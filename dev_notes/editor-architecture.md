@@ -17,7 +17,7 @@ Host application
             ↓
        RivtoEditorCore
             ↓
-       focused managers
+       BlockRegistry + focused managers
             ↓
        DocumentModelImpl
             ↓
@@ -37,19 +37,17 @@ adapters one stable interface to implement.
 | Area | Main source | Responsibility |
 | --- | --- | --- |
 | Document types | `src/store/document-model/core/types/document.ts` | Storage blocks, Markdown content, layouts, links, and snapshots |
-| Editor types | `src/editor/types.ts` | Selection, plugins, renderer contracts, and editor API |
-| Editor kernel | `src/editor/editor.ts` | Public commands, events, mode, manager ownership, and feature orchestration |
+| Editor types and kernel | `src/editor/editor/**` | Public commands, events, mode, manager ownership, and feature orchestration |
+| Block runtime | `src/editor/blocks/**` | Definitions, native-type registry, defaults, validation, and slash entries |
 | Collaborative model | `src/store/document-model/core/document-model.ts` | Canonical `DocumentModelImpl` boundary; block tree, Markdown content, props, plugin data, links, geometry, snapshots, and normalization |
-| Runtime managers | `src/editor/managers.ts` | Selection, undo, providers, plugins, and clipboard |
-| Default module | `src/editor/defaults.ts` | Built-in block specifications and slash items |
-| React view | `src/editor/react.tsx` | Toolbar, editable blocks, slash menu, page renderer, and edgeless renderer |
+| Runtime managers | `src/editor/managers/**` | Separate selection, undo, provider, plugin, and clipboard responsibilities |
+| React view | `src/editor/react/**` | Host binding, components, Markdown helpers, styles, and renderer strategies |
 | CRDT interfaces | `src/store/crdt-doc/types/**` | Adapter-neutral document and shared-type contracts |
 | Yjs adapter | `src/store/crdt-doc/yjs-doc/**` | Native Yjs implementation hidden behind CRDT interfaces |
 | Demo consumer | `demo/**` | Public API, custom plugin, custom renderer strategies, and persistence example |
 
-`DocumentModelImpl` is the canonical storage model used by the editor.
-Schema-v1 data is converted by `migrateDocumentBundleV1()`; there is no
-schema-v1 model or mutable CRDT proxy API in the storage layer.
+`DocumentModelImpl` is the canonical storage model used by the editor. It
+accepts valid schema-v3 snapshots and contains no legacy model or migration API.
 
 The internal persisted shape is declared in
 `src/store/document-model/core/types/storage.ts`. Generic
@@ -63,7 +61,7 @@ Collaborative state belongs in `DocumentModelImpl`:
 
 - Ordered root blocks and nested child blocks
 - Block type and validated props
-- Attributed inline text
+- Plain Markdown collaborative text
 - Per-block plugin data
 - Canvas geometry and z-index
 - Links between blocks
@@ -100,7 +98,7 @@ Each block contains:
 
 ```text
 id          stable block ID
-type        registered BlockSpec type
+type        required native string resolved by BlockRegistry at runtime
 props       validated block properties
 content     plain Markdown CRDTText
 children    ordered CRDTArray of child IDs
@@ -159,8 +157,17 @@ events.
 
 ### SelectionManager
 
-Stores a normalized local selection using `{ blockId, offset }` anchor and head
-positions. It does not store DOM nodes or CRDT-relative positions.
+Stores a directed local selection using `{ blockId, offset }` anchor and head
+positions. `anchor` is where the gesture began and `head` is its active end, so
+backward selections retain their direction. Equal positions are collapsed;
+different block IDs describe cross-block selection. Offsets are UTF-16 indices
+matching DOM range APIs. `get()` returns a detached value, `set()` copies and
+notifies, `clear()` notifies only on change, and `subscribe()` owns no document
+resources. The editor validates block IDs and offsets before calling it.
+
+Selection remains local because focus intent is not collaborative content. The
+manager intentionally stores neither DOM nodes, CRDT-relative positions, nor a
+document reference.
 
 Current limitation: selection mapping is suitable for the existing single-block
 formatting and clipboard paths. Robust cross-block selection, DOM restoration,
@@ -176,9 +183,9 @@ history behavior needs broader integration tests.
 
 ### PluginManager
 
-Registers block specifications, commands, slash items, and lifecycle hooks. It
-rejects duplicate plugin IDs, block types, and command names. Disposing a plugin
-removes its contributions.
+Owns trusted plugin lifecycle, commands, and plugin slash items. `BlockRegistry`
+separately owns block definitions, defaults, schemas, and type resolution.
+Disposing a plugin removes its commands and definitions.
 
 Plugins are trusted local JavaScript modules. They receive the public editor
 API, never native Yjs objects.
@@ -219,7 +226,7 @@ Renders the nested ordered block tree as a page. It currently supports:
 - Native drag-and-drop ordering
 - Slash commands
 - Inline formatting toolbar
-- Custom `BlockSpec.render` components
+- Custom `BlockDefinition.render` components
 - Unknown-block fallback
 
 Current limitations include incomplete `beforeinput` handling, IME coverage,
@@ -284,8 +291,9 @@ still select specialized renderers for lists, media, callouts, and plugins.
 ### Slash commands
 
 Typing `/` at the start of an editable block opens a filtered menu. Items come
-from registered block specifications and plugin-provided slash items. Selecting
-a default item converts the current block.
+from registered block definitions and plugin-provided slash items. Selecting a
+default item creates the typed replacement and removes the trigger block;
+storage never mutates a block's native type.
 
 Current limitation: full keyboard navigation, grouped presentation, command
 arguments, and async items need further work.
@@ -294,14 +302,14 @@ arguments, and async items need further work.
 
 A `RivtoPlugin` may contribute:
 
-- `BlockSpec` definitions
+- `BlockDefinition` values
 - Commands
 - Slash items
 - Registration/disposal hooks
 
-A `BlockSpec` defines a type, content mode, optional prop schema, optional React
+A `BlockDefinition` defines a type, content mode, optional prop schema, optional React
 renderer, and optional slash item. The demo's callout block is the reference
-consumer example.
+consumer example registered through `editor.defineBlock()`.
 
 Planned but not yet available: shortcuts, plugin-defined input rules, UI slots,
 themes, isolated plugin state APIs, and sandboxing.
@@ -315,15 +323,14 @@ blocks.
 
 Current limitation: there is no connector creation or editing UI.
 
-### Persistence and migration
+### Persistence
 
 `getSnapshot()` produces schema v3 JSON containing blocks, links, layouts, and
 plugin data. `loadSnapshot()` restores that data atomically. The demo stores the
 snapshot in browser local storage.
 
-`migrateDocumentBundleV1()` converts numeric-order v1 blocks into v2, preserving
-IDs, metadata, plugin states, links, and geometry. Future schema changes should
-use explicit sequential migrations with fixtures.
+Historical bundle shapes are rejected. Compatibility code is added only for a
+named product requirement with committed source fixtures.
 
 ### Collaboration
 
@@ -353,6 +360,7 @@ const editor = createRivtoEditor({
 
 <RivtoEditor
   editor={editor}
+  defaultBlockType="paragraph"
   renderers={{
     page: MyPageRenderer,
     edgeless: MyCanvasRenderer,
@@ -372,5 +380,5 @@ needs special care; see `dev_notes/react-strict-mode-editor-lifecycle.md`.
 4. Document data survives unknown block types and missing renderers.
 5. Page and edgeless mode render the same blocks; mode and selection stay local.
 6. Structured clipboard paste always remaps identities.
-7. Snapshot versions and migrations are explicit.
+7. Snapshot versions and supported compatibility are explicit.
 8. Destruction is terminal; a destroyed editor instance must not be reused.

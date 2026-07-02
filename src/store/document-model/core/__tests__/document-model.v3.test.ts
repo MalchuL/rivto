@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { YjsDoc } from "../../../crdt-doc";
 import { DocumentModelImpl } from "../document-model";
+import type { BlockInput, BlockPatch } from "../types";
 
 const exchangeUpdates = (left: YjsDoc, right: YjsDoc): void => {
   const leftState = Y.encodeStateAsUpdate(left.doc);
@@ -45,8 +46,8 @@ describe("DocumentModelImpl schema v3 Markdown storage", () => {
     const doc = new YjsDoc("canonical-tree");
     const model = new DocumentModelImpl("canonical-tree", doc);
 
-    model.insertBlock({ id: "parent", children: [{ id: "child", content: "Nested" }] });
-    model.insertBlock({ id: "target" });
+    model.insertBlock({ id: "parent", type: "group", children: [{ id: "child", type: "paragraph", content: "Nested" }] });
+    model.insertBlock({ id: "target", type: "paragraph" });
     model.createLink({ id: "child-target", from: { blockId: "child" }, to: { blockId: "target" } });
     model.removeBlock("parent");
 
@@ -60,12 +61,25 @@ describe("DocumentModelImpl schema v3 Markdown storage", () => {
     const model = new DocumentModelImpl(doc);
     model.insertBlock({
       id: "text",
+      type: "paragraph",
       content: "**Bold** plain",
     });
 
     model.setBlockText("text", "**Bold!** plain");
 
     expect(model.document[0].content).toBe("**Bold!** plain");
+    doc.destroy();
+  });
+
+  it("requires native types and never changes them through patches", () => {
+    const doc = new YjsDoc("canonical-types");
+    const model = new DocumentModelImpl(doc);
+
+    expect(() => model.insertBlock({ id: "missing" } as BlockInput)).toThrow("Block type is required");
+    model.insertBlock({ id: "custom", type: "acme.chart" });
+    model.updateBlock("custom", { type: "paragraph" } as unknown as BlockPatch);
+
+    expect(model.document[0].type).toBe("acme.chart");
     doc.destroy();
   });
 });

@@ -16,7 +16,7 @@ export default defineConfig({
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
   ],
   webServer: {
-    command: "pnpm demo:build && pnpm --dir demo exec vite preview --host 127.0.0.1 --port 5173",
+    command: "pnpm --dir demo exec vite preview --host 127.0.0.1 --port 5173",
     url: "http://127.0.0.1:5173",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

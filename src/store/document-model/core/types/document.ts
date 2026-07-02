@@ -27,14 +27,22 @@ export interface Link {
   meta?: Record<string, unknown>;
 }
 
-/** Input accepted when creating or patching a block. */
-export interface PartialBlock {
+/** Complete input accepted when creating a block. */
+export interface BlockInput {
+  type: string;
   id?: string;
-  type?: string;
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
   content?: string;
-  children?: PartialBlock[];
+  children?: BlockInput[];
+  layout?: Partial<BlockLayout>;
+}
+
+/** Mutable block fields; a block's type and identity are intentionally immutable. */
+export interface BlockPatch {
+  props?: Record<string, unknown>;
+  pluginData?: Record<string, unknown>;
+  content?: string;
   layout?: Partial<BlockLayout>;
 }
 

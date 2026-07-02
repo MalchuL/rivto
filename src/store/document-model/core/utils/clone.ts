@@ -1,4 +1,10 @@
-export const clone = <T>(value: T): T => {
+/**
+ * Recursively detaches portable arrays and records from CRDT adapter values.
+ *
+ * @param value - Portable primitive, array, or record to clone.
+ * @returns Structurally independent value with the same data.
+ */
+export function clone<T>(value: T): T {
     if (value === null || typeof value !== "object") return value;
     if (Array.isArray(value)) {
         return value.map(clone) as unknown as T;
@@ -10,4 +16,4 @@ export const clone = <T>(value: T): T => {
         }
     }
     return result as T;
-};
+}

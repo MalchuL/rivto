@@ -67,6 +67,7 @@ Native CRDT implementations are adapter details. The dependency direction is:
 React EditorView
   -> replaceable Renderer and focused runtime managers
   -> EditorCore
+  -> BlockRegistry
   -> DocumentModelImpl
   -> CRDTDoc
   -> Yjs adapter
@@ -76,10 +77,10 @@ React EditorView
   classes. Editor, document, renderer, manager, plugin, and block code must use
   `CRDTDoc`, `CRDTMap`, `CRDTArray`, and `CRDTText` interfaces exclusively.
 - `DocumentModelImpl` is the single source of truth for collaborative blocks,
-  hierarchy, rich text, links, layout, plugin data, snapshots, and migrations.
+  hierarchy, Markdown text, links, layout, plugin data, and snapshots.
   UI state such as selection, active mode, viewport, menus, and tools remains
   outside the document.
-- `EditorCore` orchestrates a document and focused managers. Managers are added
+- `EditorCore` orchestrates a document, `BlockRegistry`, and focused managers. Managers are added
   only for behavior with an independent lifecycle: selection, clipboard,
   providers, undo, plugins/blocks, and later theming.
 - Rendering is a strategy boundary. `BlockDOMRenderer` and
@@ -96,7 +97,7 @@ React EditorView
 These constraints supersede the earlier direct-Yjs editor prototype and the
 integrated renderer described in older notes.
 
-There is one extension mechanism. A `BlockSpec` describes a block's schema,
+There is one extension mechanism. A `BlockDefinition` describes a block's schema,
 content mode, renderer, clipboard conversion, and optional slash items. A
 `Plugin` contributes block specs, commands, shortcuts, input rules, slash
 items, UI slots, state, and lifecycle hooks. A module is merely a distributable
@@ -108,7 +109,10 @@ unsandboxed in v1.
 ```ts
 const editor = createRivtoEditor(options);
 
-<RivtoEditor editor={editor} />;
+editor.defineBlock(myBlock);
+editor.use(myPlugin);
+
+<RivtoEditor editor={editor} defaultBlockType="paragraph" />;
 ```
 
 The editor exposes `document`, `selection`, and `mode`, plus commands for block
@@ -142,8 +146,7 @@ becomes the official playground.
 ### Gate 4.1: document model v2 — 4–6 weeks
 
 Implement the ordered block tree, collaborative Markdown text, typed props,
-geometry, versioned snapshots, deterministic normalization, and a v1-to-v2
-migration preserving IDs, metadata, plugin state, links, and positions.
+geometry, versioned snapshots, and deterministic normalization.
 
 ### Gate 4.2: editor kernel — 4–6 weeks
 
@@ -151,7 +154,7 @@ Implement transactions, commands, schema and plugin registries, normalized
 selection, keyboard routing, local state, events, and local-only undo/redo.
 
 Implemented vertical slice: schema-v3 nested Yjs blocks, plain Markdown CRDTText,
-Zod prop schemas, layout, v1 migration, normalization, commands, normalized
+Zod prop schemas, layout, normalization, commands, normalized
 selection, clipboard helpers, events, local history, and runtime registration.
 
 ### Gate 4.3: page editing engine — 8–12 weeks
@@ -184,14 +187,14 @@ document/plugin state, lifecycle hooks, and unknown-block fallback behavior.
 ### Gate 4.7: collaboration and hardening — 5–7 weeks
 
 Expose provider status and cleanup, synchronize content and geometry, and test
-concurrent edits, block moves, reconnects, migrations, and local-only undo.
+concurrent edits, block moves, reconnects, snapshot compatibility, and local-only undo.
 Add browser tests for Chromium, Firefox, and WebKit, accessibility checks, API
-documentation, theming, migration guidance, package smoke tests, and semver
+documentation, theming, snapshot guidance, package smoke tests, and semver
 policy.
 
 ## Verification strategy
 
-- Unit tests cover models, commands, migrations, schemas, normalization, and
+- Unit tests cover models, commands, schemas, normalization, and
   update-order permutations across multiple Yjs documents.
 - Playwright covers native selection, IME, clipboard, keyboard behavior,
   drag/drop, slash menus, page/edgeless switching, and remote updates during
@@ -201,13 +204,12 @@ policy.
 - Release checks include keyboard-only use, visible focus, labels, recoverable
   invalid data, and no uncaught browser mutation errors.
 
-## Migration strategy
+## Snapshot compatibility
 
-Bundle versions are explicit. Loading v1 sorts blocks by numeric order and
-creates the v2 root ID array, maps existing fields into typed props and layout,
-preserves links/plugin payloads, and retains unknown types. Migration produces
-a new snapshot inside one transaction and never mutates the input bundle.
-Future migrations are sequential and tested with committed fixtures.
+Bundle versions are explicit. Version 0.3 accepts valid schema-v3 snapshots and
+rejects historical bundle shapes instead of retaining legacy conversion code.
+Future schema support is added only when a product requirement names the source
+version and supplies committed compatibility fixtures.
 
 ## Scope and estimates
 

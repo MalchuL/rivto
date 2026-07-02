@@ -3,7 +3,7 @@
 This Vite application consumes Rivto through the public `@chulane/rivto`
 workspace package. It demonstrates the `DocumentModel → CRDTDoc → YjsDoc`
 boundary without importing native Yjs. It also exercises editable blocks,
-formatting, slash commands, a custom plugin block and command, replaceable
+formatting, slash commands, a custom block definition, plugin command, replaceable
 page/edgeless renderers, structured clipboard handling, canvas movement, and
 browser persistence.
 
@@ -43,10 +43,15 @@ pnpm demo:check
 pnpm demo:build
 ```
 
-The cross-browser interaction suite can be run after installing Playwright's
-browser dependencies:
+The standard interaction suite runs in Chromium and Firefox:
 
 ```sh
-pnpm exec playwright install chromium firefox webkit
 pnpm test:e2e
+```
+
+The full release suite additionally requires WebKit system libraries:
+
+```sh
+sudo pnpm exec playwright install-deps webkit
+pnpm test:e2e:all
 ```

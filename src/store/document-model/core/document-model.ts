@@ -10,9 +10,10 @@ import {
 } from "../../crdt-doc";
 import type {
     Block,
+    BlockInput,
     BlockLayout,
+    BlockPatch,
     Link,
-    PartialBlock,
     Snapshot,
 } from "./types";
 import type { BlockLayoutStorage, BlockStorage, DocumentStorage, IDBlock, IDLink, IDPlugin, IDProp, LinkStorage } from "./types/storage";
@@ -28,19 +29,23 @@ const DEFAULT_LAYOUT: BlockLayout = { x: 40, y: 40, width: 320, height: 120, zIn
 
 type PropsValidator = (type: string, props: Record<string, unknown>) => Record<string, unknown>;
 
-/*
+/**
  * Converts a CRDT array of strings to an array of strings.
  * @param array - The CRDT array of strings.
  * @returns The array of strings.
  */
-const strings = (array: CRDTArray<string>): string[] => array.toArray().map(String);
+function strings(array: CRDTArray<string>): string[] {
+    return array.toArray().map(String);
+}
 
-/*
- * Converts a partial block content to a string.
- * @param content - The partial block content.
+/**
+ * Converts optional block content to its stored string value.
+ * @param content - The optional creation content.
  * @returns The string content.
  */
-const contentFrom = (content: PartialBlock["content"]): string => content ?? "";
+function contentFrom(content: BlockInput["content"]): string {
+    return content ?? "";
+}
 
 /**
  * Canonical collaborative storage model used by applications such as the editor.
@@ -70,8 +75,14 @@ export class DocumentModelImpl {
      *
      * @param id - Descriptive model identifier; it does not control persistence.
      * @param crdt - Collaborative document that owns the shared state.
-     */
+    */
     constructor(id: string, crdt: CRDTDoc);
+    /**
+     * Initializes typed top-level storage containers for either constructor form.
+     *
+     * @param idOrCrdt - Descriptive ID or the collaborative document itself.
+     * @param maybeCrdt - Collaborative document when a descriptive ID is supplied.
+     */
     constructor(idOrCrdt: string | CRDTDoc, maybeCrdt?: CRDTDoc) {
         const crdt = typeof idOrCrdt === "string" ? maybeCrdt : idOrCrdt;
         if (!crdt) throw new Error("DocumentModelImpl requires a CRDTDoc");
@@ -161,12 +172,13 @@ export class DocumentModelImpl {
     /**
      * Inserts a block into an ordered root or sibling list.
      *
-     * @param block - Initial portable block data.
+     * @param block - Initial portable block data including its required native type.
      * @param afterId - Sibling to insert after block id, `null` for first, or omitted for last.
      * @returns Stable ID of the inserted block.
      * @throws If the ID already exists or the requested sibling is missing.
      */
-    insertBlock(block: PartialBlock = {}, afterId?: string | null): string {
+    insertBlock(block: BlockInput, afterId?: string | null): string {
+        if (!block.type) throw new Error("Block type is required");
         let id = "";
         this.transact(() => {
             const container = afterId ? this.findContainer(afterId)?.array ?? this.storage.roots : this.storage.roots;
@@ -183,11 +195,10 @@ export class DocumentModelImpl {
      * @param patch - Fields to validate and apply.
      * @throws If the block does not exist.
      */
-    updateBlock(id: string, patch: PartialBlock): void {
+    updateBlock(id: string, patch: BlockPatch): void {
         this.transact(() => {
             const block = this.requiredBlock(id);
-            const type = String(patch.type ?? block.get("type"));
-            if (patch.type) block.set("type", patch.type);
+            const type = this.requiredType(block, id);
             if (patch.props) this.patchProps(type, this.requiredMap(block, "props"), patch.props);
             if (patch.pluginData) assignMap(this.requiredMap(block, "pluginData"), patch.pluginData, false);
             if (patch.content !== undefined) assignText(this.requiredText(block, "content"), patch.content);
@@ -457,13 +468,14 @@ export class DocumentModelImpl {
     /**
      * Creates CRDT containers for a block and inserts its ID into an ordered list.
      *
-     * @param block - Portable block data, including optional descendants.
+     * @param block - Portable block data, including its type and optional descendants.
      * @param container - Root or child array that receives the block ID.
      * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
      * @returns Stable ID assigned to the block.
      * @throws If the ID already exists or the requested sibling is missing.
      */
-    private insertInto(block: PartialBlock, container: CRDTArray<string>, afterId?: string | null): string {
+    private insertInto(block: BlockInput, container: CRDTArray<string>, afterId?: string | null): string {
+        if (!block.type) throw new Error("Block type is required");
         const id = block.id ?? crypto.randomUUID();
         if (this.storage.blocks.has(id)) throw new Error(`Block ${id} already exists`);
         const model = this.crdt.instantiator.createMap<BlockStorage>();
@@ -472,16 +484,15 @@ export class DocumentModelImpl {
         const children = this.crdt.instantiator.createArray<string>();
         const layout = this.crdt.instantiator.createMap<BlockLayoutStorage>();
         const pluginData = this.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
-        const type = block.type ?? "paragraph";
         model.set("id", id);
-        model.set("type", type);
+        model.set("type", block.type);
         model.set("props", props);
         model.set("content", content);
         model.set("children", children);
         model.set("layout", layout);
         model.set("pluginData", pluginData);
         this.storage.blocks.set(id, model);
-        assignMap(props, this.validateProps(type, block.props ?? {}));
+        assignMap(props, this.validateProps(block.type, block.props ?? {}));
         assignText(content, contentFrom(block.content));
         const flowIndex = container.length;
         assignMap(layout, {
@@ -520,7 +531,7 @@ export class DocumentModelImpl {
         const layout = this.requiredMap(value, "layout").toObject() as unknown as Partial<BlockLayout>;
         return {
             id,
-            type: String(value.get("type") ?? "paragraph"),
+            type: this.requiredType(value, id),
             props,
             pluginData,
             content,
@@ -602,6 +613,23 @@ export class DocumentModelImpl {
         const value = this.storage.blocks.get(id);
         if (!isCRDTMap(value)) throw new Error(`Block ${id} not found`);
         return value;
+    }
+
+    /**
+     * Reads the immutable native type stored on a block.
+     *
+     * Missing types indicate malformed shared data and are rejected instead of
+     * silently changing the block into a built-in editor type.
+     *
+     * @param block - Stored block map to inspect.
+     * @param id - Block ID included in a descriptive error.
+     * @returns The non-empty native block type.
+     * @throws If shared storage does not contain a valid type.
+     */
+    private requiredType(block: CRDTMap<BlockStorage>, id: string): string {
+        const type = block.get("type");
+        if (typeof type !== "string" || !type) throw new Error(`Block ${id} has no type`);
+        return type;
     }
 
     /**

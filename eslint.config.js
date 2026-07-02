@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import jsdoc from "eslint-plugin-jsdoc";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
@@ -17,7 +18,19 @@ export default tseslint.config(
   {
     files: ["src/editor/**/*.ts", "src/editor/**/*.tsx", "src/store/document-model/**/*.ts"],
     ignores: ["src/**/__tests__/**"],
+    plugins: { jsdoc },
     rules: {
+      "jsdoc/require-jsdoc": ["error", {
+        exemptEmptyConstructors: false,
+        require: {
+          ArrowFunctionExpression: false,
+          ClassDeclaration: true,
+          ClassExpression: true,
+          FunctionDeclaration: true,
+          FunctionExpression: false,
+          MethodDefinition: true,
+        },
+      }],
       "no-restricted-imports": ["error", {
         "paths": [{ "name": "yjs", "message": "Use CRDTDoc/CRDTMap/CRDTArray/CRDTText; native Yjs belongs only in the adapter." }]
       }],

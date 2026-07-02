@@ -1,10 +1,11 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   BlockDOMRenderer,
+  type BlockDefinition,
   createRivtoEditor,
   EdgelessCanvasRenderer,
   type EditorRendererProps,
-  type EditorSnapshot,
+  type Snapshot,
   RIVTO_VERSION,
   RivtoEditor,
   type RivtoPlugin,
@@ -14,23 +15,24 @@ import {
 const STORAGE_KEY = "rivto-editor-v3-demo";
 
 const initialContent = [
-  { content: "# Rivto, block by block" },
-  { content: "Select text to **format** it, or type / for block commands." },
+  { type: "paragraph", content: "# Rivto, block by block" },
+  { type: "paragraph", content: "Select text to **format** it, or type / for block commands." },
   { type: "callout", content: "This custom block is registered by the demo plugin." },
   { type: "bulletListItem", content: "Switch between page and edgeless mode." },
   { type: "bulletListItem", content: "Drag blocks around on the canvas." },
   { type: "quote", content: "Both renderers share one DocumentModel backed by a CRDTDoc adapter." },
 ];
 
+const calloutDefinition: BlockDefinition = {
+  type: "callout",
+  content: "inline",
+  title: "Callout",
+  slash: { title: "Callout", aliases: ["note", "aside"], group: "Demo" },
+  render: ({ content }) => <aside className="demo-callout"><span aria-hidden="true">✦</span><div>{content}</div></aside>,
+};
+
 const demoPlugin: RivtoPlugin = {
-  id: "rivto-demo",
-  blocks: [{
-    type: "callout",
-    content: "inline",
-    title: "Callout",
-    slash: { title: "Callout", aliases: ["note", "aside"], group: "Demo plugin" },
-    render: ({ content }) => <aside className="demo-callout"><span aria-hidden="true">✦</span><div>{content}</div></aside>,
-  }],
+  id: "rivto-demo-commands",
   commands: {
     "demo.addCallout": (editor) => editor.insertBlock(
       { type: "callout", content: "A block inserted through PluginManager." },
@@ -56,14 +58,19 @@ function DemoCanvasRenderer(props: EditorRendererProps) {
 export function App() {
   const [instance] = useState(() => {
     const doc = new YjsDoc("rivto-v2-demo");
-    const editor = createRivtoEditor({ document: doc, initialContent, plugins: [demoPlugin] });
+    const editor = createRivtoEditor({ document: doc });
+    editor.defineBlock(calloutDefinition);
+    editor.use(demoPlugin);
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
-        editor.loadSnapshot(JSON.parse(saved) as EditorSnapshot);
+        editor.loadSnapshot(JSON.parse(saved) as Snapshot);
       } catch {
         localStorage.removeItem(STORAGE_KEY);
+        initialContent.forEach((block) => editor.insertBlock(block));
       }
+    } else {
+      initialContent.forEach((block) => editor.insertBlock(block));
     }
     return { doc, editor };
   });
@@ -105,12 +112,14 @@ export function App() {
       </header>
 
       <section className="architecture" aria-label="Editor architecture">
-        <code>RivtoEditor</code><span>→</span><code>DocumentModelImpl</code><span>→</span>
+        <code>RivtoEditor</code><span>→</span><code>BlockRegistry</code><span>→</span>
+        <code>DocumentModelImpl</code><span>→</span>
         <code>CRDTDoc</code><span>→</span><code>YjsDoc adapter</code>
       </section>
 
       <RivtoEditor
         editor={instance.editor}
+        defaultBlockType="paragraph"
         renderers={{ page: DemoPageRenderer, edgeless: DemoCanvasRenderer }}
       />
 

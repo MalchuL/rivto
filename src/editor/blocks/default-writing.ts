@@ -1,6 +1,7 @@
-import type { BlockSpec, RivtoPlugin } from "./types";
+import type { BlockDefinition } from "./block-definition";
 
-export const defaultBlockSpecs: BlockSpec[] = [
+/** Built-in writing definitions installed through the same registry as custom blocks. */
+export const defaultBlockDefinitions: BlockDefinition[] = [
   { type: "paragraph", title: "Paragraph", content: "inline", slash: { title: "Paragraph", aliases: ["p", "text"], group: "Basic" } },
   { type: "heading", title: "Heading 1", content: "inline", slash: { title: "Heading 1", aliases: ["h1", "title"], group: "Headings" } },
   { type: "heading2", title: "Heading 2", content: "inline", slash: { title: "Heading 2", aliases: ["h2", "subtitle"], group: "Headings" } },
@@ -14,8 +15,3 @@ export const defaultBlockSpecs: BlockSpec[] = [
   { type: "image", title: "Image", content: "none", slash: { title: "Image", aliases: ["photo", "picture"], group: "Media" } },
   { type: "file", title: "File", content: "none", slash: { title: "File", aliases: ["attachment"], group: "Media" } },
 ];
-
-export const defaultWritingPlugin: RivtoPlugin = {
-  id: "rivto.default-writing",
-  blocks: defaultBlockSpecs,
-};

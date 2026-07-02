@@ -89,5 +89,8 @@ pnpm demo:build
 pnpm test:e2e
 ```
 
+`test:e2e` runs Chromium and Firefox. Release environments with Playwright's
+WebKit system libraries installed should run `pnpm test:e2e:all`.
+
 The implementation roadmap and remaining hardening work are tracked in
 [`docs/editor-v1-plan.md`](docs/editor-v1-plan.md).
