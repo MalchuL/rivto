@@ -10,16 +10,16 @@ export class YjsInstantiator implements Instantiator {
      * Creates a new CRDT array not attached to any document.
      * @returns The new CRDT array.
      */
-    createArray(): CRDTArray {
-        return new YjsArray();
+    createArray<Item extends BasicCRDTType = BasicCRDTType>(): CRDTArray<Item> {
+        return new YjsArray<Item>();
     }
 
     /**
      * Creates a new CRDT map not attached to any document.
      * @returns The new CRDT map.
      */
-    createMap(): CRDTMap {
-        return new YjsMap();
+    createMap<Schema extends object = Record<string, BasicCRDTType>>(): CRDTMap<Schema> {
+        return new YjsMap<Schema>();
     }
 
     /**

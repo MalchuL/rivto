@@ -10,7 +10,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { RivtoEditorCore } from "./editor";
-import type { EditorBlock, InlineContent, Mark, SlashItem } from "./types";
+import type { EditorBlock, MarkdownFormat, SlashItem } from "./types";
 
 export interface RivtoEditorProps {
   editor: RivtoEditorCore;
@@ -35,23 +35,30 @@ const styles = `
 .rivto{--rv-border:#ddd9cf;--rv-ink:#26241f;--rv-muted:#746f65;--rv-accent:#6e56cf;color:var(--rv-ink);font:15px/1.5 ui-sans-serif,system-ui,sans-serif;border:1px solid var(--rv-border);border-radius:14px;background:white;overflow:hidden}.rivto *{box-sizing:border-box}.rivto button,.rivto input{font:inherit}.rv-toolbar{display:flex;gap:6px;align-items:center;padding:9px;border-bottom:1px solid var(--rv-border);background:#faf9f6;position:relative;z-index:4}.rv-toolbar button,.rv-menu button{border:1px solid var(--rv-border);border-radius:7px;background:white;padding:5px 9px;cursor:pointer}.rv-toolbar button[aria-pressed=true]{color:white;background:var(--rv-ink)}.rv-spacer{flex:1}.rv-page{max-width:760px;min-height:420px;margin:auto;padding:48px 54px}.rv-block{position:relative;border-radius:7px;padding:3px 7px}.rv-block:hover{background:#faf9f6}.rv-side{display:none;position:absolute;right:100%;top:1px;gap:2px;padding-right:5px}.rv-block:hover>.rv-side,.rv-block:focus-within>.rv-side{display:flex}.rv-side button{border:0;background:transparent;color:var(--rv-muted);cursor:pointer;padding:3px}.rv-block-content{outline:0;min-height:1.5em;white-space:pre-wrap}.rv-block[data-type=heading] .rv-block-content{font-size:2em;font-weight:700}.rv-block[data-type=heading2] .rv-block-content{font-size:1.55em;font-weight:700}.rv-block[data-type=heading3] .rv-block-content{font-size:1.25em;font-weight:700}.rv-block[data-type=quote]{border-left:3px solid #b5afa2;padding-left:13px;color:#565149}.rv-block[data-type=code]{background:#f3f1ec;font-family:ui-monospace,monospace}.rv-prefix{display:inline-block;width:24px;color:var(--rv-muted);user-select:none}.rv-children{margin-left:28px}.rv-menu{position:absolute;top:100%;left:8px;width:260px;max-height:280px;overflow:auto;padding:6px;border:1px solid var(--rv-border);border-radius:10px;background:white;box-shadow:0 14px 40px #0002;z-index:10}.rv-menu button{display:block;width:100%;border:0;text-align:left}.rv-menu button:hover,.rv-menu button:focus{background:#f0edf9}.rv-canvas{height:600px;overflow:auto;background-color:#f8f7f3;background-image:radial-gradient(#c9c4b9 1px,transparent 1px);background-size:20px 20px}.rv-plane{position:relative;width:2400px;height:1600px;transform-origin:0 0}.rv-links{position:absolute;inset:0;pointer-events:none;color:#8b849d}.rv-canvas-block{position:absolute;border:1px solid var(--rv-border);border-radius:10px;background:white;box-shadow:0 5px 18px #0001;padding:10px;overflow:auto}.rv-canvas-block[data-selected=true]{outline:2px solid var(--rv-accent)}.rv-drag{cursor:grab;color:var(--rv-muted);font-size:12px;user-select:none}.rv-resize{position:absolute;right:2px;bottom:2px;width:14px;height:14px;border:0;background:linear-gradient(135deg,transparent 50%,var(--rv-muted) 50%);cursor:nwse-resize}.rv-media{display:grid;gap:7px;padding:10px;border:1px dashed var(--rv-border);border-radius:8px}.rv-media img{max-width:100%;max-height:280px}.rv-media input{width:100%;border:1px solid var(--rv-border);border-radius:6px;padding:6px}.rv-unknown{padding:10px;border:1px solid #e6a49b;background:#fff4f2;color:#7d2b22}.rv-divider{border:0;border-top:1px solid var(--rv-border);margin:12px 0}@media(max-width:650px){.rv-page{padding:28px 18px}.rv-toolbar{overflow:auto}}
 `;
 
-const textOf = (block: EditorBlock) => block.content.map((run) => run.text).join("");
+const textOf = (block: EditorBlock) => block.content;
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
 })[character] ?? character);
 
-const htmlOf = (content: InlineContent[]) => content.map((run) => {
-  let value = escapeHtml(run.text).replace(/\n/g, "<br>");
-  const marks = run.marks ?? {};
-  if (marks.code) value = `<code>${value}</code>`;
-  if (marks.bold) value = `<strong>${value}</strong>`;
-  if (marks.italic) value = `<em>${value}</em>`;
-  if (marks.underline) value = `<u>${value}</u>`;
-  if (marks.strike) value = `<s>${value}</s>`;
-  if (typeof marks.link === "string") value = `<a href="${escapeHtml(marks.link)}">${value}</a>`;
-  return value;
-}).join("");
+const markdownType = (block: EditorBlock): string => {
+  if (block.type !== "paragraph") return block.type;
+  if (block.content.startsWith("### ")) return "heading3";
+  if (block.content.startsWith("## ")) return "heading2";
+  if (block.content.startsWith("# ")) return "heading";
+  return block.type;
+};
+
+const htmlOf = (source: string): string => {
+  const withoutHeading = source.replace(/^#{1,3} /, "");
+  return escapeHtml(withoutHeading)
+    .replace(/`([^\n`]+)`/g, "<code>$1</code>")
+    .replace(/\[([^\]]+)]\(((?:https?:\/\/|mailto:|\/|#)[^)]+)\)/g, '<a href="$2">$1</a>')
+    .replace(/\*\*([^\n*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/~~([^\n~]+)~~/g, "<s>$1</s>")
+    .replace(/(^|[^*])\*([^\n*]+)\*/g, "$1<em>$2</em>")
+    .replace(/\n/g, "<br>");
+};
 
 const selectionOffset = (element: HTMLElement): { from: number; length: number } | undefined => {
   const selection = window.getSelection();
@@ -70,7 +77,8 @@ function EditableText({ block, title, editor, onSlash }: {
   onSlash: (blockId: string, query: string | null) => void;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const html = htmlOf(block.content);
+  const [editing, setEditing] = useState(false);
+  const html = editing ? escapeHtml(block.content).replace(/\n/g, "<br>") : htmlOf(block.content);
 
   useLayoutEffect(() => {
     const element = ref.current;
@@ -86,6 +94,11 @@ function EditableText({ block, title, editor, onSlash }: {
     suppressContentEditableWarning
     role="textbox"
     aria-label={title}
+    onFocus={(event) => {
+      if (!editing) event.currentTarget.textContent = block.content;
+      setEditing(true);
+    }}
+    onBlur={() => setEditing(false)}
     onInput={(event) => {
       const text = event.currentTarget.innerText.replace(/\n$/, "");
       editor.setBlockText(block.id, text);
@@ -200,7 +213,7 @@ function BlockView({ block, editor, slash, setSlash, canvas = false, selected, s
   return <div
     className={canvas ? "rv-block rv-canvas-block" : "rv-block"}
     data-rivto-block={block.id}
-    data-type={block.type}
+    data-type={markdownType(block)}
     data-selected={selected}
     style={style}
     onClick={select}
@@ -294,11 +307,11 @@ export function RivtoEditor({ editor, className = "", renderers }: RivtoEditorPr
   const CanvasRenderer = renderers?.edgeless ?? EdgelessCanvasRenderer;
   const rendererProps = { editor, blocks, slash, setSlash, selected, setSelected, zoom };
 
-  const format = (mark: Mark, value: boolean | string = true) => {
+  const format = (format: MarkdownFormat, value?: string) => {
     const selection = editor.selection;
     if (!selection || selection.anchor.blockId !== selection.head.blockId) return;
     const from = Math.min(selection.anchor.offset, selection.head.offset);
-    editor.formatText(selection.anchor.blockId, from, Math.abs(selection.head.offset - selection.anchor.offset), mark, value);
+    editor.formatText(selection.anchor.blockId, from, Math.abs(selection.head.offset - selection.anchor.offset), format, value);
   };
 
   return <div
@@ -313,7 +326,6 @@ export function RivtoEditor({ editor, className = "", renderers }: RivtoEditorPr
       <button onClick={() => editor.redo()} aria-label="Redo">↷</button>
       <button onClick={() => format("bold")} aria-label="Bold"><strong>B</strong></button>
       <button onClick={() => format("italic")} aria-label="Italic"><em>I</em></button>
-      <button onClick={() => format("underline")} aria-label="Underline"><u>U</u></button>
       <button onClick={() => format("strike")} aria-label="Strike"><s>S</s></button>
       <button onClick={() => format("code")} aria-label="Inline code">&lt;/&gt;</button>
       <button onClick={() => {

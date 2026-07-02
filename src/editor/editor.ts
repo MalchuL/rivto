@@ -10,7 +10,7 @@ import type {
   EditorMode,
   EditorSelection,
   EditorSnapshot,
-  Mark,
+  MarkdownFormat,
   PartialEditorBlock,
   RivtoEditorApi,
   RivtoPlugin,
@@ -74,23 +74,11 @@ export class RivtoEditorCore implements RivtoEditorApi {
   outdentBlock(id: string): void { this.documentModel.outdentBlock(id); }
 
   setBlockText(id: string, value: string): void {
-    const rules: Array<[string, string]> = [
-      ["### ", "heading3"], ["## ", "heading2"], ["# ", "heading"],
-      ["- ", "bulletListItem"], ["1. ", "numberedListItem"],
-      ["[] ", "checkListItem"], ["> ", "quote"], ["```", "code"],
-    ];
-    const rule = rules.find(([prefix]) => value.startsWith(prefix));
-    this.documentModel.transact(() => {
-      if (rule) {
-        this.documentModel.updateBlock(id, { type: rule[1] });
-        value = value.slice(rule[0].length);
-      }
-      this.documentModel.setBlockText(id, value);
-    });
+    this.documentModel.setBlockText(id, value);
   }
 
-  insertText(id: string, offset: number, text: string, marks?: Record<string, unknown>): void {
-    this.documentModel.insertText(id, offset, text, marks);
+  insertText(id: string, offset: number, text: string): void {
+    this.documentModel.insertText(id, offset, text);
   }
 
   deleteText(id: string, offset: number, length: number): void {
@@ -105,8 +93,21 @@ export class RivtoEditorCore implements RivtoEditorApi {
     this.documentModel.setPluginData(id, pluginId, value);
   }
 
-  formatText(id: string, from: number, length: number, mark: Mark, value: boolean | string = true): void {
-    this.documentModel.formatText(id, from, length, { [mark]: value });
+  formatText(id: string, from: number, length: number, format: MarkdownFormat, value?: string): void {
+    if (length <= 0) return;
+    const wrappers: Record<Exclude<MarkdownFormat, "link">, string> = {
+      bold: "**",
+      italic: "*",
+      strike: "~~",
+      code: "`",
+    };
+    const [prefix, suffix] = format === "link"
+      ? ["[", `](${value ?? ""})`]
+      : [wrappers[format], wrappers[format]];
+    this.documentModel.transact(() => {
+      this.documentModel.insertText(id, from + length, suffix);
+      this.documentModel.insertText(id, from, prefix);
+    });
   }
 
   copy(): Promise<string> { return this.clipboardManager.copy(); }
@@ -187,7 +188,7 @@ export const migrateDocumentBundleV1 = (bundle: {
   links?: EditorLink[];
   plugins?: Record<string, unknown>;
 }): EditorSnapshot => ({
-  version: 2,
+  version: 3,
   blocks: [...(bundle.blocks ?? [])]
     .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0))
     .map((block) => {
@@ -199,7 +200,7 @@ export const migrateDocumentBundleV1 = (bundle: {
         type: String(block.type ?? "paragraph"),
         props: meta,
         pluginData: clone((block.pluginStates as Record<string, unknown> | undefined) ?? {}),
-        content: text ? [{ text }] : [],
+        content: text,
         children: [],
         layout: {
           x: Number((block.position as { x?: number } | undefined)?.x ?? 40),

@@ -16,7 +16,7 @@ describe("RivtoEditorCore", () => {
 
     expect(editor.document).toHaveLength(1);
     expect(editor.document[0].children[0].id).toBe("b");
-    expect(editor.document[0].content[0].marks?.bold).toBe(true);
+    expect(editor.document[0].content).toBe("**Alpha**");
     expect(editor.document[0].layout).toMatchObject({ x: 240, y: 80 });
 
     const snapshot = editor.getSnapshot();
@@ -25,15 +25,14 @@ describe("RivtoEditorCore", () => {
     expect(restored.getSnapshot()).toEqual(snapshot);
   });
 
-  it("applies input rules and local undo", () => {
+  it("stores Markdown source and supports local undo", () => {
     const editor = createRivtoEditor({ initialContent: [{ id: "a" }] });
 
     editor.setBlockText("a", "# Heading");
-    expect(editor.document[0]).toMatchObject({ type: "heading" });
-    expect(editor.document[0].content.map((run) => run.text).join("")).toBe("Heading");
+    expect(editor.document[0]).toMatchObject({ type: "paragraph", content: "# Heading" });
 
     editor.undo();
-    expect(editor.document[0].type).toBe("paragraph");
+    expect(editor.document[0].content).toBe("");
   });
 
   it("registers and disposes trusted runtime plugins", () => {
@@ -56,9 +55,9 @@ describe("RivtoEditorCore", () => {
     editor.setSelection({ anchor: { blockId: "a", offset: 6 }, head: { blockId: "a", offset: 11 } });
     expect(await editor.copy()).toBe("world");
     expect(await editor.cut()).toBe("world");
-    expect(editor.document[0].content[0].text).toBe("Hello ");
+    expect(editor.document[0].content).toBe("Hello ");
     await editor.paste("Rivto");
-    expect(editor.document[0].content[0].text).toBe("Hello Rivto");
+    expect(editor.document[0].content).toBe("Hello Rivto");
   });
 
   it("pastes structured blocks with remapped IDs, links, and canvas offsets", () => {
@@ -119,7 +118,7 @@ describe("RivtoEditorCore", () => {
     const migrated = migrateDocumentBundleV1(bundle);
 
     expect(migrated.blocks.map((block) => block.id)).toEqual(["a", "b"]);
-    expect(migrated.blocks[0].content).toEqual([{ text: "First" }]);
+    expect(migrated.blocks[0].content).toBe("First");
     expect(migrated.blocks[0].layout).toMatchObject({ x: 12, y: 34 });
     expect(migrated.blocks[1].props).toEqual({ color: "red" });
     expect(migrated.blocks[1].pluginData).toEqual({ comments: { open: true } });

@@ -6,7 +6,8 @@ import { YjsNotAttachedError } from "../error";
 
 const NOT_ATTACHED_ERROR = 'YjsArray is not attached to a document. Add this array to any object that is attached to a document like a YjsMap or a YjsArray';
 const IS_FROM_JSON_ERROR = NOT_ATTACHED_ERROR + ' and this array was created from JSON. Add this array to any object that is attached to a document like a YjsMap or a YjsArray';
-export class YjsArray extends YjsBasic<Y.Array<any>> implements CRDTArray{
+export class YjsArray<Item extends BasicCRDTType = BasicCRDTType>
+    extends YjsBasic<Y.Array<any>> implements CRDTArray<Item> {
     // If the array was created from JSON, then it is not attached to a document.
     private isFromJson: boolean = false;
 
@@ -24,10 +25,10 @@ export class YjsArray extends YjsBasic<Y.Array<any>> implements CRDTArray{
      * @param index - The index of the item.
      * @returns The item at the given index.
      */
-    get(index: number): BasicCRDTType | undefined {
+    get(index: number): Item | undefined {
         this.checkIfNotAttached();
         const item = this.yjsObj.get(index);
-        return item === undefined ? undefined : utils.wrapYJStoCRDT(item);
+        return item === undefined ? undefined : utils.wrapYJStoCRDT(item) as Item;
     }
 
     /**
@@ -35,7 +36,7 @@ export class YjsArray extends YjsBasic<Y.Array<any>> implements CRDTArray{
      * @param index - The index to insert the items at.
      * @param items - The items to insert.
      */
-    insert(index: number, ...items: BasicCRDTType[]): void {
+    insert(index: number, ...items: Item[]): void {
         const unwrapped = items.map(utils.unwrapCRDTtoYJS);
         this.yjsObj.insert(index, unwrapped);
     }
@@ -44,7 +45,7 @@ export class YjsArray extends YjsBasic<Y.Array<any>> implements CRDTArray{
      * Appends one or more items to the end of the array.
      * @param items - The items to append.
      */
-    push(...items: BasicCRDTType[]): void {
+    push(...items: Item[]): void {
         const unwrapped = items.map(utils.unwrapCRDTtoYJS);
         this.yjsObj.push(unwrapped);
     }
@@ -71,10 +72,10 @@ export class YjsArray extends YjsBasic<Y.Array<any>> implements CRDTArray{
      * Executes a provided function once per array element.
      * @param callbackfn - The function to execute for each element.
      */
-    forEach(callbackfn: (value: BasicCRDTType, index: number, array: CRDTArray) => void): void {
+    forEach(callbackfn: (value: Item, index: number, array: CRDTArray<Item>) => void): void {
         this.checkIfNotAttached();
         this.yjsObj.forEach((item: BasicCRDTType, index: number) => {
-            callbackfn(utils.wrapYJStoCRDT(item), index, this);
+            callbackfn(utils.wrapYJStoCRDT(item) as Item, index, this);
         });
     }
 

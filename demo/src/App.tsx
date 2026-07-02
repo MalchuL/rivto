@@ -11,11 +11,11 @@ import {
   YjsDoc,
 } from "@chulane/rivto";
 
-const STORAGE_KEY = "rivto-editor-v2-demo";
+const STORAGE_KEY = "rivto-editor-v3-demo";
 
 const initialContent = [
-  { type: "heading", content: "Rivto, block by block" },
-  { content: "Select text to format it, or type / for block commands." },
+  { content: "# Rivto, block by block" },
+  { content: "Select text to **format** it, or type / for block commands." },
   { type: "callout", content: "This custom block is registered by the demo plugin." },
   { type: "bulletListItem", content: "Switch between page and edgeless mode." },
   { type: "bulletListItem", content: "Drag blocks around on the canvas." },
@@ -95,7 +95,7 @@ export function App() {
           <button
             onClick={() => {
               localStorage.removeItem(STORAGE_KEY);
-              instance.editor.loadSnapshot({ version: 2, blocks: [], links: [] });
+              instance.editor.loadSnapshot({ version: 3, blocks: [], links: [] });
               initialContent.forEach((block) => instance.editor.insertBlock(block));
             }}
           >
@@ -117,11 +117,11 @@ export function App() {
       <div className="capabilities" aria-label="Enabled extension points">
         <span>Plugin: custom callout</span>
         <span>Clipboard: JSON + HTML + text</span>
-        <span>Persistence: schema v2 snapshot</span>
+        <span>Persistence: schema v3 snapshot</span>
       </div>
 
       <details className="snapshot">
-        <summary>Schema v2 snapshot</summary>
+        <summary>Schema v3 snapshot</summary>
         <pre>{JSON.stringify(instance.editor.getSnapshot(), null, 2)}</pre>
       </details>
       <p className="saved">Changes are saved to this browser automatically.</p>

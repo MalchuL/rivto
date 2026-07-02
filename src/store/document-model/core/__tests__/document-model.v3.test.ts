@@ -9,7 +9,7 @@ const exchangeUpdates = (left: YjsDoc, right: YjsDoc): void => {
   Y.applyUpdate(right.doc, leftState);
 };
 
-describe("DocumentModelImpl schema v2", () => {
+describe("DocumentModelImpl schema v3 Markdown storage", () => {
   it("merges concurrent property, plugin namespace, and text operations", () => {
     const docA = new YjsDoc("canonical-a");
     const docB = new YjsDoc("canonical-b");
@@ -35,7 +35,7 @@ describe("DocumentModelImpl schema v2", () => {
       "acme.review": { status: "approved" },
       "rivto.comments": { threadIds: ["thread-1"] },
     });
-    expect(modelA.document[0].content.map((run) => run.text).join("")).toBe("Hi Hello Alice");
+    expect(modelA.document[0].content).toBe("Hi Hello Alice");
 
     docA.destroy();
     docB.destroy();
@@ -55,23 +55,17 @@ describe("DocumentModelImpl schema v2", () => {
     doc.destroy();
   });
 
-  it("preserves unchanged rich-text marks during plain-text reconciliation", () => {
+  it("stores Markdown syntax as plain collaborative text", () => {
     const doc = new YjsDoc("canonical-rich-text");
     const model = new DocumentModelImpl(doc);
     model.insertBlock({
       id: "text",
-      content: [
-        { text: "Bold", marks: { bold: true } },
-        { text: " plain" },
-      ],
+      content: "**Bold** plain",
     });
 
-    model.setBlockText("text", "Bold! plain");
+    model.setBlockText("text", "**Bold!** plain");
 
-    expect(model.document[0].content).toEqual([
-      { text: "Bold!", marks: { bold: true } },
-      { text: " plain", marks: undefined },
-    ]);
+    expect(model.document[0].content).toBe("**Bold!** plain");
     doc.destroy();
   });
 });

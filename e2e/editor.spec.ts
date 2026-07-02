@@ -30,3 +30,13 @@ test("switches the same document between page and edgeless views", async ({ page
   await expect(page.locator(".rv-page")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Paragraph" }).first()).toHaveText(text);
 });
+
+test("stores Markdown source and renders its heading and inline syntax", async ({ page }) => {
+  const paragraph = page.getByRole("textbox", { name: "Paragraph" }).first();
+  await paragraph.fill("# A **Markdown** heading");
+  await page.getByRole("button", { name: "Page" }).click();
+
+  const heading = page.locator('[data-type="heading"]').first();
+  await expect(heading).toContainText("A Markdown heading");
+  await expect(heading.locator("strong")).toHaveText("Markdown");
+});

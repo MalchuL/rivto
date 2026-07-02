@@ -5,6 +5,7 @@ import { CRDTText } from "./text";
 import { CRDTTransaction } from "./transaction";
 import { Instantiator } from "./utils";
 import { CRDTUndoManager, CRDTUndoScope } from "./undo";
+import { BasicCRDTType } from "./basic-types";
 
 
 /**
@@ -46,14 +47,14 @@ export interface CRDTDoc extends Serializible {
     createUndoManager(scopes: CRDTUndoScope[], trackedOrigins?: unknown[]): CRDTUndoManager;
 
     /**
-     * Get a CRDT-backed array at the given document path.
+     * Get a typed CRDT-backed array at the given document path.
      */
-    getArray(path: string): CRDTArray;
+    getArray<Item extends BasicCRDTType = BasicCRDTType>(path: string): CRDTArray<Item>;
 
     /**
-     * Get a CRDT-backed map at the given document path.
+     * Get a schema-typed CRDT-backed map at the given document path.
      */
-    getMap(path: string): CRDTMap;
+    getMap<Schema extends object = Record<string, BasicCRDTType>>(path: string): CRDTMap<Schema>;
 
     /**
      * Get a CRDT-backed collaborative text at the given document path.

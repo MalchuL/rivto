@@ -4,7 +4,6 @@ import type {
   Block as EditorBlock,
   BlockLayout,
   Link as EditorLink,
-  Mark,
   PartialBlock as PartialEditorBlock,
   Snapshot as EditorSnapshot,
 } from "../store/document-model";
@@ -15,12 +14,11 @@ export type {
   Block as EditorBlock,
   Link as EditorLink,
   Snapshot as EditorSnapshot,
-  InlineContent,
-  Mark,
   PartialBlock as PartialEditorBlock,
 } from "../store/document-model";
 
 export type EditorMode = "page" | "edgeless";
+export type MarkdownFormat = "bold" | "italic" | "strike" | "code" | "link";
 
 export interface EditorPosition {
   blockId: string;
@@ -85,11 +83,11 @@ export interface RivtoEditorApi {
   indentBlock(id: string): void;
   outdentBlock(id: string): void;
   setBlockText(id: string, text: string): void;
-  insertText(id: string, offset: number, text: string, marks?: Record<string, unknown>): void;
+  insertText(id: string, offset: number, text: string): void;
   deleteText(id: string, offset: number, length: number): void;
   setBlockProp(id: string, key: string, value: unknown): void;
   setPluginData(id: string, pluginId: string, value: unknown): void;
-  formatText(id: string, from: number, length: number, mark: Mark, value?: boolean | string): void;
+  formatText(id: string, from: number, length: number, format: MarkdownFormat, value?: string): void;
   copy(): Promise<string>;
   cut(): Promise<string>;
   paste(text?: string): Promise<void>;

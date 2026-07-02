@@ -8,7 +8,8 @@ import { YjsNotAttachedError } from "../error";
 const NOT_ATTACHED_ERROR = 'YjsMap is not attached to a document. Add this map to any object that is attached to a document like a YjsMap or a YjsArray';
 const IS_FROM_JSON_ERROR = NOT_ATTACHED_ERROR + ' and this map was created from JSON. Add this map to any object that is attached to a document like a YjsMap or a YjsArray';
 
-export class YjsMap extends YjsBasic<Y.Map<any>> implements CRDTMap{
+export class YjsMap<Schema extends object = Record<string, BasicCRDTType>>
+    extends YjsBasic<Y.Map<any>> implements CRDTMap<Schema> {
     
     // If the map was created from JSON, then it is not attached to a document.
     private isFromJson: boolean = false;
@@ -34,10 +35,10 @@ export class YjsMap extends YjsBasic<Y.Map<any>> implements CRDTMap{
      * @param key - The key to get the value for.
      * @returns The value for the given key.
      */
-    get(key: string): BasicCRDTType | undefined {
+    get<Key extends keyof Schema & string>(key: Key): Schema[Key] | undefined {
         this.checkIfNotAttached();
         const val = this.yjsObj.get(key);
-        return val === undefined ? undefined : utils.wrapYJStoCRDT(val);
+        return val === undefined ? undefined : utils.wrapYJStoCRDT(val) as Schema[Key];
     }
 
     /**
@@ -46,7 +47,7 @@ export class YjsMap extends YjsBasic<Y.Map<any>> implements CRDTMap{
      * @param val - The value to set.
      * @returns The map.
      */
-    set(key: string, val: BasicCRDTType): this {
+    set<Key extends keyof Schema & string>(key: Key, val: Schema[Key] & BasicCRDTType): this {
         this.yjsObj.set(key, utils.unwrapCRDTtoYJS(val));
         return this;
     }
@@ -72,27 +73,28 @@ export class YjsMap extends YjsBasic<Y.Map<any>> implements CRDTMap{
      * Gets the keys of the map.
      * @returns The keys of the map.
      */
-    keys(): MapIterator<string> {
+    keys(): MapIterator<keyof Schema & string> {
         this.checkIfNotAttached();
-        return this.yjsObj.keys() as MapIterator<string>;
+        return this.yjsObj.keys() as MapIterator<keyof Schema & string>;
     }
 
     /**
      * Gets the values of the map.
      * @returns The values of the map.
      */
-    values(): MapIterator<BasicCRDTType> {
+    values(): MapIterator<Schema[keyof Schema]> {
         this.checkIfNotAttached();
-        return (Array.from(this.yjsObj.values()).map(utils.wrapYJStoCRDT))[Symbol.iterator]() as  MapIterator<BasicCRDTType>;
+        return (Array.from(this.yjsObj.values()).map(utils.wrapYJStoCRDT))[Symbol.iterator]() as MapIterator<Schema[keyof Schema]>;
     }
 
     /**
      * Gets the entries of the map.
      * @returns The entries of the map.
      */
-    entries(): MapIterator<[string, BasicCRDTType]> {
+    entries(): MapIterator<[keyof Schema & string, Schema[keyof Schema]]> {
         this.checkIfNotAttached();
-        return (Array.from(this.yjsObj.entries()).map(([k, v]) => [k, utils.wrapYJStoCRDT(v)]))[Symbol.iterator]() as MapIterator<[string, BasicCRDTType]>;
+        return (Array.from(this.yjsObj.entries()).map(([k, v]) => [k, utils.wrapYJStoCRDT(v)]))[Symbol.iterator]() as
+            MapIterator<[keyof Schema & string, Schema[keyof Schema]]>;
     }
 
     /**
@@ -100,7 +102,7 @@ export class YjsMap extends YjsBasic<Y.Map<any>> implements CRDTMap{
      * @param key - The key to check.
      * @returns True if the map has the given key, false otherwise.
      */
-    has(key: string): boolean {
+    has(key: keyof Schema & string): boolean {
         this.checkIfNotAttached();
         return this.yjsObj.has(key);
     }
@@ -109,7 +111,7 @@ export class YjsMap extends YjsBasic<Y.Map<any>> implements CRDTMap{
      * Deletes a given key from the map.
      * @param key - The key to delete.
      */
-    delete(key: string): void {
+    delete(key: keyof Schema & string): void {
         this.yjsObj.delete(key);
     }
 
@@ -124,10 +126,10 @@ export class YjsMap extends YjsBasic<Y.Map<any>> implements CRDTMap{
      * Executes a provided function once per map element.
      * @param callbackfn - The function to execute for each element.
      */
-    forEach(callbackfn: (value: BasicCRDTType, key: string, map: CRDTMap) => void): void {
+    forEach(callbackfn: (value: Schema[keyof Schema], key: keyof Schema & string, map: CRDTMap<Schema>) => void): void {
         this.checkIfNotAttached();
         this.yjsObj.forEach((val: BasicCRDTType, key: string) => {
-            callbackfn(utils.wrapYJStoCRDT(val), key, this);
+            callbackfn(utils.wrapYJStoCRDT(val) as Schema[keyof Schema], key as keyof Schema & string, this);
         });
     }
 

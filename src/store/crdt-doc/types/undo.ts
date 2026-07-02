@@ -2,7 +2,7 @@ import type { CRDTArray } from "./array";
 import type { CRDTMap } from "./map";
 import type { CRDTText } from "./text";
 
-export type CRDTUndoScope = CRDTArray | CRDTMap | CRDTText;
+export type CRDTUndoScope = CRDTArray<any> | CRDTMap<any> | CRDTText;
 
 export interface CRDTUndoManager {
     undo(): void;

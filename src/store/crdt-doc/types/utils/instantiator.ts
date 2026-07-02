@@ -10,13 +10,13 @@ export interface Instantiator {
      * Creates a new CRDT array not attached to any document.
      * @returns The new CRDT array.
      */
-    createArray(): CRDTArray;
+    createArray<Item extends BasicCRDTType = BasicCRDTType>(): CRDTArray<Item>;
 
     /**
      * Creates a new CRDT map not attached to any document.
      * @returns The new CRDT map.
      */
-    createMap(): CRDTMap;
+    createMap<Schema extends object = Record<string, BasicCRDTType>>(): CRDTMap<Schema>;
 
     /**
      * Creates a new CRDT text not attached to any document.

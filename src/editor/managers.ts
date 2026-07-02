@@ -121,7 +121,7 @@ interface ClipboardBundle {
 }
 
 const flatten = (blocks: EditorBlock[]): EditorBlock[] => blocks.flatMap((block) => [block, ...flatten(block.children)]);
-const textOf = (block: EditorBlock): string => block.content.map((run) => run.text).join("");
+const textOf = (block: EditorBlock): string => block.content;
 const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
 })[character] ?? character);

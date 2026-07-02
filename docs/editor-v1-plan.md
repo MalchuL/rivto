@@ -46,8 +46,8 @@ views:
 - Content, hierarchy, links, and geometry are collaborative document state.
 - Mode, viewport, focus, and selection are local editor state.
 
-Document schema v2 uses ordered CRDT arrays for root and child block IDs, a
-CRDT map for each block, and `CRDTText` for formatted inline content. The Yjs
+Document schema v3 uses ordered CRDT arrays for root and child block IDs, a
+CRDT map for each block, and `CRDTText` for plain Markdown source. The Yjs
 adapter backs `CRDTText` with Y.Text without exposing it. Each block
 contains `id`, `type`, validated `props`, optional inline content, child IDs,
 plugin data, and optional canvas geometry. Links remain first-class records.
@@ -141,7 +141,7 @@ becomes the official playground.
 
 ### Gate 4.1: document model v2 — 4–6 weeks
 
-Implement the ordered block tree, Y.Text rich content and marks, typed props,
+Implement the ordered block tree, collaborative Markdown text, typed props,
 geometry, versioned snapshots, deterministic normalization, and a v1-to-v2
 migration preserving IDs, metadata, plugin state, links, and positions.
 
@@ -150,7 +150,7 @@ migration preserving IDs, metadata, plugin state, links, and positions.
 Implement transactions, commands, schema and plugin registries, normalized
 selection, keyboard routing, local state, events, and local-only undo/redo.
 
-Implemented vertical slice: schema-v2 nested Yjs blocks, attributed Y.Text,
+Implemented vertical slice: schema-v3 nested Yjs blocks, plain Markdown CRDTText,
 Zod prop schemas, layout, v1 migration, normalization, commands, normalized
 selection, clipboard helpers, events, local history, and runtime registration.
 

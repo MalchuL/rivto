@@ -1,12 +1,3 @@
-/** Inline mark names stored by the document model. */
-export type Mark = "bold" | "italic" | "underline" | "strike" | "code" | "link";
-
-/** A portable attributed text run returned by CRDTText. */
-export interface InlineContent {
-  text: string;
-  marks?: Partial<Record<Mark, boolean | string>>;
-}
-
 /** Collaborative block geometry shared by all renderers. */
 export interface BlockLayout {
   x: number;
@@ -22,7 +13,8 @@ export interface Block {
   type: string;
   props: Record<string, unknown>;
   pluginData: Record<string, unknown>;
-  content: InlineContent[];
+  /** Plain Markdown source stored collaboratively as CRDTText. */
+  content: string;
   children: Block[];
   layout?: BlockLayout;
 }
@@ -41,14 +33,14 @@ export interface PartialBlock {
   type?: string;
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
-  content?: string | InlineContent[];
+  content?: string;
   children?: PartialBlock[];
   layout?: Partial<BlockLayout>;
 }
 
 /** Lossless, versioned document value used for persistence. */
 export interface Snapshot {
-  version: 2;
+  version: 3;
   blocks: Block[];
   links: Link[];
   pluginData?: Record<string, unknown>;

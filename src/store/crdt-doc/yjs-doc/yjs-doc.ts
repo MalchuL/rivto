@@ -1,4 +1,4 @@
-import { BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTTransaction, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, Instantiator, WrapBasicTypeToCRDTOptions } from "../types";
+import { BasicCRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTTransaction, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, Instantiator, WrapBasicTypeToCRDTOptions } from "../types";
 import * as utils from "./structures/utils";
 import * as Y from 'yjs';
 import { Storage } from "../../../utils";
@@ -71,8 +71,8 @@ export class YjsDoc implements CRDTDoc {
      * @param path - The path to the array.
      * @returns The array.
      */
-    getArray(path: string): CRDTArray {
-        return utils.wrapYJStoCRDT(this.doc.getArray(path)) as CRDTArray;
+    getArray<Item extends BasicCRDTType = BasicCRDTType>(path: string): CRDTArray<Item> {
+        return utils.wrapYJStoCRDT(this.doc.getArray(path)) as CRDTArray<Item>;
     }
 
     /**
@@ -80,8 +80,8 @@ export class YjsDoc implements CRDTDoc {
      * @param path - The path to the map.
      * @returns The map.
      */
-    getMap(path: string): CRDTMap {
-        return utils.wrapYJStoCRDT(this.doc.getMap(path)) as CRDTMap;
+    getMap<Schema extends object = Record<string, BasicCRDTType>>(path: string): CRDTMap<Schema> {
+        return utils.wrapYJStoCRDT(this.doc.getMap(path)) as CRDTMap<Schema>;
     }
 
     /**

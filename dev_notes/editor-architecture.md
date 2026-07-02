@@ -36,10 +36,10 @@ adapters one stable interface to implement.
 
 | Area | Main source | Responsibility |
 | --- | --- | --- |
-| Document types | `src/store/document-model/core/types/document.ts` | Storage blocks, content, layouts, links, snapshots, and marks |
+| Document types | `src/store/document-model/core/types/document.ts` | Storage blocks, Markdown content, layouts, links, and snapshots |
 | Editor types | `src/editor/types.ts` | Selection, plugins, renderer contracts, and editor API |
 | Editor kernel | `src/editor/editor.ts` | Public commands, events, mode, manager ownership, and feature orchestration |
-| Collaborative model | `src/store/document-model/core/document-model.ts` | Canonical `DocumentModelImpl` boundary; block tree, rich content, props, plugin data, links, geometry, snapshots, and normalization |
+| Collaborative model | `src/store/document-model/core/document-model.ts` | Canonical `DocumentModelImpl` boundary; block tree, Markdown content, props, plugin data, links, geometry, snapshots, and normalization |
 | Runtime managers | `src/editor/managers.ts` | Selection, undo, providers, plugins, and clipboard |
 | Default module | `src/editor/defaults.ts` | Built-in block specifications and slash items |
 | React view | `src/editor/react.tsx` | Toolbar, editable blocks, slash menu, page renderer, and edgeless renderer |
@@ -50,6 +50,12 @@ adapters one stable interface to implement.
 `DocumentModelImpl` is the canonical storage model used by the editor.
 Schema-v1 data is converted by `migrateDocumentBundleV1()`; there is no
 schema-v1 model or mutable CRDT proxy API in the storage layer.
+
+The internal persisted shape is declared in
+`src/store/document-model/core/types/storage.ts`. Generic
+`CRDTMap<Schema>` and `CRDTArray<Item>` contracts make fields such as
+`content: CRDTText` and `children: CRDTArray<string>` visible to TypeScript
+without exposing native Yjs types.
 
 ## Data ownership
 
@@ -88,7 +94,7 @@ rivto.editor.plugins  document-level plugin data
 ```
 
 The `rivto.editor.*` prefix is retained as persisted wire format for existing
-schema-v2 documents. It does not make the storage model editor-specific.
+documents. It does not make the storage model editor-specific.
 
 Each block contains:
 
@@ -96,14 +102,14 @@ Each block contains:
 id          stable block ID
 type        registered BlockSpec type
 props       validated block properties
-content     attributed CRDTText
+content     plain Markdown CRDTText
 children    ordered CRDTArray of child IDs
 layout      x, y, width, height, zIndex
 pluginData  state owned by plugins for this block
 ```
 
-Block order is represented by CRDT arrays, not numeric order fields. Rich text
-is returned publicly as runs such as `{ text: "Hello", marks: { bold: true } }`.
+Block order is represented by CRDT arrays, not numeric order fields. Content is
+returned publicly as one Markdown string such as `"Hello **world**"`.
 
 Normalization removes missing or duplicate tree references and reattaches
 unreferenced blocks to the root. Unknown block types keep their document data
@@ -135,10 +141,9 @@ object with a stale local snapshot:
 
 - `setBlockProp(id, key, value)` changes one validated prop key.
 - `setPluginData(id, pluginId, value)` changes one plugin namespace.
-- `insertText(id, offset, text, marks)` inserts a CRDT text operation.
+- `insertText(id, offset, text)` inserts a CRDT text operation.
 - `deleteText(id, offset, length)` deletes a CRDT text range.
-- `setBlockText(id, text)` computes a minimal changed range for DOM input and
-  preserves unchanged formatting runs.
+- `setBlockText(id, text)` computes a minimal changed range for DOM input.
 - `setBlockLayout(id, patch)` changes only supplied geometry keys.
 
 `updateBlock()` remains a useful multi-field command, but interactive controls
@@ -264,29 +269,17 @@ The default writing plugin registers:
 Image and file blocks currently accept URLs supplied by the host/user. Upload
 transport and asset storage intentionally remain host responsibilities.
 
-### Rich text and formatting
+### Markdown text and formatting
 
-Inline text uses `CRDTText` with attributed runs. Supported marks are bold,
-italic, underline, strike, inline code, and links. The toolbar applies marks to
-a selection contained within one block.
+Inline content is stored as plain Markdown source in `CRDTText`. The toolbar
+wraps selections with Markdown tokens for bold, italic, strike, inline code,
+and links. Formatting is therefore portable text rather than CRDT attributes.
 
-### Input rules
+### Markdown rendering
 
-Typing the following prefixes changes the current block type:
-
-| Prefix | Result |
-| --- | --- |
-| `# ` | Heading 1 |
-| `## ` | Heading 2 |
-| `### ` | Heading 3 |
-| `- ` | Bulleted list |
-| `1. ` | Numbered list |
-| `[] ` | Checklist |
-| `> ` | Quote |
-| `` ``` `` | Code |
-
-These are currently implemented in the editor kernel. A future plugin input-rule
-registry should move them into the default writing plugin.
+Paragraphs beginning with `# `, `## `, or `### ` render as headings while
+the prefix remains in collaborative content. Explicit block types and props
+still select specialized renderers for lists, media, callouts, and plugins.
 
 ### Slash commands
 
@@ -324,7 +317,7 @@ Current limitation: there is no connector creation or editing UI.
 
 ### Persistence and migration
 
-`getSnapshot()` produces schema v2 JSON containing blocks, links, layouts, and
+`getSnapshot()` produces schema v3 JSON containing blocks, links, layouts, and
 plugin data. `loadSnapshot()` restores that data atomically. The demo stores the
 snapshot in browser local storage.
 

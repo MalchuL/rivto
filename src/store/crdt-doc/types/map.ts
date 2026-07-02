@@ -1,11 +1,13 @@
-import { RestrictedMap } from "../../../utils";
 import { BasicCRDTType, BasicType } from "./basic-types";
 import { Serializible } from "./crdt";
 
 /**
- * CRDTMap is a key-value store backed by a CRDT. It supports string keys.
+ * CRDTMap is a key-value store backed by a CRDT.
+ *
+ * Pass an object schema to restrict keys and values at compile time:
+ * `CRDTMap<{ content: CRDTText; children: CRDTArray<string> }>`.
  */
-export interface CRDTMap extends Serializible, RestrictedMap<string, BasicCRDTType> {
+export interface CRDTMap<Schema extends object = Record<string, BasicCRDTType>> extends Serializible {
     /**
      * Observe this map and its nested shared values without exposing an
      * adapter-specific map or transaction type.
@@ -15,12 +17,12 @@ export interface CRDTMap extends Serializible, RestrictedMap<string, BasicCRDTTy
     /**
      * Get the value for a given key.
      */
-    get(key: string): BasicCRDTType | undefined;
+    get<Key extends keyof Schema & string>(key: Key): Schema[Key] | undefined;
 
     /**
      * Set the value for a given key.
      */
-    set(key: string, val: BasicCRDTType): this;
+    set<Key extends keyof Schema & string>(key: Key, val: Schema[Key] & BasicCRDTType): this;
 
     /**
      * Returns the number of key-value pairs in the map.
@@ -31,27 +33,27 @@ export interface CRDTMap extends Serializible, RestrictedMap<string, BasicCRDTTy
     /**
      * Returns all keys in the map.
      */
-    keys(): MapIterator<string>;
+    keys(): MapIterator<keyof Schema & string>;
 
     /**
      * Returns all values in the map.
      */
-    values(): MapIterator<BasicCRDTType>;
+    values(): MapIterator<Schema[keyof Schema]>;
 
     /**
      * Returns all entries in the map as [key, value] pairs.
      */
-    entries(): MapIterator<[string, BasicCRDTType]>;
+    entries(): MapIterator<[keyof Schema & string, Schema[keyof Schema]]>;
 
     /**
      * Returns true if the key exists in the map.
      */
-    has(key: string): boolean;
+    has(key: keyof Schema & string): boolean;
 
     /**
      * Remove the value for the given key.
      */
-    delete(key: string): void;
+    delete(key: keyof Schema & string): void;
 
     /**
      * Remove all keys and values from the map.
@@ -61,8 +63,8 @@ export interface CRDTMap extends Serializible, RestrictedMap<string, BasicCRDTTy
     /**
      * Execute a callback for each [key, value] in the map.
      */
-    forEach(callbackfn: (value: BasicCRDTType, key: string, 
-                         map: CRDTMap) => void): void;
+    forEach(callbackfn: (value: Schema[keyof Schema], key: keyof Schema & string,
+                         map: CRDTMap<Schema>) => void): void;
 
     /**
      * Returns a plain JavaScript object representation of this map.

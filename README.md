@@ -30,7 +30,7 @@ export function Page() {
 The installed package version is available as `RIVTO_VERSION`.
 
 The editor includes paragraphs, three heading levels, bulleted, numbered and
-check lists, quotes, code, dividers, images, files, inline marks, slash
+check lists, quotes, code, dividers, images, files, Markdown formatting, slash
 commands, undo/redo, nesting, a page view, and an edgeless view. The editor
 depends only on the `CRDTDoc` abstraction; native Yjs objects never enter the
 editor API. To attach a provider, pass the Yjs adapter through `document`:
@@ -74,7 +74,7 @@ Unknown block types remain in snapshots and render as recoverable placeholders.
 
 ## Persistence and migration
 
-`editor.getSnapshot()` returns lossless schema-v2 JSON. Restore it with
+`editor.getSnapshot()` returns lossless schema-v3 JSON. Restore it with
 `editor.loadSnapshot(snapshot)`. Use `migrateDocumentBundleV1` to convert the
 legacy numeric-order bundle without mutating the source bundle.
 
