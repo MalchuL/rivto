@@ -1,0 +1,68 @@
+@startuml EditorArchitectureV3
+skinparam dpi 150
+left to right direction
+
+actor "Host App (React)" as Host
+
+rectangle "EditorCore" as Core {
+  [BlockRegistry]
+  [PluginRegistry]
+  [DocumentStore]
+  [ProviderManager]
+  [Renderer]
+  [SelectionManager]
+  [ClipboardManager]
+  [UndoManager]
+  [ThemeManager]
+  [EventBus]
+}
+
+rectangle "EditorView (React)" as View {
+  [DOM Event Hooks]
+  [Mount/Unmount]
+  [Clipboard Listeners]
+}
+
+rectangle "DocumentModel" as Doc {
+  [Blocks Array]
+  [Links]
+  [Meta]
+  [CRDTDoc Adapter]
+}
+
+rectangle "CRDT Layer" as CRDT {
+  [Y.Doc (Yjs)]
+  [Providers (y-websocket, indexeddb)]
+}
+
+rectangle "Plugins & Blocks" as Plugins {
+  [Plugin A]
+  [Plugin B]
+  [BlockDefs...]
+}
+
+rectangle "Renderers" as Renders {
+  [BlockDOMRenderer]
+  [EdgelessCanvasRenderer]
+}
+
+Host --> Core : create / configure
+Core --> View : setRenderer / mount
+View --> Core : events (copy/paste/keyboard)
+Core --> Doc : open/create documents
+Doc --> CRDT : CRDT ops
+Core --> ProviderManager : attach providers
+ProviderManager --> CRDT
+Core --> Plugins : plugin.setup()
+Plugins --> Core : defineBlock()
+Core --> BlockRegistry : register blocks
+Core --> Renders : renderSnapshot()
+Renders --> Doc : read blocks & links
+Renders --> Plugins : render hooks
+Core --> SelectionManager
+Core --> ClipboardManager
+Core --> UndoManager
+Core --> ThemeManager
+Core --> EventBus
+
+@enduml

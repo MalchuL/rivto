@@ -1,0 +1,1 @@
+pnpm test --filter @chulane/rivto

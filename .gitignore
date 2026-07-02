@@ -1,0 +1,6 @@
+tsconfig.tsbuildinfo
+tsconfig.cjs.tsbuildinfo
+tsconfig.esm.tsbuildinfo
+dist/
+.stuff/
+node_modules/
