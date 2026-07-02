@@ -34,7 +34,7 @@ export interface CRDTArray<Item extends BasicCRDTType = BasicCRDTType> extends S
     get length(): number;
 
     /** Execute a callback once per item. */
-    forEach(callbackfn: (value: Item, index: number, array: CRDTArray<Item>) => void): void;
+    forEach(callbackfn: (value: Item, index?: number, array?: CRDTArray<Item>) => void): void;
 
     /**
      * Returns a plain JavaScript array representing this CRDT array's contents.

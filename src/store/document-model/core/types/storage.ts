@@ -16,6 +16,11 @@ export interface BlockLayoutStorage {
   zIndex: number;
 }
 
+export type IDBlock = string;
+export type IDLink = string;
+export type IDPlugin = string;
+export type IDProp = string;
+
 /**
  * Exact shared fields stored for one block.
  *
@@ -23,18 +28,18 @@ export interface BlockLayoutStorage {
  * only changes ordered ID arrays and never rewrites its collaborative payload.
  */
 export interface BlockStorage {
-  id: string;
+  id: IDBlock;
   type: string;
-  props: CRDTMap<Record<string, BasicCRDTType>>;
+  props: CRDTMap<Record<IDProp, BasicCRDTType>>;
   content: CRDTText;
-  children: CRDTArray<string>;
-  layout: CRDTMap<BlockLayoutStorage>;
-  pluginData: CRDTMap<Record<string, BasicCRDTType>>;
+  children: CRDTArray<IDBlock>;
+  layout: CRDTMap<BlockLayoutStorage>;  // CRDTMap with keys of type IDBlockLayout (them are strings)
+  pluginData: CRDTMap<Record<IDPlugin, BasicCRDTType>>;
 }
 
 /** Exact shared fields stored for a first-class link. */
 export interface LinkStorage {
-  id: string;
+  id: IDLink;
   from: Link["from"];
   to: Link["to"];
   meta: Record<string, BasicType>;
@@ -42,8 +47,8 @@ export interface LinkStorage {
 
 /** Top-level collaborative containers owned by DocumentModelImpl. */
 export interface DocumentStorage {
-  roots: CRDTArray<string>;
-  blocks: CRDTMap<Record<string, CRDTMap<BlockStorage>>>;
-  links: CRDTMap<Record<string, CRDTMap<LinkStorage>>>;
-  pluginData: CRDTMap<Record<string, BasicCRDTType>>;
+  roots: CRDTArray<IDBlock>;
+  blocks: CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>;
+  links: CRDTMap<Record<IDLink, CRDTMap<LinkStorage>>>;
+  pluginData: CRDTMap<Record<IDPlugin, BasicCRDTType>>;
 }

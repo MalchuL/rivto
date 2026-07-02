@@ -72,7 +72,7 @@ export class YjsArray<Item extends BasicCRDTType = BasicCRDTType>
      * Executes a provided function once per array element.
      * @param callbackfn - The function to execute for each element.
      */
-    forEach(callbackfn: (value: Item, index: number, array: CRDTArray<Item>) => void): void {
+    forEach(callbackfn: (value: Item, index?: number, array?: CRDTArray<Item>) => void): void {
         this.checkIfNotAttached();
         this.yjsObj.forEach((item: BasicCRDTType, index: number) => {
             callbackfn(utils.wrapYJStoCRDT(item) as Item, index, this);

@@ -15,7 +15,8 @@ import type {
     PartialBlock,
     Snapshot,
 } from "./types";
-import type { BlockLayoutStorage, BlockStorage, DocumentStorage, LinkStorage } from "./types/storage";
+import type { BlockLayoutStorage, BlockStorage, DocumentStorage, IDBlock, IDLink, IDPlugin, IDProp, LinkStorage } from "./types/storage";
+import { assignMap, assignText, clone, isCRDTArray, isCRDTMap, isCRDTText } from "./utils";
 
 // Persisted keys retain their original namespace so existing CRDT
 // documents remain readable; this is wire format, not an editor dependency.
@@ -27,8 +28,18 @@ const DEFAULT_LAYOUT: BlockLayout = { x: 40, y: 40, width: 320, height: 120, zIn
 
 type PropsValidator = (type: string, props: Record<string, unknown>) => Record<string, unknown>;
 
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+/*
+ * Converts a CRDT array of strings to an array of strings.
+ * @param array - The CRDT array of strings.
+ * @returns The array of strings.
+ */
 const strings = (array: CRDTArray<string>): string[] => array.toArray().map(String);
+
+/*
+ * Converts a partial block content to a string.
+ * @param content - The partial block content.
+ * @returns The string content.
+ */
 const contentFrom = (content: PartialBlock["content"]): string => content ?? "";
 
 /**
@@ -67,10 +78,10 @@ export class DocumentModelImpl {
         this.crdt = crdt;
         this.id = typeof idOrCrdt === "string" ? idOrCrdt : crdt.id;
         this.storage = {
-            roots: crdt.getArray<string>(ROOTS_KEY),
-            blocks: crdt.getMap<Record<string, CRDTMap<BlockStorage>>>(BLOCKS_KEY),
-            links: crdt.getMap<Record<string, CRDTMap<LinkStorage>>>(LINKS_KEY),
-            pluginData: crdt.getMap<Record<string, BasicCRDTType>>(PLUGINS_KEY),
+            roots: crdt.getArray<IDBlock>(ROOTS_KEY),
+            blocks: crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY),
+            links: crdt.getMap<Record<IDLink, CRDTMap<LinkStorage>>>(LINKS_KEY),
+            pluginData: crdt.getMap<Record<IDPlugin, BasicCRDTType>>(PLUGINS_KEY),
         };
         this.undoScopes = [
             this.storage.blocks,
@@ -108,8 +119,8 @@ export class DocumentModelImpl {
      * @returns Links currently stored in the collaborative document.
      */
     get links(): Link[] {
-        return Array.from(this.storage.links.values()).flatMap((value) => {
-            if (!this.isMap(value)) return [];
+        return Array.from(this.storage.links.values()).flatMap((value: CRDTMap<LinkStorage>) => {
+            if (!isCRDTMap(value)) return [];
             return [{
                 id: String(value.get("id")),
                 from: clone(value.get("from") as Link["from"]),
@@ -151,7 +162,7 @@ export class DocumentModelImpl {
      * Inserts a block into an ordered root or sibling list.
      *
      * @param block - Initial portable block data.
-     * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
+     * @param afterId - Sibling to insert after block id, `null` for first, or omitted for last.
      * @returns Stable ID of the inserted block.
      * @throws If the ID already exists or the requested sibling is missing.
      */
@@ -178,9 +189,9 @@ export class DocumentModelImpl {
             const type = String(patch.type ?? block.get("type"));
             if (patch.type) block.set("type", patch.type);
             if (patch.props) this.patchProps(type, this.requiredMap(block, "props"), patch.props);
-            if (patch.pluginData) this.assignMap(this.requiredMap(block, "pluginData"), patch.pluginData, false);
-            if (patch.content !== undefined) this.assignText(this.requiredText(block, "content"), patch.content);
-            if (patch.layout) this.assignMap(this.requiredMap(block, "layout"), patch.layout, false);
+            if (patch.pluginData) assignMap(this.requiredMap(block, "pluginData"), patch.pluginData, false);
+            if (patch.content !== undefined) assignText(this.requiredText(block, "content"), patch.content);
+            if (patch.layout) assignMap(this.requiredMap(block, "layout"), patch.layout, false);
         });
     }
 
@@ -353,7 +364,7 @@ export class DocumentModelImpl {
      * @throws If the block or its layout field does not exist.
      */
     setBlockLayout(id: string, layout: Partial<BlockLayout>): void {
-        this.transact(() => this.assignMap(this.requiredMap(this.requiredBlock(id), "layout"), layout, false));
+        this.transact(() => assignMap(this.requiredMap(this.requiredBlock(id), "layout"), layout, false));
     }
 
     /**
@@ -414,7 +425,7 @@ export class DocumentModelImpl {
             this.storage.pluginData.clear();
             snapshot.blocks.forEach((block) => this.insertInto(block, this.storage.roots));
             snapshot.links?.forEach((link) => this.createLink(link));
-            this.assignMap(this.storage.pluginData, snapshot.pluginData ?? {});
+            assignMap(this.storage.pluginData, snapshot.pluginData ?? {});
         });
     }
 
@@ -437,7 +448,7 @@ export class DocumentModelImpl {
             };
             clean(this.storage.roots);
             for (const value of Array.from(this.storage.blocks.values())) {
-                if (this.isMap(value)) clean(this.requiredArray(value, "children"));
+                if (isCRDTMap(value)) clean(this.requiredArray(value, "children"));
             }
             for (const id of Array.from(this.storage.blocks.keys())) if (!seen.has(id)) this.storage.roots.push(id);
         });
@@ -470,16 +481,16 @@ export class DocumentModelImpl {
         model.set("layout", layout);
         model.set("pluginData", pluginData);
         this.storage.blocks.set(id, model);
-        this.assignMap(props, this.validateProps(type, block.props ?? {}));
-        this.assignText(content, contentFrom(block.content));
+        assignMap(props, this.validateProps(type, block.props ?? {}));
+        assignText(content, contentFrom(block.content));
         const flowIndex = container.length;
-        this.assignMap(layout, {
+        assignMap(layout, {
             ...DEFAULT_LAYOUT,
             x: 60 + (flowIndex % 4) * 350,
             y: 60 + Math.floor(flowIndex / 4) * 180,
             ...block.layout,
         }, false);
-        this.assignMap(pluginData, block.pluginData ?? {});
+        assignMap(pluginData, block.pluginData ?? {});
         block.children?.forEach((child) => this.insertInto(child, children));
         const index = afterId === undefined ? container.length : afterId === null ? 0 : strings(container).indexOf(afterId) + 1;
         if (index < 0) throw new Error(`Target block ${afterId} not found`);
@@ -494,15 +505,15 @@ export class DocumentModelImpl {
      * @param visited - IDs already traversed, used to break malformed cycles.
      * @returns Materialized block, or `undefined` when missing or already visited.
      */
-    private readBlock(id: string, visited: Set<string>): Block | undefined {
+    private readBlock(id: IDBlock, visited: Set<IDBlock>): Block | undefined {
         if (visited.has(id)) return undefined;
         const value = this.storage.blocks.get(id);
-        if (!this.isMap(value)) return undefined;
+        if (!isCRDTMap(value)) return undefined;
         visited.add(id);
-        const props = this.requiredMap(value, "props").toObject() as Record<string, unknown>;
-        const pluginData = this.requiredMap(value, "pluginData").toObject() as Record<string, unknown>;
+        const props = this.requiredMap(value, "props").toObject() as Record<IDProp, unknown>;
+        const pluginData = this.requiredMap(value, "pluginData").toObject() as Record<IDPlugin, unknown>;
         const content = this.requiredText(value, "content").toString();
-        const children = strings(this.requiredArray(value, "children")).flatMap((childId) => {
+        const children = strings(this.requiredArray(value, "children")).flatMap((childId: IDBlock) => {
             const child = this.readBlock(childId, visited);
             return child ? [child] : [];
         });
@@ -528,7 +539,7 @@ export class DocumentModelImpl {
         const rootIndex = strings(this.storage.roots).indexOf(id);
         if (rootIndex >= 0) return { array: this.storage.roots, index: rootIndex };
         for (const [parentId, value] of Array.from(this.storage.blocks.entries())) {
-            if (!this.isMap(value)) continue;
+            if (!isCRDTMap(value)) continue;
             const children = this.requiredArray(value, "children");
             const index = strings(children).indexOf(id);
             if (index >= 0) return { array: children, index, parentId };
@@ -543,7 +554,7 @@ export class DocumentModelImpl {
      */
     private removeTree(id: string): void {
         const value = this.storage.blocks.get(id);
-        if (!this.isMap(value)) return;
+        if (!isCRDTMap(value)) return;
         strings(this.requiredArray(value, "children")).forEach((child) => this.removeTree(child));
         this.storage.blocks.delete(id);
     }
@@ -556,7 +567,7 @@ export class DocumentModelImpl {
      */
     private collectTreeIds(id: string): string[] {
         const value = this.storage.blocks.get(id);
-        if (!this.isMap(value)) return [];
+        if (!isCRDTMap(value)) return [];
         return [id, ...strings(this.requiredArray(value, "children")).flatMap((child) => this.collectTreeIds(child))];
     }
 
@@ -581,36 +592,6 @@ export class DocumentModelImpl {
     }
 
     /**
-     * Copies portable object fields into a shared map.
-     *
-     * @param map - Shared map to update.
-     * @param values - Portable key-value pairs to copy.
-     * @param clear - Whether to remove existing entries before copying.
-     */
-    private assignMap<Schema extends object>(
-        map: CRDTMap<Schema>,
-        values: Record<string, unknown>,
-        clear = true,
-    ): void {
-        if (clear) map.clear();
-        const writable = map as unknown as CRDTMap<Record<string, BasicCRDTType>>;
-        Object.entries(values).forEach(([key, value]) => {
-            if (value !== undefined) writable.set(key, clone(value) as BasicCRDTType);
-        });
-    }
-
-    /**
-     * Replaces collaborative text with plain Markdown source.
-     *
-     * @param text - Shared text to rewrite.
-     * @param content - Markdown source.
-     */
-    private assignText(text: CRDTText, content: string): void {
-        if (text.length) text.delete(0, text.length);
-        if (content) text.insert(0, content);
-    }
-
-    /**
      * Reads a block map or fails with a domain-specific message.
      *
      * @param id - Block ID to resolve.
@@ -619,7 +600,7 @@ export class DocumentModelImpl {
      */
     private requiredBlock(id: string): CRDTMap<BlockStorage> {
         const value = this.storage.blocks.get(id);
-        if (!this.isMap(value)) throw new Error(`Block ${id} not found`);
+        if (!isCRDTMap(value)) throw new Error(`Block ${id} not found`);
         return value;
     }
 
@@ -636,7 +617,7 @@ export class DocumentModelImpl {
         key: Key,
     ): Extract<Schema[Key], CRDTMap<any>> {
         const value = parent.get(key);
-        if (!this.isMap(value)) throw new Error(`Expected CRDTMap at ${key}`);
+        if (!isCRDTMap(value)) throw new Error(`Expected CRDTMap at ${key}`);
         return value as Extract<Schema[Key], CRDTMap<any>>;
     }
 
@@ -653,7 +634,7 @@ export class DocumentModelImpl {
         key: Key,
     ): Extract<Schema[Key], CRDTArray<any>> {
         const value = parent.get(key);
-        if (!this.isArray(value)) throw new Error(`Expected CRDTArray at ${key}`);
+        if (!isCRDTArray(value)) throw new Error(`Expected CRDTArray at ${key}`);
         return value as Extract<Schema[Key], CRDTArray<any>>;
     }
 
@@ -670,37 +651,7 @@ export class DocumentModelImpl {
         key: Key,
     ): Extract<Schema[Key], CRDTText> {
         const value = parent.get(key);
-        if (!this.isText(value)) throw new Error(`Expected CRDTText at ${key}`);
+        if (!isCRDTText(value)) throw new Error(`Expected CRDTText at ${key}`);
         return value as Extract<Schema[Key], CRDTText>;
-    }
-
-    /**
-     * Narrows an adapter value to a CRDT map by its required capabilities.
-     *
-     * @param value - Value to inspect.
-     * @returns Whether the value implements the map contract.
-     */
-    private isMap(value: unknown): value is CRDTMap<any> {
-        return Boolean(value && typeof value === "object" && "set" in value && "entries" in value);
-    }
-
-    /**
-     * Narrows an adapter value to a CRDT array by its required capabilities.
-     *
-     * @param value - Value to inspect.
-     * @returns Whether the value implements the array contract.
-     */
-    private isArray(value: unknown): value is CRDTArray<any> {
-        return Boolean(value && typeof value === "object" && "insert" in value && "toArray" in value);
-    }
-
-    /**
-     * Narrows an adapter value to collaborative text by its required capabilities.
-     *
-     * @param value - Value to inspect.
-     * @returns Whether the value implements the text contract.
-     */
-    private isText(value: unknown): value is CRDTText {
-        return Boolean(value && typeof value === "object" && "format" in value && "toDelta" in value);
     }
 }
