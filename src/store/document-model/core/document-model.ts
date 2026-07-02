@@ -51,7 +51,18 @@ export class DocumentModelImpl {
     private readonly pluginData: CRDTMap;
     private validateProps: PropsValidator = (_type, props) => props;
 
+    /**
+     * Creates a storage model over an adapter-neutral collaborative document.
+     *
+     * @param crdt - Collaborative document that owns the shared state.
+     */
     constructor(crdt: CRDTDoc);
+    /**
+     * Creates a named storage model over a collaborative document.
+     *
+     * @param id - Descriptive model identifier; it does not control persistence.
+     * @param crdt - Collaborative document that owns the shared state.
+     */
     constructor(id: string, crdt: CRDTDoc);
     constructor(idOrCrdt: string | CRDTDoc, maybeCrdt?: CRDTDoc) {
         const crdt = typeof idOrCrdt === "string" ? maybeCrdt : idOrCrdt;
@@ -66,12 +77,20 @@ export class DocumentModelImpl {
         this.normalize();
     }
 
-    /** Install block-type prop validation without coupling the model to plugins. */
+    /**
+     * Installs block-property validation without coupling storage to plugins.
+     *
+     * @param validator - Function that validates and normalizes props by block type.
+     */
     setPropsValidator(validator: PropsValidator): void {
         this.validateProps = validator;
     }
 
-    /** Return the normalized ordered block tree as portable values. */
+    /**
+     * Returns the normalized ordered block tree as detached portable values.
+     *
+     * @returns Root blocks with recursively materialized children.
+     */
     get document(): Block[] {
         return strings(this.roots).flatMap((id) => {
             const block = this.readBlock(id, new Set());
@@ -79,7 +98,11 @@ export class DocumentModelImpl {
         });
     }
 
-    /** Return portable first-class link records. */
+    /**
+     * Returns all first-class links as detached portable values.
+     *
+     * @returns Links currently stored in the collaborative document.
+     */
     get links(): Link[] {
         return Array.from(this.linkMap.values()).flatMap((value) => {
             if (!this.isMap(value)) return [];
@@ -92,21 +115,42 @@ export class DocumentModelImpl {
         });
     }
 
+    /**
+     * Reports whether the document has no root blocks.
+     *
+     * @returns `true` when the ordered root list is empty.
+     */
     get isEmpty(): boolean {
         return this.roots.length === 0;
     }
 
-    /** Subscribe to local and remote document changes through CRDTDoc only. */
+    /**
+     * Subscribes to local and remote document changes through the CRDT abstraction.
+     *
+     * @param listener - Callback invoked after a collaborative update.
+     * @returns Function that removes the subscription.
+     */
     subscribe(listener: () => void): Unsubscribe {
         return this.crdt.on("update", listener);
     }
 
-    /** Group a semantic mutation under this model's local undo origin. */
+    /**
+     * Groups a semantic mutation under this model's local undo origin.
+     *
+     * @param operation - Synchronous mutation to execute atomically.
+     */
     transact(operation: () => void): void {
         this.crdt.transact(operation, this.origin);
     }
 
-    /** Insert a block into an ordered root or child CRDT array. */
+    /**
+     * Inserts a block into an ordered root or sibling list.
+     *
+     * @param block - Initial portable block data.
+     * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
+     * @returns Stable ID of the inserted block.
+     * @throws If the ID already exists or the requested sibling is missing.
+     */
     insertBlock(block: PartialBlock = {}, afterId?: string | null): string {
         let id = "";
         this.transact(() => {
@@ -119,6 +163,10 @@ export class DocumentModelImpl {
     /**
      * Patch only supplied block fields. Nested CRDT containers stay alive so
      * unrelated concurrent edits are not discarded by whole-object replacement.
+     *
+     * @param id - ID of the block to update.
+     * @param patch - Fields to validate and apply.
+     * @throws If the block does not exist.
      */
     updateBlock(id: string, patch: PartialBlock): void {
         this.transact(() => {
@@ -135,6 +183,11 @@ export class DocumentModelImpl {
     /**
      * Update one block property without replacing the shared props map.
      * Stable CRDT container identities let concurrent edits to different keys merge.
+     *
+     * @param id - ID of the block to update.
+     * @param key - Property name to set or remove.
+     * @param value - Portable value, or `undefined` to remove the property.
+     * @throws If the block does not exist or validation fails.
      */
     setBlockProp(id: string, key: string, value: unknown): void {
         this.transact(() => {
@@ -143,7 +196,14 @@ export class DocumentModelImpl {
         });
     }
 
-    /** Update one plugin namespace without touching data owned by other plugins. */
+    /**
+     * Updates one plugin namespace without touching data owned by other plugins.
+     *
+     * @param id - ID of the owning block.
+     * @param pluginId - Stable plugin namespace.
+     * @param value - Portable plugin data, or `undefined` to remove it.
+     * @throws If the block does not exist.
+     */
     setPluginData(id: string, pluginId: string, value: unknown): void {
         this.transact(() => {
             const data = this.requiredMap(this.requiredBlock(id), "pluginData");
@@ -155,6 +215,10 @@ export class DocumentModelImpl {
     /**
      * Reconcile DOM plain text as the smallest delete/insert range possible.
      * This preserves CRDTText identity and unchanged formatted runs.
+     *
+     * @param id - ID of the text block.
+     * @param text - Complete plain-text value received from the view.
+     * @throws If the block or its content field does not exist.
      */
     setBlockText(id: string, text: string): void {
         this.transact(() => {
@@ -175,7 +239,15 @@ export class DocumentModelImpl {
         });
     }
 
-    /** Insert collaborative text at a stable block-relative offset. */
+    /**
+     * Inserts collaborative text at a block-relative offset.
+     *
+     * @param id - ID of the text block.
+     * @param offset - Requested insertion offset, clamped to the content bounds.
+     * @param text - Text to insert.
+     * @param marks - Optional formatting attributes; surrounding marks are inherited when omitted.
+     * @throws If the block or its content field does not exist.
+     */
     insertText(id: string, offset: number, text: string, marks?: Record<string, unknown>): void {
         if (!text) return;
         this.transact(() => {
@@ -185,7 +257,14 @@ export class DocumentModelImpl {
         });
     }
 
-    /** Delete a collaborative text range without rewriting unaffected content. */
+    /**
+     * Deletes a collaborative text range without rewriting unaffected content.
+     *
+     * @param id - ID of the text block.
+     * @param offset - Requested start offset, clamped to the content bounds.
+     * @param length - Maximum number of characters to delete.
+     * @throws If the block or its content field does not exist.
+     */
     deleteText(id: string, offset: number, length: number): void {
         if (length <= 0) return;
         this.transact(() => {
@@ -195,7 +274,15 @@ export class DocumentModelImpl {
         });
     }
 
-    /** Apply portable formatting attributes to a collaborative text range. */
+    /**
+     * Applies portable formatting attributes to a collaborative text range.
+     *
+     * @param id - ID of the text block.
+     * @param from - Start offset of the formatting range.
+     * @param length - Number of characters to format.
+     * @param attributes - Mark names and their portable values.
+     * @throws If the block or its content field does not exist.
+     */
     formatText(id: string, from: number, length: number, attributes: Record<string, unknown>): void {
         if (length <= 0) return;
         this.transact(() => {
@@ -204,7 +291,11 @@ export class DocumentModelImpl {
         });
     }
 
-    /** Remove a block subtree and every link touching any removed descendant. */
+    /**
+     * Removes a block subtree and every link touching a removed descendant.
+     *
+     * @param id - Root ID of the subtree to remove.
+     */
     removeBlock(id: string): void {
         this.transact(() => {
             const found = this.findContainer(id);
@@ -218,7 +309,13 @@ export class DocumentModelImpl {
         });
     }
 
-    /** Move a block by editing ordered CRDT arrays rather than numeric positions. */
+    /**
+     * Moves a block within its sibling list by editing the ordered CRDT array.
+     *
+     * @param id - ID of the block to move.
+     * @param afterId - Sibling to move after, or `null` to move to the start.
+     * @throws If the block or target sibling does not exist.
+     */
     moveBlock(id: string, afterId: string | null): void {
         if (id === afterId) return;
         this.transact(() => {
@@ -232,7 +329,11 @@ export class DocumentModelImpl {
         });
     }
 
-    /** Nest a block under its preceding sibling. */
+    /**
+     * Nests a block under its preceding sibling.
+     *
+     * @param id - ID of the block to indent.
+     */
     indentBlock(id: string): void {
         this.transact(() => {
             const source = this.findContainer(id);
@@ -243,7 +344,11 @@ export class DocumentModelImpl {
         });
     }
 
-    /** Move a nested block directly after its parent. */
+    /**
+     * Moves a nested block directly after its parent.
+     *
+     * @param id - ID of the block to outdent.
+     */
     outdentBlock(id: string): void {
         this.transact(() => {
             const source = this.findContainer(id);
@@ -255,12 +360,23 @@ export class DocumentModelImpl {
         });
     }
 
-    /** Patch only supplied geometry keys so concurrent x/y/size edits can merge. */
+    /**
+     * Patches supplied geometry keys so independent concurrent edits can merge.
+     *
+     * @param id - ID of the block to reposition or resize.
+     * @param layout - Geometry fields to update.
+     * @throws If the block or its layout field does not exist.
+     */
     setBlockLayout(id: string, layout: Partial<BlockLayout>): void {
         this.transact(() => this.assignMap(this.requiredMap(this.requiredBlock(id), "layout"), layout, false));
     }
 
-    /** Create a validated first-class link between existing blocks. */
+    /**
+     * Creates or replaces a first-class link between existing blocks.
+     *
+     * @param link - Portable link record to store.
+     * @throws If either endpoint references a missing block.
+     */
     createLink(link: Link): void {
         this.transact(() => {
             if (!this.blocks.has(link.from.blockId) || !this.blocks.has(link.to.blockId)) {
@@ -275,11 +391,20 @@ export class DocumentModelImpl {
         });
     }
 
+    /**
+     * Removes a link by ID.
+     *
+     * @param id - ID of the link to remove.
+     */
     removeLink(id: string): void {
         this.transact(() => this.linkMap.delete(id));
     }
 
-    /** Produce a lossless portable schema-v2 snapshot. */
+    /**
+     * Produces a lossless portable schema-v2 snapshot.
+     *
+     * @returns Detached blocks, links, and document-level plugin data.
+     */
     getSnapshot(): Snapshot {
         return {
             version: 2,
@@ -289,7 +414,12 @@ export class DocumentModelImpl {
         };
     }
 
-    /** Replace collaborative state from a validated schema-v2 snapshot atomically. */
+    /**
+     * Replaces collaborative state from a schema-v2 snapshot atomically.
+     *
+     * @param snapshot - Portable snapshot to hydrate.
+     * @throws If the snapshot version or block collection is unsupported.
+     */
     loadSnapshot(snapshot: Snapshot): void {
         if (snapshot.version !== 2 || !Array.isArray(snapshot.blocks)) throw new Error("Unsupported Rivto editor snapshot");
         this.transact(() => {
@@ -306,6 +436,9 @@ export class DocumentModelImpl {
     /**
      * Repair duplicate, missing, and orphaned tree references deterministically.
      * Block payloads are retained even when a concurrent move leaves an orphan.
+     *
+     * Orphaned blocks are appended to the root list, while duplicate and missing
+     * references are removed.
      */
     normalize(): void {
         this.transact(() => {
@@ -325,6 +458,15 @@ export class DocumentModelImpl {
         });
     }
 
+    /**
+     * Creates CRDT containers for a block and inserts its ID into an ordered list.
+     *
+     * @param block - Portable block data, including optional descendants.
+     * @param container - Root or child array that receives the block ID.
+     * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
+     * @returns Stable ID assigned to the block.
+     * @throws If the ID already exists or the requested sibling is missing.
+     */
     private insertInto(block: PartialBlock, container: CRDTArray, afterId?: string | null): string {
         const id = block.id ?? crypto.randomUUID();
         if (this.blocks.has(id)) throw new Error(`Block ${id} already exists`);
@@ -360,6 +502,13 @@ export class DocumentModelImpl {
         return id;
     }
 
+    /**
+     * Materializes one stored block and its descendants as detached values.
+     *
+     * @param id - ID of the block to read.
+     * @param visited - IDs already traversed, used to break malformed cycles.
+     * @returns Materialized block, or `undefined` when missing or already visited.
+     */
     private readBlock(id: string, visited: Set<string>): Block | undefined {
         if (visited.has(id)) return undefined;
         const value = this.blocks.get(id);
@@ -387,6 +536,12 @@ export class DocumentModelImpl {
         };
     }
 
+    /**
+     * Locates the ordered array and index containing a block ID.
+     *
+     * @param id - Block ID to locate.
+     * @returns Container information, including parent ID for nested blocks.
+     */
     private findContainer(id: string): { array: CRDTArray; index: number; parentId?: string } | undefined {
         const rootIndex = strings(this.roots).indexOf(id);
         if (rootIndex >= 0) return { array: this.roots, index: rootIndex };
@@ -399,6 +554,11 @@ export class DocumentModelImpl {
         return undefined;
     }
 
+    /**
+     * Deletes a block and all descendants from the block map.
+     *
+     * @param id - Root ID of the subtree to delete.
+     */
     private removeTree(id: string): void {
         const value = this.blocks.get(id);
         if (!this.isMap(value)) return;
@@ -406,13 +566,25 @@ export class DocumentModelImpl {
         this.blocks.delete(id);
     }
 
+    /**
+     * Collects every block ID in a subtree.
+     *
+     * @param id - Root ID of the subtree.
+     * @returns Root and descendant IDs in depth-first order.
+     */
     private collectTreeIds(id: string): string[] {
         const value = this.blocks.get(id);
         if (!this.isMap(value)) return [];
         return [id, ...strings(this.requiredArray(value, "children")).flatMap((child) => this.collectTreeIds(child))];
     }
 
-    /** Apply only caller-owned prop keys; never rebuild a live CRDT map. */
+    /**
+     * Applies caller-owned prop keys without rebuilding the live CRDT map.
+     *
+     * @param type - Block type passed to the installed validator.
+     * @param props - Shared property map to patch.
+     * @param patch - Property keys owned by this operation.
+     */
     private patchProps(type: string, props: CRDTMap, patch: Record<string, unknown>): void {
         const validated = this.validateProps(type, { ...props.toObject(), ...patch } as Record<string, unknown>);
         for (const key of Object.keys(patch)) {
@@ -422,6 +594,13 @@ export class DocumentModelImpl {
         }
     }
 
+    /**
+     * Resolves formatting attributes to inherit at a text offset.
+     *
+     * @param text - Collaborative text containing attributed runs.
+     * @param offset - Block-relative text offset.
+     * @returns Attributes at the offset, or the preceding run at the end.
+     */
     private attributesAt(text: CRDTText, offset: number): Record<string, unknown> {
         let cursor = 0;
         let previous: Record<string, unknown> = {};
@@ -434,6 +613,13 @@ export class DocumentModelImpl {
         return previous;
     }
 
+    /**
+     * Copies portable object fields into a shared map.
+     *
+     * @param map - Shared map to update.
+     * @param values - Portable key-value pairs to copy.
+     * @param clear - Whether to remove existing entries before copying.
+     */
     private assignMap(map: CRDTMap, values: Record<string, unknown>, clear = true): void {
         if (clear) map.clear();
         Object.entries(values).forEach(([key, value]) => {
@@ -441,6 +627,12 @@ export class DocumentModelImpl {
         });
     }
 
+    /**
+     * Replaces collaborative text with attributed portable runs.
+     *
+     * @param text - Shared text to rewrite.
+     * @param content - Ordered attributed text runs.
+     */
     private assignContent(text: CRDTText, content: InlineContent[]): void {
         if (text.length) text.delete(0, text.length);
         content.forEach((run) => {
@@ -448,38 +640,87 @@ export class DocumentModelImpl {
         });
     }
 
+    /**
+     * Reads a block map or fails with a domain-specific message.
+     *
+     * @param id - Block ID to resolve.
+     * @returns Stored block map.
+     * @throws If the block does not exist.
+     */
     private requiredBlock(id: string): CRDTMap {
         const value = this.blocks.get(id);
         if (!this.isMap(value)) throw new Error(`Block ${id} not found`);
         return value;
     }
 
+    /**
+     * Reads a required map field from a parent map.
+     *
+     * @param parent - Parent shared map.
+     * @param key - Field expected to contain a CRDT map.
+     * @returns Nested shared map.
+     * @throws If the field is absent or has the wrong shared type.
+     */
     private requiredMap(parent: CRDTMap, key: string): CRDTMap {
         const value = parent.get(key);
         if (!this.isMap(value)) throw new Error(`Expected CRDTMap at ${key}`);
         return value;
     }
 
+    /**
+     * Reads a required array field from a parent map.
+     *
+     * @param parent - Parent shared map.
+     * @param key - Field expected to contain a CRDT array.
+     * @returns Nested shared array.
+     * @throws If the field is absent or has the wrong shared type.
+     */
     private requiredArray(parent: CRDTMap, key: string): CRDTArray {
         const value = parent.get(key);
         if (!this.isArray(value)) throw new Error(`Expected CRDTArray at ${key}`);
         return value;
     }
 
+    /**
+     * Reads a required text field from a parent map.
+     *
+     * @param parent - Parent shared map.
+     * @param key - Field expected to contain collaborative text.
+     * @returns Nested collaborative text.
+     * @throws If the field is absent or has the wrong shared type.
+     */
     private requiredText(parent: CRDTMap, key: string): CRDTText {
         const value = parent.get(key);
         if (!this.isText(value)) throw new Error(`Expected CRDTText at ${key}`);
         return value;
     }
 
+    /**
+     * Narrows an adapter value to a CRDT map by its required capabilities.
+     *
+     * @param value - Value to inspect.
+     * @returns Whether the value implements the map contract.
+     */
     private isMap(value: BasicCRDTType | undefined): value is CRDTMap {
         return Boolean(value && typeof value === "object" && "set" in value && "entries" in value);
     }
 
+    /**
+     * Narrows an adapter value to a CRDT array by its required capabilities.
+     *
+     * @param value - Value to inspect.
+     * @returns Whether the value implements the array contract.
+     */
     private isArray(value: BasicCRDTType | undefined): value is CRDTArray {
         return Boolean(value && typeof value === "object" && "insert" in value && "toArray" in value);
     }
 
+    /**
+     * Narrows an adapter value to collaborative text by its required capabilities.
+     *
+     * @param value - Value to inspect.
+     * @returns Whether the value implements the text contract.
+     */
     private isText(value: BasicCRDTType | undefined): value is CRDTText {
         return Boolean(value && typeof value === "object" && "format" in value && "toDelta" in value);
     }
