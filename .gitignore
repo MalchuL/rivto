@@ -1,6 +1,8 @@
-tsconfig.tsbuildinfo
-tsconfig.cjs.tsbuildinfo
-tsconfig.esm.tsbuildinfo
+*.tsbuildinfo
 dist/
 .stuff/
 node_modules/
+*.tgz
+.eslintcache
+playwright-report/
+test-results/

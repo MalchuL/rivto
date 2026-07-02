@@ -1,4 +1,4 @@
-import { RestrictedMap } from "@/utils";
+import { RestrictedMap } from "../../../utils";
 import { BasicCRDTType, BasicType } from "./basic-types";
 import { Serializible } from "./crdt";
 
@@ -6,6 +6,12 @@ import { Serializible } from "./crdt";
  * CRDTMap is a key-value store backed by a CRDT. It supports string keys.
  */
 export interface CRDTMap extends Serializible, RestrictedMap<string, BasicCRDTType> {
+    /**
+     * Observe this map and its nested shared values without exposing an
+     * adapter-specific map or transaction type.
+     */
+    observe(handler: (events: unknown, transaction: unknown) => void): () => void;
+
     /**
      * Get the value for a given key.
      */

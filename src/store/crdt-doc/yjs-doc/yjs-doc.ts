@@ -1,4 +1,4 @@
-import { BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTTransaction, Unsubscribe, Provider, Instantiator, WrapBasicTypeToCRDTOptions } from "../types";
+import { BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTTransaction, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, Instantiator, WrapBasicTypeToCRDTOptions } from "../types";
 import * as utils from "./structures/utils";
 import * as Y from 'yjs';
 import { Storage } from "../../../utils";
@@ -48,8 +48,22 @@ export class YjsDoc implements CRDTDoc {
      * Executes a transaction on the YjsDoc.
      * @param fn - The function to execute within the transaction.
      */
-    transact(fn: (tx: CRDTTransaction) => void): void {
-        this.doc.transact(fn);
+    transact(fn: (tx: CRDTTransaction) => void, origin?: unknown): void {
+        this.doc.transact(fn, origin);
+    }
+
+    createUndoManager(scopes: CRDTUndoScope[], trackedOrigins: unknown[] = []): CRDTUndoManager {
+        const nativeScopes = scopes.map((scope) => utils.unwrapCRDTtoYJS(scope) as Y.AbstractType<any>);
+        const manager = new Y.UndoManager(nativeScopes, {
+            trackedOrigins: new Set(trackedOrigins),
+        });
+        return {
+            undo: () => manager.undo(),
+            redo: () => manager.redo(),
+            clear: () => manager.clear(),
+            stopCapturing: () => manager.stopCapturing(),
+            destroy: () => manager.destroy(),
+        };
     }
 
     /**
@@ -121,7 +135,7 @@ export class YjsDoc implements CRDTDoc {
         const snapshot: Record<string, BasicType> = {};
 
         this.doc.share.forEach((_, key) => {
-            let value = this.doc.get(key)
+            const value = this.doc.get(key)
             // If the value is an AbstractType (might be in synced docs), we need to convert it to a JSON object.
             if (value.constructor.name === 'AbstractType') {
                throw new Error(`YjsDoc.toJSON: AbstractType found in synced docs. To fix this call "doc.getMap(${key}) or doc.getText(${key}) or doc.getArray(${key})" to get the value.`);

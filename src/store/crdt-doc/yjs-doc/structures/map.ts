@@ -1,8 +1,8 @@
-import { BasicCRDTType, BasicType, CRDTMap, WrapBasicTypeToCRDTOptions } from "../../types";
+import { BasicCRDTType, BasicType, CRDTMap } from "../../types";
 import * as Y from 'yjs';
 import * as utils from './utils';
 import { YjsBasic } from "./basic";
-import { YjsInvalidJSONError, YjsNotAttachedError } from "../error";
+import { YjsNotAttachedError } from "../error";
 
 
 const NOT_ATTACHED_ERROR = 'YjsMap is not attached to a document. Add this map to any object that is attached to a document like a YjsMap or a YjsArray';
@@ -20,6 +20,13 @@ export class YjsMap extends YjsBasic<Y.Map<any>> implements CRDTMap{
     constructor(yMap?: Y.Map<any>) {
       const yMapInstance = yMap || new Y.Map<any>();
       super(yMapInstance);
+    }
+
+    /** Keep native Yjs observation inside the adapter boundary. */
+    observe(handler: (events: unknown, transaction: unknown) => void): () => void {
+        const listener = (events: Y.YEvent<any>[], transaction: Y.Transaction) => handler(events, transaction);
+        this.yjsObj.observeDeep(listener);
+        return () => this.yjsObj.unobserveDeep(listener);
     }
 
     /**

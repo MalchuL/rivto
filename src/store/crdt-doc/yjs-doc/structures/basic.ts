@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import { YjsError, YjsUndefinedError } from '../error';
+import { YjsUndefinedError } from '../error';
 
 export abstract class YjsBasic<T extends Y.AbstractType<any>> {
     /**
@@ -39,7 +39,7 @@ export abstract class YjsBasic<T extends Y.AbstractType<any>> {
      * @returns The parent.
      */
     protected get parent(): Y.AbstractType<any> | null {
-        let parent = this._yjsObj.parent;
+        const parent = this._yjsObj.parent;
         if (parent instanceof Y.Doc) {
             return null;
         }

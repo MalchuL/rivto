@@ -1,7 +1,11 @@
 {
-
   "compilerOptions": {
     "rootDir": "src",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -11,8 +15,7 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "allowJs": true,
-    "composite": true,
+    "baseUrl": ".",
     "paths": {
       "@/store/crdt-doc": [
         "./src/store/crdt-doc"
@@ -25,7 +28,5 @@
       ]
     }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }
-
-

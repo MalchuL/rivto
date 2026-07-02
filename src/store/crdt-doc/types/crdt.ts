@@ -1,5 +1,4 @@
 import { BasicType } from "./basic-types";
-import { WrapBasicTypeToCRDTOptions } from "./utils";
 
 export interface Serializible {
     /**

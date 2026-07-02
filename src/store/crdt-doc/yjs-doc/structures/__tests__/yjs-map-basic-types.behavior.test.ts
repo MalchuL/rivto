@@ -32,15 +32,12 @@ describe('Yjs behavior: basic (non-Yjs) types stored in Y.Map', () => {
         ]),
       );
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.log('Setting a native JS Map throws:', err);
     }
 
     const json = root.toJSON();
     // Intentionally no assertions: meant for manual inspection.
-    // eslint-disable-next-line no-console
     console.log('Y.Map.toJSON()', json);
-    // eslint-disable-next-line no-console
     console.log('JSON.stringify(Y.Map.toJSON())', JSON.stringify(json));
 
     expect(true).toBe(true);
@@ -163,4 +160,3 @@ describe('Yjs behavior: basic (non-Yjs) types stored in Y.Map', () => {
     expect(root2.get('arr')).toEqual([1, 2, 3]);
   });
 });
-

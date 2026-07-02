@@ -1,8 +1,7 @@
-import { BasicType, CRDTText, WrapBasicTypeToCRDTOptions } from "../../types";
+import { BasicType, CRDTText, CRDTTextDelta } from "../../types";
 import * as Y from 'yjs';
-import * as utils from './utils';
 import { YjsBasic } from "./basic";
-import { YjsInvalidJSONError, YjsNotAttachedError } from "../error";
+import { YjsNotAttachedError } from "../error";
 
 const NOT_ATTACHED_ERROR = 'YjsText is not attached to a document. Add this text to any object that is attached to a document like a YjsMap or a YjsArray';
 const IS_FROM_JSON_ERROR = NOT_ATTACHED_ERROR + ' and this text was created from JSON. Add this text to any object that is attached to a document like a YjsMap or a YjsArray';
@@ -25,8 +24,8 @@ export class YjsText extends YjsBasic<Y.Text> implements CRDTText {
      * @param pos - The position to insert the text at.
      * @param text - The text to insert.
      */
-    insert(pos: number, text: string): void {
-        this.yjsObj.insert(pos, text);
+    insert(pos: number, text: string, attributes?: Record<string, unknown>): void {
+        this.yjsObj.insert(pos, text, attributes);
     }
 
     /**
@@ -36,6 +35,19 @@ export class YjsText extends YjsBasic<Y.Text> implements CRDTText {
      */
     delete(pos: number, length: number): void {
         this.yjsObj.delete(pos, length);
+    }
+
+    format(pos: number, length: number, attributes: Record<string, unknown>): void {
+        this.yjsObj.format(pos, length, attributes);
+    }
+
+    toDelta(): CRDTTextDelta[] {
+        this.checkIfNotAttached();
+        return this.yjsObj.toDelta().flatMap((part: { insert: unknown; attributes?: Record<string, unknown> }) =>
+            typeof part.insert === 'string'
+                ? [{ insert: part.insert, attributes: part.attributes as Record<string, unknown> | undefined }]
+                : [],
+        );
     }
 
     /**

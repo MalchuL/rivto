@@ -1,8 +1,7 @@
-import { BasicCRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, Instantiator, WrapBasicTypeToCRDTOptions } from "../../types";
+import { BasicCRDTType, BasicType, CRDTArray, CRDTMap, CRDTText, Instantiator, WrapBasicTypeToCRDTOptions } from "../../types";
 import { YjsArray, YjsMap, YjsText } from "../structures";
 import { isDeepPlainRecord } from "../structures/utils/plain-check";
 import { basicToCRDT } from "../structures/utils/wrap";
-import { YjsDoc } from "../yjs-doc";
 
 export class YjsInstantiator implements Instantiator {
 

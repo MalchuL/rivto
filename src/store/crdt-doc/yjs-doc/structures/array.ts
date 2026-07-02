@@ -1,8 +1,8 @@
-import { BasicCRDTType, BasicType, CRDTArray, WrapBasicTypeToCRDTOptions } from "../../types";
+import { BasicCRDTType, BasicType, CRDTArray } from "../../types";
 import * as Y from 'yjs';
 import * as utils from './utils';
 import { YjsBasic } from "./basic";
-import { YjsInvalidJSONError, YjsNotAttachedError } from "../error";
+import { YjsNotAttachedError } from "../error";
 
 const NOT_ATTACHED_ERROR = 'YjsArray is not attached to a document. Add this array to any object that is attached to a document like a YjsMap or a YjsArray';
 const IS_FROM_JSON_ERROR = NOT_ATTACHED_ERROR + ' and this array was created from JSON. Add this array to any object that is attached to a document like a YjsMap or a YjsArray';

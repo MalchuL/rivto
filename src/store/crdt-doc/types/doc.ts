@@ -4,6 +4,7 @@ import { CRDTMap } from "./map";
 import { CRDTText } from "./text";
 import { CRDTTransaction } from "./transaction";
 import { Instantiator } from "./utils";
+import { CRDTUndoManager, CRDTUndoScope } from "./undo";
 
 
 /**
@@ -39,7 +40,10 @@ export interface CRDTDoc extends Serializible {
     /**
      * Execute operations within a transaction for atomicity.
      */
-    transact(fn: (tx: CRDTTransaction) => void): void;
+    transact(fn: (tx: CRDTTransaction) => void, origin?: unknown): void;
+
+    /** Create history for the provided CRDT scopes without leaking adapter types. */
+    createUndoManager(scopes: CRDTUndoScope[], trackedOrigins?: unknown[]): CRDTUndoManager;
 
     /**
      * Get a CRDT-backed array at the given document path.
