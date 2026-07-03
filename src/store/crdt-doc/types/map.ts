@@ -64,7 +64,7 @@ export interface CRDTMap<Schema extends object = Record<string, BasicCRDTType>> 
      * Execute a callback for each [key, value] in the map.
      */
     forEach(callbackfn: (value: Schema[keyof Schema], key: keyof Schema & string,
-                         map: CRDTMap<Schema>) => void): void;
+                         map?: CRDTMap<Schema>) => void): void;
 
     /**
      * Returns a plain JavaScript object representation of this map.
