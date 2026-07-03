@@ -111,6 +111,24 @@ function readPosition(root: HTMLElement, node: Node | null, offset: number): Edi
 }
 
 /**
+ * Converts a pointer-selection endpoint into portable editor coordinates.
+ *
+ * Cross-contenteditable mouse selection is partly synthetic: Rivto resolves
+ * the pointer position itself, then asks the browser to display a native range.
+ * Reading the resolved endpoint directly avoids waiting for the browser's
+ * asynchronous `selectionchange` event. It also preserves the real gesture
+ * direction, because the native Range API normalizes upward selections into
+ * document order.
+ *
+ * @param root - Editor root that must own the endpoint.
+ * @param point - Live DOM endpoint resolved from pointer coordinates.
+ * @returns Stable block ID and UTF-16 offset, or `undefined` if detached.
+ */
+export function readDOMPointPosition(root: HTMLElement, point: DOMSelectionPoint): EditorPosition | undefined {
+  return readPosition(root, point.node, point.offset);
+}
+
+/**
  * Reads the browser's directed selection when both endpoints belong to Rivto.
  *
  * Each endpoint is resolved independently, allowing selections to cross block
@@ -139,6 +157,51 @@ function pointAtOffset(content: HTMLElement, requestedOffset: number): { node: N
     remaining -= length;
   }
   return last ? { node: last, offset: last.textContent?.length ?? 0 } : { node: content, offset: 0 };
+}
+
+/**
+ * Finds one editable content host without interpolating its arbitrary block ID.
+ *
+ * @param root - Editor instance that owns the block.
+ * @param blockId - Stable ID matched through dataset values.
+ * @returns Editable content host, or `undefined` when it is not rendered.
+ */
+function contentForBlock(root: HTMLElement, blockId: string): HTMLElement | undefined {
+  return [...root.querySelectorAll<HTMLElement>("[data-rivto-block]")]
+    .find((block) => block.dataset.rivtoBlock === blockId)
+    ?.querySelector<HTMLElement>(".rv-block-content") ?? undefined;
+}
+
+/**
+ * Restores portable editor selection after React synchronizes editable DOM.
+ *
+ * A collapsed range focuses its owning editing host. Cross-block ranges retain
+ * the current focus because browsers permit only one active contenteditable.
+ * Restoration is skipped when focus has left editable content (for example,
+ * when the user clicks the toolbar); otherwise an old stored caret could steal
+ * focus back from the user's new target. During structured paste, focus remains
+ * in the old editable, so moving it to the newly inserted final block is safe.
+ *
+ * @param root - Editor root containing both portable endpoints.
+ * @param selection - Local editor selection to restore.
+ */
+export function restoreEditorSelection(root: HTMLElement, selection: EditorSelection | null): void {
+  if (!selection) return;
+  const anchorContent = contentForBlock(root, selection.anchor.blockId);
+  const headContent = contentForBlock(root, selection.head.blockId);
+  if (!anchorContent || !headContent) return;
+  const collapsed = selection.anchor.blockId === selection.head.blockId && selection.anchor.offset === selection.head.offset;
+  const activeContent = document.activeElement instanceof HTMLElement
+    ? document.activeElement.closest<HTMLElement>(".rv-block-content")
+    : null;
+  if (collapsed && (!activeContent || !root.contains(activeContent))) return;
+  if (collapsed && activeContent !== headContent) headContent.focus({ preventScroll: true });
+  const anchor = pointAtOffset(anchorContent, selection.anchor.offset);
+  const head = pointAtOffset(headContent, selection.head.offset);
+  setNativeSelection(
+    { ...anchor, content: anchorContent },
+    { ...head, content: headContent },
+  );
 }
 
 /** Removes Rivto's supplemental cross-editing-host selection paint. */

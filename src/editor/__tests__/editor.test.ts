@@ -1,5 +1,6 @@
 import { createRivtoEditor } from "../editor";
 import { YjsDoc } from "../../store/crdt-doc";
+import { createClipboardPayload } from "../managers/clipboard-bundle";
 import { z } from "zod";
 
 describe("RivtoEditorCore", () => {
@@ -101,31 +102,77 @@ describe("RivtoEditorCore", () => {
     expect(editor.document[0].content).toBe("Hello Rivto");
   });
 
-  it("copies complete blocks across a cross-block selection", async () => {
+  it("copies partial typed blocks across forward and reversed selections", async () => {
     const editor = createRivtoEditor({ initialContent: [
-      { id: "a", type: "paragraph", content: "First block" },
-      { id: "b", type: "paragraph", content: "Second block" },
+      { id: "a", type: "paragraph", content: "Alpha", props: { tone: "plain" } },
+      { id: "b", type: "heading", content: "Beta", pluginData: { comments: { count: 1 } } },
     ] });
-    editor.setSelection({ anchor: { blockId: "a", offset: 0 }, head: { blockId: "b", offset: 12 } });
+    const selection = { anchor: { blockId: "a", offset: 2 }, head: { blockId: "b", offset: 2 } };
+    editor.setSelection(selection);
 
-    expect(await editor.copy()).toBe("First block\nSecond block");
+    const payload = createClipboardPayload(editor.documentModel, editor.selection);
+    expect(await editor.copy()).toBe("pha\nBe");
+    expect(payload?.html).toBe("<p>pha</p><p>Be</p>");
+    expect(payload?.bundle.blocks).toMatchObject([
+      { type: "paragraph", content: "pha", props: { tone: "plain" } },
+      { type: "heading", content: "Be", pluginData: { comments: { count: 1 } } },
+    ]);
+
+    editor.setSelection({ anchor: selection.head, head: selection.anchor });
+    expect(await editor.copy()).toBe("pha\nBe");
   });
 
-  it("pastes structured types with remapped IDs, links, and canvas offsets", () => {
-    const editor = createRivtoEditor({ initialContent: [
-      { id: "a", type: "paragraph", content: "A", layout: { x: 10, y: 20 } },
-      { id: "b", type: "paragraph", content: "B", layout: { x: 30, y: 40 } },
+  it("pastes the first structured block at the cursor and remaps remaining data", () => {
+    const source = createRivtoEditor({ initialContent: [
+      { id: "first", type: "heading", content: "First", props: { source: true } },
+      { id: "child", type: "quote", content: "Child" },
+      { id: "second", type: "code", content: "Second", pluginData: { syntax: { language: "ts" } }, layout: { x: 30, y: 40 } },
     ] });
-    editor.createLink({ id: "ab", from: { blockId: "a" }, to: { blockId: "b" } });
-    editor.setSelection({ anchor: { blockId: "a", offset: 0 }, head: { blockId: "b", offset: 1 } });
-    editor.clipboardManager.pasteBundle({ version: 1, blocks: editor.document, links: editor.links });
+    source.indentBlock("child");
+    source.createLink({ id: "first-child", from: { blockId: "first" }, to: { blockId: "child" } });
+    source.createLink({ id: "first-second", from: { blockId: "first" }, to: { blockId: "second" } });
+    source.setSelection({ anchor: { blockId: "first", offset: 0 }, head: { blockId: "second", offset: 6 } });
+    const bundle = createClipboardPayload(source.documentModel, source.selection)?.bundle;
+    if (!bundle) throw new Error("Expected structured clipboard data");
 
-    expect(editor.document).toHaveLength(4);
-    const pasted = editor.document.slice(2);
-    expect(pasted.map((block) => block.id)).not.toEqual(["a", "b"]);
-    expect(pasted.map((block) => block.type)).toEqual(["paragraph", "paragraph"]);
-    expect(pasted[0].layout).toMatchObject({ x: 34, y: 44 });
-    expect(editor.links[1]).toMatchObject({ from: { blockId: pasted[0].id }, to: { blockId: pasted[1].id } });
+    const editor = createRivtoEditor({ initialContent: [
+      { id: "target", type: "paragraph", content: "Hello world", props: { target: true } },
+    ] });
+    editor.setSelection({ anchor: { blockId: "target", offset: 6 }, head: { blockId: "target", offset: 6 } });
+    editor.clipboardManager.pasteBundle(bundle);
+
+    expect(editor.document).toHaveLength(2);
+    expect(editor.document[0]).toMatchObject({
+      id: "target", type: "paragraph", content: "Hello First", props: { target: true },
+      children: [{ type: "quote", content: "Child" }],
+    });
+    expect(editor.document[1]).toMatchObject({
+      type: "code", content: "Secondworld", pluginData: { syntax: { language: "ts" } }, layout: { x: 54, y: 64 },
+    });
+    expect(editor.selection).toEqual({
+      anchor: { blockId: editor.document[1].id, offset: 6 },
+      head: { blockId: editor.document[1].id, offset: 6 },
+    });
+    expect(editor.links).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: { blockId: "target" }, to: { blockId: editor.document[0].children[0].id } }),
+      expect.objectContaining({ from: { blockId: "target" }, to: { blockId: editor.document[1].id } }),
+    ]));
+  });
+
+  it("cuts partial cross-block content and keeps multiline plain text in one block", async () => {
+    const editor = createRivtoEditor({ initialContent: [
+      { id: "a", type: "paragraph", content: "Alpha" },
+      { id: "b", type: "heading", content: "Beta" },
+    ] });
+    editor.setSelection({ anchor: { blockId: "a", offset: 2 }, head: { blockId: "b", offset: 2 } });
+
+    expect(await editor.cut()).toBe("pha\nBe");
+    expect(editor.document).toMatchObject([{ id: "a", type: "paragraph", content: "Alta" }]);
+    expect(editor.selection).toEqual({ anchor: { blockId: "a", offset: 2 }, head: { blockId: "a", offset: 2 } });
+
+    await editor.paste("paragraph", "one\ntwo");
+    expect(editor.document).toMatchObject([{ id: "a", type: "paragraph", content: "Alone\ntwota" }]);
+    expect(editor.document).toHaveLength(1);
   });
 
   it("preserves unknown stored types while requiring definitions for new blocks", () => {

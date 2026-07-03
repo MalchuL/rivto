@@ -203,6 +203,13 @@ and link references, offsets canvas positions, and inserts the result in one
 document transaction. HTML currently falls back to extracted plain text rather
 than a complete HTML-to-block conversion.
 
+Clipboard ranges are normalized in visible document order. Copy trims boundary
+content in every MIME representation while keeping block types and extension
+data. Paste consumes the first copied block into the current block without
+changing its type, inserts later blocks normally, and moves the current suffix
+to the final inserted block. React, rather than the manager or document model,
+reconciles focused editable DOM and restores the native caret.
+
 ### ProviderManager
 
 Attaches and detaches collaboration providers through `CRDTDoc`. Editor and UI

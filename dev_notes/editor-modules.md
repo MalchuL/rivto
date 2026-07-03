@@ -128,10 +128,14 @@ Contains pure clipboard-domain functions. It:
 
 - Flattens block trees in visible order.
 - Derives selected top-level subtrees without duplicating descendants.
-- Normalizes same-block text ranges.
-- Produces structured JSON, escaped HTML, and plain text.
+- Normalizes forward and reversed ranges in visible depth-first order.
+- Trims the first and last block content to the exact selected offsets while
+  retaining their type, props, plugin data, layout, and descendant trees.
+- Produces structured JSON, escaped HTML, and plain text from the same slice.
 - Generates new block and link IDs during paste.
-- Remaps link endpoints and offsets edgeless geometry.
+- Can map the consumed first clipboard block onto an existing target block, so
+  links remain valid without replacing the target's native type or metadata.
+- Remaps other link endpoints and offsets edgeless geometry.
 
 Keeping these transformations pure makes them testable without browser APIs.
 
@@ -147,6 +151,12 @@ selection managers. Copy priority is:
 Structured paste preserves block types and data while remapping identities.
 HTML currently becomes visible plain text. Plain text uses the explicit default
 block type supplied by the React host when no selected block exists.
+
+At an existing caret, the first clipboard block contributes only content. The
+target retains its type and metadata, copied children attach below it, remaining
+blocks are inserted as siblings, and the target's old suffix moves to the last
+inserted block. Cut and range replacement use the same normalized boundaries.
+Multiline plain text remains in one block.
 
 ### `plugin-manager.ts`
 
@@ -199,6 +209,9 @@ Contains both renderer strategies and their shared block components:
 - Shared block components resolve `BlockDefinition` through `editor.blocks`.
 - Unknown types render a visible fallback without losing their data.
 - `contenteditable` input writes Markdown source through editor commands.
+- Focused content is reconciled only when its DOM text differs from stored
+  content, which makes programmatic paste and remote updates visible without
+  resetting the caret during ordinary typing.
 - Page block dragging starts only from the side handle, so it does not intercept
   ordinary text-selection gestures.
 - Slash replacement creates a new typed block and removes the trigger block;
@@ -221,6 +234,8 @@ contenteditables while preserving anchor/head direction for clipboard actions.
 Because some engines paint only the active editing host, this module also uses
 the CSS Highlight API to paint the remaining cross-block text ranges without
 mutating editable DOM.
+It also restores a portable selection after React reconciles programmatic
+content changes, focusing the destination only for a collapsed caret.
 
 ### `styles.ts`
 

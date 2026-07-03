@@ -1,9 +1,9 @@
 import { type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Block } from "../../store/document-model";
 import type { SlashItem } from "../blocks";
-import type { RivtoEditorCore } from "../editor";
+import type { EditorPosition, EditorSelection, RivtoEditorCore } from "../editor";
 import { escapeHtml, markdownHtml, markdownType } from "./markdown";
-import { readDOMSelectionPoint, setNativeSelection, type DOMSelectionPoint } from "./selection";
+import { readDOMPointPosition, readDOMSelectionPoint, restoreEditorSelection, updateCrossBlockHighlight, type DOMSelectionPoint } from "./selection";
 import type { EditorRendererProps, SlashState } from "./types";
 
 /** Renders and synchronizes one block's editable Markdown source. */
@@ -19,8 +19,17 @@ function EditableText({ block, title, editor, defaultBlockType, onSlash }: {
   const html = editing ? escapeHtml(block.content).replace(/\n/g, "<br>") : markdownHtml(block.content);
   useLayoutEffect(() => {
     const element = ref.current;
-    if (element && document.activeElement !== element && element.innerHTML !== html) element.innerHTML = html;
-  }, [html]);
+    if (!element) return;
+    if (document.activeElement === element) {
+      // Native typing changes the DOM before onInput updates the document, so
+      // equal text must be left untouched or every keystroke would reset the
+      // caret. Programmatic paste and remote CRDT updates change the document
+      // first; a mismatch identifies exactly those cases and refreshes the
+      // focused host immediately instead of waiting for blur/refocus.
+      const visibleText = element.innerText.replace(/\n$/, "");
+      if (visibleText !== block.content) element.textContent = block.content;
+    } else if (element.innerHTML !== html) element.innerHTML = html;
+  }, [block.content, html]);
   return <span ref={ref} className="rv-block-content" contentEditable suppressContentEditableWarning role="textbox" aria-label={title}
     onFocus={(event) => { if (!editing) event.currentTarget.textContent = block.content; setEditing(true); }}
     onBlur={() => setEditing(false)}
@@ -153,10 +162,16 @@ function BlockView({ block, editor, defaultBlockType, slash, setSlash, canvas = 
 /** Renders ordered block trees in document flow. */
 export function BlockDOMRenderer({ editor, blocks, defaultBlockType, slash, setSlash }: EditorRendererProps) {
   const page = useRef<HTMLDivElement>(null);
-  const pointerSelection = useRef<{ anchor?: DOMSelectionPoint; head?: DOMSelectionPoint; x: number; y: number } | null>(null);
+  const pointerSelection = useRef<{
+    anchorPosition?: EditorPosition;
+    anchor?: DOMSelectionPoint;
+    selection?: EditorSelection;
+    x: number;
+    y: number;
+  } | null>(null);
   useEffect(() => {
     /** Extends an active gesture when the pointer enters another block editing host. */
-    const move = (event: MouseEvent): void => {
+    const move = (event: PointerEvent): void => {
       const root = page.current;
       const start = pointerSelection.current;
       if (!root || !start || Math.hypot(event.clientX - start.x, event.clientY - start.y) < 3) return;
@@ -164,31 +179,66 @@ export function BlockDOMRenderer({ editor, blocks, defaultBlockType, slash, setS
       if (!anchor) return;
       start.anchor = anchor;
       const head = readDOMSelectionPoint(root, event.clientX, event.clientY);
-      if (!head || head.content === anchor.content) return;
+      if (!head) return;
+      const anchorPosition = start.anchorPosition ?? readDOMPointPosition(root, anchor);
+      const headPosition = readDOMPointPosition(root, head);
+      if (!anchorPosition || !headPosition || anchorPosition.blockId === headPosition.blockId) return;
       event.preventDefault();
-      start.head = head;
-      setNativeSelection(anchor, head);
+      // Tell the outer React binding that this renderer currently owns the
+      // portable cross-host selection. Native selectionchange events emitted
+      // during Chromium's drag describe only its active host and must not
+      // overwrite the correct anchor/head below.
+      root.dataset.rivtoPointerSelecting = "true";
+      // Native selectionchange is asynchronous and, for a bottom-to-top drag,
+      // some engines do not publish or paint the cross-host range until mouseup.
+      // Publish the already-resolved pointer endpoints immediately so React's
+      // CSS Highlight layer updates during the gesture. Using the original
+      // anchor/head also keeps reverse direction even though Range normalizes it.
+      const directedSelection = { anchor: anchorPosition, head: headPosition };
+      start.selection = directedSelection;
+      editor.setSelection(directedSelection);
+      // Chromium can defer React's external-store commit while its native
+      // selection gesture is active. Paint from the same portable value now;
+      // RivtoEditor will reconcile the identical highlight after the commit.
+      updateCrossBlockHighlight(root, directedSelection);
     };
     /** Ends pointer selection without changing the resulting native range. */
     const stop = (): void => {
       const completed = pointerSelection.current;
       pointerSelection.current = null;
-      const anchor = completed?.anchor;
-      const head = completed?.head;
-      if (anchor && head) setTimeout(() => setNativeSelection(anchor, head));
+      const root = page.current;
+      // During the drag, CSS Highlight is authoritative because Chromium's
+      // native range can collapse to the active host. Once pointer ownership is
+      // released, restore the browser range from stable editor coordinates so
+      // copy/cut and keyboard extension continue from the visible selection.
+      if (root && completed?.selection) setTimeout(() => {
+        restoreEditorSelection(root, completed.selection ?? null);
+        delete root.dataset.rivtoPointerSelecting;
+      });
+      else if (root) delete root.dataset.rivtoPointerSelecting;
     };
-    window.addEventListener("mousemove", move, { passive: false });
-    window.addEventListener("mouseup", stop);
+    // Chromium can withhold mousemove while it owns a native text-selection
+    // drag. Pointer events continue through that gesture in both Chromium and
+    // Firefox, so the bridge can render reverse selection before pointerup.
+    window.addEventListener("pointermove", move, { passive: false, capture: true });
+    window.addEventListener("pointerup", stop, true);
     return () => {
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseup", stop);
+      if (page.current) delete page.current.dataset.rivtoPointerSelecting;
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", stop, true);
     };
-  }, []);
+  }, [editor]);
   return <div ref={page} className="rv-page"
-    onMouseDown={(event) => {
+    onPointerDownCapture={(event) => {
       if (event.button !== 0) return;
       const target = event.target instanceof Element ? event.target.closest(".rv-block-content") : null;
-      pointerSelection.current = target ? { x: event.clientX, y: event.clientY } : null;
+      const root = page.current;
+      const anchor = target && root ? readDOMSelectionPoint(root, event.clientX, event.clientY) : undefined;
+      // Store the portable anchor before native contenteditable handling runs.
+      // Chromium may later report the current head for a hit-test at the old
+      // coordinates; the stable block/offset remains valid across DOM rewrites.
+      const anchorPosition = root && anchor ? readDOMPointPosition(root, anchor) : undefined;
+      pointerSelection.current = target ? { anchorPosition, x: event.clientX, y: event.clientY } : null;
     }}>
     {blocks.map((block) => <BlockView key={block.id} block={block} editor={editor} defaultBlockType={defaultBlockType} slash={slash} setSlash={setSlash} />)}
   </div>;

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { MarkdownFormat } from "../editor";
 import { BlockDOMRenderer, EdgelessCanvasRenderer } from "./renderers";
-import { clearCrossBlockHighlight, readEditorSelection, updateCrossBlockHighlight } from "./selection";
+import { clearCrossBlockHighlight, readEditorSelection, restoreEditorSelection, updateCrossBlockHighlight } from "./selection";
 import { editorStyles } from "./styles";
 import type { RivtoEditorProps, SlashState } from "./types";
 
@@ -26,6 +26,11 @@ export function RivtoEditor({ editor, defaultBlockType, className = "", renderer
     /** Synchronizes the browser's possibly cross-block range into local editor state. */
     const synchronizeSelection = (): void => {
       if (!root.current) return;
+      // BlockDOMRenderer owns selection while bridging separate editing hosts.
+      // Chromium emits intermediate same-host selectionchange events during an
+      // upward drag; accepting them would erase the renderer's live cross-block
+      // anchor/head and make highlighting disappear until pointer-up.
+      if (root.current.querySelector('[data-rivto-pointer-selecting="true"]')) return;
       const selection = readEditorSelection(root.current);
       if (selection) editor.setSelection(selection);
     };
@@ -33,7 +38,10 @@ export function RivtoEditor({ editor, defaultBlockType, className = "", renderer
     return () => document.removeEventListener("selectionchange", synchronizeSelection);
   }, [editor]);
   useLayoutEffect(() => {
-    if (root.current) updateCrossBlockHighlight(root.current, editor.selection);
+    if (root.current) {
+      restoreEditorSelection(root.current, editor.selection);
+      updateCrossBlockHighlight(root.current, editor.selection);
+    }
     return () => { if (root.current) clearCrossBlockHighlight(root.current); };
   }, [editor, mode, selectionRevision]);
   /** Applies Markdown formatting to the current single-block selection. */
@@ -45,7 +53,15 @@ export function RivtoEditor({ editor, defaultBlockType, className = "", renderer
   };
   return <div ref={root} className={`rivto ${className}`} data-rivto-editor
     onCopy={(event) => editor.clipboardManager.handleCopyEvent(event.nativeEvent)}
-    onPaste={(event) => editor.clipboardManager.handlePasteEvent(event.nativeEvent, defaultBlockType)}>
+    onPaste={(event) => {
+      // `selectionchange` is asynchronous in browsers. Ctrl+V can arrive before
+      // SelectionManager receives the newest caret, so read the native range at
+      // paste time. ClipboardManager remains DOM-agnostic while still receiving
+      // the exact insertion point the user sees.
+      const nativeSelection = root.current ? readEditorSelection(root.current) : undefined;
+      if (nativeSelection) editor.setSelection(nativeSelection);
+      editor.clipboardManager.handlePasteEvent(event.nativeEvent, defaultBlockType);
+    }}>
     <style>{editorStyles}</style>
     <div className="rv-toolbar" role="toolbar" aria-label="Editor toolbar">
       <button onClick={() => editor.undo()} aria-label="Undo">↶</button><button onClick={() => editor.redo()} aria-label="Redo">↷</button>
