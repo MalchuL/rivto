@@ -23,15 +23,15 @@ const editor = createRivtoEditor({
 });
 
 export function Page() {
-  return <RivtoEditor editor={editor} />;
+  return <RivtoEditor editor={editor} defaultBlockType="paragraph" />;
 }
 ```
 
 The installed package version is available as `RIVTO_VERSION`.
 
-The editor includes paragraphs, three heading levels, bulleted, numbered and
+The command-driven editor runtime includes paragraphs, three heading levels, bulleted, numbered and
 check lists, quotes, code, dividers, images, files, Markdown formatting, slash
-commands, undo/redo, nesting, a page view, and an edgeless view. The editor
+commands, undo/redo, nesting, a block view, and an edgeless view. The editor
 depends only on the `CRDTDoc` abstraction; native Yjs objects never enter the
 editor API. To attach a provider, pass the Yjs adapter through `document`:
 
@@ -44,13 +44,17 @@ const editor = createRivtoEditor({ document });
 
 ## Custom blocks and plugins
 
-Plugins are trusted local modules and may be registered at creation time or at
-runtime.
+Plugins are trusted local modules and may contribute blocks, commands, routed
+events, and mode-aware UI at creation time or at runtime. Document mutations
+go through `editor.commands.execute()`. Built-in names infer exact payload and
+result types. Runtime-only plugin commands retain local typing through the
+handle returned by `commands.registerDynamic()`; declarative UI invokes truly
+dynamic names through `commands.executeDynamic()`.
 
 ```tsx
 import { z } from "zod";
 
-const dispose = editor.registerPlugin({
+const dispose = editor.use({
   id: "acme.alerts",
   blocks: [{
     type: "alert",
@@ -63,7 +67,9 @@ const dispose = editor.registerPlugin({
     ),
   }],
   commands: {
-    insertAlert: (editor) => editor.insertBlock({ type: "alert" }),
+    insertAlert: (editor) => editor.commands.execute("block.insert", {
+      block: { type: "alert" },
+    }),
   },
 });
 
@@ -74,8 +80,8 @@ Unknown block types remain in snapshots and render as recoverable placeholders.
 
 ## Persistence and migration
 
-`editor.getSnapshot()` returns lossless schema-v3 JSON. Restore it with
-`editor.loadSnapshot(snapshot)`. Use `migrateDocumentBundleV1` to convert the
+`editor.document.getSnapshot()` returns lossless schema-v3 JSON. Restore it with
+`editor.commands.execute("document.load", { snapshot })`. Use `migrateDocumentBundleV1` to convert the
 legacy numeric-order bundle without mutating the source bundle.
 
 ## Development

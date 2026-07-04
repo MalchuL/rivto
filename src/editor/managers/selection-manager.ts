@@ -2,47 +2,47 @@ import type { Unsubscribe } from "../../store/crdt-doc";
 import type { EditorSelection } from "../editor/types";
 
 /**
- * Owns the editor's local text selection and publishes explicit changes.
+ * Owns detached local text, block, or edgeless selection state.
  *
- * A selection keeps its direction: `anchor` is where the gesture began and
- * `head` is where it ended. Equal positions are collapsed. Different block
- * IDs describe a cross-block selection. Offsets are UTF-16 string offsets,
- * matching browser DOM selection APIs. The editor validates positions before
- * calling this manager; the manager deliberately has no document dependency.
+ * Selection is editor-session state, never collaborative document content.
+ * This manager deliberately has no document dependency: EditorRuntime validates
+ * IDs, UTF-16 offsets, endpoints, and mode compatibility before calling `set`.
  */
 export class SelectionManager {
   private value: EditorSelection | null = null;
   private readonly listeners = new Set<() => void>();
 
-  /** Creates a manager with no active selection. */
-  constructor() {}
-
   /**
-   * Returns a detached copy of the current local selection.
+   * Returns a detached selection value.
    *
-   * @returns Directed selection, or `null` when nothing is selected.
+   * Nested positions and block ID arrays are copied so consumers cannot mutate
+   * manager state without producing a subscription notification.
    */
   get(): EditorSelection | null {
-    return this.value ? {
-      anchor: { ...this.value.anchor },
-      head: { ...this.value.head },
-    } : null;
+    if (!this.value) return null;
+    if (this.value.type === "text") return {
+      type: "text", anchor: { ...this.value.anchor }, head: { ...this.value.head },
+    };
+    if (this.value.type === "block") return { ...this.value, blockIds: [...this.value.blockIds] };
+    return { type: "edgeless", blockIds: [...this.value.blockIds] };
   }
 
   /**
-   * Replaces local selection state and notifies every subscriber once.
+   * Replaces selection with a detached copy and notifies subscribers.
    *
-   * The value is copied so callers cannot mutate manager state without a
-   * notification. Document existence and offset validation belong to EditorCore.
+   * Text anchor/head direction is preserved. Clipboard normalization may sort
+   * it later for range operations, but gesture direction belongs here.
    *
-   * @param selection - Valid directed selection supplied by the editor boundary.
+   * @param selection - Runtime-validated local selection.
    */
   set(selection: EditorSelection): void {
-    this.value = { anchor: { ...selection.anchor }, head: { ...selection.head } };
+    this.value = selection.type === "text"
+      ? { type: "text", anchor: { ...selection.anchor }, head: { ...selection.head } }
+      : { ...selection, blockIds: [...selection.blockIds] };
     this.notify();
   }
 
-  /** Clears the local selection and notifies subscribers when it changed. */
+  /** Clears an effective selection without notifying for an existing null. */
   clear(): void {
     if (!this.value) return;
     this.value = null;
@@ -50,9 +50,9 @@ export class SelectionManager {
   }
 
   /**
-   * Subscribes to local selection changes.
+   * Subscribes to selection changes.
    *
-   * @param listener - Callback invoked after set or an effective clear.
+   * @param listener - Callback invoked after set or effective clear.
    * @returns Function that removes this listener.
    */
   subscribe(listener: () => void): Unsubscribe {
@@ -60,8 +60,6 @@ export class SelectionManager {
     return () => this.listeners.delete(listener);
   }
 
-  /** Invokes a stable snapshot of subscribers after state has changed. */
-  private notify(): void {
-    [...this.listeners].forEach((listener) => listener());
-  }
+  /** Notifies a stable snapshot so listeners may unsubscribe during dispatch. */
+  private notify(): void { [...this.listeners].forEach((listener) => listener()); }
 }

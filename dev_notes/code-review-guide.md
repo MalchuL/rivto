@@ -10,8 +10,8 @@ is: “does every feature preserve the boundary below?”
 
 ```text
 React and host application
-  → RivtoEditorCore
-    → BlockRegistry and focused managers
+  → EditorRuntime
+    → CommandRegistry / EventRouter / focused managers
       → DocumentModelImpl
         → CRDTDoc
 ```
@@ -26,6 +26,7 @@ zoom remain local.
 ```text
 0. Product and architecture intent
 ├─ docs/base_ideas.md
+├─ docs/phase2.md
 ├─ docs/editor-v1-plan.md
 ├─ dev_notes/editor-architecture.md
 ├─ dev_notes/editor-modules.md
@@ -58,9 +59,13 @@ zoom remain local.
 
 4. Small managers
 └─ src/editor/managers/
+   ├─ command-registry.ts
+   ├─ event-router.ts
+   ├─ mode-manager.ts
    ├─ selection-manager.ts
    ├─ plugin-manager.ts
-   ├─ undo-manager.ts
+   ├─ history-manager.ts / undo-manager.ts
+   ├─ ui-registry.ts
    ├─ provider-manager.ts
    └─ index.ts
 
@@ -127,9 +132,10 @@ Follow this sequence inside `App`:
 1. A `YjsDoc` adapter is created by the host.
 2. `createRivtoEditor({ document: doc })` creates the editor and document model.
 3. `defineBlock(calloutDefinition)` registers a custom presentation.
-4. `use(demoPlugin)` installs a named command.
-5. A schema-v3 snapshot is restored or initial typed blocks are inserted.
-6. `useSyncExternalStore` subscribes to the editor's document revision.
+4. `use(demoPlugin)` atomically installs commands, events, and UI contributions.
+5. A schema-v3 snapshot is restored or initial blocks are inserted through
+   `editor.commands.execute()`.
+6. `useSyncExternalStore` subscribes to runtime, command, and event state.
 7. Changes are persisted to local storage.
 8. React cleanup destroys both editor and host-owned document.
 
@@ -141,7 +147,7 @@ replay.
 
 The callout and renderer wrappers are deliberate extension examples. Confirm
 that they import only the package root and never a private `src/**` path. Also
-confirm that page and edgeless wrappers receive the same `EditorRendererProps`
+confirm that block and edgeless wrappers receive the same `EditorRendererProps`
 and do not create independent documents.
 
 ## 2. Establish the public contract
@@ -154,8 +160,8 @@ such as `BlockSpec`, `registerPlugin`, and `getBlockSpec` have not returned.
 Next read `src/editor/editor/types.ts` in full. Important contracts are:
 
 - `EditorPosition.offset` is a UTF-16 offset, matching DOM Range APIs.
-- `EditorSelection` is directed: anchor and head must not be automatically
-  sorted because reverse gestures need their direction.
+- `EditorSelection` is discriminated as text, block, or edgeless. Text anchor
+  and head remain directed because reverse gestures need their direction.
 - `CreateRivtoEditorOptions.document` accepts `CRDTDoc`, not native Yjs and not
   a renderer.
 - `RivtoEditorApi` is the surface plugins receive.
@@ -166,7 +172,7 @@ At the time this guide was written, `package.json` says `0.3.0` while
 `RIVTO_VERSION` says `0.4.0`; decide which release value is intended before the
 next package build.
 
-## 3. Review `RivtoEditorCore` as the central coordinator
+## 3. Review `EditorRuntime` as the central coordinator
 
 Read `src/editor/editor/rivto-editor.ts` from top to bottom. This class should
 coordinate existing responsibilities rather than implement browser behavior or
@@ -179,13 +185,14 @@ order carefully:
 
 ```text
 DocumentModelImpl
-  → clipboard/provider/undo managers
-  → plugin manager
+  → command, mode, selection, history, clipboard, and provider managers
+  → event router, UI registry, and plugin manager
+  → built-in commands and event fallbacks
   → props validator connected to BlockRegistry
   → default block definitions
   → configured plugins
   → optional initial content
-  → document and selection subscriptions
+  → document, mode, and selection subscriptions
 ```
 
 Questions worth asking:
@@ -193,35 +200,35 @@ Questions worth asking:
 - Should initialization mutations emit editor revisions, or is subscribing only
   after initialization intentional?
 - Are block definitions installed before every editor-level insertion?
-- Does the undo manager track only `documentModel.origin`?
+- Does history track only `document.origin`?
 - Does every owned subscription have a matching cleanup in `destroy()`?
 
-### Command methods
+### Built-in commands
 
-Most methods are intentionally thin delegates. Focus review time on the methods
-that add editor semantics:
+Public mutation methods are intentionally absent. Review the registrations in
+`registerBuiltInCommands()` and confirm every renderer, plugin, and demo action
+uses `commands.execute(name, payload)`. Pay special attention to:
 
-- `insertBlock()` applies `BlockRegistry.prepare()` before storage insertion.
-- `removeBlock()` additionally clears selection when an endpoint disappeared.
-- `formatText()` calculates Markdown wrappers and inserts them atomically.
-- `setSelection()` validates block existence and UTF-16 boundaries before the
-  document-free `SelectionManager` stores the value.
-- `loadSnapshot()` clears undo history because old operations refer to replaced
-  state.
+- `block.insert` applies `BlockRegistry.prepare()` and mode availability before
+  storage insertion.
+- document subscriptions reconcile selections after deletion or remote edits.
+- `text.format` calculates Markdown wrappers and inserts them atomically.
+- `selection.set` validates the discriminant, block IDs, endpoints, offsets,
+  and edgeless mode compatibility.
+- `document.load` clears history because prior operations target replaced state.
 - `defineBlock()` wraps registry cleanup, tracks ownership, and invalidates
   views.
 - `focus()` crosses into the DOM and therefore deserves scrutiny with multiple
   editor instances; its unscoped fallback query currently selects the first
   matching editor in the document.
-- `changed()` and `emit()` form the external-store notification path used by
-  React.
+- `changed()` forms the external-store notification path used by React.
 - `destroy()` must be idempotent enough for the documented host lifecycle and
   must not leave plugin, history, or listener resources alive.
 
-An update made through `editor.documentModel` still reaches `changed()` through
-the document subscription and refreshes React. It can, however, bypass
-editor-only behavior such as selection cleanup and registry defaults. Keep that
-distinction in mind when reviewing future AI editing; see
+An update made through `editor.document` still reaches `changed()` and selection
+reconciliation through the document subscription. It can bypass command
+validation and registry defaults, so application UI should never use that path.
+Keep the distinction in mind when reviewing future AI editing; see
 `dev_notes/ai-document-editing.md`.
 
 ## 4. Review block definitions and registration
@@ -235,12 +242,17 @@ owns data. Check these invariants:
 - `content` states whether Rivto supplies inline editing or no text editor.
 - `defaultProps` apply only during editor-level creation.
 - `propSchema` validates the complete property object.
-- `render` receives detached block data, public editor commands, and default
-  content; it receives no CRDT objects.
+- `supportedModes` controls creation and presentation availability.
+- `render` may be shared or mode-specific and receives detached block data,
+  public editor commands, and default content; it receives no CRDT objects.
+- `behavior` supplies block-level event handlers after plugins and before
+  fallbacks.
+- Toolbar and side-menu actions reference commands rather than mutation
+  callbacks.
 - Slash definitions become normal `SlashItem` values through the registry.
 
-In `BlockRegistry`, inspect `register()`, `prepare()`, `validate()`, and
-`getSlashItems()`:
+In `BlockRegistry`, inspect registration, preparation, mode-aware renderer,
+behavior, slash, and UI lookups:
 
 - Registration rejects empty and duplicate types and returns an idempotent
   disposer tied to the exact registered object.
@@ -248,6 +260,7 @@ In `BlockRegistry`, inspect `register()`, `prepare()`, `validate()`, and
   data, then validates.
 - `validate()` deliberately passes unknown stored types through so documents
   remain lossless when a plugin is absent.
+- `supports()` consistently filters insertion, slash entries, and renderers.
 - No paragraph fallback should appear in storage or registry code.
 
 Read `default-writing.ts` last. Built-ins use the same definitions as plugins,
@@ -258,19 +271,47 @@ whether those presentations should eventually move into definitions.
 
 ## 5. Review the focused managers
 
+### `CommandRegistry`
+
+All editor mutations converge here. Check duplicate rejection, idempotent
+disposal, successful-execution notification, and `lastExecuted`. A failed
+command must not be published as successful. Plugin commands use the same
+registry as built-ins and must enforce plugin mode availability.
+
+Built-ins are declared in `BuiltInCommandMap`, binding every stable command name
+to its payload and result. Review both compile-time map coverage and runtime
+validation: TypeScript is not a trust boundary. Dynamic plugin commands should
+normally execute through the typed handle from `registerDynamic()`;
+`executeDynamic()` is for declarative actions whose names truly arrive at
+runtime.
+
+### `EventRouter`
+
+Trace one normalized event through active plugin handlers, current block
+behavior, then fallbacks. Returning `true` short-circuits later handlers and
+causes React to prevent the native default where appropriate. Verify priority,
+mode filtering, plugin cleanup, and that the router contains no DOM rendering.
+
+### `ModeManager` and `UIRegistry`
+
+Mode is local `block | edgeless` state. A change must invalidate views and clear
+incompatible edgeless selection without touching the document. UI contributions
+are command-backed, unique by ID, and filtered by slot, mode, and optional block
+type.
+
 ### `SelectionManager`
 
-This should remain the easiest manager in the project. Review only four
-behaviors:
+This manager owns three detached variants: directed text selection, ordered
+block selection, and edgeless object selection. Review four behaviors:
 
 - `get()` returns a copy.
-- `set()` stores a copy and preserves direction.
+- `set()` stores a copy, preserves text direction, and copies block ID arrays.
 - `clear()` notifies only when state changed.
 - `subscribe()` returns cleanup.
 
 It intentionally cannot validate positions because it has no document
-dependency. Validation belongs to `RivtoEditorCore.setSelection()`. Selection is
-local and must never be serialized into a snapshot or synchronized through the
+dependency. Validation belongs to the built-in `selection.set` command.
+Selection is local and must never be serialized or synchronized through the
 provider.
 
 One design choice to review is that `set()` notifies even when the next value is
@@ -281,22 +322,24 @@ React work.
 
 Focus on `use()` and `unuse()`:
 
-- Plugin IDs and command names are unique.
-- Installation is rollback-safe when a later block, command, or setup step
-  throws.
-- Every registered block and command is attributed to a plugin owner.
+- Plugin IDs and contribution IDs are unique in their owning registries.
+- Installation is rollback-safe when a later block, command, event, UI, or
+  setup step throws.
+- Every registered block, command, event handler, and UI action is attributed
+  to a plugin owner.
 - Setup cleanup runs exactly once.
 - Disposal order is the reverse of registration where appropriate.
-- Plugins receive the public editor API, not `RivtoEditorCore` internals or Yjs.
+- Plugins receive the public editor API, not runtime internals or Yjs.
 
-`getEditor` is lazy because `RivtoEditorCore` constructs the manager before its
+`getEditor` is lazy because `EditorRuntime` constructs the manager before its
 own constructor is complete. Check that plugin setup is not called before the
 editor is usable.
 
-### `UndoManager`
+### `HistoryManager`
 
-The key line is its constructor. It passes the document's scopes and only the
-current model's `origin` to adapter-neutral history. This is why another model
+`HistoryManager` is the public name for the existing adapter-neutral undo
+implementation. Its constructor passes the document's scopes and only the
+current model's `origin`. This is why another model
 over the same CRDT can update the view without being treated as this editor's
 local undo operation.
 
@@ -331,8 +374,8 @@ normalizeSelection
 Pay close attention to:
 
 - `flattenBlocks()` defines visible order as depth-first traversal.
-- `normalizeSelection()` sorts endpoints for mutation while leaving the
-  original manager value directed.
+- `normalizeSelection()` sorts text endpoints for mutation and expands block or
+  edgeless selections to complete selected block ranges.
 - `copySelectedSubtrees()` avoids including a selected descendant twice when
   its selected ancestor already owns it.
 - Only first and last block content is trimmed. Descendant trees remain atomic.
@@ -384,37 +427,45 @@ Review these edge decisions carefully:
   boundary.
 - `htmlToText()` is intentionally lossy and does not yet perform semantic
   HTML-to-block conversion.
-- Direct document insertion does not apply `BlockRegistry` defaults. Verify
-  whether pasted complete structured data makes that the intended behavior.
+- Clipboard mutations occur inside clipboard commands but deliberately operate
+  on complete structured document data rather than reapplying block defaults.
 
 ## 7. Review the React boundary in dependency order
 
 ### `react/types.ts`
 
 Confirm both renderer strategies receive the same detached root blocks and
-editor instance. `defaultBlockType` is explicit because generic UI actions must
-not invent a storage fallback. Slash state, selected canvas block, and zoom are
-local presentation state.
+runtime instance. `defaultBlockType` is explicit because generic UI actions
+must not invent a storage fallback. Slash state and zoom stay in React; canvas
+object selection belongs to `SelectionManager`.
 
 ### `rivto-editor.tsx`
 
-This component is the bridge between editor events and browser events:
+This component is the bridge between runtime state and browser events:
 
-- `useSyncExternalStore` observes document revision, mode, and selection.
+- `useSyncExternalStore` observes runtime revision, mode, and selection.
 - The document subscription causes model-only and remote updates to render.
 - `selectionchange` maps the native browser selection into editor coordinates.
 - `useLayoutEffect` restores selection after DOM reconciliation and adds the
   supplemental cross-block highlight.
-- Copy and paste events are forwarded to `ClipboardManager`.
+- Copy and paste are normalized through `EventRouter`, then fall back to
+  clipboard commands.
 - Paste re-reads the native selection synchronously because the browser may not
   have emitted `selectionchange` yet.
-- Toolbar operations use editor commands and local mode state.
+- Toolbar operations use built-in, plugin, and block command contributions.
 - Generic add-block behavior always receives `defaultBlockType`.
 
 The `data-rivto-pointer-selecting` guard is subtle. During an upward drag,
 Chromium reports intermediate selection state confined to one contenteditable.
 Accepting that event would overwrite the correct portable cross-block
 selection maintained by `BlockDOMRenderer`.
+
+`BlockDOMRenderer` owns two intentionally separate pointer gestures: starting
+inside `.rv-block-content` creates a partial directed text range; starting on
+blank page space creates a rectangle of whole-block selections. Handle clicks
+create one block selection, Shift extends from the stable anchor, and Ctrl/Cmd
+toggles membership. Keyboard replacement of a cross-block text range must run
+before native contenteditable changes only its active host.
 
 ### `selection.ts`
 
@@ -428,22 +479,26 @@ pointer x/y ↔ DOM node/offset ↔ block ID/UTF-16 offset
 Review in this order:
 
 1. `readDOMSelectionPoint()` uses the Firefox and Chromium caret hit-test APIs,
-   then `nearestTextPoint()` as a per-block fallback.
+   then clamps gaps/out-of-bounds drags to the nearest content host and uses
+   `nearestTextPoint()` as a per-block fallback.
 2. `readPosition()` converts a DOM endpoint into portable block coordinates.
 3. `readEditorSelection()` preserves browser anchor/focus direction.
 4. `pointAtOffset()` and `contentForBlock()` resolve portable positions back to
    live DOM.
-5. `restoreEditorSelection()` avoids stealing focus after toolbar interaction.
-6. `updateCrossBlockHighlight()` paints ranges browsers omit across separate
+5. `setNativeSelection()` uses `setBaseAndExtent()` so restored upward ranges
+   keep their native anchor/focus direction, with ordered Range as fallback.
+6. `blockIdsInRect()` applies parent/descendant filtering to blank-area block
+   selection and returns visible document order.
+7. `restoreEditorSelection()` avoids stealing focus after toolbar interaction.
+8. `updateCrossBlockHighlight()` paints ranges browsers omit across separate
    contenteditables.
 
 Important risks:
 
 - DOM `Range` offsets and string offsets must agree for text, `<br>`, and
   formatted preview nodes.
-- `setNativeSelection()` currently installs an ordered `Range`; restoration may
-  not preserve the native direction of a reversed selection even though editor
-  state does.
+- `setBaseAndExtent()` can reject detached cross-editable endpoints, so the
+  ordered Range fallback must never become the portable direction source.
 - The CSS Highlight name `rivto-cross-selection` is global. Multiple Rivto
   editor instances can currently clear or replace one another's supplemental
   highlight.
@@ -478,13 +533,13 @@ In `SlashMenu`, review replacement ordering and focus: the new typed block is
 inserted, the slash-trigger block is removed, then focus is requested. A slash
 item with `run` owns its own mutation behavior.
 
-In `BlockView`, separate page and canvas concerns:
+In `BlockView`, separate block and canvas concerns:
 
-- Page mode owns side controls, hierarchy, HTML drag/drop ordering, and nested
+- Block mode owns side controls, hierarchy, HTML drag/drop ordering, and nested
   rendering.
 - Canvas mode owns absolute layout, pointer movement, resize, selection, and
   keyboard nudging.
-- Both use `BlockContent` and `BlockRegistry`, which prevents page/edgeless type
+- Both use `BlockContent` and `BlockRegistry`, which prevents block/edgeless type
   disagreement.
 
 Check pointer listener cleanup if a component unmounts during drag. Canvas link
@@ -534,15 +589,14 @@ unexported type is an architectural regression.
 Read `src/editor/__tests__/editor.test.ts` after the implementation, not before.
 Its cases demonstrate:
 
-- typed hierarchy, geometry, Markdown, snapshots, and undo;
-- block definition defaults, validation, duplicate rejection, and disposal;
-- plugin command ownership and disposal;
-- collapsed, reversed, and cross-block selection values;
-- same-block and cross-block clipboard boundaries;
-- cursor-aware structured paste, children, metadata, geometry, and links;
-- partial cut and multiline plain-text paste;
-- unknown stored type preservation;
-- CRDT convergence through editor commands.
+- command registration, observation, duplicate rejection, and disposal;
+- built-in document commands and history;
+- mode-aware blocks, renderers, behaviors, slash items, and UI;
+- text, block, and edgeless selection validation and cleanup;
+- plugin → block → fallback event order and short-circuiting;
+- atomic plugin installation and full contribution disposal;
+- reverse partial-text and true whole-block clipboard behavior;
+- validation, unknown stored types, and CRDT convergence.
 
 For every unit test, ask whether the assertion proves behavior or merely
 repeats implementation details. Clipboard tests should assert complete boundary
@@ -553,13 +607,17 @@ prove:
 
 - contenteditable input and persistence;
 - slash menu interaction;
-- page/edgeless registry consistency;
+- block/edgeless registry consistency;
 - explicit default block creation;
 - forward cross-block native selection and clipboard text;
 - upward selection paint before pointer-up;
+- exact partial endpoints in both directions and atomic keyboard replacement;
+- handle, Shift+Arrow, and blank-area rectangle block selection;
 - exclusion of side-control glyphs;
 - immediate focused-DOM refresh after paste;
 - Markdown preview rendering.
+- runtime inspector state for commands, events, and all selection kinds;
+- edgeless object selection and keyboard movement through commands.
 
 Selection tests are intentionally geometry-driven and browser-sensitive. Keep
 the assertion made while the mouse button is still down; moving it after
@@ -611,13 +669,11 @@ inside the tarball, and the demo really imports the built public surface. The
 lockfile is mechanical but important: review it primarily for unexpected
 dependency or version changes.
 
-Review `README.md` and `architecture.puml` as public documentation, but do not
-assume they match the implementation. At the time this guide was written, the
-README still mentions removed `registerPlugin` and migration APIs, and its
-`RivtoEditor` example omits the required `defaultBlockType`. The PlantUML file
-also contains aspirational managers and renderer-to-document relationships that
-do not describe the current DDD folders. These files should either be aligned
-before release or clearly labeled as historical. Generated `*.tsbuildinfo`,
+Review `README.md` and `architecture.puml` as public documentation, but verify
+them against the implementation. The README should use `editor.use()`,
+`editor.commands.execute()`, and the required `defaultBlockType`. Treat the
+PlantUML diagram as historical unless it is updated alongside runtime changes.
+Generated `*.tsbuildinfo`,
 `dist`, Playwright reports, and test results are ignored artifacts and are not
 part of code review.
 
@@ -629,7 +685,7 @@ After the file-by-file pass, trace these scenarios without skipping layers:
 
 ```text
 EditableText.onInput
-  → editor.setBlockText
+  → editor.commands.execute("text.set")
   → DocumentModelImpl
   → CRDT update
   → editor.changed
@@ -642,10 +698,10 @@ EditableText.onInput
 ```text
 editor.defineBlock
   → BlockRegistry.register
-  → editor.insertBlock
+  → editor.commands.execute("block.insert")
   → BlockRegistry.prepare
   → DocumentModelImpl.insertBlock
-  → BlockContent resolves definition.render
+  → BlockContent resolves BlockRegistry.getRenderer(type, mode)
 ```
 
 ### Copy and paste a partial cross-block range
@@ -653,7 +709,11 @@ editor.defineBlock
 ```text
 native selection
   → readEditorSelection
+  → editor.commands.execute("selection.set")
   → SelectionManager
+  → native copy/paste event
+  → EventRouter
+  → clipboard command
   → createClipboardPayload
   → custom JSON + HTML + text
   → pasteBundle
@@ -663,11 +723,11 @@ native selection
   → React DOM and native caret restoration
 ```
 
-### Switch page to edgeless and back
+### Switch block to edgeless and back
 
 ```text
-editor.setMode
-  → local mode event
+editor.commands.execute("mode.set")
+  → ModeManager
   → renderer strategy changes
   → both read the same editor.document and BlockRegistry
   → no document mutation
@@ -676,15 +736,16 @@ editor.setMode
 ### Apply an external or AI document-model edit
 
 ```text
-editor.documentModel mutation
+editor.document.setBlockText / insertBlock / removeBlock
   → CRDT update
   → editor document subscription
   → revision and React refresh
 ```
 
-Then check the exceptions: direct model creation bypasses registry defaults,
-direct removal bypasses editor selection cleanup, and a different model origin
-is not part of this editor's local undo history.
+Then check the exceptions: direct model creation bypasses command validation and
+registry defaults, while the runtime's document subscription still refreshes
+views and reconciles selection. A different model origin is not part of this
+runtime's local history.
 
 ## Final review checklist
 
@@ -692,7 +753,11 @@ is not part of this editor's local undo history.
 - Renderers never access CRDT containers.
 - All created blocks have explicit types.
 - Unknown stored types remain lossless and visible.
-- Page and edgeless views resolve the same registry.
+- Block and edgeless views resolve the same registry.
+- Renderers, demo UI, and plugins mutate through `CommandRegistry`.
+- Routed events preserve plugin → block → fallback order.
+- Mode-aware commands, blocks, slash items, and UI are unavailable outside
+  their declared modes.
 - Selection direction and UTF-16 offsets survive both drag directions.
 - Clipboard JSON, HTML, and text describe the same selected range.
 - Paste preserves the target block's type and metadata.

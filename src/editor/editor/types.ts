@@ -1,133 +1,179 @@
 import type { CRDTDoc } from "../../store/crdt-doc";
-import type { Block, BlockInput, BlockLayout, BlockPatch, Link, Snapshot } from "../../store/document-model";
-import type { BlockDefinition, BlockRegistry, SlashItem } from "../blocks";
-import type { ClipboardManager, PluginManager, ProviderManager, RivtoPlugin, SelectionManager, UndoManager } from "../managers";
+import type { Block, BlockInput, BlockLayout, BlockPatch, DocumentModelImpl, Link, Snapshot } from "../../store/document-model";
+import type { BlockDefinition, BlockRegistry } from "../blocks";
+import type { SlashItem } from "../plugins";
+import type {
+  ClipboardManager,
+  CommandRegistry,
+  EventRouter,
+  HistoryManager,
+  ModeManager,
+  PluginManager,
+  ProviderManager,
+  RivtoPlugin,
+  SelectionManager,
+  UIContribution,
+  UIRegistry,
+} from "../managers";
+import type { CommandSpec } from "../managers/command-registry";
 
-/** Editor presentation strategy selected by local UI state. */
-export type EditorMode = "page" | "edgeless";
+/** Local presentation strategy; never persisted in collaborative state. */
+export type EditorMode = "block" | "edgeless";
 
-/** Markdown wrapper supported by the editor formatting command. */
-export type MarkdownFormat = "bold" | "italic" | "strike" | "code" | "link";
-
-/** One UTF-16 text position inside a block. */
+/** UTF-16 text position inside a block. */
 export interface EditorPosition {
-  /** Stable block ID containing the position. */
+  /** Stable block containing the position. */
   blockId: string;
-  /** UTF-16 offset compatible with browser DOM ranges. */
+  /** UTF-16 offset compatible with DOM Range APIs. */
   offset: number;
 }
 
-/** Directed local selection from gesture anchor to active head. */
-export interface EditorSelection {
-  /** Position where the selection gesture began. */
+/** Directed browser-compatible text selection. */
+export interface TextSelection {
+  /** Discriminant for browser-compatible text selection. */
+  type: "text";
+  /** Endpoint where the gesture began. */
   anchor: EditorPosition;
-  /** Current active end of the selection gesture. */
+  /** Active endpoint; may precede anchor for reverse selection. */
   head: EditorPosition;
 }
 
-/** Construction options for one editor runtime. */
+/** Ordered selection of document blocks. */
+export interface BlockSelection {
+  /** Discriminant for ordered document-block selection. */
+  type: "block";
+  /** Selected IDs in visible document order. */
+  blockIds: string[];
+  /** Block where the selection gesture began. */
+  anchorBlockId: string;
+  /** Active block where the gesture currently ends. */
+  focusBlockId: string;
+}
+
+/** Local selection of objects on the edgeless canvas. */
+export interface EdgelessSelection {
+  /** Discriminant for canvas object selection. */
+  type: "edgeless";
+  /** Selected object block IDs. */
+  blockIds: string[];
+}
+
+/** Every local selection shape owned by SelectionManager. */
+export type EditorSelection = TextSelection | BlockSelection | EdgelessSelection;
+/** Markdown wrappers supported by the built-in formatting command. */
+export type MarkdownFormat = "bold" | "italic" | "strike" | "code" | "link";
+/** Low-level renderer events normalized for framework-independent routing. */
+export type RuntimeEventType = "input" | "keydown" | "copy" | "paste" | "drop" | "pointerdown";
+
+/**
+ * Stable command contracts supplied by every EditorRuntime.
+ *
+ * Keeping this map beside the public editor types gives callers exact payload
+ * checks and inferred results without weakening runtime validation.
+ */
+export type BuiltInCommandMap = {
+  "block.insert": CommandSpec<{ block: BlockInput; afterId?: string | null }, string>;
+  "block.update": CommandSpec<{ id: string; patch: BlockPatch }>;
+  "block.remove": CommandSpec<{ id: string }>;
+  "block.move": CommandSpec<{ id: string; afterId: string | null }>;
+  "block.indent": CommandSpec<{ id: string }>;
+  "block.outdent": CommandSpec<{ id: string }>;
+  "text.set": CommandSpec<{ id: string; text: string }>;
+  "text.insert": CommandSpec<{ id: string; offset: number; text: string }>;
+  "text.delete": CommandSpec<{ id: string; offset: number; length: number }>;
+  "text.format": CommandSpec<{ id: string; from: number; length: number; format: MarkdownFormat; value?: string }>;
+  "block.prop.set": CommandSpec<{ id: string; key: string; value: unknown }>;
+  "block.pluginData.set": CommandSpec<{ id: string; pluginId: string; value: unknown }>;
+  "block.layout.set": CommandSpec<{ id: string; layout: Partial<BlockLayout> }>;
+  "link.create": CommandSpec<{ link: Link }>;
+  "link.remove": CommandSpec<{ id: string }>;
+  "selection.set": CommandSpec<{ selection: EditorSelection }>;
+  "selection.clear": CommandSpec;
+  "mode.set": CommandSpec<{ mode: EditorMode }>;
+  "history.undo": CommandSpec;
+  "history.redo": CommandSpec;
+  "clipboard.copy": CommandSpec<undefined, Promise<string>>;
+  "clipboard.cut": CommandSpec<undefined, Promise<string>>;
+  "clipboard.paste": CommandSpec<{ defaultBlockType: string; text?: string }, Promise<void>>;
+  "clipboard.copyEvent": CommandSpec<{ event: ClipboardEvent }>;
+  "clipboard.pasteEvent": CommandSpec<{ event: ClipboardEvent; defaultBlockType: string }>;
+  "document.load": CommandSpec<{ snapshot: Snapshot }>;
+};
+
+/** Framework-neutral event routed through plugins, block behavior, then fallback. */
+export interface RuntimeEvent {
+  /** Normalized event category. */
+  type: RuntimeEventType;
+  /** Optional current block used to resolve definition behavior. */
+  blockId?: string;
+  /** Keyboard key for `keydown`. */
+  key?: string;
+  /** Normalized keyboard modifier state. */
+  shiftKey?: boolean;
+  /** Normalized keyboard modifier state. */
+  ctrlKey?: boolean;
+  /** Normalized keyboard modifier state. */
+  metaKey?: boolean;
+  /** Renderer-specific context consumed by commands or fallback behavior. */
+  payload?: unknown;
+}
+
+/** Handler returning `true` only when it fully claims the routed event. */
+export type RuntimeEventHandler = (event: RuntimeEvent, editor: RivtoEditorApi) => boolean | void;
+
+/** Construction options for one long-lived editor runtime. */
 export interface CreateRivtoEditorOptions {
-  /** Existing adapter-neutral collaborative document, or a fresh Yjs adapter by default. */
+  /** Existing adapter-neutral collaborative document; a Yjs adapter is created by default. */
   document?: CRDTDoc;
-  /** Typed blocks inserted only when the supplied document is empty. */
+  /** Blocks inserted through commands only when the supplied document is empty. */
   initialContent?: BlockInput[];
-  /** Trusted runtime plugins installed after built-in block definitions. */
+  /** Trusted plugins installed after built-in block and command definitions. */
   plugins?: RivtoPlugin[];
   /** Initial local presentation mode. */
   mode?: EditorMode;
 }
 
-/** Public runtime surface available to applications and trusted plugins. */
+/**
+ * Public command-driven editor runtime exposed to applications and plugins.
+ *
+ * Managers are readable extension points, while document mutations initiated
+ * by UI or plugins belong in CommandRegistry.
+ */
 export interface RivtoEditorApi {
-  /** Canonical adapter-neutral collaborative storage model. */
-  readonly documentModel: import("../../store/document-model").DocumentModelImpl;
-  /** Registry resolving native block types to runtime definitions. */
+  /** Canonical collaborative document and persistence boundary. */
+  readonly document: DocumentModelImpl;
+  /** Native block definition registry. */
   readonly blocks: BlockRegistry;
-  /** Local selection state owner. */
-  readonly selectionManager: SelectionManager;
-  /** Browser clipboard coordinator. */
-  readonly clipboardManager: ClipboardManager;
-  /** Collaboration-provider coordinator. */
-  readonly providerManager: ProviderManager;
-  /** Local collaborative history coordinator. */
-  readonly undoManager: UndoManager;
-  /** Trusted plugin lifecycle and command coordinator. */
-  readonly pluginManager: PluginManager;
-  /** Detached ordered block tree. */
-  readonly document: Block[];
-  /** Detached first-class document links. */
-  readonly links: Link[];
-  /** Directed local selection, or `null`. */
-  readonly selection: EditorSelection | null;
-  /** Current local rendering mode. */
-  readonly mode: EditorMode;
-  /** Monotonic view invalidation counter. */
+  /** Single mutation and action entry point. */
+  readonly commands: CommandRegistry<BuiltInCommandMap>;
+  /** Trusted plugin lifecycle coordinator. */
+  readonly plugins: PluginManager;
+  /** Local discriminated selection owner. */
+  readonly selection: SelectionManager;
+  /** Local block/edgeless mode owner. */
+  readonly mode: ModeManager;
+  /** Adapter-neutral local history owner. */
+  readonly history: HistoryManager;
+  /** Ordered normalized interaction router. */
+  readonly events: EventRouter;
+  /** Command-backed toolbar and side-menu contributions. */
+  readonly ui: UIRegistry;
+  /** Structured browser clipboard coordinator. */
+  readonly clipboard: ClipboardManager;
+  /** Adapter-neutral collaboration provider coordinator. */
+  readonly providers: ProviderManager;
+  /** Monotonic view invalidation snapshot. */
   readonly revision: number;
-  /** Creates a registered native block. */
-  insertBlock(block: BlockInput, afterId?: string | null): string;
-  /** Patches mutable fields without changing block identity or type. */
-  updateBlock(id: string, patch: BlockPatch): void;
-  /** Removes a block subtree and touching links. */
-  removeBlock(id: string): void;
-  /** Reorders a block after a sibling. */
-  moveBlock(id: string, afterId: string | null): void;
-  /** Nests a block under its preceding sibling. */
-  indentBlock(id: string): void;
-  /** Moves a nested block after its parent. */
-  outdentBlock(id: string): void;
-  /** Reconciles a block's complete Markdown source. */
-  setBlockText(id: string, text: string): void;
-  /** Inserts collaborative text at a UTF-16 offset. */
-  insertText(id: string, offset: number, text: string): void;
-  /** Deletes collaborative text at a UTF-16 range. */
-  deleteText(id: string, offset: number, length: number): void;
-  /** Sets one block-owned property. */
-  setBlockProp(id: string, key: string, value: unknown): void;
-  /** Sets data under one plugin namespace. */
-  setPluginData(id: string, pluginId: string, value: unknown): void;
-  /** Wraps a text range in Markdown syntax. */
-  formatText(id: string, from: number, length: number, format: MarkdownFormat, value?: string): void;
-  /** Copies the current selection. */
-  copy(): Promise<string>;
-  /** Copies and deletes the current selection. */
-  cut(): Promise<string>;
-  /** Pastes clipboard data using an explicit type for new plain-text blocks. */
-  paste(defaultBlockType: string, text?: string): Promise<void>;
-  /** Validates and sets local selection, or clears it with `null`. */
-  setSelection(selection: EditorSelection | null): void;
-  /** Changes local renderer mode. */
-  setMode(mode: EditorMode): void;
-  /** Patches collaborative edgeless geometry. */
-  setBlockLayout(id: string, layout: Partial<BlockLayout>): void;
-  /** Creates or replaces a first-class link. */
-  createLink(link: Link): void;
-  /** Removes a first-class link. */
-  removeLink(id: string): void;
-  /** Reverts the latest captured local operation. */
-  undo(): void;
-  /** Reapplies the latest undone local operation. */
-  redo(): void;
-  /** Requests focus for a block or the first editable block. */
+  /** Subscribes to runtime view invalidation. */
+  subscribe(listener: () => void): () => void;
+  /** Requests browser focus after renderer reconciliation. */
   focus(blockId?: string): void;
-  /** Returns a lossless schema-v3 snapshot. */
-  getSnapshot(): Snapshot;
-  /** Replaces document content from a schema-v3 snapshot. */
-  loadSnapshot(snapshot: Snapshot): void;
-  /** Defines one native block type. */
+  /** Registers a native block definition. */
   defineBlock(definition: BlockDefinition): () => void;
-  /** Installs one trusted runtime plugin. */
+  /** Atomically installs a trusted plugin. */
   use(plugin: RivtoPlugin): () => void;
-  /** Runs a named plugin command. */
-  runCommand(name: string, ...args: unknown[]): unknown;
-  /** Returns block-generated and plugin-generated slash actions. */
-  getSlashItems(): SlashItem[];
-  /** Subscribes to one editor-level view event. */
-  subscribe(event: EditorEvent, listener: () => void): () => void;
+  /** Releases runtime-owned resources. */
+  destroy(): void;
 }
 
-/** Editor-level event streams consumed by framework bindings. */
-export type EditorEvent = "document" | "selection" | "mode" | "focus";
-
-export type { Block, BlockInput, BlockLayout, BlockPatch, Link, Snapshot } from "../../store/document-model";
-export type { BlockDefinition, SlashItem } from "../blocks";
-export type { RivtoPlugin } from "../managers";
+export type { Block, BlockDefinition, BlockInput, BlockLayout, BlockPatch, Link, RivtoPlugin, SlashItem, Snapshot, UIContribution };

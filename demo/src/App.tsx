@@ -27,18 +27,25 @@ const calloutDefinition: BlockDefinition = {
   type: "callout",
   content: "inline",
   title: "Callout",
+  supportedModes: ["block", "edgeless"],
   slash: { title: "Callout", aliases: ["note", "aside"], group: "Demo" },
   render: ({ content }) => <aside className="demo-callout"><span aria-hidden="true">✦</span><div>{content}</div></aside>,
+  behavior: { selectable: true, draggable: true },
 };
 
 const demoPlugin: RivtoPlugin = {
   id: "rivto-demo-commands",
-  commands: {
-    "demo.addCallout": (editor) => editor.insertBlock(
-      { type: "callout", content: "A block inserted through PluginManager." },
-      editor.document.at(-1)?.id,
-    ),
+  events: {
+    keydown: () => false,
+    pointerdown: () => false,
   },
+  commands: {
+    "demo.addCallout": (editor) => editor.commands.execute("block.insert", {
+      block: { type: "callout", content: "A block inserted through CommandRegistry." },
+      afterId: editor.document.document.at(-1)?.id,
+    }),
+  },
+  ui: [{ id: "demo.addCallout", slot: "toolbar", title: "Add callout", command: "demo.addCallout", modes: ["edgeless"] }],
 };
 
 function DemoPageRenderer(props: EditorRendererProps) {
@@ -64,26 +71,45 @@ export function App() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
-        editor.loadSnapshot(JSON.parse(saved) as Snapshot);
+        editor.commands.execute("document.load", { snapshot: JSON.parse(saved) as Snapshot });
       } catch {
         localStorage.removeItem(STORAGE_KEY);
-        initialContent.forEach((block) => editor.insertBlock(block));
+        initialContent.forEach((block) => editor.commands.execute("block.insert", { block }));
       }
     } else {
-      initialContent.forEach((block) => editor.insertBlock(block));
+      initialContent.forEach((block) => editor.commands.execute("block.insert", { block }));
     }
     return { doc, editor };
   });
 
   const revision = useSyncExternalStore(
-    (listener) => instance.editor.subscribe("document", listener),
+    (listener) => instance.editor.subscribe(listener),
     () => instance.editor.revision,
     () => 0,
   );
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(instance.editor.getSnapshot()));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(instance.editor.document.getSnapshot()));
   }, [instance, revision]);
+
+  const runtime = useSyncExternalStore(
+    (listener) => {
+      const dispose = [
+        instance.editor.subscribe(listener),
+        instance.editor.commands.subscribe(listener),
+        instance.editor.events.subscribe(listener),
+      ];
+      return () => dispose.forEach((unsubscribe) => unsubscribe());
+    },
+    () => JSON.stringify({
+      mode: instance.editor.mode.get(),
+      selection: instance.editor.selection.get()?.type ?? "none",
+      event: instance.editor.events.lastEvent ?? "none",
+      command: instance.editor.commands.lastExecuted ?? "none",
+    }),
+    () => "{}",
+  );
+  const runtimeState = JSON.parse(runtime) as Record<string, string>;
 
   useEffect(() => () => {
     instance.editor.destroy();
@@ -98,12 +124,18 @@ export function App() {
           <h1>Collaborative block editor</h1>
         </div>
         <div className="header-actions">
-          <button onClick={() => instance.editor.runCommand("demo.addCallout")}>Plugin command</button>
+          <button onClick={() => instance.editor.commands.executeDynamic("demo.addCallout")}>Plugin command</button>
+          <button onClick={() => {
+            const blockIds = instance.editor.document.document.slice(0, 2).map((block) => block.id);
+            if (blockIds.length) instance.editor.commands.execute("selection.set", { selection: {
+              type: "block", blockIds, anchorBlockId: blockIds[0]!, focusBlockId: blockIds.at(-1)!,
+            } });
+          }}>Select blocks</button>
           <button
             onClick={() => {
               localStorage.removeItem(STORAGE_KEY);
-              instance.editor.loadSnapshot({ version: 3, blocks: [], links: [] });
-              initialContent.forEach((block) => instance.editor.insertBlock(block));
+              instance.editor.commands.execute("document.load", { snapshot: { version: 3, blocks: [], links: [] } });
+              initialContent.forEach((block) => instance.editor.commands.execute("block.insert", { block }));
             }}
           >
             Reset document
@@ -112,9 +144,17 @@ export function App() {
       </header>
 
       <section className="architecture" aria-label="Editor architecture">
-        <code>RivtoEditor</code><span>→</span><code>BlockRegistry</code><span>→</span>
-        <code>DocumentModelImpl</code><span>→</span>
+        <code>DocumentModel</code><span>→</span><code>EditorRuntime</code><span>→</span>
+        <code>Renderer</code><span>→</span>
         <code>CRDTDoc</code><span>→</span><code>YjsDoc adapter</code>
+      </section>
+
+      <section className="runtime-inspector" aria-label="Runtime inspector">
+        <strong>Runtime</strong>
+        <span>Mode: <code>{runtimeState.mode}</code></span>
+        <span>Selection: <code>{runtimeState.selection}</code></span>
+        <span>Event: <code>{runtimeState.event}</code></span>
+        <span>Command: <code>{runtimeState.command}</code></span>
       </section>
 
       <RivtoEditor
@@ -125,13 +165,14 @@ export function App() {
 
       <div className="capabilities" aria-label="Enabled extension points">
         <span>Plugin: custom callout</span>
+        <span>Events: plugin → block → fallback</span>
         <span>Clipboard: JSON + HTML + text</span>
         <span>Persistence: schema v3 snapshot</span>
       </div>
 
       <details className="snapshot">
         <summary>Schema v3 snapshot</summary>
-        <pre>{JSON.stringify(instance.editor.getSnapshot(), null, 2)}</pre>
+        <pre>{JSON.stringify(instance.editor.document.getSnapshot(), null, 2)}</pre>
       </details>
       <p className="saved">Changes are saved to this browser automatically.</p>
     </main>

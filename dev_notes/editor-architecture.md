@@ -15,9 +15,9 @@ Host application
        ├─ BlockDOMRenderer
        └─ EdgelessCanvasRenderer
             ↓
-       RivtoEditorCore
+       EditorRuntime
             ↓
-       BlockRegistry + focused managers
+       CommandRegistry + EventRouter + focused managers
             ↓
        DocumentModelImpl
             ↓
@@ -40,7 +40,8 @@ adapters one stable interface to implement.
 | Editor types and kernel | `src/editor/editor/**` | Public commands, events, mode, manager ownership, and feature orchestration |
 | Block runtime | `src/editor/blocks/**` | Definitions, native-type registry, defaults, validation, and slash entries |
 | Collaborative model | `src/store/document-model/core/document-model.ts` | Canonical `DocumentModelImpl` boundary; block tree, Markdown content, props, plugin data, links, geometry, snapshots, and normalization |
-| Runtime managers | `src/editor/managers/**` | Separate selection, undo, provider, plugin, and clipboard responsibilities |
+| Runtime managers | `src/editor/managers/**` | Commands, event routing, mode, selection, history, plugins, UI, providers, and clipboard |
+| Core plugins | `src/editor/plugins/**` | Global interaction systems such as slash-menu state, events, filtering, and commands |
 | React view | `src/editor/react/**` | Host binding, components, Markdown helpers, styles, and renderer strategies |
 | CRDT interfaces | `src/store/crdt-doc/types/**` | Adapter-neutral document and shared-type contracts |
 | Yjs adapter | `src/store/crdt-doc/yjs-doc/**` | Native Yjs implementation hidden behind CRDT interfaces |
@@ -67,10 +68,10 @@ Collaborative state belongs in `DocumentModelImpl`:
 - Links between blocks
 - Document-level plugin data
 
-Local UI state belongs in `RivtoEditorCore`, managers, or React components:
+Local UI state belongs in `EditorRuntime`, managers, or React components:
 
-- Current page or edgeless mode
-- Text/block selection
+- Current block or edgeless mode
+- Text, block, or edgeless object selection
 - Focus
 - Slash-menu state
 - Selected canvas block
@@ -120,7 +121,7 @@ Views and plugins call public editor commands. Commands delegate to
 
 ```text
 user gesture or plugin
-  → editor command
+  → CommandRegistry.execute
   → document-model operation
   → CRDTDoc transaction with local origin
   → CRDT update
@@ -151,29 +152,59 @@ recreates the shared props map.
 
 ## Editor kernel and managers
 
-`RivtoEditorCore` owns the document model and focused managers. It exposes the
-public command surface and emits `document`, `selection`, `mode`, and `focus`
-events.
+`EditorRuntime` owns the document model and focused managers. Public mutation
+methods are intentionally absent: renderers, plugins, and application UI use
+`runtime.commands.execute(name, payload)`.
+
+### CommandRegistry
+
+Owns built-in and plugin commands, rejects duplicate names, and exposes the last
+successful command for tooling. Built-ins cover document structure, text,
+properties, layout, links, selection, mode, history, clipboard, and snapshot
+loading.
+
+`CommandRegistry<BuiltInCommandMap>` binds each stable name to its payload and
+result. These compile-time checks complement rather than replace handler
+validation because JavaScript and deserialized data reach the same boundary. A
+dynamically installed command cannot alter the type of an existing runtime, so
+`registerDynamic()` returns a locally typed execution/disposal handle. Unknown
+declarative actions use the explicit `executeDynamic()` escape hatch.
+
+### ModeManager and EventRouter
+
+`ModeManager` owns local `block | edgeless` state. `EventRouter` accepts
+framework-neutral keyboard, clipboard, drop, and pointer events, then
+short-circuits through active plugins, the current block behavior, and built-in
+fallbacks. React only normalizes DOM events and applies `preventDefault` when a
+runtime handler reports success.
+
+### UIRegistry
+
+Stores command-backed toolbar and side-menu contributions filtered by mode and
+optional block type. React renders contributions but does not own their action
+logic.
 
 ### SelectionManager
 
-Stores a directed local selection using `{ blockId, offset }` anchor and head
-positions. `anchor` is where the gesture began and `head` is its active end, so
-backward selections retain their direction. Equal positions are collapsed;
-different block IDs describe cross-block selection. Offsets are UTF-16 indices
-matching DOM range APIs. `get()` returns a detached value, `set()` copies and
-notifies, `clear()` notifies only on change, and `subscribe()` owns no document
-resources. The editor validates block IDs and offsets before calling it.
+Stores discriminated local text, ordered block, or edgeless object selection.
+Text anchor/head positions retain direction and use browser-compatible UTF-16
+offsets. The runtime validates selected IDs, offsets, endpoints, and mode
+compatibility before the manager stores a detached value.
+
+The React range bridge follows the same separation used by BlockSuite: native
+DOM selection is a projection, while portable selection is authoritative.
+Cross-block text gestures retain anchor/focus direction, clamp pointer hit
+testing through gaps, and paint exact partial first/intermediate/last ranges.
+Whole blocks can be selected from handles, extended with Shift+Arrow or
+Shift-click, toggled additively, or collected with a blank-area rectangle.
+Block IDs are normalized into depth-first document order without changing the
+selection's anchor/focus direction.
 
 Selection remains local because focus intent is not collaborative content. The
 manager intentionally stores neither DOM nodes, CRDT-relative positions, nor a
 document reference.
 
-Current limitation: selection mapping is suitable for the existing single-block
-formatting and clipboard paths. Robust cross-block selection, DOM restoration,
-and remote-edit resilience remain future work.
-
-### UndoManager
+### HistoryManager
 
 Uses the adapter-neutral `CRDTUndoManager`. The Yjs adapter supplies the native
 implementation and tracks transactions carrying the current editor's origin.
@@ -183,9 +214,9 @@ history behavior needs broader integration tests.
 
 ### PluginManager
 
-Owns trusted plugin lifecycle, commands, and plugin slash items. `BlockRegistry`
-separately owns block definitions, defaults, schemas, and type resolution.
-Disposing a plugin removes its commands and definitions.
+Owns trusted plugin lifecycle. Plugin blocks, commands, event handlers, slash
+items, and mode-aware UI contributions are installed atomically in their
+dedicated registries. Disposing a plugin removes every owned contribution.
 
 Plugins are trusted local JavaScript modules. They receive the public editor
 API, never native Yjs objects.
@@ -237,8 +268,9 @@ Renders the nested ordered block tree as a page. It currently supports:
 - Unknown-block fallback
 
 Current limitations include incomplete `beforeinput` handling, IME coverage,
-cross-block editing, rich HTML paste, selection restoration, and production
-screen-reader validation.
+rich HTML paste, auto-scroll during long selection drags, and production
+screen-reader validation. Ordinary keyboard replacement across partial blocks
+is intercepted before native contenteditable handling and applied atomically.
 
 ### EdgelessCanvasRenderer
 
@@ -297,10 +329,12 @@ still select specialized renderers for lists, media, callouts, and plugins.
 
 ### Slash commands
 
-Typing `/` at the start of an editable block opens a filtered menu. Items come
-from registered block definitions and plugin-provided slash items. Selecting a
-default item creates the typed replacement and removes the trigger block;
-storage never mutates a block's native type.
+Typing `/` at the start of an editable block dispatches a normalized input event
+to `SlashMenuPlugin`. The plugin owns query state, combines mode-aware block and
+plugin contributions, and filters the result. React only renders that state.
+Selecting an item executes `slash.execute`; the default action creates the typed
+replacement and removes the trigger block through built-in commands, so storage
+never mutates a block's native type.
 
 Current limitation: full keyboard navigation, grouped presentation, command
 arguments, and async items need further work.

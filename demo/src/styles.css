@@ -22,6 +22,8 @@ button:hover:not(:disabled) { border-color: #8a4f35; }
 .header-actions { display: flex; gap: 8px; }
 .architecture { display: flex; align-items: center; justify-content: center; gap: 10px; overflow-x: auto; margin-bottom: 16px; color: #777167; font-size: 0.78rem; white-space: nowrap; }
 .architecture code { border: 1px solid #d8d1c2; border-radius: 7px; background: #fffdf8; color: #544d43; padding: 5px 8px; }
+.runtime-inspector { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 14px; border: 1px solid #d8d1c2; border-radius: 10px; background: #ebe6da; padding: 9px 12px; color: #686158; font-size: 0.76rem; }
+.runtime-inspector strong { color: #27251f; }
 .renderer-frame { position: relative; }
 .renderer-label { position: absolute; top: 11px; right: 14px; z-index: 3; color: #8a8174; font: 700 0.65rem/1 ui-monospace, monospace; letter-spacing: 0.04em; }
 .demo-callout { display: grid; grid-template-columns: auto 1fr; gap: 9px; border: 1px solid #d8ccaa; border-radius: 9px; background: #fff8df; padding: 10px 12px; }

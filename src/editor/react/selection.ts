@@ -1,4 +1,4 @@
-import type { EditorPosition, EditorSelection } from "../editor";
+import type { EditorPosition, EditorSelection, TextSelection } from "../editor";
 
 /** Native DOM endpoint used while extending a mouse selection across editing hosts. */
 export interface DOMSelectionPoint {
@@ -8,6 +8,34 @@ export interface DOMSelectionPoint {
   offset: number;
   /** Editable block-content host containing the endpoint. */
   content: HTMLElement;
+}
+
+/** Viewport rectangle produced by a blank-area block-selection gesture. */
+export interface SelectionRect {
+  /** Left viewport edge. */
+  left: number;
+  /** Top viewport edge. */
+  top: number;
+  /** Rectangle width. */
+  width: number;
+  /** Rectangle height. */
+  height: number;
+}
+
+/** Returns the distance from a point to the nearest point inside a rectangle. */
+function distanceToRect(rect: DOMRect, x: number, y: number): number {
+  const dx = Math.max(rect.left - x, 0, x - rect.right);
+  const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+  return Math.hypot(dx, dy);
+}
+
+/** Finds the text host under the pointer or the nearest host outside block gaps. */
+function contentNearPoint(root: HTMLElement, x: number, y: number): HTMLElement | undefined {
+  const hit = document.elementFromPoint(x, y)?.closest<HTMLElement>(".rv-block-content");
+  if (hit && root.contains(hit)) return hit;
+  return [...root.querySelectorAll<HTMLElement>(".rv-block-content")]
+    .map((content) => ({ content, distance: distanceToRect(content.getBoundingClientRect(), x, y) }))
+    .sort((a, b) => a.distance - b.distance)[0]?.content;
 }
 
 /**
@@ -54,8 +82,8 @@ function nearestTextPoint(content: HTMLElement, x: number, y: number): DOMSelect
  * @returns DOM endpoint and content host, or `undefined` outside block text.
  */
 export function readDOMSelectionPoint(root: HTMLElement, x: number, y: number): DOMSelectionPoint | undefined {
-  const hit = document.elementFromPoint(x, y)?.closest<HTMLElement>(".rv-block-content");
-  if (!hit || !root.contains(hit)) return;
+  const hit = contentNearPoint(root, x, y);
+  if (!hit) return;
   const caret = document.caretPositionFromPoint?.(x, y);
   const fallback = (document as Document & { caretRangeFromPoint?: (left: number, top: number) => Range | null })
     .caretRangeFromPoint?.(x, y);
@@ -74,6 +102,16 @@ export function readDOMSelectionPoint(root: HTMLElement, x: number, y: number): 
 export function setNativeSelection(anchor: DOMSelectionPoint, head: DOMSelectionPoint): void {
   const selection = window.getSelection();
   if (!selection) return;
+  // Selection.setBaseAndExtent is the only native API that retains gesture
+  // direction. Range always sorts its endpoints, which turns an upward drag
+  // into a forward selection and breaks later Shift+Arrow extension.
+  try {
+    selection.setBaseAndExtent(anchor.node, anchor.offset, head.node, head.offset);
+    return;
+  } catch {
+    // Detached or browser-rejected cross-editable endpoints still get a
+    // normalized range; EditorSelection remains the source of direction.
+  }
   const anchorBeforeHead = anchor.node === head.node
     ? anchor.offset <= head.offset
     : Boolean(anchor.node.compareDocumentPosition(head.node) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -84,6 +122,55 @@ export function setNativeSelection(anchor: DOMSelectionPoint, head: DOMSelection
   range.setEnd(end.node, end.offset);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+/** Clears a native range only when one of its endpoints belongs to this editor. */
+export function clearNativeSelection(root: HTMLElement): void {
+  const selection = window.getSelection();
+  const anchor = selection?.anchorNode;
+  const head = selection?.focusNode;
+  if (!selection || (!anchor && !head)) return;
+  if ((anchor && root.contains(anchor)) || (head && root.contains(head))) selection.removeAllRanges();
+}
+
+/** Tests strict rectangle intersection; touching edges alone does not select. */
+function intersects(a: SelectionRect, b: DOMRect): boolean {
+  return a.left < b.right && a.left + a.width > b.left && a.top < b.bottom && a.top + a.height > b.top;
+}
+
+/** Tests whether a block fully contains the user's selection rectangle vertically. */
+function containsVertically(block: DOMRect, selection: SelectionRect): boolean {
+  return block.top <= selection.top && block.bottom >= selection.top + selection.height;
+}
+
+/**
+ * Resolves blank-area rectangle selection into visible document-order block IDs.
+ *
+ * This follows BlockSuite's parent rule: a gesture contained inside one parent
+ * selects a contiguous run of that parent's direct children when both gesture
+ * boundaries land in children. Otherwise intersecting ancestors win and their
+ * descendants are removed, so copying never duplicates a selected subtree.
+ */
+export function blockIdsInRect(root: HTMLElement, selection: SelectionRect): string[] {
+  const blocks = [...root.querySelectorAll<HTMLElement>("[data-rivto-block]")]
+    .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+    .filter(({ rect }) => rect.top <= selection.top + selection.height);
+  if (!blocks.length) return [];
+  const containing = blocks.filter(({ rect }) => intersects(selection, rect) && containsVertically(rect, selection)).at(-1);
+  let selected = blocks.filter(({ rect }) => intersects(selection, rect));
+  if (containing) {
+    const children = blocks.filter(({ element }) =>
+      element.parentElement?.closest<HTMLElement>("[data-rivto-block]") === containing.element);
+    const first = children.findIndex(({ rect }) => intersects(selection, rect) && rect.top < selection.top);
+    const last = children.findIndex(({ rect }) => intersects(selection, rect) && rect.bottom > selection.top + selection.height);
+    selected = first >= 0 && last >= 0 ? children.slice(first, last + 1) : [containing];
+  }
+  const selectedElements = new Set(selected.map(({ element }) => element));
+  return selected.flatMap(({ element }) => {
+    const parent = element.parentElement?.closest<HTMLElement>("[data-rivto-block]");
+    const id = element.dataset.rivtoBlock;
+    return id && (!parent || !selectedElements.has(parent)) ? [id] : [];
+  });
 }
 
 /**
@@ -137,12 +224,12 @@ export function readDOMPointPosition(root: HTMLElement, point: DOMSelectionPoint
  * @param root - Editor instance whose DOM selection should be mapped.
  * @returns Portable directed selection, or `undefined` outside this editor.
  */
-export function readEditorSelection(root: HTMLElement): EditorSelection | undefined {
+export function readEditorSelection(root: HTMLElement): TextSelection | undefined {
   const selection = window.getSelection();
   if (!selection?.rangeCount) return;
   const anchor = readPosition(root, selection.anchorNode, selection.anchorOffset);
   const head = readPosition(root, selection.focusNode, selection.focusOffset);
-  return anchor && head ? { anchor, head } : undefined;
+  return anchor && head ? { type: "text", anchor, head } : undefined;
 }
 
 /** Resolves a UTF-16 text offset to a live DOM Range endpoint. */
@@ -186,7 +273,7 @@ function contentForBlock(root: HTMLElement, blockId: string): HTMLElement | unde
  * @param selection - Local editor selection to restore.
  */
 export function restoreEditorSelection(root: HTMLElement, selection: EditorSelection | null): void {
-  if (!selection) return;
+  if (!selection || selection.type !== "text") return;
   const anchorContent = contentForBlock(root, selection.anchor.blockId);
   const headContent = contentForBlock(root, selection.head.blockId);
   if (!anchorContent || !headContent) return;
@@ -224,7 +311,7 @@ export function clearCrossBlockHighlight(root: HTMLElement): void {
  */
 export function updateCrossBlockHighlight(root: HTMLElement, selection: EditorSelection | null): void {
   clearCrossBlockHighlight(root);
-  if (!selection || selection.anchor.blockId === selection.head.blockId) return;
+  if (!selection || selection.type !== "text" || selection.anchor.blockId === selection.head.blockId) return;
   const contents = [...root.querySelectorAll<HTMLElement>(".rv-block-content")];
   const blockId = (content: HTMLElement): string | undefined => content.closest<HTMLElement>("[data-rivto-block]")?.dataset.rivtoBlock;
   const anchorIndex = contents.findIndex((content) => blockId(content) === selection.anchor.blockId);

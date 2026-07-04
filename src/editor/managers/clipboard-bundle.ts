@@ -123,6 +123,18 @@ function indexParents(blocks: Block[], parents = new Map<string, string>()): Map
 export function normalizeSelection(document: DocumentModelImpl, selection: EditorSelection | null): NormalizedSelection | undefined {
   if (!selection) return;
   const all = flattenBlocks(document.document);
+  if (selection.type !== "text") {
+    const selected = new Set(selection.blockIds);
+    const blocks = all.filter((block) => selected.has(block.id));
+    const first = blocks[0];
+    const last = blocks.at(-1);
+    if (!first || !last) return;
+    return {
+      start: { blockId: first.id, offset: 0 },
+      end: { blockId: last.id, offset: last.content.length },
+      blocks,
+    };
+  }
   const anchorIndex = all.findIndex((block) => block.id === selection.anchor.blockId);
   const headIndex = all.findIndex((block) => block.id === selection.head.blockId);
   if (anchorIndex < 0 || headIndex < 0) return;

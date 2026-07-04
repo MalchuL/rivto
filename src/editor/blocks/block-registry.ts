@@ -1,5 +1,7 @@
 import type { BlockInput } from "../../store/document-model";
-import type { BlockDefinition, SlashItem } from "./block-definition";
+import type { ComponentType } from "react";
+import type { EditorMode } from "../editor/types";
+import type { BlockBehavior, BlockDefinition, BlockRenderProps, BlockUIAction } from "./block-definition";
 
 /**
  * Owns the runtime mapping from persisted native types to block definitions.
@@ -8,6 +10,7 @@ import type { BlockDefinition, SlashItem } from "./block-definition";
  * ownership and prepares editor-level creation data.
  */
 export class BlockRegistry {
+  // Block name to definition
   private readonly definitions = new Map<string, BlockDefinition>();
 
   /** Creates an empty block-definition registry. */
@@ -49,6 +52,48 @@ export class BlockRegistry {
     return this.definitions.has(type);
   }
 
+  /** Returns every registered definition for mode-aware consumers such as slash menus. */
+  listDefinitions(): BlockDefinition[] {
+    return [...this.definitions.values()];
+  }
+
+  /**
+   * Reports whether a definition supports a mode.
+   *
+   * Omitted `supportedModes` means both modes. Unknown types remain unsupported
+   * for creation even though existing unknown data is preserved by the model.
+   */
+  supports(type: string, mode: EditorMode): boolean {
+    const definition = this.get(type);
+    return !!definition && (!definition.supportedModes || definition.supportedModes.includes(mode));
+  }
+
+  /**
+   * Resolves a mode-specific or shared renderer.
+   *
+   * A function is the shared shorthand; an object requires an explicit entry
+   * for the requested mode. Supported blocks without a custom renderer fall
+   * back to Rivto's default content presentation.
+   */
+  getRenderer(type: string, mode: EditorMode): ComponentType<BlockRenderProps> | undefined {
+    const definition = this.get(type);
+    if (!definition || !this.supports(type, mode) || !definition.render) return undefined;
+    return typeof definition.render === "function" ? definition.render : definition.render[mode];
+  }
+
+  /** Resolves normalized event and selection behavior for a native type. */
+  getBehavior(type: string): BlockBehavior | undefined { return this.get(type)?.behavior; }
+
+  /** Returns a fresh list of toolbar actions active for a type and mode. */
+  getToolbarItems(type: string, mode: EditorMode): BlockUIAction[] {
+    return (this.get(type)?.toolbar ?? []).filter((item) => !item.modes || item.modes.includes(mode));
+  }
+
+  /** Returns a fresh list of side-menu actions active for a type and mode. */
+  getSideMenuItems(type: string, mode: EditorMode): BlockUIAction[] {
+    return (this.get(type)?.sideMenu ?? []).filter((item) => !item.modes || item.modes.includes(mode));
+  }
+
   /**
    * Applies definition defaults and validates creation properties.
    *
@@ -74,17 +119,6 @@ export class BlockRegistry {
    */
   validate(type: string, props: Record<string, unknown>): Record<string, unknown> {
     return this.get(type)?.propSchema?.parse(props) ?? props;
-  }
-
-  /**
-   * Builds slash-menu entries from registered block definitions.
-   *
-   * @returns Fresh menu values safe for consumers to sort or filter.
-   */
-  getSlashItems(): SlashItem[] {
-    return [...this.definitions.values()].flatMap((definition) => definition.slash
-      ? [{ ...definition.slash, block: { type: definition.type } }]
-      : []);
   }
 
   /**

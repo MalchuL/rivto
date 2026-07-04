@@ -1,11 +1,12 @@
 # Rivto editor demo
 
 This Vite application consumes Rivto through the public `@chulane/rivto`
-workspace package. It demonstrates the `DocumentModel → CRDTDoc → YjsDoc`
-boundary without importing native Yjs. It also exercises editable blocks,
-formatting, slash commands, a custom block definition, plugin command, replaceable
-page/edgeless renderers, structured clipboard handling, canvas movement, and
-browser persistence.
+workspace package. It demonstrates the `DocumentModel → EditorRuntime → Renderer`
+boundary without importing native Yjs. It exercises command-driven editing,
+typed selection, routed events, mode-aware plugins and UI, replaceable
+block/edgeless renderers, structured clipboard handling, canvas movement, and
+browser persistence. The runtime inspector shows the active mode, selection
+kind, last routed event, and last executed command.
 
 The header displays `RIVTO_VERSION` from the package's public API, so the demo
 identifies the Rivto build it is exercising.

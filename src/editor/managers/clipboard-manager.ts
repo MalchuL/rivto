@@ -65,8 +65,17 @@ export class ClipboardManager {
    * @returns Plain-text representation copied before deletion.
    */
   async cut(): Promise<string> {
+    const selection = this.selection.get();
     const text = await this.copy();
-    const range = normalizeSelection(this.document, this.selection.get());
+    const range = normalizeSelection(this.document, selection);
+    if (range && selection?.type !== "text") {
+      // Whole-block selection is structurally different from a text range:
+      // retaining an empty first block would turn Cut into partial text
+      // replacement. Remove selected subtrees in visible order instead.
+      this.document.transact(() => range.blocks.forEach((block) => this.document.removeBlock(block.id)));
+      this.selection.clear();
+      return text;
+    }
     if (range && (range.start.blockId !== range.end.blockId || range.start.offset !== range.end.offset)) {
       this.replaceRange(range, "");
     }
@@ -266,7 +275,7 @@ export class ClipboardManager {
    * @param offset - UTF-16 position immediately after pasted content.
    */
   private collapse(blockId: string, offset: number): void {
-    this.selection.set({ anchor: { blockId, offset }, head: { blockId, offset } });
+    this.selection.set({ type: "text", anchor: { blockId, offset }, head: { blockId, offset } });
   }
 
   /** Converts interoperable HTML clipboard data to its visible plain text. */
