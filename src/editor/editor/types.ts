@@ -1,5 +1,5 @@
 import type { CRDTDoc } from "../../store/crdt-doc";
-import type { Block, BlockInput, BlockLayout, BlockPatch, DocumentModelImpl, Link, Snapshot } from "../../store/document-model";
+import type { Block, BlockInput, BlockLayout, BlockPatch, DocumentModelImpl, Link, Snapshot, SnapshotUpdate } from "../../store/document-model";
 import type { BlockDefinition, BlockRegistry } from "../blocks";
 import type { SlashItem } from "../plugins";
 import type {
@@ -97,14 +97,14 @@ export type BuiltInCommandMap = {
   "clipboard.paste": CommandSpec<{ defaultBlockType: string; text?: string }, Promise<void>>;
   "clipboard.copyEvent": CommandSpec<{ event: ClipboardEvent }>;
   "clipboard.pasteEvent": CommandSpec<{ event: ClipboardEvent; defaultBlockType: string }>;
-  "document.load": CommandSpec<{ snapshot: Snapshot }>;
+  "document.load": CommandSpec<{ snapshot: SnapshotUpdate }>;
 };
 
-/** Framework-neutral event routed through plugins, block behavior, then fallback. */
+/** Framework-neutral event routed through global plugins, block plugins, then fallback. */
 export interface RuntimeEvent {
   /** Normalized event category. */
   type: RuntimeEventType;
-  /** Optional current block used to resolve definition behavior. */
+  /** Optional current block used to resolve block-scoped plugin behavior. */
   blockId?: string;
   /** Keyboard key for `keydown`. */
   key?: string;
@@ -176,4 +176,4 @@ export interface RivtoEditorApi {
   destroy(): void;
 }
 
-export type { Block, BlockDefinition, BlockInput, BlockLayout, BlockPatch, Link, RivtoPlugin, SlashItem, Snapshot, UIContribution };
+export type { Block, BlockDefinition, BlockInput, BlockLayout, BlockPatch, Link, RivtoPlugin, SlashItem, Snapshot, SnapshotUpdate, UIContribution };

@@ -2,7 +2,9 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   BlockDOMRenderer,
   type BlockDefinition,
+  createSlashMenuPlugin,
   createRivtoEditor,
+  defaultSlashItems,
   EdgelessCanvasRenderer,
   type EditorRendererProps,
   type Snapshot,
@@ -27,18 +29,17 @@ const calloutDefinition: BlockDefinition = {
   type: "callout",
   content: "inline",
   title: "Callout",
-  supportedModes: ["block", "edgeless"],
-  slash: { title: "Callout", aliases: ["note", "aside"], group: "Demo" },
   render: ({ content }) => <aside className="demo-callout"><span aria-hidden="true">✦</span><div>{content}</div></aside>,
-  behavior: { selectable: true, draggable: true },
 };
 
 const demoPlugin: RivtoPlugin = {
   id: "rivto-demo-commands",
+  blocks: [calloutDefinition],
+  slashItems: [{ title: "Callout", aliases: ["note", "aside"], group: "Demo", block: { type: "callout" } }],
   events: {
     keydown: () => false,
-    pointerdown: () => false,
   },
+  blockEvents: { callout: { pointerdown: () => false } },
   commands: {
     "demo.addCallout": (editor) => editor.commands.execute("block.insert", {
       block: { type: "callout", content: "A block inserted through CommandRegistry." },
@@ -65,9 +66,10 @@ function DemoCanvasRenderer(props: EditorRendererProps) {
 export function App() {
   const [instance] = useState(() => {
     const doc = new YjsDoc("rivto-v2-demo");
-    const editor = createRivtoEditor({ document: doc });
-    editor.defineBlock(calloutDefinition);
-    editor.use(demoPlugin);
+    const editor = createRivtoEditor({
+      document: doc,
+      plugins: [createSlashMenuPlugin(defaultSlashItems), demoPlugin],
+    });
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
@@ -124,7 +126,7 @@ export function App() {
           <h1>Collaborative block editor</h1>
         </div>
         <div className="header-actions">
-          <button onClick={() => instance.editor.commands.executeDynamic("demo.addCallout")}>Plugin command</button>
+          <button onClick={() => instance.editor.commands.execute<Record<string, () => unknown>>("demo.addCallout")}>Plugin command</button>
           <button onClick={() => {
             const blockIds = instance.editor.document.document.slice(0, 2).map((block) => block.id);
             if (blockIds.length) instance.editor.commands.execute("selection.set", { selection: {

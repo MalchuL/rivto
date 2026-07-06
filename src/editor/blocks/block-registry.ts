@@ -1,7 +1,32 @@
 import type { BlockInput } from "../../store/document-model";
 import type { ComponentType } from "react";
 import type { EditorMode } from "../editor/types";
-import type { BlockBehavior, BlockDefinition, BlockRenderProps, BlockUIAction } from "./block-definition";
+import type { BlockDefinition, BlockRenderProps } from "./block-definition";
+
+/** True only for mergeable records; arrays and class instances are values. */
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value) as object | null;
+  // Checking the prototype chain, rather than identity with this realm's
+  // Object.prototype, also recognizes records cloned across test/worker realms.
+  return prototype === null || Object.getPrototypeOf(prototype) === null;
+};
+
+/**
+ * Recursively overlays caller properties without sharing nested defaults.
+ *
+ * Only plain objects merge. Arrays and other values are intentional leaves and
+ * are replaced as a whole, which avoids surprising index-by-index merging.
+ */
+const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unknown>): Record<string, unknown> => {
+  const result: Record<string, unknown> = structuredClone(defaults);
+  for (const [key, value] of Object.entries(input)) {
+    result[key] = isRecord(result[key]) && isRecord(value)
+      ? mergeProps(result[key], value)
+      : value;
+  }
+  return result;
+};
 
 /**
  * Owns the runtime mapping from persisted native types to block definitions.
@@ -52,22 +77,6 @@ export class BlockRegistry {
     return this.definitions.has(type);
   }
 
-  /** Returns every registered definition for mode-aware consumers such as slash menus. */
-  listDefinitions(): BlockDefinition[] {
-    return [...this.definitions.values()];
-  }
-
-  /**
-   * Reports whether a definition supports a mode.
-   *
-   * Omitted `supportedModes` means both modes. Unknown types remain unsupported
-   * for creation even though existing unknown data is preserved by the model.
-   */
-  supports(type: string, mode: EditorMode): boolean {
-    const definition = this.get(type);
-    return !!definition && (!definition.supportedModes || definition.supportedModes.includes(mode));
-  }
-
   /**
    * Resolves a mode-specific or shared renderer.
    *
@@ -77,21 +86,8 @@ export class BlockRegistry {
    */
   getRenderer(type: string, mode: EditorMode): ComponentType<BlockRenderProps> | undefined {
     const definition = this.get(type);
-    if (!definition || !this.supports(type, mode) || !definition.render) return undefined;
+    if (!definition?.render) return undefined;
     return typeof definition.render === "function" ? definition.render : definition.render[mode];
-  }
-
-  /** Resolves normalized event and selection behavior for a native type. */
-  getBehavior(type: string): BlockBehavior | undefined { return this.get(type)?.behavior; }
-
-  /** Returns a fresh list of toolbar actions active for a type and mode. */
-  getToolbarItems(type: string, mode: EditorMode): BlockUIAction[] {
-    return (this.get(type)?.toolbar ?? []).filter((item) => !item.modes || item.modes.includes(mode));
-  }
-
-  /** Returns a fresh list of side-menu actions active for a type and mode. */
-  getSideMenuItems(type: string, mode: EditorMode): BlockUIAction[] {
-    return (this.get(type)?.sideMenu ?? []).filter((item) => !item.modes || item.modes.includes(mode));
   }
 
   /**
@@ -103,7 +99,7 @@ export class BlockRegistry {
    */
   prepare(input: BlockInput): BlockInput {
     const definition = this.require(input.type);
-    const props = { ...definition.defaultProps, ...input.props };
+    const props = mergeProps(definition.defaultProps ?? {}, input.props ?? {});
     return { ...input, props: definition.propSchema?.parse(props) ?? props };
   }
 

@@ -53,3 +53,11 @@ export interface Snapshot {
   links: Link[];
   pluginData?: Record<string, unknown>;
 }
+
+/** Sections received from persistence that should replace only supplied state. */
+export interface SnapshotUpdate {
+  version: 3;
+  blocks?: Block[];
+  links?: Link[];
+  pluginData?: Record<string, unknown>;
+}

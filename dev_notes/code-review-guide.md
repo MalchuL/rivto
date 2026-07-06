@@ -242,25 +242,20 @@ owns data. Check these invariants:
 - `content` states whether Rivto supplies inline editing or no text editor.
 - `defaultProps` apply only during editor-level creation.
 - `propSchema` validates the complete property object.
-- `supportedModes` controls creation and presentation availability.
 - `render` may be shared or mode-specific and receives detached block data,
-  public editor commands, and default content; it receives no CRDT objects.
-- `behavior` supplies block-level event handlers after plugins and before
-  fallbacks.
-- Toolbar and side-menu actions reference commands rather than mutation
-  callbacks.
-- Slash definitions become normal `SlashItem` values through the registry.
+  public editor commands, and default content; it receives no CRDT objects. A
+  mode-specific renderer map is also the block's availability declaration.
+- Event behavior, slash items, and toolbar/side-menu actions belong to plugins,
+  not definitions.
 
-In `BlockRegistry`, inspect registration, preparation, mode-aware renderer,
-behavior, slash, and UI lookups:
+In `BlockRegistry`, inspect registration, preparation, and renderer lookup:
 
 - Registration rejects empty and duplicate types and returns an idempotent
   disposer tied to the exact registered object.
-- `prepare()` rejects unknown types, merges defaults without mutating caller
-  data, then validates.
+- `prepare()` rejects unknown types, recursively merges plain-object defaults
+  without mutating caller data, replaces arrays/scalars, then validates.
 - `validate()` deliberately passes unknown stored types through so documents
   remain lossless when a plugin is absent.
-- `supports()` consistently filters insertion, slash entries, and renderers.
 - No paragraph fallback should appear in storage or registry code.
 
 Read `default-writing.ts` last. Built-ins use the same definitions as plugins,
@@ -280,15 +275,14 @@ registry as built-ins and must enforce plugin mode availability.
 
 Built-ins are declared in `BuiltInCommandMap`, binding every stable command name
 to its payload and result. Review both compile-time map coverage and runtime
-validation: TypeScript is not a trust boundary. Dynamic plugin commands should
-normally execute through the typed handle from `registerDynamic()`;
-`executeDynamic()` is for declarative actions whose names truly arrive at
-runtime.
+validation: TypeScript is not a trust boundary. Plugins provide their command
+map explicitly to the generic `register()` or `execute()` method; declarative
+UI uses the same runtime lookup path.
 
 ### `EventRouter`
 
-Trace one normalized event through active plugin handlers, current block
-behavior, then fallbacks. Returning `true` short-circuits later handlers and
+Trace one normalized event through active global plugin handlers, block-scoped
+plugin handlers, then fallbacks. Returning `true` short-circuits later handlers and
 causes React to prevent the native default where appropriate. Verify priority,
 mode filtering, plugin cleanup, and that the router contains no DOM rendering.
 
@@ -452,7 +446,7 @@ This component is the bridge between runtime state and browser events:
   clipboard commands.
 - Paste re-reads the native selection synchronously because the browser may not
   have emitted `selectionchange` yet.
-- Toolbar operations use built-in, plugin, and block command contributions.
+- Toolbar operations use built-in and plugin command contributions.
 - Generic add-block behavior always receives `defaultBlockType`.
 
 The `data-rivto-pointer-selecting` guard is subtle. During an upward drag,
@@ -591,7 +585,7 @@ Its cases demonstrate:
 
 - command registration, observation, duplicate rejection, and disposal;
 - built-in document commands and history;
-- mode-aware blocks, renderers, behaviors, slash items, and UI;
+- renderer-declared block availability and plugin-owned behaviors, slash items, and UI;
 - text, block, and edgeless selection validation and cleanup;
 - plugin → block → fallback event order and short-circuiting;
 - atomic plugin installation and full contribution disposal;
@@ -756,7 +750,7 @@ runtime's local history.
 - Block and edgeless views resolve the same registry.
 - Renderers, demo UI, and plugins mutate through `CommandRegistry`.
 - Routed events preserve plugin → block → fallback order.
-- Mode-aware commands, blocks, slash items, and UI are unavailable outside
+- Mode-aware commands, renderer-scoped blocks, slash items, and UI are unavailable outside
   their declared modes.
 - Selection direction and UTF-16 offsets survive both drag directions.
 - Clipboard JSON, HTML, and text describe the same selected range.

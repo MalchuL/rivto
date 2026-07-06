@@ -104,7 +104,7 @@ function SlashMenu({ editor, blockId, items }: { editor: EditorRuntime; blockId:
     {items.length === 0 ? <p>No matching blocks</p> : items.map((item) =>
       <button key={slashItemId(item)} role="menuitem" onMouseDown={(event) => {
         event.preventDefault();
-        editor.commands.executeDynamic("slash.execute", { blockId, itemId: slashItemId(item) });
+        editor.commands.execute<Record<string, (payload: unknown) => unknown>>("slash.execute", { blockId, itemId: slashItemId(item) });
       }}>{item.title}</button>)}
   </div>;
 }
@@ -174,10 +174,8 @@ function BlockView({ block, editor, defaultBlockType, slash, canvas = false, sel
       <button onClick={() => editor.commands.execute("block.indent", { id: block.id })} aria-label="Indent block">→</button>
       <button onClick={() => editor.commands.execute("block.outdent", { id: block.id })} aria-label="Outdent block">←</button>
       <button onClick={() => editor.commands.execute("block.remove", { id: block.id })} aria-label="Delete block">×</button>
-      {editor.blocks.getSideMenuItems(block.type, editor.mode.get()).map((item) =>
-        <button key={item.id} onClick={() => editor.commands.executeDynamic(item.command, { blockId: block.id })}>{item.title}</button>)}
       {editor.ui.get("sideMenu", editor.mode.get(), block.type).map((item) =>
-        <button key={item.id} onClick={() => editor.commands.executeDynamic(item.command, { blockId: block.id })}>{item.title}</button>)}
+        <button key={item.id} onClick={() => editor.commands.execute<Record<string, (payload: unknown) => unknown>>(item.command, { blockId: block.id })}>{item.title}</button>)}
     </div>}
     {canvas && <div className="rv-drag" onPointerDown={drag}>Drag block</div>}
     <BlockContent block={block} editor={editor} defaultBlockType={defaultBlockType} />

@@ -3,7 +3,7 @@ import { YjsDoc } from "../../store/crdt-doc";
 import { createClipboardPayload } from "../managers/clipboard-bundle";
 import { CommandRegistry, type CommandSpec } from "../managers";
 import { createRivtoEditor } from "../editor";
-import { getSlashMenuPlugin } from "../plugins";
+import { createSlashMenuPlugin, defaultSlashItems, getSlashMenuPlugin } from "../plugins";
 
 const textSelection = (anchorId: string, anchorOffset: number, headId = anchorId, headOffset = anchorOffset) => ({
   type: "text" as const,
@@ -36,9 +36,10 @@ describe("Phase 2 editor runtime", () => {
     expect(checkStaticTypes).toBeDefined();
   });
 
-  it("preserves types on dynamically registered command handles", () => {
+  it("preserves extension types through the generic command API", () => {
     const commands = new CommandRegistry();
-    const greeting = commands.registerDynamic<{ name: string }, string>(
+    type GreetingCommands = { "plugin.greet": CommandSpec<{ name: string }, string> };
+    const greeting = commands.register<GreetingCommands>(
       "plugin.greet",
       ({ name }) => `Hello ${name}`,
     );
@@ -46,7 +47,10 @@ describe("Phase 2 editor runtime", () => {
     greeting.dispose();
     expect(() => greeting.execute({ name: "Rivto" })).toThrow("Unknown command");
     const checkHandleTypes = (): void => {
-      // @ts-expect-error Dynamic handles retain their declared payload type.
+      commands.execute<GreetingCommands>("plugin.greet", { name: "Rivto" });
+      // @ts-expect-error Extension command maps validate direct execution payloads.
+      commands.execute<GreetingCommands>("plugin.greet", { name: 42 });
+      // @ts-expect-error Registration handles retain their declared payload type.
       greeting.execute({ name: 42 });
     };
     expect(checkHandleTypes).toBeDefined();
@@ -67,19 +71,21 @@ describe("Phase 2 editor runtime", () => {
     expect(editor.document.document[0].content).toBe("Alpha");
   });
 
-  it("supports mode-aware block definitions, renderers, behavior, and actions", () => {
-    const editor = createRivtoEditor();
+  it("uses renderers for block availability and plugins for behavior and actions", () => {
+    const editor = createRivtoEditor({ plugins: [createSlashMenuPlugin(defaultSlashItems)] });
     const Render = () => null;
     editor.defineBlock({
-      type: "shape", content: "none", supportedModes: ["edgeless"],
+      type: "shape", content: "none",
       render: { edgeless: Render },
-      toolbar: [{ id: "shape.color", title: "Color", command: "shape.color" }],
-      behavior: { selectable: true },
-      slash: { title: "Shape" },
+    });
+    editor.use({
+      id: "shape.tools",
+      slashItems: [{ title: "Shape", block: { type: "shape" } }],
+      ui: [{ id: "shape.color", slot: "toolbar", title: "Color", command: "shape.color", blockTypes: ["shape"] }],
+      blockEvents: { shape: { pointerdown: () => true } },
     });
     expect(editor.blocks.getRenderer("shape", "edgeless")).toBe(Render);
-    expect(editor.blocks.getBehavior("shape")?.selectable).toBe(true);
-    expect(editor.blocks.getToolbarItems("shape", "edgeless")).toHaveLength(1);
+    expect(editor.ui.get("toolbar", "edgeless", "shape")).toHaveLength(1);
     const slash = getSlashMenuPlugin(editor)!;
     expect(slash.getItems(editor)).not.toEqual(expect.arrayContaining([expect.objectContaining({ title: "Shape" })]));
     expect(() => editor.commands.execute("block.insert", { block: { type: "shape" } })).toThrow("unavailable");
@@ -88,7 +94,10 @@ describe("Phase 2 editor runtime", () => {
   });
 
   it("owns slash query, filtering, and execution in the slash plugin", () => {
-    const editor = createRivtoEditor({ initialContent: [{ id: "a", type: "paragraph" }] });
+    const editor = createRivtoEditor({
+      initialContent: [{ id: "a", type: "paragraph" }],
+      plugins: [createSlashMenuPlugin(defaultSlashItems)],
+    });
     const slash = getSlashMenuPlugin(editor)!;
     const listener = jest.fn();
     slash.subscribe(listener);
@@ -99,7 +108,7 @@ describe("Phase 2 editor runtime", () => {
       "Heading 1", "Heading 2", "Heading 3",
     ]);
 
-    editor.commands.executeDynamic("slash.execute", { blockId: "a", itemId: "heading2" });
+    editor.commands.execute<Record<string, (payload: unknown) => unknown>>("slash.execute", { blockId: "a", itemId: "heading2" });
     expect(editor.document.document).toEqual([expect.objectContaining({ type: "heading2" })]);
     expect(slash.getState()).toBeNull();
     expect(listener).toHaveBeenCalledTimes(2);
@@ -135,11 +144,12 @@ describe("Phase 2 editor runtime", () => {
     const calls: string[] = [];
     const editor = createRivtoEditor({ initialContent: [{ id: "a", type: "paragraph" }] });
     const fallback = editor.events.registerFallback("pointerdown", () => { calls.push("fallback"); return true; });
-    const removeBlock = editor.defineBlock({
-      type: "event-block", content: "inline",
-      behavior: { pointerdown: () => { calls.push("block"); return false; } },
-    });
+    const removeBlock = editor.defineBlock({ type: "event-block", content: "inline" });
     const id = editor.commands.execute("block.insert", { block: { type: "event-block" } });
+    const disposeBlockPlugin = editor.use({
+      id: "block-events",
+      blockEvents: { "event-block": { pointerdown: () => { calls.push("block"); return false; } } },
+    });
     const disposePlugin = editor.use({
       id: "events", events: { pointerdown: () => { calls.push("plugin"); return false; } },
     });
@@ -149,30 +159,32 @@ describe("Phase 2 editor runtime", () => {
     disposePlugin();
     editor.events.dispatch({ type: "pointerdown", blockId: id });
     expect(calls).toEqual(["block", "fallback"]);
-    fallback(); removeBlock();
+    disposeBlockPlugin(); fallback(); removeBlock();
   });
 
   it("installs plugins atomically and removes commands, events, blocks, and UI", () => {
     const editor = createRivtoEditor();
+    const Render = () => null;
     const dispose = editor.use({
       id: "test.plugin", modes: ["edgeless"],
-      blocks: [{ type: "notice", content: "inline", title: "Notice" }],
+      blocks: [{ type: "notice", content: "inline", title: "Notice", render: { edgeless: Render } }],
       commands: { hello: (_editor, value) => `hello ${String(value)}` },
       events: { pointerdown: () => true },
       ui: [{ id: "hello", slot: "toolbar", title: "Hello", command: "hello" }],
     });
-    expect(() => editor.commands.executeDynamic("hello", "world")).toThrow("unavailable");
+    type HelloCommands = { hello: CommandSpec<string, string> };
+    expect(() => editor.commands.execute<HelloCommands>("hello", "world")).toThrow("unavailable");
     expect(editor.ui.get("toolbar", "block")).toHaveLength(0);
     expect(editor.ui.get("toolbar", "edgeless")).toHaveLength(1);
     expect(() => editor.commands.execute("block.insert", { block: { type: "notice" } })).toThrow("unavailable");
     editor.commands.execute("mode.set", { mode: "edgeless" });
-    expect(editor.commands.executeDynamic("hello", "world")).toBe("hello world");
+    expect(editor.commands.execute<HelloCommands>("hello", "world")).toBe("hello world");
     dispose();
     expect(editor.blocks.has("notice")).toBe(false);
-    expect(() => editor.commands.executeDynamic("hello")).toThrow("Unknown command");
+    expect(() => editor.commands.execute<HelloCommands>("hello", "world")).toThrow("Unknown command");
     expect(editor.ui.get("toolbar", "edgeless")).toHaveLength(0);
 
-    editor.commands.registerDynamic("taken", () => undefined);
+    editor.commands.register<{ taken: CommandSpec }>("taken", () => undefined);
     expect(() => editor.use({ id: "broken", blocks: [{ type: "temporary", content: "none" }], commands: { taken: () => undefined } })).toThrow();
     expect(editor.blocks.has("temporary")).toBe(false);
   });
@@ -232,6 +244,42 @@ describe("Phase 2 editor runtime", () => {
       layout: { x: 40, y: 40, width: 320, height: 120, zIndex: 0 },
     }], links: [] } });
     expect(editor.document.document[0].type).toBe("missing");
+  });
+
+  it("merges nested default properties without replacing sibling defaults", () => {
+    const editor = createRivtoEditor();
+    editor.defineBlock({
+      type: "card", content: "inline",
+      defaultProps: { style: { color: "blue", border: { width: 1, kind: "solid" } } },
+    });
+    editor.commands.execute("block.insert", { block: {
+      type: "card", props: { style: { border: { width: 2 } } },
+    } });
+    expect(editor.document.document[0].props).toEqual({
+      style: { color: "blue", border: { width: 2, kind: "solid" } },
+    });
+  });
+
+  it("loads only fetched snapshot sections", () => {
+    const editor = createRivtoEditor();
+    editor.commands.execute("document.load", { snapshot: {
+      version: 3,
+      blocks: [
+        { id: "a", type: "paragraph", props: {}, pluginData: {}, content: "A", children: [] },
+        { id: "b", type: "paragraph", props: {}, pluginData: {}, content: "B", children: [] },
+      ],
+      links: [{ id: "edge", from: { blockId: "a" }, to: { blockId: "b" } }],
+      pluginData: { source: "remote" },
+    } });
+    editor.commands.execute("document.load", { snapshot: {
+      version: 3,
+      blocks: [
+        { id: "a", type: "paragraph", props: {}, pluginData: {}, content: "Updated", children: [] },
+        { id: "b", type: "paragraph", props: {}, pluginData: {}, content: "B", children: [] },
+      ],
+    } });
+    expect(editor.document.links).toEqual([expect.objectContaining({ id: "edge" })]);
+    expect(editor.document.getSnapshot().pluginData).toEqual({ source: "remote" });
   });
 
   it("converges command changes across CRDT adapters", () => {

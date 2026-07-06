@@ -15,9 +15,9 @@ interface RoutedHandler {
 /**
  * Routes framework-neutral interaction events through runtime behavior.
  *
- * Dispatch has three strict phases: active plugin handlers, the current block
- * definition, then built-in fallbacks. A handler returns `true` to claim the
- * event and stop later phases. React can use that result to decide whether the
+ * Dispatch has three strict phases: active global plugin handlers, handlers
+ * scoped to the current block type, then built-in fallbacks. A handler returns
+ * `true` to claim the event and stop later phases. React can use that result to decide whether the
  * native browser default should be prevented.
  *
  * The router stores no DOM nodes and performs no mutations itself. Handlers use
@@ -26,6 +26,7 @@ interface RoutedHandler {
  */
 export class EventRouter {
   private readonly plugins = new Map<RuntimeEventType, RoutedHandler[]>();
+  private readonly blocks = new Map<string, Map<RuntimeEventType, RoutedHandler[]>>();
   private readonly fallbacks = new Map<RuntimeEventType, RuntimeEventHandler[]>();
   private currentLastEvent: RuntimeEventType | null = null;
   private readonly listeners = new Set<() => void>();
@@ -38,7 +39,7 @@ export class EventRouter {
    */
   constructor(
     private readonly getEditor: () => RivtoEditorApi,
-    private readonly blocks: BlockRegistry,
+    private readonly blockRegistry: BlockRegistry,
     private readonly getMode: () => EditorMode,
   ) {}
 
@@ -71,8 +72,25 @@ export class EventRouter {
     };
   }
 
+  /** Registers plugin-owned behavior for one native block type. */
+  registerBlock(id: string, blockType: string, type: RuntimeEventType, handler: RuntimeEventHandler, modes?: EditorMode[], priority = 0): () => void {
+    if (!this.blockRegistry.has(blockType)) throw new Error(`Unknown block type ${blockType}`);
+    const byEvent = this.blocks.get(blockType) ?? new Map<RuntimeEventType, RoutedHandler[]>();
+    const handlers = byEvent.get(type) ?? [];
+    const entry = { id, handler, modes, priority };
+    handlers.push(entry);
+    handlers.sort((a, b) => b.priority - a.priority);
+    byEvent.set(type, handlers);
+    this.blocks.set(blockType, byEvent);
+    return () => {
+      const current = byEvent.get(type);
+      if (current) byEvent.set(type, current.filter((candidate) => candidate !== entry));
+      if ([...byEvent.values()].every((items) => items.length === 0)) this.blocks.delete(blockType);
+    };
+  }
+
   /**
-   * Registers a built-in fallback after plugins and block behavior.
+   * Registers a built-in fallback after global and block-scoped plugin behavior.
    *
    * @param type - Normalized event type.
    * @param handler - Default behavior implementation.
@@ -110,8 +128,11 @@ export class EventRouter {
       const block = editor.document.document.flatMap(function flatten(item): import("../../store/document-model").Block[] {
         return [item, ...item.children.flatMap(flatten)];
       }).find((item) => item.id === event.blockId);
-      const handler = block && this.blocks.getBehavior(block.type)?.[event.type];
-      if (handler?.(event, editor) === true) return true;
+      if (block) {
+        for (const entry of this.blocks.get(block.type)?.get(event.type) ?? []) {
+          if ((!entry.modes || entry.modes.includes(mode)) && entry.handler(event, editor) === true) return true;
+        }
+      }
     }
     for (const handler of this.fallbacks.get(event.type) ?? []) if (handler(event, editor) === true) return true;
     return false;

@@ -42,13 +42,7 @@ export function RivtoEditor({ editor, defaultBlockType, className = "", renderer
   // Work only with detached block values; React never traverses CRDT containers.
   const flatten = (items: typeof blocks): typeof blocks => items.flatMap((block) => [block, ...flatten(block.children)]);
   const activeBlock = flatten(blocks).find((block) => block.id === activeBlockId);
-  // Global/plugin UI and definition-owned actions share the same command path.
-  // Combining them here keeps UIRegistry framework-free and avoids callbacks
-  // that could mutate the document outside CommandRegistry.
-  const toolbarItems = [
-    ...editor.ui.get("toolbar", mode, activeBlock?.type),
-    ...(activeBlock ? editor.blocks.getToolbarItems(activeBlock.type, mode).map((item) => ({ ...item, slot: "toolbar" as const })) : []),
-  ];
+  const toolbarItems = editor.ui.get("toolbar", mode, activeBlock?.type);
   const setSelected = (blockId: string | null): void => {
     if (blockId) editor.commands.execute("selection.set", { selection: { type: "edgeless", blockIds: [blockId] } });
     else editor.commands.execute("selection.clear");
@@ -92,7 +86,7 @@ export function RivtoEditor({ editor, defaultBlockType, className = "", renderer
       const selection = editor.selection.get();
       const blockId = selection?.type === "text" ? selection.anchor.blockId : selection?.blockIds[0];
       // Extensions get the first chance to claim clipboard events. The built-in
-      // command runs only when plugin and block behavior decline the event.
+      // command runs only when global and block-scoped plugins decline the event.
       if (!editor.events.dispatch({ type: "copy", blockId, payload: { event: event.nativeEvent } })) {
         editor.commands.execute("clipboard.copyEvent", { event: event.nativeEvent });
       }
@@ -119,7 +113,7 @@ export function RivtoEditor({ editor, defaultBlockType, className = "", renderer
       <span className="rv-spacer" />
       {mode === "edgeless" && <><button onClick={() => setZoom(Math.max(.5, zoom - .1))} aria-label="Zoom out">−</button>
         <span>{Math.round(zoom * 100)}%</span><button onClick={() => setZoom(Math.min(2, zoom + .1))} aria-label="Zoom in">+</button></>}
-      {toolbarItems.map((item) => <button key={item.id} onClick={() => editor.commands.executeDynamic(item.command, { blockId: activeBlockId })}>{item.title}</button>)}
+      {toolbarItems.map((item) => <button key={item.id} onClick={() => editor.commands.execute<Record<string, (payload: unknown) => unknown>>(item.command, { blockId: activeBlockId })}>{item.title}</button>)}
       <button onClick={() => {
         const id = editor.commands.execute("block.insert", { block: { type: defaultBlockType }, afterId: blocks.at(-1)?.id });
         editor.focus(id);

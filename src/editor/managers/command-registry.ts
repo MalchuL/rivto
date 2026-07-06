@@ -20,11 +20,10 @@ export type CommandMap = Record<string, CommandHandler>;
 type StoredCommandHandler = (payload?: unknown) => unknown;
 
 /**
- * Typed ownership token for a dynamically registered command.
+ * Typed ownership token for a registered command.
  *
- * A plugin cannot change the static command map of an already-created runtime.
- * The handle therefore carries the plugin command's local payload and result
- * types while the registry retains its stable built-in type surface.
+ * The handle carries the command's payload and result types and can execute or
+ * dispose only the exact registration that created it.
  */
 export interface RegisteredCommand<Handler extends CommandHandler> {
   /** Stable registered command ID. */
@@ -39,8 +38,8 @@ export interface RegisteredCommand<Handler extends CommandHandler> {
  * Owns every command available to views, plugins, and host applications.
  *
  * `Commands` provides exact name, payload, and result inference for the stable
- * runtime API. Extensions remain dynamic by nature and use `registerDynamic`
- * plus its typed handle, or the explicit `executeDynamic` escape hatch.
+ * runtime API. Extensions pass their own command map as the explicit generic
+ * to `register()` or `execute()`; no second dynamic API is necessary.
  * Runtime validation still belongs to each command because TypeScript types
  * disappear for JavaScript callers and external data.
  *
@@ -61,23 +60,10 @@ export class CommandRegistry<Commands extends CommandMap = Record<string, Comman
    * @param handler - Exactly typed command implementation.
    * @returns Typed ownership and execution handle.
    */
-  register<Name extends keyof Commands & string>(
+  register<Available extends CommandMap = Commands, Name extends keyof Available & string = keyof Available & string>(
     name: Name,
-    handler: Commands[Name],
-  ): RegisteredCommand<Commands[Name]> {
-    return this.add(name, handler);
-  }
-
-  /**
-   * Registers a command whose name is introduced at runtime, normally by a plugin.
-   *
-   * Keep and execute through the returned handle when possible. It preserves
-   * the extension's types without falsely adding its name to every runtime.
-   */
-  registerDynamic<Payload = undefined, Result = void>(
-    name: string,
-    handler: CommandSpec<Payload, Result>,
-  ): RegisteredCommand<CommandSpec<Payload, Result>> {
+    handler: Available[Name],
+  ): RegisteredCommand<Available[Name]> {
     return this.add(name, handler);
   }
 
@@ -85,21 +71,11 @@ export class CommandRegistry<Commands extends CommandMap = Record<string, Comman
   has(name: string): boolean { return this.handlers.has(name); }
 
   /** Executes a command declared in the static command map. */
-  execute<Name extends keyof Commands & string>(
+  execute<Available extends CommandMap = Commands, Name extends keyof Available & string = keyof Available & string>(
     name: Name,
-    ...args: Parameters<Commands[Name]>
-  ): ReturnType<Commands[Name]> {
-    return this.run(name, args[0]) as ReturnType<Commands[Name]>;
-  }
-
-  /**
-   * Executes a command known only at runtime.
-   *
-   * Prefer a `RegisteredCommand` handle when the caller installed the command;
-   * this escape hatch exists for declarative UI items and separately loaded plugins.
-   */
-  executeDynamic<Result = unknown>(name: string, payload?: unknown): Result {
-    return this.run(name, payload) as Result;
+    ...args: Parameters<Available[Name]>
+  ): ReturnType<Available[Name]> {
+    return this.run(name, args[0]) as ReturnType<Available[Name]>;
   }
 
   /** Subscribes to successful command executions. */

@@ -1,6 +1,5 @@
 import type { BlockInput } from "../../store/document-model";
-import type { BlockRegistry } from "../blocks";
-import type { EditorMode, RivtoEditorApi } from "../editor";
+import type { RivtoEditorApi } from "../editor";
 import type { RivtoPlugin } from "../managers";
 
 /** Checks the detached block tree without reaching into DocumentModel internals. */
@@ -27,8 +26,21 @@ export interface SlashItem {
   run?: (editor: RivtoEditorApi, blockId: string) => void;
 }
 
-/** Slash-menu metadata attached to a registered block type. */
-export type BlockSlashDefinition = Omit<SlashItem, "block" | "run">;
+/** Standard writing actions hosts may opt into with the slash-menu plugin. */
+export const defaultSlashItems: SlashItem[] = [
+  { title: "Paragraph", aliases: ["p", "text"], group: "Basic", block: { type: "paragraph" } },
+  { title: "Heading 1", aliases: ["h1", "title"], group: "Headings", block: { type: "heading" } },
+  { title: "Heading 2", aliases: ["h2", "subtitle"], group: "Headings", block: { type: "heading2" } },
+  { title: "Heading 3", aliases: ["h3"], group: "Headings", block: { type: "heading3" } },
+  { title: "Bulleted list", aliases: ["ul", "bullet"], group: "Lists", block: { type: "bulletListItem" } },
+  { title: "Numbered list", aliases: ["ol", "number"], group: "Lists", block: { type: "numberedListItem" } },
+  { title: "Checklist", aliases: ["todo", "check"], group: "Lists", block: { type: "checkListItem" } },
+  { title: "Quote", aliases: ["blockquote"], group: "Basic", block: { type: "quote" } },
+  { title: "Code block", aliases: ["pre"], group: "Basic", block: { type: "code" } },
+  { title: "Divider", aliases: ["line", "hr"], group: "Basic", block: { type: "divider" } },
+  { title: "Image", aliases: ["photo", "picture"], group: "Media", block: { type: "image" } },
+  { title: "File", aliases: ["attachment"], group: "Media", block: { type: "file" } },
+];
 
 /** Current slash query owned by the plugin rather than a renderer. */
 export interface SlashMenuState {
@@ -54,16 +66,16 @@ export function slashItemId(item: SlashItem): string {
 }
 
 /**
- * Builds slash-menu entries from registered block definitions.
- *
- * Filtering occurs before creating actions so a slash menu cannot insert a
- * type that `block.insert` would immediately reject in the current mode.
+ * Reports whether an item's block can be created in the current mode.
+ * A shared renderer or no custom renderer means both modes; a renderer map is
+ * also the availability declaration, so the model has no duplicate mode list.
  */
-export function collectBlockSlashItems(registry: BlockRegistry, mode?: EditorMode): SlashItem[] {
-  return registry.listDefinitions().flatMap((definition) => definition.slash && (!mode || registry.supports(definition.type, mode))
-    ? [{ id: definition.type, ...definition.slash, block: { type: definition.type } }]
-    : []);
-}
+const isAvailable = (editor: RivtoEditorApi, item: SlashItem): boolean => {
+  if (!item.block) return true;
+  const definition = editor.blocks.get(item.block.type);
+  const render = definition?.render;
+  return !!definition && (!render || typeof render === "function" || !!render[editor.mode.get()]);
+};
 
 /**
  * Creates the global slash-menu interaction plugin.
@@ -72,7 +84,7 @@ export function collectBlockSlashItems(registry: BlockRegistry, mode?: EditorMod
  * popup presentation. Selecting an item enters through `slash.execute`, so
  * even the default remove-and-insert behavior remains command-driven.
  */
-export function createSlashMenuPlugin(): SlashMenuPlugin {
+export function createSlashMenuPlugin(items: SlashItem[] = []): SlashMenuPlugin {
   let state: SlashMenuState | null = null;
   const listeners = new Set<() => void>();
   const setState = (next: SlashMenuState | null): void => {
@@ -82,15 +94,14 @@ export function createSlashMenuPlugin(): SlashMenuPlugin {
   };
   const getItems = (editor: RivtoEditorApi, query = ""): SlashItem[] => {
     const normalized = query.toLowerCase();
-    return [
-      ...collectBlockSlashItems(editor.blocks, editor.mode.get()),
-      ...editor.plugins.getSlashItems(),
-    ].filter((item) => [item.title, ...(item.aliases ?? [])]
+    return editor.plugins.getSlashItems().filter((item) => isAvailable(editor, item)
+      && [item.title, ...(item.aliases ?? [])]
       .some((term) => term.toLowerCase().includes(normalized)));
   };
 
   return {
     id: SLASH_MENU_PLUGIN_ID,
+    slashItems: items,
     events: {
       input: (event) => {
         const text = event.payload && typeof event.payload === "object"

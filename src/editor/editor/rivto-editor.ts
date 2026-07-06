@@ -1,5 +1,5 @@
 import { YjsDoc } from "../../store/crdt-doc";
-import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type BlockPatch, type Link, type Snapshot } from "../../store/document-model";
+import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type BlockPatch, type Link, type SnapshotUpdate } from "../../store/document-model";
 import { BlockRegistry, defaultBlockDefinitions, type BlockDefinition } from "../blocks";
 import {
   ClipboardManager,
@@ -13,7 +13,6 @@ import {
   UIRegistry,
   type RivtoPlugin,
 } from "../managers";
-import { createSlashMenuPlugin } from "../plugins";
 import type { BuiltInCommandMap, CreateRivtoEditorOptions, EditorPosition, EditorSelection, MarkdownFormat, RivtoEditorApi, RuntimeEvent } from "./types";
 
 type Payload = Record<string, unknown>;
@@ -96,7 +95,6 @@ export class EditorRuntime implements RivtoEditorApi {
     this.registerFallbackEvents();
     this.document.setPropsValidator((type, props) => this.blocks.validate(type, props));
     defaultBlockDefinitions.forEach((definition) => this.defineBlock(definition));
-    this.use(createSlashMenuPlugin());
     options.plugins?.forEach((plugin) => this.use(plugin));
     if (this.document.isEmpty && options.initialContent?.length) {
       options.initialContent.forEach((block) => this.commands.execute("block.insert", { block }));
@@ -202,12 +200,16 @@ export class EditorRuntime implements RivtoEditorApi {
       name: PayloadCommandName,
       handler: (data: Payload) => PayloadCommandResult,
     ): void => {
-      this.commands.registerDynamic<unknown, PayloadCommandResult>(name, (value) => handler(payload(value)));
+      this.commands.register<Record<PayloadCommandName, (value: unknown) => PayloadCommandResult>>(name, (value) => handler(payload(value)));
     };
     register("block.insert", (data) => {
       const block = payload(data.block) as unknown as BlockInput;
       if (typeof block.type !== "string") throw new Error("block.type must be a string");
-      if (!this.blocks.supports(block.type, this.mode.get())) throw new Error(`Block type ${block.type} is unavailable in ${this.mode.get()} mode`);
+      const definition = this.blocks.get(block.type);
+      const render = definition?.render;
+      if (!definition || (render && typeof render !== "function" && !render[this.mode.get()])) {
+        throw new Error(`Block type ${block.type} is unavailable in ${this.mode.get()} mode`);
+      }
       // `undefined` appends while explicit `null` inserts first. Collapsing both
       // values here would silently change DocumentModel's ordering contract.
       const afterId = data.afterId === undefined ? undefined : data.afterId === null ? null : string(data.afterId, "afterId");
@@ -244,11 +246,11 @@ export class EditorRuntime implements RivtoEditorApi {
     register("clipboard.paste", (data) => this.clipboard.paste(string(data.defaultBlockType, "defaultBlockType"), data.text as string | undefined));
     register("clipboard.copyEvent", (data) => this.clipboard.handleCopyEvent(data.event as ClipboardEvent));
     register("clipboard.pasteEvent", (data) => this.clipboard.handlePasteEvent(data.event as ClipboardEvent, string(data.defaultBlockType, "defaultBlockType")));
-    register("document.load", (data) => { this.document.loadSnapshot(data.snapshot as Snapshot); this.history.clear(); });
+    register("document.load", (data) => { this.document.loadSnapshot(data.snapshot as SnapshotUpdate); this.history.clear(); });
   }
 
   /**
-   * Registers built-in handlers that run after plugins and block behavior.
+   * Registers built-in handlers that run after global and block-scoped plugins.
    *
    * Fallbacks claim only events they can fully handle. This lets extensions
    * override keyboard or drop semantics by returning `true` earlier in the

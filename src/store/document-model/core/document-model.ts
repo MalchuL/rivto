@@ -15,6 +15,7 @@ import type {
     BlockPatch,
     Link,
     Snapshot,
+    SnapshotUpdate,
 } from "./types";
 import type { BlockLayoutStorage, BlockStorage, DocumentStorage, IDBlock, IDLink, IDPlugin, IDProp, LinkStorage } from "./types/storage";
 import { assignMap, assignText, clone, isCRDTArray, isCRDTMap, isCRDTText } from "./utils";
@@ -422,21 +423,34 @@ export class DocumentModelImpl {
     }
 
     /**
-     * Replaces collaborative state from a schema-v3 snapshot atomically.
+     * Applies supplied schema-v3 snapshot sections atomically.
      *
-     * @param snapshot - Portable snapshot to hydrate.
-     * @throws If the snapshot version or block collection is unsupported.
+     * A complete snapshot replaces the complete document. A partial fetched
+     * update replaces only its present sections, leaving omitted state intact.
+     *
+     * @param snapshot - Complete snapshot or partial persistence update.
+     * @throws If the snapshot version or supplied block collection is unsupported.
      */
-    loadSnapshot(snapshot: Snapshot): void {
-        if (snapshot.version !== 3 || !Array.isArray(snapshot.blocks)) throw new Error("Unsupported Rivto document snapshot");
+    loadSnapshot(snapshot: SnapshotUpdate): void {
+        if (snapshot.version !== 3 || (snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks))) {
+            throw new Error("Unsupported Rivto document snapshot");
+        }
         this.transact(() => {
-            this.storage.roots.delete(0, this.storage.roots.length);
-            this.storage.blocks.clear();
-            this.storage.links.clear();
-            this.storage.pluginData.clear();
-            snapshot.blocks.forEach((block) => this.insertInto(block, this.storage.roots));
-            snapshot.links?.forEach((link) => this.createLink(link));
-            assignMap(this.storage.pluginData, snapshot.pluginData ?? {});
+            // Persistence may fetch sections independently. Replacing only keys
+            // present in the update avoids erasing newer links or plugin state.
+            if (snapshot.blocks) {
+                this.storage.roots.delete(0, this.storage.roots.length);
+                this.storage.blocks.clear();
+                snapshot.blocks.forEach((block) => this.insertInto(block, this.storage.roots));
+            }
+            if (snapshot.links) {
+                this.storage.links.clear();
+                snapshot.links.forEach((link) => this.createLink(link));
+            }
+            if (snapshot.pluginData) {
+                this.storage.pluginData.clear();
+                assignMap(this.storage.pluginData, snapshot.pluginData);
+            }
         });
     }
 

@@ -38,7 +38,7 @@ adapters one stable interface to implement.
 | --- | --- | --- |
 | Document types | `src/store/document-model/core/types/document.ts` | Storage blocks, Markdown content, layouts, links, and snapshots |
 | Editor types and kernel | `src/editor/editor/**` | Public commands, events, mode, manager ownership, and feature orchestration |
-| Block runtime | `src/editor/blocks/**` | Definitions, native-type registry, defaults, validation, and slash entries |
+| Block runtime | `src/editor/blocks/**` | Definitions, native-type registry, nested defaults, validation, and renderers |
 | Collaborative model | `src/store/document-model/core/document-model.ts` | Canonical `DocumentModelImpl` boundary; block tree, Markdown content, props, plugin data, links, geometry, snapshots, and normalization |
 | Runtime managers | `src/editor/managers/**` | Commands, event routing, mode, selection, history, plugins, UI, providers, and clipboard |
 | Core plugins | `src/editor/plugins/**` | Global interaction systems such as slash-menu state, events, filtering, and commands |
@@ -165,16 +165,16 @@ loading.
 
 `CommandRegistry<BuiltInCommandMap>` binds each stable name to its payload and
 result. These compile-time checks complement rather than replace handler
-validation because JavaScript and deserialized data reach the same boundary. A
-dynamically installed command cannot alter the type of an existing runtime, so
-`registerDynamic()` returns a locally typed execution/disposal handle. Unknown
-declarative actions use the explicit `executeDynamic()` escape hatch.
+validation because JavaScript and deserialized data reach the same boundary.
+Extensions supply their own command map as the explicit generic to the same
+`register()` and `execute()` methods. The returned registration remains a
+locally typed execution/disposal handle.
 
 ### ModeManager and EventRouter
 
 `ModeManager` owns local `block | edgeless` state. `EventRouter` accepts
 framework-neutral keyboard, clipboard, drop, and pointer events, then
-short-circuits through active plugins, the current block behavior, and built-in
+short-circuits through active global plugins, block-scoped plugins, and built-in
 fallbacks. React only normalizes DOM events and applies `preventDefault` when a
 runtime handler reports success.
 
@@ -214,7 +214,7 @@ history behavior needs broader integration tests.
 
 ### PluginManager
 
-Owns trusted plugin lifecycle. Plugin blocks, commands, event handlers, slash
+Owns trusted plugin lifecycle. Plugin blocks, commands, global and block event handlers, slash
 items, and mode-aware UI contributions are installed atomically in their
 dedicated registries. Disposing a plugin removes every owned contribution.
 
@@ -301,7 +301,7 @@ deleted root block. Block children are collaborative ordered arrays.
 
 ### Default blocks
 
-The default writing plugin registers:
+The runtime registers these default block definitions:
 
 - Paragraph
 - Heading 1, 2, and 3
@@ -330,8 +330,9 @@ still select specialized renderers for lists, media, callouts, and plugins.
 ### Slash commands
 
 Typing `/` at the start of an editable block dispatches a normalized input event
-to `SlashMenuPlugin`. The plugin owns query state, combines mode-aware block and
-plugin contributions, and filters the result. React only renders that state.
+to `SlashMenuPlugin` when the host installs it. The plugin owns query state,
+combines plugin contributions, filters unavailable renderer modes, and exposes
+the result. React only renders that state.
 Selecting an item executes `slash.execute`; the default action creates the typed
 replacement and removes the trigger block through built-in commands, so storage
 never mutates a block's native type.
@@ -345,15 +346,17 @@ A `RivtoPlugin` may contribute:
 
 - `BlockDefinition` values
 - Commands
+- Global and block-scoped event handlers
 - Slash items
+- Toolbar and side-menu UI actions
 - Registration/disposal hooks
 
-A `BlockDefinition` defines a type, content mode, optional prop schema, optional React
-renderer, and optional slash item. The demo's callout block is the reference
-consumer example registered through `editor.defineBlock()`.
+A `BlockDefinition` defines only a type, content mode, optional prop schema, and
+optional shared or mode-specific React renderer. Interaction and UI policy live
+in plugins. The demo's callout plugin is the reference consumer example.
 
-Planned but not yet available: shortcuts, plugin-defined input rules, UI slots,
-themes, isolated plugin state APIs, and sandboxing.
+Planned but not yet available: shortcuts, plugin-defined input rules, themes,
+isolated plugin state APIs, and sandboxing.
 
 ### Links
 
@@ -367,7 +370,7 @@ Current limitation: there is no connector creation or editing UI.
 ### Persistence
 
 `getSnapshot()` produces schema v3 JSON containing blocks, links, layouts, and
-plugin data. `loadSnapshot()` restores that data atomically. The demo stores the
+plugin data. `loadSnapshot()` atomically replaces only supplied sections. The demo stores the
 snapshot in browser local storage.
 
 Historical bundle shapes are rejected. Compatibility code is added only for a

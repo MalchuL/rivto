@@ -13,9 +13,15 @@ pnpm add @chulane/rivto react react-dom yjs
 ## Editor
 
 ```tsx
-import { createRivtoEditor, RivtoEditor } from "@chulane/rivto";
+import {
+  createRivtoEditor,
+  createSlashMenuPlugin,
+  defaultSlashItems,
+  RivtoEditor,
+} from "@chulane/rivto";
 
 const editor = createRivtoEditor({
+  plugins: [createSlashMenuPlugin(defaultSlashItems)],
   initialContent: [
     { type: "heading", content: "Hello Rivto" },
     { type: "paragraph", content: "Type / for commands." },
@@ -30,7 +36,7 @@ export function Page() {
 The installed package version is available as `RIVTO_VERSION`.
 
 The command-driven editor runtime includes paragraphs, three heading levels, bulleted, numbered and
-check lists, quotes, code, dividers, images, files, Markdown formatting, slash
+check lists, quotes, code, dividers, images, files, Markdown formatting, opt-in slash
 commands, undo/redo, nesting, a block view, and an edgeless view. The editor
 depends only on the `CRDTDoc` abstraction; native Yjs objects never enter the
 editor API. To attach a provider, pass the Yjs adapter through `document`:
@@ -47,9 +53,8 @@ const editor = createRivtoEditor({ document });
 Plugins are trusted local modules and may contribute blocks, commands, routed
 events, and mode-aware UI at creation time or at runtime. Document mutations
 go through `editor.commands.execute()`. Built-in names infer exact payload and
-result types. Runtime-only plugin commands retain local typing through the
-handle returned by `commands.registerDynamic()`; declarative UI invokes truly
-dynamic names through `commands.executeDynamic()`.
+result types. Plugin commands use the same methods by supplying their command
+map explicitly: `commands.execute<MyPluginCommands>(name, payload)`.
 
 ```tsx
 import { z } from "zod";
@@ -61,7 +66,6 @@ const dispose = editor.use({
     title: "Alert",
     content: "inline",
     propSchema: z.object({ tone: z.enum(["info", "warning"]).default("info") }),
-    slash: { title: "Alert", aliases: ["notice"], group: "Custom" },
     render: ({ block, content }) => (
       <aside data-tone={block.props.tone}>{content}</aside>
     ),
@@ -71,6 +75,8 @@ const dispose = editor.use({
       block: { type: "alert" },
     }),
   },
+  slashItems: [{ title: "Alert", aliases: ["notice"], group: "Custom", block: { type: "alert" } }],
+  blockEvents: { alert: { pointerdown: () => false } },
 });
 
 dispose();
@@ -81,7 +87,9 @@ Unknown block types remain in snapshots and render as recoverable placeholders.
 ## Persistence and migration
 
 `editor.document.getSnapshot()` returns lossless schema-v3 JSON. Restore it with
-`editor.commands.execute("document.load", { snapshot })`. Use `migrateDocumentBundleV1` to convert the
+`editor.commands.execute("document.load", { snapshot })`. Fetched updates may
+contain only `blocks`, `links`, or `pluginData`; omitted sections are preserved.
+Use `migrateDocumentBundleV1` to convert the
 legacy numeric-order bundle without mutating the source bundle.
 
 ## Development
