@@ -223,15 +223,41 @@ describe("Phase 2 editor runtime", () => {
         expect.objectContaining({ id: "c" }),
       ] }),
     ]);
+    expect(editor.selection.get()).toEqual({
+      type: "block", blockIds: ["b", "c"], anchorBlockId: "b", focusBlockId: "c",
+    });
 
     editor.commands.execute("block.outdent", { id: "c" });
     expect(editor.document.document.map((block) => block.id)).toEqual(["a", "b", "c"]);
+    expect(editor.selection.get()).toEqual({
+      type: "block", blockIds: ["b", "c"], anchorBlockId: "b", focusBlockId: "c",
+    });
 
     editor.commands.execute("selection.set", { selection: {
       type: "block", blockIds: ["b", "c"], anchorBlockId: "b", focusBlockId: "c",
     } });
     editor.commands.execute("block.remove", { id: "b" });
     expect(editor.document.document.map((block) => block.id)).toEqual(["a"]);
+  });
+
+  it("uses the active block selection for Tab even when keydown comes from another block", () => {
+    const editor = createRivtoEditor({ initialContent: [
+      { id: "a", type: "paragraph", content: "Alpha" },
+      { id: "b", type: "paragraph", content: "Beta" },
+      { id: "c", type: "paragraph", content: "Gamma" },
+    ] });
+    editor.commands.execute("selection.set", { selection: {
+      type: "block", blockIds: ["b", "c"], anchorBlockId: "b", focusBlockId: "c",
+    } });
+
+    expect(editor.events.dispatch({ type: "keydown", blockId: "a", key: "Tab", payload: { defaultBlockType: "paragraph" } })).toBe(true);
+
+    expect(editor.document.document).toEqual([
+      expect.objectContaining({ id: "a", children: [
+        expect.objectContaining({ id: "b" }),
+        expect.objectContaining({ id: "c" }),
+      ] }),
+    ]);
   });
 
   it("normalizes reverse partial text selection without losing its boundaries", () => {

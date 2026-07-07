@@ -16,6 +16,7 @@ import {
 import type { BuiltInCommandMap, CreateRivtoEditorOptions, EditorPosition, EditorSelection, MarkdownFormat, RivtoEditorApi, RuntimeEvent } from "./types";
 
 type Payload = Record<string, unknown>;
+type RuntimeBlockSelection = Extract<EditorSelection, { type: "block" }>;
 type PayloadCommandName =
   | "block.insert" | "block.update" | "block.remove" | "block.move" | "block.indent" | "block.outdent"
   | "text.set" | "text.insert" | "text.delete" | "text.format"
@@ -218,12 +219,22 @@ export class EditorRuntime implements RivtoEditorApi {
     register("block.update", (data) => this.document.updateBlock(string(data.id, "id"), payload(data.patch) as BlockPatch));
     register("block.remove", (data) => this.document.transact(() => this.selectedBlockIds(string(data.id, "id")).forEach((id) => this.document.removeBlock(id))));
     register("block.move", (data) => this.document.moveBlock(string(data.id, "id"), data.afterId === null ? null : string(data.afterId, "afterId")));
-    register("block.indent", (data) => this.document.transact(() => this.selectedBlockIds(string(data.id, "id")).forEach((id) => this.document.indentBlock(id))));
-    register("block.outdent", (data) => this.document.transact(() => {
-      // Moving nested siblings upward inserts each one after its parent. Walking
-      // bottom-to-top preserves their visual order: B,C under A becomes A,B,C.
-      this.selectedBlockIds(string(data.id, "id")).reverse().forEach((id) => this.document.outdentBlock(id));
-    }));
+    register("block.indent", (data) => {
+      const before = this.selection.get();
+      const ids = this.selectedBlockIds(string(data.id, "id"));
+      this.document.transact(() => ids.forEach((id) => this.document.indentBlock(id)));
+      this.restoreBlockSelection(before, ids);
+    });
+    register("block.outdent", (data) => {
+      const before = this.selection.get();
+      const ids = this.selectedBlockIds(string(data.id, "id"));
+      this.document.transact(() => {
+        // Moving nested siblings upward inserts each one after its parent. Walking
+        // bottom-to-top preserves their visual order: B,C under A becomes A,B,C.
+        [...ids].reverse().forEach((id) => this.document.outdentBlock(id));
+      });
+      this.restoreBlockSelection(before, ids);
+    });
     register("text.set", (data) => this.document.setBlockText(string(data.id, "id"), string(data.text, "text")));
     register("text.insert", (data) => this.document.insertText(string(data.id, "id"), number(data.offset, "offset"), string(data.text, "text")));
     register("text.delete", (data) => this.document.deleteText(string(data.id, "id"), number(data.offset, "offset"), number(data.length, "length")));
@@ -287,7 +298,10 @@ export class EditorRuntime implements RivtoEditorApi {
     } else if (event.key === "Backspace" && data.empty === true) {
       this.commands.execute("block.remove", { id: event.blockId });
     } else if (event.key === "Tab") {
-      this.commands.execute(event.shiftKey ? "block.outdent" : "block.indent", { id: event.blockId });
+      const selection = this.selection.get();
+      this.commands.execute(event.shiftKey ? "block.outdent" : "block.indent", {
+        id: selection?.type === "block" ? selection.focusBlockId : event.blockId,
+      });
     } else return false;
     return true;
   }
@@ -321,6 +335,16 @@ export class EditorRuntime implements RivtoEditorApi {
   private selectedBlockIds(id: string): string[] {
     const selection = this.selection.get();
     return selection?.type === "block" && selection.blockIds.includes(id) ? selection.blockIds : [id];
+  }
+
+  /** Re-publishes block selection after structural moves reorder the document tree. */
+  private restoreBlockSelection(previous: EditorSelection | null, ids: string[]): void {
+    if (previous?.type !== "block") return;
+    const remaining = ids.filter((id) => this.findBlock(id));
+    if (!remaining.length) return this.selection.clear();
+    const anchorBlockId = remaining.includes(previous.anchorBlockId) ? previous.anchorBlockId : remaining[0]!;
+    const focusBlockId = remaining.includes(previous.focusBlockId) ? previous.focusBlockId : remaining.at(-1)!;
+    this.setSelection({ type: "block", blockIds: remaining, anchorBlockId, focusBlockId } satisfies RuntimeBlockSelection);
   }
 
   /** Validates a supported Markdown format at the command boundary. */

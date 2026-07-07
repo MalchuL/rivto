@@ -239,6 +239,21 @@ test("selects whole blocks by dragging across blank page space", async ({ page }
   await expect(blocks.nth(1)).toHaveAttribute("data-selected", "true");
 });
 
+test("moves a collapsed caret between blocks with the same text offset", async ({ page }) => {
+  const paragraphs = page.getByRole("textbox", { name: "Paragraph" });
+  await paragraphs.nth(0).fill("abcdef");
+  await paragraphs.nth(1).fill("uvwxyz");
+  const point = await textPoint(paragraphs.nth(0), 2);
+  await page.mouse.click(point.x, point.y);
+
+  await page.keyboard.press("ArrowDown");
+  await expect.poll(() => page.evaluate(() => {
+    const selection = window.getSelection();
+    const content = document.activeElement?.closest(".rv-block-content");
+    return { text: content?.textContent, offset: selection?.focusOffset };
+  })).toEqual({ text: "uvwxyz", offset: 2 });
+});
+
 test("pastes multiline text at the caret and refreshes focused content", async ({ page }) => {
   const paragraph = page.getByRole("textbox", { name: "Paragraph" }).first();
   await paragraph.fill("Hello world");
@@ -301,6 +316,23 @@ test("selects and moves an object in edgeless mode through runtime commands", as
   await block.press("ArrowRight");
   await expect.poll(() => block.evaluate((element) => getComputedStyle(element).left)).not.toBe(before);
   await expect(page.getByLabel("Runtime inspector")).toContainText("Command: block.layout.set");
+
+  const firstBox = await page.locator(".rv-canvas-block").nth(0).boundingBox();
+  const secondBox = await page.locator(".rv-canvas-block").nth(1).boundingBox();
+  if (!firstBox || !secondBox) throw new Error("Expected edgeless blocks");
+  await page.mouse.move(firstBox.x + 8, firstBox.y - 12);
+  await page.mouse.down();
+  await page.mouse.move(secondBox.x + secondBox.width - 8, secondBox.y + secondBox.height + 12, { steps: 8 });
+  await expect(page.locator(".rv-selection-rect")).toBeVisible();
+  await page.mouse.up();
+  const selected = page.locator(".rv-canvas-block[data-selected=true]");
+  await expect(selected).toHaveCount(2);
+  const firstBefore = await selected.nth(0).evaluate((element) => getComputedStyle(element).left);
+  const secondBefore = await selected.nth(1).evaluate((element) => getComputedStyle(element).left);
+  await selected.nth(0).focus();
+  await selected.nth(0).press("ArrowRight");
+  await expect.poll(() => selected.nth(0).evaluate((element) => getComputedStyle(element).left)).not.toBe(firstBefore);
+  await expect.poll(() => selected.nth(1).evaluate((element) => getComputedStyle(element).left)).not.toBe(secondBefore);
 });
 
 test("keeps edgeless text editing separate from object selection", async ({ page }) => {

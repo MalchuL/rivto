@@ -31,7 +31,8 @@ export function RivtoEditor({ editor, defaultBlockType, className = "", renderer
   const [zoom, setZoom] = useState(1);
   const blocks = editor.document.document;
   const selection = editor.selection.get();
-  const selected = selection?.type === "edgeless" ? selection.blockIds[0] ?? null : null;
+  const selectedIds = selection?.type === "edgeless" ? selection.blockIds : [];
+  const selected = selectedIds[0] ?? null;
   // Every selection variant identifies its active block differently. Reducing
   // them here gives toolbar contributions one consistent block context without
   // leaking selection-shape branching into each action renderer.
@@ -49,7 +50,7 @@ export function RivtoEditor({ editor, defaultBlockType, className = "", renderer
   };
   const PageRenderer = renderers?.page ?? BlockDOMRenderer;
   const CanvasRenderer = renderers?.edgeless ?? EdgelessCanvasRenderer;
-  const rendererProps = { editor, blocks, defaultBlockType, slash, selected, setSelected, zoom };
+  const rendererProps = { editor, blocks, defaultBlockType, slash, selected, selectedIds, setSelected, zoom };
   useEffect(() => {
     /** Synchronizes the browser's possibly cross-block range into local editor state. */
     const synchronizeSelection = (): void => {
@@ -65,6 +66,38 @@ export function RivtoEditor({ editor, defaultBlockType, className = "", renderer
     document.addEventListener("selectionchange", synchronizeSelection);
     return () => document.removeEventListener("selectionchange", synchronizeSelection);
   }, [editor]);
+  useEffect(() => {
+    /** Moves a collapsed caret between block hosts before native ArrowUp/Down keeps it trapped. */
+    const moveCaretBetweenBlocks = (event: globalThis.KeyboardEvent): void => {
+      if (!root.current || !["ArrowUp", "ArrowDown"].includes(event.key) || event.shiftKey || event.metaKey || event.ctrlKey) return;
+      const selection = readEditorSelection(root.current);
+      const activeContent = document.activeElement instanceof HTMLElement
+        ? document.activeElement.closest<HTMLElement>(".rv-block-content")
+        : null;
+      const activeBlockId = activeContent?.closest<HTMLElement>("[data-rivto-block]")?.dataset.rivtoBlock;
+      const native = window.getSelection();
+      const fallback = activeBlockId && native?.isCollapsed && native.focusNode && activeContent?.contains(native.focusNode)
+        ? { blockId: activeBlockId, offset: native.focusOffset }
+        : undefined;
+      const position = selection && selection.anchor.blockId === selection.head.blockId && selection.anchor.offset === selection.head.offset
+        ? selection.anchor
+        : fallback;
+      if (!position) return;
+      const flattenBlocks = (items: typeof blocks): typeof blocks => items.flatMap((block) => [block, ...flattenBlocks(block.children)]);
+      const visible = flattenBlocks(editor.document.document);
+      const index = visible.findIndex((block) => block.id === position.blockId);
+      const next = visible[index + (event.key === "ArrowDown" ? 1 : -1)];
+      if (!next) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const offset = Math.min(position.offset, next.content.length);
+      editor.commands.execute("selection.set", { selection: {
+        type: "text", anchor: { blockId: next.id, offset }, head: { blockId: next.id, offset },
+      } });
+    };
+    document.addEventListener("keydown", moveCaretBetweenBlocks, true);
+    return () => document.removeEventListener("keydown", moveCaretBetweenBlocks, true);
+  }, [editor, blocks]);
   useLayoutEffect(() => {
     if (root.current) {
       const selection = editor.selection.get();

@@ -3,7 +3,7 @@ import type { Block } from "../../store/document-model";
 import type { EditorPosition, EditorSelection, EditorRuntime } from "../editor";
 import { getSlashMenuPlugin, slashItemId, type SlashItem, type SlashMenuState } from "../plugins";
 import { escapeHtml, markdownHtml, markdownType } from "./markdown";
-import { blockIdsInRect, clearNativeSelection, readDOMPointPosition, readDOMSelectionPoint, restoreEditorSelection, setNativeSelection, updateCrossBlockHighlight, type DOMSelectionPoint, type SelectionRect } from "./selection";
+import { blockIdsInRect, clearNativeSelection, readDOMPointPosition, readDOMSelectionPoint, readEditorSelection, restoreEditorSelection, setNativeSelection, updateCrossBlockHighlight, type DOMSelectionPoint, type SelectionRect } from "./selection";
 import type { EditorRendererProps } from "./types";
 
 /** Renders and synchronizes one block's editable Markdown source. */
@@ -109,6 +109,11 @@ function SlashMenu({ editor, blockId, items }: { editor: EditorRuntime; blockId:
   </div>;
 }
 
+/** Returns detached blocks in visible tree order for multi-object canvas actions. */
+function flattenedBlocks(blocks: Block[]): Block[] {
+  return blocks.flatMap((block) => [block, ...flattenedBlocks(block.children)]);
+}
+
 /** Renders one block recursively for page mode or absolutely for edgeless mode. */
 function BlockView({ block, editor, defaultBlockType, slash, canvas = false, selected, select, selectBlock }: {
   block: Block;
@@ -126,11 +131,20 @@ function BlockView({ block, editor, defaultBlockType, slash, canvas = false, sel
   const items = useMemo(() => {
     return slashPlugin?.getItems(editor, slash?.query) ?? [];
   }, [editor, editor.revision, slash?.query, slashPlugin]);
+  const currentSelection = editor.selection.get();
   const drag = (event: ReactPointerEvent): void => {
     if (!canvas) return;
     event.preventDefault();
-    const start = { x: event.clientX, y: event.clientY, left: layout.x, top: layout.y };
-    const move = (next: PointerEvent): void => editor.commands.execute("block.layout.set", { id: block.id, layout: { x: start.left + next.clientX - start.x, y: start.top + next.clientY - start.y } });
+    const selectedIds = currentSelection?.type === "edgeless" && currentSelection.blockIds.includes(block.id) ? currentSelection.blockIds : [block.id];
+    const starts = flattenedBlocks(editor.document.document)
+      .filter((item) => selectedIds.includes(item.id))
+      .map((item) => ({ id: item.id, layout: item.layout ?? { x: 40, y: 40, width: 320, height: 120, zIndex: 0 } }));
+    const start = { x: event.clientX, y: event.clientY };
+    const move = (next: PointerEvent): void => {
+      const dx = next.clientX - start.x;
+      const dy = next.clientY - start.y;
+      starts.forEach((item) => editor.commands.execute("block.layout.set", { id: item.id, layout: { x: item.layout.x + dx, y: item.layout.y + dy } }));
+    };
     const stop = (): void => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", stop);
   };
@@ -141,7 +155,6 @@ function BlockView({ block, editor, defaultBlockType, slash, canvas = false, sel
     const stop = (): void => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", stop);
   };
-  const currentSelection = editor.selection.get();
   const blockSelected = canvas ? selected : currentSelection?.type === "block" && currentSelection.blockIds.includes(block.id);
   return <div className={canvas ? "rv-block rv-canvas-block" : "rv-block"} data-rivto-block={block.id}
     data-type={markdownType(block)} data-selected={blockSelected} style={style} onClick={(event) => {
@@ -162,7 +175,13 @@ function BlockView({ block, editor, defaultBlockType, slash, canvas = false, sel
       if (!canvas || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key) || (event.target as HTMLElement).isContentEditable) return;
       event.preventDefault();
       const step = event.shiftKey ? 10 : 1;
-      editor.commands.execute("block.layout.set", { id: block.id, layout: { x: layout.x + (event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0), y: layout.y + (event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0) } });
+      const dx = event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0;
+      const dy = event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0;
+      const selectedIds = currentSelection?.type === "edgeless" && currentSelection.blockIds.includes(block.id) ? currentSelection.blockIds : [block.id];
+      flattenedBlocks(editor.document.document).filter((item) => selectedIds.includes(item.id)).forEach((item) => {
+        const itemLayout = item.layout ?? { x: 40, y: 40, width: 320, height: 120, zIndex: 0 };
+        editor.commands.execute("block.layout.set", { id: item.id, layout: { x: itemLayout.x + dx, y: itemLayout.y + dy } });
+      });
     }}>
     {!canvas && <div className="rv-side" aria-label="Block controls" contentEditable={false}>
       <button draggable onDragStart={(event) => event.dataTransfer.setData("application/x-rivto-block", block.id)}
@@ -203,10 +222,11 @@ export function BlockDOMRenderer({ editor, blocks, defaultBlockType, slash }: Ed
     y: number;
     moved: boolean;
   }) | null>(null);
-  const visibleBlockIds = useMemo(() => {
-    const flatten = (items: Block[]): string[] => items.flatMap((block) => [block.id, ...flatten(block.children)]);
+  const visibleBlocks = useMemo(() => {
+    const flatten = (items: Block[]): Block[] => items.flatMap((block) => [block, ...flatten(block.children)]);
     return flatten(blocks);
   }, [blocks]);
+  const visibleBlockIds = useMemo(() => visibleBlocks.map((block) => block.id), [visibleBlocks]);
   /** Selects one block or a document-ordered range anchored by the prior selection. */
   const selectBlock = (blockId: string, extend: boolean, toggle: boolean): void => {
     const current = editor.selection.get();
@@ -329,8 +349,29 @@ export function BlockDOMRenderer({ editor, blocks, defaultBlockType, slash }: Ed
     };
   }, [editor]);
   return <div ref={page} className="rv-page" tabIndex={0}
-    onKeyDown={(event) => {
+    onKeyDownCapture={(event) => {
       const selection = editor.selection.get();
+      if (selection?.type !== "block" || event.key !== "Tab") return;
+      event.preventDefault();
+      event.stopPropagation();
+      editor.commands.execute(event.shiftKey ? "block.outdent" : "block.indent", { id: selection.focusBlockId });
+    }}
+    onKeyDown={(event) => {
+      const nativeSelection = page.current ? readEditorSelection(page.current) : undefined;
+      const selection = nativeSelection ?? editor.selection.get();
+      if (selection?.type === "text" && event.key && ["ArrowUp", "ArrowDown"].includes(event.key)
+        && selection.anchor.blockId === selection.head.blockId && selection.anchor.offset === selection.head.offset
+        && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+        const index = visibleBlocks.findIndex((block) => block.id === selection.anchor.blockId);
+        const next = visibleBlocks[index + (event.key === "ArrowDown" ? 1 : -1)];
+        if (!next) return;
+        event.preventDefault();
+        const offset = Math.min(selection.anchor.offset, next.content.length);
+        editor.commands.execute("selection.set", { selection: {
+          type: "text", anchor: { blockId: next.id, offset }, head: { blockId: next.id, offset },
+        } });
+        return;
+      }
       if (selection?.type !== "block") return;
       if (event.key === "Escape") {
         event.preventDefault();
@@ -375,8 +416,46 @@ export function BlockDOMRenderer({ editor, blocks, defaultBlockType, slash }: Ed
 }
 
 /** Renders the same blocks on a scalable absolute-positioned DOM plane. */
-export function EdgelessCanvasRenderer({ editor, blocks, defaultBlockType, slash, selected, setSelected, zoom }: EditorRendererProps) {
-  return <div className="rv-canvas"><div className="rv-plane" style={{ transform: `scale(${zoom})` }}>
+export function EdgelessCanvasRenderer({ editor, blocks, defaultBlockType, slash, selectedIds, setSelected, zoom }: EditorRendererProps) {
+  const canvas = useRef<HTMLDivElement>(null);
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
+  useEffect(() => {
+    const move = (event: PointerEvent): void => {
+      const root = canvas.current;
+      const start = dragStart.current;
+      if (!root || !start || Math.hypot(event.clientX - start.x, event.clientY - start.y) < 3) return;
+      event.preventDefault();
+      clearNativeSelection(root);
+      const rect = {
+        left: Math.min(start.x, event.clientX), top: Math.min(start.y, event.clientY),
+        width: Math.abs(event.clientX - start.x), height: Math.abs(event.clientY - start.y),
+      };
+      setSelectionRect(rect);
+      const blockIds = blockIdsInRect(root, rect);
+      if (blockIds.length) editor.commands.execute("selection.set", { selection: { type: "edgeless", blockIds } });
+      else editor.commands.execute("selection.clear");
+    };
+    const stop = (): void => {
+      dragStart.current = null;
+      setSelectionRect(null);
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", stop);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    };
+  }, [editor]);
+  return <div ref={canvas} className="rv-canvas" tabIndex={0} onPointerDownCapture={(event) => {
+    if (event.button !== 0) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest("[data-rivto-block]")) return;
+    event.preventDefault();
+    event.currentTarget.focus({ preventScroll: true });
+    dragStart.current = { x: event.clientX, y: event.clientY };
+    editor.commands.execute("selection.clear");
+  }}><div className="rv-plane" style={{ transform: `scale(${zoom})` }}>
     <svg className="rv-links" width="2400" height="1600" aria-hidden="true">{editor.document.links.map((link) => {
       const from = blocks.find((block) => block.id === link.from.blockId)?.layout;
       const to = blocks.find((block) => block.id === link.to.blockId)?.layout;
@@ -384,6 +463,11 @@ export function EdgelessCanvasRenderer({ editor, blocks, defaultBlockType, slash
         x2={to.x + to.width / 2} y2={to.y + to.height / 2} stroke="currentColor" strokeWidth="2" /> : null;
     })}</svg>
     {blocks.map((block) => <BlockView key={block.id} block={block} editor={editor} defaultBlockType={defaultBlockType}
-      slash={slash} canvas selected={selected === block.id} select={() => setSelected(block.id)} />)}
-  </div></div>;
+      slash={slash} canvas selected={selectedIds.includes(block.id)} select={() => setSelected(block.id)} />)}
+  </div>{selectionRect && <div className="rv-selection-rect" style={{
+    left: selectionRect.left - (canvas.current?.getBoundingClientRect().left ?? 0),
+    top: selectionRect.top - (canvas.current?.getBoundingClientRect().top ?? 0),
+    width: selectionRect.width, height: selectionRect.height,
+  }} />}
+  </div>;
 }

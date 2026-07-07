@@ -13,8 +13,10 @@ export interface EditorRendererProps {
   defaultBlockType: string;
   /** Active slash query, or `null`. */
   slash: SlashMenuState | null;
-  /** Selected edgeless block ID. */
+  /** First selected edgeless block ID, retained for simple custom renderers. */
   selected: string | null;
+  /** All selected edgeless block IDs. */
+  selectedIds: string[];
   /** Updates selected edgeless block ID. */
   setSelected: (value: string | null) => void;
   /** Current local edgeless zoom factor. */
