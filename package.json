@@ -19,7 +19,8 @@
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsup src/index.ts --format esm --dts --sourcemap --clean --out-dir dist/esm",
-    "demo": "pnpm build && pnpm --dir demo dev",
+    "dev": "tsup src/index.ts --format esm --dts --sourcemap --clean --out-dir dist/esm --watch",
+    "demo": "pnpm -r --parallel --include-workspace-root --filter @chulane/rivto --filter @chulane/rivto-demo dev",
     "demo:build": "pnpm build && pnpm --dir demo build",
     "demo:check": "pnpm --dir demo check-types",
     "lint": "eslint src --max-warnings=0",
