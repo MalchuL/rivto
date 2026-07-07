@@ -216,10 +216,14 @@ export class EditorRuntime implements RivtoEditorApi {
       return this.document.insertBlock(this.blocks.prepare(block), afterId);
     });
     register("block.update", (data) => this.document.updateBlock(string(data.id, "id"), payload(data.patch) as BlockPatch));
-    register("block.remove", (data) => this.document.removeBlock(string(data.id, "id")));
+    register("block.remove", (data) => this.document.transact(() => this.selectedBlockIds(string(data.id, "id")).forEach((id) => this.document.removeBlock(id))));
     register("block.move", (data) => this.document.moveBlock(string(data.id, "id"), data.afterId === null ? null : string(data.afterId, "afterId")));
-    register("block.indent", (data) => this.document.indentBlock(string(data.id, "id")));
-    register("block.outdent", (data) => this.document.outdentBlock(string(data.id, "id")));
+    register("block.indent", (data) => this.document.transact(() => this.selectedBlockIds(string(data.id, "id")).forEach((id) => this.document.indentBlock(id))));
+    register("block.outdent", (data) => this.document.transact(() => {
+      // Moving nested siblings upward inserts each one after its parent. Walking
+      // bottom-to-top preserves their visual order: B,C under A becomes A,B,C.
+      this.selectedBlockIds(string(data.id, "id")).reverse().forEach((id) => this.document.outdentBlock(id));
+    }));
     register("text.set", (data) => this.document.setBlockText(string(data.id, "id"), string(data.text, "text")));
     register("text.insert", (data) => this.document.insertText(string(data.id, "id"), number(data.offset, "offset"), string(data.text, "text")));
     register("text.delete", (data) => this.document.deleteText(string(data.id, "id"), number(data.offset, "offset"), number(data.length, "length")));
@@ -303,6 +307,20 @@ export class EditorRuntime implements RivtoEditorApi {
       this.document.insertText(id, from + length, suffix);
       this.document.insertText(id, from, prefix);
     });
+  }
+
+  /**
+   * Expands a single-block command to the active block selection when possible.
+   *
+   * Toolbar buttons and key handlers naturally know the block that received the
+   * event, but a marquee selection means the user's intent is "act on all these
+   * blocks". Requiring every renderer to repeat that check would make selection
+   * semantics drift; keeping it at the command boundary gives plugins the same
+   * behavior for free.
+   */
+  private selectedBlockIds(id: string): string[] {
+    const selection = this.selection.get();
+    return selection?.type === "block" && selection.blockIds.includes(id) ? selection.blockIds : [id];
   }
 
   /** Validates a supported Markdown format at the command boundary. */

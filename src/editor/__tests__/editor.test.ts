@@ -207,6 +207,33 @@ describe("Phase 2 editor runtime", () => {
     expect(createClipboardPayload(editor.document, editor.selection.get())?.text).toBe("Alpha\nBeta");
   });
 
+  it("applies single-block structure commands to the active block selection", () => {
+    const editor = createRivtoEditor({ initialContent: [
+      { id: "a", type: "paragraph", content: "Alpha" },
+      { id: "b", type: "paragraph", content: "Beta" },
+      { id: "c", type: "paragraph", content: "Gamma" },
+    ] });
+    editor.commands.execute("selection.set", { selection: {
+      type: "block", blockIds: ["b", "c"], anchorBlockId: "b", focusBlockId: "c",
+    } });
+    editor.commands.execute("block.indent", { id: "b" });
+    expect(editor.document.document).toEqual([
+      expect.objectContaining({ id: "a", children: [
+        expect.objectContaining({ id: "b" }),
+        expect.objectContaining({ id: "c" }),
+      ] }),
+    ]);
+
+    editor.commands.execute("block.outdent", { id: "c" });
+    expect(editor.document.document.map((block) => block.id)).toEqual(["a", "b", "c"]);
+
+    editor.commands.execute("selection.set", { selection: {
+      type: "block", blockIds: ["b", "c"], anchorBlockId: "b", focusBlockId: "c",
+    } });
+    editor.commands.execute("block.remove", { id: "b" });
+    expect(editor.document.document.map((block) => block.id)).toEqual(["a"]);
+  });
+
   it("normalizes reverse partial text selection without losing its boundaries", () => {
     const editor = createRivtoEditor({ initialContent: [
       { id: "a", type: "paragraph", content: "Alpha" },

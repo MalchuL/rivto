@@ -309,6 +309,7 @@ export function BlockDOMRenderer({ editor, blocks, defaultBlockType, slash }: Ed
       }
       else if (root && completed?.type === "block" && completed.moved) {
         clearNativeSelection(root);
+        root.focus({ preventScroll: true });
         setTimeout(() => {
           clearNativeSelection(root);
           delete root.dataset.rivtoPointerSelecting;
@@ -327,7 +328,7 @@ export function BlockDOMRenderer({ editor, blocks, defaultBlockType, slash }: Ed
       window.removeEventListener("pointerup", stop, true);
     };
   }, [editor]);
-  return <div ref={page} className="rv-page"
+  return <div ref={page} className="rv-page" tabIndex={0}
     onKeyDown={(event) => {
       const selection = editor.selection.get();
       if (selection?.type !== "block") return;
@@ -359,6 +360,7 @@ export function BlockDOMRenderer({ editor, blocks, defaultBlockType, slash }: Ed
       const anchorPosition = root && anchor ? readDOMPointPosition(root, anchor) : undefined;
       if (target) pointerSelection.current = { type: "text", anchorPosition, x: event.clientX, y: event.clientY };
       else if (event.target === root) {
+        root.focus({ preventScroll: true });
         pointerSelection.current = { type: "block", x: event.clientX, y: event.clientY, moved: false };
         editor.commands.execute("selection.clear");
       } else pointerSelection.current = null;
