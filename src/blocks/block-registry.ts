@@ -1,7 +1,7 @@
-import type { BlockInput } from "../../store/document-model";
 import type { ComponentType } from "react";
 import type { EditorMode } from "../editor/types";
-import type { BlockDefinition, BlockRenderProps } from "./block-definition";
+import type { EditorBlockInput } from "../editor/model";
+import type { BlockDefinition, BlockRenderProps } from "./types";
 
 /** True only for mergeable records; arrays and class instances are values. */
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -31,7 +31,7 @@ const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unk
 /**
  * Owns the runtime mapping from persisted native types to block definitions.
  *
- * The registry does not read documents or render UI. It only validates type
+ * The registry does not render UI. It only validates type
  * ownership and prepares editor-level creation data.
  */
 export class BlockRegistry {
@@ -94,10 +94,10 @@ export class BlockRegistry {
    * Applies definition defaults and validates creation properties.
    *
    * @param input - Caller-owned creation data containing a registered type.
-   * @returns Detached input safe to pass to DocumentModelImpl.
+   * @returns Detached input with definition defaults and validated props.
    * @throws If the type is unknown or its property schema rejects the data.
    */
-  prepare(input: BlockInput): BlockInput {
+  prepare(input: EditorBlockInput): EditorBlockInput {
     const definition = this.require(input.type);
     const props = mergeProps(definition.defaultProps ?? {}, input.props ?? {});
     return { ...input, props: definition.propSchema?.parse(props) ?? props };
@@ -106,7 +106,7 @@ export class BlockRegistry {
   /**
    * Validates a complete property object for a stored block.
    *
-   * Unknown types pass through unchanged so documents remain recoverable when
+   * Unknown types pass through unchanged so block data remains recoverable when
    * an optional plugin is not installed.
    *
    * @param type - Persisted native block type.

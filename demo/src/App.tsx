@@ -7,7 +7,7 @@ import {
   defaultSlashItems,
   EdgelessCanvasRenderer,
   type EditorRendererProps,
-  type Snapshot,
+  type EditorSnapshot,
   RIVTO_VERSION,
   RivtoEditor,
   type RivtoPlugin,
@@ -27,7 +27,6 @@ const initialContent = [
 
 const calloutDefinition: BlockDefinition = {
   type: "callout",
-  content: "inline",
   title: "Callout",
   render: ({ content }) => <aside className="demo-callout"><span aria-hidden="true">✦</span><div>{content}</div></aside>,
 };
@@ -73,7 +72,7 @@ export function App() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
-        editor.commands.execute("document.load", { snapshot: JSON.parse(saved) as Snapshot });
+        editor.commands.execute("document.load", { snapshot: JSON.parse(saved) as EditorSnapshot });
       } catch {
         localStorage.removeItem(STORAGE_KEY);
         initialContent.forEach((block) => editor.commands.execute("block.insert", { block }));

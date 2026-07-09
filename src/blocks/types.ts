@@ -1,13 +1,13 @@
 import type { ComponentType, ReactNode } from "react";
 import type { ZodType } from "zod";
-import type { Block } from "../../store/document-model";
 import type { EditorMode, RivtoEditorApi } from "../editor/types";
+import type { EditorBlock } from "../editor/model";
 
 /** Properties supplied to a React renderer owned by a block definition. */
 export interface BlockRenderProps {
   /** Detached collaborative block value being rendered. */
-  block: Block;
-  /** Public editor commands available to trusted local extensions. */
+  block: EditorBlock;
+  /** Public editor runtime available to trusted local extensions. */
   editor: RivtoEditorApi;
   /** Default editable content produced by Rivto. */
   content: ReactNode;
@@ -16,14 +16,12 @@ export interface BlockRenderProps {
 /**
  * Defines one native block type understood by the editor runtime.
  *
- * Definitions own validation and presentation. Collaborative values remain in
- * DocumentModelImpl, so definitions never receive native CRDT objects.
+ * Definitions own validation and presentation. They describe block behavior
+ * without owning storage.
  */
 export interface BlockDefinition<Props extends Record<string, unknown> = Record<string, unknown>> {
   /** Stable native type persisted in every block record. */
   type: string;
-  /** Whether the block owns editable inline text. */
-  content: "inline" | "none";
   /** Human-readable name used by accessible UI. */
   title?: string;
   /** Properties merged into caller data during editor-level creation. */

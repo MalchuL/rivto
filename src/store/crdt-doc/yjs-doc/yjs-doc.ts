@@ -52,6 +52,18 @@ export class YjsDoc implements CRDTDoc {
         this.doc.transact(fn, origin);
     }
 
+    /**
+     * Creates an undo/redo manager for the provided CRDT scopes using Yjs UndoManager.
+     *
+     * The method unwraps the CRDT scopes into native Yjs types and creates a `Y.UndoManager`
+     * that tracks changes only within those scopes. Changes are filtered by `trackedOrigins`:
+     * only transactions whose origin is included in the provided set will be recorded in the
+     * undo/redo history.
+     *
+     * @param scopes The list of CRDT scopes to track for undo/redo operations.
+     * @param trackedOrigins A list of origin objects whose transactions should be tracked.
+     * @returns A `CRDTUndoManager` instance with `undo`, `redo`, `clear`, `stopCapturing`, and `destroy` methods.
+     */
     createUndoManager(scopes: CRDTUndoScope[], trackedOrigins: unknown[] = []): CRDTUndoManager {
         const nativeScopes = scopes.map((scope) => utils.unwrapCRDTtoYJS(scope) as Y.AbstractType<any>);
         const manager = new Y.UndoManager(nativeScopes, {
