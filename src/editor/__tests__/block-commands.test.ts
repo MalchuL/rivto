@@ -17,17 +17,12 @@ describe("EditorRuntime block commands", () => {
   it("mutates blocks through registered commands", () => {
     const editor = createRivtoEditor();
 
-    const firstId = editor.execute("block.insert", {
-      block: { type: "paragraph", content: "First" },
-    });
-    const secondId = editor.execute("block.insert", {
-      block: { type: "paragraph", content: "Second" },
-      afterId: firstId,
-    });
+    const firstId = editor.insertBlock({ type: "paragraph", content: "First" });
+    const secondId = editor.insertBlock({ type: "paragraph", content: "Second" }, firstId);
 
-    editor.execute("block.prop.set", { id: firstId, key: "tone", value: "info" });
-    editor.execute("block.layout.set", { id: firstId, layout: { x: 120, y: 80 } });
-    editor.execute("block.indent", { id: secondId });
+    editor.setBlockProp(firstId, "tone", "info");
+    editor.setBlockLayout(firstId, { x: 120, y: 80 });
+    editor.indentBlock(secondId);
 
     expect(editor.document.document).toMatchObject([
       {
@@ -38,7 +33,7 @@ describe("EditorRuntime block commands", () => {
       },
     ]);
 
-    editor.execute("block.remove", { id: firstId });
+    editor.removeBlock(firstId);
 
     expect(editor.document.document).toEqual([]);
     editor.destroy();
@@ -63,34 +58,34 @@ describe("EditorRuntime block commands", () => {
     let secondId = "";
 
     expectOneUpdate(editor, () => {
-      firstId = editor.execute("block.insert", { block: { type: "paragraph", content: "First" } }) as string;
+      firstId = editor.insertBlock({ type: "paragraph", content: "First" });
     });
     expectOneUpdate(editor, () => {
-      secondId = editor.execute("block.insert", { block: { type: "paragraph", content: "Second" }, afterId: firstId }) as string;
+      secondId = editor.insertBlock({ type: "paragraph", content: "Second" }, firstId);
     });
     expectOneUpdate(editor, () => {
-      editor.execute("block.update", { id: firstId, patch: { content: "First updated" } });
+      editor.updateBlock(firstId, { content: "First updated" });
     });
     expectOneUpdate(editor, () => {
-      editor.execute("block.prop.set", { id: firstId, key: "tone", value: "info" });
+      editor.setBlockProp(firstId, "tone", "info");
     });
     expectOneUpdate(editor, () => {
-      editor.execute("block.pluginData.set", { id: firstId, pluginId: "test", value: { seen: true } });
+      editor.setBlockPluginData(firstId, "test", { seen: true });
     });
     expectOneUpdate(editor, () => {
-      editor.execute("block.layout.set", { id: firstId, layout: { x: 20 } });
+      editor.setBlockLayout(firstId, { x: 20 });
     });
     expectOneUpdate(editor, () => {
-      editor.execute("block.indent", { id: secondId });
+      editor.indentBlock(secondId);
     });
     expectOneUpdate(editor, () => {
-      editor.execute("block.outdent", { id: secondId });
+      editor.outdentBlock(secondId);
     });
     expectOneUpdate(editor, () => {
-      editor.execute("block.move", { id: secondId, afterId: null });
+      editor.moveBlock(secondId, null);
     });
     expectOneUpdate(editor, () => {
-      editor.execute("block.remove", { id: secondId });
+      editor.removeBlock(secondId);
     });
 
     editor.destroy();
@@ -102,7 +97,7 @@ describe("EditorRuntime block commands", () => {
     const unsubscribe = editor.subscribe(listener);
 
     unsubscribe();
-    editor.execute("block.insert", { block: { type: "paragraph" } });
+    editor.insertBlock({ type: "paragraph" });
 
     expect(listener).not.toHaveBeenCalled();
     editor.destroy();
@@ -118,6 +113,39 @@ describe("EditorRuntime block commands", () => {
 
     expect(listener).not.toHaveBeenCalled();
     expect(editor.revision).toBe(before);
+    editor.destroy();
+  });
+
+  it("creates links and loads/dumps snapshots through editor methods", () => {
+    const editor = createRivtoEditor();
+    const sourceId = editor.insertBlock({ type: "paragraph", content: "Source" });
+    const targetId = editor.insertBlock({ type: "paragraph", content: "Target" }, sourceId);
+
+    editor.createLink({ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } });
+
+    expect(editor.dump()).toMatchObject({
+      version: 3,
+      blocks: [{ id: sourceId }, { id: targetId }],
+      links: [{ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } }],
+    });
+
+    editor.removeLink("source-target");
+    expect(editor.dump().links).toEqual([]);
+
+    editor.load({
+      version: 3,
+      blocks: [{
+        id: "loaded",
+        type: "paragraph",
+        props: {},
+        pluginData: {},
+        content: "Loaded",
+        children: [],
+      }],
+      links: [],
+    });
+
+    expect(editor.document.document).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     editor.destroy();
   });
 });

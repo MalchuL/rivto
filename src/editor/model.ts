@@ -28,3 +28,35 @@ export interface EditorBlockInput {
   children?: EditorBlockInput[];
   layout?: Partial<EditorBlockLayout>;
 }
+
+/** Mutable editor block fields; type and identity are immutable. */
+export interface EditorBlockPatch {
+  props?: Record<string, unknown>;
+  pluginData?: Record<string, unknown>;
+  content?: string;
+  layout?: Partial<EditorBlockLayout>;
+}
+
+/** First-class connection between two editor blocks. */
+export interface EditorLink {
+  id: string;
+  from: { blockId: string; port?: string };
+  to: { blockId: string; port?: string };
+  meta?: Record<string, unknown>;
+}
+
+/** Lossless editor document value used for persistence. */
+export interface EditorSnapshot {
+  version: 3;
+  blocks: EditorBlock[];
+  links: EditorLink[];
+  pluginData?: Record<string, unknown>;
+}
+
+/** Persisted document sections that replace only supplied state. */
+export interface EditorSnapshotUpdate {
+  version: 3;
+  blocks?: EditorBlock[];
+  links?: EditorLink[];
+  pluginData?: Record<string, unknown>;
+}

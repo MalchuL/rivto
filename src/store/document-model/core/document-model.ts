@@ -90,8 +90,8 @@ export class DocumentModelImpl {
         this.crdt = crdt;
         this.id = typeof idOrCrdt === "string" ? idOrCrdt : crdt.id;
         this.storage = {
-            roots: crdt.getArray<IDBlock>(ROOTS_KEY),
-            blocks: crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY),
+            roots: crdt.getArray<IDBlock>(ROOTS_KEY),  // Only root blocks are stored
+            blocks: crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY),  // All blocks are stored in a map of IDBlock
             links: crdt.getMap<Record<IDLink, CRDTMap<LinkStorage>>>(LINKS_KEY),
             pluginData: crdt.getMap<Record<IDPlugin, BasicCRDTType>>(PLUGINS_KEY),
         };

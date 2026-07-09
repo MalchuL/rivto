@@ -1,7 +1,8 @@
 import type { BlockDefinition, BlockRegistry } from "../blocks";
-import type { CommandHandler, CommandRegistry, RegisteredCommand, ModeManager } from "../managers";
+import type { CommandHandler, CommandRegistry, RegisteredCommand, ModeManager, UndoManager } from "../managers";
 import type { CRDTDoc } from "../store/crdt-doc";
 import type { DocumentModelImpl } from "../store/document-model";
+import type { EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
 /** Local presentation strategy; never persisted in collaborative state. */
 export type EditorMode = "block" | "edgeless";
@@ -27,6 +28,8 @@ export interface RivtoEditorApi {
   readonly commands: CommandRegistry;
   /** Local block/edgeless mode owner. */
   readonly mode: ModeManager;
+  /** Local undo/redo history scoped to document mutations from this runtime. */
+  readonly history: UndoManager;
   /** Monotonic view invalidation snapshot. */
   readonly revision: number;
 
@@ -62,6 +65,51 @@ export interface RivtoEditorApi {
    * @param name - Command ID to remove.
    */
   removeCommand(name: string): void;
+
+  /** Inserts a block through the built-in `block.insert` command. */
+  insertBlock(block: EditorBlockInput, afterId?: string | null): string;
+
+  /** Updates mutable block fields through the built-in `block.update` command. */
+  updateBlock(id: string, patch: EditorBlockPatch): void;
+
+  /** Removes a block through the built-in `block.remove` command. */
+  removeBlock(id: string): void;
+
+  /** Moves a block through the built-in `block.move` command. */
+  moveBlock(id: string, afterId: string | null): void;
+
+  /** Indents a block through the built-in `block.indent` command. */
+  indentBlock(id: string): void;
+
+  /** Outdents a block through the built-in `block.outdent` command. */
+  outdentBlock(id: string): void;
+
+  /** Sets one block property through the built-in `block.prop.set` command. */
+  setBlockProp(id: string, key: string, value: unknown): void;
+
+  /** Sets one block plugin-data namespace through `block.pluginData.set`. */
+  setBlockPluginData(id: string, pluginId: string, value: unknown): void;
+
+  /** Patches block layout through the built-in `block.layout.set` command. */
+  setBlockLayout(id: string, layout: Partial<EditorBlockLayout>): void;
+
+  /** Creates or replaces a link through the built-in `link.create` command. */
+  createLink(link: EditorLink): void;
+
+  /** Removes a link through the built-in `link.remove` command. */
+  removeLink(id: string): void;
+
+  /** Loads persisted document state through the built-in `document.load` command. */
+  load(snapshot: EditorSnapshotUpdate): void;
+
+  /** Dumps the current document snapshot for persistence. */
+  dump(): EditorSnapshot;
+
+  /** Reverts the latest local document operation through `history.undo`. */
+  undo(): void;
+
+  /** Reapplies the latest undone document operation through `history.redo`. */
+  redo(): void;
 
   /**
    * Adds a block definition to the runtime registry.

@@ -1,13 +1,14 @@
 import { BlockRegistry, defaultBlockDefinitions, type BlockDefinition } from "../blocks";
-import { CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager } from "../managers";
+import { CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
-import { DocumentModelImpl, type BlockInput, type BlockLayout, type BlockPatch } from "../store/document-model";
+import { DocumentModelImpl, type BlockInput, type BlockLayout, type BlockPatch, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
+import type { EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
 import type { CreateRivtoEditorOptions, RivtoEditorApi } from "./types";
 
 /**
  * Owns the active document, block registry, commands, and editor mode.
  *
- * The runtime currently registers only block-level commands. It connects
+ * The runtime currently registers document mutation commands. It connects
  * document, block definition, and mode changes to a single revision stream
  * that React can subscribe to with `useSyncExternalStore`.
  */
@@ -16,6 +17,7 @@ export class EditorRuntime implements RivtoEditorApi {
   readonly blocks = new BlockRegistry();
   readonly commands = new CommandRegistry();
   readonly mode: ModeManager;
+  readonly history: UndoManager;
   private readonly listeners = new Set<() => void>();
   /** Unsubscribe callbacks owned by the runtime and called during destroy(). */
   private readonly unsubscribeFns: Array<() => void> = [];
@@ -30,6 +32,7 @@ export class EditorRuntime implements RivtoEditorApi {
   constructor(options: CreateRivtoEditorOptions = {}) {
     this.document = new DocumentModelImpl(options.document ?? new YjsDoc(`rivto-${crypto.randomUUID()}`));
     this.mode = new ModeManager(options.mode ?? "block");
+    this.history = new UndoManager(this.document);
     this.document.setPropsValidator((type, props) => this.blocks.validate(type, props));
     this.registerBlockCommands();
     defaultBlockDefinitions.forEach((definition) => this.defineBlock(definition));
@@ -87,6 +90,87 @@ export class EditorRuntime implements RivtoEditorApi {
     this.commands.remove(name);
   }
 
+  /** Inserts a block through the built-in command path. */
+  insertBlock(block: EditorBlockInput, afterId?: string | null): string {
+    const command = { block, afterId } satisfies { block: BlockInput; afterId?: string | null };
+    return this.execute("block.insert", command) as string;
+  }
+
+  /** Updates mutable block fields through the built-in command path. */
+  updateBlock(id: string, patch: EditorBlockPatch): void {
+    const command = { id, patch } satisfies { id: string; patch: BlockPatch };
+    this.execute("block.update", command);
+  }
+
+  /** Removes a block through the built-in command path. */
+  removeBlock(id: string): void {
+    this.execute("block.remove", { id });
+  }
+
+  /** Moves a block through the built-in command path. */
+  moveBlock(id: string, afterId: string | null): void {
+    this.execute("block.move", { id, afterId });
+  }
+
+  /** Indents a block through the built-in command path. */
+  indentBlock(id: string): void {
+    this.execute("block.indent", { id });
+  }
+
+  /** Outdents a block through the built-in command path. */
+  outdentBlock(id: string): void {
+    this.execute("block.outdent", { id });
+  }
+
+  /** Sets one block property through the built-in command path. */
+  setBlockProp(id: string, key: string, value: unknown): void {
+    this.execute("block.prop.set", { id, key, value });
+  }
+
+  /** Sets one plugin-data namespace through the built-in command path. */
+  setBlockPluginData(id: string, pluginId: string, value: unknown): void {
+    this.execute("block.pluginData.set", { id, pluginId, value });
+  }
+
+  /** Patches block layout through the built-in command path. */
+  setBlockLayout(id: string, layout: Partial<EditorBlockLayout>): void {
+    const command = { id, layout } satisfies { id: string; layout: Partial<BlockLayout> };
+    this.execute("block.layout.set", command);
+  }
+
+  /** Creates or replaces a link through the built-in command path. */
+  createLink(link: EditorLink): void {
+    const command = { link } satisfies { link: Link };
+    this.execute("link.create", command);
+  }
+
+  /** Removes a link through the built-in command path. */
+  removeLink(id: string): void {
+    this.execute("link.remove", { id });
+  }
+
+  /** Loads persisted document state through the built-in command path. */
+  load(snapshot: EditorSnapshotUpdate): void {
+    const command = { snapshot } satisfies { snapshot: SnapshotUpdate };
+    this.execute("document.load", command);
+  }
+
+  /** Dumps the current document snapshot for persistence. */
+  dump(): EditorSnapshot {
+    const snapshot = this.document.getSnapshot() satisfies Snapshot;
+    return snapshot satisfies EditorSnapshot;
+  }
+
+  /** Reverts the latest local document operation through the built-in command path. */
+  undo(): void {
+    this.execute("history.undo");
+  }
+
+  /** Reapplies the latest undone document operation through the built-in command path. */
+  redo(): void {
+    this.execute("history.redo");
+  }
+
   /**
    * Registers one block definition for this editor instance.
    *
@@ -109,7 +193,7 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Registers built-in commands that mutate block data.
+   * Registers built-in commands that mutate document data.
    *
    * Commands validate their small runtime payloads, then delegate storage and
    * CRDT behavior to DocumentModelImpl.
@@ -124,8 +208,16 @@ export class EditorRuntime implements RivtoEditorApi {
       if (typeof value !== "string") throw new Error(`${name} must be a string`);
       return value;
     };
+    const documentCommand = (handler: (value?: unknown) => unknown): CommandHandler => (value) => {
+      this.history.stopCapturing();
+      try {
+        return handler(value);
+      } finally {
+        this.history.stopCapturing();
+      }
+    };
 
-    this.commands.register("block.insert", (value) => {
+    this.commands.register("block.insert", documentCommand((value) => {
       const data = payload(value);
       const block = payload(data.block) as unknown as BlockInput;
       if (typeof block.type !== "string") throw new Error("block.type must be a string");
@@ -136,39 +228,54 @@ export class EditorRuntime implements RivtoEditorApi {
       }
       const afterId = data.afterId === undefined ? undefined : data.afterId === null ? null : string(data.afterId, "afterId");
       return this.document.insertBlock(this.blocks.prepare(block), afterId);
-    });
+    }));
     this.commands.register("block.update", (value) => {
       const data = payload(value);
       this.document.updateBlock(string(data.id, "id"), payload(data.patch) as BlockPatch);
     });
-    this.commands.register("block.remove", (value) => {
+    this.commands.register("block.remove", documentCommand((value) => {
       const data = payload(value);
       this.document.removeBlock(string(data.id, "id"));
-    });
-    this.commands.register("block.move", (value) => {
+    }));
+    this.commands.register("block.move", documentCommand((value) => {
       const data = payload(value);
       this.document.moveBlock(string(data.id, "id"), data.afterId === null ? null : string(data.afterId, "afterId"));
-    });
-    this.commands.register("block.indent", (value) => {
+    }));
+    this.commands.register("block.indent", documentCommand((value) => {
       const data = payload(value);
       this.document.indentBlock(string(data.id, "id"));
-    });
-    this.commands.register("block.outdent", (value) => {
+    }));
+    this.commands.register("block.outdent", documentCommand((value) => {
       const data = payload(value);
       this.document.outdentBlock(string(data.id, "id"));
-    });
-    this.commands.register("block.prop.set", (value) => {
+    }));
+    this.commands.register("block.prop.set", documentCommand((value) => {
       const data = payload(value);
       this.document.setBlockProp(string(data.id, "id"), string(data.key, "key"), data.value);
-    });
-    this.commands.register("block.pluginData.set", (value) => {
+    }));
+    this.commands.register("block.pluginData.set", documentCommand((value) => {
       const data = payload(value);
       this.document.setPluginData(string(data.id, "id"), string(data.pluginId, "pluginId"), data.value);
-    });
-    this.commands.register("block.layout.set", (value) => {
+    }));
+    this.commands.register("block.layout.set", documentCommand((value) => {
       const data = payload(value);
       this.document.setBlockLayout(string(data.id, "id"), payload(data.layout) as Partial<BlockLayout>);
-    });
+    }));
+    this.commands.register("link.create", documentCommand((value) => {
+      const data = payload(value);
+      this.document.createLink(payload(data.link) as unknown as Link);
+    }));
+    this.commands.register("link.remove", documentCommand((value) => {
+      const data = payload(value);
+      this.document.removeLink(string(data.id, "id"));
+    }));
+    this.commands.register("document.load", documentCommand((value) => {
+      const data = payload(value);
+      this.document.loadSnapshot(data.snapshot as SnapshotUpdate);
+      this.history.clear();
+    }));
+    this.commands.register("history.undo", () => this.history.undo());
+    this.commands.register("history.redo", () => this.history.redo());
   }
 
   /**
@@ -180,6 +287,7 @@ export class EditorRuntime implements RivtoEditorApi {
   destroy(): void {
     this.unsubscribeFns.splice(0).forEach((unsubscribe) => unsubscribe());
     [...this.removeDefinitions].reverse().forEach((dispose) => dispose());
+    this.history.destroy();
     this.commands.clear();
     this.listeners.clear();
   }

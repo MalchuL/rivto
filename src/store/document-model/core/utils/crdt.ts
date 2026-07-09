@@ -23,7 +23,7 @@ export function isCRDTText(value: unknown): value is CRDTText {
 }
 
 /**
- * Copies portable object fields into a shared map.
+ * Copies portable object fields into a shared map. Clear the map if `clear` is true else keeps existing keys and adds/overwrites only provided defined values.
  */
 export function assignMap<Schema extends object>(
     map: CRDTMap<Schema>,
