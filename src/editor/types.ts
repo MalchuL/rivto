@@ -1,11 +1,52 @@
 import type { BlockDefinition, BlockRegistry } from "../blocks";
-import type { CommandHandler, CommandRegistry, RegisteredCommand, ModeManager, UndoManager } from "../managers";
+import type { CommandHandler, CommandRegistry, RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
 import type { CRDTDoc } from "../store/crdt-doc";
 import type { DocumentModelImpl } from "../store/document-model";
 import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
 /** Local presentation strategy; never persisted in collaborative state. */
 export type EditorMode = "block" | "edgeless";
+
+/** UTF-16 text position inside a block. */
+export interface EditorPosition {
+  /** Stable block containing the position. */
+  blockId: string;
+  /** UTF-16 offset compatible with DOM Range APIs. */
+  offset: number;
+}
+
+/** Directed browser-compatible text selection. */
+export interface TextSelection {
+  /** Discriminant for browser-compatible text selection. */
+  type: "text";
+  /** Endpoint where the gesture began. */
+  anchor: EditorPosition;
+  /** Active endpoint; may precede anchor for reverse selection. */
+  head: EditorPosition;
+}
+
+/** Ordered selection of document blocks. */
+export interface BlockSelection {
+  /** Discriminant for ordered document-block selection. */
+  type: "block";
+  /** Selected IDs in visible document order. */
+  blockIds: string[];
+  /** Block where the selection gesture began. */
+  anchorBlockId: string;
+  /** Active block where the gesture currently ends. */
+  focusBlockId: string;
+}
+
+/** Local selection of blocks on the edgeless canvas. */
+export interface EdgelessSelection {
+  /** Discriminant for canvas object selection. */
+  type: "edgeless";
+  /** Selected object block IDs. */
+  blockIds: string[];
+}
+
+/** Every local selection shape owned by SelectionManager. */
+export type EditorSelection = TextSelection | BlockSelection | EdgelessSelection;
 
 export interface CreateRivtoEditorOptions {
   document?: CRDTDoc;
@@ -28,6 +69,8 @@ export interface RivtoEditorApi {
   readonly commands: CommandRegistry;
   /** Local block/edgeless mode owner. */
   readonly mode: ModeManager;
+  /** Local text, block, or edgeless selection owner. */
+  readonly selection: SelectionManager;
   /** Local undo/redo history scoped to document mutations from this runtime. */
   readonly history: UndoManager;
   /** Monotonic view invalidation snapshot. */

@@ -1,9 +1,11 @@
 import { BlockRegistry, defaultBlockDefinitions, type BlockDefinition } from "../blocks";
-import { CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, UndoManager } from "../managers";
+import { CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
-import { DocumentModelImpl, type BlockInput, type BlockLayout, type BlockPatch, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
+import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type BlockPatch, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
 import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
-import type { CreateRivtoEditorOptions, RivtoEditorApi } from "./types";
+import type { CreateRivtoEditorOptions, EditorPosition, EditorSelection, RivtoEditorApi } from "./types";
+
+type RuntimeBlockSelection = Extract<EditorSelection, { type: "block" }>;
 
 /**
  * Owns the active document, block registry, commands, and editor mode.
@@ -17,6 +19,7 @@ export class EditorRuntime implements RivtoEditorApi {
   readonly blocks = new BlockRegistry();
   readonly commands = new CommandRegistry();
   readonly mode: ModeManager;
+  readonly selection = new SelectionManager();
   readonly history: UndoManager;
   private readonly listeners = new Set<() => void>();
   /** Unsubscribe callbacks owned by the runtime and called during destroy(). */
@@ -38,10 +41,19 @@ export class EditorRuntime implements RivtoEditorApi {
     defaultBlockDefinitions.forEach((definition) => this.defineBlock(definition));
 
     // Document changes cover block commands and direct/remote document edits.
-    const unsubscribeFromDocumentChanges = this.document.subscribe(() => this.changed());
+    const unsubscribeFromDocumentChanges = this.document.subscribe(() => {
+      this.reconcileSelection();
+      this.changed();
+    });
     this.unsubscribeFns.push(unsubscribeFromDocumentChanges);
+    // Selection is local view state, but renderers still need to redraw selected blocks.
+    const unsubscribeFromSelectionChanges = this.selection.subscribe(() => this.changed());
+    this.unsubscribeFns.push(unsubscribeFromSelectionChanges);
     // Mode changes are local runtime state, so they still notify directly.
-    const unsubscribeFromModeChanges = this.mode.subscribe(() => this.changed());
+    const unsubscribeFromModeChanges = this.mode.subscribe(() => {
+      this.reconcileSelection();
+      this.changed();
+    });
     this.unsubscribeFns.push(unsubscribeFromModeChanges);
   }
 
@@ -260,7 +272,9 @@ export class EditorRuntime implements RivtoEditorApi {
     });
     this.commands.register("block.remove", documentCommand((value) => {
       const data = payload(value);
-      this.document.removeBlock(string(data.id, "id"));
+      this.document.transact(() => {
+        this.selectedBlockIds(string(data.id, "id")).forEach((id) => this.document.removeBlock(id));
+      });
     }));
     this.commands.register("block.move", documentCommand((value) => {
       const data = payload(value);
@@ -268,11 +282,19 @@ export class EditorRuntime implements RivtoEditorApi {
     }));
     this.commands.register("block.indent", documentCommand((value) => {
       const data = payload(value);
-      this.document.indentBlock(string(data.id, "id"));
+      const before = this.selection.get();
+      const ids = this.selectedBlockIds(string(data.id, "id"));
+      this.document.transact(() => ids.forEach((id) => this.document.indentBlock(id)));
+      this.restoreBlockSelection(before, ids);
     }));
     this.commands.register("block.outdent", documentCommand((value) => {
       const data = payload(value);
-      this.document.outdentBlock(string(data.id, "id"));
+      const before = this.selection.get();
+      const ids = this.selectedBlockIds(string(data.id, "id"));
+      this.document.transact(() => {
+        [...ids].reverse().forEach((id) => this.document.outdentBlock(id));
+      });
+      this.restoreBlockSelection(before, ids);
     }));
     this.commands.register("block.prop.set", documentCommand((value) => {
       const data = payload(value);
@@ -299,8 +321,108 @@ export class EditorRuntime implements RivtoEditorApi {
       this.document.loadSnapshot(data.snapshot as SnapshotUpdate);
       this.history.clear();
     }));
+    this.commands.register("selection.set", (value) => {
+      const data = payload(value);
+      this.setSelection(data.selection as EditorSelection);
+    });
+    this.commands.register("selection.clear", () => this.selection.clear());
     this.commands.register("history.undo", () => this.history.undo());
     this.commands.register("history.redo", () => this.history.redo());
+  }
+
+  /**
+   * Expands a block command to the active block selection when the target block
+   * belongs to that selection.
+   */
+  private selectedBlockIds(id: string): string[] {
+    const selection = this.selection.get();
+    return selection?.type === "block" && selection.blockIds.includes(id) ? selection.blockIds : [id];
+  }
+
+  /** Re-publishes block selection after structural moves reorder the document tree. */
+  private restoreBlockSelection(previous: EditorSelection | null, ids: string[]): void {
+    if (previous?.type !== "block") return;
+    const remaining = ids.filter((id) => this.findBlock(id));
+    if (!remaining.length) {
+      this.selection.clear();
+      return;
+    }
+    const anchorBlockId = remaining.includes(previous.anchorBlockId) ? previous.anchorBlockId : remaining[0]!;
+    const focusBlockId = remaining.includes(previous.focusBlockId) ? previous.focusBlockId : remaining.at(-1)!;
+    this.setSelection({ type: "block", blockIds: remaining, anchorBlockId, focusBlockId } satisfies RuntimeBlockSelection);
+  }
+
+  /**
+   * Validates and stores a local selection.
+   *
+   * Text offsets are checked against current block content. Block selections are
+   * stored in visible document order while preserving anchor/focus direction.
+   * Edgeless selection is only valid while the editor is in edgeless mode.
+   */
+  private setSelection(selection: EditorSelection): void {
+    if (!selection || !["text", "block", "edgeless"].includes(selection.type)) throw new Error("Invalid selection");
+    if (selection.type === "text") {
+      this.validatePosition(selection.anchor);
+      this.validatePosition(selection.head);
+      this.selection.set(selection);
+      return;
+    }
+
+    if (!selection.blockIds.length) throw new Error("Selection requires at least one block");
+    selection.blockIds.forEach((id) => {
+      if (!this.findBlock(id)) throw new Error(`Selection block ${id} not found`);
+    });
+    if (selection.type === "edgeless") {
+      if (this.mode.get() !== "edgeless") throw new Error("Edgeless selection requires edgeless mode");
+      this.selection.set(selection);
+      return;
+    }
+    if (!selection.blockIds.includes(selection.anchorBlockId) || !selection.blockIds.includes(selection.focusBlockId)) {
+      throw new Error("Block selection endpoints must be selected");
+    }
+
+    const selected = new Set(selection.blockIds);
+    const ordered: string[] = [];
+    const visit = (blocks: Block[]): void => blocks.forEach((block) => {
+      if (selected.has(block.id)) ordered.push(block.id);
+      visit(block.children);
+    });
+    visit(this.document.document);
+    this.selection.set({ ...selection, blockIds: ordered });
+  }
+
+  /**
+   * Clears selections made invalid by document or mode changes.
+   *
+   * Direct document edits, remote CRDT updates, undo/redo, and mode swaps can
+   * remove selected blocks or make edgeless selections illegal.
+   */
+  private reconcileSelection(): void {
+    const selection = this.selection.get();
+    if (!selection) return;
+    const ids = selection.type === "text" ? [selection.anchor.blockId, selection.head.blockId] : selection.blockIds;
+    if (ids.some((id) => !this.findBlock(id)) || (selection.type === "edgeless" && this.mode.get() !== "edgeless")) {
+      this.selection.clear();
+    }
+  }
+
+  /** Finds one block recursively in detached document values. */
+  private findBlock(id: string, blocks: Block[] = this.document.document): Block | undefined {
+    for (const block of blocks) {
+      if (block.id === id) return block;
+      const child = this.findBlock(id, block.children);
+      if (child) return child;
+    }
+    return undefined;
+  }
+
+  /** Validates a UTF-16 text position against current document content. */
+  private validatePosition(position: EditorPosition): void {
+    const block = this.findBlock(position.blockId);
+    if (!block) throw new Error(`Selection block ${position.blockId} not found`);
+    if (!Number.isInteger(position.offset) || position.offset < 0 || position.offset > block.content.length) {
+      throw new Error(`Selection offset ${position.offset} is outside block ${position.blockId}`);
+    }
   }
 
   /**

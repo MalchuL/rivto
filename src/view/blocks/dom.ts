@@ -5,3 +5,11 @@
  * block IDs, for example during drag/drop, selection overlays, and block menus.
  */
 export const RIVTO_BLOCK_ATTR = "data-rivto-block-id";
+
+/**
+ * Marks a rendered block as selected by local editor UI state.
+ *
+ * View plugins and demo styles can query this without depending on renderer
+ * implementation details.
+ */
+export const RIVTO_SELECTED_ATTR = "data-rivto-selected";

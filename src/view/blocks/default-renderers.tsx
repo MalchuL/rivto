@@ -1,6 +1,6 @@
-import { createElement, type ReactNode } from "react";
+import { createElement, type MouseEvent, type ReactNode } from "react";
 import type { BlockRenderProps, BlockRenderer } from "./types";
-import { RIVTO_BLOCK_ATTR } from "./dom";
+import { RIVTO_BLOCK_ATTR, RIVTO_SELECTED_ATTR } from "./dom";
 import { BlockRendererRegistry } from "../managers/block-renderer-registry";
 import type { SurfaceType } from "../editor/types";
 
@@ -41,9 +41,27 @@ function tagFor(type: string): keyof React.JSX.IntrinsicElements {
   }
 }
 
-function DefaultBlockRenderer({ block, content }: BlockRenderProps): ReactNode {
+function DefaultBlockRenderer({ block, editor, content }: BlockRenderProps): ReactNode {
+  const selection = editor.selection.get();
+  const selected = selection ? selection.type !== "text" && selection.blockIds.includes(block.id) : false;
+  const attrs = {
+    [RIVTO_BLOCK_ATTR]: block.id,
+    [RIVTO_SELECTED_ATTR]: selected ? "true" : undefined,
+    onClick(event: MouseEvent) {
+      event.stopPropagation();
+      editor.execute("selection.set", {
+        selection: {
+          type: "block",
+          blockIds: [block.id],
+          anchorBlockId: block.id,
+          focusBlockId: block.id,
+        },
+      });
+    },
+  };
+
   if (block.type === "divider") {
-    return createElement("div", { [RIVTO_BLOCK_ATTR]: block.id }, createElement("hr"), content);
+    return createElement("div", attrs, createElement("hr"), content);
   }
 
   const tag = tagFor(block.type);
@@ -53,7 +71,7 @@ function DefaultBlockRenderer({ block, content }: BlockRenderProps): ReactNode {
 
   return createElement(
     "div",
-    { [RIVTO_BLOCK_ATTR]: block.id },
+    attrs,
     createElement(tag, null, text),
     content,
   );
