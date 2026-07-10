@@ -1,7 +1,5 @@
-import type { ComponentType } from "react";
-import type { EditorMode } from "../editor/types";
 import type { EditorBlockInput } from "../editor/model";
-import type { BlockDefinition, BlockRenderProps } from "./types";
+import type { BlockDefinition } from "./types";
 
 /** True only for mergeable records; arrays and class instances are values. */
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -31,8 +29,8 @@ const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unk
 /**
  * Owns the runtime mapping from persisted native types to block definitions.
  *
- * The registry does not render UI. It only validates type
- * ownership and prepares editor-level creation data.
+ * The registry does not render UI. It only validates type ownership and
+ * prepares editor-level creation data.
  */
 export class BlockRegistry {
   // Block name to definition
@@ -75,19 +73,6 @@ export class BlockRegistry {
    */
   has(type: string): boolean {
     return this.definitions.has(type);
-  }
-
-  /**
-   * Resolves a mode-specific or shared renderer.
-   *
-   * A function is the shared shorthand; an object requires an explicit entry
-   * for the requested mode. Supported blocks without a custom renderer fall
-   * back to Rivto's default content presentation.
-   */
-  getRenderer(type: string, mode: EditorMode): ComponentType<BlockRenderProps> | undefined {
-    const definition = this.get(type);
-    if (!definition?.render) return undefined;
-    return typeof definition.render === "function" ? definition.render : definition.render[mode];
   }
 
   /**

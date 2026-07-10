@@ -10,7 +10,7 @@ import type { CreateRivtoEditorOptions, RivtoEditorApi } from "./types";
  *
  * The runtime currently registers document mutation commands. It connects
  * document, block definition, and mode changes to a single revision stream
- * that React can subscribe to with `useSyncExternalStore`.
+ * that any view layer can subscribe to.
  */
 export class EditorRuntime implements RivtoEditorApi {
   readonly document: DocumentModelImpl;
@@ -222,10 +222,7 @@ export class EditorRuntime implements RivtoEditorApi {
       const block = payload(data.block) as unknown as BlockInput;
       if (typeof block.type !== "string") throw new Error("block.type must be a string");
       const definition = this.blocks.get(block.type);
-      const render = definition?.render;
-      if (!definition || (render && typeof render !== "function" && !render[this.mode.get()])) {
-        throw new Error(`Block type ${block.type} is unavailable in ${this.mode.get()} mode`);
-      }
+      if (!definition) throw new Error(`Block type ${block.type} is unavailable in ${this.mode.get()} mode`);
       const afterId = data.afterId === undefined ? undefined : data.afterId === null ? null : string(data.afterId, "afterId");
       return this.document.insertBlock(this.blocks.prepare(block), afterId);
     }));
