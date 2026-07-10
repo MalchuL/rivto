@@ -2,7 +2,7 @@ import { BlockRegistry, defaultBlockDefinitions, type BlockDefinition } from "..
 import { CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
 import { DocumentModelImpl, type BlockInput, type BlockLayout, type BlockPatch, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
-import type { EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
+import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
 import type { CreateRivtoEditorOptions, RivtoEditorApi } from "./types";
 
 /**
@@ -88,6 +88,34 @@ export class EditorRuntime implements RivtoEditorApi {
    */
   removeCommand(name: string): void {
     this.commands.remove(name);
+  }
+
+  /** Finds one block in the current detached document tree. */
+  getBlock(id: string): EditorBlock | undefined {
+    const find = (blocks: EditorBlock[]): EditorBlock | undefined => {
+      for (const block of blocks) {
+        if (block.id === id) return block;
+        const child = find(block.children);
+        if (child) return child;
+      }
+      return undefined;
+    };
+    return find(this.getBlocks());
+  }
+
+  /** Returns current root blocks as detached values. */
+  getBlocks(): EditorBlock[] {
+    return this.document.document satisfies EditorBlock[];
+  }
+
+  /** Finds one link by ID. */
+  getLink(id: string): EditorLink | undefined {
+    return this.getLinks().find((link) => link.id === id);
+  }
+
+  /** Returns all current document links as detached values. */
+  getLinks(): EditorLink[] {
+    return this.document.links satisfies EditorLink[];
   }
 
   /** Inserts a block through the built-in command path. */

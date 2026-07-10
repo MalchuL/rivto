@@ -2,7 +2,7 @@ import type { BlockDefinition, BlockRegistry } from "../blocks";
 import type { CommandHandler, CommandRegistry, RegisteredCommand, ModeManager, UndoManager } from "../managers";
 import type { CRDTDoc } from "../store/crdt-doc";
 import type { DocumentModelImpl } from "../store/document-model";
-import type { EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
+import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
 /** Local presentation strategy; never persisted in collaborative state. */
 export type EditorMode = "block" | "edgeless";
@@ -65,6 +65,36 @@ export interface RivtoEditorApi {
    * @param name - Command ID to remove.
    */
   removeCommand(name: string): void;
+
+  /**
+   * Finds one block in the current detached document tree.
+   *
+   * @param id - Stable block ID.
+   * @returns Current block value, or undefined when missing.
+   */
+  getBlock(id: string): EditorBlock | undefined;
+
+  /**
+   * Returns current root blocks as detached values.
+   *
+   * @returns Ordered root block tree.
+   */
+  getBlocks(): EditorBlock[];
+
+  /**
+   * Finds one link by ID.
+   *
+   * @param id - Stable link ID.
+   * @returns Current link value, or undefined when missing.
+   */
+  getLink(id: string): EditorLink | undefined;
+
+  /**
+   * Returns all current document links as detached values.
+   *
+   * @returns First-class links stored in the document.
+   */
+  getLinks(): EditorLink[];
 
   /** Inserts a block through the built-in `block.insert` command. */
   insertBlock(block: EditorBlockInput, afterId?: string | null): string;
