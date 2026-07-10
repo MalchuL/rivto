@@ -71,6 +71,8 @@ export function App() {
           <button onClick={() => instance.editor.mode.set(mode === "block" ? "edgeless" : "block")}>
             Mode: {mode}
           </button>
+          <button onClick={() => instance.editor.undo()}>Undo</button>
+          <button onClick={() => instance.editor.redo()}>Redo</button>
           <button
             onClick={() => {
               localStorage.removeItem(STORAGE_KEY);

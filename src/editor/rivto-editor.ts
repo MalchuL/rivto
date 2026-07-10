@@ -51,8 +51,10 @@ export class EditorRuntime implements RivtoEditorApi {
     this.unsubscribeFns.push(unsubscribeFromSelectionChanges);
     // Mode changes are local runtime state, so they still notify directly.
     const unsubscribeFromModeChanges = this.mode.subscribe(() => {
+      this.history.stopCapturing();
       this.reconcileSelection();
       this.changed();
+      this.history.stopCapturing();
     });
     this.unsubscribeFns.push(unsubscribeFromModeChanges);
   }

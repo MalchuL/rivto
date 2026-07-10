@@ -42,6 +42,22 @@ describe("EditorRuntime undo manager", () => {
     editor.destroy();
   });
 
+  it("keeps undo history across mode switches and splits typing capture", () => {
+    const editor = createRivtoEditor();
+    const id = editor.insertBlock({ type: "paragraph", content: "Initial" });
+
+    editor.updateBlock(id, { content: "First" });
+    editor.mode.set("edgeless");
+    editor.updateBlock(id, { content: "Second" });
+
+    editor.undo();
+    expect(editor.document.document).toMatchObject([{ id, content: "First" }]);
+
+    editor.undo();
+    expect(editor.document.document).toMatchObject([{ id, content: "Initial" }]);
+    editor.destroy();
+  });
+
   it("publishes document updates for undo and redo", () => {
     const editor = createRivtoEditor();
     const id = editor.insertBlock({ type: "paragraph", content: "Initial" });

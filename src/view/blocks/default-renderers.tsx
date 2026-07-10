@@ -1,6 +1,6 @@
-import { createElement, type MouseEvent, type ReactNode } from "react";
+import { createElement, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { BlockRenderProps, BlockRenderer } from "./types";
-import { RIVTO_BLOCK_ATTR, RIVTO_SELECTED_ATTR } from "./dom";
+import { RIVTO_BLOCK_ATTR, RIVTO_BLOCK_CONTENT_ATTR, RIVTO_SELECTED_ATTR } from "./dom";
 import { BlockRendererRegistry } from "../managers/block-renderer-registry";
 import type { SurfaceType } from "../editor/types";
 
@@ -41,6 +41,10 @@ function tagFor(type: string): keyof React.JSX.IntrinsicElements {
   }
 }
 
+function isEditable(type: string): boolean {
+  return !["divider", "image", "file"].includes(type);
+}
+
 function DefaultBlockRenderer({ block, editor, content }: BlockRenderProps): ReactNode {
   const selection = editor.selection.get();
   const selected = selection ? selection.type !== "text" && selection.blockIds.includes(block.id) : false;
@@ -68,11 +72,30 @@ function DefaultBlockRenderer({ block, editor, content }: BlockRenderProps): Rea
   const text = block.type === "file" || block.type === "image"
     ? block.content || String(block.props.title ?? block.type)
     : block.content;
+  const editable = isEditable(block.type);
+  const contentAttrs = editable ? {
+    [RIVTO_BLOCK_CONTENT_ATTR]: "",
+    contentEditable: true,
+    suppressContentEditableWarning: true,
+    ref(element: HTMLElement | null) {
+      if (!element || element.textContent === text) return;
+      element.textContent = text;
+    },
+    onFocus() {
+      editor.history.stopCapturing();
+    },
+    onBlur() {
+      editor.history.stopCapturing();
+    },
+    onInput(event: FormEvent<HTMLElement>) {
+      editor.updateBlock(block.id, { content: event.currentTarget.textContent ?? "" });
+    },
+  } : undefined;
 
   return createElement(
     "div",
     attrs,
-    createElement(tag, null, text),
+    createElement(tag, contentAttrs, editable ? undefined : text),
     content,
   );
 }

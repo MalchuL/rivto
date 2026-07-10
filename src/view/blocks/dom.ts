@@ -7,6 +7,14 @@
 export const RIVTO_BLOCK_ATTR = "data-rivto-block-id";
 
 /**
+ * Marks the editable content element inside a rendered block.
+ *
+ * Text selection helpers use this marker to translate DOM ranges into block
+ * offsets without depending on the specific heading/paragraph tag.
+ */
+export const RIVTO_BLOCK_CONTENT_ATTR = "data-rivto-block-content";
+
+/**
  * Marks a rendered block as selected by local editor UI state.
  *
  * View plugins and demo styles can query this without depending on renderer
