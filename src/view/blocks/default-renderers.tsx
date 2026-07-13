@@ -1,8 +1,9 @@
-import { createElement, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { createElement, type MouseEvent, type ReactNode } from "react";
 import type { BlockRenderProps, BlockRenderer } from "./types";
 import { RIVTO_BLOCK_ATTR, RIVTO_BLOCK_CONTENT_ATTR, RIVTO_SELECTED_ATTR } from "./dom";
 import { BlockRendererRegistry } from "../managers/block-renderer-registry";
 import type { SurfaceType } from "../editor/types";
+import { useBlockTextEditing } from "./use-block-text-editing";
 
 const DEFAULT_BLOCK_TYPES = [
   "paragraph",
@@ -52,6 +53,8 @@ function DefaultBlockRenderer({ block, editor, content }: BlockRenderProps): Rea
     [RIVTO_BLOCK_ATTR]: block.id,
     [RIVTO_SELECTED_ATTR]: selected ? "true" : undefined,
     onClick(event: MouseEvent) {
+      const target = typeof Element === "undefined" || !(event.target instanceof Element) ? null : event.target;
+      if (target?.closest(`[${RIVTO_BLOCK_CONTENT_ATTR}]`)) return;
       event.stopPropagation();
       editor.execute("selection.set", {
         selection: {
@@ -73,24 +76,7 @@ function DefaultBlockRenderer({ block, editor, content }: BlockRenderProps): Rea
     ? block.content || String(block.props.title ?? block.type)
     : block.content;
   const editable = isEditable(block.type);
-  const contentAttrs = editable ? {
-    [RIVTO_BLOCK_CONTENT_ATTR]: "",
-    contentEditable: true,
-    suppressContentEditableWarning: true,
-    ref(element: HTMLElement | null) {
-      if (!element || element.textContent === text) return;
-      element.textContent = text;
-    },
-    onFocus() {
-      editor.history.stopCapturing();
-    },
-    onBlur() {
-      editor.history.stopCapturing();
-    },
-    onInput(event: FormEvent<HTMLElement>) {
-      editor.updateBlock(block.id, { content: event.currentTarget.textContent ?? "" });
-    },
-  } : undefined;
+  const contentAttrs = editable ? useBlockTextEditing({ block, editor, text }) : undefined;
 
   return createElement(
     "div",

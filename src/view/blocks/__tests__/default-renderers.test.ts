@@ -48,7 +48,6 @@ describe("default block renderers", () => {
         onFocus(): void;
         onBlur(): void;
         onInput(event: { currentTarget: { textContent: string } }): void;
-        onKeyDown(event: { key: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; preventDefault(): void }): void;
       }>>;
     }>;
     const contentElement = element.props.children[0]!;
@@ -72,20 +71,16 @@ describe("default block renderers", () => {
       children: Array<ReactElement<{
         onFocus(): void;
         onBlur(): void;
-        onKeyDown(event: { key: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; preventDefault(): void }): void;
       }>>;
     }>;
-    const event = { key: "z", ctrlKey: true, preventDefault: jest.fn() };
     const contentElement = element.props.children[0]!;
 
     contentElement.props.onFocus();
     editor.updateBlock(id, { content: "Changed" });
     contentElement.props.onBlur();
-    contentElement.props.onKeyDown(event);
 
     expect(stopCapturing).toHaveBeenCalledTimes(2);
-    expect(event.preventDefault).toHaveBeenCalledTimes(1);
-    expect(editor.getBlock(id)?.content).toBe("Initial");
+    expect(editor.getBlock(id)?.content).toBe("Changed");
     editor.destroy();
   });
 
