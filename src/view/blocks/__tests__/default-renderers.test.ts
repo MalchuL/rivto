@@ -1,7 +1,7 @@
-import { createDefaultBlockRendererRegistry } from "../default-renderers";
+import { createDefaultBlockRendererRegistry } from "../../react/blocks/default-renderers";
 import { createRivtoEditor } from "../../../editor";
 import type { FunctionComponent, ReactElement } from "react";
-import type { BlockRenderProps } from "../types";
+import type { BlockRenderProps } from "../../react/blocks/types";
 
 describe("default block renderers", () => {
   it("registers built-in block renderers for both surfaces", () => {

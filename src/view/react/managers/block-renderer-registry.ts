@@ -16,7 +16,7 @@ export class BlockRendererRegistry {
    *
    * @param renderer - Renderer for one native block type on one surface.
    * @returns Idempotent function that removes this exact renderer.
-   * @throws If the block type is empty or another renderer already owns the same key.
+   * @throws If another renderer already owns the same key.
    */
   register(renderer: BlockRenderer): () => void {
     const key = this.key(renderer.blockType, renderer.surface);

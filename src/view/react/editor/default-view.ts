@@ -1,9 +1,9 @@
 import { createDefaultBlockRendererRegistry } from "../blocks/default-renderers";
 import type { BlockRendererRegistry } from "../managers/block-renderer-registry";
 import type { SurfaceRegistry } from "../managers/surface-registry";
-import { createDefaultSurfaceRegistry } from "./default-surfaces";
+import { createDefaultSurfaceRegistry } from "../surfaces/default-surfaces";
 
-/** Default registries needed by EditorView for built-in rendering. */
+/** Default registries needed by EditorView for built-in React rendering. */
 export interface DefaultViewRegistries {
   /** Built-in block and edgeless surfaces. */
   readonly surfaces: SurfaceRegistry;
@@ -11,7 +11,7 @@ export interface DefaultViewRegistries {
   readonly renderers: BlockRendererRegistry;
 }
 
-/** Creates the default view registries for a basic Rivto editor view. */
+/** Creates the default React view registries for a basic Rivto editor view. */
 export function createDefaultViewRegistries(): DefaultViewRegistries {
   return {
     surfaces: createDefaultSurfaceRegistry(),

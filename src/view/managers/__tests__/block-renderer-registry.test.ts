@@ -1,5 +1,5 @@
-import type { BlockRenderer } from "../../blocks/types";
-import { BlockRendererRegistry } from "../block-renderer-registry";
+import type { BlockRenderer } from "../../react/blocks/types";
+import { BlockRendererRegistry } from "../../react/managers/block-renderer-registry";
 
 function renderer(blockType: string, surface: "block" | "edgeless" = "block"): BlockRenderer {
   return {

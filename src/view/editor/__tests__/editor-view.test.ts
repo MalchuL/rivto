@@ -1,4 +1,4 @@
-import { EditorView } from "../editor-view";
+import { EditorView } from "../../react/editor/editor-view";
 
 describe("EditorView", () => {
   it("exports a React component", () => {

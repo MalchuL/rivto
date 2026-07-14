@@ -1,4 +1,4 @@
-import { createDefaultSurfaceRegistry } from "../default-surfaces";
+import { createDefaultSurfaceRegistry } from "../../react/surfaces/default-surfaces";
 
 describe("default surfaces", () => {
   it("registers block and edgeless surfaces", () => {

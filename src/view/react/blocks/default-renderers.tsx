@@ -1,8 +1,8 @@
 import { createElement, type MouseEvent, type ReactNode } from "react";
-import type { BlockRenderProps, BlockRenderer } from "./types";
-import { RIVTO_BLOCK_ATTR, RIVTO_BLOCK_CONTENT_ATTR, RIVTO_SELECTED_ATTR } from "./dom";
-import { BlockRendererRegistry } from "../managers/block-renderer-registry";
 import type { SurfaceType } from "../editor/types";
+import { BlockRendererRegistry } from "../managers/block-renderer-registry";
+import { RIVTO_BLOCK_ATTR, RIVTO_BLOCK_CONTENT_ATTR, RIVTO_SELECTED_ATTR } from "./dom";
+import type { BlockRenderProps, BlockRenderer } from "./types";
 import { useBlockTextEditing } from "./use-block-text-editing";
 
 const DEFAULT_BLOCK_TYPES = [
@@ -46,7 +46,13 @@ function isEditable(type: string): boolean {
   return !["divider", "image", "file"].includes(type);
 }
 
-function DefaultBlockRenderer({ block, editor, content }: BlockRenderProps): ReactNode {
+/**
+ * Default React renderer for built-in text-like blocks.
+ *
+ * Surfaces own layout and child traversal; this component owns only the block
+ * shell, selected marker, and editable content element.
+ */
+function DefaultBlockRenderer({ block, editor, surface, content }: BlockRenderProps): ReactNode {
   const selection = editor.selection.get();
   const selected = selection ? selection.type !== "text" && selection.blockIds.includes(block.id) : false;
   const attrs = {
@@ -56,6 +62,10 @@ function DefaultBlockRenderer({ block, editor, content }: BlockRenderProps): Rea
       const target = typeof Element === "undefined" || !(event.target instanceof Element) ? null : event.target;
       if (target?.closest(`[${RIVTO_BLOCK_CONTENT_ATTR}]`)) return;
       event.stopPropagation();
+      if (surface === "edgeless") {
+        editor.execute("selection.set", { selection: { type: "edgeless", blockIds: [block.id] } });
+        return;
+      }
       editor.execute("selection.set", {
         selection: {
           type: "block",
@@ -94,7 +104,7 @@ function renderer(blockType: string, surface: SurfaceType): BlockRenderer {
   };
 }
 
-/** Creates a block renderer registry for Rivto's built-in block definitions. */
+/** Creates React block renderers for Rivto's built-in block definitions. */
 export function createDefaultBlockRendererRegistry(): BlockRendererRegistry {
   const registry = new BlockRendererRegistry();
   for (const blockType of DEFAULT_BLOCK_TYPES) {

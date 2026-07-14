@@ -1,6 +1,6 @@
 import type { FormEvent } from "react";
-import type { RivtoEditorApi } from "../../editor";
-import type { EditorBlock } from "../../editor/model";
+import type { RivtoEditorApi } from "../../../editor";
+import type { EditorBlock } from "../../../editor/model";
 import { RIVTO_BLOCK_CONTENT_ATTR } from "./dom";
 
 interface BlockTextEditingOptions {
@@ -12,8 +12,9 @@ interface BlockTextEditingOptions {
 /**
  * Creates DOM props for the built-in editable block content element.
  *
- * This keeps contentEditable synchronization in one place. The focused DOM
- * node remains owned by the browser so React rerenders do not move the caret.
+ * React must not rewrite a focused contenteditable on every document revision:
+ * the browser owns the live caret while the user types. The ref updates only
+ * when focus is elsewhere or the DOM has diverged from document text.
  */
 export function useBlockTextEditing({ block, editor, text }: BlockTextEditingOptions) {
   return {

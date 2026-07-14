@@ -1,5 +1,5 @@
-import type { Surface } from "../../editor/types";
-import { SurfaceRegistry } from "../surface-registry";
+import type { Surface } from "../../react/editor/types";
+import { SurfaceRegistry } from "../../react/managers/surface-registry";
 
 function surface(type: "block" | "edgeless" = "block"): Surface {
   return {

@@ -1,4 +1,4 @@
-import { createDefaultViewRegistries } from "../default-view";
+import { createDefaultViewRegistries } from "../../react/editor/default-view";
 
 describe("default view registries", () => {
   it("creates default surface and block renderer registries", () => {
