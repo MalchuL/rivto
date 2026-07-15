@@ -1,23 +1,24 @@
 import { createElement, type ReactNode } from "react";
 import type { EditorBlock } from "../../../editor/model";
 import type { SurfaceRenderProps, SurfaceType } from "../editor/types";
+import { BlockShell } from "../blocks/block-shell";
 
 /**
- * Renders one block through the registered renderer for the active surface.
+ * Renders one generic block shell for the active surface.
  *
- * Surfaces call this helper while deciding placement and tree traversal. The
- * block renderer receives already-rendered child content and stays focused on
- * the block's own visual body.
+ * Surfaces decide placement. The shell owns DOM markers, selection state, and
+ * child traversal, then asks the registered block renderer for content only.
  */
-export function renderBlock(block: EditorBlock, props: SurfaceRenderProps, surface: SurfaceType): ReactNode {
-  const renderer = props.renderers.get(block.type, surface);
-  if (!renderer) return props.fallback?.(block) ?? null;
-  return createElement(renderer.component, {
+export function renderBlockShell(block: EditorBlock, props: SurfaceRenderProps, surface: SurfaceType): ReactNode {
+  const selection = props.editor.selection.get();
+  const selected = selection ? selection.type !== "text" && selection.blockIds.includes(block.id) : false;
+  return createElement(BlockShell, {
     key: block.id,
     block,
     editor: props.editor,
     surface,
-    content: block.children.map((child) => renderBlock(child, props, surface)),
+    renderProps: props,
+    selected,
   });
 }
 

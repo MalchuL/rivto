@@ -2,6 +2,7 @@ import { createDefaultBlockRendererRegistry } from "../../react/blocks/default-r
 import { createRivtoEditor } from "../../../editor";
 import type { FunctionComponent, ReactElement } from "react";
 import type { BlockRenderProps } from "../../react/blocks/types";
+import { BlockShell } from "../../react/blocks/block-shell";
 
 describe("default block renderers", () => {
   it("registers built-in block renderers for both surfaces", () => {
@@ -13,16 +14,34 @@ describe("default block renderers", () => {
     expect(registry.get("checkListItem", "edgeless")).toBeDefined();
   });
 
-  it("selects a block when its default renderer is clicked", () => {
+  it("keeps default renderers content-only", () => {
     const editor = createRivtoEditor();
     const registry = createDefaultBlockRendererRegistry();
     const id = editor.insertBlock({ type: "paragraph", content: "Text" });
     const block = editor.getBlock(id)!;
     const component = registry.get("paragraph", "block")!.component as FunctionComponent<BlockRenderProps>;
-    const element = component({ block, editor, surface: "block" }) as ReactElement<{
-      onClick(event: { stopPropagation(): void }): void;
+    const element = component({ block, editor, surface: "block" }) as ReactElement<{ "data-rivto-block-id"?: string }>;
+
+    expect(element.props["data-rivto-block-id"]).toBeUndefined();
+    editor.destroy();
+  });
+
+  it("selects a block from the generic shell", () => {
+    const editor = createRivtoEditor();
+    const renderers = createDefaultBlockRendererRegistry();
+    const id = editor.insertBlock({ type: "paragraph", content: "Text" });
+    const block = editor.getBlock(id)!;
+    const element = BlockShell({
+      block,
+      editor,
+      surface: "block",
+      renderProps: { editor, renderers },
+      selected: false,
+    }) as ReactElement<{
+      onClick(event: { target: null; stopPropagation(): void; defaultPrevented: boolean }): void;
+      "data-rivto-selected"?: string;
     }>;
-    const event = { stopPropagation: jest.fn() };
+    const event = { target: null, stopPropagation: jest.fn(), defaultPrevented: false };
 
     element.props.onClick(event);
 
@@ -33,6 +52,7 @@ describe("default block renderers", () => {
       anchorBlockId: id,
       focusBlockId: id,
     });
+    expect(element.props["data-rivto-selected"]).toBeUndefined();
     editor.destroy();
   });
 
@@ -43,14 +63,12 @@ describe("default block renderers", () => {
     const block = editor.getBlock(id)!;
     const component = registry.get("paragraph", "block")!.component as FunctionComponent<BlockRenderProps>;
     const element = component({ block, editor, surface: "block" }) as ReactElement<{
-      children: Array<ReactElement<{
-        children?: string;
-        onFocus(): void;
-        onBlur(): void;
-        onInput(event: { currentTarget: { textContent: string } }): void;
-      }>>;
+      children?: string;
+      onFocus(): void;
+      onBlur(): void;
+      onInput(event: { currentTarget: { textContent: string } }): void;
     }>;
-    const contentElement = element.props.children[0]!;
+    const contentElement = element;
 
     expect(contentElement.props.children).toBeUndefined();
 
@@ -68,12 +86,10 @@ describe("default block renderers", () => {
     const stopCapturing = jest.spyOn(editor.history, "stopCapturing");
     const component = registry.get("paragraph", "block")!.component as FunctionComponent<BlockRenderProps>;
     const element = component({ block, editor, surface: "block" }) as ReactElement<{
-      children: Array<ReactElement<{
-        onFocus(): void;
-        onBlur(): void;
-      }>>;
+      onFocus(): void;
+      onBlur(): void;
     }>;
-    const contentElement = element.props.children[0]!;
+    const contentElement = element;
 
     contentElement.props.onFocus();
     editor.updateBlock(id, { content: "Changed" });
@@ -92,22 +108,20 @@ describe("default block renderers", () => {
       const block = editor.getBlock(id)!;
       const component = registry.get("paragraph", surface)!.component as FunctionComponent<BlockRenderProps>;
       return component({ block, editor, surface }) as ReactElement<{
-        children: Array<ReactElement<{
-          onFocus(): void;
-          onBlur(): void;
-          onInput(event: { currentTarget: { textContent: string } }): void;
-        }>>;
+        onFocus(): void;
+        onBlur(): void;
+        onInput(event: { currentTarget: { textContent: string } }): void;
       }>;
     };
 
-    const blockContent = render("block").props.children[0]!;
+    const blockContent = render("block");
     blockContent.props.onFocus();
     blockContent.props.onInput({ currentTarget: { textContent: "Block edit" } });
     blockContent.props.onBlur();
 
     editor.mode.set("edgeless");
 
-    const edgelessContent = render("edgeless").props.children[0]!;
+    const edgelessContent = render("edgeless");
     edgelessContent.props.onFocus();
     edgelessContent.props.onInput({ currentTarget: { textContent: "Edgeless edit" } });
     edgelessContent.props.onBlur();

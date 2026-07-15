@@ -2,6 +2,15 @@ import { BlockRegistry, defaultBlockDefinitions, type BlockDefinition } from "..
 import { CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
 import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type BlockPatch, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
+import {
+  createClipboardPayload,
+  cutSelection,
+  htmlToText,
+  pasteClipboardBundle,
+  pastePlainText,
+  RIVTO_CLIPBOARD_MIME,
+  type ClipboardBundle,
+} from "./clipboard";
 import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
 import type { CreateRivtoEditorOptions, EditorPosition, EditorSelection, RivtoEditorApi } from "./types";
 
@@ -38,6 +47,7 @@ export class EditorRuntime implements RivtoEditorApi {
     this.history = new UndoManager(this.document);
     this.document.setPropsValidator((type, props) => this.blocks.validate(type, props));
     this.registerBlockCommands();
+    this.registerClipboardCommands();
     defaultBlockDefinitions.forEach((definition) => this.defineBlock(definition));
 
     // Document changes cover block commands and direct/remote document edits.
@@ -330,6 +340,88 @@ export class EditorRuntime implements RivtoEditorApi {
     this.commands.register("selection.clear", () => this.selection.clear());
     this.commands.register("history.undo", () => this.history.undo());
     this.commands.register("history.redo", () => this.history.redo());
+  }
+
+  /**
+   * Registers clipboard commands used by React DOM bridges and tests.
+   *
+   * The runtime keeps this as commands rather than a manager because clipboard
+   * behavior is just document mutation plus local selection updates. Browser
+   * event details are read here only to synchronously set custom MIME data.
+   */
+  private registerClipboardCommands(): void {
+    type Payload = Record<string, unknown>;
+    const payload = (value: unknown): Payload => value && typeof value === "object" && !Array.isArray(value) ? value as Payload : {};
+    const text = (value: unknown): string | undefined => typeof value === "string" ? value : undefined;
+    const clipboardEvent = (value: unknown): ClipboardEvent | undefined => {
+      if (typeof ClipboardEvent === "undefined") return undefined;
+      const event = value instanceof ClipboardEvent ? value : payload(value).event;
+      return event instanceof ClipboardEvent ? event : undefined;
+    };
+    const documentCommand = (handler: (value?: unknown) => unknown): CommandHandler => (value) => {
+      this.history.stopCapturing();
+      try {
+        return handler(value);
+      } finally {
+        this.history.stopCapturing();
+      }
+    };
+
+    this.commands.register("clipboard.copy", (value) => {
+      const event = clipboardEvent(value);
+      const data = payload(value);
+      const payloadData = createClipboardPayload(this.document, this.selection.get());
+      if (!payloadData) return "";
+      if (event?.clipboardData) {
+        event.preventDefault();
+        event.clipboardData.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(payloadData.bundle));
+        event.clipboardData.setData("text/html", payloadData.html);
+        event.clipboardData.setData("text/plain", payloadData.text);
+      }
+      if (data.clipboardData && typeof (data.clipboardData as { setData?: unknown }).setData === "function") {
+        const transfer = data.clipboardData as Pick<DataTransfer, "setData">;
+        transfer.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(payloadData.bundle));
+        transfer.setData("text/html", payloadData.html);
+        transfer.setData("text/plain", payloadData.text);
+      }
+      return payloadData.text;
+    });
+
+    this.commands.register("clipboard.cut", documentCommand((value) => {
+      const event = clipboardEvent(value);
+      const payloadData = cutSelection(this.document, this.selection, this.selection.get());
+      if (!payloadData) return "";
+      if (event?.clipboardData) {
+        event.preventDefault();
+        event.clipboardData.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(payloadData.bundle));
+        event.clipboardData.setData("text/html", payloadData.html);
+        event.clipboardData.setData("text/plain", payloadData.text);
+      }
+      return payloadData.text;
+    }));
+
+    this.commands.register("clipboard.paste", documentCommand((value) => {
+      const event = clipboardEvent(value);
+      const data = payload(value);
+      const defaultBlockType = text(data.defaultBlockType) ?? "paragraph";
+      const structured = text(data.structured)
+        ?? (event?.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) || undefined);
+      const bundle = data.bundle as ClipboardBundle | undefined;
+      if (event?.clipboardData) event.preventDefault();
+      if (bundle) {
+        pasteClipboardBundle(this.document, this.selection, this.selection.get(), bundle);
+        return;
+      }
+      if (structured) {
+        pasteClipboardBundle(this.document, this.selection, this.selection.get(), JSON.parse(structured) as ClipboardBundle);
+        return;
+      }
+      const plain = text(data.text)
+        ?? (event?.clipboardData?.getData("text/html") ? htmlToText(event.clipboardData.getData("text/html")) : undefined)
+        ?? event?.clipboardData?.getData("text/plain")
+        ?? "";
+      pastePlainText(this.document, this.selection, this.selection.get(), defaultBlockType, plain);
+    }));
   }
 
   /**

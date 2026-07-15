@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType } from "react";
 import type { RivtoEditorApi } from "../../../editor";
 import type { EditorBlock } from "../../../editor/model";
 import type { SurfaceType } from "../editor/types";
@@ -11,8 +11,6 @@ export interface BlockRenderProps {
   readonly editor: RivtoEditorApi;
   /** Surface currently rendering the block. */
   readonly surface: SurfaceType;
-  /** Nested child content produced by the surface. */
-  readonly content?: ReactNode;
 }
 
 /** Defines one React component for one block type on one surface. */

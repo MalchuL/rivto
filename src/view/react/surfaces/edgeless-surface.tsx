@@ -1,24 +1,34 @@
-import { createElement, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createElement, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { EditorBlock } from "../../../editor/model";
-import { blockIdsInRect, clearNativeSelection, RIVTO_BLOCK_SELECTOR, RIVTO_SELECTION_RECT_CLASS, type SelectionRect } from "../selection";
+import { blockIdsInRect, clearNativeSelection, RIVTO_BLOCK_SELECTOR, type SelectionRect } from "../selection";
 import type { Surface, SurfaceRenderProps } from "../editor/types";
-import { renderBlock } from "./render-block";
+import { BlockShell } from "../blocks/block-shell";
+import { RIVTO_CANVAS_BLOCK_CLASS, RIVTO_CANVAS_BLOCK_SELECTOR, RIVTO_DRAG_ID_ATTR } from "../blocks/constants";
+import { flattenBlocks } from "./render-block";
+import { SelectionRectangle } from "../selection/selection-rect";
 
 const DEFAULT_LAYOUT = { x: 0, y: 0, width: 320, height: 120, zIndex: 0 };
 
-function selectionRectStyle(rect: SelectionRect, root: HTMLElement | null) {
-  return {
-    left: rect.left - (root?.getBoundingClientRect().left ?? 0),
-    top: rect.top - (root?.getBoundingClientRect().top ?? 0),
-    width: rect.width,
-    height: rect.height,
-  };
+function visibleLayout(block: EditorBlock) {
+  return { ...DEFAULT_LAYOUT, ...block.layout };
 }
 
-function renderCanvasBlock(block: EditorBlock, props: SurfaceRenderProps): ReactNode {
-  const content = renderBlock(block, props, "edgeless");
-  if (!content) return null;
-  const layout = { ...DEFAULT_LAYOUT, ...block.layout };
+function blockElement(id: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`${RIVTO_CANVAS_BLOCK_SELECTOR}[${RIVTO_DRAG_ID_ATTR}="${CSS.escape(id)}"]`);
+}
+
+function setLocalDragOffset(id: string, dx: number, dy: number): void {
+  const element = blockElement(id);
+  if (element) element.style.transform = `translate(${dx}px, ${dy}px)`;
+}
+
+function clearLocalDragOffset(id: string): void {
+  const element = blockElement(id);
+  if (element) element.style.transform = "";
+}
+
+function renderCanvasBlock(block: EditorBlock, props: SurfaceRenderProps, selectedIds: string[]): ReactNode {
+  const layout = visibleLayout(block);
   const style: CSSProperties = {
     position: "absolute",
     left: layout.x,
@@ -27,7 +37,80 @@ function renderCanvasBlock(block: EditorBlock, props: SurfaceRenderProps): React
     minHeight: layout.height,
     zIndex: layout.zIndex,
   };
-  return createElement("div", { key: block.id, style }, content);
+  const moveSelection = (dx: number, dy: number): void => {
+    const ids = selectedIds.includes(block.id) ? selectedIds : [block.id];
+    flattenBlocks(props.editor.getBlocks())
+      .filter((item) => ids.includes(item.id))
+      .forEach((item) => {
+        const itemLayout = visibleLayout(item);
+        props.editor.setBlockLayout(item.id, { x: itemLayout.x + dx, y: itemLayout.y + dy });
+      });
+  };
+  const select = (): void => {
+    props.editor.execute("selection.set", { selection: { type: "edgeless", blockIds: [block.id] } });
+  };
+  const drag = (event: ReactPointerEvent): void => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!selectedIds.includes(block.id)) select();
+    (event.currentTarget.parentElement as HTMLElement | null)?.focus({ preventScroll: true });
+    const ids = selectedIds.includes(block.id) ? selectedIds : [block.id];
+    const starts = flattenBlocks(props.editor.getBlocks())
+      .filter((item) => ids.includes(item.id))
+      .map((item) => ({ id: item.id, layout: visibleLayout(item) }));
+    const start = { x: event.clientX, y: event.clientY };
+    const move = (next: PointerEvent): void => {
+      const dx = next.clientX - start.x;
+      const dy = next.clientY - start.y;
+      starts.forEach((item) => {
+        setLocalDragOffset(item.id, dx, dy);
+      });
+    };
+    const stop = (next: PointerEvent): void => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      const dx = next.clientX - start.x;
+      const dy = next.clientY - start.y;
+      starts.forEach((item) => {
+        clearLocalDragOffset(item.id);
+        if (dx || dy) props.editor.setBlockLayout(item.id, { x: item.layout.x + dx, y: item.layout.y + dy });
+      });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+  };
+  const keyDown = (event: KeyboardEvent): void => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.isContentEditable) return;
+    event.preventDefault();
+    const step = event.shiftKey ? 10 : 1;
+    moveSelection(
+      event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0,
+      event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0,
+    );
+  };
+  return createElement(
+    BlockShell,
+    {
+      key: block.id,
+      block,
+      editor: props.editor,
+      surface: "edgeless",
+      renderProps: props,
+      selected: selectedIds.includes(block.id),
+      className: RIVTO_CANVAS_BLOCK_CLASS,
+      style,
+      shellProps: {
+        [RIVTO_DRAG_ID_ATTR]: block.id,
+        "data-selected": selectedIds.includes(block.id) ? "true" : undefined,
+        tabIndex: 0,
+        onKeyDown: keyDown,
+      },
+      handleProps: { onPointerDown: drag },
+    },
+  );
 }
 
 /**
@@ -40,16 +123,22 @@ function renderCanvasBlock(block: EditorBlock, props: SurfaceRenderProps): React
 export function EdgelessSurface(props: SurfaceRenderProps): ReactNode {
   const canvas = useRef<HTMLDivElement>(null);
   const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
+  const [pendingSelectedIds, setPendingSelectedIds] = useState<string[]>([]);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const pendingSelection = useRef<string[]>([]);
   const blocks = props.editor.getBlocks();
+  const selection = props.editor.selection.get();
+  const selectedIds = pendingSelectedIds.length ? pendingSelectedIds : selection?.type === "edgeless" ? selection.blockIds : [];
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
     if (event.button !== 0) return;
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest(RIVTO_BLOCK_SELECTOR)) return;
+    if (target?.closest(`${RIVTO_BLOCK_SELECTOR},${RIVTO_CANVAS_BLOCK_SELECTOR}`)) return;
     event.preventDefault();
     event.currentTarget.focus({ preventScroll: true });
     dragStart.current = { x: event.clientX, y: event.clientY };
+    pendingSelection.current = [];
+    setPendingSelectedIds([]);
     props.editor.execute("selection.clear");
   };
 
@@ -67,13 +156,18 @@ export function EdgelessSurface(props: SurfaceRenderProps): ReactNode {
     };
     setSelectionRect(rect);
     const blockIds = blockIdsInRect(root, rect);
-    if (blockIds.length) props.editor.execute("selection.set", { selection: { type: "edgeless", blockIds } });
-    else props.editor.execute("selection.clear");
+    pendingSelection.current = blockIds;
+    setPendingSelectedIds(blockIds);
   };
 
   const onPointerUp = (): void => {
+    const blockIds = pendingSelection.current;
     dragStart.current = null;
+    pendingSelection.current = [];
     setSelectionRect(null);
+    setPendingSelectedIds([]);
+    if (blockIds.length) props.editor.execute("selection.set", { selection: { type: "edgeless", blockIds } });
+    else props.editor.execute("selection.clear");
   };
 
   return createElement(
@@ -81,6 +175,7 @@ export function EdgelessSurface(props: SurfaceRenderProps): ReactNode {
     {
       ref: canvas,
       "data-rivto-surface-content": "edgeless",
+      className: "rv-canvas",
       tabIndex: 0,
       style: { position: "relative", width: "100%", height: "100%" },
       onPointerDownCapture: onPointerDown,
@@ -102,11 +197,8 @@ export function EdgelessSurface(props: SurfaceRenderProps): ReactNode {
           })
         : null;
     })),
-    blocks.map((block) => renderCanvasBlock(block, props)),
-    selectionRect && createElement("div", {
-      className: RIVTO_SELECTION_RECT_CLASS,
-      style: selectionRectStyle(selectionRect, canvas.current),
-    }),
+    blocks.map((block) => renderCanvasBlock(block, props, selectedIds)),
+    selectionRect && createElement(SelectionRectangle, { rect: selectionRect, root: canvas.current }),
   );
 }
 

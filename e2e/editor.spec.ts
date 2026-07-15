@@ -309,7 +309,7 @@ test("shows command, event, and selection runtime state", async ({ page }) => {
 test("selects and moves an object in edgeless mode through runtime commands", async ({ page }) => {
   await page.getByRole("button", { name: "Edgeless" }).click();
   const block = page.locator(".rv-canvas-block").first();
-  await block.locator(".rv-drag").click();
+  await block.locator(".rv-block-handle").click();
   await expect(page.getByLabel("Runtime inspector")).toContainText("Selection: edgeless");
   const before = await block.evaluate((element) => getComputedStyle(element).left);
   await block.focus();
@@ -341,7 +341,7 @@ test("keeps edgeless text editing separate from object selection", async ({ page
   const block = page.locator(".rv-canvas-block").first();
   const content = block.getByRole("textbox").first();
 
-  await block.locator(".rv-drag").click();
+  await block.locator(".rv-block-handle").click();
   await expect(inspector).toContainText("Selection: edgeless");
 
   await content.click();
@@ -350,7 +350,7 @@ test("keeps edgeless text editing separate from object selection", async ({ page
   await expect(content).toContainText("editable");
   await expect(inspector).toContainText("Selection: text");
 
-  await block.locator(".rv-drag").click();
+  await block.locator(".rv-block-handle").click();
   await expect(inspector).toContainText("Selection: edgeless");
 });
 
@@ -367,6 +367,6 @@ test("keeps edgeless form controls focused without selecting their card", async 
   await expect(input).toHaveValue("https://example.test/image.png");
   await expect(page.getByLabel("Runtime inspector")).not.toContainText("Selection: edgeless");
 
-  await page.locator('.rv-canvas-block[data-type="image"] .rv-drag').click();
+  await page.locator('.rv-canvas-block[data-type="image"] .rv-block-handle').click();
   await expect(page.getByLabel("Runtime inspector")).toContainText("Selection: edgeless");
 });
