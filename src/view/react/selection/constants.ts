@@ -38,10 +38,3 @@ export const RIVTO_CROSS_SELECTED_ATTR = "data-rivto-cross-selected";
  * overwriting the correct editor selection.
  */
 export const RIVTO_POINTER_SELECTING_ATTR = "data-rivto-pointer-selecting";
-
-/**
- * CSS class for the temporary rectangle drawn during block/object selection.
- *
- * The rectangle is visual-only; block IDs are still resolved from DOM geometry.
- */
-export const RIVTO_SELECTION_RECT_CLASS = "rv-selection-rect";

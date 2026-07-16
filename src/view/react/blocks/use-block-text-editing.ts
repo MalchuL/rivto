@@ -3,7 +3,7 @@ import type { RivtoEditorApi } from "../../../editor";
 import type { EditorBlock } from "../../../editor/model";
 import { RIVTO_BLOCK_CONTENT_ATTR } from "./dom";
 
-interface BlockTextEditingOptions {
+export interface BlockTextEditingOptions {
   block: EditorBlock;
   editor: RivtoEditorApi;
   text: string;
@@ -16,7 +16,7 @@ interface BlockTextEditingOptions {
  * the browser owns the live caret while the user types. The ref updates only
  * when focus is elsewhere or the DOM has diverged from document text.
  */
-export function useBlockTextEditing({ block, editor, text }: BlockTextEditingOptions) {
+export function useBlockTextEditing({ block, editor, text = block.content }: Omit<BlockTextEditingOptions, "text"> & { text?: string }) {
   return {
     [RIVTO_BLOCK_CONTENT_ATTR]: "",
     contentEditable: true,

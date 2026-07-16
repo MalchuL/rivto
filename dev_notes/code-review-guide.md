@@ -1,5 +1,9 @@
 # How to review the Rivto editor code
 
+> The React view layer was replaced after this broader guide was written. For
+> the current implementation and review checklist, start with
+> [`react-view-rewrite-review.md`](./react-view-rewrite-review.md).
+
 This is a reading guide for the editor implementation, demo, packaging, and
 tests. It intentionally treats `src/store/document-model/**` and
 `src/store/crdt-doc/**` as existing lower-level dependencies. Read their public

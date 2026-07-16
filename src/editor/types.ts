@@ -145,6 +145,9 @@ export interface RivtoEditorApi {
   /** Updates mutable block fields through the built-in `block.update` command. */
   updateBlock(id: string, patch: EditorBlockPatch): void;
 
+  /** Converts a block through `block.type.set` without changing its identity. */
+  setBlockType(id: string, type: string): void;
+
   /** Removes a block through the built-in `block.remove` command. */
   removeBlock(id: string): void;
 

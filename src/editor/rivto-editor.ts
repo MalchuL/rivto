@@ -154,6 +154,11 @@ export class EditorRuntime implements RivtoEditorApi {
     this.execute("block.update", command);
   }
 
+  /** Converts a block to another registered native type. */
+  setBlockType(id: string, type: string): void {
+    this.execute("block.type.set", { id, type });
+  }
+
   /** Removes a block through the built-in command path. */
   removeBlock(id: string): void {
     this.execute("block.remove", { id });
@@ -282,6 +287,13 @@ export class EditorRuntime implements RivtoEditorApi {
       const data = payload(value);
       this.document.updateBlock(string(data.id, "id"), payload(data.patch) as BlockPatch);
     });
+    this.commands.register("block.type.set", documentCommand((value) => {
+      const data = payload(value);
+      const id = string(data.id, "id");
+      const type = string(data.type, "type");
+      const prepared = this.blocks.prepare({ type });
+      this.document.setBlockType(id, type, prepared.props);
+    }));
     this.commands.register("block.remove", documentCommand((value) => {
       const data = payload(value);
       this.document.transact(() => {
@@ -354,9 +366,10 @@ export class EditorRuntime implements RivtoEditorApi {
     const payload = (value: unknown): Payload => value && typeof value === "object" && !Array.isArray(value) ? value as Payload : {};
     const text = (value: unknown): string | undefined => typeof value === "string" ? value : undefined;
     const clipboardEvent = (value: unknown): ClipboardEvent | undefined => {
-      if (typeof ClipboardEvent === "undefined") return undefined;
-      const event = value instanceof ClipboardEvent ? value : payload(value).event;
-      return event instanceof ClipboardEvent ? event : undefined;
+      const candidate = payload(value).event ?? value;
+      return candidate && typeof candidate === "object" && "clipboardData" in candidate && "preventDefault" in candidate
+        ? candidate as ClipboardEvent
+        : undefined;
     };
     const documentCommand = (handler: (value?: unknown) => unknown): CommandHandler => (value) => {
       this.history.stopCapturing();

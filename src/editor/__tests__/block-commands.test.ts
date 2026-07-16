@@ -52,6 +52,34 @@ describe("EditorRuntime block commands", () => {
     editor.destroy();
   });
 
+  it("converts a block without losing identity or nested data", () => {
+    const editor = createRivtoEditor();
+    const id = editor.insertBlock({
+      type: "paragraph",
+      props: { old: true },
+      pluginData: { demo: { pinned: true } },
+      content: "Title",
+      children: [{ type: "paragraph", content: "Child" }],
+      layout: { x: 90 },
+    });
+
+    editor.setBlockType(id, "heading2");
+
+    expect(editor.getBlock(id)).toMatchObject({
+      id,
+      type: "heading2",
+      props: {},
+      pluginData: { demo: { pinned: true } },
+      content: "Title",
+      children: [{ content: "Child" }],
+      layout: { x: 90 },
+    });
+    editor.undo();
+    expect(editor.getBlock(id)).toMatchObject({ type: "paragraph", props: { old: true } });
+    expect(() => editor.setBlockType(id, "missing")).toThrow("Unknown block type missing");
+    editor.destroy();
+  });
+
   it("notifies subscribers once for every successful block command", () => {
     const editor = createRivtoEditor();
     let firstId = "";

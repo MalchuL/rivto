@@ -1,41 +1,10 @@
-# View Notes
+# React view contracts
 
-## UI Plugins
+`EditorView` provides editor, root, and plugin context around an explicit
+surface child. It never chooses a surface. `BlockView` is the stable block DOM
+container; surfaces choose block renderers, recursion, and layout.
 
-Block renderers only own visual content for one block. UI behavior such as drag
-and drop, block handles, slash menus, format bars, and selection overlays should
-live in view plugins instead of individual block renderers.
-
-Minimal future shape:
-
-```ts
-interface ViewPluginContext {
-  editor: RivtoEditorApi;
-  surface: SurfaceType;
-  root: HTMLElement;
-}
-
-interface ViewPlugin {
-  id: string;
-  mount(context: ViewPluginContext): void | (() => void);
-}
-```
-
-This keeps behavior modular without adding DI or a full event framework. A
-plugin can attach DOM listeners to the editor root and return one cleanup
-function.
-
-For drag and drop, the view layer also needs a stable DOM convention:
-
-```tsx
-<div data-rivto-block-id={block.id}>...</div>
-```
-
-Recommended order:
-
-1. Renderer registry.
-2. Surface component types.
-3. Editor view component.
-4. Stable block DOM marker.
-5. View plugin type and simple mounting.
-6. Drag and drop plugin.
+Plugins are declarative React wrappers. A root wrapper handles delegated events
+or overlays, while an optional block wrapper adds behavior such as selection or
+drag handles. Plugins are ordered, scoped to one `EditorView`, and cleaned up by
+React. Concrete page and edgeless surfaces belong to the consuming application.

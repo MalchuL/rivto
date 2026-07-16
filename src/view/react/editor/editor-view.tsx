@@ -1,20 +1,7 @@
-import { createElement, useRef, useSyncExternalStore } from "react";
-import type { RivtoEditorApi } from "../../../editor";
-import type { BlockRendererRegistry } from "../managers/block-renderer-registry";
-import type { SurfaceRegistry } from "../managers/surface-registry";
+import { createElement, useCallback, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { RIVTO_EDITOR_ROOT_ATTR, RIVTO_SURFACE_ATTR } from "./dom";
-import { EventsBridge } from "./events-bridge";
-import { SelectionBridge, type SelectionBridgeApi } from "./selection-bridge";
-
-/** Properties for the top-level React editor view connector. */
-export interface EditorViewProps {
-  /** Long-lived editor runtime owned by the host application. */
-  readonly editor: RivtoEditorApi;
-  /** Registered document-level surface components. */
-  readonly surfaces: SurfaceRegistry;
-  /** Registered block-level renderer components. */
-  readonly renderers: BlockRendererRegistry;
-}
+import { ViewContext } from "./context";
+import type { EditorViewProps } from "./types";
 
 /**
  * Connects the editor runtime to registered React surface components.
@@ -23,40 +10,25 @@ export interface EditorViewProps {
  * root DOM markers, and bridge mounting. Surface and block rendering are
  * delegated to their registries.
  */
-export function EditorView({ editor, surfaces, renderers }: EditorViewProps) {
+export function EditorView({ editor, plugins = [], children }: EditorViewProps) {
   const root = useRef<HTMLDivElement>(null);
-  const selectionBridge = useRef<SelectionBridgeApi | null>(null);
-  useSyncExternalStore(
-    (listener) => editor.subscribe(listener),
-    () => editor.revision,
-    () => editor.revision,
-  );
+  const subscribe = useCallback((listener: () => void) => editor.subscribe(listener), [editor]);
+  useSyncExternalStore(subscribe, () => editor.revision, () => editor.revision);
+  const value = useMemo(() => ({ editor, root, plugins }), [editor, plugins]);
+  const ids = new Set<string>();
+  plugins.forEach(({ id }) => {
+    if (!id || ids.has(id)) throw new Error(`Duplicate or empty view plugin id: ${id}`);
+    ids.add(id);
+  });
+  const content = [...plugins].reverse().reduce<ReactNode>((child, plugin) => (
+    plugin.View ? createElement(plugin.View, null, child) : child
+  ), children);
 
-  const surfaceType = editor.mode.get();
-  const surface = surfaces.get(surfaceType);
-  if (!surface) return null;
-
-  return createElement(
-    "div",
-    {
-      ref: root,
-      [RIVTO_EDITOR_ROOT_ATTR]: "",
-      [RIVTO_SURFACE_ATTR]: surfaceType,
-    },
-    createElement(SelectionBridge, {
-      editor,
-      root,
-      surfaceType,
-      api: selectionBridge,
-    }),
-    createElement(EventsBridge, {
-      editor,
-      root,
-      selectionBridge,
-    }),
-    createElement(surface.component, {
-      editor,
-      renderers,
-    }),
-  );
+  return createElement(ViewContext.Provider, { value }, createElement("div", {
+    ref: root,
+    [RIVTO_EDITOR_ROOT_ATTR]: "",
+    [RIVTO_SURFACE_ATTR]: editor.mode.get(),
+  }, content));
 }
+
+export type { EditorViewProps } from "./types";

@@ -207,6 +207,17 @@ export class DocumentModelImpl {
         });
     }
 
+    /** Changes a block's native type while preserving its identity and nested data. */
+    setBlockType(id: string, type: string, props: Record<string, unknown> = {}): void {
+        if (!type) throw new Error("Block type is required");
+        this.transact(() => {
+            const block = this.requiredBlock(id);
+            const nextProps = this.validateProps(type, props);
+            block.set("type", type);
+            assignMap(this.requiredMap(block, "props"), nextProps);
+        });
+    }
+
     /**
      * Update one block property without replacing the shared props map.
      * Stable CRDT container identities let concurrent edits to different keys merge.

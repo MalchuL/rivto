@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
-  createDefaultViewRegistries,
+  clipboardPlugin,
+  createKeyboardPlugin,
   createRivtoEditor,
   EditorView,
+  textSelectionPlugin,
   type EditorSnapshot,
   RIVTO_VERSION,
   YjsDoc,
 } from "@chulane/rivto";
+import { edgelessPlugin } from "./editor/edgeless-plugin";
+import { pagePlugin } from "./editor/page-plugin";
+import { slashPlugin } from "./editor/slash-plugin";
+import { EdgelessSurface, PageSurface } from "./editor/surfaces";
 
 const STORAGE_KEY = "rivto-editor-v3-demo";
 
@@ -20,7 +26,9 @@ const initialContent = [
 ];
 
 export function App() {
-  const view = useMemo(() => createDefaultViewRegistries(), []);
+  const keyboard = useMemo(() => createKeyboardPlugin(), []);
+  const pagePlugins = useMemo(() => [textSelectionPlugin, clipboardPlugin, keyboard, pagePlugin, slashPlugin], [keyboard]);
+  const edgelessPlugins = useMemo(() => [textSelectionPlugin, clipboardPlugin, keyboard, edgelessPlugin], [keyboard]);
   const [instance] = useState(() => {
     const doc = new YjsDoc("rivto-v3-demo");
     const editor = createRivtoEditor({ document: doc });
@@ -56,6 +64,7 @@ export function App() {
   }, [instance]);
 
   const mode = instance.editor.mode.get();
+  const plugins = mode === "block" ? pagePlugins : edgelessPlugins;
 
   return (
     <main className="shell">
@@ -65,8 +74,8 @@ export function App() {
           <h1>Collaborative block editor</h1>
         </div>
         <div className="header-actions">
-          <button onClick={() => instance.editor.insertBlock({ type: "paragraph", content: "New paragraph" })}>
-            Add paragraph
+          <button aria-label="Add block" onClick={() => instance.editor.insertBlock({ type: "paragraph", content: "" })}>
+            Add block
           </button>
           <button onClick={() => instance.editor.mode.set(mode === "block" ? "edgeless" : "block")}>
             Mode: {mode}
@@ -100,12 +109,14 @@ export function App() {
 
       <section className="renderer-frame" data-renderer="EditorView">
         <span className="renderer-label">EditorView</span>
-        <EditorView editor={instance.editor} {...view} />
+        <EditorView editor={instance.editor} plugins={plugins}>
+          {mode === "block" ? <PageSurface /> : <EdgelessSurface />}
+        </EditorView>
       </section>
 
       <div className="capabilities" aria-label="Enabled extension points">
-        <span>Default surfaces</span>
-        <span>Default block renderers</span>
+        <span>Demo-owned surfaces</span>
+        <span>Composable view plugins</span>
         <span>Persistence: schema v3 snapshot</span>
       </div>
 
