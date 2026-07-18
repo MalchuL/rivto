@@ -8,7 +8,101 @@ body {
   margin: 0;
 }
 
-main {
+.demo-header {
+  padding: 16px 24px;
+  color: #666;
+  font-size: 14px;
+}
+
+.page-surface {
   width: min(720px, calc(100% - 32px));
-  margin: 64px auto;
+  min-height: 70vh;
+  margin: 24px auto 64px;
+  padding: 56px 64px;
+  box-sizing: border-box;
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 6%);
+}
+
+.page-block {
+  margin: 4px 0;
+}
+
+.page-block-content {
+  min-height: 1.5em;
+  line-height: 1.5;
+  outline: none;
+  white-space: pre-wrap;
+}
+
+[data-block-type="heading"] > .page-block-content {
+  margin: 16px 0 8px;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+[data-block-type="heading2"] > .page-block-content {
+  margin-top: 12px;
+  font-size: 1.5rem;
+  font-weight: 650;
+}
+
+[data-block-type="heading3"] > .page-block-content {
+  margin-top: 8px;
+  font-size: 1.2rem;
+  font-weight: 650;
+}
+
+[data-block-type="bulletListItem"] > .page-block-content::before {
+  content: "• ";
+}
+
+[data-block-type="numberedListItem"] > .page-block-content::before {
+  content: "1. ";
+}
+
+[data-block-type="checkListItem"] > .page-block-content::before {
+  content: "☐ ";
+}
+
+[data-block-type="quote"] > .page-block-content {
+  padding-left: 12px;
+  border-left: 3px solid #ccc;
+  color: #555;
+}
+
+[data-block-type="code"] > .page-block-content {
+  padding: 12px;
+  border-radius: 6px;
+  background: #f3f3f3;
+  font-family: ui-monospace, monospace;
+}
+
+.page-block-children {
+  margin-left: 24px;
+}
+
+.page-divider {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid #ddd;
+}
+
+.page-attachment,
+.page-unknown-block {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  color: #666;
+}
+
+@media (max-width: 640px) {
+  .page-surface {
+    padding: 32px 24px;
+  }
 }
