@@ -364,7 +364,13 @@ export class DocumentModelImpl {
     }
 
     /**
-     * Moves a nested block directly after its parent.
+     * Moves a nested block directly after its parent and adopts later siblings.
+     *
+     * Following siblings become children of the outdented block, preserving the
+     * visible tree order: the block's existing children stay first, followed by
+     * the siblings that previously appeared after it. Removing and reinserting
+     * every affected ID inside this method's transaction publishes one update
+     * and creates one undoable tree operation.
      *
      * @param id - ID of the block to outdent.
      */
@@ -374,8 +380,13 @@ export class DocumentModelImpl {
             if (!source?.parentId) return;
             const parentContainer = this.findContainer(source.parentId);
             if (!parentContainer) return;
-            source.array.delete(source.index, 1);
+
+            const followingSiblingIds = strings(source.array).slice(source.index + 1);
+            source.array.delete(source.index, 1 + followingSiblingIds.length);
             parentContainer.array.insert(parentContainer.index + 1, id);
+            if (followingSiblingIds.length > 0) {
+                this.requiredArray(this.requiredBlock(id), "children").push(...followingSiblingIds);
+            }
         });
     }
 

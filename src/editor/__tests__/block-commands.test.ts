@@ -119,6 +119,44 @@ describe("EditorRuntime block commands", () => {
     editor.destroy();
   });
 
+  it("outdents once and adopts every following sibling after existing children", () => {
+    const editor = createRivtoEditor();
+    const parentId = editor.insertBlock({ type: "paragraph", content: "Parent" });
+    const beforeId = editor.insertBlock({ type: "paragraph", content: "Before" }, parentId);
+    editor.indentBlock(beforeId);
+    const currentId = editor.insertBlock({ type: "paragraph", content: "Current" }, beforeId);
+    const existingChildId = editor.insertBlock({ type: "paragraph", content: "Existing child" }, currentId);
+    editor.indentBlock(existingChildId);
+    const followingId = editor.insertBlock({ type: "paragraph", content: "Following" }, currentId);
+    const lastId = editor.insertBlock({ type: "paragraph", content: "Last" }, followingId);
+
+    expectOneUpdate(editor, () => editor.outdentBlock(currentId));
+
+    expect(editor.getBlocks()).toMatchObject([
+      { id: parentId, children: [{ id: beforeId }] },
+      {
+        id: currentId,
+        children: [
+          { id: existingChildId },
+          { id: followingId },
+          { id: lastId },
+        ],
+      },
+    ]);
+
+    editor.undo();
+    expect(editor.getBlocks()).toMatchObject([{
+      id: parentId,
+      children: [
+        { id: beforeId },
+        { id: currentId, children: [{ id: existingChildId }] },
+        { id: followingId },
+        { id: lastId },
+      ],
+    }]);
+    editor.destroy();
+  });
+
   it("stops notifying after unsubscribe", () => {
     const editor = createRivtoEditor();
     const listener = jest.fn();
