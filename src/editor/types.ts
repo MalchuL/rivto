@@ -151,6 +151,9 @@ export interface RivtoEditorApi {
   /** Removes a block through the built-in `block.remove` command. */
   removeBlock(id: string): void;
 
+  /** Atomically appends a source block into a target and returns the text join offset. */
+  mergeBlocks(targetId: string, sourceId: string): number;
+
   /** Moves a block through the built-in `block.move` command. */
   moveBlock(id: string, afterId: string | null): void;
 

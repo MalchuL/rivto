@@ -66,6 +66,46 @@ function findBlock(root: HTMLElement, blockId: string): HTMLElement | null {
   return null;
 }
 
+/** Finds editable content owned directly by one BlockView, excluding descendants. */
+function findOwnedContent(block: HTMLElement): HTMLElement | null {
+  for (const content of block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)) {
+    if (content.closest(BLOCK_ID_SELECTOR) === block) return content;
+  }
+  return null;
+}
+
+/**
+ * Finds the immediately previous rendered block when that block is editable.
+ *
+ * BlockView elements are returned in depth-first DOM order, matching the page's
+ * visible traversal. A non-editable divider or attachment stops the lookup so
+ * Backspace never merges text across structural content.
+ *
+ * @param root - Active page surface root.
+ * @param blockId - Current block whose predecessor is requested.
+ * @returns Previous editable block identity and elements, or null.
+ */
+export function findPreviousEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+  const index = blocks.findIndex((block) => block.dataset.blockId === blockId);
+  if (index <= 0) return null;
+
+  const block = blocks[index - 1];
+  const content = findOwnedContent(block);
+  const previousId = block.dataset.blockId;
+  return content && previousId ? { block, content, blockId: previousId } : null;
+}
+
+/**
+ * Finds the nearest ancestor BlockView of a rendered block.
+ *
+ * @param block - Current BlockView element.
+ * @returns Parent BlockView, or null when the block is at the surface root.
+ */
+export function findParentBlock(block: HTMLElement): HTMLElement | null {
+  return block.parentElement?.closest<HTMLElement>(BLOCK_ID_SELECTOR) ?? null;
+}
+
 /**
  * Focuses a rendered block and places a collapsed caret at a text offset.
  *
@@ -80,7 +120,8 @@ function findBlock(root: HTMLElement, blockId: string): HTMLElement | null {
  * @returns True when the block and editable content were found.
  */
 export function focusBlock(root: HTMLElement, blockId: string, offset: number): boolean {
-  const content = findBlock(root, blockId)?.querySelector<HTMLElement>(BLOCK_CONTENT_SELECTOR);
+  const block = findBlock(root, blockId);
+  const content = block ? findOwnedContent(block) : null;
   if (!content) return false;
 
   content.focus();

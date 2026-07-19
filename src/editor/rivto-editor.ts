@@ -164,6 +164,11 @@ export class EditorRuntime implements RivtoEditorApi {
     this.execute("block.remove", { id });
   }
 
+  /** Atomically merges a source block into a target through the built-in command path. */
+  mergeBlocks(targetId: string, sourceId: string): number {
+    return this.execute("block.merge", { targetId, sourceId }) as number;
+  }
+
   /** Moves a block through the built-in command path. */
   moveBlock(id: string, afterId: string | null): void {
     this.execute("block.move", { id, afterId });
@@ -299,6 +304,13 @@ export class EditorRuntime implements RivtoEditorApi {
       this.document.transact(() => {
         this.selectedBlockIds(string(data.id, "id")).forEach((id) => this.document.removeBlock(id));
       });
+    }));
+    this.commands.register("block.merge", documentCommand((value) => {
+      const data = payload(value);
+      return this.document.mergeBlocks(
+        string(data.targetId, "targetId"),
+        string(data.sourceId, "sourceId"),
+      );
     }));
     this.commands.register("block.move", documentCommand((value) => {
       const data = payload(value);
@@ -553,6 +565,12 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 }
 
+/**
+ * Creates one editor runtime over an optional collaborative document.
+ *
+ * @param options - Optional document adapter and initial presentation mode.
+ * @returns Runtime whose lifecycle is owned by the caller.
+ */
 export function createRivtoEditor(options: CreateRivtoEditorOptions = {}): EditorRuntime {
   return new EditorRuntime(options);
 }

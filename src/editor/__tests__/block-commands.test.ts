@@ -157,6 +157,36 @@ describe("EditorRuntime block commands", () => {
     editor.destroy();
   });
 
+  it("merges text and descendants in one undoable update", () => {
+    const editor = createRivtoEditor();
+    const targetId = editor.insertBlock({ type: "paragraph", content: "Before" });
+    const targetChildId = editor.insertBlock({ type: "paragraph", content: "Target child" }, targetId);
+    editor.indentBlock(targetChildId);
+    const sourceId = editor.insertBlock({ type: "paragraph", content: "After" }, targetId);
+    const sourceChildId = editor.insertBlock({ type: "paragraph", content: "Source child" }, sourceId);
+    editor.indentBlock(sourceChildId);
+    let joinOffset = -1;
+
+    expectOneUpdate(editor, () => {
+      joinOffset = editor.mergeBlocks(targetId, sourceId);
+    });
+
+    expect(joinOffset).toBe("Before".length);
+    expect(editor.getBlocks()).toMatchObject([{
+      id: targetId,
+      content: "BeforeAfter",
+      children: [{ id: targetChildId }, { id: sourceChildId }],
+    }]);
+    expect(editor.getBlock(sourceId)).toBeUndefined();
+
+    editor.undo();
+    expect(editor.getBlocks()).toMatchObject([
+      { id: targetId, content: "Before", children: [{ id: targetChildId }] },
+      { id: sourceId, content: "After", children: [{ id: sourceChildId }] },
+    ]);
+    editor.destroy();
+  });
+
   it("stops notifying after unsubscribe", () => {
     const editor = createRivtoEditor();
     const listener = jest.fn();

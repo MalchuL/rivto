@@ -4,7 +4,11 @@ import {
   RIVTO_VERSION,
 } from "@chulane/rivto";
 import { useEffect, useState } from "react";
-import { PageEnterPlugin, PageTabPlugin } from "./plugins";
+import {
+  PageBackspacePlugin,
+  PageEnterPlugin,
+  PageTabPlugin,
+} from "./plugins";
 import { PageSurface } from "./surfaces/page";
 
 /** Creates the demo-owned runtime and a small document that exercises nesting. */
@@ -40,6 +44,7 @@ export function App() {
       <EditorView editor={editor}>
         <PageTabPlugin />
         <PageEnterPlugin />
+        <PageBackspacePlugin />
         <PageSurface />
       </EditorView>
     </>

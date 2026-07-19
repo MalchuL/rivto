@@ -22,11 +22,13 @@ export interface BlockOperations {
   setLayout(layout: Partial<EditorBlockLayout>): void;
   /** Removes the block subtree and links touching removed descendants. */
   remove(): void;
+  /** Appends this block's content and children into a target, then removes it. */
+  mergeInto(targetId: string): number;
   /** Moves the block after a sibling, or to the start when passed null. */
   moveAfter(blockId: string | null): void;
   /** Nests the block under its previous sibling when the structure allows it. */
   indent(): void;
-  /** Moves the block one nesting level toward the document root. */
+  /** Outdents the block and adopts siblings that followed it. */
   outdent(): void;
 }
 
@@ -65,6 +67,7 @@ export function useBlock(blockId: string): UseBlockResult {
     setPluginData: (pluginId, value) => editor.setBlockPluginData(blockId, pluginId, value),
     setLayout: (layout) => editor.setBlockLayout(blockId, layout),
     remove: () => editor.removeBlock(blockId),
+    mergeInto: (targetId) => editor.mergeBlocks(targetId, blockId),
     moveAfter: (afterId) => editor.moveBlock(blockId, afterId),
     indent: () => editor.indentBlock(blockId),
     outdent: () => editor.outdentBlock(blockId),

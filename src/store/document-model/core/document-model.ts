@@ -329,6 +329,82 @@ export class DocumentModelImpl {
     }
 
     /**
+     * Joins two blocks while preserving the target block's identity.
+     *
+     * This is the document operation used when Backspace is pressed at the
+     * beginning of a block. For example, merging `"World"` into `"Hello "`
+     * produces one target block containing `"Hello World"`; the source block
+     * no longer exists.
+     *
+     * A merge transfers more than text. Source children are appended after the
+     * target's existing children, preserving their relative order. Links that
+     * point directly to the removed source are deleted because their endpoint
+     * would otherwise be invalid. The source's other fields are intentionally
+     * discarded: the target keeps its type, props, layout, and plugin data.
+     *
+     * Every mutation runs inside one CRDT transaction. Remote collaborators see
+     * one coherent change, and Undo restores the entire source block—including
+     * its text and children—in one step.
+     *
+     * @param targetId - Block that remains in the document and receives content.
+     * @param sourceId - Block whose text and children are transferred, then removed.
+     * @returns The target's original text length. A view can place the caret at
+     * this offset, which is the boundary between the old target and source text.
+     * @throws If either block is missing, both IDs match, or target is inside source.
+     */
+    mergeBlocks(targetId: string, sourceId: string): number {
+        if (targetId === sourceId) throw new Error("Cannot merge a block into itself");
+
+        let joinOffset = 0;
+        this.transact(() => {
+            // Keep the source's parent array and index so its tree entry can be
+            // removed after its transferable data has been copied to the target.
+            const sourceContainer = this.findContainer(sourceId);
+            if (!sourceContainer) throw new Error(`Block ${sourceId} not found`);
+
+            // Moving a source into one of its own descendants would leave that
+            // descendant referring to a deleted ancestor and corrupt the tree.
+            if (this.collectTreeIds(sourceId).includes(targetId)) {
+                throw new Error(`Cannot merge block ${sourceId} into its descendant ${targetId}`);
+            }
+
+            const target = this.requiredBlock(targetId);
+            const source = this.requiredBlock(sourceId);
+            const targetContent = this.requiredText(target, "content");
+            const sourceContent = this.requiredText(source, "content").toString();
+            const targetChildren = this.requiredArray(target, "children");
+            const sourceChildren = this.requiredArray(source, "children");
+            const sourceChildIds = strings(sourceChildren);
+
+            // Capture this before inserting source text. The Backspace plugin
+            // uses the returned boundary to restore the caret after React rerenders.
+            joinOffset = targetContent.length;
+            if (sourceContent) targetContent.insert(joinOffset, sourceContent);
+            if (sourceChildIds.length > 0) {
+                // A CRDT child array is ownership, not a copy. Detach the child
+                // IDs from the source before attaching them to the target so a
+                // child appears in exactly one parent list throughout the change.
+                sourceChildren.delete(0, sourceChildIds.length);
+                targetChildren.push(...sourceChildIds);
+            }
+
+            // Remove both representations of the source: its ID in the tree and
+            // its stored block record. The moved children remain stored normally.
+            sourceContainer.array.delete(sourceContainer.index, 1);
+            this.storage.blocks.delete(sourceId);
+
+            // Links address blocks by ID. Once sourceId is gone, links touching
+            // it cannot be resolved and must be removed in the same transaction.
+            for (const link of this.links) {
+                if (link.from.blockId === sourceId || link.to.blockId === sourceId) {
+                    this.storage.links.delete(link.id);
+                }
+            }
+        });
+        return joinOffset;
+    }
+
+    /**
      * Moves a block within its sibling list by editing the ordered CRDT array.
      *
      * @param id - ID of the block to move.
