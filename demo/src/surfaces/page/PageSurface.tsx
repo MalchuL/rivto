@@ -1,4 +1,4 @@
-import { useDocument } from "@chulane/rivto";
+import { useDocument, useEditorRoot } from "@chulane/rivto";
 import { PageBlock } from "./PageBlock";
 
 /**
@@ -11,9 +11,10 @@ import { PageBlock } from "./PageBlock";
  */
 export function PageSurface() {
   const document = useDocument();
+  const { ref } = useEditorRoot();
 
   return (
-    <main className="page-surface" aria-label="Document editor">
+    <main ref={ref} className="page-surface" aria-label="Document editor">
       {document.document.map((block) => (
         <PageBlock key={block.id} blockId={block.id} />
       ))}

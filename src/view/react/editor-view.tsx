@@ -1,6 +1,13 @@
-import { useCallback, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import type { RivtoEditorApi } from "../../editor";
 import { EditorContext } from "./editor-context";
+import { EditorRootContext } from "./editor-root-context";
 
 /** Properties accepted by the React editor boundary. */
 export interface EditorViewProps {
@@ -16,7 +23,7 @@ export interface EditorViewProps {
  * EditorView is intentionally a provider rather than a renderer. It does not
  * create or destroy the editor, choose a page/canvas surface, traverse blocks,
  * or render a DOM wrapper. The host owns runtime lifetime and the child surface
- * owns presentation.
+ * owns presentation and registers its own DOM root through `useEditorRoot`.
  *
  * One `useSyncExternalStore` subscription converts the runtime's monotonic
  * revision into React updates. The revision is included in the context value,
@@ -31,6 +38,8 @@ export interface EditorViewProps {
  * @returns A context provider; EditorView adds no DOM element.
  */
 export function EditorView({ editor, children }: EditorViewProps) {
+  const [root, setRoot] = useState<HTMLElement | null>(null);
+
   // Keep the subscribe function stable until the editor instance changes;
   // otherwise useSyncExternalStore would unsubscribe on every React render.
   const subscribe = useCallback((listener: () => void) => editor.subscribe(listener), [editor]);
@@ -39,6 +48,16 @@ export function EditorView({ editor, children }: EditorViewProps) {
   // A new value is published only for an editor swap or runtime revision. The
   // revision is not an API feature; it is the invalidation signal for hooks.
   const context = useMemo(() => ({ editor, revision }), [editor, revision]);
+  // The callback ref identity never changes, preventing React from unregistering
+  // and registering the same surface root on ordinary editor renders.
+  const rootRef = useCallback((element: HTMLElement | null) => setRoot(element), []);
+  const rootContext = useMemo(() => ({ element: root, ref: rootRef }), [root, rootRef]);
 
-  return <EditorContext.Provider value={context}>{children}</EditorContext.Provider>;
+  return (
+    <EditorContext.Provider value={context}>
+      <EditorRootContext.Provider value={rootContext}>
+        {children}
+      </EditorRootContext.Provider>
+    </EditorContext.Provider>
+  );
 }
