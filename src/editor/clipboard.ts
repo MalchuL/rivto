@@ -156,9 +156,13 @@ export function normalizeSelection(document: DocumentModelImpl, selection: Edito
   };
 }
 
-function selectedTopLevelSubtrees(document: DocumentModelImpl, range: NormalizedSelection): Block[] {
+function selectedTopLevelSubtrees(document: DocumentModelImpl, range: NormalizedSelection, wholeBlocks: boolean): Block[] {
   const selectedIds = new Set(range.blocks.map((block) => block.id));
   const parents = indexParents(document.document);
+  const cloneSelection = (block: Block): Block => ({
+    ...cloneBlock(block),
+    children: block.children.filter((child) => selectedIds.has(child.id)).map(cloneSelection),
+  });
   return range.blocks.filter((block) => {
     let parent = parents.get(block.id);
     while (parent) {
@@ -166,7 +170,7 @@ function selectedTopLevelSubtrees(document: DocumentModelImpl, range: Normalized
       parent = parents.get(parent);
     }
     return true;
-  }).map(cloneBlock);
+  }).map(wholeBlocks ? cloneBlock : cloneSelection);
 }
 
 function escapeHtml(value: string): string {
@@ -188,7 +192,7 @@ function escapeHtml(value: string): string {
 export function createClipboardPayload(document: DocumentModelImpl, selection: EditorSelection): ClipboardPayload | undefined {
   const range = normalizeSelection(document, selection);
   if (!range?.blocks.length) return undefined;
-  const blocks = selectedTopLevelSubtrees(document, range);
+  const blocks = selectedTopLevelSubtrees(document, range, !selection.some((item) => item.type === "text"));
   const start = findBlock(blocks, range.start.blockId);
   const end = findBlock(blocks, range.end.blockId);
   if (!start || !end) return undefined;

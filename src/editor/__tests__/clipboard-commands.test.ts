@@ -1,6 +1,32 @@
 import { createRivtoEditor, RIVTO_CLIPBOARD_MIME } from "../index";
 
 describe("clipboard commands", () => {
+  it("copies only selected text when its block has nested children", () => {
+    const source = createRivtoEditor();
+    const parent = source.insertBlock({ type: "paragraph", content: "Parent text" });
+    const child = source.insertBlock({ type: "paragraph", content: "Nested child" }, parent);
+    source.indentBlock(child);
+    source.execute("selection.set", {
+      selection: [{
+        type: "text",
+        anchor: { blockId: parent, offset: 0 },
+        head: { blockId: parent, offset: 6 },
+      }],
+    });
+    const clipboard = new Map<string, string>();
+
+    source.execute("clipboard.copy", {
+      clipboardData: { setData: (type: string, value: string) => clipboard.set(type, value) },
+    });
+
+    const bundle = JSON.parse(clipboard.get(RIVTO_CLIPBOARD_MIME)!) as {
+      blocks: Array<{ content: string; children: unknown[] }>;
+    };
+    expect(clipboard.get("text/plain")).toBe("Parent");
+    expect(bundle.blocks).toMatchObject([{ content: "Parent", children: [] }]);
+    source.destroy();
+  });
+
   it("serializes selected block subtrees with native data and internal links", () => {
     const editor = createRivtoEditor();
     const parent = editor.insertBlock({
