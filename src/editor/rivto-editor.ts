@@ -5,16 +5,18 @@ import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type 
 import {
   createClipboardPayload,
   cutSelection,
+  deleteSelection,
   htmlToText,
+  normalizeSelection,
   pasteClipboardBundle,
   pastePlainText,
   RIVTO_CLIPBOARD_MIME,
   type ClipboardBundle,
 } from "./clipboard";
 import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
-import type { CreateRivtoEditorOptions, EditorPosition, EditorSelection, RivtoEditorApi } from "./types";
+import type { CreateRivtoEditorOptions, EditorPosition, EditorSelection, EditorSelectionItem, RivtoEditorApi } from "./types";
 
-type RuntimeBlockSelection = Extract<EditorSelection, { type: "block" }>;
+type RuntimeBlockSelection = Extract<EditorSelectionItem, { type: "block" }>;
 
 /**
  * Owns the active document, block registry, commands, and editor mode.
@@ -164,14 +166,19 @@ export class EditorRuntime implements RivtoEditorApi {
     this.execute("block.remove", { id });
   }
 
+  /** Deletes every active selection item through one document command. */
+  deleteSelection(): void {
+    this.execute("selection.delete");
+  }
+
   /** Atomically merges a source block into a target through the built-in command path. */
   mergeBlocks(targetId: string, sourceId: string): number {
     return this.execute("block.merge", { targetId, sourceId }) as number;
   }
 
-  /** Moves a block through the built-in command path. */
-  moveBlock(id: string, afterId: string | null): void {
-    this.execute("block.move", { id, afterId });
+  /** Moves a block before, after, or inside a target through the built-in command path. */
+  moveBlock(id: string, targetId: string | null, position: "before" | "after" | "inside" = "after"): void {
+    this.execute("block.move", { id, targetId, position });
   }
 
   /** Indents a block through the built-in command path. */
@@ -314,22 +321,27 @@ export class EditorRuntime implements RivtoEditorApi {
     }));
     this.commands.register("block.move", documentCommand((value) => {
       const data = payload(value);
-      this.document.moveBlock(string(data.id, "id"), data.afterId === null ? null : string(data.afterId, "afterId"));
+      // `afterId` remains readable for snapshots created during the top-down
+      // rewrite; new callers use the placement-neutral targetId field.
+      const rawTarget = "targetId" in data ? data.targetId : data.afterId;
+      this.document.moveBlock(
+        string(data.id, "id"),
+        rawTarget === null ? null : string(rawTarget, "targetId"),
+        data.position === "before" || data.position === "inside" ? data.position : "after",
+      );
     }));
     this.commands.register("block.indent", documentCommand((value) => {
       const data = payload(value);
       const before = this.selection.get();
-      const ids = this.selectedBlockIds(string(data.id, "id"));
-      this.document.transact(() => ids.forEach((id) => this.document.indentBlock(id)));
+      const ids = this.selectedStructuralBlockIds(string(data.id, "id"));
+      this.document.indentBlocks(ids);
       this.restoreBlockSelection(before, ids);
     }));
     this.commands.register("block.outdent", documentCommand((value) => {
       const data = payload(value);
       const before = this.selection.get();
-      const ids = this.selectedBlockIds(string(data.id, "id"));
-      this.document.transact(() => {
-        [...ids].reverse().forEach((id) => this.document.outdentBlock(id));
-      });
+      const ids = this.selectedStructuralBlockIds(string(data.id, "id"));
+      this.document.outdentBlocks(ids);
       this.restoreBlockSelection(before, ids);
     }));
     this.commands.register("block.prop.set", documentCommand((value) => {
@@ -361,6 +373,9 @@ export class EditorRuntime implements RivtoEditorApi {
       const data = payload(value);
       this.setSelection(data.selection as EditorSelection);
     });
+    this.commands.register("selection.delete", documentCommand(() => {
+      deleteSelection(this.document, this.selection, this.selection.get());
+    }));
     this.commands.register("selection.clear", () => this.selection.clear());
     this.commands.register("history.undo", () => this.history.undo());
     this.commands.register("history.redo", () => this.history.redo());
@@ -454,75 +469,111 @@ export class EditorRuntime implements RivtoEditorApi {
    * belongs to that selection.
    */
   private selectedBlockIds(id: string): string[] {
-    const selection = this.selection.get();
-    return selection?.type === "block" && selection.blockIds.includes(id) ? selection.blockIds : [id];
+    const selection = this.selection.get().find((item) => item.type === "block" && item.blockIds.includes(id));
+    return selection?.type === "block" ? selection.blockIds : [id];
+  }
+
+  /** Resolves a structural command target to the complete active selection range. */
+  private selectedStructuralBlockIds(id: string): string[] {
+    const range = normalizeSelection(this.document, this.selection.get());
+    return range?.blocks.some((block) => block.id === id)
+      ? range.blocks.map((block) => block.id)
+      : [id];
   }
 
   /** Re-publishes block selection after structural moves reorder the document tree. */
-  private restoreBlockSelection(previous: EditorSelection | null, ids: string[]): void {
-    if (previous?.type !== "block") return;
-    const remaining = ids.filter((id) => this.findBlock(id));
+  private restoreBlockSelection(previous: EditorSelection, ids: string[]): void {
+    const index = previous.findIndex((item) => item.type === "block" && ids.some((id) => item.blockIds.includes(id)));
+    const blockSelection = previous[index];
+    if (blockSelection?.type !== "block") return;
+    // `ids` can be wider than this item. A mixed text selection uses partial
+    // text boundary blocks plus a BlockSelection for only the fully covered
+    // middle blocks. Preserve that distinction after moving the whole range.
+    const remaining = blockSelection.blockIds.filter((id) => this.findBlock(id));
     if (!remaining.length) {
-      this.selection.clear();
+      this.selection.set(previous.filter((_, itemIndex) => itemIndex !== index));
       return;
     }
-    const anchorBlockId = remaining.includes(previous.anchorBlockId) ? previous.anchorBlockId : remaining[0]!;
-    const focusBlockId = remaining.includes(previous.focusBlockId) ? previous.focusBlockId : remaining.at(-1)!;
-    this.setSelection({ type: "block", blockIds: remaining, anchorBlockId, focusBlockId } satisfies RuntimeBlockSelection);
+    const anchorBlockId = remaining.includes(blockSelection.anchorBlockId) ? blockSelection.anchorBlockId : remaining[0]!;
+    const focusBlockId = remaining.includes(blockSelection.focusBlockId) ? blockSelection.focusBlockId : remaining.at(-1)!;
+    const restored = { type: "block", blockIds: remaining, anchorBlockId, focusBlockId } satisfies RuntimeBlockSelection;
+    this.setSelection(previous.map((item, itemIndex) => itemIndex === index ? restored : item));
   }
 
   /**
-   * Validates and stores a local selection.
+   * Validates and stores every item in the local selection list.
    *
    * Text offsets are checked against current block content. Block selections are
    * stored in visible document order while preserving anchor/focus direction.
-   * Edgeless selection is only valid while the editor is in edgeless mode.
+   * Edgeless items are only valid while the editor is in edgeless mode. Items
+   * remain separate, allowing text and whole-block selection to coexist.
    */
   private setSelection(selection: EditorSelection): void {
-    if (!selection || !["text", "block", "edgeless"].includes(selection.type)) throw new Error("Invalid selection");
-    if (selection.type === "text") {
-      this.validatePosition(selection.anchor);
-      this.validatePosition(selection.head);
-      this.selection.set(selection);
-      return;
-    }
+    if (!Array.isArray(selection)) throw new Error("Selection must be a list");
+    const normalized = selection.map((item): EditorSelectionItem => {
+      if (!item || !["text", "block", "edgeless"].includes(item.type)) throw new Error("Invalid selection");
+      if (item.type === "text") {
+        this.validatePosition(item.anchor);
+        this.validatePosition(item.head);
+        return item;
+      }
 
-    if (!selection.blockIds.length) throw new Error("Selection requires at least one block");
-    selection.blockIds.forEach((id) => {
-      if (!this.findBlock(id)) throw new Error(`Selection block ${id} not found`);
-    });
-    if (selection.type === "edgeless") {
-      if (this.mode.get() !== "edgeless") throw new Error("Edgeless selection requires edgeless mode");
-      this.selection.set(selection);
-      return;
-    }
-    if (!selection.blockIds.includes(selection.anchorBlockId) || !selection.blockIds.includes(selection.focusBlockId)) {
-      throw new Error("Block selection endpoints must be selected");
-    }
+      if (!item.blockIds.length) throw new Error("Selection requires at least one block");
+      item.blockIds.forEach((id) => {
+        if (!this.findBlock(id)) throw new Error(`Selection block ${id} not found`);
+      });
+      if (item.type === "edgeless") {
+        if (this.mode.get() !== "edgeless") throw new Error("Edgeless selection requires edgeless mode");
+        return item;
+      }
+      if (!item.blockIds.includes(item.anchorBlockId) || !item.blockIds.includes(item.focusBlockId)) {
+        throw new Error("Block selection endpoints must be selected");
+      }
 
-    const selected = new Set(selection.blockIds);
-    const ordered: string[] = [];
-    const visit = (blocks: Block[]): void => blocks.forEach((block) => {
-      if (selected.has(block.id)) ordered.push(block.id);
-      visit(block.children);
+      const selected = new Set(item.blockIds);
+      const ordered: string[] = [];
+      const visit = (blocks: Block[]): void => blocks.forEach((block) => {
+        if (selected.has(block.id)) ordered.push(block.id);
+        visit(block.children);
+      });
+      visit(this.document.document);
+      return { ...item, blockIds: ordered };
     });
-    visit(this.document.document);
-    this.selection.set({ ...selection, blockIds: ordered });
+    this.selection.set(normalized);
   }
 
   /**
-   * Clears selections made invalid by document or mode changes.
+   * Reconciles local selection with the latest document and editor mode.
    *
    * Direct document edits, remote CRDT updates, undo/redo, and mode swaps can
-   * remove selected blocks or make edgeless selections illegal.
+   * remove selected blocks or make edgeless selections illegal. Structural
+   * moves can also change the visible order of a BlockSelection without
+   * invalidating any of its IDs. Invalid items are removed, while valid block
+   * selections are reordered to match the current depth-first document tree.
+   * Anchor and focus IDs remain untouched so gesture direction is preserved.
    */
   private reconcileSelection(): void {
     const selection = this.selection.get();
-    if (!selection) return;
-    const ids = selection.type === "text" ? [selection.anchor.blockId, selection.head.blockId] : selection.blockIds;
-    if (ids.some((id) => !this.findBlock(id)) || (selection.type === "edgeless" && this.mode.get() !== "edgeless")) {
-      this.selection.clear();
-    }
+    const visibleIds: string[] = [];
+    const visit = (blocks: Block[]): void => blocks.forEach((block) => {
+      visibleIds.push(block.id);
+      visit(block.children);
+    });
+    visit(this.document.document);
+    const order = new Map(visibleIds.map((id, index) => [id, index]));
+    let changed = false;
+    const valid = selection.flatMap((item): EditorSelectionItem[] => {
+      const ids = item.type === "text" ? [item.anchor.blockId, item.head.blockId] : item.blockIds;
+      if (!ids.every((id) => order.has(id)) || (item.type === "edgeless" && this.mode.get() !== "edgeless")) {
+        changed = true;
+        return [];
+      }
+      if (item.type !== "block") return [item];
+      const blockIds = [...item.blockIds].sort((left, right) => order.get(left)! - order.get(right)!);
+      if (blockIds.some((id, index) => id !== item.blockIds[index])) changed = true;
+      return [{ ...item, blockIds }];
+    });
+    if (changed) this.selection.set(valid);
   }
 
   /** Finds one block recursively in detached document values. */

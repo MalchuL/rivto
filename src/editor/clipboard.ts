@@ -1,5 +1,5 @@
 import type { DocumentModelImpl, Block, BlockInput, Link } from "../store/document-model";
-import type { EditorPosition, EditorSelection } from "./types";
+import type { EditorPosition, EditorSelection, EditorSelectionItem } from "./types";
 
 /** MIME type carrying Rivto's lossless structured clipboard bundle. */
 export const RIVTO_CLIPBOARD_MIME = "application/x-rivto+json";
@@ -8,6 +8,8 @@ export const RIVTO_CLIPBOARD_MIME = "application/x-rivto+json";
 export interface ClipboardBundle {
   /** Clipboard schema version, independent from document snapshot versions. */
   version: 1;
+  /** Whether copied content begins with partial text; omitted legacy bundles mean blocks. */
+  startsWithText?: boolean;
   /** Selected block subtrees preserving native types, props, plugin data, and layout. */
   blocks: Block[];
   /** Links whose endpoints are both inside the copied block set. */
@@ -79,17 +81,52 @@ function indexParents(blocks: Block[], parents = new Map<string, string>()): Map
 }
 
 /**
- * Normalizes local selection into document order.
+ * Normalizes the complete local selection list into one clipboard range.
  *
- * UI selection keeps anchor/focus direction for gestures. Clipboard mutation
- * needs a stable start/end boundary so backwards text selection, range copy,
- * cut, and paste all observe the same block slice.
+ * Block-only items remain a possibly non-contiguous set of complete blocks.
+ * When text and block items coexist, they describe one visual range: text
+ * items provide partial boundaries and block items contribute complete blocks.
+ * Clipboard mutation therefore uses the earliest start and latest end and
+ * includes every visible block between them.
  */
-export function normalizeSelection(document: DocumentModelImpl, selection: EditorSelection | null): NormalizedSelection | undefined {
-  if (!selection) return undefined;
+export function normalizeSelection(document: DocumentModelImpl, selection: EditorSelection): NormalizedSelection | undefined {
+  if (!selection.length) return undefined;
   const all = flattenBlocks(document.document);
-  if (selection.type !== "text") {
-    const selected = new Set(selection.blockIds);
+  const indices = new Map(all.map((block, index) => [block.id, index]));
+
+  const normalizeItem = (item: EditorSelectionItem): NormalizedSelection | undefined => {
+    if (item.type !== "text") {
+      const selected = new Set(item.blockIds);
+      const blocks = all.filter((block) => selected.has(block.id));
+      const first = blocks[0];
+      const last = blocks.at(-1);
+      return first && last ? {
+        start: { blockId: first.id, offset: 0 },
+        end: { blockId: last.id, offset: last.content.length },
+        blocks,
+      } : undefined;
+    }
+    const anchorIndex = indices.get(item.anchor.blockId);
+    const headIndex = indices.get(item.head.blockId);
+    if (anchorIndex === undefined || headIndex === undefined) return undefined;
+    const forward = anchorIndex < headIndex || (anchorIndex === headIndex && item.anchor.offset <= item.head.offset);
+    const start = forward ? item.anchor : item.head;
+    const end = forward ? item.head : item.anchor;
+    return {
+      start: { ...start },
+      end: { ...end },
+      blocks: all.slice(Math.min(anchorIndex, headIndex), Math.max(anchorIndex, headIndex) + 1),
+    };
+  };
+
+  const ranges = selection.flatMap((item) => {
+    const range = normalizeItem(item);
+    return range ? [range] : [];
+  });
+  if (!ranges.length) return undefined;
+
+  if (!selection.some((item) => item.type === "text")) {
+    const selected = new Set(ranges.flatMap((range) => range.blocks.map((block) => block.id)));
     const blocks = all.filter((block) => selected.has(block.id));
     const first = blocks[0];
     const last = blocks.at(-1);
@@ -100,16 +137,22 @@ export function normalizeSelection(document: DocumentModelImpl, selection: Edito
       blocks,
     };
   }
-  const anchorIndex = all.findIndex((block) => block.id === selection.anchor.blockId);
-  const headIndex = all.findIndex((block) => block.id === selection.head.blockId);
-  if (anchorIndex < 0 || headIndex < 0) return undefined;
-  const forward = anchorIndex < headIndex || (anchorIndex === headIndex && selection.anchor.offset <= selection.head.offset);
-  const start = forward ? selection.anchor : selection.head;
-  const end = forward ? selection.head : selection.anchor;
+
+  const compare = (left: EditorPosition, right: EditorPosition): number => {
+    const blockDifference = (indices.get(left.blockId) ?? -1) - (indices.get(right.blockId) ?? -1);
+    return blockDifference || left.offset - right.offset;
+  };
+  const starts = ranges.map((range) => range.start);
+  const ends = ranges.map((range) => range.end);
+  const start = starts.reduce((earliest, position) => compare(position, earliest) < 0 ? position : earliest);
+  const end = ends.reduce((latest, position) => compare(position, latest) > 0 ? position : latest);
+  const startIndex = indices.get(start.blockId);
+  const endIndex = indices.get(end.blockId);
+  if (startIndex === undefined || endIndex === undefined) return undefined;
   return {
     start: { ...start },
     end: { ...end },
-    blocks: all.slice(Math.min(anchorIndex, headIndex), Math.max(anchorIndex, headIndex) + 1),
+    blocks: all.slice(startIndex, endIndex + 1),
   };
 }
 
@@ -142,7 +185,7 @@ function escapeHtml(value: string): string {
  * Boundary text blocks are trimmed on clones only. The collaborative document
  * is never patched while preparing clipboard data.
  */
-export function createClipboardPayload(document: DocumentModelImpl, selection: EditorSelection | null): ClipboardPayload | undefined {
+export function createClipboardPayload(document: DocumentModelImpl, selection: EditorSelection): ClipboardPayload | undefined {
   const range = normalizeSelection(document, selection);
   if (!range?.blocks.length) return undefined;
   const blocks = selectedTopLevelSubtrees(document, range);
@@ -158,14 +201,18 @@ export function createClipboardPayload(document: DocumentModelImpl, selection: E
   const ids = new Set(visible.map((block) => block.id));
   const links = document.links.filter((link) => ids.has(link.from.blockId) && ids.has(link.to.blockId));
   return {
-    bundle: { version: 1, blocks, links },
+    bundle: { version: 1, startsWithText: selection[0]?.type === "text", blocks, links },
     html: visible.map((block) => `<p>${escapeHtml(block.content)}</p>`).join(""),
     text: visible.map((block) => block.content).join("\n"),
   };
 }
 
 function remapClipboardBundle(bundle: ClipboardBundle, firstTargetId?: string): RemappedClipboardBundle {
-  if (bundle.version !== 1 || !Array.isArray(bundle.blocks) || !Array.isArray(bundle.links)) {
+  if (
+    bundle.version !== 1 ||
+    !Array.isArray(bundle.blocks) ||
+    !Array.isArray(bundle.links)
+  ) {
     throw new Error("Unsupported Rivto clipboard payload");
   }
   const idMap = new Map<string, string>();
@@ -197,7 +244,7 @@ function remapClipboardBundle(bundle: ClipboardBundle, firstTargetId?: string): 
 }
 
 function collapse(selection: SelectionWriter, blockId: string, offset: number): void {
-  selection.set({ type: "text", anchor: { blockId, offset }, head: { blockId, offset } });
+  selection.set([{ type: "text", anchor: { blockId, offset }, head: { blockId, offset } }]);
 }
 
 function removeRangeTail(document: DocumentModelImpl, range: NormalizedSelection): void {
@@ -212,6 +259,7 @@ function insertBlocksAfter(document: DocumentModelImpl, blocks: BlockInput[], af
   return previous ?? undefined;
 }
 
+/** Inserts a complete structured bundle as one CRDT transaction and undo step. */
 function insertBundleAsBlocks(document: DocumentModelImpl, selection: SelectionWriter, bundle: ClipboardBundle, afterId?: string | null): void {
   const remapped = remapClipboardBundle(bundle);
   let lastId: string | undefined;
@@ -219,25 +267,35 @@ function insertBundleAsBlocks(document: DocumentModelImpl, selection: SelectionW
     lastId = insertBlocksAfter(document, remapped.blocks, afterId);
     remapped.links.forEach((link) => document.createLink(link));
   });
-  if (lastId) selection.set({ type: "block", blockIds: [lastId], anchorBlockId: lastId, focusBlockId: lastId });
+  if (lastId) selection.set([{ type: "block", blockIds: [lastId], anchorBlockId: lastId, focusBlockId: lastId }]);
 }
 
 /**
  * Pastes a structured Rivto block bundle at the current selection.
  *
- * Text selections consume the first copied root into the current block, which
- * preserves the target block's type and metadata. Block and edgeless selections
- * paste fresh block subtrees after the active selected block.
+ * A bundle that begins with partial text consumes its first copied root into a
+ * current text selection, preserving the target block's identity and metadata.
+ * Every later copied root remains a block. A bundle copied from whole blocks
+ * always inserts every root as a block, even when the destination is a caret.
+ * All text, tree, and link mutations run inside one outer CRDT transaction;
+ * nested document helpers join it instead of producing separate updates.
  */
 export function pasteClipboardBundle(
   document: DocumentModelImpl,
   selection: SelectionWriter,
-  current: EditorSelection | null,
+  current: EditorSelection,
   bundle: ClipboardBundle,
 ): void {
   if (!bundle.blocks.length) return;
-  if (current?.type !== "text") {
-    const afterId = current?.type === "block" ? current.focusBlockId : current?.blockIds.at(-1);
+  const hasTextTarget = current.some((item) => item.type === "text");
+  if (bundle.startsWithText !== true || !hasTextTarget) {
+    const active = current.at(-1);
+    const range = normalizeSelection(document, current);
+    const afterId = active?.type === "block"
+      ? active.focusBlockId
+      : active?.type === "edgeless"
+        ? active.blockIds.at(-1)
+        : range?.blocks.at(-1)?.id;
     insertBundleAsBlocks(document, selection, bundle, afterId);
     return;
   }
@@ -253,6 +311,9 @@ export function pasteClipboardBundle(
   const remapped = remapClipboardBundle(bundle, target.id);
   let previous = target.id;
   let caretOffset = prefix.length + first.content.length;
+  // This is the atomic boundary for replacement plus every inserted block,
+  // child, and link. It must remain outside the loops so Undo removes the whole
+  // paste in one step and collaborators never observe a half-pasted document.
   document.transact(() => {
     removeRangeTail(document, range);
     document.setBlockText(target.id, prefix + first.content + (remapped.blocks.length ? "" : suffix));
@@ -280,7 +341,7 @@ export function pasteClipboardBundle(
 export function pastePlainText(
   document: DocumentModelImpl,
   selection: SelectionWriter,
-  current: EditorSelection | null,
+  current: EditorSelection,
   defaultBlockType: string,
   value: string,
 ): void {
@@ -322,17 +383,51 @@ export function pastePlainText(
   collapse(selection, lastId, lines.at(-1)?.length ?? 0);
 }
 
-/** Copies then removes the selected text range or selected block subtrees. */
-export function cutSelection(document: DocumentModelImpl, selection: SelectionWriter, current: EditorSelection | null): ClipboardPayload | undefined {
-  const payload = createClipboardPayload(document, current);
+/**
+ * Deletes the current heterogeneous selection as one document transaction.
+ *
+ * Text selection removes its normalized range and collapses to the surviving
+ * boundary. A block-only selection removes complete subtrees. Deleting every
+ * root creates one empty default block so keyboard editing always has a target.
+ */
+export function deleteSelection(
+  document: DocumentModelImpl,
+  selection: SelectionWriter,
+  current: EditorSelection,
+  defaultBlockType = "paragraph",
+): void {
   const range = normalizeSelection(document, current);
-  if (!payload || !range) return payload;
-  if (current?.type !== "text") {
-    document.transact(() => range.blocks.forEach((block) => document.removeBlock(block.id)));
-    selection.clear();
-    return payload;
+  if (!range) return;
+  if (!current.some((item) => item.type === "text")) {
+    const visibleBefore = flattenBlocks(document.document);
+    const firstRemovedIndex = Math.max(0, visibleBefore.findIndex((block) => block.id === range.blocks[0]?.id));
+    let caretBlockId: string | undefined;
+    document.transact(() => {
+      range.blocks.forEach((block) => document.removeBlock(block.id));
+      if (!document.document.length) {
+        caretBlockId = document.insertBlock({ type: defaultBlockType, content: "" });
+        return;
+      }
+
+      // Prefer the block that moved into the first removed block's position.
+      // When deletion removed the tail, clamp to the last surviving block.
+      // Publishing this zero-length text selection keeps subsequent keyboard
+      // commands selection-driven even after deleting whole blocks.
+      const remaining = flattenBlocks(document.document);
+      caretBlockId = remaining[Math.min(firstRemovedIndex, remaining.length - 1)]?.id;
+    });
+    if (caretBlockId) collapse(selection, caretBlockId, 0);
+    else selection.clear();
+    return;
   }
-  pastePlainText(document, selection, current, "paragraph", "");
+  pastePlainText(document, selection, current, defaultBlockType, "");
+}
+
+/** Copies then deletes selected text or block subtrees. */
+export function cutSelection(document: DocumentModelImpl, selection: SelectionWriter, current: EditorSelection): ClipboardPayload | undefined {
+  const payload = createClipboardPayload(document, current);
+  if (!payload) return;
+  deleteSelection(document, selection, current);
   return payload;
 }
 

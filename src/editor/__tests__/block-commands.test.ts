@@ -157,6 +157,184 @@ describe("EditorRuntime block commands", () => {
     editor.destroy();
   });
 
+  it("indents consecutive selected roots as one group without moving descendants twice", () => {
+    const editor = createRivtoEditor();
+    const previousId = editor.insertBlock({ type: "paragraph", content: "Previous" });
+    const firstId = editor.insertBlock({ type: "paragraph", content: "First" }, previousId);
+    const childId = editor.insertBlock({ type: "paragraph", content: "Child" }, firstId);
+    editor.indentBlock(childId);
+    const secondId = editor.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    editor.execute("selection.set", {
+      selection: [{
+        type: "block",
+        blockIds: [firstId, childId, secondId],
+        anchorBlockId: firstId,
+        focusBlockId: secondId,
+      }],
+    });
+
+    const documentUpdates = jest.fn();
+    const unsubscribe = editor.document.subscribe(documentUpdates);
+    editor.indentBlock(firstId);
+
+    expect(documentUpdates).toHaveBeenCalledTimes(1);
+    expect(editor.getBlocks()).toMatchObject([{
+      id: previousId,
+      children: [
+        { id: firstId, children: [{ id: childId }] },
+        { id: secondId },
+      ],
+    }]);
+    editor.undo();
+    expect(editor.getBlocks()).toMatchObject([
+      { id: previousId },
+      { id: firstId, children: [{ id: childId }] },
+      { id: secondId },
+    ]);
+    unsubscribe();
+    editor.destroy();
+  });
+
+  it("does not partially indent a non-consecutive selection", () => {
+    const editor = createRivtoEditor();
+    const previousId = editor.insertBlock({ type: "paragraph", content: "Previous" });
+    const firstId = editor.insertBlock({ type: "paragraph", content: "First" }, previousId);
+    const gapId = editor.insertBlock({ type: "paragraph", content: "Gap" }, firstId);
+    const lastId = editor.insertBlock({ type: "paragraph", content: "Last" }, gapId);
+    editor.execute("selection.set", {
+      selection: [{
+        type: "block",
+        blockIds: [firstId, lastId],
+        anchorBlockId: firstId,
+        focusBlockId: lastId,
+      }],
+    });
+    const documentUpdates = jest.fn();
+    const unsubscribe = editor.document.subscribe(documentUpdates);
+
+    editor.indentBlock(firstId);
+
+    expect(documentUpdates).not.toHaveBeenCalled();
+    expect(editor.getBlocks().map((block) => block.id)).toEqual([previousId, firstId, gapId, lastId]);
+    unsubscribe();
+    editor.destroy();
+  });
+
+  it("rejects moving a block into its own subtree", () => {
+    const editor = createRivtoEditor();
+    const parentId = editor.insertBlock({ type: "paragraph", content: "Parent" });
+    const childId = editor.insertBlock({ type: "paragraph", content: "Child" }, parentId);
+    editor.indentBlock(childId);
+
+    expect(() => editor.moveBlock(parentId, childId)).toThrow("relative to its descendant");
+    expect(editor.getBlocks()).toMatchObject([{
+      id: parentId,
+      children: [{ id: childId }],
+    }]);
+    editor.destroy();
+  });
+
+  it("moves one block with its nested subtree in one undoable update", () => {
+    const editor = createRivtoEditor();
+    const parentId = editor.insertBlock({ type: "paragraph", content: "Parent" });
+    const childId = editor.insertBlock({ type: "paragraph", content: "Child" }, parentId);
+    editor.indentBlock(childId);
+    const targetId = editor.insertBlock({ type: "paragraph", content: "Target" }, parentId);
+    const documentUpdates = jest.fn();
+    const unsubscribe = editor.document.subscribe(documentUpdates);
+
+    editor.moveBlock(parentId, targetId);
+
+    expect(documentUpdates).toHaveBeenCalledTimes(1);
+    expect(editor.getBlocks()).toMatchObject([
+      { id: targetId },
+      { id: parentId, children: [{ id: childId }] },
+    ]);
+    editor.undo();
+    expect(editor.getBlocks()).toMatchObject([
+      { id: parentId, children: [{ id: childId }] },
+      { id: targetId },
+    ]);
+    unsubscribe();
+    editor.destroy();
+  });
+
+  it("moves a block before a nested sibling", () => {
+    const editor = createRivtoEditor();
+    const parentId = editor.insertBlock({ type: "paragraph", content: "Parent" });
+    const firstId = editor.insertBlock({ type: "paragraph", content: "First" }, parentId);
+    editor.indentBlock(firstId);
+    const secondId = editor.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    const movedId = editor.insertBlock({ type: "paragraph", content: "Moved" }, parentId);
+
+    editor.moveBlock(movedId, secondId, "before");
+
+    expect(editor.getBlocks()).toMatchObject([{
+      id: parentId,
+      children: [{ id: firstId }, { id: movedId }, { id: secondId }],
+    }]);
+    editor.destroy();
+  });
+
+  it("moves a block inside another block as its last child", () => {
+    const editor = createRivtoEditor();
+    const parentId = editor.insertBlock({ type: "paragraph", content: "Parent" });
+    const existingChildId = editor.insertBlock({ type: "paragraph", content: "Existing" }, parentId);
+    editor.indentBlock(existingChildId);
+    const movedId = editor.insertBlock({ type: "paragraph", content: "Moved" }, parentId);
+
+    editor.moveBlock(movedId, parentId, "inside");
+
+    expect(editor.getBlocks()).toMatchObject([{
+      id: parentId,
+      children: [{ id: existingChildId }, { id: movedId }],
+    }]);
+    editor.destroy();
+  });
+
+  it("outdents consecutive selected roots as one group and adopts their following siblings", () => {
+    const editor = createRivtoEditor();
+    const parentId = editor.insertBlock({ type: "paragraph", content: "Parent" });
+    const beforeId = editor.insertBlock({ type: "paragraph", content: "Before" }, parentId);
+    editor.indentBlock(beforeId);
+    const firstId = editor.insertBlock({ type: "paragraph", content: "First" }, beforeId);
+    const existingChildId = editor.insertBlock({ type: "paragraph", content: "Existing child" }, firstId);
+    editor.indentBlock(existingChildId);
+    const secondId = editor.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    const followingId = editor.insertBlock({ type: "paragraph", content: "Following" }, secondId);
+    editor.execute("selection.set", {
+      selection: [{
+        type: "block",
+        blockIds: [firstId, existingChildId, secondId],
+        anchorBlockId: firstId,
+        focusBlockId: secondId,
+      }],
+    });
+
+    const documentUpdates = jest.fn();
+    const unsubscribe = editor.document.subscribe(documentUpdates);
+    editor.outdentBlock(firstId);
+
+    expect(documentUpdates).toHaveBeenCalledTimes(1);
+    expect(editor.getBlocks()).toMatchObject([
+      { id: parentId, children: [{ id: beforeId }] },
+      { id: firstId, children: [{ id: existingChildId }] },
+      { id: secondId, children: [{ id: followingId }] },
+    ]);
+    editor.undo();
+    expect(editor.getBlocks()).toMatchObject([{
+      id: parentId,
+      children: [
+        { id: beforeId },
+        { id: firstId, children: [{ id: existingChildId }] },
+        { id: secondId },
+        { id: followingId },
+      ],
+    }]);
+    unsubscribe();
+    editor.destroy();
+  });
+
   it("merges text and descendants in one undoable update", () => {
     const editor = createRivtoEditor();
     const targetId = editor.insertBlock({ type: "paragraph", content: "Before" });

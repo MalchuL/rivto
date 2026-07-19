@@ -19,8 +19,7 @@ export type SelectedBlockState = BlockSelection | EdgelessSelection;
  */
 export function useBlockSelection(blockId: string): SelectedBlockState | null {
   const { editor } = useEditorContext();
-  const selection = editor.selection.get();
-  return selection && selection.type !== "text" && selection.blockIds.includes(blockId)
-    ? selection
-    : null;
+  return editor.selection.get().find((selection): selection is SelectedBlockState => (
+    selection.type !== "text" && selection.blockIds.includes(blockId)
+  )) ?? null;
 }

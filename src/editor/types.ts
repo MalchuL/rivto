@@ -45,8 +45,18 @@ export interface EdgelessSelection {
   blockIds: string[];
 }
 
-/** Every local selection shape owned by SelectionManager. */
-export type EditorSelection = TextSelection | BlockSelection | EdgelessSelection;
+/** One independently meaningful selection segment owned by SelectionManager. */
+export type EditorSelectionItem = TextSelection | BlockSelection | EdgelessSelection;
+
+/**
+ * Ordered local selection state.
+ *
+ * A list can describe heterogeneous selection—for example, partial text at
+ * both ends with complete blocks between them. The order is retained for view
+ * behavior; commands that mutate document content normalize it to document
+ * order before applying changes.
+ */
+export type EditorSelection = EditorSelectionItem[];
 
 export interface CreateRivtoEditorOptions {
   document?: CRDTDoc;
@@ -69,7 +79,7 @@ export interface RivtoEditorApi {
   readonly commands: CommandRegistry;
   /** Local block/edgeless mode owner. */
   readonly mode: ModeManager;
-  /** Local text, block, or edgeless selection owner. */
+  /** Local owner for an ordered list of text, block, and edgeless selections. */
   readonly selection: SelectionManager;
   /** Local undo/redo history scoped to document mutations from this runtime. */
   readonly history: UndoManager;
@@ -151,11 +161,14 @@ export interface RivtoEditorApi {
   /** Removes a block through the built-in `block.remove` command. */
   removeBlock(id: string): void;
 
+  /** Deletes the complete active selection through one undoable transaction. */
+  deleteSelection(): void;
+
   /** Atomically appends a source block into a target and returns the text join offset. */
   mergeBlocks(targetId: string, sourceId: string): number;
 
-  /** Moves a block through the built-in `block.move` command. */
-  moveBlock(id: string, afterId: string | null): void;
+  /** Moves a block before, after, or inside another block through `block.move`. */
+  moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
 
   /** Indents a block through the built-in `block.indent` command. */
   indentBlock(id: string): void;

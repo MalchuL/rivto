@@ -2,20 +2,21 @@ import {
   useEditor,
   useEditorEvent,
   useEditorRoot,
+  restoreEditorDOMSelection,
 } from "@chulane/rivto";
 import {
-  findBlockFromEvent,
-  focusBlock,
-  getCaretOffset,
-} from "./block-dom";
+  firstKeyboardTarget,
+  isEditableKeyboardEvent,
+} from "./keyboard-selection";
 
 /**
  * Installs page-specific Tab and Shift+Tab indentation.
  *
  * This plugin owns one delegated keydown listener and ignores every key except
- * Tab. It resolves the editable block from stable DOM markers, invokes the
- * existing tree commands, and restores focus after React moves the block into a
- * different nesting container.
+ * Tab. The first editor selection item supplies the command entry point; the
+ * runtime expands that point to the complete normalized selection range. The
+ * DOM event is used only to confirm that the shortcut originated in editable
+ * page content. Selected roots then move as one Logseq-style structural group.
  */
 export function PageTabPlugin() {
   const editor = useEditor();
@@ -29,17 +30,22 @@ export function PageTabPlugin() {
       !root
     ) return;
 
-    const origin = findBlockFromEvent(event);
-    if (!origin) return;
+    if (!isEditableKeyboardEvent(event)) return;
+    const selection = editor.selection.get();
+    const target = firstKeyboardTarget(selection);
+    if (!target) return;
 
-    const caretOffset = getCaretOffset(origin.content) ?? 0;
     event.preventDefault();
-    if (event.shiftKey) editor.outdentBlock(origin.blockId);
-    else editor.indentBlock(origin.blockId);
+    if (event.shiftKey) editor.outdentBlock(target.blockId);
+    else editor.indentBlock(target.blockId);
 
-    // Moving between nesting containers can remount the editable element.
-    // Wait for React to commit the new tree, then restore focus and caret.
-    requestAnimationFrame(() => focusBlock(root, origin.blockId, caretOffset));
+    // React may reparent every selected BlockView and cause the browser to emit
+    // a transient empty selectionchange. Re-publish the selection captured
+    // before the command, then resolve its text endpoints in the committed DOM.
+    requestAnimationFrame(() => {
+      editor.execute("selection.set", { selection });
+      restoreEditorDOMSelection(root, selection);
+    });
   });
 
   return null;

@@ -26,6 +26,10 @@ export interface BlockOperations {
   mergeInto(targetId: string): number;
   /** Moves the block after a sibling, or to the start when passed null. */
   moveAfter(blockId: string | null): void;
+  /** Moves the block directly before a sibling. */
+  moveBefore(blockId: string): void;
+  /** Moves the block to the end of another block's children. */
+  moveInside(blockId: string): void;
   /** Nests the block under its previous sibling when the structure allows it. */
   indent(): void;
   /** Outdents the block and adopts siblings that followed it. */
@@ -69,6 +73,8 @@ export function useBlock(blockId: string): UseBlockResult {
     remove: () => editor.removeBlock(blockId),
     mergeInto: (targetId) => editor.mergeBlocks(targetId, blockId),
     moveAfter: (afterId) => editor.moveBlock(blockId, afterId),
+    moveBefore: (beforeId) => editor.moveBlock(blockId, beforeId, "before"),
+    moveInside: (parentId) => editor.moveBlock(blockId, parentId, "inside"),
     indent: () => editor.indentBlock(blockId),
     outdent: () => editor.outdentBlock(blockId),
   }), [blockId, editor]);

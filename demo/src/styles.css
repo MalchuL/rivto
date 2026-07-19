@@ -24,10 +24,121 @@ body {
   border: 1px solid #e5e5e5;
   border-radius: 12px;
   box-shadow: 0 12px 36px rgb(0 0 0 / 6%);
+  overflow-x: clip;
 }
 
 .page-block {
   margin: 4px 0;
+}
+
+.page-block-row {
+  position: relative;
+  width: 100%;
+}
+
+/* Extend only the hover target across the page. The rendered row remains at
+   its real nesting depth, so indentation and drop geometry do not change. */
+.page-block-row::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0 -100vw;
+  background: transparent;
+  content: "";
+}
+
+.page-block-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+.page-drag-handle {
+  position: absolute;
+  top: 0;
+  left: -28px;
+  /* Reach the block edge so the handle stays visible while the pointer moves
+     from the row onto the button. */
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: #888;
+  background: transparent;
+  cursor: grab;
+  opacity: 0;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Children live outside their parent's row, so only the line under the cursor
+   or owning the caret reveals its handle. */
+.page-block-row:hover > .page-drag-handle,
+.page-block-row:focus-within > .page-drag-handle,
+.page-drag-handle:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.page-drag-handle:active {
+  cursor: grabbing;
+}
+
+[data-dragging] {
+  opacity: 0.45;
+}
+
+[data-drop-inside] {
+  background: #eeeaff;
+}
+
+.page-drop-line {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  height: 2px;
+  background: #6c5ce7;
+  pointer-events: none;
+}
+
+.page-drop-line[data-edge="before"] {
+  top: -2px;
+}
+
+.page-drop-line[data-edge="after"] {
+  bottom: -2px;
+}
+
+.page-drag-overlay {
+  width: min(520px, 70vw);
+  max-width: 520px;
+  max-height: 220px;
+  padding: 10px 14px;
+  overflow: hidden;
+  border: 1px solid #d8d2ff;
+  border-radius: 6px;
+  color: #333;
+  background: white;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.page-drag-preview-block {
+  margin: 4px 0;
+}
+
+.page-drag-preview-block > .page-block-content {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.page-drag-preview-more {
+  margin-top: 8px;
+  color: #777;
+  font-size: 0.875rem;
 }
 
 .page-block-content {
@@ -35,6 +146,17 @@ body {
   line-height: 1.5;
   outline: none;
   white-space: pre-wrap;
+}
+
+/* TextSelectionPlugin uses an exact CSS range when the browser supports it. */
+::highlight(rivto-text-selection) {
+  background: #cfc4ff;
+}
+
+/* Older browsers receive a whole-content fallback marker instead. */
+[data-text-selected],
+[data-selected] > .page-block-row > .page-block-content {
+  background: #e5dfff;
 }
 
 [data-block-type="heading"] > .page-block-content {

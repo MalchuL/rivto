@@ -35,31 +35,8 @@ export function findBlockFromEvent(event: Event): EventBlock | null {
   return content && block && blockId ? { block, content, blockId } : null;
 }
 
-/**
- * Reads a collapsed browser caret as a plain-text offset inside editable content.
- *
- * DOM selections store a node and an offset within that node. Editor commands
- * need one offset within the complete block string, so a temporary Range measures
- * all text between the start of the content element and the caret. Expanded or
- * cross-block selections return null because splitting them requires replacement
- * semantics rather than the simple Enter behavior implemented today.
- *
- * @param content - Block content element containing the expected caret.
- * @returns Zero-based text offset, or null when there is no collapsed caret.
- */
-export function getCaretOffset(content: HTMLElement): number | null {
-  const selection = content.ownerDocument.getSelection();
-  if (!selection?.isCollapsed || !selection.focusNode) return null;
-  if (!content.contains(selection.focusNode)) return null;
-
-  const range = content.ownerDocument.createRange();
-  range.selectNodeContents(content);
-  range.setEnd(selection.focusNode, selection.focusOffset);
-  return range.toString().length;
-}
-
 /** Finds a rendered BlockView by ID without interpolating that ID into CSS. */
-function findBlock(root: HTMLElement, blockId: string): HTMLElement | null {
+export function findRenderedBlock(root: HTMLElement, blockId: string): HTMLElement | null {
   for (const block of root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)) {
     if (block.dataset.blockId === blockId) return block;
   }
@@ -96,6 +73,18 @@ export function findPreviousEditableBlock(root: HTMLElement, blockId: string): E
   return content && previousId ? { block, content, blockId: previousId } : null;
 }
 
+/** Finds the immediately next rendered block when that block is editable. */
+export function findNextEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+  const index = blocks.findIndex((block) => block.dataset.blockId === blockId);
+  if (index < 0 || index >= blocks.length - 1) return null;
+
+  const block = blocks[index + 1];
+  const content = findOwnedContent(block);
+  const nextId = block.dataset.blockId;
+  return content && nextId ? { block, content, blockId: nextId } : null;
+}
+
 /**
  * Finds the nearest ancestor BlockView of a rendered block.
  *
@@ -120,7 +109,7 @@ export function findParentBlock(block: HTMLElement): HTMLElement | null {
  * @returns True when the block and editable content were found.
  */
 export function focusBlock(root: HTMLElement, blockId: string, offset: number): boolean {
-  const block = findBlock(root, blockId);
+  const block = findRenderedBlock(root, blockId);
   const content = block ? findOwnedContent(block) : null;
   if (!content) return false;
 

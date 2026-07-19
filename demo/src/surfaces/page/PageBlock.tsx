@@ -1,4 +1,8 @@
-import { BlockView, useBlock } from "@chulane/rivto";
+import {
+  useBlock,
+  useBlockSelection,
+} from "@chulane/rivto";
+import { PageDraggableBlock } from "../../plugins/PageDragPlugin";
 import { pageBlockRenderers, UnknownBlock } from "./block-renderers";
 
 /** Properties required to render one block subtree on the page surface. */
@@ -21,14 +25,17 @@ export interface PageBlockProps {
  */
 export function PageBlock({ blockId }: PageBlockProps) {
   const { block } = useBlock(blockId);
+  const selection = useBlockSelection(blockId);
 
   if (!block) return null;
   const Content = pageBlockRenderers[block.type] ?? UnknownBlock;
 
   return (
-    <BlockView block={block} className="page-block">
-      <Content blockId={block.id} />
-
+    <PageDraggableBlock
+      block={block}
+      selected={Boolean(selection)}
+      content={<Content blockId={block.id} />}
+    >
       {block.children.length > 0 && (
         <div className="page-block-children">
           {block.children.map((child) => (
@@ -36,6 +43,6 @@ export function PageBlock({ blockId }: PageBlockProps) {
           ))}
         </div>
       )}
-    </BlockView>
+    </PageDraggableBlock>
   );
 }

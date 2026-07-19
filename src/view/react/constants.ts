@@ -15,3 +15,9 @@ export const BLOCK_SELECTED_ATTRIBUTE = "data-selected";
 
 /** CSS selector matching selected BlockView containers. */
 export const BLOCK_SELECTED_SELECTOR = `[${BLOCK_SELECTED_ATTRIBUTE}]`;
+
+/** Fallback marker placed on editable content touched by cross-block text selection. */
+export const TEXT_SELECTED_ATTRIBUTE = "data-text-selected";
+
+/** CSS selector matching fallback cross-block text-selection markers. */
+export const TEXT_SELECTED_SELECTOR = `[${TEXT_SELECTED_ATTRIBUTE}]`;

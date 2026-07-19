@@ -4,21 +4,26 @@ import {
   useEditorRoot,
 } from "@chulane/rivto";
 import {
-  findBlockFromEvent,
   findParentBlock,
   findPreviousEditableBlock,
+  findRenderedBlock,
   focusBlock,
-  getCaretOffset,
 } from "./block-dom";
+import {
+  firstKeyboardTarget,
+  focusSelectionCaret,
+  isEditableKeyboardEvent,
+  shouldDeleteSelection,
+} from "./keyboard-selection";
 
 /**
  * Installs page-specific Backspace behavior at the start of a block.
  *
- * Nested blocks outdent first. Root blocks merge into the immediately previous
- * visible editable block through one core transaction, preserving descendants
- * and restoring the caret at the text join. A first empty non-paragraph becomes
- * a paragraph, while an empty paragraph remains as the document's safe final
- * editing target.
+ * Expanded text or whole-block selections are deleted through the atomic
+ * selection command. For one collapsed caret at offset zero, nested blocks
+ * outdent and root blocks merge into the previous visible editable block. A
+ * first empty non-paragraph becomes a paragraph; an empty paragraph remains as
+ * the safe final editing target.
  */
 export function PageBackspacePlugin() {
   const editor = useEditor();
@@ -36,13 +41,23 @@ export function PageBackspacePlugin() {
       !root
     ) return;
 
-    const origin = findBlockFromEvent(event);
-    if (!origin || getCaretOffset(origin.content) !== 0) return;
+    if (!isEditableKeyboardEvent(event)) return;
+    const selection = editor.selection.get();
+    if (shouldDeleteSelection(selection)) {
+      event.preventDefault();
+      editor.deleteSelection();
+      requestAnimationFrame(() => focusSelectionCaret(root, editor));
+      return;
+    }
 
-    const block = editor.getBlock(origin.blockId);
+    const target = firstKeyboardTarget(selection);
+    if (!target?.collapsed || target.offset !== 0) return;
+
+    const block = editor.getBlock(target.blockId);
     if (!block) return;
 
-    if (findParentBlock(origin.block)) {
+    const renderedBlock = findRenderedBlock(root, block.id);
+    if (renderedBlock && findParentBlock(renderedBlock)) {
       event.preventDefault();
       editor.outdentBlock(block.id);
       requestAnimationFrame(() => focusBlock(root, block.id, 0));
@@ -53,6 +68,11 @@ export function PageBackspacePlugin() {
     if (previous) {
       event.preventDefault();
       const joinOffset = editor.mergeBlocks(previous.blockId, block.id);
+      editor.execute("selection.set", { selection: [{
+        type: "text",
+        anchor: { blockId: previous.blockId, offset: joinOffset },
+        head: { blockId: previous.blockId, offset: joinOffset },
+      }] });
       requestAnimationFrame(() => focusBlock(root, previous.blockId, joinOffset));
       return;
     }

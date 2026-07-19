@@ -1,7 +1,14 @@
-import type { EditorSelection } from "../editor/types";
+import type { EditorSelection, EditorSelectionItem } from "../editor/types";
+
+/** Creates a detached copy of one selection item. */
+function cloneSelection(selection: EditorSelectionItem): EditorSelectionItem {
+  return selection.type === "text"
+    ? { type: "text", anchor: { ...selection.anchor }, head: { ...selection.head } }
+    : { ...selection, blockIds: [...selection.blockIds] };
+}
 
 /**
- * Owns detached local text, block, or edgeless selection state.
+ * Owns an ordered list of detached local selection items.
  *
  * Selection is local editor-session state. It is intentionally not stored in
  * the collaborative document, because each user/view can have different active
@@ -12,48 +19,37 @@ import type { EditorSelection } from "../editor/types";
  * before calling `set`.
  */
 export class SelectionManager {
-  private value: EditorSelection | null = null;
+  private value: EditorSelection = [];
   private readonly listeners = new Set<() => void>();
 
   /**
-   * Returns the current detached selection.
+   * Returns the current detached selection list.
    *
    * Nested text positions and selected block arrays are copied so callers cannot
    * mutate manager state without going through `set` and notifying subscribers.
    */
-  get(): EditorSelection | null {
-    if (!this.value) return null;
-    if (this.value.type === "text") {
-      return {
-        type: "text",
-        anchor: { ...this.value.anchor },
-        head: { ...this.value.head },
-      };
-    }
-    if (this.value.type === "block") return { ...this.value, blockIds: [...this.value.blockIds] };
-    return { type: "edgeless", blockIds: [...this.value.blockIds] };
+  get(): EditorSelection {
+    return this.value.map(cloneSelection);
   }
 
   /**
-   * Replaces selection with a detached copy and notifies subscribers.
+   * Replaces every selection item with detached copies and notifies subscribers.
    *
    * Text selection direction is preserved. Operations that need document-order
    * ranges can normalize later, while UI can still know whether the user dragged
    * top-to-bottom or bottom-to-top.
    *
-   * @param selection - Runtime-validated local selection.
+   * @param selection - Runtime-validated local selection list.
    */
   set(selection: EditorSelection): void {
-    this.value = selection.type === "text"
-      ? { type: "text", anchor: { ...selection.anchor }, head: { ...selection.head } }
-      : { ...selection, blockIds: [...selection.blockIds] };
+    this.value = selection.map(cloneSelection);
     this.notify();
   }
 
   /** Clears an active selection without notifying when selection is already empty. */
   clear(): void {
-    if (!this.value) return;
-    this.value = null;
+    if (!this.value.length) return;
+    this.value = [];
     this.notify();
   }
 

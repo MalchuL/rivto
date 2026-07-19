@@ -408,18 +408,31 @@ export class DocumentModelImpl {
      * Moves a block within its sibling list by editing the ordered CRDT array.
      *
      * @param id - ID of the block to move.
-     * @param afterId - Sibling to move after, or `null` to move to the start.
+     * @param targetId - Sibling to move beside, or `null` to move to the start.
+     * @param position - Whether to insert before, after, or inside the target.
      * @throws If the block or target sibling does not exist.
      */
-    moveBlock(id: string, afterId: string | null): void {
-        if (id === afterId) return;
+    moveBlock(id: string, targetId: string | null, position: "before" | "after" | "inside" = "after"): void {
+        if (id === targetId) return;
         this.transact(() => {
             const source = this.findContainer(id);
             if (!source) throw new Error(`Block ${id} not found`);
-            const target = afterId === null ? source.array : this.findContainer(afterId)?.array;
-            if (!target) throw new Error(`Target block ${afterId} not found`);
+            // A subtree cannot be inserted into its own descendants. Besides
+            // being an invalid outline operation, doing so would create a
+            // recursive ownership cycle that detached snapshots cannot render.
+            if (targetId !== null && this.collectTreeIds(id).includes(targetId)) {
+                throw new Error(`Cannot move block ${id} relative to its descendant ${targetId}`);
+            }
+            const targetBlock = targetId === null ? undefined : this.requiredBlock(targetId);
+            const target = position === "inside" && targetBlock
+                ? this.requiredArray(targetBlock, "children")
+                : targetId === null ? source.array : this.findContainer(targetId)?.array;
+            if (!target) throw new Error(`Target block ${targetId} not found`);
             source.array.delete(source.index, 1);
-            const index = afterId === null ? 0 : Math.max(0, strings(target).indexOf(afterId) + 1);
+            const targetIndex = targetId === null ? 0 : strings(target).indexOf(targetId);
+            const index = position === "inside"
+                ? target.length
+                : targetId === null ? 0 : Math.max(0, targetIndex + (position === "after" ? 1 : 0));
             target.insert(index, id);
         });
     }
@@ -430,12 +443,33 @@ export class DocumentModelImpl {
      * @param id - ID of the block to indent.
      */
     indentBlock(id: string): void {
+        this.indentBlocks([id]);
+    }
+
+    /**
+     * Nests consecutive selected roots under the first root's previous sibling.
+     *
+     * Descendants whose ancestors are also selected are removed from the move
+     * list: moving the selected ancestor already carries its complete subtree.
+     * The remaining roots must cover one uninterrupted visible range. If the
+     * first root has no previous sibling, the complete operation is a no-op;
+     * later roots are never partially indented. This matches Logseq's grouped
+     * outliner behavior and keeps the supplied roots at the same new depth.
+     *
+     * @param ids - Selected block IDs in any order, including descendants.
+     */
+    indentBlocks(ids: string[]): void {
         this.transact(() => {
-            const source = this.findContainer(id);
+            const roots = this.selectedTopLevelRoots(ids);
+            if (!this.isConsecutiveSelection(roots)) return;
+            const source = this.findContainer(roots[0]!);
             if (!source || source.index === 0) return;
             const parent = this.requiredBlock(String(source.array.get(source.index - 1)));
-            source.array.delete(source.index, 1);
-            this.requiredArray(parent, "children").push(id);
+            roots.forEach((rootId) => {
+                const current = this.findContainer(rootId);
+                if (current) current.array.delete(current.index, 1);
+            });
+            this.requiredArray(parent, "children").push(...roots);
         });
     }
 
@@ -451,17 +485,54 @@ export class DocumentModelImpl {
      * @param id - ID of the block to outdent.
      */
     outdentBlock(id: string): void {
+        this.outdentBlocks([id]);
+    }
+
+    /**
+     * Outdents consecutive selected roots as one ordered group.
+     *
+     * Only top-level selected roots move, so selected descendants travel with
+     * their selected ancestor exactly once. The group is inserted directly
+     * after its parent. Unselected siblings following the last moved root become
+     * children of that last root, preserving the visible outline order and the
+     * direct-outdent behavior used by Logseq and Rivto's single-block command.
+     *
+     * Selection that begins at root depth or skips visible blocks is a no-op.
+     * All detach, insert, and adoption mutations share one CRDT transaction.
+     *
+     * @param ids - Selected block IDs in any order, including descendants.
+     */
+    outdentBlocks(ids: string[]): void {
         this.transact(() => {
-            const source = this.findContainer(id);
+            const roots = this.selectedTopLevelRoots(ids);
+            if (!this.isConsecutiveSelection(roots)) return;
+            const source = this.findContainer(roots[0]!);
             if (!source?.parentId) return;
             const parentContainer = this.findContainer(source.parentId);
             if (!parentContainer) return;
 
-            const followingSiblingIds = strings(source.array).slice(source.index + 1);
-            source.array.delete(source.index, 1 + followingSiblingIds.length);
-            parentContainer.array.insert(parentContainer.index + 1, id);
+            // A range may continue with blocks already at the destination depth.
+            // Stop before them instead of moving them one level too far.
+            const firstDestinationLevel = roots.findIndex(
+                (rootId) => this.findContainer(rootId)?.parentId === parentContainer.parentId,
+            );
+            const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
+            if (!moving.length) return;
+            const last = this.findContainer(moving.at(-1)!);
+            if (!last) return;
+            const followingSiblingIds = strings(last.array).slice(last.index + 1);
+
+            moving.forEach((rootId) => {
+                const current = this.findContainer(rootId);
+                if (current) current.array.delete(current.index, 1);
+            });
+            followingSiblingIds.forEach((siblingId) => {
+                const current = this.findContainer(siblingId);
+                if (current) current.array.delete(current.index, 1);
+            });
+            parentContainer.array.insert(parentContainer.index + 1, ...moving);
             if (followingSiblingIds.length > 0) {
-                this.requiredArray(this.requiredBlock(id), "children").push(...followingSiblingIds);
+                this.requiredArray(this.requiredBlock(moving.at(-1)!), "children").push(...followingSiblingIds);
             }
         });
     }
@@ -668,6 +739,36 @@ export class DocumentModelImpl {
             if (index >= 0) return { array: children, index, parentId };
         }
         return undefined;
+    }
+
+    /** Returns selected roots in visible order, excluding selected descendants. */
+    private selectedTopLevelRoots(ids: string[]): string[] {
+        const selected = new Set(ids.filter((id) => this.storage.blocks.has(id)));
+        const hasSelectedAncestor = (id: string): boolean => {
+            let parentId = this.findContainer(id)?.parentId;
+            while (parentId) {
+                if (selected.has(parentId)) return true;
+                parentId = this.findContainer(parentId)?.parentId;
+            }
+            return false;
+        };
+        return this.visibleBlockIds().filter((id) => selected.has(id) && !hasSelectedAncestor(id));
+    }
+
+    /** Checks that selected subtrees cover one uninterrupted visible range. */
+    private isConsecutiveSelection(roots: string[]): boolean {
+        if (!roots.length) return false;
+        const visible = this.visibleBlockIds();
+        const covered = new Set(roots.flatMap((id) => this.collectTreeIds(id)));
+        const first = visible.indexOf(roots[0]!);
+        const lastTree = this.collectTreeIds(roots.at(-1)!);
+        const last = visible.indexOf(lastTree.at(-1)!);
+        return first >= 0 && last >= first && visible.slice(first, last + 1).every((id) => covered.has(id));
+    }
+
+    /** Returns every stored tree ID in visible depth-first order. */
+    private visibleBlockIds(): string[] {
+        return strings(this.storage.roots).flatMap((id) => this.collectTreeIds(id));
     }
 
     /**
