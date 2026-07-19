@@ -5,7 +5,8 @@ import {
   type HTMLAttributes,
   type RefObject,
 } from "react";
-import { restoreDOMSelection, saveDOMSelection } from "./dom-text-selection";
+import { BLOCK_CONTENT_ATTRIBUTE } from "../../constants";
+import { restoreDOMSelection, saveDOMSelection } from "../utils/dom-text-selection";
 import { useBlock } from "./use-block";
 
 /** Props returned for a plain-text contentEditable block element. */
@@ -17,7 +18,7 @@ export interface BlockTextEditingProps {
   /** Acknowledges that the browser, rather than React children, owns the text. */
   readonly suppressContentEditableWarning: true;
   /** Stable marker used by delegated events and DOM-selection utilities. */
-  readonly "data-block-content": "";
+  readonly [BLOCK_CONTENT_ATTRIBUTE]: "";
   /** Persists native browser edits through the block command API. */
   readonly onInput: NonNullable<HTMLAttributes<HTMLDivElement>["onInput"]>;
   /** Defers synchronization while an IME composition is active. */
@@ -99,7 +100,7 @@ export function useBlockTextEditing(blockId: string): BlockTextEditingProps {
     ref: elementRef,
     contentEditable: "plaintext-only",
     suppressContentEditableWarning: true,
-    "data-block-content": "",
+    [BLOCK_CONTENT_ATTRIBUTE]: "",
     onInput,
     onCompositionStart,
     onCompositionEnd,

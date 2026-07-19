@@ -4,7 +4,7 @@ import {
   RIVTO_VERSION,
 } from "@chulane/rivto";
 import { useEffect, useState } from "react";
-import { PageKeyboardPlugin } from "./plugins";
+import { PageEnterPlugin, PageTabPlugin } from "./plugins";
 import { PageSurface } from "./surfaces/page";
 
 /** Creates the demo-owned runtime and a small document that exercises nesting. */
@@ -38,7 +38,8 @@ export function App() {
     <>
       <header className="demo-header">Rivto v{RIVTO_VERSION}</header>
       <EditorView editor={editor}>
-        <PageKeyboardPlugin />
+        <PageTabPlugin />
+        <PageEnterPlugin />
         <PageSurface />
       </EditorView>
     </>
