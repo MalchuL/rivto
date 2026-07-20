@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs"
   },
   "dependencies": {
     "@chulane/rivto": "workspace:*",

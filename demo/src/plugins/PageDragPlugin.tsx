@@ -24,6 +24,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { resolveAfterDropPlacement } from "./page-drag-placement";
 
 /** Maximum number of block rows rendered inside the floating preview. */
 const MAX_PREVIEW_BLOCKS = 4;
@@ -76,30 +77,6 @@ function containsBlock(block: EditorBlock, candidateId: string): boolean {
   return block.id === candidateId || block.children.some((child) => containsBlock(child, candidateId));
 }
 
-/** Returns the root-to-block path for one block ID. */
-function findBlockPath(blocks: EditorBlock[], targetId: string, parents: EditorBlock[] = []): EditorBlock[] | undefined {
-  for (const block of blocks) {
-    const path = [...parents, block];
-    if (block.id === targetId) return path;
-    const childPath = findBlockPath(block.children, targetId, path);
-    if (childPath) return childPath;
-  }
-  return undefined;
-}
-
-/**
- * Finds the shallowest level reachable at the gap after the path's last block.
- *
- * A block can move outside its parent at the same visible gap only when it is
- * that parent's last child. The check repeats upward so a final descendant can
- * be placed beside any ancestor whose subtree also ends at this gap.
- */
-function minimumDropDepth(path: EditorBlock[]): number {
-  let depth = path.length - 1;
-  while (depth > 0 && path[depth - 1]?.children.at(-1)?.id === path[depth]?.id) depth -= 1;
-  return depth;
-}
-
 /**
  * Selects the block row under the pointer across the complete page width.
  *
@@ -142,8 +119,6 @@ function resolveDropPlacement(
 ): DropPlacement | null {
   if (!event.over) return null;
   const indicatorId = String(event.over.id);
-  const path = findBlockPath(blocks, indicatorId);
-  if (!path) return null;
   const activator = event.activatorEvent as Event & { clientX?: unknown; clientY?: unknown };
   const activeRect = event.active.rect.current.translated ?? event.active.rect.current.initial;
   const pointerX = typeof activator.clientX === "number" ? activator.clientX : undefined;
@@ -178,26 +153,17 @@ function resolveDropPlacement(
     };
   }
 
-  const currentDepth = path.length - 1;
-  const firstChild = path[currentDepth]!.children[0];
-  // The gap below a non-empty parent is the start of its child list. It cannot
-  // also mean "after the parent", which would place the block below the entire
-  // subtree instead of at the displayed line.
-  const pointerDepth = firstChild
-    ? currentDepth + 1
-    : pointerX !== undefined
-    ? currentDepth + Math.trunc((cursorX - event.over.rect.left) / childDropIndent)
-    : currentDepth;
-  const depth = Math.max(minimumDropDepth(path), Math.min(currentDepth + 1, pointerDepth));
-  const asChild = depth > currentDepth;
+  const depthOffset = pointerX === undefined
+    ? 0
+    : Math.trunc((cursorX - event.over.rect.left) / childDropIndent);
+  const placement = resolveAfterDropPlacement(blocks, indicatorId, depthOffset);
+  if (!placement) return null;
   return {
-    // The gap directly after a parent is before its first child. Only an empty
-    // parent uses `inside`, where append and first insertion are equivalent.
-    targetId: asChild ? firstChild?.id ?? indicatorId : path[depth]!.id,
-    position: asChild ? firstChild ? "before" : "inside" : "after",
+    targetId: placement.targetId,
+    position: placement.position,
     indicatorId,
     indicatorEdge: "after",
-    indicatorOffset: (depth - currentDepth) * PAGE_INDENT,
+    indicatorOffset: placement.depthOffset * PAGE_INDENT,
   };
 }
 
