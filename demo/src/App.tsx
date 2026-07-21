@@ -2,6 +2,7 @@ import {
   ClipboardPlugin,
   createRivtoEditor,
   EditorView,
+  HistoryPlugin,
   RIVTO_VERSION,
   TextSelectionPlugin,
 } from "@chulane/rivto";
@@ -119,6 +120,7 @@ export function App() {
     <>
       <header className="demo-header">Rivto v{RIVTO_VERSION}</header>
       <EditorView editor={editor}>
+        <HistoryPlugin />
         <TextSelectionPlugin />
         <PageBlockSelectionPlugin />
         <PageCollapsePlugin />

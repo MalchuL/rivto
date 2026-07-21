@@ -614,11 +614,11 @@ export class EditorRuntime implements RivtoEditorApi {
    * Reconciles local selection with the latest document and editor mode.
    *
    * Direct document edits, remote CRDT updates, undo/redo, and mode swaps can
-   * remove selected blocks or make edgeless selections illegal. Structural
-   * moves can also change the visible order of a BlockSelection without
-   * invalidating any of its IDs. Invalid items are removed, while valid block
-   * selections are reordered to match the current depth-first document tree.
-   * Anchor and focus IDs remain untouched so gesture direction is preserved.
+   * remove selected blocks, shorten selected text, or make edgeless selections
+   * illegal. Surviving text offsets are clamped, deleted structural IDs are
+   * filtered, and block selections are reordered to match the current tree.
+   * When a block-selection endpoint disappeared, its replacement is chosen
+   * from the same directional edge so top-down and bottom-up intent survives.
    */
   private reconcileSelection(): void {
     const selection = this.selection.get();
@@ -631,15 +631,61 @@ export class EditorRuntime implements RivtoEditorApi {
     const order = new Map(visibleIds.map((id, index) => [id, index]));
     let changed = false;
     const valid = selection.flatMap((item): EditorSelectionItem[] => {
-      const ids = item.type === "text" ? [item.anchor.blockId, item.head.blockId] : item.blockIds;
-      if (!ids.every((id) => order.has(id)) || (item.type === "edgeless" && this.mode.get() !== "edgeless")) {
+      if (item.type === "text") {
+        const anchorBlock = this.findBlock(item.anchor.blockId);
+        const headBlock = this.findBlock(item.head.blockId);
+        if (!anchorBlock || !headBlock) {
+          changed = true;
+          return [];
+        }
+        const anchorOffset = Math.min(item.anchor.offset, anchorBlock.content.length);
+        const headOffset = Math.min(item.head.offset, headBlock.content.length);
+        if (anchorOffset === item.anchor.offset && headOffset === item.head.offset) return [item];
+        changed = true;
+        return [{
+          ...item,
+          anchor: { ...item.anchor, offset: anchorOffset },
+          head: { ...item.head, offset: headOffset },
+        }];
+      }
+
+      if (item.type === "edgeless") {
+        if (this.mode.get() !== "edgeless") {
+          changed = true;
+          return [];
+        }
+        const blockIds = item.blockIds.filter((id) => order.has(id));
+        if (!blockIds.length) {
+          changed = true;
+          return [];
+        }
+        if (blockIds.length === item.blockIds.length) return [item];
+        changed = true;
+        return [{ ...item, blockIds }];
+      }
+
+      const selected = new Set(item.blockIds);
+      const blockIds = visibleIds.filter((id) => selected.has(id));
+      if (!blockIds.length) {
         changed = true;
         return [];
       }
-      if (item.type !== "block") return [item];
-      const blockIds = [...item.blockIds].sort((left, right) => order.get(left)! - order.get(right)!);
-      if (blockIds.some((id, index) => id !== item.blockIds[index])) changed = true;
-      return [{ ...item, blockIds }];
+      const anchorIndex = item.blockIds.indexOf(item.anchorBlockId);
+      const focusIndex = item.blockIds.indexOf(item.focusBlockId);
+      const forward = anchorIndex <= focusIndex;
+      const anchorBlockId = selected.has(item.anchorBlockId) && order.has(item.anchorBlockId)
+        ? item.anchorBlockId
+        : forward ? blockIds[0]! : blockIds.at(-1)!;
+      const focusBlockId = selected.has(item.focusBlockId) && order.has(item.focusBlockId)
+        ? item.focusBlockId
+        : forward ? blockIds.at(-1)! : blockIds[0]!;
+      if (
+        blockIds.length !== item.blockIds.length ||
+        blockIds.some((id, index) => id !== item.blockIds[index]) ||
+        anchorBlockId !== item.anchorBlockId ||
+        focusBlockId !== item.focusBlockId
+      ) changed = true;
+      return [{ ...item, blockIds, anchorBlockId, focusBlockId }];
     });
     if (changed) this.selection.set(valid);
   }

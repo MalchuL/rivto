@@ -41,8 +41,13 @@ export function PageBackspacePlugin() {
       !root
     ) return;
 
-    if (!isEditableKeyboardEvent(event)) return;
     const selection = editor.selection.get();
+    // Whole-block gestures deliberately clear the native Range and focus the
+    // page root. Handle that structural selection before requiring an editable
+    // event target; controls inside the page never satisfy this root-focus gate.
+    const rootBlockSelection = root.ownerDocument.activeElement === root &&
+      selection.some((item) => item.type === "block");
+    if (!rootBlockSelection && !isEditableKeyboardEvent(event)) return;
     if (shouldDeleteSelection(selection)) {
       event.preventDefault();
       editor.deleteSelection();

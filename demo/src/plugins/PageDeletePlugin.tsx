@@ -35,11 +35,16 @@ export function PageDeletePlugin() {
       event.altKey ||
       event.ctrlKey ||
       event.metaKey ||
-      !root ||
-      !isEditableKeyboardEvent(event)
+      !root
     ) return;
 
     const selection = editor.selection.get();
+    // A block-only selection is owned by the focusable page root rather than a
+    // contenteditable. Controls such as collapse toggles cannot enter this path
+    // because they, not the root, remain the active element.
+    const rootBlockSelection = root.ownerDocument.activeElement === root &&
+      selection.some((item) => item.type === "block");
+    if (!rootBlockSelection && !isEditableKeyboardEvent(event)) return;
     if (shouldDeleteSelection(selection)) {
       event.preventDefault();
       editor.deleteSelection();

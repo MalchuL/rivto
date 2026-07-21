@@ -24,6 +24,9 @@ by the UI-agnostic React package.
 | `Delete` | Caret at the end of an expanded block | Merges the next visible editable block into the current block. A collapsed parent remains unchanged. |
 | `Tab` | Editable block or structural selection | Indents the selected structural roots when the move is valid. |
 | `Shift+Tab` | Editable block or structural selection | Outdents the selected structural roots when the move is valid. |
+| `Primary+Z` | Anywhere inside the active editor | Undoes the latest local CRDT history item and restores a valid editor selection. |
+| `Primary+Shift+Z` | Anywhere inside the active editor | Redoes the latest undone CRDT history item. |
+| `Primary+Y` | Anywhere inside the active editor | Redoes the latest undone CRDT history item on every platform. |
 
 Unmodified Enter, Backspace, and Delete ignore IME composition. Their
 `Primary`, `Alt`, and unsupported `Shift` variants are left to the browser.
@@ -90,5 +93,4 @@ keeps the inserted subtree hidden until that block is expanded.
 ## Not currently bound
 
 - `/` has no slash-command menu in the current demo.
-- `Primary+Z` and `Primary+Shift+Z` are not connected to Rivto undo/redo.
 - `Primary+A` has no editor-wide select-all command; native browser behavior applies.

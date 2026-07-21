@@ -70,6 +70,58 @@ describe("EditorRuntime selection", () => {
     editor.destroy();
   });
 
+  it("clamps text offsets when undo restores shorter content", () => {
+    const editor = createRivtoEditor();
+    const id = editor.insertBlock({ type: "paragraph", content: "A" });
+    editor.updateBlock(id, { content: "Long" });
+    editor.execute("selection.set", { selection: [textSelection(id, 4)] });
+
+    editor.undo();
+
+    expect(editor.getBlock(id)?.content).toBe("A");
+    expect(editor.selection.get()).toEqual([textSelection(id, 1)]);
+    editor.destroy();
+  });
+
+  it("keeps surviving IDs and direction when history removes selected blocks", () => {
+    const editor = createRivtoEditor();
+    const firstId = editor.insertBlock({ type: "paragraph", content: "First" });
+    const secondId = editor.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    const thirdId = editor.insertBlock({ type: "paragraph", content: "Third" }, secondId);
+    editor.execute("selection.set", {
+      selection: [{
+        type: "block",
+        blockIds: [firstId, secondId, thirdId],
+        anchorBlockId: thirdId,
+        focusBlockId: firstId,
+      }],
+    });
+
+    editor.undo();
+
+    expect(editor.selection.get()).toEqual([{
+      type: "block",
+      blockIds: [firstId, secondId],
+      anchorBlockId: secondId,
+      focusBlockId: firstId,
+    }]);
+    editor.destroy();
+  });
+
+  it("filters deleted IDs from an edgeless selection", () => {
+    const editor = createRivtoEditor({ mode: "edgeless" });
+    const firstId = editor.insertBlock({ type: "paragraph" });
+    const secondId = editor.insertBlock({ type: "paragraph" }, firstId);
+    editor.execute("selection.set", {
+      selection: [{ type: "edgeless", blockIds: [firstId, secondId] }],
+    });
+
+    editor.removeBlock(secondId);
+
+    expect(editor.selection.get()).toEqual([{ type: "edgeless", blockIds: [firstId] }]);
+    editor.destroy();
+  });
+
   it("applies selected block commands and preserves bottom-to-top outdent order", () => {
     const editor = createRivtoEditor();
     const parentId = editor.insertBlock({ type: "paragraph", content: "Parent" });

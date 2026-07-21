@@ -387,6 +387,8 @@ describe("clipboard commands", () => {
   it("deletes a block selection atomically and keeps one editable fallback", () => {
     const editor = createRivtoEditor();
     const first = editor.insertBlock({ type: "paragraph", content: "First" });
+    const child = editor.insertBlock({ type: "paragraph", content: "Nested" }, first);
+    editor.indentBlock(child);
     const second = editor.insertBlock({ type: "heading2", content: "Second" }, first);
     editor.execute("selection.set", {
       selection: [{ type: "block", blockIds: [first, second], anchorBlockId: first, focusBlockId: second }],
@@ -407,9 +409,12 @@ describe("clipboard commands", () => {
 
     editor.undo();
     expect(editor.getBlocks()).toMatchObject([
-      { id: first, content: "First" },
+      { id: first, content: "First", children: [{ id: child, content: "Nested" }] },
       { id: second, content: "Second" },
     ]);
+
+    editor.redo();
+    expect(editor.getBlocks()).toMatchObject([{ type: "paragraph", content: "" }]);
     editor.destroy();
   });
 
