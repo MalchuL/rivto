@@ -16,7 +16,8 @@ import {
  * Tab. The first editor selection item supplies the command entry point; the
  * runtime expands that point to the complete normalized selection range. The
  * DOM event is used only to confirm that the shortcut originated in editable
- * page content. Selected roots then move as one Logseq-style structural group.
+ * page content or from a whole-block selection focused on the page root.
+ * Selected roots then move as one Logseq-style structural group.
  */
 export function PageTabPlugin() {
   const editor = useEditor();
@@ -30,10 +31,11 @@ export function PageTabPlugin() {
       !root
     ) return;
 
-    if (!isEditableKeyboardEvent(event)) return;
     const selection = editor.selection.get();
     const target = firstKeyboardTarget(selection);
     if (!target) return;
+    const blockSelectionAtRoot = event.target === root && target.item.type === "block";
+    if (!isEditableKeyboardEvent(event) && !blockSelectionAtRoot) return;
 
     event.preventDefault();
     if (event.shiftKey) editor.outdentBlock(target.blockId);

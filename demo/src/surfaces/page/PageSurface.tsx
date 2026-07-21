@@ -14,7 +14,7 @@ export function PageSurface() {
   const { ref } = useEditorRoot();
 
   return (
-    <main ref={ref} className="page-surface" aria-label="Document editor">
+    <main ref={ref} className="page-surface" aria-label="Document editor" tabIndex={-1}>
       {document.document.map((block) => (
         <PageBlock key={block.id} blockId={block.id} />
       ))}

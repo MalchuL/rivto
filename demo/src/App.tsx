@@ -8,6 +8,9 @@ import {
 import { useEffect, useState } from "react";
 import {
   PageBackspacePlugin,
+  PageArrowPlugin,
+  PageBlockSelectionPlugin,
+  PageCollapsePlugin,
   PageDeletePlugin,
   PageDragPlugin,
   PageEnterPlugin,
@@ -19,8 +22,8 @@ import { PageSurface } from "./surfaces/page";
  * Creates demo content for manual editing and selection checks.
  *
  * The document deliberately contains adjacent text blocks and two nested list
- * trees. This makes it easy to drag a selection across different depths and
- * verify that complete blocks between partial text boundaries remain selected.
+ * trees. This makes it easy to verify whole-block cross-line selection, or hold
+ * Alt while dragging to exercise partial text boundaries across different depths.
  */
 function createDemoEditor() {
   const editor = createRivtoEditor();
@@ -117,6 +120,9 @@ export function App() {
       <header className="demo-header">Rivto v{RIVTO_VERSION}</header>
       <EditorView editor={editor}>
         <TextSelectionPlugin />
+        <PageBlockSelectionPlugin />
+        <PageCollapsePlugin />
+        <PageArrowPlugin />
         <ClipboardPlugin />
         <PageTabPlugin />
         <PageEnterPlugin />

@@ -15,16 +15,19 @@ import {
 } from "@dnd-kit/core";
 import {
   BlockView,
+  isBlockCollapsed,
   useEditor,
   type EditorBlock,
 } from "@chulane/rivto";
 import {
   createContext,
   useContext,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { resolveAfterDropPlacement } from "./page-drag-placement";
+import { selectedMoveRoots, type SelectedMoveRoots } from "./page-selection";
 
 /** Maximum number of block rows rendered inside the floating preview. */
 const MAX_PREVIEW_BLOCKS = 4;
@@ -45,8 +48,13 @@ interface DropPlacement {
   readonly indicatorOffset: number;
 }
 
-/** Shares the current insertion edge with recursively rendered page blocks. */
-const PageDropPlacementContext = createContext<DropPlacement | null>(null);
+/** Drag state shared with recursively rendered page blocks. */
+interface PageDragState {
+  readonly placement: DropPlacement | null;
+  readonly draggedIds: readonly string[];
+}
+
+const PageDragStateContext = createContext<PageDragState>({ placement: null, draggedIds: [] });
 
 /** Properties for the page drag-and-drop boundary. */
 export interface PageDragPluginProps {
@@ -68,6 +76,8 @@ export interface PageDraggableBlockProps {
   readonly selected: boolean;
   /** Surface-owned renderer for this block's own row. */
   readonly content: ReactNode;
+  /** Optional surface controls placed beside the drag handle. */
+  readonly controls?: ReactNode;
   /** Recursively rendered child blocks placed below this block's own row. */
   readonly children?: ReactNode;
 }
@@ -177,8 +187,15 @@ interface PreviewEntry {
 function flattenPreview(block: EditorBlock, depth = 0): PreviewEntry[] {
   return [
     { block, depth },
-    ...block.children.flatMap((child) => flattenPreview(child, depth + 1)),
+    ...(isBlockCollapsed(block)
+      ? []
+      : block.children.flatMap((child) => flattenPreview(child, depth + 1))),
   ];
+}
+
+/** Counts the complete moved subtree, including children hidden by collapse. */
+function subtreeSize(block: EditorBlock): number {
+  return 1 + block.children.reduce((total, child) => total + subtreeSize(child), 0);
 }
 
 /**
@@ -189,9 +206,12 @@ function flattenPreview(block: EditorBlock, depth = 0): PreviewEntry[] {
  * of draggable and droppable nodes with the same IDs. Stable type attributes
  * let the preview reuse the demo's heading, list, quote, and code presentation.
  */
-function PageDragPreview({ block }: { readonly block: EditorBlock }) {
-  const entries = flattenPreview(block);
-  const hiddenCount = Math.max(0, entries.length - MAX_PREVIEW_BLOCKS);
+function PageDragPreview({ blocks }: { readonly blocks: EditorBlock[] }) {
+  const entries = blocks.flatMap((block) => flattenPreview(block));
+  const hiddenCount = Math.max(
+    0,
+    blocks.reduce((total, block) => total + subtreeSize(block), 0) - Math.min(entries.length, MAX_PREVIEW_BLOCKS),
+  );
 
   return (
     <>
@@ -217,20 +237,18 @@ function PageDragPreview({ block }: { readonly block: EditorBlock }) {
 }
 
 /**
- * Provides demo-owned single-block drag-and-drop behavior for PageSurface.
+ * Provides demo-owned block drag-and-drop behavior for PageSurface.
  *
- * Each successful drop moves only the block whose handle started the drag.
- * Children are not separate move targets: they remain owned by that block and
- * therefore travel with it automatically. A block-body drop appends and uses
+ * A selected sibling group moves together when the dragged block belongs to
+ * it. Mixed-level selections safely fall back to the handle's single block.
+ * Children remain owned by their roots and travel automatically. A block-body drop appends and uses
  * a highlight. A gap drop uses a horizontal line that follows the pointer
  * across every available depth. The resolved move is expressed relative to
  * the preceding block, one of its final ancestors, or its children. Dropping
  * onto the dragged subtree is ignored to prevent an ownership cycle.
  *
- * After a successful move, the plugin replaces any text, block, or mixed
- * selection with one BlockSelection for the moved block. This is deliberate:
- * dragging is a single-object operation, and retaining a DOM text range across
- * remounted content would leave selection state disconnected from the browser.
+ * Grouped movement retains its whole-block selection; single movement replaces
+ * any text or mixed selection with the moved block.
  */
 export function PageDragPlugin({
   children,
@@ -239,65 +257,80 @@ export function PageDragPlugin({
   gapDropZone = 8,
 }: PageDragPluginProps) {
   const editor = useEditor();
-  const [activeId, setActiveId] = useState<string>();
+  const activeMove = useRef<SelectedMoveRoots | undefined>(undefined);
+  const [activeIds, setActiveIds] = useState<string[]>([]);
   const [dropPlacement, setDropPlacement] = useState<DropPlacement | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: activationDistance } }),
     useSensor(KeyboardSensor),
   );
-  const activeBlock = activeId ? editor.getBlock(activeId) : undefined;
+  const activeBlocks = activeIds.flatMap((id) => {
+    const block = editor.getBlock(id);
+    return block ? [block] : [];
+  });
+
+  /** Removes feedback for targets owned by any currently moved subtree. */
+  const validPlacement = (event: DragMoveEvent): DropPlacement | null => {
+    const placement = resolveDropPlacement(event, editor.getBlocks(), childDropIndent, gapDropZone);
+    if (!placement) return null;
+    const invalid = activeMove.current?.ids.some((id) => {
+      const block = editor.getBlock(id);
+      return block ? containsBlock(block, placement.targetId) : false;
+    });
+    return invalid ? null : placement;
+  };
 
   const handleDragStart = ({ active }: DragStartEvent) => {
-    setActiveId(String(active.id));
+    const move = selectedMoveRoots(editor.getBlocks(), editor.selection.get(), String(active.id));
+    activeMove.current = move;
+    setActiveIds(move.ids);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    setActiveId(undefined);
+    const move = activeMove.current;
+    const placement = validPlacement(event);
+    activeMove.current = undefined;
+    setActiveIds([]);
     setDropPlacement(null);
-    const placement = resolveDropPlacement(event, editor.getBlocks(), childDropIndent, gapDropZone);
-    if (!placement) return;
+    if (!placement || !move) return;
 
-    const movedId = String(event.active.id);
     const { targetId, position } = placement;
-    const moved = editor.getBlock(movedId);
-    if (!moved || containsBlock(moved, targetId)) return;
-
-    editor.moveBlock(movedId, targetId, position);
-    editor.execute("selection.set", {
-      selection: [{
-        type: "block",
-        blockIds: [movedId],
-        anchorBlockId: movedId,
-        focusBlockId: movedId,
-      }],
-    });
+    editor.moveBlocks(move.ids, targetId, position);
+    const selection = move.grouped && move.selection
+      ? move.selection
+      : {
+          type: "block" as const,
+          blockIds: [move.ids[0]!],
+          anchorBlockId: move.ids[0]!,
+          focusBlockId: move.ids[0]!,
+        };
+    editor.execute("selection.set", { selection: [selection] });
   };
 
   return (
-    <PageDropPlacementContext.Provider value={dropPlacement}>
+    <PageDragStateContext.Provider value={{ placement: dropPlacement, draggedIds: activeIds }}>
       <DndContext
         sensors={sensors}
         collisionDetection={pageCollisionDetection}
         onDragStart={handleDragStart}
-        onDragMove={(event) => setDropPlacement(
-          resolveDropPlacement(event, editor.getBlocks(), childDropIndent, gapDropZone),
-        )}
+        onDragMove={(event) => setDropPlacement(validPlacement(event))}
         onDragCancel={() => {
-          setActiveId(undefined);
+          activeMove.current = undefined;
+          setActiveIds([]);
           setDropPlacement(null);
         }}
         onDragEnd={handleDragEnd}
       >
         {children}
         <DragOverlay dropAnimation={null}>
-          {activeBlock && (
+          {activeBlocks.length > 0 && (
             <div className="page-drag-overlay" aria-hidden="true">
-              <PageDragPreview block={activeBlock} />
+              <PageDragPreview blocks={activeBlocks} />
             </div>
           )}
         </DragOverlay>
       </DndContext>
-    </PageDropPlacementContext.Provider>
+    </PageDragStateContext.Provider>
   );
 }
 
@@ -309,10 +342,11 @@ export function PageDragPlugin({
  * editable content prevents ordinary caret placement and text selection from
  * accidentally beginning a drag.
  */
-export function PageDraggableBlock({ block, selected, content, children }: PageDraggableBlockProps) {
+export function PageDraggableBlock({ block, selected, content, controls, children }: PageDraggableBlockProps) {
   const draggable = useDraggable({ id: block.id });
   const droppable = useDroppable({ id: block.id });
-  const dropPlacement = useContext(PageDropPlacementContext);
+  const dragState = useContext(PageDragStateContext);
+  const dropPlacement = dragState.placement;
   const indicator = dropPlacement?.indicatorId === block.id ? dropPlacement : undefined;
 
   return (
@@ -320,7 +354,7 @@ export function PageDraggableBlock({ block, selected, content, children }: PageD
       block={block}
       selected={selected}
       className="page-block"
-      data-dragging={draggable.isDragging ? "true" : undefined}
+      data-dragging={draggable.isDragging || dragState.draggedIds.includes(block.id) ? "true" : undefined}
     >
       <div
         ref={droppable.setNodeRef}
@@ -339,6 +373,7 @@ export function PageDraggableBlock({ block, selected, content, children }: PageD
         >
           ⋮⋮
         </button>
+        {controls}
         {content}
         {indicator?.indicatorEdge && (
           <span

@@ -1,6 +1,7 @@
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_SELECTOR,
+  type EditorPosition,
 } from "@chulane/rivto";
 
 /** DOM elements and persisted identity resolved from an editor event target. */
@@ -143,4 +144,108 @@ export function focusBlock(root: HTMLElement, blockId: string, offset: number): 
   selection.removeAllRanges();
   selection.addRange(range);
   return true;
+}
+
+/** One block-relative caret candidate measured from the rendered DOM. */
+interface CaretCandidate {
+  readonly offset: number;
+  readonly left: number;
+  readonly top: number;
+}
+
+/** Resolves a flat UTF-16 text offset to a live DOM text endpoint. */
+function textPoint(content: HTMLElement, requestedOffset: number): { node: Node; offset: number } {
+  const walker = content.ownerDocument.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
+  let remaining = Math.max(0, requestedOffset);
+  let last: Node | undefined;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    last = node;
+    const length = node.textContent?.length ?? 0;
+    if (remaining <= length) return { node, offset: remaining };
+    remaining -= length;
+  }
+  return last ? { node: last, offset: last.textContent?.length ?? 0 } : { node: content, offset: 0 };
+}
+
+/** Measures a collapsed caret, falling back to an adjacent character box. */
+function caretCandidate(content: HTMLElement, offset: number): CaretCandidate {
+  const length = content.textContent?.length ?? 0;
+  const safeOffset = Math.max(0, Math.min(offset, length));
+  const point = textPoint(content, safeOffset);
+  const range = content.ownerDocument.createRange();
+  range.setStart(point.node, point.offset);
+  range.collapse(true);
+  let rect = range.getBoundingClientRect();
+  if (!rect.height && length) {
+    const fromPrevious = safeOffset === length;
+    const start = textPoint(content, fromPrevious ? safeOffset - 1 : safeOffset);
+    const end = textPoint(content, fromPrevious ? safeOffset : safeOffset + 1);
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+    rect = range.getBoundingClientRect();
+    return { offset: safeOffset, left: fromPrevious ? rect.right : rect.left, top: rect.top };
+  }
+  const contentRect = content.getBoundingClientRect();
+  return { offset: safeOffset, left: rect.left || contentRect.left, top: rect.top || contentRect.top };
+}
+
+/** Groups measured character positions into rendered visual lines. */
+function caretLines(content: HTMLElement): CaretCandidate[][] {
+  const length = content.textContent?.length ?? 0;
+  const lines: CaretCandidate[][] = [];
+  for (let offset = 0; offset <= length; offset += 1) {
+    const candidate = caretCandidate(content, offset);
+    const line = lines.find((items) => Math.abs(items[0]!.top - candidate.top) < 2);
+    if (line) line.push(candidate);
+    else lines.push([candidate]);
+  }
+  return lines.sort((left, right) => left[0]!.top - right[0]!.top);
+}
+
+/** Chooses the character on one visual line nearest a viewport x-coordinate. */
+function closestOnLine(line: CaretCandidate[], x: number): CaretCandidate {
+  return line.reduce((closest, candidate) => (
+    Math.abs(candidate.left - x) < Math.abs(closest.left - x) ? candidate : closest
+  ));
+}
+
+/**
+ * Resolves Up/Down using rendered lines rather than newline characters.
+ *
+ * Soft wrapping does not exist in the block's stored string, so the only
+ * reliable source is DOM geometry. The scan is linear in block text length;
+ * page blocks are intentionally short, and a cached layout index can replace
+ * it later if profiling shows long code blocks need one.
+ */
+export function verticalCaretPosition(
+  root: HTMLElement,
+  position: EditorPosition,
+  direction: "up" | "down",
+): EditorPosition | undefined {
+  const currentBlock = findRenderedBlock(root, position.blockId);
+  const currentContent = currentBlock ? findOwnedContent(currentBlock) : null;
+  if (!currentContent) return;
+  const current = caretCandidate(currentContent, position.offset);
+  const lines = caretLines(currentContent);
+  const lineIndex = lines.reduce((best, line, index) => (
+    Math.abs(line[0]!.top - current.top) < Math.abs(lines[best]![0]!.top - current.top) ? index : best
+  ), 0);
+  const nextLine = lines[lineIndex + (direction === "up" ? -1 : 1)];
+  if (nextLine) return { blockId: position.blockId, offset: closestOnLine(nextLine, current.left).offset };
+
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+  const currentIndex = blocks.findIndex((block) => block.dataset.blockId === position.blockId);
+  for (
+    let index = currentIndex + (direction === "up" ? -1 : 1);
+    index >= 0 && index < blocks.length;
+    index += direction === "up" ? -1 : 1
+  ) {
+    const content = findOwnedContent(blocks[index]!);
+    const blockId = blocks[index]!.dataset.blockId;
+    if (!content || !blockId) continue;
+    const targetLines = caretLines(content);
+    const targetLine = direction === "up" ? targetLines.at(-1) : targetLines[0];
+    return targetLine ? { blockId, offset: closestOnLine(targetLine, current.left).offset } : undefined;
+  }
+  return;
 }

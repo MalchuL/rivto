@@ -1,4 +1,4 @@
-import { createSelectionItems } from "../hooks/utils/editor-dom-selection";
+import { createBlockSelection, createSelectionItems } from "../hooks/utils/editor-dom-selection";
 
 const blocks = [
   { id: "first", length: 10 },
@@ -8,6 +8,15 @@ const blocks = [
 ];
 
 describe("cross-block selection items", () => {
+  it("creates an inclusive block range while preserving reverse direction", () => {
+    expect(createBlockSelection(["a", "b", "c", "d"], "d", "b")).toEqual([{
+      type: "block",
+      blockIds: ["b", "c", "d"],
+      anchorBlockId: "d",
+      focusBlockId: "b",
+    }]);
+  });
+
   it("preserves top-down direction and selects complete middle blocks", () => {
     expect(createSelectionItems(
       blocks,

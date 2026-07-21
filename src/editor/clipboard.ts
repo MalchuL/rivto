@@ -1,4 +1,5 @@
 import type { DocumentModelImpl, Block, BlockInput, Link } from "../store/document-model";
+import { isBlockCollapsed } from "../utils";
 import type { EditorPosition, EditorSelection, EditorSelectionItem } from "./types";
 
 /** MIME type carrying Rivto's lossless structured clipboard bundle. */
@@ -53,6 +54,7 @@ export function flattenBlocks(blocks: Block[]): Block[] {
   return blocks.flatMap((block) => [block, ...flattenBlocks(block.children)]);
 }
 
+/** Deep-clones portable block data before clipboard trimming mutates it. */
 function cloneBlock(block: Block): Block {
   return {
     ...block,
@@ -63,6 +65,7 @@ function cloneBlock(block: Block): Block {
   };
 }
 
+/** Finds one detached block recursively by stable ID. */
 function findBlock(blocks: Block[], id: string): Block | undefined {
   for (const block of blocks) {
     if (block.id === id) return block;
@@ -72,6 +75,7 @@ function findBlock(blocks: Block[], id: string): Block | undefined {
   return undefined;
 }
 
+/** Builds child-to-parent lookup data for selected-root normalization. */
 function indexParents(blocks: Block[], parents = new Map<string, string>()): Map<string, string> {
   blocks.forEach((parent) => {
     parent.children.forEach((child) => parents.set(child.id, parent.id));
@@ -156,6 +160,7 @@ export function normalizeSelection(document: DocumentModelImpl, selection: Edito
   };
 }
 
+/** Clones selected roots once, excluding roots already carried by an ancestor. */
 function selectedTopLevelSubtrees(document: DocumentModelImpl, range: NormalizedSelection, wholeBlocks: boolean): Block[] {
   const selectedIds = new Set(range.blocks.map((block) => block.id));
   const parents = indexParents(document.document);
@@ -173,6 +178,7 @@ function selectedTopLevelSubtrees(document: DocumentModelImpl, range: Normalized
   }).map(wholeBlocks ? cloneBlock : cloneSelection);
 }
 
+/** Escapes plain block text for the interoperable HTML clipboard flavor. */
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({
     "&": "&amp;",
@@ -211,6 +217,7 @@ export function createClipboardPayload(document: DocumentModelImpl, selection: E
   };
 }
 
+/** Gives pasted blocks and links fresh IDs, optionally reusing the text target. */
 function remapClipboardBundle(bundle: ClipboardBundle, firstTargetId?: string): RemappedClipboardBundle {
   if (
     bundle.version !== 1 ||
@@ -247,28 +254,44 @@ function remapClipboardBundle(bundle: ClipboardBundle, firstTargetId?: string): 
   return { blocks, firstChildren, links };
 }
 
+/** Publishes one collapsed portable text caret. */
 function collapse(selection: SelectionWriter, blockId: string, offset: number): void {
   selection.set([{ type: "text", anchor: { blockId, offset }, head: { blockId, offset } }]);
 }
 
+/** Removes every selected block after the surviving first text boundary. */
 function removeRangeTail(document: DocumentModelImpl, range: NormalizedSelection): void {
   range.blocks.slice(1).forEach((block) => document.removeBlock(block.id));
 }
 
-function insertBlocksAfter(document: DocumentModelImpl, blocks: BlockInput[], afterId?: string | null): string | undefined {
-  let previous = afterId;
-  blocks.forEach((block) => {
-    previous = document.insertBlock(block, previous ?? undefined);
-  });
-  return previous ?? undefined;
+/** Location for roots inserted by a normal structured paste. */
+interface BlockPastePlacement {
+  /** Initial sibling after which temporary roots are inserted. */
+  afterId?: string | null;
+  /** Existing first child before which every pasted root is finally moved. */
+  beforeChildId?: string;
 }
 
 /** Inserts a complete structured bundle as one CRDT transaction and undo step. */
-function insertBundleAsBlocks(document: DocumentModelImpl, selection: SelectionWriter, bundle: ClipboardBundle, afterId?: string | null): void {
+function insertBundleAsBlocks(
+  document: DocumentModelImpl,
+  selection: SelectionWriter,
+  bundle: ClipboardBundle,
+  placement: BlockPastePlacement = {},
+): void {
   const remapped = remapClipboardBundle(bundle);
   let lastId: string | undefined;
   document.transact(() => {
-    lastId = insertBlocksAfter(document, remapped.blocks, afterId);
+    const insertedIds: string[] = [];
+    let previous = placement.afterId;
+    remapped.blocks.forEach((block) => {
+      previous = document.insertBlock(block, previous ?? undefined);
+      insertedIds.push(previous);
+    });
+    if (placement.beforeChildId && insertedIds.length) {
+      document.moveBlocks(insertedIds, placement.beforeChildId, "before");
+    }
+    lastId = insertedIds.at(-1);
     remapped.links.forEach((link) => document.createLink(link));
   });
   if (lastId) selection.set([{ type: "block", blockIds: [lastId], anchorBlockId: lastId, focusBlockId: lastId }]);
@@ -277,30 +300,39 @@ function insertBundleAsBlocks(document: DocumentModelImpl, selection: SelectionW
 /**
  * Pastes a structured Rivto block bundle at the current selection.
  *
- * A bundle that begins with partial text consumes its first copied root into a
- * current text selection, preserving the target block's identity and metadata.
- * Every later copied root remains a block. A bundle copied from whole blocks
- * always inserts every root as a block, even when the destination is a caret.
- * All text, tree, and link mutations run inside one outer CRDT transaction;
- * nested document helpers join it instead of producing separate updates.
+ * A bundle beginning with selected text merges that text into a text target by
+ * default, while a whole-block bundle remains block-shaped. Passing
+ * `mergeText: false` explicitly keeps partial text as blocks. Every mutation
+ * runs inside one outer CRDT transaction so undo and collaborators never
+ * observe a partial paste.
  */
 export function pasteClipboardBundle(
   document: DocumentModelImpl,
   selection: SelectionWriter,
   current: EditorSelection,
   bundle: ClipboardBundle,
+  mergeText = true,
 ): void {
   if (!bundle.blocks.length) return;
   const hasTextTarget = current.some((item) => item.type === "text");
-  if (bundle.startsWithText !== true || !hasTextTarget) {
+  if (!mergeText || bundle.startsWithText !== true || !hasTextTarget) {
     const active = current.at(-1);
     const range = normalizeSelection(document, current);
     const afterId = active?.type === "block"
       ? active.focusBlockId
       : active?.type === "edgeless"
         ? active.blockIds.at(-1)
-        : range?.blocks.at(-1)?.id;
-    insertBundleAsBlocks(document, selection, bundle, afterId);
+        : active?.type === "text"
+          ? active.head.blockId
+          : range?.blocks.at(-1)?.id;
+    const caretBlock = active?.type === "text" ? findBlock(document.document, active.head.blockId) : undefined;
+
+    // A collapsed parent is a visible leaf, while every expanded block with
+    // children receives pasted roots before its existing first child.
+    const beforeChildId = !caretBlock || isBlockCollapsed(caretBlock)
+      ? undefined
+      : caretBlock.children[0]?.id;
+    insertBundleAsBlocks(document, selection, bundle, { afterId, beforeChildId });
     return;
   }
   const range = normalizeSelection(document, current);

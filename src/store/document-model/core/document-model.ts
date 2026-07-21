@@ -438,6 +438,43 @@ export class DocumentModelImpl {
     }
 
     /**
+     * Moves sibling block roots as one ordered, atomic operation.
+     *
+     * Selected descendants are ignored because moving their selected ancestor
+     * already carries them. Every remaining root must belong to the same direct
+     * parent; accepting mixed source levels would make one drag silently change
+     * the relative hierarchy of otherwise independent branches.
+     *
+     * @param ids - Selected block IDs in any order, including descendants.
+     * @param targetId - Block beside or inside which the roots are inserted.
+     * @param position - Placement relative to `targetId`.
+     * @throws If selected roots are not siblings or target their own subtree.
+     */
+    moveBlocks(
+        ids: string[],
+        targetId: string | null,
+        position: "before" | "after" | "inside" = "after",
+    ): void {
+        this.transact(() => {
+            const roots = this.selectedTopLevelRoots(ids);
+            if (!roots.length) return;
+            const parentId = this.findContainer(roots[0]!)?.parentId;
+            if (roots.some((id) => this.findContainer(id)?.parentId !== parentId)) {
+                throw new Error("Moved blocks must share the same parent");
+            }
+            if (targetId !== null && roots.some((id) => this.collectTreeIds(id).includes(targetId))) {
+                throw new Error(`Cannot move blocks relative to their descendant ${targetId}`);
+            }
+
+            // Repeated "after" and root-start insertions target the same index,
+            // so process from the end to retain visible source order. "before"
+            // and "inside" naturally retain order when processed forwards.
+            const ordered = targetId === null || position === "after" ? [...roots].reverse() : roots;
+            ordered.forEach((id) => this.moveBlock(id, targetId, position));
+        });
+    }
+
+    /**
      * Nests a block under its preceding sibling.
      *
      * @param id - ID of the block to indent.

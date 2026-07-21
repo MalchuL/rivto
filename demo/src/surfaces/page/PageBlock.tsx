@@ -24,20 +24,40 @@ export interface PageBlockProps {
  * nothing instead of leaving a stale container behind.
  */
 export function PageBlock({ blockId }: PageBlockProps) {
-  const { block } = useBlock(blockId);
+  const { block, getters, operations } = useBlock(blockId);
   const selection = useBlockSelection(blockId);
 
   if (!block) return null;
   const Content = pageBlockRenderers[block.type] ?? UnknownBlock;
+  const collapsed = getters.collapsed;
+  const childrenId = `block-children-${block.id}`;
 
   return (
     <PageDraggableBlock
       block={block}
       selected={Boolean(selection)}
+      controls={block.children.length > 0 && (
+        <button
+          type="button"
+          className="page-collapse-toggle"
+          data-collapse-toggle="true"
+          aria-label={`${collapsed ? "Expand" : "Collapse"} block: ${block.content || block.type}`}
+          aria-expanded={!collapsed}
+          aria-controls={childrenId}
+          onPointerDown={(event) => {
+            // The toggle is a control, not a text-selection or drag endpoint.
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onClick={operations.toggleCollapsed}
+        >
+          {collapsed ? "▸" : "▾"}
+        </button>
+      )}
       content={<Content blockId={block.id} />}
     >
-      {block.children.length > 0 && (
-        <div className="page-block-children">
+      {block.children.length > 0 && !collapsed && (
+        <div id={childrenId} className="page-block-children">
           {block.children.map((child) => (
             <PageBlock key={child.id} blockId={child.id} />
           ))}

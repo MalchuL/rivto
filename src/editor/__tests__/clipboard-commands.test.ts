@@ -61,6 +61,66 @@ describe("clipboard commands", () => {
     editor.destroy();
   });
 
+  it("copies and pastes a collapsed parent with its complete hidden subtree", () => {
+    const source = createRivtoEditor();
+    const parent = source.insertBlock({
+      type: "paragraph",
+      content: "Parent",
+      children: [{ type: "paragraph", content: "Hidden child" }],
+    });
+    source.setBlockCollapsed(parent, true);
+    source.execute("selection.set", {
+      selection: [{ type: "block", blockIds: [parent], anchorBlockId: parent, focusBlockId: parent }],
+    });
+    const clipboard = new Map<string, string>();
+    source.execute("clipboard.copy", {
+      clipboardData: { setData: (type: string, value: string) => clipboard.set(type, value) },
+    });
+
+    const target = createRivtoEditor();
+    const destination = target.insertBlock({ type: "paragraph", content: "Destination" });
+    target.execute("selection.set", {
+      selection: [{ type: "block", blockIds: [destination], anchorBlockId: destination, focusBlockId: destination }],
+    });
+    target.execute("clipboard.paste", { structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
+
+    const pasted = target.getBlocks()[1]!;
+    expect(target.getBlockCollapsed(pasted.id)).toBe(true);
+    expect(pasted.children).toMatchObject([{ content: "Hidden child" }]);
+    source.destroy();
+    target.destroy();
+  });
+
+  it("pastes structured blocks after a collapsed caret block", () => {
+    const source = createRivtoEditor();
+    const copied = source.insertBlock({ type: "paragraph", content: "Pasted" });
+    source.execute("selection.set", {
+      selection: [{ type: "block", blockIds: [copied], anchorBlockId: copied, focusBlockId: copied }],
+    });
+    const clipboard = new Map<string, string>();
+    source.execute("clipboard.copy", {
+      clipboardData: { setData: (type: string, value: string) => clipboard.set(type, value) },
+    });
+
+    const target = createRivtoEditor();
+    const parent = target.insertBlock({
+      type: "paragraph",
+      content: "Parent",
+      children: [{ type: "paragraph", content: "Hidden child" }],
+    });
+    target.setBlocksCollapsed(parent, true);
+    target.execute("selection.set", {
+      selection: [{ type: "text", anchor: { blockId: parent, offset: 3 }, head: { blockId: parent, offset: 3 } }],
+    });
+
+    target.execute("clipboard.paste", { structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
+
+    expect(target.getBlocks().map((block) => block.content)).toEqual(["Parent", "Pasted"]);
+    expect(target.getBlock(parent)?.children).toMatchObject([{ content: "Hidden child" }]);
+    source.destroy();
+    target.destroy();
+  });
+
   it("pastes selected blocks as fresh blocks instead of plain text", () => {
     const source = createRivtoEditor();
     const target = createRivtoEditor();
@@ -119,6 +179,114 @@ describe("clipboard commands", () => {
     expect(target.getBlocks().map((block) => ({ type: block.type, content: block.content }))).toEqual([
       { type: "paragraph", content: "Destination" },
     ]);
+    source.destroy();
+    target.destroy();
+  });
+
+  it("does not special-case empty blocks that already have children", () => {
+    const source = createRivtoEditor();
+    const copied = source.insertBlock({ type: "heading2", content: "Pasted" });
+    source.execute("selection.set", {
+      selection: [{ type: "block", blockIds: [copied], anchorBlockId: copied, focusBlockId: copied }],
+    });
+    const clipboard = new Map<string, string>();
+    source.execute("clipboard.copy", {
+      clipboardData: { setData: (type: string, value: string) => clipboard.set(type, value) },
+    });
+
+    const target = createRivtoEditor();
+    const empty = target.insertBlock({ type: "paragraph", content: "" });
+    const oldChild = target.insertBlock({ type: "paragraph", content: "Old child" }, empty);
+    target.indentBlock(oldChild);
+    target.execute("selection.set", {
+      selection: [{ type: "text", anchor: { blockId: empty, offset: 0 }, head: { blockId: empty, offset: 0 } }],
+    });
+
+    target.execute("clipboard.paste", { structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
+
+    expect(target.getBlocks().map((block) => block.content)).toEqual([""]);
+    expect(target.getBlock(empty)?.children.map((block) => block.content)).toEqual(["Pasted", "Old child"]);
+    source.destroy();
+    target.destroy();
+  });
+
+  it("pastes at the start of a caret block's existing children atomically", () => {
+    const source = createRivtoEditor();
+    const first = source.insertBlock({ type: "paragraph", content: "Pasted first" });
+    const second = source.insertBlock({ type: "paragraph", content: "Pasted second" }, first);
+    source.execute("selection.set", {
+      selection: [{ type: "block", blockIds: [first, second], anchorBlockId: first, focusBlockId: second }],
+    });
+    const clipboard = new Map<string, string>();
+    source.execute("clipboard.copy", {
+      clipboardData: { setData: (type: string, value: string) => clipboard.set(type, value) },
+    });
+
+    const target = createRivtoEditor();
+    const parent = target.insertBlock({ type: "paragraph", content: "Parent" });
+    const oldChild = target.insertBlock({ type: "paragraph", content: "Old child" }, parent);
+    target.indentBlock(oldChild);
+    target.execute("selection.set", {
+      selection: [{ type: "text", anchor: { blockId: parent, offset: 3 }, head: { blockId: parent, offset: 3 } }],
+    });
+    const updates = jest.fn();
+    const unsubscribe = target.document.subscribe(updates);
+
+    target.execute("clipboard.paste", { structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
+
+    expect(updates).toHaveBeenCalledTimes(1);
+    expect(target.getBlocks()).toHaveLength(1);
+    expect(target.getBlock(parent)?.children.map((block) => block.content)).toEqual([
+      "Pasted first",
+      "Pasted second",
+      "Old child",
+    ]);
+    target.undo();
+    expect(target.getBlock(parent)?.children.map((block) => block.content)).toEqual(["Old child"]);
+    unsubscribe();
+    source.destroy();
+    target.destroy();
+  });
+
+  it("pastes a partial structured copy as text by default at a text caret", () => {
+    const source = createRivtoEditor();
+    const copied = source.insertBlock({ type: "paragraph", content: "Alpha" });
+    source.execute("selection.set", {
+      selection: [{
+        type: "text",
+        anchor: { blockId: copied, offset: 1 },
+        head: { blockId: copied, offset: 4 },
+      }],
+    });
+    const clipboard = new Map<string, string>();
+    source.execute("clipboard.copy", {
+      clipboardData: { setData: (type: string, value: string) => clipboard.set(type, value) },
+    });
+
+    const target = createRivtoEditor();
+    const destination = target.insertBlock({ type: "paragraph", content: "Destination" });
+    target.execute("selection.set", {
+      selection: [{
+        type: "text",
+        anchor: { blockId: destination, offset: 4 },
+        head: { blockId: destination, offset: 4 },
+      }],
+    });
+    const updates = jest.fn();
+    const unsubscribe = target.document.subscribe(updates);
+
+    target.execute("clipboard.paste", { structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
+
+    expect(updates).toHaveBeenCalledTimes(1);
+    expect(target.getBlocks().map((block) => block.content)).toEqual(["Destlphination"]);
+    expect(target.selection.get()).toEqual([{
+      type: "text",
+      anchor: { blockId: destination, offset: 7 },
+      head: { blockId: destination, offset: 7 },
+    }]);
+    target.undo();
+    expect(target.getBlocks().map((block) => block.content)).toEqual(["Destination"]);
+    unsubscribe();
     source.destroy();
     target.destroy();
   });

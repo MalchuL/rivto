@@ -51,6 +51,10 @@ export function PageDeletePlugin() {
     const block = target?.collapsed ? editor.getBlock(target.blockId) : undefined;
     if (!target?.collapsed || !block || target.offset !== block.content.length) return;
 
+    // A collapsed parent is a visible leaf. Its hidden first child must not be
+    // merged or skipped over by forward deletion, matching Logseq's behavior.
+    if (editor.getBlockCollapsed(block.id)) return;
+
     const next = findNextEditableBlock(root, block.id);
     if (!next) return;
 

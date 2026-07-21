@@ -16,6 +16,10 @@ export interface BlockOperations {
   setType(type: string): void;
   /** Sets or removes one native property without replacing sibling properties. */
   setProp(key: string, value: unknown): void;
+  /** Collapses or expands this block's children when the block can be folded. */
+  setCollapsed(collapsed: boolean): void;
+  /** Toggles the latest persisted collapse state instead of a rendered snapshot. */
+  toggleCollapsed(): void;
   /** Sets or removes data owned by one plugin namespace. */
   setPluginData(pluginId: string, value: unknown): void;
   /** Patches collaborative canvas geometry without replacing omitted fields. */
@@ -36,10 +40,18 @@ export interface BlockOperations {
   outdent(): void;
 }
 
+/** Reactive derived values for one block snapshot. */
+export interface BlockGetters {
+  /** Whether the block's children are currently persisted as collapsed. */
+  readonly collapsed: boolean;
+}
+
 /** Reactive block snapshot and stable commands returned by useBlock. */
 export interface UseBlockResult {
   /** Current detached block value, or undefined after deletion/for unknown IDs. */
   readonly block: EditorBlock | undefined;
+  /** Derived values recomputed whenever the editor revision changes. */
+  readonly getters: BlockGetters;
   /** Memoized commands permanently bound to the requested block ID. */
   readonly operations: BlockOperations;
 }
@@ -49,10 +61,9 @@ export interface UseBlockResult {
  *
  * `block` is a detached snapshot, not a live or mutable CRDT object. Document
  * changes increment the EditorView revision and cause that snapshot to be
- * resolved again; deletion changes it to undefined. `operations` remains a
- * stable command object until either the editor instance or block ID changes.
- * Keeping both values under separate fields makes mutation explicit without
- * requiring consumers to coordinate two hooks.
+ * resolved again; deletion changes it to undefined. `getters` contains values
+ * derived from that render's current editor revision, while `operations`
+ * remains stable until either the editor instance or block ID changes.
  *
  * @param blockId - Stable persisted ID of the block to resolve.
  * @returns Current block snapshot together with commands bound to its ID.
@@ -68,6 +79,10 @@ export function useBlock(blockId: string): UseBlockResult {
     setContent: (content) => editor.updateBlock(blockId, { content }),
     setType: (type) => editor.setBlockType(blockId, type),
     setProp: (key, value) => editor.setBlockProp(blockId, key, value),
+    setCollapsed: (collapsed) => editor.setBlockCollapsed(blockId, collapsed),
+    toggleCollapsed: () => {
+      if (editor.getBlock(blockId)) editor.setBlockCollapsed(blockId, !editor.getBlockCollapsed(blockId));
+    },
     setPluginData: (pluginId, value) => editor.setBlockPluginData(blockId, pluginId, value),
     setLayout: (layout) => editor.setBlockLayout(blockId, layout),
     remove: () => editor.removeBlock(blockId),
@@ -81,6 +96,7 @@ export function useBlock(blockId: string): UseBlockResult {
 
   return {
     block: editor.getBlock(blockId),
+    getters: { collapsed: editor.getBlockCollapsed(blockId) },
     operations,
   };
 }

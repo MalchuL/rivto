@@ -1,3 +1,7 @@
+import * as Y from "yjs";
+import { z } from "zod";
+import { BLOCK_COLLAPSED_PROP } from "../../blocks";
+import { YjsDoc } from "../../store/crdt-doc";
 import { createRivtoEditor } from "../rivto-editor";
 
 describe("EditorRuntime block commands", () => {
@@ -78,6 +82,78 @@ describe("EditorRuntime block commands", () => {
     expect(editor.getBlock(id)).toMatchObject({ type: "paragraph", props: { old: true } });
     expect(() => editor.setBlockType(id, "missing")).toThrow("Unknown block type missing");
     editor.destroy();
+  });
+
+  it("validates and preserves the reserved collapse property across block types", () => {
+    const editor = createRivtoEditor();
+    editor.defineBlock({
+      type: "strict",
+      propSchema: z.object({ tone: z.string().optional() }).strict(),
+    });
+    const id = editor.insertBlock({
+      type: "strict",
+      props: { tone: "info" },
+      children: [{ type: "paragraph", content: "Child" }],
+    });
+
+    editor.setBlockCollapsed(id, true);
+    expect(editor.getBlock(id)?.props).toEqual({ tone: "info", [BLOCK_COLLAPSED_PROP]: true });
+    expect(() => editor.setBlockProp(id, BLOCK_COLLAPSED_PROP, "yes")).toThrow("must be a boolean");
+
+    editor.setBlockType(id, "heading2");
+    expect(editor.getBlock(id)?.props).toEqual({ [BLOCK_COLLAPSED_PROP]: true });
+    expect(editor.getBlockCollapsed(id)).toBe(true);
+    editor.destroy();
+  });
+
+  it("collapses several parents atomically, ignores leaves, and undoes once", () => {
+    const editor = createRivtoEditor();
+    const first = editor.insertBlock({
+      type: "paragraph",
+      content: "First",
+      children: [{ type: "paragraph", content: "First child" }],
+    });
+    const leaf = editor.insertBlock({ type: "paragraph", content: "Leaf" }, first);
+    const second = editor.insertBlock({
+      type: "paragraph",
+      content: "Second",
+      children: [{ type: "paragraph", content: "Second child" }],
+    }, leaf);
+    const updates = jest.fn();
+    const unsubscribe = editor.document.subscribe(updates);
+
+    editor.setBlocksCollapsed([first, leaf, second, first], true);
+
+    expect(updates).toHaveBeenCalledTimes(1);
+    expect(editor.getBlockCollapsed(first)).toBe(true);
+    expect(editor.getBlockCollapsed(second)).toBe(true);
+    expect(editor.getBlock(leaf)?.props).toEqual({});
+
+    editor.undo();
+    expect(editor.getBlockCollapsed(first)).toBe(false);
+    expect(editor.getBlockCollapsed(second)).toBe(false);
+    unsubscribe();
+    editor.destroy();
+  });
+
+  it("synchronizes collapse state through the CRDT document", () => {
+    const leftDocument = new YjsDoc("collapse-left");
+    const rightDocument = new YjsDoc("collapse-right");
+    const left = createRivtoEditor({ document: leftDocument });
+    const right = createRivtoEditor({ document: rightDocument });
+    const parent = left.insertBlock({
+      type: "paragraph",
+      content: "Parent",
+      children: [{ type: "paragraph", content: "Child" }],
+    });
+    Y.applyUpdate(rightDocument.doc, Y.encodeStateAsUpdate(leftDocument.doc));
+
+    left.setBlocksCollapsed(parent, true);
+    Y.applyUpdate(rightDocument.doc, Y.encodeStateAsUpdate(leftDocument.doc));
+
+    expect(right.getBlockCollapsed(parent)).toBe(true);
+    left.destroy();
+    right.destroy();
   });
 
   it("notifies subscribers once for every successful block command", () => {
@@ -256,6 +332,43 @@ describe("EditorRuntime block commands", () => {
       { id: targetId },
     ]);
     unsubscribe();
+    editor.destroy();
+  });
+
+  it("moves sibling roots in source order as one undoable update", () => {
+    const editor = createRivtoEditor();
+    const firstId = editor.insertBlock({ type: "paragraph", content: "First" });
+    const gapId = editor.insertBlock({ type: "paragraph", content: "Gap" }, firstId);
+    const secondId = editor.insertBlock({ type: "paragraph", content: "Second" }, gapId);
+    const targetId = editor.insertBlock({ type: "paragraph", content: "Target" }, secondId);
+    const childId = editor.insertBlock({ type: "paragraph", content: "Child" }, firstId);
+    editor.indentBlock(childId);
+    const documentUpdates = jest.fn();
+    const unsubscribe = editor.document.subscribe(documentUpdates);
+
+    editor.moveBlocks([secondId, childId, firstId], targetId, "after");
+
+    expect(documentUpdates).toHaveBeenCalledTimes(1);
+    expect(editor.getBlocks().map((block) => block.id)).toEqual([gapId, targetId, firstId, secondId]);
+    expect(editor.getBlock(firstId)?.children).toMatchObject([{ id: childId }]);
+    editor.undo();
+    expect(editor.getBlocks().map((block) => block.id)).toEqual([firstId, gapId, secondId, targetId]);
+    unsubscribe();
+    editor.destroy();
+  });
+
+  it("rejects grouped moves whose roots have different parents", () => {
+    const editor = createRivtoEditor();
+    const parentId = editor.insertBlock({ type: "paragraph", content: "Parent" });
+    const childId = editor.insertBlock({ type: "paragraph", content: "Child" }, parentId);
+    editor.indentBlock(childId);
+    const siblingId = editor.insertBlock({ type: "paragraph", content: "Sibling" }, parentId);
+
+    expect(() => editor.moveBlocks([childId, siblingId], parentId, "before")).toThrow("share the same parent");
+    expect(editor.getBlocks()).toMatchObject([
+      { id: parentId, children: [{ id: childId }] },
+      { id: siblingId },
+    ]);
     editor.destroy();
   });
 

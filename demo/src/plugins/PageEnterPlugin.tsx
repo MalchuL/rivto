@@ -79,7 +79,7 @@ export function PageEnterPlugin() {
         content: isTextTarget ? block.content.slice(splitAt) : "",
       }, block.id);
 
-      if (block.children.length > 0) {
+      if (block.children.length > 0 && !editor.getBlockCollapsed(block.id)) {
         // Insertion initially creates a sibling directly after `block`.
         // Indenting makes it the last child; moving it to position zero then
         // gives Enter the requested first-child placement.

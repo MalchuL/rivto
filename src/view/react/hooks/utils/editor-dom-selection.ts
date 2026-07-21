@@ -81,6 +81,35 @@ export function createSelectionItems(
   ];
 }
 
+/**
+ * Creates one inclusive whole-block range in visible order.
+ *
+ * Unlike a text range, both endpoint blocks are complete selections. The ID
+ * array remains top-down while anchor/focus retain gesture direction.
+ */
+export function createBlockSelection(
+  blockIds: readonly string[],
+  anchorBlockId: string,
+  focusBlockId: string,
+): EditorSelection {
+  const anchorIndex = blockIds.indexOf(anchorBlockId);
+  const focusIndex = blockIds.indexOf(focusBlockId);
+  if (anchorIndex < 0 || focusIndex < 0) return [];
+  return [{
+    type: "block",
+    blockIds: blockIds.slice(Math.min(anchorIndex, focusIndex), Math.max(anchorIndex, focusIndex) + 1),
+    anchorBlockId,
+    focusBlockId,
+  }];
+}
+
+/** Returns every rendered BlockView ID in visible depth-first DOM order. */
+export function orderedBlockIds(root: HTMLElement): string[] {
+  return [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => (
+    block.dataset.blockId ? [block.dataset.blockId] : []
+  ));
+}
+
 /** Maps one DOM endpoint to a block-relative plain-text offset. */
 function readPosition(root: HTMLElement, node: Node | null, offset: number): EditorPosition | undefined {
   const element = node instanceof Element ? node : node?.parentElement;
@@ -235,6 +264,12 @@ function pointAtOffset(content: HTMLElement, requestedOffset: number): { node: N
   return last
     ? { node: last, offset: last.textContent?.length ?? 0 }
     : { node: content, offset: 0 };
+}
+
+/** Resolves one portable editor position to its current live DOM endpoint. */
+export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosition): DOMSelectionPoint | undefined {
+  const content = orderedContents(root).find((candidate) => blockIdForContent(candidate) === position.blockId);
+  return content ? { ...pointAtOffset(content, position.offset), content } : undefined;
 }
 
 /**

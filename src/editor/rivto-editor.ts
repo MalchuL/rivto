@@ -1,7 +1,13 @@
-import { BlockRegistry, defaultBlockDefinitions, type BlockDefinition } from "../blocks";
+import {
+  BLOCK_COLLAPSED_PROP,
+  BlockRegistry,
+  defaultBlockDefinitions,
+  type BlockDefinition,
+} from "../blocks";
 import { CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
 import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type BlockPatch, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
+import { isBlockCollapsed } from "../utils";
 import {
   createClipboardPayload,
   cutSelection,
@@ -129,6 +135,12 @@ export class EditorRuntime implements RivtoEditorApi {
     return find(this.getBlocks());
   }
 
+  /** Reads the latest collapse value without exposing native property access. */
+  getBlockCollapsed(id: string): boolean {
+    const block = this.getBlock(id);
+    return block ? isBlockCollapsed(block) : false;
+  }
+
   /** Returns current root blocks as detached values. */
   getBlocks(): EditorBlock[] {
     return this.document.document satisfies EditorBlock[];
@@ -181,6 +193,11 @@ export class EditorRuntime implements RivtoEditorApi {
     this.execute("block.move", { id, targetId, position });
   }
 
+  /** Moves sibling block roots through one built-in command and undo item. */
+  moveBlocks(ids: string[], targetId: string | null, position: "before" | "after" | "inside" = "after"): void {
+    this.execute("block.move-many", { ids, targetId, position });
+  }
+
   /** Indents a block through the built-in command path. */
   indentBlock(id: string): void {
     this.execute("block.indent", { id });
@@ -194,6 +211,16 @@ export class EditorRuntime implements RivtoEditorApi {
   /** Sets one block property through the built-in command path. */
   setBlockProp(id: string, key: string, value: unknown): void {
     this.execute("block.prop.set", { id, key, value });
+  }
+
+  /** Persists one block's collapse state through the shared batch command. */
+  setBlockCollapsed(id: string, collapsed: boolean): void {
+    this.setBlocksCollapsed(id, collapsed);
+  }
+
+  /** Persists one collapse state for one or several blocks in one undoable command. */
+  setBlocksCollapsed(ids: string | string[], collapsed: boolean): void {
+    this.execute("block.collapsed.set", { ids: typeof ids === "string" ? [ids] : ids, collapsed });
   }
 
   /** Sets one plugin-data namespace through the built-in command path. */
@@ -303,7 +330,13 @@ export class EditorRuntime implements RivtoEditorApi {
       const data = payload(value);
       const id = string(data.id, "id");
       const type = string(data.type, "type");
-      const prepared = this.blocks.prepare({ type });
+      const current = this.getBlock(id);
+      const prepared = this.blocks.prepare({
+        type,
+        props: current && BLOCK_COLLAPSED_PROP in current.props
+          ? { [BLOCK_COLLAPSED_PROP]: current.props[BLOCK_COLLAPSED_PROP] }
+          : undefined,
+      });
       this.document.setBlockType(id, type, prepared.props);
     }));
     this.commands.register("block.remove", documentCommand((value) => {
@@ -330,6 +363,15 @@ export class EditorRuntime implements RivtoEditorApi {
         data.position === "before" || data.position === "inside" ? data.position : "after",
       );
     }));
+    this.commands.register("block.move-many", documentCommand((value) => {
+      const data = payload(value);
+      if (!Array.isArray(data.ids) || data.ids.some((id) => typeof id !== "string")) {
+        throw new Error("ids must be an array of strings");
+      }
+      const targetId = data.targetId === null ? null : string(data.targetId, "targetId");
+      const position = data.position === "before" || data.position === "inside" ? data.position : "after";
+      this.document.moveBlocks(data.ids, targetId, position);
+    }));
     this.commands.register("block.indent", documentCommand((value) => {
       const data = payload(value);
       const before = this.selection.get();
@@ -347,6 +389,25 @@ export class EditorRuntime implements RivtoEditorApi {
     this.commands.register("block.prop.set", documentCommand((value) => {
       const data = payload(value);
       this.document.setBlockProp(string(data.id, "id"), string(data.key, "key"), data.value);
+    }));
+    this.commands.register("block.collapsed.set", documentCommand((value) => {
+      const data = payload(value);
+      if (!Array.isArray(data.ids) || data.ids.some((id) => typeof id !== "string")) {
+        throw new Error("ids must be an array of strings");
+      }
+      if (typeof data.collapsed !== "boolean") throw new Error("collapsed must be a boolean");
+      const blocks = [...new Set(data.ids)].map((id) => {
+        const block = this.getBlock(id);
+        if (!block) throw new Error(`Block ${id} not found`);
+        return block;
+      });
+      this.document.transact(() => {
+        blocks.forEach((block) => {
+          if (data.collapsed && block.children.length === 0) return;
+          if (isBlockCollapsed(block) === data.collapsed) return;
+          this.document.setBlockProp(block.id, BLOCK_COLLAPSED_PROP, data.collapsed);
+        });
+      });
     }));
     this.commands.register("block.pluginData.set", documentCommand((value) => {
       const data = payload(value);
@@ -447,13 +508,20 @@ export class EditorRuntime implements RivtoEditorApi {
       const structured = text(data.structured)
         ?? (event?.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) || undefined);
       const bundle = data.bundle as ClipboardBundle | undefined;
+      const mergeText = data.mergeText !== false;
       if (event?.clipboardData) event.preventDefault();
       if (bundle) {
-        pasteClipboardBundle(this.document, this.selection, this.selection.get(), bundle);
+        pasteClipboardBundle(this.document, this.selection, this.selection.get(), bundle, mergeText);
         return;
       }
       if (structured) {
-        pasteClipboardBundle(this.document, this.selection, this.selection.get(), JSON.parse(structured) as ClipboardBundle);
+        pasteClipboardBundle(
+          this.document,
+          this.selection,
+          this.selection.get(),
+          JSON.parse(structured) as ClipboardBundle,
+          mergeText,
+        );
         return;
       }
       const plain = text(data.text)

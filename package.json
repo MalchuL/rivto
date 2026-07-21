@@ -25,6 +25,7 @@
     "demo:check": "pnpm --dir demo check-types",
     "lint": "eslint src --max-warnings=0",
     "test": "scripts/run-test.sh",
+    "test:e2e": "pnpm demo:build && playwright test --project=chromium --project=firefox",
     "check-types": "tsc --noEmit"
   },
   "peerDependencies": {
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
+    "@playwright/test": "^1.58.0",
     "@types/jest": "^29.5.14",
     "@types/react": "^19.2.0",
     "eslint": "^9.39.0",

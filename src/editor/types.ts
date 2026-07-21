@@ -127,6 +127,9 @@ export interface RivtoEditorApi {
    */
   getBlock(id: string): EditorBlock | undefined;
 
+  /** Reads one block's latest persisted collapse state; missing blocks are expanded. */
+  getBlockCollapsed(id: string): boolean;
+
   /**
    * Returns current root blocks as detached values.
    *
@@ -170,6 +173,9 @@ export interface RivtoEditorApi {
   /** Moves a block before, after, or inside another block through `block.move`. */
   moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
 
+  /** Atomically moves sibling block roots through `block.move-many`. */
+  moveBlocks(ids: string[], targetId: string | null, position?: "before" | "after" | "inside"): void;
+
   /** Indents a block through the built-in `block.indent` command. */
   indentBlock(id: string): void;
 
@@ -178,6 +184,12 @@ export interface RivtoEditorApi {
 
   /** Sets one block property through the built-in `block.prop.set` command. */
   setBlockProp(id: string, key: string, value: unknown): void;
+
+  /** Persists one block's collapse state through the atomic batch command. */
+  setBlockCollapsed(id: string, collapsed: boolean): void;
+
+  /** Atomically persists one collapse state for one ID or several IDs. */
+  setBlocksCollapsed(ids: string | string[], collapsed: boolean): void;
 
   /** Sets one block plugin-data namespace through `block.pluginData.set`. */
   setBlockPluginData(id: string, pluginId: string, value: unknown): void;

@@ -1,4 +1,5 @@
 import type { EditorBlockInput } from "../editor/model";
+import { BLOCK_COLLAPSED_PROP } from "./constants";
 import type { BlockDefinition } from "./types";
 
 /** True only for mergeable records; arrays and class instances are values. */
@@ -24,6 +25,25 @@ const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unk
       : value;
   }
   return result;
+};
+
+/**
+ * Validates type-owned properties without making every block schema repeat the
+ * editor-wide collapse property. Strict schemas therefore remain strict while
+ * the reserved boolean can be used consistently by every native block type.
+ */
+const validateProps = (
+  definition: BlockDefinition | undefined,
+  props: Record<string, unknown>,
+): Record<string, unknown> => {
+  const { [BLOCK_COLLAPSED_PROP]: collapsed, ...typeProps } = props;
+  if (collapsed !== undefined && typeof collapsed !== "boolean") {
+    throw new TypeError(`${BLOCK_COLLAPSED_PROP} must be a boolean`);
+  }
+  const validated = definition?.propSchema?.parse(typeProps) ?? typeProps;
+  return collapsed === undefined
+    ? validated
+    : { ...validated, [BLOCK_COLLAPSED_PROP]: collapsed };
 };
 
 /**
@@ -85,7 +105,7 @@ export class BlockRegistry {
   prepare(input: EditorBlockInput): EditorBlockInput {
     const definition = this.require(input.type);
     const props = mergeProps(definition.defaultProps ?? {}, input.props ?? {});
-    return { ...input, props: definition.propSchema?.parse(props) ?? props };
+    return { ...input, props: validateProps(definition, props) };
   }
 
   /**
@@ -99,7 +119,7 @@ export class BlockRegistry {
    * @returns Validated properties or the original unknown-type properties.
    */
   validate(type: string, props: Record<string, unknown>): Record<string, unknown> {
-    return this.get(type)?.propSchema?.parse(props) ?? props;
+    return validateProps(this.get(type), props);
   }
 
   /**
