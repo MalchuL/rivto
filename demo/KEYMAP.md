@@ -11,14 +11,14 @@ by the UI-agnostic React package.
 | Input | Context | Result |
 | --- | --- | --- |
 | Typing | Text caret or text selection | Uses the native `contenteditable` input path and synchronizes the block text. |
-| `Enter` | Editable block | Splits at the caret. List items continue the same list type; other blocks create a paragraph. If the expanded block has children, the new block becomes its first child; a collapsed block creates a next sibling. |
+| `Enter` | Editable block | Splits at the caret and creates a paragraph. If the expanded block has children, the new block becomes its first child; a collapsed block creates a next sibling. |
 | `Enter` | Expanded editor selection | Deletes the selection atomically, then applies the normal Enter behavior at the surviving caret. |
 | `Shift+Enter` | Editable block | Inserts a native line break inside the same block. |
 | `Backspace` | Expanded text or block selection originating in editable content | Deletes the complete selection in one transaction. |
 | `Backspace` | Caret after the start of a block | Uses native character deletion. |
 | `Backspace` | Caret at the start of a nested block | Outdents the block. |
 | `Backspace` | Caret at the start of a root block | Merges it into the previous visible editable block. |
-| `Backspace` | First empty non-paragraph | Converts it to a paragraph. The final empty paragraph is retained. |
+| `Backspace` | First empty custom block | Converts it to a paragraph. The final empty paragraph is retained. |
 | `Delete` | Expanded text or block selection originating in editable content | Deletes the complete selection in one transaction. |
 | `Delete` | Caret before the end of a block | Uses native forward character deletion. |
 | `Delete` | Caret at the end of an expanded block | Merges the next visible editable block into the current block. A collapsed parent remains unchanged. |
@@ -90,7 +90,44 @@ Dropping into a moved block's own subtree is rejected. There is no placement
 animation after mouse or keyboard release. Dropping inside a collapsed block
 keeps the inserted subtree hidden until that block is expanded.
 
+## Slash commands
+
+| Combination | Context | Result |
+| --- | --- | --- |
+| `/` | Anywhere in editable Markdown/Slider content | Inserts `/` as ordinary text and opens the command menu. |
+| Text / `Backspace` | Open slash menu | Edits the collaborative query and filters commands. |
+| `ArrowUp` / `ArrowDown` | Open slash menu | Moves through matching commands. |
+| `Enter` | Open slash menu | Removes the active `/query` and executes the command as one undo step. |
+| `Escape` | Open slash menu | Closes the menu and preserves `/query` in the block. |
+
+Commands convert the current block to Markdown, Slider, or Counter; duplicate
+or delete its complete subtree; and collapse or expand it when applicable.
+
+## Edgeless canvas
+
+| Input | Result |
+| --- | --- |
+| Click card chrome | Selects the complete root subtree as one canvas object. |
+| Click text or a control | Edits text or activates the control without selecting the canvas object. |
+| `Enter` in editable content | Uses the shared block splitter. Expanded roots with children receive the new first child; a split leaf root creates a nearby canvas card. |
+| `Tab` / `Shift+Tab` in editable content | Uses the shared structural indent/outdent behavior inside the card outline. |
+| `Primary+click` inside a card | Toggles its owning root object; controls do not activate. |
+| Drag empty canvas | Rectangle-selects intersecting root cards. |
+| Drag `Move` | Moves one root, or every selected root when the handle belongs to the selection. |
+| Drag a block `⋮⋮` handle | Uses the shared structural drag/drop behavior to reorder or nest blocks within or across root cards. |
+| Drag resize corner | Resizes one root card, with a minimum size of 180×100. |
+| Arrow keys | Moves selected roots by one canvas pixel. |
+| `Shift+Arrow` | Moves selected roots by ten canvas pixels. |
+| `Backspace` / `Delete` | Removes selected root subtrees in one transaction. |
+| `Escape` | Cancels an active transform or clears object selection. |
+| Native scroll / wheel | Scrolls the 2400×1600 canvas viewport. |
+| Space+drag / middle-button drag | Pans by changing native viewport scroll offsets. |
+| `Primary+wheel` | Zooms around the pointer between 50% and 200%. |
+
+Page/Edgeless mode buttons clear local selection but retain the same document,
+hierarchy, layouts, custom properties, and undo history. Collapse is page-only;
+all nested descendants remain rendered inside an edgeless root card.
+
 ## Not currently bound
 
-- `/` has no slash-command menu in the current demo.
 - `Primary+A` has no editor-wide select-all command; native browser behavior applies.

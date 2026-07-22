@@ -1,4 +1,5 @@
 import {
+  readEditorDOMSelection,
   useEditor,
   useEditorEvent,
   useEditorRoot,
@@ -10,7 +11,7 @@ import {
 } from "./keyboard-selection";
 
 /**
- * Installs page-specific Tab and Shift+Tab indentation.
+ * Installs shared outline Tab and Shift+Tab indentation.
  *
  * This plugin owns one delegated keydown listener and ignores every key except
  * Tab. The first editor selection item supplies the command entry point; the
@@ -31,11 +32,14 @@ export function PageTabPlugin() {
       !root
     ) return;
 
-    const selection = editor.selection.get();
+    const editable = isEditableKeyboardEvent(event);
+    const nativeSelection = editable ? readEditorDOMSelection(root) : undefined;
+    if (nativeSelection) editor.execute("selection.set", { selection: nativeSelection });
+    const selection = nativeSelection ?? editor.selection.get();
     const target = firstKeyboardTarget(selection);
     if (!target) return;
     const blockSelectionAtRoot = event.target === root && target.item.type === "block";
-    if (!isEditableKeyboardEvent(event) && !blockSelectionAtRoot) return;
+    if (!editable && !blockSelectionAtRoot) return;
 
     event.preventDefault();
     if (event.shiftKey) editor.outdentBlock(target.blockId);

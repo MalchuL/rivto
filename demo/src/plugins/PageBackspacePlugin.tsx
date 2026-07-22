@@ -1,4 +1,5 @@
 import {
+  DEFAULT_BLOCK_TYPE,
   useEditor,
   useEditorEvent,
   useEditorRoot,
@@ -87,7 +88,7 @@ export function PageBackspacePlugin() {
     // place where the user can continue typing.
     if (block.content === "") {
       event.preventDefault();
-      if (block.type !== "paragraph") editor.setBlockType(block.id, "paragraph");
+      if (block.type !== DEFAULT_BLOCK_TYPE) editor.setBlockType(block.id, DEFAULT_BLOCK_TYPE);
       requestAnimationFrame(() => focusBlock(root, block.id, 0));
     }
   });

@@ -1,4 +1,6 @@
 import {
+  DEFAULT_BLOCK_TYPE,
+  readEditorDOMSelection,
   useEditor,
   useEditorEvent,
   useEditorRoot,
@@ -12,21 +14,14 @@ import {
   shouldDeleteSelection,
 } from "./keyboard-selection";
 
-/** List-item types that continue the same list when Enter splits their text. */
-const LIST_ITEM_TYPES = new Set([
-  "bulletListItem",
-  "numberedListItem",
-  "checkListItem",
-]);
-
 /**
- * Installs page-specific Enter block splitting.
+ * Installs outline block splitting for Page and Edgeless surfaces.
  *
  * This plugin owns one delegated keydown listener and ignores every key except
  * unmodified Enter. The first selection item supplies the only insertion target,
  * so a multi-item selection never creates several blocks. Expanded text is
  * deleted first, a collapsed caret splits its block, and a whole-block item adds
- * one empty block. List items continue their type; other types create paragraphs.
+ * one empty default writing block.
  * The new block becomes the first child when the source has children, or the
  * next sibling otherwise. Shift+Enter remains native plaintext input.
  */
@@ -47,7 +42,11 @@ export function PageEnterPlugin() {
     ) return;
 
     if (!isEditableKeyboardEvent(event)) return;
-    const selection = editor.selection.get();
+    // Read the key event's native caret synchronously. A newly focused editor
+    // can receive Enter before the browser's deferred selectionchange event.
+    const nativeSelection = readEditorDOMSelection(root);
+    if (nativeSelection) editor.execute("selection.set", { selection: nativeSelection });
+    const selection = nativeSelection ?? editor.selection.get();
     const initialTarget = firstKeyboardTarget(selection);
     if (!initialTarget || initialTarget.item.type === "edgeless") return;
 
@@ -71,20 +70,26 @@ export function PageEnterPlugin() {
       const splitAt = isTextTarget
         ? Math.min(target.offset ?? 0, block.content.length)
         : block.content.length;
-      const nextType = LIST_ITEM_TYPES.has(block.type) ? block.type : "paragraph";
-
       if (isTextTarget) editor.updateBlock(block.id, { content: block.content.slice(0, splitAt) });
       nextBlockId = editor.insertBlock({
-        type: nextType,
+        type: DEFAULT_BLOCK_TYPE,
         content: isTextTarget ? block.content.slice(splitAt) : "",
       }, block.id);
 
-      if (block.children.length > 0 && !editor.getBlockCollapsed(block.id)) {
+      const childrenAreVisible = editor.mode.get() === "edgeless" || !editor.getBlockCollapsed(block.id);
+      if (block.children.length > 0 && childrenAreVisible) {
         // Insertion initially creates a sibling directly after `block`.
         // Indenting makes it the last child; moving it to position zero then
         // gives Enter the requested first-child placement.
         editor.indentBlock(nextBlockId);
         editor.moveBlock(nextBlockId, null);
+      } else if (editor.mode.get() === "edgeless" && editor.getBlocks().some((rootBlock) => rootBlock.id === block.id)) {
+        // A split root becomes another canvas object near its source instead
+        // of overlapping the core's default coordinates.
+        editor.setBlockLayout(nextBlockId, {
+          x: (block.layout?.x ?? 40) + 24,
+          y: (block.layout?.y ?? 40) + 24,
+        });
       }
 
       editor.execute("selection.set", { selection: [{

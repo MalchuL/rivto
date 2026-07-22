@@ -146,6 +146,7 @@ describe("clipboard commands", () => {
 
   it("keeps a whole-block copy as a block when pasted at a text caret", () => {
     const source = createRivtoEditor();
+    source.defineBlock({ type: "heading2" });
     const target = createRivtoEditor();
     const copied = source.insertBlock({ type: "heading2", content: "Copied heading" });
     source.execute("selection.set", {
@@ -185,6 +186,7 @@ describe("clipboard commands", () => {
 
   it("does not special-case empty blocks that already have children", () => {
     const source = createRivtoEditor();
+    source.defineBlock({ type: "heading2" });
     const copied = source.insertBlock({ type: "heading2", content: "Pasted" });
     source.execute("selection.set", {
       selection: [{ type: "block", blockIds: [copied], anchorBlockId: copied, focusBlockId: copied }],
@@ -293,6 +295,8 @@ describe("clipboard commands", () => {
 
   it("merges the first copied text and inserts every remaining item as a block", () => {
     const source = createRivtoEditor();
+    source.defineBlock({ type: "heading2" });
+    source.defineBlock({ type: "bulletListItem" });
     const target = createRivtoEditor();
     const first = source.insertBlock({ type: "paragraph", content: "Alpha" });
     const second = source.insertBlock({ type: "heading2", content: "Middle" }, first);
@@ -389,7 +393,7 @@ describe("clipboard commands", () => {
     const first = editor.insertBlock({ type: "paragraph", content: "First" });
     const child = editor.insertBlock({ type: "paragraph", content: "Nested" }, first);
     editor.indentBlock(child);
-    const second = editor.insertBlock({ type: "heading2", content: "Second" }, first);
+    const second = editor.insertBlock({ type: "paragraph", content: "Second" }, first);
     editor.execute("selection.set", {
       selection: [{ type: "block", blockIds: [first, second], anchorBlockId: first, focusBlockId: second }],
     });

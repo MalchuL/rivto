@@ -58,6 +58,7 @@ describe("EditorRuntime block commands", () => {
 
   it("converts a block without losing identity or nested data", () => {
     const editor = createRivtoEditor();
+    editor.defineBlock({ type: "heading2" });
     const id = editor.insertBlock({
       type: "paragraph",
       props: { old: true },
@@ -86,6 +87,7 @@ describe("EditorRuntime block commands", () => {
 
   it("validates and preserves the reserved collapse property across block types", () => {
     const editor = createRivtoEditor();
+    editor.defineBlock({ type: "heading2" });
     editor.defineBlock({
       type: "strict",
       propSchema: z.object({ tone: z.string().optional() }).strict(),

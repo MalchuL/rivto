@@ -1,4 +1,5 @@
 import type { DocumentModelImpl, Block, BlockInput, Link } from "../store/document-model";
+import { DEFAULT_BLOCK_TYPE } from "../blocks";
 import { isBlockCollapsed } from "../utils";
 import type { EditorPosition, EditorSelection, EditorSelectionItem } from "./types";
 
@@ -430,7 +431,7 @@ export function deleteSelection(
   document: DocumentModelImpl,
   selection: SelectionWriter,
   current: EditorSelection,
-  defaultBlockType = "paragraph",
+  defaultBlockType = DEFAULT_BLOCK_TYPE,
 ): void {
   const range = normalizeSelection(document, current);
   if (!range) return;

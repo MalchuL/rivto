@@ -56,8 +56,8 @@ function findOwnedContent(block: HTMLElement): HTMLElement | null {
  * Finds the immediately previous rendered block when that block is editable.
  *
  * BlockView elements are returned in depth-first DOM order, matching the page's
- * visible traversal. A non-editable divider or attachment stops the lookup so
- * Backspace never merges text across structural content.
+ * visible traversal. A contentless custom block stops the lookup so Backspace
+ * never merges text across structural controls.
  *
  * @param root - Active page surface root.
  * @param blockId - Current block whose predecessor is requested.

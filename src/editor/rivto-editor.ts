@@ -1,10 +1,11 @@
 import {
   BLOCK_COLLAPSED_PROP,
   BlockRegistry,
+  DEFAULT_BLOCK_TYPE,
   defaultBlockDefinitions,
   type BlockDefinition,
 } from "../blocks";
-import { CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
+import { CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
 import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type BlockPatch, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
 import { isBlockCollapsed } from "../utils";
@@ -38,6 +39,7 @@ export class EditorRuntime implements RivtoEditorApi {
   readonly mode: ModeManager;
   readonly selection = new SelectionManager();
   readonly history: UndoManager;
+  readonly slashCommands = new SlashCommandManager();
   private readonly listeners = new Set<() => void>();
   /** Unsubscribe callbacks owned by the runtime and called during destroy(). */
   private readonly unsubscribeFns: Array<() => void> = [];
@@ -504,7 +506,7 @@ export class EditorRuntime implements RivtoEditorApi {
     this.commands.register("clipboard.paste", documentCommand((value) => {
       const event = clipboardEvent(value);
       const data = payload(value);
-      const defaultBlockType = text(data.defaultBlockType) ?? "paragraph";
+      const defaultBlockType = text(data.defaultBlockType) ?? DEFAULT_BLOCK_TYPE;
       const structured = text(data.structured)
         ?? (event?.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) || undefined);
       const bundle = data.bundle as ClipboardBundle | undefined;
@@ -719,6 +721,7 @@ export class EditorRuntime implements RivtoEditorApi {
     this.unsubscribeFns.splice(0).forEach((unsubscribe) => unsubscribe());
     [...this.removeDefinitions].reverse().forEach((dispose) => dispose());
     this.history.destroy();
+    this.slashCommands.clear();
     this.commands.clear();
     this.listeners.clear();
   }

@@ -1,5 +1,5 @@
 import type { BlockDefinition, BlockRegistry } from "../blocks";
-import type { CommandHandler, CommandRegistry, RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
+import type { CommandHandler, CommandRegistry, RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import type { CRDTDoc } from "../store/crdt-doc";
 import type { DocumentModelImpl } from "../store/document-model";
 import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
@@ -83,6 +83,8 @@ export interface RivtoEditorApi {
   readonly selection: SelectionManager;
   /** Local undo/redo history scoped to document mutations from this runtime. */
   readonly history: UndoManager;
+  /** Ordered application commands available to slash-command surfaces. */
+  readonly slashCommands: SlashCommandManager;
   /** Monotonic view invalidation snapshot. */
   readonly revision: number;
 

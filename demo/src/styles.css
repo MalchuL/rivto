@@ -9,9 +9,32 @@ body {
 }
 
 .demo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 16px 24px;
   color: #666;
   font-size: 14px;
+}
+
+.demo-mode-switch {
+  display: flex;
+  gap: 4px;
+}
+
+.demo-mode-switch button,
+.edgeless-zoom-controls button {
+  padding: 5px 9px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+
+.demo-mode-switch button[aria-pressed="true"] {
+  border-color: #6c5ce7;
+  color: white;
+  background: #6c5ce7;
 }
 
 .page-surface {
@@ -196,68 +219,256 @@ body {
   outline: none;
 }
 
-[data-block-type="heading"] > .page-block-content {
-  margin: 16px 0 8px;
-  font-size: 2rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-[data-block-type="heading2"] > .page-block-content {
-  margin-top: 12px;
-  font-size: 1.5rem;
-  font-weight: 650;
-}
-
-[data-block-type="heading3"] > .page-block-content {
-  margin-top: 8px;
-  font-size: 1.2rem;
-  font-weight: 650;
-}
-
-[data-block-type="bulletListItem"] > .page-block-content::before {
-  content: "• ";
-}
-
-[data-block-type="numberedListItem"] > .page-block-content::before {
-  content: "1. ";
-}
-
-[data-block-type="checkListItem"] > .page-block-content::before {
-  content: "☐ ";
-}
-
-[data-block-type="quote"] > .page-block-content {
-  padding-left: 12px;
-  border-left: 3px solid #ccc;
-  color: #555;
-}
-
-[data-block-type="code"] > .page-block-content {
-  padding: 12px;
-  border-radius: 6px;
-  background: #f3f3f3;
-  font-family: ui-monospace, monospace;
-}
-
 .page-block-children {
   margin-left: 24px;
 }
 
-.page-divider {
-  margin: 16px 0;
-  border: 0;
-  border-top: 1px solid #ddd;
+.markdown-content {
+  position: relative;
+  min-height: 1.5em;
 }
 
-.page-attachment,
+.markdown-editor {
+  position: relative;
+  z-index: 1;
+  color: transparent;
+  caret-color: transparent;
+}
+
+.markdown-preview {
+  position: absolute;
+  inset: 0;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+.markdown-editor:focus {
+  color: inherit;
+  caret-color: auto;
+}
+
+.markdown-content:focus-within .markdown-preview {
+  visibility: hidden;
+}
+
+/* Delimiters remain DOM text so raw source offsets can be reconstructed even
+   though the formatted preview does not paint them. */
+.markdown-marker {
+  display: none;
+}
+
+.markdown-preview code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #f1f1f1;
+  font-family: ui-monospace, monospace;
+}
+
+.markdown-preview a {
+  color: #5b4bd8;
+}
+
+.custom-slider-block {
+  display: grid;
+  gap: 6px;
+}
+
+.custom-slider-block input {
+  width: min(320px, 100%);
+  accent-color: #6c5ce7;
+}
+
+.custom-counter-block {
+  padding: 6px 12px;
+  border: 1px solid #d8d2ff;
+  border-radius: 6px;
+  background: #f7f5ff;
+  cursor: pointer;
+}
+
 .page-unknown-block {
-  display: flex;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid #ddd;
+  padding: 8px 10px;
+  border: 1px dashed #bbb;
   border-radius: 6px;
   color: #666;
+}
+
+.slash-menu {
+  position: fixed;
+  z-index: 1000;
+  width: min(280px, calc(100vw - 24px));
+  max-height: 320px;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 16%);
+}
+
+.slash-menu-group {
+  padding: 6px 8px 3px;
+  color: #777;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.slash-menu-item {
+  display: block;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 5px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.slash-menu-item:hover,
+.slash-menu-item[data-active] {
+  background: #eeeaff;
+}
+
+.slash-menu-empty {
+  padding: 10px;
+  color: #777;
+}
+
+.edgeless-viewport {
+  position: relative;
+  width: calc(100% - 32px);
+  height: calc(100vh - 96px);
+  min-height: 520px;
+  margin: 8px 16px 24px;
+  overflow: auto;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: #f8f7fb;
+  outline: none;
+  overscroll-behavior: contain;
+}
+
+.edgeless-viewport[data-panning-ready],
+.edgeless-viewport[data-panning] {
+  cursor: grab;
+}
+
+.edgeless-viewport[data-panning] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.edgeless-zoom-controls {
+  position: sticky;
+  z-index: 20;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  width: max-content;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 8%);
+}
+
+.edgeless-scaled-plane {
+  position: relative;
+}
+
+.edgeless-plane {
+  position: absolute;
+  inset: 0;
+  background-color: #f8f7fb;
+  background-image: radial-gradient(#c9c4d0 1px, transparent 1px);
+  background-size: 20px 20px;
+  transform-origin: 0 0;
+}
+
+.edgeless-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid #d8d5df;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 8%);
+  outline: none;
+}
+
+.edgeless-card[data-selected] {
+  border-color: #6c5ce7;
+  box-shadow: 0 0 0 2px #6c5ce7, 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+.edgeless-card-header {
+  display: flex;
+  flex: 0 0 28px;
+  align-items: center;
+  padding: 2px 7px;
+  border-bottom: 1px solid #eee;
+  background: #faf9fc;
+}
+
+.edgeless-drag-handle {
+  padding: 2px 5px;
+  border: 0;
+  color: #777;
+  background: transparent;
+  font-size: 0.75rem;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.edgeless-drag-handle:active {
+  cursor: grabbing;
+}
+
+.edgeless-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px 12px 18px 40px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Page rows extend their hover hit area across an infinite writing page. That
+   extension must stop at a canvas card or it creates a viewport-wide scrollbar. */
+.edgeless-card .page-block-row::before {
+  inset-inline: 0;
+}
+
+.edgeless-resize-handle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: linear-gradient(135deg, transparent 50%, #888 50%);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.edgeless-selection-rectangle {
+  position: fixed;
+  z-index: 1000;
+  border: 1px solid #6c5ce7;
+  background: rgb(108 92 231 / 12%);
+  pointer-events: none;
+}
+
+.edgeless-viewport[data-transforming] {
+  user-select: none;
 }
 
 @media (max-width: 640px) {

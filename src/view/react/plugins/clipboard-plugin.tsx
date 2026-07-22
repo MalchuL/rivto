@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { DEFAULT_BLOCK_TYPE } from "../../../blocks";
 import { RIVTO_CLIPBOARD_MIME } from "../../../editor";
 import { useEditor } from "../hooks/editor/use-editor";
 import { useEditorEvent } from "../hooks/editor/use-editor-event";
@@ -32,12 +33,12 @@ export interface ClipboardPluginProps {
  * ```tsx
  * <EditorView editor={editor}>
  *   <TextSelectionPlugin />
- *   <ClipboardPlugin defaultBlockType="paragraph" />
+ *   <ClipboardPlugin defaultBlockType={DEFAULT_BLOCK_TYPE} />
  *   <PageSurface />
  * </EditorView>
  * ```
  */
-export function ClipboardPlugin({ defaultBlockType = "paragraph" }: ClipboardPluginProps) {
+export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: ClipboardPluginProps) {
   const editor = useEditor();
   const { element: root } = useEditorRoot();
   // ClipboardEvent does not expose keyboard modifiers. Remember only the
@@ -98,10 +99,13 @@ export function ClipboardPlugin({ defaultBlockType = "paragraph" }: ClipboardPlu
      * dispatches its copy, cut, and paste events to `body`, so root-delegated
      * listeners cannot observe them. Restricting this fallback to a focused
      * root with a block-only editor selection keeps clipboard events from
-     * unrelated controls outside this editor untouched.
+     * root (or one of its block cards) with a block-only editor selection keeps
+     * clipboard events from unrelated controls outside this editor untouched.
      */
     const handleBlockClipboard = (event: ClipboardEvent): void => {
-      if (event.defaultPrevented || root.contains(event.target as Node) || document.activeElement !== root) return;
+      const activeElement = document.activeElement;
+      const editorHasFocus = activeElement === root || (activeElement !== null && root.contains(activeElement));
+      if (event.defaultPrevented || root.contains(event.target as Node) || !editorHasFocus) return;
       const current = editor.selection.get();
       if (!current.length || current.some((item) => item.type === "text")) return;
       if (event.type === "paste") {

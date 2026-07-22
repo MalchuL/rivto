@@ -3,12 +3,14 @@ import {
   useBlockSelection,
 } from "@chulane/rivto";
 import { PageDraggableBlock } from "../../plugins/PageDragPlugin";
-import { pageBlockRenderers, UnknownBlock } from "./block-renderers";
+import { blockRenderers, UnknownBlock } from "./block-renderers";
 
 /** Properties required to render one block subtree on the page surface. */
 export interface PageBlockProps {
   /** Stable root ID of the subtree to render. */
   readonly blockId: string;
+  /** Render every child and omit page-only collapse controls. */
+  readonly ignoreCollapse?: boolean;
 }
 
 /**
@@ -23,20 +25,20 @@ export interface PageBlockProps {
  * observes the latest editor revision. A concurrently removed block renders
  * nothing instead of leaving a stale container behind.
  */
-export function PageBlock({ blockId }: PageBlockProps) {
+export function PageBlock({ blockId, ignoreCollapse = false }: PageBlockProps) {
   const { block, getters, operations } = useBlock(blockId);
   const selection = useBlockSelection(blockId);
 
   if (!block) return null;
-  const Content = pageBlockRenderers[block.type] ?? UnknownBlock;
+  const Content = blockRenderers[block.type] ?? UnknownBlock;
   const collapsed = getters.collapsed;
   const childrenId = `block-children-${block.id}`;
 
   return (
     <PageDraggableBlock
       block={block}
-      selected={Boolean(selection)}
-      controls={block.children.length > 0 && (
+      selected={!ignoreCollapse && Boolean(selection)}
+      controls={!ignoreCollapse && block.children.length > 0 && (
         <button
           type="button"
           className="page-collapse-toggle"
@@ -56,10 +58,10 @@ export function PageBlock({ blockId }: PageBlockProps) {
       )}
       content={<Content blockId={block.id} />}
     >
-      {block.children.length > 0 && !collapsed && (
+      {block.children.length > 0 && (ignoreCollapse || !collapsed) && (
         <div id={childrenId} className="page-block-children">
           {block.children.map((child) => (
-            <PageBlock key={child.id} blockId={child.id} />
+            <PageBlock key={child.id} blockId={child.id} ignoreCollapse={ignoreCollapse} />
           ))}
         </div>
       )}

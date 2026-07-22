@@ -58,7 +58,7 @@ const PageDragStateContext = createContext<PageDragState>({ placement: null, dra
 
 /** Properties for the page drag-and-drop boundary. */
 export interface PageDragPluginProps {
-  /** Page surface whose blocks participate in this drag context. */
+  /** Outline surface whose blocks participate in this drag context. */
   readonly children: ReactNode;
   /** Pointer movement in pixels required before dragging starts. Defaults to 4. */
   readonly activationDistance?: number;
@@ -204,7 +204,7 @@ function subtreeSize(block: EditorBlock): number {
  * The preview uses detached block data instead of PageBlock. Reusing PageBlock
  * here would mount duplicate contenteditable elements and register a second set
  * of draggable and droppable nodes with the same IDs. Stable type attributes
- * let the preview reuse the demo's heading, list, quote, and code presentation.
+ * let the preview reuse the demo's Markdown and custom-block presentation.
  */
 function PageDragPreview({ blocks }: { readonly blocks: EditorBlock[] }) {
   const entries = blocks.flatMap((block) => flattenPreview(block));
@@ -237,7 +237,7 @@ function PageDragPreview({ blocks }: { readonly blocks: EditorBlock[] }) {
 }
 
 /**
- * Provides demo-owned block drag-and-drop behavior for PageSurface.
+ * Provides demo-owned structural block drag-and-drop for an outline surface.
  *
  * A selected sibling group moves together when the dragged block belongs to
  * it. Mixed-level selections safely fall back to the handle's single block.

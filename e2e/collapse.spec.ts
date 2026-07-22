@@ -30,7 +30,7 @@ test("toggles an accessible collapsed subtree without exposing hidden rows", asy
 
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByText(childValue ?? "", { exact: true })).toBeVisible();
+  await expect(parent.locator(":scope > .page-block-children [data-block-content]").first()).toHaveText(childValue ?? "");
 });
 
 test("supports Logseq collapse keys for editing and multi-block selection", async ({ page }) => {
@@ -132,5 +132,5 @@ test("drops inside a collapsed parent and keeps the moved subtree hidden", async
   await expect(target).toHaveAttribute("data-selected", "true");
   await page.keyboard.press("Control+ArrowDown");
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  await expect(target.locator(":scope > .page-block-children").getByText(sourceText ?? "", { exact: true })).toBeVisible();
+  await expect(target.locator(":scope > .page-block-children [data-block-content]").filter({ hasText: sourceText ?? "" }).first()).toBeVisible();
 });
