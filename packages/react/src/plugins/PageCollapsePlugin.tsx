@@ -8,7 +8,7 @@ import {
   type TextSelection,
 } from "../internal";
 import { useEffect } from "react";
-import { reconcileCollapsedSelection } from "./page-selection";
+import { reconcileCollapsedSelection } from "./utils/page-selection";
 
 /** Resolves the edited block or all blocks in the active whole-block selection. */
 function collapseTargets(

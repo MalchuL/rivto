@@ -13,7 +13,7 @@ import { PageDeletePlugin } from "./plugins/PageDeletePlugin";
 import { PageDragPlugin, type PageDragPluginProps } from "./plugins/PageDragPlugin";
 import { PageEnterPlugin } from "./plugins/PageEnterPlugin";
 import { PageSlashCommandPlugin } from "./plugins/PageSlashCommandPlugin";
-import { applyIndentShortcut } from "./plugins/indent";
+import { applyIndentShortcut } from "./plugins/utils/indent";
 import { EdgelessSurface } from "./surfaces/edgeless";
 import { PageSurface } from "./surfaces/page";
 import type { ReactEditorPlugin } from "./react-editor";

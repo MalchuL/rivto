@@ -17,8 +17,8 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import { findRenderedBlock } from "./block-dom";
-import { keepNoResultMenuOpen, rankSlashCommands } from "./slash-search";
+import { findRenderedBlock } from "./utils/block-dom";
+import { keepNoResultMenuOpen, rankSlashCommands } from "./utils/slash-search";
 
 interface SlashSession {
   readonly blockId: string;

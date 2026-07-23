@@ -2,7 +2,7 @@ import {
   readEditorDOMSelection,
   restoreEditorDOMSelection,
   type RivtoEditorApi,
-} from "../internal";
+} from "../../internal";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,

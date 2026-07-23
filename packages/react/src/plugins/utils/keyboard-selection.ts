@@ -2,7 +2,7 @@ import type {
   EditorSelection,
   EditorSelectionItem,
   RivtoEditorApi,
-} from "../internal";
+} from "../../internal";
 import { findBlockFromEvent, focusBlock } from "./block-dom";
 
 /** First selection item resolved to one page block for a keyboard command. */

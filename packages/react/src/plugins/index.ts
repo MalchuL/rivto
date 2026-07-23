@@ -8,4 +8,4 @@ export * from "./PageDeletePlugin";
 export * from "./PageDragPlugin";
 export * from "./PageEnterPlugin";
 export * from "./PageSlashCommandPlugin";
-export * from "./indent";
+export * from "./utils/indent";

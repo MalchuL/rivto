@@ -9,7 +9,7 @@ import {
   reconcileCollapsedSelection,
   selectedMoveRoots,
   toggleBlockSelection,
-} from "../../packages/react/src/plugins/page-selection.ts";
+} from "../../packages/react/src/plugins/utils/page-selection.ts";
 
 const block = (id, children = [], collapsed = false) => ({
   id,

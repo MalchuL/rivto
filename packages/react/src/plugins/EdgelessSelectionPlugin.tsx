@@ -12,7 +12,7 @@ import {
   rootsInRect,
   translatedLayouts,
   type EdgelessRect,
-} from "./edgeless-geometry";
+} from "./utils/edgeless-geometry";
 
 interface RectangleGesture {
   readonly x: number;

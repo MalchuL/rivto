@@ -7,7 +7,7 @@ import {
   type BlockSelection,
 } from "../internal";
 import { useEffect, useState } from "react";
-import { toggleBlockSelection } from "./page-selection";
+import { toggleBlockSelection } from "./utils/page-selection";
 
 /**
  * Adds explicit whole-block selection to the demo page surface.

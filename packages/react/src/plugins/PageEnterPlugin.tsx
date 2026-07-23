@@ -7,12 +7,12 @@ import {
 } from "../internal";
 import {
   focusBlock,
-} from "./block-dom";
+} from "./utils/block-dom";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "./keyboard-selection";
+} from "./utils/keyboard-selection";
 
 /**
  * Installs outline block splitting for Page and Edgeless surfaces.

@@ -3,7 +3,7 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
   type EditorPosition,
-} from "../internal";
+} from "../../internal";
 
 /** DOM elements and persisted identity resolved from an editor event target. */
 export interface EventBlock {

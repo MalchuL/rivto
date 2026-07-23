@@ -6,13 +6,13 @@ import {
 import {
   findNextEditableBlock,
   focusBlock,
-} from "./block-dom";
+} from "./utils/block-dom";
 import {
   firstKeyboardTarget,
   focusSelectionCaret,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "./keyboard-selection";
+} from "./utils/keyboard-selection";
 
 /**
  * Installs selection-aware forward Delete behavior for the page surface.

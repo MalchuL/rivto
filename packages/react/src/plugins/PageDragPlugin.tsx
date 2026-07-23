@@ -26,8 +26,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { resolveAfterDropPlacement } from "./page-drag-placement";
-import { selectedMoveRoots, type SelectedMoveRoots } from "./page-selection";
+import { resolveAfterDropPlacement } from "./utils/page-drag-placement";
+import { selectedMoveRoots, type SelectedMoveRoots } from "./utils/page-selection";
 
 /** Maximum number of block rows rendered inside the floating preview. */
 const MAX_PREVIEW_BLOCKS = 4;

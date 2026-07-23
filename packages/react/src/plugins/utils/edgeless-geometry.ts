@@ -1,4 +1,4 @@
-import type { EditorBlock, EditorBlockLayout } from "../internal";
+import type { EditorBlock, EditorBlockLayout } from "../../internal";
 
 /** Rectangle expressed in viewport coordinates. */
 export interface EdgelessRect {

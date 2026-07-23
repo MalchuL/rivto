@@ -9,13 +9,13 @@ import {
   findPreviousEditableBlock,
   findRenderedBlock,
   focusBlock,
-} from "./block-dom";
+} from "./utils/block-dom";
 import {
   firstKeyboardTarget,
   focusSelectionCaret,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "./keyboard-selection";
+} from "./utils/keyboard-selection";
 
 /**
  * Installs page-specific Backspace behavior at the start of a block.

@@ -15,7 +15,7 @@ import {
   findPreviousEditableBlock,
   focusBlock,
   verticalCaretPosition,
-} from "./block-dom";
+} from "./utils/block-dom";
 import {
   adjacentBlockSelection,
   blockSelection,
@@ -23,7 +23,7 @@ import {
   keyboardMovePlacement,
   pageEntries,
   selectedMoveRoots,
-} from "./page-selection";
+} from "./utils/page-selection";
 
 /** Returns whether a text selection is one caret. */
 function collapsed(selection: TextSelection): boolean {

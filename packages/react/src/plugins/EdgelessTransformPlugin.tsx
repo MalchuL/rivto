@@ -6,7 +6,7 @@ import {
   type EditorBlockLayout,
 } from "../internal";
 import { useEffect, useRef } from "react";
-import { canvasDelta } from "./edgeless-geometry";
+import { canvasDelta } from "./utils/edgeless-geometry";
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
 
