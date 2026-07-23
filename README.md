@@ -1,110 +1,133 @@
 # Rivto
 
-Rivto is a React block editor with Yjs-backed content and shared page and
-edgeless views. The package also exports the canonical `DocumentModelImpl`,
-lower-level CRDT interfaces, and a temporary schema-v1 compatibility model.
+Rivto is a collaborative block-document runtime backed by Yjs. The core and
+React view are separate packages:
+
+- `@chulane/rivto` owns documents, CRDT storage, blocks, commands, selection,
+  history, clipboard data, modes, and slash-command state.
+- `@chulane/rivto-react` owns React rendering, page and edgeless surfaces,
+  Markdown, browser events, key bindings, and interaction plugins.
 
 ## Install
 
 ```sh
-pnpm add @chulane/rivto react react-dom yjs
+pnpm add @chulane/rivto @chulane/rivto-react react react-dom yjs
 ```
 
-## Editor
+## React editor
 
 ```tsx
+import { createRivtoEditor } from "@chulane/rivto";
 import {
-  createRivtoEditor,
-  createSlashMenuPlugin,
-  defaultSlashItems,
-  RivtoEditor,
-} from "@chulane/rivto";
+  blockCreationPlugin,
+  clipboardPlugin,
+  createReactEditor,
+  edgelessSurfacePlugin,
+  EditorView,
+  historyPlugin,
+  indentPlugin,
+  pageSurfacePlugin,
+  slashCommandPlugin,
+  textSelectionPlugin,
+} from "@chulane/rivto-react";
+import "@chulane/rivto-react/styles.css";
 
-const editor = createRivtoEditor({
-  plugins: [createSlashMenuPlugin(defaultSlashItems)],
-  initialContent: [
-    { type: "heading", content: "Hello Rivto" },
-    { type: "paragraph", content: "Type / for commands." },
+const editor = createRivtoEditor();
+const view = createReactEditor({
+  editor,
+  plugins: [
+    pageSurfacePlugin(),
+    edgelessSurfacePlugin(),
+    historyPlugin(),
+    clipboardPlugin(),
+    textSelectionPlugin(),
+    slashCommandPlugin(),
+    blockCreationPlugin(),
+    indentPlugin(),
   ],
 });
 
-export function Page() {
-  return <RivtoEditor editor={editor} defaultBlockType="paragraph" />;
+export function Document() {
+  return <EditorView editor={view} />;
 }
+
+// The owner disposes the view before the core runtime.
+view.destroy();
+editor.destroy();
 ```
 
-The installed package version is available as `RIVTO_VERSION`.
+Plugins are ordinary factory calls supplied to `createReactEditor`; plugin
+components are never placed in `EditorView` children. Optional children are
+reserved for application chrome such as a mode toolbar.
 
-The command-driven editor runtime includes paragraphs, three heading levels, bulleted, numbered and
-check lists, quotes, code, dividers, images, files, Markdown formatting, opt-in slash
-commands, undo/redo, nesting, a block view, and an edgeless view. The editor
-depends only on the `CRDTDoc` abstraction; native Yjs objects never enter the
-editor API. To attach a provider, pass the Yjs adapter through `document`:
+See [Markdown rendering and live block size](packages/react/docs/markdown-rendering.md)
+for the focused/raw presentation model and its CSS overrides.
+
+## Custom React blocks
+
+One registration installs the core model definition, renderer, and optional
+in-place slash conversion:
+
+```tsx
+view.registerBlock({
+  definition: {
+    type: "acme.counter",
+    title: "Counter",
+    defaultProps: { count: 0 },
+  },
+  render: CounterBlock,
+  slashCommand: {
+    title: "Counter",
+    group: "Turn into",
+    keywords: ["count"],
+  },
+});
+```
+
+Renderers receive `{ blockId }` and use `useBlock`, `useEditor`, and the other
+focused hooks from `@chulane/rivto-react`. Unknown persisted types remain in
+the document and render through the configured fallback.
+
+## Custom plugins and events
+
+```ts
+const plugin = (keys = ["Primary+K"]) => ({
+  id: "acme.command",
+  setup({ keyboard }) {
+    keyboard.bind(keys, ({ event, editor }) => {
+      event.preventDefault();
+      editor.execute("acme.command");
+    });
+  },
+});
+```
+
+`EditorEvents` delegates typed native events to the active surface root.
+`KeyboardEvents` adds exact, portable shortcut matching. Registrations follow
+plugin declaration order, stop after `defaultPrevented`, and are removed when
+the React editor is destroyed.
+
+## Core-only usage
+
+The core has no React dependency and can be used with another view layer:
 
 ```ts
 import { createRivtoEditor, YjsDoc } from "@chulane/rivto";
 
-const document = new YjsDoc("room-id");
-const editor = createRivtoEditor({ document });
+const editor = createRivtoEditor({ document: new YjsDoc("room-id") });
+const id = editor.insertBlock({ type: "paragraph", content: "Hello" });
+editor.updateBlock(id, { content: "Hello world" });
 ```
-
-## Custom blocks and plugins
-
-Plugins are trusted local modules and may contribute blocks, commands, routed
-events, and mode-aware UI at creation time or at runtime. Document mutations
-go through `editor.commands.execute()`. Built-in names infer exact payload and
-result types. Plugin commands use the same methods by supplying their command
-map explicitly: `commands.execute<MyPluginCommands>(name, payload)`.
-
-```tsx
-import { z } from "zod";
-
-const dispose = editor.use({
-  id: "acme.alerts",
-  blocks: [{
-    type: "alert",
-    title: "Alert",
-    content: "inline",
-    propSchema: z.object({ tone: z.enum(["info", "warning"]).default("info") }),
-    render: ({ block, content }) => (
-      <aside data-tone={block.props.tone}>{content}</aside>
-    ),
-  }],
-  commands: {
-    insertAlert: (editor) => editor.commands.execute("block.insert", {
-      block: { type: "alert" },
-    }),
-  },
-  slashItems: [{ title: "Alert", aliases: ["notice"], group: "Custom", block: { type: "alert" } }],
-  blockEvents: { alert: { pointerdown: () => false } },
-});
-
-dispose();
-```
-
-Unknown block types remain in snapshots and render as recoverable placeholders.
-
-## Persistence and migration
-
-`editor.document.getSnapshot()` returns lossless schema-v3 JSON. Restore it with
-`editor.commands.execute("document.load", { snapshot })`. Fetched updates may
-contain only `blocks`, `links`, or `pluginData`; omitted sections are preserved.
-Use `migrateDocumentBundleV1` to convert the
-legacy numeric-order bundle without mutating the source bundle.
 
 ## Development
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm check-types
+pnpm --filter @chulane/rivto-react check-types
 pnpm lint
-pnpm test -- --runInBand
+pnpm test
+pnpm --filter @chulane/rivto-react test
 pnpm demo:build
 pnpm test:e2e
 ```
-
-`test:e2e` runs Chromium and Firefox. Release environments with Playwright's
-WebKit system libraries installed should run `pnpm test:e2e:all`.
-
-The implementation roadmap and remaining hardening work are tracked in
-[`docs/editor-v1-plan.md`](docs/editor-v1-plan.md).

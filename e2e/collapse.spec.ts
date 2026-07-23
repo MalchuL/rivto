@@ -1,4 +1,11 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  blockIdSelector,
+  BLOCK_ID_ATTRIBUTE,
+  BLOCK_ID_SELECTOR,
+  BLOCK_SELECTED_ATTRIBUTE,
+  BLOCK_SELECTED_SELECTOR,
+} from "./dom-markers";
 
 interface ClipboardBlock {
   children: ClipboardBlock[];
@@ -7,9 +14,9 @@ interface ClipboardBlock {
 /** Returns a stable ID-based locator that still resolves after children unmount. */
 async function collapsibleRoot(page: Page, index = 0): Promise<Locator> {
   const candidate = page.locator(".page-surface > .page-block:has(> .page-block-children)").nth(index);
-  const id = await candidate.getAttribute("data-block-id");
+  const id = await candidate.getAttribute(BLOCK_ID_ATTRIBUTE);
   if (!id) throw new Error("Expected collapsible root ID");
-  return page.locator(`[data-block-id="${id}"]`);
+  return page.locator(blockIdSelector(id));
 }
 
 test.beforeEach(async ({ page }) => {
@@ -50,7 +57,7 @@ test("supports Logseq collapse keys for editing and multi-block selection", asyn
   await page.keyboard.press("Control+;");
   await expect(firstToggle).toHaveAttribute("aria-expanded", "false");
   await expect(secondToggle).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator("[data-selected]")).toHaveCount(2);
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
 });
 
 test("moves a hidden caret selection to its collapsed parent", async ({ page }) => {
@@ -60,38 +67,38 @@ test("moves a hidden caret selection to its collapsed parent", async ({ page }) 
 
   await parent.locator(":scope > .page-block-row [data-collapse-toggle]").click();
 
-  await expect(parent).toHaveAttribute("data-selected", "true");
-  await expect(page.locator("[data-selected]")).toHaveCount(1);
+  await expect(parent).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => getSelection()?.rangeCount ?? 0)).toBe(0);
 });
 
 test("treats a collapsed parent as a visible leaf for Enter and Delete", async ({ page }) => {
   const parent = await collapsibleRoot(page);
-  const parentId = await parent.getAttribute("data-block-id");
+  const parentId = await parent.getAttribute(BLOCK_ID_ATTRIBUTE);
   const content = parent.locator(":scope > .page-block-row [data-block-content]");
   await parent.locator(":scope > .page-block-row [data-collapse-toggle]").click();
 
-  const next = parent.locator("xpath=following-sibling::*[@data-block-id][1]");
-  const nextId = await next.getAttribute("data-block-id");
+  const next = parent.locator(`xpath=following-sibling::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
+  const nextId = await next.getAttribute(BLOCK_ID_ATTRIBUTE);
   const nextText = await next.locator(":scope > .page-block-row [data-block-content]").textContent();
   await content.click();
   await page.keyboard.press("End");
   await page.keyboard.press("Delete");
-  await expect(page.locator(`[data-block-id="${parentId}"]`)).toBeVisible();
-  await expect(page.locator(`[data-block-id="${nextId}"] [data-block-content]`)).toHaveText(nextText ?? "");
+  await expect(page.locator(blockIdSelector(parentId!))).toBeVisible();
+  await expect(page.locator(`${blockIdSelector(nextId!)} [data-block-content]`)).toHaveText(nextText ?? "");
 
   await content.click();
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
-  const inserted = parent.locator("xpath=following-sibling::*[@data-block-id][1]");
+  const inserted = parent.locator(`xpath=following-sibling::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
   await expect(inserted).toBeVisible();
-  expect(await inserted.getAttribute("data-block-id")).not.toBe(nextId);
+  expect(await inserted.getAttribute(BLOCK_ID_ATTRIBUTE)).not.toBe(nextId);
   await expect(parent.locator(":scope > .page-block-children")).toHaveCount(0);
 });
 
 test("copies a collapsed parent with its hidden descendants", async ({ page }) => {
   const parent = await collapsibleRoot(page);
-  const childCount = await parent.locator(":scope > .page-block-children [data-block-id]").count();
+  const childCount = await parent.locator(`:scope > .page-block-children ${BLOCK_ID_SELECTOR}`).count();
   await parent.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
   await parent.locator(":scope > .page-block-row [data-collapse-toggle]").click();
   await page.evaluate(() => {
@@ -129,7 +136,7 @@ test("drops inside a collapsed parent and keeps the moved subtree hidden", async
   await page.mouse.up();
 
   await expect(page.getByText(sourceText ?? "", { exact: true })).toHaveCount(0);
-  await expect(target).toHaveAttribute("data-selected", "true");
+  await expect(target).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
   await page.keyboard.press("Control+ArrowDown");
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(target.locator(":scope > .page-block-children [data-block-content]").filter({ hasText: sourceText ?? "" }).first()).toBeVisible();

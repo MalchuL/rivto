@@ -4,12 +4,12 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", "demo/dist", "node_modules", "src/.stuff"],
+    ignores: ["dist", "packages/*/dist", "demo/dist", "node_modules", "src/.stuff"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["src/**/*.ts", "src/**/*.tsx"],
+    files: ["src/**/*.ts", "src/**/*.tsx", "packages/react/src/**/*.ts", "packages/react/src/**/*.tsx"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
@@ -37,7 +37,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/**/__tests__/**/*.ts", "src/**/*.test.ts"],
+    files: ["src/**/__tests__/**/*.ts", "src/**/*.test.ts", "packages/react/src/**/__tests__/**/*.ts", "packages/react/src/**/*.test.ts"],
     rules: {
       "@typescript-eslint/ban-ts-comment": "off",
       "@typescript-eslint/no-unused-vars": "off",

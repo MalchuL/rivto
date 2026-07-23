@@ -1,8 +1,8 @@
 # Demo keymap
 
-This file describes the interactions currently installed by `demo/src/App.tsx`.
-It is a reference for the demo page surface, not a list of commands guaranteed
-by the UI-agnostic React package.
+This file describes the functional plugins registered by `demo/src/App.tsx`.
+The behavior is supplied by `@chulane/rivto-react`; consumers may omit plugins
+or remap supported bindings.
 
 `Primary` means `Ctrl` on Windows/Linux and `Command` on macOS.
 

@@ -25,6 +25,18 @@ import type { CreateRivtoEditorOptions, EditorPosition, EditorSelection, EditorS
 
 type RuntimeBlockSelection = Extract<EditorSelectionItem, { type: "block" }>;
 
+/** Framework-neutral subset of browser or host clipboard data. */
+interface ClipboardDataLike {
+  getData(type: string): string;
+  setData(type: string, value: string): void;
+}
+
+/** Structural clipboard event accepted without importing DOM event types. */
+interface ClipboardEventLike {
+  readonly clipboardData: ClipboardDataLike | null;
+  preventDefault(): void;
+}
+
 /**
  * Owns the active document, block registry, commands, and editor mode.
  *
@@ -445,7 +457,7 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Registers clipboard commands used by React DOM bridges and tests.
+   * Registers clipboard commands used by view bridges and tests.
    *
    * The runtime keeps this as commands rather than a manager because clipboard
    * behavior is just document mutation plus local selection updates. Browser
@@ -455,10 +467,10 @@ export class EditorRuntime implements RivtoEditorApi {
     type Payload = Record<string, unknown>;
     const payload = (value: unknown): Payload => value && typeof value === "object" && !Array.isArray(value) ? value as Payload : {};
     const text = (value: unknown): string | undefined => typeof value === "string" ? value : undefined;
-    const clipboardEvent = (value: unknown): ClipboardEvent | undefined => {
+    const clipboardEvent = (value: unknown): ClipboardEventLike | undefined => {
       const candidate = payload(value).event ?? value;
       return candidate && typeof candidate === "object" && "clipboardData" in candidate && "preventDefault" in candidate
-        ? candidate as ClipboardEvent
+        ? candidate as ClipboardEventLike
         : undefined;
     };
     const documentCommand = (handler: (value?: unknown) => unknown): CommandHandler => (value) => {
@@ -482,7 +494,7 @@ export class EditorRuntime implements RivtoEditorApi {
         event.clipboardData.setData("text/plain", payloadData.text);
       }
       if (data.clipboardData && typeof (data.clipboardData as { setData?: unknown }).setData === "function") {
-        const transfer = data.clipboardData as Pick<DataTransfer, "setData">;
+        const transfer = data.clipboardData as Pick<ClipboardDataLike, "setData">;
         transfer.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(payloadData.bundle));
         transfer.setData("text/html", payloadData.html);
         transfer.setData("text/plain", payloadData.text);

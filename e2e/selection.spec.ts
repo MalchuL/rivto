@@ -1,4 +1,12 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  BLOCK_ID_ATTRIBUTE,
+  BLOCK_ID_SELECTOR,
+  BLOCK_SELECTED_ATTRIBUTE,
+  BLOCK_SELECTED_SELECTOR,
+} from "./dom-markers";
+
+const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
 
 async function textPoint(content: Locator, offset: number): Promise<{ x: number; y: number }> {
   return content.evaluate((element, requestedOffset) => {
@@ -33,8 +41,8 @@ test("switches cross-block drag to blocks and restores text on return", async ({
   const first = contents.nth(0);
   const second = contents.nth(1);
   await dragText(page, first, 2, second, 8);
-  await expect(first.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute("data-selected", "true");
-  await expect(second.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute("data-selected", "true");
+  await expect(first.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(second.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
 
   await page.reload();
   const start = page.locator("[data-block-content]").nth(0);
@@ -47,12 +55,14 @@ test("switches cross-block drag to blocks and restores text on return", async ({
   await page.mouse.move(across.x, across.y, { steps: 6 });
   await page.mouse.move(back.x, back.y, { steps: 6 });
   await page.mouse.up();
-  await expect.poll(() => page.evaluate(() => {
+  await expect.poll(() => page.evaluate(({ attribute, selector }) => {
     const selection = getSelection();
     const blockId = (node: Node | null) => (node instanceof Element ? node : node?.parentElement)
-      ?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
+      ?.closest<HTMLElement>(selector)?.getAttribute(attribute);
     return [blockId(selection?.anchorNode ?? null), blockId(selection?.focusNode ?? null)];
-  })).toEqual(await start.locator("xpath=ancestor::*[@data-block-id][1]").getAttribute("data-block-id").then((id) => [id, id]));
+  }, { attribute: BLOCK_ID_ATTRIBUTE, selector: BLOCK_ID_SELECTOR })).toEqual(
+    await start.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE).then((id) => [id, id]),
+  );
 });
 
 test("Alt drag keeps partial text across blocks", async ({ page }) => {
@@ -60,7 +70,7 @@ test("Alt drag keeps partial text across blocks", async ({ page }) => {
   await page.keyboard.down("Alt");
   await dragText(page, contents.nth(0), 2, contents.nth(1), 8);
   await page.keyboard.up("Alt");
-  await expect(contents.nth(0).locator("xpath=ancestor::*[@data-block-id][1]")).not.toHaveAttribute("data-selected", "true");
+  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
   await expect.poll(() => page.evaluate(() => getSelection()?.toString().length ?? 0)).toBeGreaterThan(0);
 });
 
@@ -68,27 +78,27 @@ test("Shift click ranges complete blocks", async ({ page }) => {
   const contents = page.locator("[data-block-content]");
   await contents.nth(0).click();
   await contents.nth(2).click({ modifiers: ["Shift"] });
-  await expect(page.locator("[data-selected]")).toHaveCount(3);
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(3);
 });
 
 test("Ctrl click toggles blocks with a pointer cursor", async ({ page }) => {
   const contents = page.locator("[data-block-content]");
   await contents.nth(0).click({ modifiers: ["Control"] });
   await contents.nth(1).click({ modifiers: ["Control"] });
-  await expect(page.locator("[data-selected]")).toHaveCount(2);
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
   await page.keyboard.down("Control");
   await expect(contents.nth(1)).toHaveCSS("cursor", "pointer");
   await page.keyboard.up("Control");
   await contents.nth(1).click({ modifiers: ["Control"] });
-  await expect(contents.nth(1).locator("xpath=ancestor::*[@data-block-id][1]")).not.toHaveAttribute("data-selected", "true");
+  await expect(contents.nth(1).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
 });
 
 test("selecting a parent draws one selection rectangle around its subtree", async ({ page }) => {
   const parent = page.locator(".page-block:has(> .page-block-children)").first();
-  const child = parent.locator(".page-block-children [data-block-id]").last();
+  const child = parent.locator(`.page-block-children ${BLOCK_ID_SELECTOR}`).last();
   await parent.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
 
-  await expect(parent).toHaveAttribute("data-selected", "true");
+  await expect(parent).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
   await expect(parent).toHaveCSS("background-color", "rgb(229, 223, 255)");
   const parentBox = await parent.boundingBox();
   const childBox = await child.boundingBox();
@@ -102,30 +112,30 @@ test("Alt selects block ranges and Alt+Shift moves a block", async ({ page }) =>
   const firstText = await contents.nth(0).textContent();
   await contents.nth(0).click();
   await page.keyboard.press("Alt+ArrowDown");
-  await expect(page.locator("[data-selected]")).toHaveCount(1);
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(1);
   await page.keyboard.press("Alt+ArrowDown");
-  await expect(page.locator("[data-selected]")).toHaveCount(2);
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
   await page.keyboard.press("Alt+ArrowUp");
-  await expect(page.locator("[data-selected]")).toHaveCount(1);
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(1);
   await page.keyboard.press("Alt+Shift+ArrowDown");
   await expect(page.locator("[data-block-content]").nth(1)).toHaveText(firstText ?? "");
 });
 
 test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => {
-  const blocks = page.locator("[data-block-id]");
+  const blocks = page.locator(BLOCK_ID_SELECTOR);
   const first = blocks.nth(5);
   const second = blocks.nth(8);
-  const parentId = await first.locator("xpath=ancestor::*[@data-block-id][1]").getAttribute("data-block-id");
+  const parentId = await first.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
   expect(parentId).toBeTruthy();
-  await expect(second.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute("data-block-id", parentId!);
+  await expect(second.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(BLOCK_ID_ATTRIBUTE, parentId!);
 
   await first.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
   await second.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
   await page.keyboard.press("Shift+Tab");
 
-  await expect(first.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveCount(0);
-  await expect(second.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveCount(0);
-  await expect(page.locator("[data-selected]")).toHaveCount(2);
+  await expect(first.locator(BLOCK_ANCESTOR_XPATH)).toHaveCount(0);
+  await expect(second.locator(BLOCK_ANCESTOR_XPATH)).toHaveCount(0);
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
 });
 
 test("Down follows wrapped visual lines at approximately the same x", async ({ page }) => {

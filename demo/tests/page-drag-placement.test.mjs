@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveAfterDropPlacement } from "../src/plugins/page-drag-placement.ts";
+import { resolveAfterDropPlacement } from "../../packages/react/src/plugins/page-drag-placement.ts";
 
 const block = (id, children = []) => ({ id, children });
 

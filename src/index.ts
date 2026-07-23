@@ -4,5 +4,4 @@ export * from './managers';
 export * from './store/crdt-doc';
 export * from './store/document-model';
 export * from './editor';
-export * from './view';
 export { isBlockCollapsed } from './utils/blocks';

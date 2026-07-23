@@ -1,0 +1,432 @@
+.edgeless-zoom-controls button {
+  padding: 5px 9px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+
+.page-surface {
+  width: min(720px, calc(100% - 32px));
+  min-height: 70vh;
+  margin: 24px auto 64px;
+  padding: 56px 64px;
+  box-sizing: border-box;
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 6%);
+  overflow-x: clip;
+}
+
+.page-block {
+  margin: 4px 0;
+}
+
+.page-block-row {
+  position: relative;
+  width: 100%;
+}
+
+/* Extend only the hover target across the page. The rendered row remains at
+   its real nesting depth, so indentation and drop geometry do not change. */
+.page-block-row::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0 -100vw;
+  background: transparent;
+  content: "";
+}
+
+.page-block-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+[data-block-selecting] .page-block-row,
+[data-block-selecting] [data-block-content] {
+  cursor: pointer;
+}
+
+.page-drag-handle {
+  position: absolute;
+  top: 0;
+  left: -28px;
+  /* Reach the block edge so the handle stays visible while the pointer moves
+     from the row onto the button. */
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: #888;
+  background: transparent;
+  cursor: grab;
+  opacity: 0;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Children live outside their parent's row, so only the line under the cursor
+   or owning the caret reveals its handle. */
+.page-block-row:hover > .page-drag-handle,
+.page-block-row:focus-within > .page-drag-handle,
+.page-drag-handle:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.page-drag-handle:active {
+  cursor: grabbing;
+}
+
+.page-collapse-toggle {
+  position: absolute;
+  top: 0;
+  left: -48px;
+  width: 20px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  color: #777;
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+.page-collapse-toggle:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--rivto-accent, #6c5ce7);
+}
+
+[data-dragging] {
+  opacity: 0.45;
+}
+
+[data-drop-inside] {
+  background: #eeeaff;
+}
+
+.page-drop-line {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  height: 2px;
+  background: var(--rivto-accent, #6c5ce7);
+  pointer-events: none;
+}
+
+.page-drop-line[data-edge="before"] {
+  top: -2px;
+}
+
+.page-drop-line[data-edge="after"] {
+  bottom: -2px;
+}
+
+.page-drag-overlay {
+  width: min(520px, 70vw);
+  max-width: 520px;
+  max-height: 220px;
+  padding: 10px 14px;
+  overflow: hidden;
+  border: 1px solid #d8d2ff;
+  border-radius: 6px;
+  color: #333;
+  background: white;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.page-drag-preview-block {
+  margin: 4px 0;
+}
+
+.page-drag-preview-block > .page-block-content {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.page-drag-preview-more {
+  margin-top: 8px;
+  color: #777;
+  font-size: 0.875rem;
+}
+
+.page-block-content {
+  min-height: 1.5em;
+  line-height: 1.5;
+  outline: none;
+  white-space: pre-wrap;
+}
+
+/* TextSelectionPlugin uses an exact CSS range when the browser supports it. */
+::highlight(rivto-text-selection) {
+  background: #cfc4ff;
+}
+
+/* Older browsers receive a whole-content fallback marker instead. */
+[data-text-selected] {
+  background: #e5dfff;
+}
+
+/* A page block owns its recursively rendered children, so decorating the
+   outer BlockView makes a whole-block selection cover the complete subtree as
+   one rectangle. Nested selected markers do not draw additional rectangles. */
+.page-block[data-selected] {
+  border-radius: 4px;
+  background: #e5dfff;
+  outline: 1px solid #cfc4ff;
+}
+
+.page-block[data-selected] .page-block[data-selected] {
+  border-radius: 0;
+  outline: none;
+}
+
+.page-block-children {
+  margin-left: 24px;
+}
+
+.markdown-content {
+  display: grid;
+  min-height: 1.5em;
+}
+
+.markdown-editor {
+  grid-area: 1 / 1;
+  position: relative;
+  z-index: 1;
+  color: transparent;
+  caret-color: transparent;
+}
+
+.markdown-preview {
+  grid-area: 1 / 1;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  white-space: normal;
+}
+
+.markdown-editor:focus {
+  color: inherit;
+  caret-color: auto;
+}
+
+.markdown-content:focus-within .markdown-preview {
+  visibility: hidden;
+}
+
+.markdown-preview > :first-child {
+  margin-top: 0;
+}
+
+.markdown-preview > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-preview code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #f1f1f1;
+  font-family: ui-monospace, monospace;
+}
+
+.markdown-preview a {
+  color: var(--rivto-link-color, #5b4bd8);
+}
+
+.page-unknown-block {
+  padding: 8px 10px;
+  border: 1px dashed #bbb;
+  border-radius: 6px;
+  color: #666;
+}
+
+.slash-menu {
+  position: fixed;
+  z-index: 1000;
+  width: min(280px, calc(100vw - 24px));
+  max-height: 320px;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 16%);
+}
+
+.slash-menu-group {
+  padding: 6px 8px 3px;
+  color: #777;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.slash-menu-item {
+  display: block;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 5px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.slash-menu-item:hover,
+.slash-menu-item[data-active] {
+  background: #eeeaff;
+}
+
+.slash-menu-empty {
+  padding: 10px;
+  color: #777;
+}
+
+.edgeless-viewport {
+  position: relative;
+  width: calc(100% - 32px);
+  height: calc(100vh - 96px);
+  min-height: 520px;
+  margin: 8px 16px 24px;
+  overflow: auto;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: #f8f7fb;
+  outline: none;
+  overscroll-behavior: contain;
+}
+
+.edgeless-viewport[data-panning-ready],
+.edgeless-viewport[data-panning] {
+  cursor: grab;
+}
+
+.edgeless-viewport[data-panning] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.edgeless-zoom-controls {
+  position: sticky;
+  z-index: 20;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  width: max-content;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 8%);
+}
+
+.edgeless-scaled-plane {
+  position: relative;
+}
+
+.edgeless-plane {
+  position: absolute;
+  inset: 0;
+  background-color: #f8f7fb;
+  background-image: radial-gradient(#c9c4d0 1px, transparent 1px);
+  background-size: 20px 20px;
+  transform-origin: 0 0;
+}
+
+.edgeless-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid #d8d5df;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 8%);
+  outline: none;
+}
+
+.edgeless-card[data-selected] {
+  border-color: var(--rivto-accent, #6c5ce7);
+  box-shadow: 0 0 0 2px var(--rivto-accent, #6c5ce7), 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+.edgeless-card-header {
+  display: flex;
+  flex: 0 0 28px;
+  align-items: center;
+  padding: 2px 7px;
+  border-bottom: 1px solid #eee;
+  background: #faf9fc;
+}
+
+.edgeless-drag-handle {
+  padding: 2px 5px;
+  border: 0;
+  color: #777;
+  background: transparent;
+  font-size: 0.75rem;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.edgeless-drag-handle:active {
+  cursor: grabbing;
+}
+
+.edgeless-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px 12px 18px 40px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Page rows extend their hover hit area across an infinite writing page. That
+   extension must stop at a canvas card or it creates a viewport-wide scrollbar. */
+.edgeless-card .page-block-row::before {
+  inset-inline: 0;
+}
+
+.edgeless-resize-handle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: linear-gradient(135deg, transparent 50%, #888 50%);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.edgeless-selection-rectangle {
+  position: fixed;
+  z-index: 1000;
+  border: 1px solid var(--rivto-accent, #6c5ce7);
+  background: rgb(108 92 231 / 12%);
+  pointer-events: none;
+}
+
+.edgeless-viewport[data-transforming] {
+  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .page-surface {
+    padding: 32px 24px;
+  }
+}

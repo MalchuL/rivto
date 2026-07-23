@@ -1,12 +1,18 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  blockIdSelector,
+  BLOCK_ID_ATTRIBUTE,
+  BLOCK_ID_SELECTOR,
+  BLOCK_SELECTED_SELECTOR,
+} from "./dom-markers";
 
 /** Selects root blocks through the same Ctrl+click gesture used by the demo. */
 async function selectRoots(page: Page, indexes: number[]): Promise<string[]> {
-  const roots = page.locator(".page-surface > [data-block-id]");
+  const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
   const ids: string[] = [];
   for (const index of indexes) {
     const root = roots.nth(index);
-    const id = await root.getAttribute("data-block-id");
+    const id = await root.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!id) throw new Error("Expected root block ID");
     ids.push(id);
     await root.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
@@ -16,7 +22,7 @@ async function selectRoots(page: Page, indexes: number[]): Promise<string[]> {
 
 /** Resolves a stable block locator after undo recreates its rendered element. */
 function blockById(page: Page, id: string): Locator {
-  return page.locator(`[data-block-id="${id}"]`);
+  return page.locator(blockIdSelector(id));
 }
 
 test.beforeEach(async ({ page }) => {
@@ -25,7 +31,7 @@ test.beforeEach(async ({ page }) => {
 
 test("Backspace and Delete remove root-focused block selections atomically", async ({ page }) => {
   const [firstId, secondId] = await selectRoots(page, [0, 1]);
-  await expect(page.locator("[data-selected]" )).toHaveCount(2);
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
 
   await page.keyboard.press("Backspace");
   await expect(blockById(page, firstId!)).toHaveCount(0);

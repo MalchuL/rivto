@@ -6,7 +6,7 @@ import {
   normalizeSlashText,
   rankSlashCommands,
   slashSearchDistance,
-} from "../src/plugins/slash-search.ts";
+} from "../../packages/react/src/plugins/slash-search.ts";
 
 const command = (id, title, keywords = []) => ({ id, title, keywords, execute() {} });
 

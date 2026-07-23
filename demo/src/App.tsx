@@ -1,35 +1,36 @@
 import {
-  ClipboardPlugin,
   createRivtoEditor,
   DEFAULT_BLOCK_TYPE,
-  EditorView,
-  HistoryPlugin,
   RIVTO_VERSION,
-  TextSelectionPlugin,
+} from "@chulane/rivto";
+import {
+  blockCreationPlugin,
+  blockMergePlugin,
+  caretNavigationPlugin,
+  clipboardPlugin,
+  collapsePlugin,
+  createReactEditor,
+  edgelessSelectionPlugin,
+  edgelessSurfacePlugin,
+  edgelessTransformPlugin,
+  EditorView,
+  historyPlugin,
+  indentPlugin,
+  pageDragPlugin,
+  pageSelectionPlugin,
+  pageSurfacePlugin,
+  selectionDeletionPlugin,
+  slashCommandPlugin,
+  textSelectionPlugin,
   useEditor,
   useEditorMode,
-} from "@chulane/rivto";
+} from "@chulane/rivto-react";
 import { useEffect, useState } from "react";
 import {
   COUNTER_BLOCK_TYPE,
   installCustomBlocks,
   SLIDER_BLOCK_TYPE,
 } from "./blocks/custom-blocks";
-import {
-  EdgelessSelectionPlugin,
-  EdgelessTransformPlugin,
-  PageBackspacePlugin,
-  PageArrowPlugin,
-  PageBlockSelectionPlugin,
-  PageCollapsePlugin,
-  PageDeletePlugin,
-  PageDragPlugin,
-  PageEnterPlugin,
-  PageSlashCommandPlugin,
-  PageTabPlugin,
-} from "./plugins";
-import { PageSurface } from "./surfaces/page";
-import { EdgelessSurface } from "./surfaces/edgeless";
 
 /**
  * Creates demo content for manual editing and selection checks.
@@ -39,7 +40,28 @@ import { EdgelessSurface } from "./surfaces/edgeless";
  */
 function createDemoEditor() {
   const editor = createRivtoEditor();
-  const disposeCustomBlocks = installCustomBlocks(editor);
+  const reactEditor = createReactEditor({
+    editor,
+    plugins: [
+      pageSurfacePlugin(),
+      edgelessSurfacePlugin(),
+      historyPlugin(),
+      textSelectionPlugin(),
+      slashCommandPlugin(),
+      clipboardPlugin(),
+      pageSelectionPlugin(),
+      collapsePlugin(),
+      caretNavigationPlugin(),
+      indentPlugin(),
+      blockCreationPlugin(),
+      selectionDeletionPlugin(),
+      blockMergePlugin(),
+      pageDragPlugin(),
+      edgelessSelectionPlugin(),
+      edgelessTransformPlugin(),
+    ],
+  });
+  installCustomBlocks(reactEditor);
   const introId = editor.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "**Rivto editor**",
@@ -135,7 +157,7 @@ function createDemoEditor() {
   }));
   editor.history.clear();
 
-  return { editor, disposeCustomBlocks };
+  return { editor, reactEditor };
 }
 
 /** Demo toolbar for switching the local presentation of one shared document. */
@@ -159,68 +181,20 @@ function DemoToolbar() {
   );
 }
 
-/** Installs plugins that are meaningful only for the ordered page surface. */
-function PageMode() {
-  return (
-    <>
-      <PageBlockSelectionPlugin />
-      <PageCollapsePlugin />
-      <PageArrowPlugin />
-      <PageTabPlugin />
-      <PageEnterPlugin />
-      <PageBackspacePlugin />
-      <PageDeletePlugin />
-      <PageDragPlugin>
-        <PageSurface />
-      </PageDragPlugin>
-    </>
-  );
-}
-
-/** Installs root-object behavior around the demo's positioned canvas surface. */
-function EdgelessMode() {
-  return (
-    <>
-      <EdgelessSelectionPlugin />
-      <EdgelessTransformPlugin />
-      <PageEnterPlugin />
-      <PageTabPlugin />
-      <PageDragPlugin>
-        <EdgelessSurface />
-      </PageDragPlugin>
-    </>
-  );
-}
-
-/** Selects one concrete surface without changing the persisted document. */
-function DemoEditor() {
-  const mode = useEditorMode();
-  return (
-    <>
-      <DemoToolbar />
-      <HistoryPlugin />
-      <TextSelectionPlugin />
-      <PageSlashCommandPlugin />
-      <ClipboardPlugin />
-      {mode === "block" ? <PageMode /> : <EdgelessMode />}
-    </>
-  );
-}
-
 /** Hosts the editor runtime and explicitly selects the active demo surface. */
 export function App() {
-  const [{ editor, disposeCustomBlocks }] = useState(createDemoEditor);
+  const [{ editor, reactEditor }] = useState(createDemoEditor);
 
   // EditorView consumes but does not own the runtime, so the application that
   // created it also releases its subscriptions and command registrations.
   useEffect(() => () => {
-    disposeCustomBlocks();
+    reactEditor.destroy();
     editor.destroy();
-  }, [disposeCustomBlocks, editor]);
+  }, [editor, reactEditor]);
 
   return (
-    <EditorView editor={editor}>
-      <DemoEditor />
+    <EditorView editor={reactEditor}>
+      <DemoToolbar />
     </EditorView>
   );
 }

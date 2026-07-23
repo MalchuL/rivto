@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { BLOCK_ID_SELECTOR, BLOCK_SELECTED_SELECTOR } from "./dom-markers";
 
 async function textPoint(
   content: import("@playwright/test").Locator,
@@ -127,23 +128,23 @@ test("copies a multi-block selection from the focused page", async ({ page }) =>
 
 test("copies and pastes a mouse-dragged multi-block selection", async ({ page }) => {
   const contents = page.locator("[data-block-content]");
-  const before = await page.locator("[data-block-id]").count();
+  const before = await page.locator(BLOCK_ID_SELECTOR).count();
   const start = await textPoint(contents.nth(0), 2);
   const end = await textPoint(contents.nth(2), 8);
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 10 });
   await page.mouse.up();
-  await expect(page.locator("[data-selected]")).toHaveCount(3);
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(3);
 
   await page.keyboard.press("Control+c");
   await page.keyboard.press("Control+v");
 
-  await expect(page.locator("[data-block-id]")).toHaveCount(before + 3);
+  await expect(page.locator(BLOCK_ID_SELECTOR)).toHaveCount(before + 3);
 });
 
 test("drags selected sibling roots together", async ({ page }) => {
-  const blocks = page.locator("[data-block-id]");
+  const blocks = page.locator(BLOCK_ID_SELECTOR);
   const firstText = await blocks.nth(0).locator("[data-block-content]").textContent();
   const secondText = await blocks.nth(1).locator("[data-block-content]").textContent();
   await blocks.nth(0).locator("[data-block-content]").click({ modifiers: ["Control"] });
@@ -160,5 +161,5 @@ test("drags selected sibling roots together", async ({ page }) => {
   await expect(page.locator(".page-drag-overlay")).toContainText(firstText ?? "");
   await expect(page.locator(".page-drag-overlay")).toContainText(secondText ?? "");
   await page.mouse.up();
-  await expect(page.locator("[data-selected]")).toHaveCount(2);
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
 });

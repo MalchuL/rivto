@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@chulane/rivto": "workspace:*",
-    "@dnd-kit/core": "^6.3.1",
+    "@chulane/rivto-react": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zod": "^4.1.13"
