@@ -1,10 +1,52 @@
+/**
+ * Recursive rendering policy shared by the page outline and edgeless cards.
+ *
+ * The surface chooses content and child placement here, then delegates only
+ * structural interaction chrome to the active `BlockWrapper`.
+ *
+ * @module
+ */
 import {
   useBlock,
   useBlockSelection,
   useReactEditor,
 } from "../../hooks";
-import { PageDraggableBlock } from "../../plugins/PageDragPlugin";
+import {
+  BlockElementRefBoundary,
+  BlockView,
+  BlockWrapper,
+  useBlockElementRef,
+  type BlockShellProps,
+} from "../../blocks";
 import { UnknownBlock } from "./block-renderers";
+
+/**
+ * Renders the page surface's non-interactive structural block shell.
+ *
+ * This fallback preserves the stable BlockView markers and page row layout when
+ * no plugin contributes handles or decorations. It intentionally does not know
+ * about drag-and-drop.
+ *
+ * @param props - Resolved block, selection state, row slots, and descendants.
+ * @returns One page block container with its row followed by nested children.
+ */
+function PageBlockWrapper({ block, selected, content, controls, children }: BlockShellProps) {
+  const blockElementRef = useBlockElementRef();
+  return (
+    <BlockView
+      ref={blockElementRef}
+      block={block}
+      selected={selected}
+      className="page-block"
+    >
+      <div className="page-block-row" data-block-type={block.type}>
+        {controls}
+        {content}
+      </div>
+      <BlockElementRefBoundary>{children}</BlockElementRefBoundary>
+    </BlockView>
+  );
+}
 
 /** Properties required to render one block subtree on the page surface. */
 export interface PageBlockProps {
@@ -25,19 +67,33 @@ export interface PageBlockProps {
  * Resolving by ID rather than retaining a parent snapshot ensures this subtree
  * observes the latest editor revision. A concurrently removed block renders
  * nothing instead of leaving a stale container behind.
+ *
+ * The structural shell is resolved through `BlockWrapper`. Consequently this
+ * surface never imports optional plugins: the runtime may substitute a DnD or
+ * decoration wrapper while renderer and recursion decisions remain here.
+ *
+ * @param props - Stable block ID and optional collapse-policy override.
+ * @returns The complete rendered block subtree, or null if the block was
+ * concurrently removed.
  */
 export function PageBlock({ blockId, ignoreCollapse = false }: PageBlockProps) {
+  // Hooks resolve from the editor revision so renderers never receive stale
+  // snapshots after local commands, remote CRDT changes, undo, or redo.
   const { block, getters, operations } = useBlock(blockId);
   const reactEditor = useReactEditor();
   const selection = useBlockSelection(blockId);
 
   if (!block) return null;
+  // Renderer policy belongs to the surface; BlockView only supplies DOM identity.
   const Content = reactEditor.getRenderer(block.type) ?? UnknownBlock;
   const collapsed = getters.collapsed;
+  // The stable relationship lets assistive technology associate the toggle
+  // with the descendant container it shows or hides.
   const childrenId = `block-children-${block.id}`;
 
   return (
-    <PageDraggableBlock
+    <BlockWrapper
+      fallback={PageBlockWrapper}
       block={block}
       selected={!ignoreCollapse && Boolean(selection)}
       controls={!ignoreCollapse && block.children.length > 0 && (
@@ -60,6 +116,8 @@ export function PageBlock({ blockId, ignoreCollapse = false }: PageBlockProps) {
       )}
       content={<Content blockId={block.id} />}
     >
+      {/* Collapse removes descendants from page DOM and navigation. Edgeless
+          reuse opts out because each canvas card must expose its full outline. */}
       {block.children.length > 0 && (ignoreCollapse || !collapsed) && (
         <div id={childrenId} className="page-block-children">
           {block.children.map((child) => (
@@ -67,6 +125,6 @@ export function PageBlock({ blockId, ignoreCollapse = false }: PageBlockProps) {
           ))}
         </div>
       )}
-    </PageDraggableBlock>
+    </BlockWrapper>
   );
 }

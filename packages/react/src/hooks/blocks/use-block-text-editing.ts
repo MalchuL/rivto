@@ -6,7 +6,10 @@ import {
   type RefObject,
 } from "react";
 import { BLOCK_CONTENT_ATTRIBUTE } from "../../constants";
-import { restoreDOMSelection, saveDOMSelection } from "../utils/dom-text-selection";
+import {
+  restoreDOMSelection,
+  saveDOMSelection,
+} from "../../events/utils/selection/dom-text-selection";
 import { useBlock } from "./use-block";
 
 /** Props returned for a plain-text contentEditable block element. */

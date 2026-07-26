@@ -14,7 +14,7 @@ export interface UseEditorRootResult {
  *
  * A surface assigns `ref` to its own container, preserving ownership of the
  * element, semantics, layout, and styling. Plugins read `element` indirectly
- * through `useEditorEvent` or directly for scoped queries, focus restoration,
+ * through `useDOMEvent` or directly for scoped queries, focus restoration,
  * geometry, and overlays. EditorView stores only the local DOM reference and
  * still renders no wrapper element.
  *

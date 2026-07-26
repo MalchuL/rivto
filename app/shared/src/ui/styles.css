@@ -1,0 +1,58 @@
+.rivto-tiptap .ProseMirror {
+  outline: none;
+}
+
+.rivto-tiptap .ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--muted-foreground, #737373);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.rivto-tiptap .ProseMirror h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 1rem 0 0.5rem;
+}
+
+.rivto-tiptap .ProseMirror h2 {
+  font-size: 1.5rem;
+  font-weight: 650;
+  line-height: 1.25;
+  margin: 0.9rem 0 0.4rem;
+}
+
+.rivto-tiptap .ProseMirror h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0.8rem 0 0.35rem;
+}
+
+.rivto-tiptap .ProseMirror ul,
+.rivto-tiptap .ProseMirror ol {
+  padding-left: 1.25rem;
+  margin: 0.5rem 0;
+}
+
+.rivto-tiptap .ProseMirror blockquote {
+  border-left: 3px solid var(--border, #e5e5e5);
+  margin: 0.75rem 0;
+  padding-left: 0.85rem;
+  color: var(--muted-foreground, #737373);
+}
+
+.rivto-tiptap .ProseMirror code {
+  border-radius: 0.25rem;
+  background: var(--muted, #f5f5f5);
+  padding: 0.1rem 0.3rem;
+  font-size: 0.9em;
+}
+
+.rivto-tiptap .ProseMirror pre {
+  border-radius: 0.5rem;
+  background: var(--muted, #f5f5f5);
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+}

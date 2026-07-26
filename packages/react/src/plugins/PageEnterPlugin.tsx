@@ -1,24 +1,25 @@
+import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
+import { readEditorDOMSelection } from "../events/utils/selection/editor-dom-selection";
 import {
-  DEFAULT_BLOCK_TYPE,
-  readEditorDOMSelection,
   useEditor,
-  useEditorEvent,
   useEditorRoot,
-} from "../internal";
+  useKeyboardEvent,
+} from "../hooks";
 import {
   focusBlock,
-} from "./utils/block-dom";
+} from "../events/utils/dom/block-dom";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "./utils/keyboard-selection";
+} from "../events/utils/keyboard/selection";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
 
 /**
  * Installs outline block splitting for Page and Edgeless surfaces.
  *
- * This plugin owns one delegated keydown listener and ignores every key except
- * unmodified Enter. The first selection item supplies the only insertion target,
+ * The declarative `block.create` binding decides which key invokes this action.
+ * The first selection item supplies the only insertion target,
  * so a multi-item selection never creates several blocks. Expanded text is
  * deleted first, a collapsed caret splits its block, and a whole-block item adds
  * one empty default writing block.
@@ -29,28 +30,19 @@ export function PageEnterPlugin() {
   const editor = useEditor();
   const { element: root } = useEditorRoot();
 
-  useEditorEvent("keydown", (event) => {
-    if (
-      event.defaultPrevented ||
-      event.isComposing ||
-      event.key !== "Enter" ||
-      event.shiftKey ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey ||
-      !root
-    ) return;
-
-    if (!isEditableKeyboardEvent(event)) return;
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.blockCreate,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,
+  }, ({ event }) => {
+    if (!root || !isEditableKeyboardEvent(event)) return false;
     // Read the key event's native caret synchronously. A newly focused editor
     // can receive Enter before the browser's deferred selectionchange event.
     const nativeSelection = readEditorDOMSelection(root);
     if (nativeSelection) editor.execute("selection.set", { selection: nativeSelection });
     const selection = nativeSelection ?? editor.selection.get();
     const initialTarget = firstKeyboardTarget(selection);
-    if (!initialTarget || initialTarget.item.type === "edgeless") return;
+    if (!initialTarget || initialTarget.item.type === "edgeless") return false;
 
-    event.preventDefault();
     let nextBlockId = "";
 
     // Selection deletion, text splitting, insertion, and nesting share one CRDT
@@ -99,7 +91,9 @@ export function PageEnterPlugin() {
       }] });
     });
 
-    if (nextBlockId) requestAnimationFrame(() => focusBlock(root, nextBlockId, 0));
+    if (!nextBlockId) return false;
+    requestAnimationFrame(() => focusBlock(root, nextBlockId, 0));
+    return true;
   });
 
   return null;

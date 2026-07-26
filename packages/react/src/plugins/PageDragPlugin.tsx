@@ -1,3 +1,10 @@
+/**
+ * dnd-kit integration for atomic movement of one block subtree or an eligible
+ * sibling-root selection. Surface rendering enters through wrapper slots, so
+ * this module owns gesture mechanics without owning recursive traversal.
+ *
+ * @module
+ */
 import {
   closestCenter,
   DndContext,
@@ -14,18 +21,23 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
-  BlockView,
   isBlockCollapsed,
-  useEditor,
   type EditorBlock,
-} from "../internal";
+} from "@chulane/rivto";
+import {
+  BlockElementRefProvider,
+  type BlockWrapperProps,
+} from "../blocks";
+import { useEditor } from "../hooks";
 import {
   createContext,
   useContext,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { resolveAfterDropPlacement } from "./utils/page-drag-placement";
 import { selectedMoveRoots, type SelectedMoveRoots } from "./utils/page-selection";
 
@@ -35,10 +47,17 @@ const MAX_PREVIEW_BLOCKS = 4;
 /** Visual nesting used by `.page-block-children` in the demo stylesheet. */
 const PAGE_INDENT = 24;
 
-/** Insertion line currently selected by the pointer. */
+/**
+ * Normalized document destination and visual feedback for the current pointer.
+ *
+ * Keeping the document target separate from the indicator owner is important:
+ * horizontal gap movement can target an ancestor level while the line remains
+ * visually attached to the row immediately above the pointer.
+ */
 interface DropPlacement {
   /** Block used by the document move operation. */
   readonly targetId: string;
+  /** Relationship passed to `editor.moveBlocks`. */
   readonly position: "before" | "after" | "inside";
   /** Hovered row that owns the visible insertion line. */
   readonly indicatorId: string;
@@ -50,10 +69,18 @@ interface DropPlacement {
 
 /** Drag state shared with recursively rendered page blocks. */
 interface PageDragState {
+  /** Valid destination currently advertised to recursively rendered rows. */
   readonly placement: DropPlacement | null;
+  /** Moved root IDs whose rows should share the translucent dragging state. */
   readonly draggedIds: readonly string[];
 }
 
+/**
+ * Connects the provider-level gesture calculation to every recursive row.
+ *
+ * A harmless empty value lets wrappers render outside PageDragPlugin during
+ * tests or when a host registers the wrapper without the provider.
+ */
 const PageDragStateContext = createContext<PageDragState>({ placement: null, draggedIds: [] });
 
 /** Properties for the page drag-and-drop boundary. */
@@ -68,21 +95,16 @@ export interface PageDragPluginProps {
   readonly gapDropZone?: number;
 }
 
-/** Properties for one draggable page block container. */
-export interface PageDraggableBlockProps {
-  /** Current detached block rendered by this container. */
-  readonly block: EditorBlock;
-  /** Whether the surface currently renders the whole block as selected. */
-  readonly selected: boolean;
-  /** Surface-owned renderer for this block's own row. */
-  readonly content: ReactNode;
-  /** Optional surface controls placed beside the drag handle. */
-  readonly controls?: ReactNode;
-  /** Recursively rendered child blocks placed below this block's own row. */
-  readonly children?: ReactNode;
-}
-
-/** Returns whether a block subtree contains a candidate ID. */
+/**
+ * Tests whether an ID belongs to a block's complete persisted subtree.
+ *
+ * This deliberately includes collapsed descendants: they are hidden visually
+ * but remain owned by the moved root and therefore cannot be valid targets.
+ *
+ * @param block - Root of the subtree to inspect.
+ * @param candidateId - Prospective destination ID.
+ * @returns True when the root or any descendant has the candidate ID.
+ */
 function containsBlock(block: EditorBlock, candidateId: string): boolean {
   return block.id === candidateId || block.children.some((child) => containsBlock(child, candidateId));
 }
@@ -94,6 +116,10 @@ function containsBlock(block: EditorBlock, candidateId: string): boolean {
  * selects the closest preceding row, making the gap an unambiguous "after"
  * insertion point across the complete page width. Keyboard dragging retains
  * dnd-kit's nearest-center fallback.
+ *
+ * @param arguments_ - Rectangles and pointer coordinates supplied by dnd-kit.
+ * @returns At most one collision: the row whose body or preceding gap owns the
+ * current pointer position.
  */
 const pageCollisionDetection: CollisionDetection = (arguments_) => {
   const { pointerCoordinates, droppableContainers, droppableRects } = arguments_;
@@ -120,6 +146,13 @@ const pageCollisionDetection: CollisionDetection = (arguments_) => {
  * A pointer over the row body appends inside that block and highlights it. A
  * pointer in a gap renders a line; horizontal movement then snaps that line to
  * every structurally available depth.
+ *
+ * @param event - Current dnd-kit movement including the active and over rects.
+ * @param blocks - Latest complete document tree used to resolve ancestor depth.
+ * @param childDropIndent - Horizontal pixels representing one requested depth.
+ * @param gapDropZone - Vertical pixels reserved at the top and bottom of a row.
+ * @returns A valid candidate destination and indicator, or null when the
+ * pointer is not over a registered row.
  */
 function resolveDropPlacement(
   event: DragMoveEvent,
@@ -177,13 +210,24 @@ function resolveDropPlacement(
   };
 }
 
-/** One flattened row in the height-limited subtree preview. */
+/** One visible row in the height-limited, pre-order subtree preview. */
 interface PreviewEntry {
+  /** Detached block snapshot whose label is displayed. */
   readonly block: EditorBlock;
+  /** Relative nesting depth used only for preview indentation. */
   readonly depth: number;
 }
 
-/** Flattens a subtree in visible order while retaining indentation depth. */
+/**
+ * Flattens one subtree in visible page order while retaining relative depth.
+ *
+ * Collapsed descendants are omitted from visible rows; `subtreeSize` counts
+ * them separately so the preview can still report hidden moved content.
+ *
+ * @param block - Root snapshot to flatten.
+ * @param depth - Current relative nesting depth used by recursive calls.
+ * @returns Pre-order entries suitable for direct preview rendering.
+ */
 function flattenPreview(block: EditorBlock, depth = 0): PreviewEntry[] {
   return [
     { block, depth },
@@ -193,7 +237,12 @@ function flattenPreview(block: EditorBlock, depth = 0): PreviewEntry[] {
   ];
 }
 
-/** Counts the complete moved subtree, including children hidden by collapse. */
+/**
+ * Counts every node owned by one moved root, including collapsed descendants.
+ *
+ * @param block - Root snapshot whose complete subtree is counted.
+ * @returns Number of blocks transported by the structural move.
+ */
 function subtreeSize(block: EditorBlock): number {
   return 1 + block.children.reduce((total, child) => total + subtreeSize(child), 0);
 }
@@ -205,6 +254,9 @@ function subtreeSize(block: EditorBlock): number {
  * here would mount duplicate contenteditable elements and register a second set
  * of draggable and droppable nodes with the same IDs. Stable type attributes
  * let the preview reuse the demo's Markdown and custom-block presentation.
+ *
+ * @param props - Detached root snapshots participating in this gesture.
+ * @returns A capped list of visible rows plus a compact omitted-block count.
  */
 function PageDragPreview({ blocks }: { readonly blocks: EditorBlock[] }) {
   const entries = blocks.flatMap((block) => flattenPreview(block));
@@ -249,6 +301,9 @@ function PageDragPreview({ blocks }: { readonly blocks: EditorBlock[] }) {
  *
  * Grouped movement retains its whole-block selection; single movement replaces
  * any text or mixed selection with the moved block.
+ *
+ * @param props - Surface subtree and pointer/drop-zone configuration.
+ * @returns A dnd-kit provider, shared drag state, source surface, and overlay.
  */
 export function PageDragPlugin({
   children,
@@ -280,12 +335,25 @@ export function PageDragPlugin({
     return invalid ? null : placement;
   };
 
+  /**
+   * Freezes the eligible move roots when activation begins.
+   *
+   * Selection can otherwise change while the pointer is moving. Capturing the
+   * roots once keeps the preview and final atomic move consistent.
+   *
+   * @param event - dnd-kit start event containing the handle's block ID.
+   */
   const handleDragStart = ({ active }: DragStartEvent) => {
     const move = selectedMoveRoots(editor.getBlocks(), editor.selection.get(), String(active.id));
     activeMove.current = move;
     setActiveIds(move.ids);
   };
 
+  /**
+   * Commits the last valid structural destination and reconciles selection.
+   *
+   * @param event - Final pointer geometry and target supplied by dnd-kit.
+   */
   const handleDragEnd = (event: DragEndEvent) => {
     const move = activeMove.current;
     const placement = validPlacement(event);
@@ -335,33 +403,57 @@ export function PageDragPlugin({
 }
 
 /**
- * Renders one BlockView with a dnd-kit drop target and dedicated drag handle.
+ * Decorates one surface-owned BlockView with page drag behavior.
  *
- * Only the block's own row is a drop target; nested rows register themselves.
- * The button alone activates the draggable sensor. Keeping listeners off
- * editable content prevents ordinary caret placement and text selection from
- * accidentally beginning a drag.
+ * The decorator contributes a BlockView ref through context, then attaches the
+ * dnd-kit droppable directly to the existing row. Its handle and indicator are
+ * portalled into that row, preserving the surface DOM contract and collision
+ * geometry without rendering a second BlockView.
+ *
+ * This component is registered through `registerBlockWrapper`; page and
+ * edgeless surfaces never import it. The button alone activates the draggable
+ * sensor, so editable content retains ordinary caret and selection behavior.
+ *
+ * @param props - Block snapshot and the next ordered decorator or surface shell.
+ * @returns A DOM-free ref provider plus row-portalled drag controls.
  */
-export function PageDraggableBlock({ block, selected, content, controls, children }: PageDraggableBlockProps) {
+export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
   const draggable = useDraggable({ id: block.id });
   const droppable = useDroppable({ id: block.id });
   const dragState = useContext(PageDragStateContext);
+  const [blockElement, setBlockElement] = useState<HTMLDivElement | null>(null);
   const dropPlacement = dragState.placement;
   const indicator = dropPlacement?.indicatorId === block.id ? dropPlacement : undefined;
+  const row = blockElement?.querySelector<HTMLElement>(":scope > .page-block-row") ?? null;
+  const dragging = draggable.isDragging || dragState.draggedIds.includes(block.id);
 
-  return (
-    <BlockView
-      block={block}
-      selected={selected}
-      className="page-block"
-      data-dragging={draggable.isDragging || dragState.draggedIds.includes(block.id) ? "true" : undefined}
-    >
-      <div
-        ref={droppable.setNodeRef}
-        className="page-block-row"
-        data-block-type={block.type}
-        data-drop-inside={indicator && !indicator.indicatorEdge ? "true" : undefined}
-      >
+  // dnd-kit accepts a node imperatively, allowing the decorator to reuse the
+  // surface's exact row instead of cloning or replacing its React element.
+  useLayoutEffect(() => {
+    droppable.setNodeRef(row);
+    return () => droppable.setNodeRef(null);
+  }, [droppable.setNodeRef, row]);
+
+  // Dragging and inside-drop state decorate stable surface elements without
+  // moving ownership of their data-block markers into this plugin.
+  useLayoutEffect(() => {
+    if (!blockElement) return;
+    if (dragging) blockElement.setAttribute("data-dragging", "true");
+    else blockElement.removeAttribute("data-dragging");
+    return () => blockElement.removeAttribute("data-dragging");
+  }, [blockElement, dragging]);
+  useLayoutEffect(() => {
+    if (!row) return;
+    if (indicator && !indicator.indicatorEdge) {
+      row.setAttribute("data-drop-inside", "true");
+    } else {
+      row.removeAttribute("data-drop-inside");
+    }
+    return () => row.removeAttribute("data-drop-inside");
+  }, [indicator, row]);
+
+  const controls = row ? createPortal(
+    <>
         <button
           {...draggable.attributes}
           {...draggable.listeners}
@@ -373,8 +465,6 @@ export function PageDraggableBlock({ block, selected, content, controls, childre
         >
           ⋮⋮
         </button>
-        {controls}
-        {content}
         {indicator?.indicatorEdge && (
           <span
             className="page-drop-line"
@@ -382,8 +472,14 @@ export function PageDraggableBlock({ block, selected, content, controls, childre
             style={{ left: indicator.indicatorOffset }}
           />
         )}
-      </div>
+    </>,
+    row,
+  ) : null;
+
+  return (
+    <BlockElementRefProvider elementRef={setBlockElement}>
       {children}
-    </BlockView>
+      {controls}
+    </BlockElementRefProvider>
   );
 }

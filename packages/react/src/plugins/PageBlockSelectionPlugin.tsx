@@ -1,13 +1,17 @@
+import type { BlockSelection } from "@chulane/rivto";
 import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
+} from "../constants";
+import {
   useEditor,
-  useEditorEvent,
+  useDOMEvent,
   useEditorRoot,
-  type BlockSelection,
-} from "../internal";
+  useKeyboardEvent,
+} from "../hooks";
 import { useEffect, useState } from "react";
 import { toggleBlockSelection } from "./utils/page-selection";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
 
 /**
  * Adds explicit whole-block selection to the demo page surface.
@@ -29,44 +33,45 @@ export function PageBlockSelectionPlugin() {
     return () => { delete root.dataset.blockSelecting; };
   }, [modifierDown, root]);
 
-  useEffect(() => {
-    if (!root) return;
-    const window = root.ownerDocument.defaultView;
-    if (!window) return;
-    const down = (event: KeyboardEvent) => {
-      if (event.key === "Control" || event.key === "Meta") setModifierDown(true);
-    };
-    const up = (event: KeyboardEvent) => {
-      if (event.key === "Control" || event.key === "Meta") setModifierDown(false);
-    };
-    const clear = () => setModifierDown(false);
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    window.addEventListener("blur", clear);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-      window.removeEventListener("blur", clear);
-    };
-  }, [root]);
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.blockSelectionModifierDown,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierDown]!,
+    target: "window",
+  }, () => {
+    setModifierDown(true);
+    return false;
+  });
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.blockSelectionModifierUp,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierUp]!,
+    phase: "keyup",
+    target: "window",
+  }, () => {
+    setModifierDown(false);
+    return false;
+  });
+  useDOMEvent("blur", () => {
+    setModifierDown(false);
+    return false;
+  }, { target: "window" });
 
-  useEditorEvent("pointerdown", (event) => {
-    if (event.defaultPrevented || event.button !== 0 || (!event.ctrlKey && !event.metaKey)) return;
+  useDOMEvent("pointerdown", ({ event }) => {
+    if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) return false;
     if (
       !(event.target instanceof Element) ||
       event.target.closest(".page-drag-handle, [data-collapse-toggle]")
-    ) return;
+    ) return false;
     const block = event.target.closest<HTMLElement>(BLOCK_ID_SELECTOR);
     const blockId = block?.getAttribute(BLOCK_ID_ATTRIBUTE);
-    if (!root || !block || !blockId || !root.contains(block)) return;
+    if (!root || !block || !blockId || !root.contains(block)) return false;
 
-    event.preventDefault();
     const current = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
     const next = toggleBlockSelection(editor.getBlocks(), current, blockId);
     editor.execute(next ? "selection.set" : "selection.clear", next ? { selection: [next] } : undefined);
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });
-  }, true);
+    return true;
+  }, { capture: true });
 
   return null;
 }

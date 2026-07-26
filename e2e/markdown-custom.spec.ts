@@ -16,38 +16,61 @@ test.beforeEach(async ({ page }) => {
 
 test("shows full GFM at rest and raw source while editing", async ({ page }) => {
   const block = page.locator(blockTypeSelector("paragraph")).first();
-  const editor = block.locator(":scope > .page-block-row [data-block-content]");
+  const editor = block.locator(":scope > .page-block-row .markdown-editor");
   const preview = block.locator(":scope > .page-block-row .markdown-preview");
 
-  await expect(editor).toHaveText("**Rivto editor**");
   await expect(preview.locator("strong")).toHaveText("Rivto editor");
-  await expect(preview).toHaveCSS("visibility", "visible");
+  await expect(editor).toHaveText("**Rivto editor**");
   await editor.click();
   await expect(editor).toBeFocused();
-  await expect(preview).toHaveCSS("visibility", "hidden");
+  await expect(preview).toHaveCount(0);
 
-  const source = "# Heading\n\n- [x] task\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n~~done~~";
+  const source = [
+    "# Heading",
+    "",
+    "- [x] task",
+    "",
+    "| A | B |",
+    "| - | - |",
+    "| 1 | 2 |",
+    "",
+    "~~done~~",
+    "",
+    "```bash",
+    'echo "hello"',
+    "```",
+    "",
+    "```src/example.js",
+    "const value = 42;",
+    "```",
+  ].join("\n");
   await editor.evaluate((element, value) => {
     element.textContent = value;
     element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
   }, source);
   await editor.evaluate((element) => (element as HTMLElement).blur());
 
-  await expect.poll(() => editor.textContent()).toBe(source);
+  await expect(editor).not.toBeFocused();
   await expect(preview.locator("h1")).toHaveText("Heading");
   await expect(preview.locator('input[type="checkbox"]')).toBeChecked();
   await expect(preview.locator("table")).toBeVisible();
   await expect(preview.locator("del")).toHaveText("done");
+  await expect(preview.locator(".markdown-code-label").nth(0)).toHaveText("bash");
+  await expect(preview.locator("code.language-bash")).toContainText('echo "hello"');
+  await expect(preview.locator(".markdown-code-label").nth(1)).toHaveText("src/example.js");
+  await expect(preview.locator(".markdown-code-language").nth(0)).toHaveText("JavaScript");
+  await expect(preview.locator("code.language-javascript .hljs-keyword")).toHaveText("const");
 });
 
 test("filters typo queries, converts in place, and undoes query removal with conversion", async ({ page }) => {
-  const editor = page.locator("[data-block-content]").last();
-  const block = editor.locator(BLOCK_ANCESTOR_XPATH);
+  const content = page.locator("[data-block-content]").last();
+  const block = content.locator(BLOCK_ANCESTOR_XPATH);
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
-  const initial = await editor.textContent();
   if (!id) throw new Error("Expected block ID");
 
-  await editor.click();
+  await content.click();
+  const editor = block.locator("[data-block-content]");
+  const initial = await editor.textContent();
   await page.keyboard.press("End");
   await page.keyboard.type("/sloder");
   const menu = page.locator("[data-slash-menu]");
@@ -57,11 +80,13 @@ test("filters typo queries, converts in place, and undoes query removal with con
 
   const converted = page.locator(blockIdSelector(id));
   await expect(converted).toHaveAttribute(BLOCK_TYPE_ATTRIBUTE, "demo.slider");
+  await converted.locator("[data-block-content]").click();
   await expect(converted.locator("[data-block-content]")).toHaveText(initial ?? "");
   await expect(menu).toHaveCount(0);
 
   await page.keyboard.press("Control+z");
   await expect(converted).toHaveAttribute(BLOCK_TYPE_ATTRIBUTE, "paragraph");
+  await converted.locator("[data-block-content]").click();
   await expect(converted.locator("[data-block-content]")).toHaveText(`${initial}/sloder`);
 });
 
@@ -96,13 +121,14 @@ test("Escape preserves slash text and custom controls update or select their blo
 });
 
 test("mouse slash execution creates a contentless Counter and undo restores dormant text", async ({ page }) => {
-  const editor = page.locator("[data-block-content]").last();
-  const block = editor.locator(BLOCK_ANCESTOR_XPATH);
+  const content = page.locator("[data-block-content]").last();
+  const block = content.locator(BLOCK_ANCESTOR_XPATH);
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
-  const initial = await editor.textContent();
   if (!id) throw new Error("Expected block ID");
 
-  await editor.click();
+  await content.click();
+  const editor = block.locator("[data-block-content]");
+  const initial = await editor.textContent();
   await page.keyboard.press("End");
   await page.keyboard.type(" /count");
   await page.locator('[data-slash-command="type.demo.counter"]').click();
@@ -112,6 +138,7 @@ test("mouse slash execution creates a contentless Counter and undo restores dorm
 
   await page.keyboard.press("Control+z");
   await expect(converted).toHaveAttribute(BLOCK_TYPE_ATTRIBUTE, "paragraph");
+  await converted.locator("[data-block-content]").click();
   await expect(converted.locator("[data-block-content]")).toHaveText(`${initial} /count`);
 });
 

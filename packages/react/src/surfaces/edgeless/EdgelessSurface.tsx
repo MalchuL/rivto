@@ -1,5 +1,11 @@
-import { useDocument, useEditorRoot } from "../../hooks";
-import { useCallback, useEffect, useRef, useState, type PointerEvent, type WheelEvent } from "react";
+import {
+  useDocument,
+  useDOMEvent,
+  useEditorRoot,
+  useKeyboardEvent,
+} from "../../hooks";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../events/keymap";
+import { useCallback, useRef, useState } from "react";
 import { EdgelessRootBlock } from "./EdgelessBlock";
 
 export const EDGELESS_PLANE_WIDTH = 2400;
@@ -7,22 +13,28 @@ export const EDGELESS_PLANE_HEIGHT = 1600;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
 
+interface PanGesture {
+  readonly x: number;
+  readonly y: number;
+  readonly left: number;
+  readonly top: number;
+}
+
 const clampZoom = (value: number): number => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
 
 /**
  * Projects root block layouts onto a scrollable, zoomable demo canvas.
  *
- * Browser scrolling supplies the viewport model. The scaled wrapper gives the
- * browser the correct scroll extent while the inner plane keeps persisted
- * block coordinates unscaled. Space+drag and middle-button drag merely adjust
- * scroll offsets, so no viewport data enters the collaborative document.
+ * Viewport gestures are registered through the editor event runtime. This is
+ * important when a surface is replaced: its root, document, and window
+ * listeners move together instead of leaving global listeners behind.
  */
 export function EdgelessSurface() {
   const document = useDocument();
   const { ref: registerRoot } = useEditorRoot();
   const viewport = useRef<HTMLElement | null>(null);
   const spaceHeld = useRef(false);
-  const cancelPan = useRef<() => void>(() => undefined);
+  const panGesture = useRef<PanGesture | null>(null);
   const [zoom, setZoom] = useState(1);
 
   const rootRef = useCallback((element: HTMLElement | null) => {
@@ -30,52 +42,75 @@ export function EdgelessSurface() {
     registerRoot(element);
   }, [registerRoot]);
 
-  useEffect(() => {
-    const clearSpace = () => {
-      spaceHeld.current = false;
-      viewport.current?.removeAttribute("data-panning-ready");
-    };
-    const releaseSpace = (event: KeyboardEvent) => {
-      if (event.code === "Space") clearSpace();
-    };
-    window.addEventListener("keyup", releaseSpace);
-    window.addEventListener("blur", clearSpace);
-    return () => {
-      cancelPan.current();
-      window.removeEventListener("keyup", releaseSpace);
-      window.removeEventListener("blur", clearSpace);
-    };
-  }, []);
+  const clearSpace = () => {
+    spaceHeld.current = false;
+    viewport.current?.removeAttribute("data-panning-ready");
+  };
 
-  const pan = (event: PointerEvent<HTMLElement>): void => {
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.edgelessPanStart,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessPanStart],
+    mode: "edgeless",
+    when: ({ event }) => {
+      const target = event.target;
+      return target instanceof HTMLElement &&
+        !target.isContentEditable &&
+        !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName);
+    },
+  }, () => {
+    spaceHeld.current = true;
+    viewport.current?.setAttribute("data-panning-ready", "true");
+    return true;
+  });
+
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.edgelessPanStop,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessPanStop],
+    phase: "keyup",
+    target: "window",
+    mode: "edgeless",
+  }, () => {
+    clearSpace();
+    return false;
+  });
+
+  useDOMEvent("blur", () => {
+    clearSpace();
+    panGesture.current = null;
+    viewport.current?.removeAttribute("data-panning");
+  }, { target: "window" });
+
+  useDOMEvent("pointerdown", ({ event }) => {
     const root = viewport.current;
     const allowed = event.button === 1 || (event.button === 0 && spaceHeld.current);
-    if (!root || !allowed) return;
-    cancelPan.current();
-    event.preventDefault();
-    const start = {
+    if (!root || !allowed) return false;
+    panGesture.current = {
       x: event.clientX,
       y: event.clientY,
       left: root.scrollLeft,
       top: root.scrollTop,
     };
     root.dataset.panning = "true";
-    const move = (next: globalThis.PointerEvent) => {
-      root.scrollLeft = start.left - (next.clientX - start.x);
-      root.scrollTop = start.top - (next.clientY - start.y);
-    };
-    const stop = () => {
-      delete root.dataset.panning;
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-      window.removeEventListener("pointercancel", stop);
-      cancelPan.current = () => undefined;
-    };
-    cancelPan.current = stop;
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("pointercancel", stop);
+    return true;
+  }, { capture: true });
+
+  useDOMEvent("pointermove", ({ event }) => {
+    const root = viewport.current;
+    const start = panGesture.current;
+    if (!root || !start) return false;
+    root.scrollLeft = start.left - (event.clientX - start.x);
+    root.scrollTop = start.top - (event.clientY - start.y);
+    return true;
+  }, { target: "window", passive: false });
+
+  const stopPan = () => {
+    if (!panGesture.current) return false;
+    panGesture.current = null;
+    viewport.current?.removeAttribute("data-panning");
+    return false;
   };
+  useDOMEvent("pointerup", stopPan, { target: "window" });
+  useDOMEvent("pointercancel", stopPan, { target: "window" });
 
   const zoomAt = (nextZoom: number, clientX?: number, clientY?: number): void => {
     const root = viewport.current;
@@ -93,11 +128,12 @@ export function EdgelessSurface() {
     });
   };
 
-  const wheel = (event: WheelEvent<HTMLElement>): void => {
-    if (!event.ctrlKey && !event.metaKey) return;
-    event.preventDefault();
+  useDOMEvent("wheel", ({ event }) => {
+    // Wheel modifier policy is a pointer gesture rather than a key binding.
+    if (!event.ctrlKey && !event.metaKey) return false;
     zoomAt(zoom * Math.exp(-event.deltaY * 0.002), event.clientX, event.clientY);
-  };
+    return true;
+  }, { passive: false });
 
   return (
     <main
@@ -106,15 +142,6 @@ export function EdgelessSurface() {
       data-edgeless-zoom={zoom}
       aria-label="Edgeless document canvas"
       tabIndex={-1}
-      onPointerDownCapture={pan}
-      onWheel={wheel}
-      onKeyDown={(event) => {
-        const target = event.target as HTMLElement;
-        if (event.code !== "Space" || target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName)) return;
-        event.preventDefault();
-        spaceHeld.current = true;
-        event.currentTarget.dataset.panningReady = "true";
-      }}
     >
       <div className="edgeless-zoom-controls" role="toolbar" aria-label="Canvas zoom">
         <button type="button" aria-label="Zoom out" onClick={() => zoomAt(zoom - 0.1)}>−</button>

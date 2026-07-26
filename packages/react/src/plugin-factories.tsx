@@ -1,100 +1,245 @@
+/**
+ * Public functional plugin catalog.
+ *
+ * Factories hide hook-host components and give applications a declarative,
+ * creation-time plugin list with stable IDs and focused configuration.
+ *
+ * @module
+ */
 import type { EditorBlock, EditorBlockInput } from "@chulane/rivto";
 import type { ComponentType, ReactNode } from "react";
 import { ClipboardPlugin, type ClipboardPluginProps } from "./plugins/clipboard-plugin";
 import { HistoryPlugin, type HistoryPluginProps } from "./plugins/history-plugin";
 import { TextSelectionPlugin } from "./plugins/text-selection-plugin";
 import { EdgelessSelectionPlugin } from "./plugins/EdgelessSelectionPlugin";
+import { EdgelessDeletionPlugin } from "./plugins/EdgelessDeletionPlugin";
+import { EdgelessMovementPlugin } from "./plugins/EdgelessMovementPlugin";
 import { EdgelessTransformPlugin } from "./plugins/EdgelessTransformPlugin";
-import { PageArrowPlugin } from "./plugins/PageArrowPlugin";
-import { PageBackspacePlugin } from "./plugins/PageBackspacePlugin";
+import {
+  BlockSelectionNavigationPlugin,
+  CaretNavigationPlugin,
+  KeyboardBlockMovePlugin,
+} from "./plugins/PageArrowPlugin";
+import {
+  BackwardBlockMergePlugin,
+  BlockOutdentPlugin,
+  EmptyBlockResetPlugin,
+} from "./plugins/PageBackspacePlugin";
 import { PageBlockSelectionPlugin } from "./plugins/PageBlockSelectionPlugin";
 import { PageCollapsePlugin } from "./plugins/PageCollapsePlugin";
-import { PageDeletePlugin } from "./plugins/PageDeletePlugin";
-import { PageDragPlugin, type PageDragPluginProps } from "./plugins/PageDragPlugin";
+import { ForwardBlockMergePlugin } from "./plugins/PageDeletePlugin";
+import {
+  PageDragBlockWrapper,
+  PageDragPlugin,
+  type PageDragPluginProps,
+} from "./plugins/PageDragPlugin";
 import { PageEnterPlugin } from "./plugins/PageEnterPlugin";
 import { PageSlashCommandPlugin } from "./plugins/PageSlashCommandPlugin";
+import { SelectionDeletionPlugin } from "./plugins/SelectionDeletionPlugin";
 import { applyIndentShortcut } from "./plugins/utils/indent";
 import { EdgelessSurface } from "./surfaces/edgeless";
 import { PageSurface } from "./surfaces/page";
 import type { ReactEditorPlugin } from "./react-editor";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "./events/keymap";
 
+/**
+ * Adapts a React component to the functional plugin lifecycle.
+ *
+ * Components remain useful for behavior implemented with React hooks, while
+ * callers configure the editor exclusively through plugin functions.
+ *
+ * @param id - Stable plugin identity used for duplicate detection.
+ * @param component - Headless or visual component mounted by EditorView.
+ * @param mode - Optional presentation modes in which it is mounted.
+ * @returns A creation-time React editor plugin.
+ */
 const componentPlugin = (
   id: string,
   component: ComponentType,
   mode?: "block" | "edgeless" | readonly ("block" | "edgeless")[],
-): ReactEditorPlugin => ({ id, setup: ({ mount }) => { mount(component, mode); } });
+): ReactEditorPlugin => ({
+  id,
+  setup: (reactEditor) => {
+    reactEditor.mount(component, mode);
+  },
+});
 
+/** @returns The built-in recursive outline surface for block mode. */
 export const pageSurfacePlugin = (): ReactEditorPlugin => ({
   id: "surface.page",
-  setup: ({ registerSurface }) => { registerSurface("block", PageSurface); },
+  setup: (reactEditor) => {
+    reactEditor.registerSurface("block", PageSurface);
+  },
 });
 
+/** @returns The built-in positioned-card surface for edgeless mode. */
 export const edgelessSurfacePlugin = (): ReactEditorPlugin => ({
   id: "surface.edgeless",
-  setup: ({ registerSurface }) => { registerSurface("edgeless", EdgelessSurface); },
+  setup: (reactEditor) => {
+    reactEditor.registerSurface("edgeless", EdgelessSurface);
+  },
 });
 
+/**
+ * Installs CRDT-backed undo/redo and native contenteditable history suppression.
+ *
+ * @param options - Optional shortcut and restoration behavior.
+ * @returns A mode-independent history plugin.
+ */
 export const historyPlugin = (options: HistoryPluginProps = {}): ReactEditorPlugin => {
   const History = () => <HistoryPlugin {...options} />;
   return componentPlugin("history", History);
 };
+
+/** @returns DOM-to-editor text and cross-block selection synchronization. */
 export const textSelectionPlugin = (): ReactEditorPlugin => componentPlugin("selection.text", TextSelectionPlugin);
 
+/**
+ * Installs structured and plain-text copy, cut, and paste handling.
+ *
+ * @param options - Clipboard serialization and paste behavior.
+ * @returns A mode-independent clipboard plugin.
+ */
 export const clipboardPlugin = (options: ClipboardPluginProps = {}): ReactEditorPlugin => {
   const Clipboard = () => <ClipboardPlugin {...options} />;
   return componentPlugin("clipboard", Clipboard);
 };
 
+/** @returns Pointer and modifier-based whole-block selection for page mode. */
 export const pageSelectionPlugin = (): ReactEditorPlugin => componentPlugin("selection.page", PageBlockSelectionPlugin, "block");
-export const caretNavigationPlugin = (): ReactEditorPlugin => componentPlugin("navigation.caret", PageArrowPlugin, "block");
+
+/** @returns Visual-line and cross-block caret navigation for page mode. */
+export const caretNavigationPlugin = (): ReactEditorPlugin =>
+  componentPlugin("navigation.caret", CaretNavigationPlugin, "block");
+
+/** @returns Keyboard growth, shrink, and movement of page block selections. */
+export const blockSelectionNavigationPlugin = (): ReactEditorPlugin =>
+  componentPlugin("navigation.block-selection", BlockSelectionNavigationPlugin, "block");
+
+/** @returns Alt+Shift structural movement for eligible page blocks. */
+export const keyboardBlockMovePlugin = (): ReactEditorPlugin =>
+  componentPlugin("block.keyboard-move", KeyboardBlockMovePlugin, "block");
+
+/** @returns Enter-driven block splitting and creation in editable content. */
 export const blockCreationPlugin = (): ReactEditorPlugin => componentPlugin("block.create", PageEnterPlugin);
 
+/**
+ * Installs backward and forward boundary merges as one semantic plugin.
+ *
+ * @returns Page-only behavior for Backspace at start and Delete at end.
+ */
 export const blockMergePlugin = (): ReactEditorPlugin => {
-  const Merge = () => <><PageBackspacePlugin behavior="merge" /><PageDeletePlugin behavior="merge" /></>;
+  const Merge = () => <><BackwardBlockMergePlugin /><ForwardBlockMergePlugin /></>;
   return componentPlugin("block.merge", Merge, "block");
 };
 
-export const selectionDeletionPlugin = (): ReactEditorPlugin => {
-  const DeleteSelection = () => <><PageBackspacePlugin behavior="selection" /><PageDeletePlugin behavior="selection" /></>;
-  return componentPlugin("selection.delete", DeleteSelection, "block");
-};
+/** @returns Backspace/Delete removal for expanded structural selections. */
+export const selectionDeletionPlugin = (): ReactEditorPlugin =>
+  componentPlugin("selection.delete", SelectionDeletionPlugin, "block");
 
+/** @returns Backspace-at-start outdent behavior for nested page blocks. */
+export const blockOutdentPlugin = (): ReactEditorPlugin =>
+  componentPlugin("block.outdent-at-start", BlockOutdentPlugin, "block");
+
+/** @returns Reset of the first empty custom block to the default paragraph. */
+export const emptyBlockResetPlugin = (): ReactEditorPlugin =>
+  componentPlugin("block.reset-empty", EmptyBlockResetPlugin, "block");
+
+/** Shortcut configuration for structural indentation. */
 export interface IndentPluginOptions {
+  /** Bindings that indent the active block or eligible sibling selection. */
   readonly indentKeys?: readonly string[];
+  /** Bindings that outdent while preserving the selected subtree structure. */
   readonly outdentKeys?: readonly string[];
 }
 
+/**
+ * Installs configurable indent and outdent keyboard actions.
+ *
+ * Both modes use the same core structural commands; binding conditions inside
+ * `applyIndentShortcut` decide whether the active selection is eligible.
+ *
+ * @param options - Optional replacement shortcuts for either action.
+ * @returns A functional plugin with two stable keyboard binding IDs.
+ */
 export const indentPlugin = (options: IndentPluginOptions = {}): ReactEditorPlugin => {
-  const indentKeys = options.indentKeys ?? ["Tab"];
-  const outdentKeys = options.outdentKeys ?? ["Shift+Tab"];
+  const indentKeys = options.indentKeys ?? BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockIndent]!;
+  const outdentKeys = options.outdentKeys ?? BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockOutdent]!;
   return {
     id: "block.indent",
-    setup: ({ keyboard }) => {
-      keyboard.bind(indentKeys, ({ editor, root, event }) => applyIndentShortcut(editor, root, event, false));
-      keyboard.bind(outdentKeys, ({ editor, root, event }) => applyIndentShortcut(editor, root, event, true));
+    setup: (reactEditor) => {
+      reactEditor.events.bind({
+        id: KEYBOARD_BINDING_IDS.blockIndent,
+        keys: indentKeys,
+      }, ({ editor, root, event }) => applyIndentShortcut(editor, root, event, false));
+      reactEditor.events.bind({
+        id: KEYBOARD_BINDING_IDS.blockOutdent,
+        keys: outdentKeys,
+      }, ({ editor, root, event }) => applyIndentShortcut(editor, root, event, true));
     },
   };
 };
 
+/** @returns Page-only persisted collapse controls and keyboard actions. */
 export const collapsePlugin = (): ReactEditorPlugin => componentPlugin("block.collapse", PageCollapsePlugin, "block");
+
+/** @returns Root-card click, toggle, and rectangle selection in edgeless mode. */
 export const edgelessSelectionPlugin = (): ReactEditorPlugin => componentPlugin("selection.edgeless", EdgelessSelectionPlugin, "edgeless");
+
+/** @returns Atomic Backspace/Delete removal of selected edgeless roots. */
+export const edgelessDeletionPlugin = (): ReactEditorPlugin =>
+  componentPlugin("selection.edgeless-delete", EdgelessDeletionPlugin, "edgeless");
+
+/** @returns One- or ten-pixel keyboard movement of selected canvas roots. */
+export const edgelessMovementPlugin = (): ReactEditorPlugin =>
+  componentPlugin("movement.edgeless", EdgelessMovementPlugin, "edgeless");
+
+/** @returns Pointer drag and resize interactions for edgeless root cards. */
 export const edgelessTransformPlugin = (): ReactEditorPlugin => componentPlugin("transform.edgeless", EdgelessTransformPlugin, "edgeless");
 
+/** Page drag configuration excluding the wrapper-owned React children slot. */
 export type PageDragOptions = Omit<PageDragPluginProps, "children">;
 
+/**
+ * Creates structural drag-and-drop behavior for both built-in modes.
+ *
+ * The editor wrapper owns dnd-kit's gesture runtime and overlay. Registered
+ * block wrappers connect each recursively rendered row to that boundary. Keeping
+ * these registrations together guarantees that a wrapper is never installed
+ * without its required editor-wide context.
+ *
+ * @param options - Pointer activation and page drop-zone tuning.
+ * @returns Functional React editor plugin installed by createReactEditor.
+ */
 export const pageDragPlugin = (options: PageDragOptions = {}): ReactEditorPlugin => {
-  const DragProvider = ({ children }: { readonly children?: ReactNode }) => (
+  const DragBoundary = ({ children }: { readonly children?: ReactNode }) => (
     <PageDragPlugin {...options}>{children}</PageDragPlugin>
   );
-  return { id: "drag.page", setup: ({ provide }) => { provide(DragProvider); } };
+  return {
+    id: "drag.page",
+    setup: (reactEditor) => {
+      reactEditor.wrapEditor(DragBoundary);
+      reactEditor.registerBlockWrapper("block", PageDragBlockWrapper);
+      reactEditor.registerBlockWrapper("edgeless", PageDragBlockWrapper);
+    },
+  };
 };
 
-/** Adds the inline menu and the generic structural slash actions. */
+/**
+ * Adds the inline command menu and generic structural block actions.
+ *
+ * Block-type conversion entries are registered separately by `registerBlock`.
+ * This plugin owns only actions valid for arbitrary registered types.
+ *
+ * @returns A mode-independent slash popup and its core command registrations.
+ */
 export const slashCommandPlugin = (): ReactEditorPlugin => ({
   id: "slash.commands",
-  setup: ({ editor, mount }) => {
-    mount(PageSlashCommandPlugin);
+  setup: (reactEditor) => {
+    const { editor } = reactEditor;
+    reactEditor.mount(PageSlashCommandPlugin);
     const disposers = [
+      // Clone the complete subtree while leaving persisted IDs for the store to generate.
       editor.slashCommands.register({
         id: "block.duplicate",
         title: "Duplicate block",
@@ -117,6 +262,7 @@ export const slashCommandPlugin = (): ReactEditorPlugin => ({
           }] });
         },
       }),
+      // Route deletion through structural selection so descendants are atomic.
       editor.slashCommands.register({
         id: "block.delete",
         title: "Delete block",
@@ -133,6 +279,7 @@ export const slashCommandPlugin = (): ReactEditorPlugin => ({
           editor.deleteSelection();
         },
       }),
+      // Collapse is page-only because edgeless deliberately renders all descendants.
       editor.slashCommands.register({
         id: "block.collapse",
         title: "Collapse block",
@@ -144,6 +291,7 @@ export const slashCommandPlugin = (): ReactEditorPlugin => ({
         },
         execute: ({ blockId }) => editor.setBlockCollapsed(blockId, true),
       }),
+      // Expansion is offered only when it has a visible effect in page mode.
       editor.slashCommands.register({
         id: "block.expand",
         title: "Expand block",
@@ -156,10 +304,22 @@ export const slashCommandPlugin = (): ReactEditorPlugin => ({
         execute: ({ blockId }) => editor.setBlockCollapsed(blockId, false),
       }),
     ];
+    // Core slash registrations are stack-like and therefore dispose in reverse.
     return () => disposers.reverse().forEach((dispose) => dispose());
   },
 });
 
+/**
+ * Converts a detached block snapshot into recursive insertion input.
+ *
+ * IDs and links are intentionally omitted so the core store assigns fresh
+ * identity without duplicating link ownership. Mutable payloads are cloned to
+ * prevent the new subtree from sharing application-owned object references.
+ *
+ * @param block - Root snapshot of the subtree to duplicate.
+ * @returns Recursive, ID-free input preserving type, content, props, layout,
+ * plugin data, and descendants.
+ */
 const duplicateBlockInput = (block: EditorBlock): EditorBlockInput => ({
   type: block.type,
   content: block.content,

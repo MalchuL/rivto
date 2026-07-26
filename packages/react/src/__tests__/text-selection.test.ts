@@ -1,4 +1,7 @@
-import { createBlockSelection, createSelectionItems } from "../hooks/utils/editor-dom-selection";
+import {
+  createBlockSelection,
+  createSelectionItems,
+} from "../events/utils/selection/editor-dom-selection";
 
 const blocks = [
   { id: "first", length: 10 },

@@ -131,3 +131,44 @@ all nested descendants remain rendered inside an edgeless root card.
 ## Not currently bound
 
 - `Primary+A` has no editor-wide select-all command; native browser behavior applies.
+
+## Binding IDs and remapping
+
+Built-in actions are remapped once when `createReactEditor` is called. An empty
+array disables an action. Unknown IDs are ignored, so one preferences object
+can be shared by applications with different plugin sets.
+
+```ts
+createReactEditor({
+  editor,
+  plugins,
+  keymap: {
+    "block.indent": ["Primary+ArrowRight"],
+    "history.redo": [],
+  },
+});
+```
+
+| Binding ID | Default |
+| --- | --- |
+| `history.undo` / `history.redo` | `Primary+Z` / `Primary+Shift+Z`, `Primary+Y` |
+| `clipboard.paste-as-blocks` | `Primary+Shift+V` |
+| `block.create` | `Enter` |
+| `selection.delete` | `Backspace`, `Delete` |
+| `block.outdent-at-start` | `Backspace` |
+| `block.merge-backward` / `block.merge-forward` | `Backspace` / `Delete` |
+| `block.reset-empty` | `Backspace` |
+| `block.indent` / `block.outdent` | `Tab` / `Shift+Tab` |
+| `caret.left`, `caret.right`, `caret.up`, `caret.down` | Corresponding unmodified arrow |
+| `caret.extend-up` / `caret.extend-down` | `Shift+ArrowUp` / `Shift+ArrowDown` |
+| `selection.block-up` / `selection.block-down` | `ArrowUp` / `ArrowDown` |
+| `selection.block-extend-up` / `selection.block-extend-down` | `Shift+ArrowUp` / `Shift+ArrowDown` |
+| `selection.block-grow-up` / `selection.block-grow-down` | `Alt+ArrowUp` / `Alt+ArrowDown` |
+| `block.move-up` / `block.move-down` | `Alt+Shift+ArrowUp` / `Alt+Shift+ArrowDown` |
+| `block.collapse` / `block.expand` / `block.toggle-collapse` | `Primary+ArrowUp` / `Primary+ArrowDown` / `Primary+;` |
+| `slash.previous` / `slash.next` / `slash.execute` / `slash.close` | `ArrowUp` / `ArrowDown` / `Enter` / `Escape` |
+| `edgeless.selection-clear` / `edgeless.selection-delete` | `Escape` / `Backspace`, `Delete` |
+| `edgeless.move-*` | Arrow keys |
+| `edgeless.move-fast-*` | `Shift+Arrow` keys |
+| `edgeless.transform-cancel` | `Escape` |
+| `edgeless.pan-start` / `edgeless.pan-stop` | `Space` keydown / keyup |

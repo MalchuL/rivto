@@ -1,18 +1,18 @@
+import type { RivtoEditorApi } from "@chulane/rivto";
 import {
   readEditorDOMSelection,
   restoreEditorDOMSelection,
-  type RivtoEditorApi,
-} from "../../internal";
+} from "../../events/utils/selection/editor-dom-selection";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
-} from "./keyboard-selection";
+} from "../../events/utils/keyboard/selection";
 
 /**
  * Applies one semantic indent or outdent binding.
  *
  * `indentPlugin` maps configurable shortcuts to this operation through the
- * shared KeyboardEvents registry. The first editor selection item supplies the command entry point; the
+ * unified keyboard event registry. The first editor selection item supplies the command entry point; the
  * runtime expands that point to the complete normalized selection range. The
  * DOM event is used only to confirm that the shortcut originated in editable
  * page content or from a whole-block selection focused on the page root.
@@ -23,22 +23,16 @@ export function applyIndentShortcut(
   root: HTMLElement,
   event: KeyboardEvent,
   outdent: boolean,
-): void {
-    if (
-      event.defaultPrevented ||
-      event.isComposing
-    ) return;
-
+): boolean {
     const editable = isEditableKeyboardEvent(event);
     const nativeSelection = editable ? readEditorDOMSelection(root) : undefined;
     if (nativeSelection) editor.execute("selection.set", { selection: nativeSelection });
     const selection = nativeSelection ?? editor.selection.get();
     const target = firstKeyboardTarget(selection);
-    if (!target) return;
+    if (!target) return false;
     const blockSelectionAtRoot = event.target === root && target.item.type === "block";
-    if (!editable && !blockSelectionAtRoot) return;
+    if (!editable && !blockSelectionAtRoot) return false;
 
-    event.preventDefault();
     if (outdent) editor.outdentBlock(target.blockId);
     else editor.indentBlock(target.blockId);
 
@@ -49,4 +43,5 @@ export function applyIndentShortcut(
       editor.execute("selection.set", { selection });
       restoreEditorDOMSelection(root, selection);
     });
+    return true;
 }

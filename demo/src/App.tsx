@@ -6,22 +6,29 @@ import {
 import {
   blockCreationPlugin,
   blockMergePlugin,
+  blockOutdentPlugin,
+  blockSelectionNavigationPlugin,
   caretNavigationPlugin,
   clipboardPlugin,
   collapsePlugin,
   createReactEditor,
+  edgelessDeletionPlugin,
+  edgelessMovementPlugin,
   edgelessSelectionPlugin,
   edgelessSurfacePlugin,
   edgelessTransformPlugin,
   EditorView,
   historyPlugin,
   indentPlugin,
+  KEYBOARD_BINDING_IDS,
+  keyboardBlockMovePlugin,
   pageDragPlugin,
   pageSelectionPlugin,
   pageSurfacePlugin,
   selectionDeletionPlugin,
   slashCommandPlugin,
   textSelectionPlugin,
+  emptyBlockResetPlugin,
   useEditor,
   useEditorMode,
 } from "@chulane/rivto-react";
@@ -40,8 +47,17 @@ import {
  */
 function createDemoEditor() {
   const editor = createRivtoEditor();
+  // This named demo preset gives browser tests and documentation examples a
+  // real host-level keymap without adding test-only editor APIs.
+  const alternateKeymap = new URLSearchParams(window.location.search).get("keymap") === "alternate"
+    ? {
+        [KEYBOARD_BINDING_IDS.blockIndent]: ["Primary+ArrowRight"],
+        [KEYBOARD_BINDING_IDS.blockOutdent]: [],
+      }
+    : undefined;
   const reactEditor = createReactEditor({
     editor,
+    keymap: alternateKeymap,
     plugins: [
       pageSurfacePlugin(),
       edgelessSurfacePlugin(),
@@ -52,13 +68,19 @@ function createDemoEditor() {
       pageSelectionPlugin(),
       collapsePlugin(),
       caretNavigationPlugin(),
+      blockSelectionNavigationPlugin(),
+      keyboardBlockMovePlugin(),
       indentPlugin(),
       blockCreationPlugin(),
       selectionDeletionPlugin(),
+      blockOutdentPlugin(),
       blockMergePlugin(),
+      emptyBlockResetPlugin(),
       pageDragPlugin(),
       edgelessSelectionPlugin(),
       edgelessTransformPlugin(),
+      edgelessDeletionPlugin(),
+      edgelessMovementPlugin(),
     ],
   });
   installCustomBlocks(reactEditor);
@@ -163,19 +185,19 @@ function createDemoEditor() {
 /** Demo toolbar for switching the local presentation of one shared document. */
 function DemoToolbar() {
   const editor = useEditor();
-  const mode = useEditorMode();
-  const setMode = (next: "block" | "edgeless") => {
+  const { mode, setMode } = useEditorMode();
+  const switchMode = (next: "block" | "edgeless") => {
     if (next === mode) return;
     editor.execute("selection.clear");
-    editor.mode.set(next);
+    setMode(next);
   };
 
   return (
     <header className="demo-header">
       <span>Rivto v{RIVTO_VERSION}</span>
       <div className="demo-mode-switch" role="group" aria-label="Editor mode">
-        <button type="button" data-editor-mode="block" aria-pressed={mode === "block"} onClick={() => setMode("block")}>Page</button>
-        <button type="button" data-editor-mode="edgeless" aria-pressed={mode === "edgeless"} onClick={() => setMode("edgeless")}>Edgeless</button>
+        <button type="button" data-editor-mode="block" aria-pressed={mode === "block"} onClick={() => switchMode("block")}>Page</button>
+        <button type="button" data-editor-mode="edgeless" aria-pressed={mode === "edgeless"} onClick={() => switchMode("edgeless")}>Edgeless</button>
       </div>
     </header>
   );
@@ -187,6 +209,7 @@ export function App() {
 
   // EditorView consumes but does not own the runtime, so the application that
   // created it also releases its subscriptions and command registrations.
+  // This useEffect returns a cleanup function that destroys the editor.
   useEffect(() => () => {
     reactEditor.destroy();
     editor.destroy();

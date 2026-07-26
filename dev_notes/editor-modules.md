@@ -16,10 +16,12 @@ React dependency.
 ## `@chulane/rivto-react`
 
 - `react-editor.tsx` — React runtime, functional plugin lifecycle, surfaces,
-  renderers, providers, and atomic block registration.
-- `events.ts` / `keyboard-events.ts` — root-delegated browser interaction APIs.
+  renderers, editor wrappers, and atomic block registration.
+- `events` — the inherited `EditorEvent → DOMEditorEvents →
+  KeyboardEditorEvents` runtime, keymap, and event-specific utilities.
 - `editor-view.tsx` / `hooks` / `blocks` — React context, subscriptions,
-  `BlockView`, editing hooks, DOM selection conversion, and Markdown.
+  `BlockView`, the plugin-resolved `BlockWrapper`, editing hooks, DOM selection
+  conversion, and Markdown.
 - `surfaces` — package-owned Page and Edgeless renderers.
 - `plugin-factories.tsx` — public semantic plugin factories.
 - `plugins` — internal implementations behind those factories.

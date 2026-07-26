@@ -5,9 +5,10 @@ Review from the public composition inward:
 1. `demo/src/App.tsx` — core creation, functional plugin list, custom block
    registration, mode toolbar, and lifecycle.
 2. `packages/react/src/react-editor.tsx` — plugin setup/rollback, surfaces,
-   renderer registration, providers, and destruction.
-3. `packages/react/src/events.ts` and `keyboard-events.ts` — delegated event
-   ordering, root replacement, mode filtering, and shortcut matching.
+   renderer registration, editor wrappers, and destruction.
+3. `packages/react/src/events/` — delegated DOM events, keyboard bindings,
+   focused utilities, ordering, root replacement, mode filtering, and shortcut
+   matching.
 4. `packages/react/src/plugin-factories.tsx` — semantic built-in plugins and
    their mode ownership.
 5. `packages/react/src/surfaces/**` — page traversal versus edgeless root-card

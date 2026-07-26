@@ -1,14 +1,17 @@
+import type {
+  BlockSelection,
+  EditorSelection,
+  TextSelection,
+} from "@chulane/rivto";
+import { readEditorDOMSelection } from "../events/utils/selection/editor-dom-selection";
 import {
-  readEditorDOMSelection,
   useEditor,
-  useEditorEvent,
   useEditorRoot,
-  type BlockSelection,
-  type EditorSelection,
-  type TextSelection,
-} from "../internal";
+  useKeyboardEvent,
+} from "../hooks";
 import { useEffect } from "react";
 import { reconcileCollapsedSelection } from "./utils/page-selection";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
 
 /** Resolves the edited block or all blocks in the active whole-block selection. */
 function collapseTargets(
@@ -45,34 +48,40 @@ export function PageCollapsePlugin() {
     }
   }, [editor, revision, root]);
 
-  useEditorEvent("keydown", (event) => {
-    if (
-      event.defaultPrevented ||
-      event.isComposing ||
-      event.altKey ||
-      event.shiftKey ||
-      event.ctrlKey === event.metaKey ||
-      !root
-    ) return;
-
-    const collapse = event.key === "ArrowUp";
-    const expand = event.key === "ArrowDown";
-    const toggle = event.key === ";";
-    if (!collapse && !expand && !toggle) return;
-
+  const setCollapsed = (value: boolean | "toggle"): boolean => {
+    if (!root) return false;
     const current = editor.selection.get();
     // Chromium may deliver the shortcut before its selectionchange event after
     // a click. Reading the native caret keeps the keybinding deterministic.
     const nativeSelection = readEditorDOMSelection(root);
     const selection = nativeSelection?.length ? nativeSelection : current;
     const ids = collapseTargets(selection);
-    if (!ids.length) return;
+    if (!ids.length) return false;
     const firstId = ids[0]!;
-    if (!editor.getBlock(firstId)) return;
+    if (!editor.getBlock(firstId)) return false;
 
-    event.preventDefault();
-    editor.setBlocksCollapsed(ids, toggle ? !editor.getBlockCollapsed(firstId) : collapse);
-  });
+    editor.setBlocksCollapsed(
+      ids,
+      value === "toggle" ? !editor.getBlockCollapsed(firstId) : value,
+    );
+    return true;
+  };
+
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.blockCollapse,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCollapse]!,
+    mode: "block",
+  }, () => setCollapsed(true));
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.blockExpand,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockExpand]!,
+    mode: "block",
+  }, () => setCollapsed(false));
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.blockToggleCollapse,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockToggleCollapse]!,
+    mode: "block",
+  }, () => setCollapsed("toggle"));
 
   return null;
 }

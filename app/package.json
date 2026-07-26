@@ -1,0 +1,15 @@
+{
+  "name": "@chulane/rivto-app",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.8.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @chulane/rivto-app-server --filter @chulane/rivto-app-web dev",
+    "web": "pnpm --filter @chulane/rivto-app-web dev",
+    "server": "pnpm --filter @chulane/rivto-app-server dev",
+    "desktop": "pnpm --filter @chulane/rivto-app-desktop dev",
+    "build": "pnpm --filter @chulane/rivto-app-shared build && pnpm --filter @chulane/rivto-app-web build && pnpm --filter @chulane/rivto-app-desktop build",
+    "gen:client": "pnpm --filter @chulane/rivto-app-server gen:client",
+    "check-types": "pnpm -r --filter './shared' --filter './web' --filter './desktop' --filter './server' run check-types"
+  }
+}

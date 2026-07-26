@@ -193,32 +193,14 @@
 }
 
 .markdown-content {
-  display: grid;
+  position: relative;
   min-height: 1.5em;
 }
 
-.markdown-editor {
-  grid-area: 1 / 1;
-  position: relative;
-  z-index: 1;
-  color: transparent;
-  caret-color: transparent;
-}
-
 .markdown-preview {
-  grid-area: 1 / 1;
   overflow-wrap: anywhere;
   pointer-events: none;
   white-space: normal;
-}
-
-.markdown-editor:focus {
-  color: inherit;
-  caret-color: auto;
-}
-
-.markdown-content:focus-within .markdown-preview {
-  visibility: hidden;
 }
 
 .markdown-preview > :first-child {
@@ -234,6 +216,69 @@
   border-radius: 4px;
   background: #f1f1f1;
   font-family: ui-monospace, monospace;
+}
+
+.markdown-code-block {
+  margin: 0.75em 0;
+  overflow: hidden;
+  border: 1px solid var(--rivto-code-border, #dedede);
+  border-radius: 7px;
+  background: var(--rivto-code-background, #f6f7f8);
+}
+
+.markdown-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--rivto-code-border, #dedede);
+  color: var(--rivto-code-label-color, #555);
+  font: 0.78rem/1.2 ui-monospace, monospace;
+}
+
+.markdown-code-language {
+  color: var(--rivto-code-language-color, #777);
+}
+
+.markdown-code-block pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+}
+
+.markdown-code-block code {
+  display: block;
+  padding: 0;
+  background: transparent;
+  white-space: pre;
+}
+
+.markdown-code-block .hljs-keyword,
+.markdown-code-block .hljs-selector-tag,
+.markdown-code-block .hljs-literal {
+  color: var(--rivto-code-keyword, #a626a4);
+}
+
+.markdown-code-block .hljs-string,
+.markdown-code-block .hljs-attr {
+  color: var(--rivto-code-string, #50a14f);
+}
+
+.markdown-code-block .hljs-number,
+.markdown-code-block .hljs-built_in {
+  color: var(--rivto-code-number, #986801);
+}
+
+.markdown-code-block .hljs-title,
+.markdown-code-block .hljs-function {
+  color: var(--rivto-code-title, #4078f2);
+}
+
+.markdown-code-block .hljs-comment {
+  color: var(--rivto-code-comment, #7f848e);
+  font-style: italic;
 }
 
 .markdown-preview a {

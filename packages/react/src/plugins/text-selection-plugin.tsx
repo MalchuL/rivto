@@ -9,6 +9,7 @@ import type {
 } from "@chulane/rivto";
 import { BLOCK_CONTENT_SELECTOR } from "../constants";
 import { useEditor } from "../hooks/editor/use-editor";
+import { useDOMEvent } from "../hooks/editor/use-dom-event";
 import { useEditorRoot } from "../hooks/editor/use-editor-root";
 import {
   clearTextSelectionHighlight,
@@ -22,7 +23,7 @@ import {
   setNativeSelection,
   updateTextSelectionHighlight,
   type DOMSelectionPoint,
-} from "../hooks/utils/editor-dom-selection";
+} from "../events/utils/selection/editor-dom-selection";
 
 /** Live state retained only for the duration of one pointer selection gesture. */
 interface PointerSelection {
@@ -82,6 +83,8 @@ export function TextSelectionPlugin() {
   const editor = useEditor();
   const { element: root } = useEditorRoot();
   const pointer = useRef<PointerSelection | null>(null);
+  const releaseTimer = useRef<number | undefined>(undefined);
+  const ownsCrossBlockSelection = useRef(false);
   const currentSelection = editor.selection.get();
 
   // Repaint after document commands, remote changes, or clipboard operations.
@@ -90,16 +93,9 @@ export function TextSelectionPlugin() {
     if (root) updateTextSelectionHighlight(root, currentSelection);
   }, [currentSelection, root]);
 
-  useEffect(() => {
-    if (!root) return;
-    const document = root.ownerDocument;
-    const window = document.defaultView;
-    if (!window) return;
-    let releaseTimer: number | undefined;
-    let ownsCrossBlockSelection = false;
-
-    /** Publishes the synthetic endpoint chosen for a cross-host gesture. */
-    const publish = (active: PointerSelection, head: DOMSelectionPoint, headPosition: EditorPosition): void => {
+  /** Publishes the synthetic endpoint chosen for a cross-host gesture. */
+  const publish = (active: PointerSelection, head: DOMSelectionPoint, headPosition: EditorPosition): void => {
+      if (!root) return;
       active.crossBlock = headPosition.blockId !== active.anchorPosition.blockId;
       active.head = head;
       active.wholeBlocks = active.crossBlock && !active.textAcrossBlocks;
@@ -110,26 +106,30 @@ export function TextSelectionPlugin() {
 
       editor.execute("selection.set", { selection: active.selection });
       if (active.wholeBlocks) {
-        document.getSelection()?.removeAllRanges();
-        root.focus({ preventScroll: true });
+        root.ownerDocument.getSelection()?.removeAllRanges();
+        // Keep the originating contenteditable focused for the duration of the
+        // gesture. Focusing the root here would blur MarkdownContent, replace
+        // its raw editor with formatted preview geometry, and make a return to
+        // the original block resolve a different character offset.
         clearTextSelectionHighlight(root);
       } else {
         setNativeSelection(active.anchor, head);
         updateTextSelectionHighlight(root, active.selection);
       }
-    };
+  };
 
-    /** Saves a stable pointer-down endpoint before native selection starts. */
-    const start = (event: PointerEvent): void => {
-      if (event.defaultPrevented || event.ctrlKey || event.metaKey) {
-        if (releaseTimer !== undefined) window.clearTimeout(releaseTimer);
+  useDOMEvent("pointerdown", ({ event }) => {
+      if (!root) return false;
+      const view = root.ownerDocument.defaultView;
+      if (event.ctrlKey || event.metaKey) {
+        if (releaseTimer.current !== undefined) view?.clearTimeout(releaseTimer.current);
         pointer.current = null;
-        ownsCrossBlockSelection = false;
-        return;
+        ownsCrossBlockSelection.current = false;
+        return false;
       }
-      if (event.button !== 0 || !isEditableTarget(root, event.target)) return;
-      if (releaseTimer !== undefined) window.clearTimeout(releaseTimer);
-      ownsCrossBlockSelection = false;
+      if (event.button !== 0 || !isEditableTarget(root, event.target)) return false;
+      if (releaseTimer.current !== undefined) view?.clearTimeout(releaseTimer.current);
+      ownsCrossBlockSelection.current = false;
       const current = editor.selection.get();
       const clicked = readDOMSelectionPoint(root, event.clientX, event.clientY);
       const clickedPosition = clicked && readDOMPointPosition(root, clicked);
@@ -139,24 +139,22 @@ export function TextSelectionPlugin() {
       if (event.shiftKey && clickedPosition) {
         const block = current.find((item) => item.type === "block");
         if (block?.type === "block") {
-          event.preventDefault();
-          ownsCrossBlockSelection = true;
+          ownsCrossBlockSelection.current = true;
           pointer.current = null;
           editor.execute("selection.set", {
             selection: createBlockSelection(orderedBlockIds(root), block.anchorBlockId, clickedPosition.blockId),
           });
-          document.getSelection()?.removeAllRanges();
+          root.ownerDocument.getSelection()?.removeAllRanges();
           root.focus({ preventScroll: true });
           clearTextSelectionHighlight(root);
-          releaseTimer = window.setTimeout(() => { ownsCrossBlockSelection = false; });
-          return;
+          releaseTimer.current = view?.setTimeout(() => { ownsCrossBlockSelection.current = false; });
+          return true;
         }
 
         const text = current.find((item) => item.type === "text");
         const anchor = text && resolveDOMSelectionPoint(root, text.anchor);
         if (text && anchor) {
-          event.preventDefault();
-          ownsCrossBlockSelection = true;
+          ownsCrossBlockSelection.current = true;
           const active: PointerSelection = {
             startX: event.clientX,
             startY: event.clientY,
@@ -168,7 +166,7 @@ export function TextSelectionPlugin() {
           };
           pointer.current = active;
           publish(active, clicked, clickedPosition);
-          return;
+          return true;
         }
       }
 
@@ -183,36 +181,44 @@ export function TextSelectionPlugin() {
         crossBlock: false,
         wholeBlocks: false,
       } : null;
-    };
+      return false;
+  });
 
-    /** Bridges selection only after the pointer enters a different block host. */
-    const move = (event: PointerEvent): void => {
+  useDOMEvent("pointermove", ({ event }) => {
+      if (!root) return false;
       const active = pointer.current;
-      if (!active || Math.hypot(event.clientX - active.startX, event.clientY - active.startY) < 3) return;
+      if (!active || Math.hypot(event.clientX - active.startX, event.clientY - active.startY) < 3) return false;
 
       const head = readDOMSelectionPoint(root, event.clientX, event.clientY);
       const headPosition = head && readDOMPointPosition(root, head);
-      if (!head || !headPosition) return;
+      if (!head || !headPosition) return false;
 
       const sameBlock = headPosition.blockId === active.anchorPosition.blockId;
-      if (sameBlock && !active.crossBlock) return;
+      // Native selection owns a gesture only until it first crosses an editing
+      // host. After that transition, continue publishing every move—even after
+      // returning to the anchor block—so `active.head` follows the pointer
+      // instead of freezing at the first same-block re-entry offset.
+      if (sameBlock && !ownsCrossBlockSelection.current) return false;
 
       // Native contenteditable selection owns same-block dragging. Once the
       // gesture crosses hosts, preventing its default movement avoids Chromium
       // replacing our original endpoint with a collapsed range in the new host.
-      event.preventDefault();
-      ownsCrossBlockSelection = true;
+      ownsCrossBlockSelection.current = true;
       publish(active, head, headPosition);
-    };
+      return true;
+  }, { target: "window", capture: true, passive: false });
 
-    /** Restores the final directed native range, then releases pointer ownership. */
-    const stop = (): void => {
+  const stop = (): false => {
       const completed = pointer.current;
       pointer.current = null;
-      if (!completed?.head || !completed.selection || (!completed.crossBlock && !ownsCrossBlockSelection)) return;
+      if (!root || !completed?.head || !completed.selection ||
+        (!completed.crossBlock && !ownsCrossBlockSelection.current)) return false;
 
       if (completed.wholeBlocks) {
-        document.getSelection()?.removeAllRanges();
+        root.ownerDocument.getSelection()?.removeAllRanges();
+        // The gesture really ended as structural selection, so keyboard block
+        // commands should now be routed through the surface root.
+        root.focus({ preventScroll: true });
         clearTextSelectionHighlight(root);
       } else {
         setNativeSelection(completed.anchor, completed.head);
@@ -221,26 +227,28 @@ export function TextSelectionPlugin() {
 
       // Firefox and Chromium can emit one delayed selectionchange after
       // pointer-up. Keep the synthetic result authoritative through that task.
-      releaseTimer = window.setTimeout(() => {
+      releaseTimer.current = root.ownerDocument.defaultView?.setTimeout(() => {
         if (completed.wholeBlocks) {
-          document.getSelection()?.removeAllRanges();
+          root.ownerDocument.getSelection()?.removeAllRanges();
           clearTextSelectionHighlight(root);
         } else {
           setNativeSelection(completed.anchor, completed.head!);
           updateTextSelectionHighlight(root, completed.selection!);
         }
-        ownsCrossBlockSelection = false;
+        ownsCrossBlockSelection.current = false;
       });
-    };
+      return false;
+  };
+  useDOMEvent("pointerup", stop, { target: "window", capture: true });
+  useDOMEvent("pointercancel", stop, { target: "window", capture: true });
 
-    /** Mirrors ordinary native caret and same-host selection changes. */
-    const synchronize = (): void => {
-      if (ownsCrossBlockSelection) return;
+  useDOMEvent("selectionchange", () => {
+      if (!root || ownsCrossBlockSelection.current) return false;
       const selection = readEditorDOMSelection(root);
       if (selection) {
         editor.execute("selection.set", { selection });
         updateTextSelectionHighlight(root, selection);
-        return;
+        return false;
       }
 
       // Losing the browser range clears only text items. A separate block or
@@ -249,26 +257,19 @@ export function TextSelectionPlugin() {
       const remaining = current.filter((item) => item.type !== "text");
       if (remaining.length !== current.length) editor.execute("selection.set", { selection: remaining });
       clearTextSelectionHighlight(root);
-    };
+      return false;
+  }, { target: "document" });
 
-    root.addEventListener("pointerdown", start);
-    window.addEventListener("pointermove", move, { capture: true, passive: false });
-    window.addEventListener("pointerup", stop, true);
-    window.addEventListener("pointercancel", stop, true);
-    document.addEventListener("selectionchange", synchronize);
-
+  useEffect(() => {
     return () => {
-      if (releaseTimer !== undefined) window.clearTimeout(releaseTimer);
-      ownsCrossBlockSelection = false;
+      if (releaseTimer.current !== undefined) {
+        root?.ownerDocument.defaultView?.clearTimeout(releaseTimer.current);
+      }
+      ownsCrossBlockSelection.current = false;
       pointer.current = null;
-      root.removeEventListener("pointerdown", start);
-      window.removeEventListener("pointermove", move, true);
-      window.removeEventListener("pointerup", stop, true);
-      window.removeEventListener("pointercancel", stop, true);
-      document.removeEventListener("selectionchange", synchronize);
-      clearTextSelectionHighlight(root);
+      if (root) clearTextSelectionHighlight(root);
     };
-  }, [editor, root]);
+  }, [root]);
 
   return null;
 }

@@ -1,21 +1,26 @@
+import type {
+  BlockSelection,
+  EditorPosition,
+  EditorSelection,
+  TextSelection,
+} from "@chulane/rivto";
+import { BLOCK_ID_ATTRIBUTE } from "../constants";
 import {
-  BLOCK_ID_ATTRIBUTE,
-  restoreEditorDOMSelection,
   readEditorDOMSelection,
+  restoreEditorDOMSelection,
+} from "../events/utils/selection/editor-dom-selection";
+import {
   useEditor,
-  useEditorEvent,
   useEditorRoot,
-  type BlockSelection,
-  type EditorPosition,
-  type EditorSelection,
-  type TextSelection,
-} from "../internal";
+  useKeyboardEvent,
+} from "../hooks";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
 import {
   findNextEditableBlock,
   findPreviousEditableBlock,
   focusBlock,
   verticalCaretPosition,
-} from "./utils/block-dom";
+} from "../events/utils/dom/block-dom";
 import {
   adjacentBlockSelection,
   blockSelection,
@@ -25,12 +30,13 @@ import {
   selectedMoveRoots,
 } from "./utils/page-selection";
 
-/** Returns whether a text selection is one caret. */
+type VerticalDirection = "up" | "down";
+
 function collapsed(selection: TextSelection): boolean {
-  return selection.anchor.blockId === selection.head.blockId && selection.anchor.offset === selection.head.offset;
+  return selection.anchor.blockId === selection.head.blockId &&
+    selection.anchor.offset === selection.head.offset;
 }
 
-/** Returns the document-ordered start or end of a directed text selection. */
 function textSelectionEdge(
   editor: ReturnType<typeof useEditor>,
   selection: TextSelection,
@@ -47,7 +53,15 @@ function textSelectionEdge(
   return edge === "start" ? start : end;
 }
 
-/** Publishes and paints one text caret after delegated keyboard handling. */
+function currentSelection(
+  root: HTMLElement,
+  editor: ReturnType<typeof useEditor>,
+): EditorSelection {
+  const managed = editor.selection.get();
+  // A click followed immediately by a key can precede `selectionchange`.
+  return managed.length ? managed : readEditorDOMSelection(root) ?? [];
+}
+
 function setCaret(
   root: HTMLElement,
   editor: ReturnType<typeof useEditor>,
@@ -59,7 +73,6 @@ function setCaret(
   focusBlock(root, position.blockId, position.offset);
 }
 
-/** Clears native text paint and focuses the page's block-selection owner. */
 function focusBlockSelection(root: HTMLElement, blockId: string): void {
   root.ownerDocument.getSelection()?.removeAllRanges();
   root.focus({ preventScroll: true });
@@ -68,116 +81,179 @@ function focusBlockSelection(root: HTMLElement, blockId: string): void {
 }
 
 /**
- * Implements the page demo's Logseq-style arrow keymap.
+ * Owns native-looking caret movement, including wrapped-line geometry.
  *
- * Text movement uses DOM line geometry because soft wraps are absent from the
- * stored string. Once Shift or Alt enters whole-block mode, anchor/focus IDs
- * carry direction and the browser selection is deliberately cleared.
+ * Each shortcut is a separate declarative binding. Structural block selection
+ * is intentionally absent, allowing an unclaimed key to fall through to
+ * `BlockSelectionNavigationPlugin`.
  */
-export function PageArrowPlugin() {
+export function CaretNavigationPlugin() {
   const editor = useEditor();
   const { element: root } = useEditorRoot();
 
-  useEditorEvent("keydown", (event) => {
-    if (
-      event.defaultPrevented ||
-      event.isComposing ||
-      !root ||
-      !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
-    ) return;
-
-    const vertical = event.key === "ArrowUp" || event.key === "ArrowDown";
-    const direction = event.key === "ArrowUp" ? "up" : "down";
-    // `selectionchange` may follow the keydown when the user clicks and presses
-    // a shortcut immediately. Read the native caret as a synchronous fallback.
-    const currentSelection = editor.selection.get();
-    const selection = currentSelection.length ? currentSelection : readEditorDOMSelection(root) ?? [];
+  const movePlain = (direction: "left" | "right" | VerticalDirection): boolean => {
+    if (!root) return false;
+    const selection = currentSelection(root, editor);
     const text = selection.find((item): item is TextSelection => item.type === "text");
-    const blocks = selection.find((item): item is BlockSelection => item.type === "block");
-
-    if (vertical && event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey) {
-      const activeId = text?.head.blockId ?? blocks?.focusBlockId;
-      if (!activeId) return;
-      const roots = selectedMoveRoots(editor.getBlocks(), selection, activeId);
-      const placement = keyboardMovePlacement(editor.getBlocks(), roots.ids, direction);
-      if (!placement) return;
-      event.preventDefault();
-      editor.moveBlocks(roots.ids, placement.targetId, placement.position);
-      if (roots.grouped && roots.selection) editor.execute("selection.set", { selection: [roots.selection] });
-      else if (blocks) editor.execute("selection.set", { selection: [blockSelection(editor.getBlocks(), activeId)] });
-      requestAnimationFrame(() => {
-        if (text && !blocks) restoreEditorDOMSelection(root, selection);
-        else focusBlockSelection(root, activeId);
-      });
-      return;
-    }
-
-    if (vertical && event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
-      event.preventDefault();
-      const next = blocks
-        ? extendBlockSelection(editor.getBlocks(), blocks, direction)
-        : text ? blockSelection(editor.getBlocks(), text.head.blockId) : undefined;
-      if (!next) return;
-      editor.execute("selection.set", { selection: [next] });
-      focusBlockSelection(root, next.focusBlockId);
-      return;
-    }
-
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
-
-    if (text && !event.shiftKey && !collapsed(text)) {
-      event.preventDefault();
-      const towardStart = event.key === "ArrowLeft" || event.key === "ArrowUp";
+    if (!text) return false;
+    if (!collapsed(text)) {
+      const towardStart = direction === "left" || direction === "up";
       setCaret(root, editor, textSelectionEdge(editor, text, towardStart ? "start" : "end"));
-      return;
+      return true;
     }
-
-    if (vertical && blocks) {
-      event.preventDefault();
-      const next = event.shiftKey
-        ? extendBlockSelection(editor.getBlocks(), blocks, direction)
-        : adjacentBlockSelection(editor.getBlocks(), blocks, direction);
-      editor.execute("selection.set", { selection: [next] });
-      focusBlockSelection(root, next.focusBlockId);
-      return;
-    }
-
-    if (!text) return;
-    if (!vertical) {
-      if (event.shiftKey || !collapsed(text)) return;
+    if (direction === "left" || direction === "right") {
       const block = editor.getBlock(text.head.blockId);
-      const previous = event.key === "ArrowLeft" && text.head.offset === 0
+      const adjacent = direction === "left" && text.head.offset === 0
         ? findPreviousEditableBlock(root, text.head.blockId)
-        : null;
-      const next = event.key === "ArrowRight" && text.head.offset === (block?.content.length ?? -1)
-        ? findNextEditableBlock(root, text.head.blockId)
-        : null;
-      const target = previous
-        ? { blockId: previous.blockId, offset: previous.content.textContent?.length ?? 0 }
-        : next ? { blockId: next.blockId, offset: 0 } : undefined;
-      if (!target) return;
-      event.preventDefault();
-      setCaret(root, editor, target);
-      return;
+        : direction === "right" && text.head.offset === (block?.content.length ?? -1)
+          ? findNextEditableBlock(root, text.head.blockId)
+          : null;
+      if (!adjacent) return false;
+      setCaret(root, editor, {
+        blockId: adjacent.blockId,
+        offset: direction === "left" ? adjacent.content.textContent?.length ?? 0 : 0,
+      });
+      return true;
     }
-
     const moved = verticalCaretPosition(root, text.head, direction);
-    if (!moved) return;
-    event.preventDefault();
-    if (event.shiftKey && moved.blockId !== text.anchor.blockId) {
+    if (!moved) return false;
+    setCaret(root, editor, moved);
+    return true;
+  };
+
+  const extendText = (direction: VerticalDirection): boolean => {
+    if (!root) return false;
+    const selection = currentSelection(root, editor);
+    const text = selection.find((item): item is TextSelection => item.type === "text");
+    if (!text) return false;
+    const moved = verticalCaretPosition(root, text.head, direction);
+    if (!moved) return false;
+    if (moved.blockId !== text.anchor.blockId) {
       const next = blockSelection(editor.getBlocks(), text.anchor.blockId, moved.blockId);
       editor.execute("selection.set", { selection: [next] });
       focusBlockSelection(root, next.focusBlockId);
-      return;
+      return true;
     }
-    if (event.shiftKey) {
-      const next: EditorSelection = [{ type: "text", anchor: text.anchor, head: moved }];
-      editor.execute("selection.set", { selection: next });
-      restoreEditorDOMSelection(root, next);
-      return;
+    const next: EditorSelection = [{ type: "text", anchor: text.anchor, head: moved }];
+    editor.execute("selection.set", { selection: next });
+    restoreEditorDOMSelection(root, next);
+    return true;
+  };
+
+  const bindPlain = (
+    id: string,
+    direction: "left" | "right" | VerticalDirection,
+  ) => useKeyboardEvent({
+    id,
+    keys: BUILTIN_KEYMAP[id],
+    mode: "block",
+  }, () => movePlain(direction));
+  bindPlain(KEYBOARD_BINDING_IDS.caretLeft, "left");
+  bindPlain(KEYBOARD_BINDING_IDS.caretRight, "right");
+  bindPlain(KEYBOARD_BINDING_IDS.caretUp, "up");
+  bindPlain(KEYBOARD_BINDING_IDS.caretDown, "down");
+
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.caretExtendUp,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendUp],
+    mode: "block",
+  }, () => extendText("up"));
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.caretExtendDown,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendDown],
+    mode: "block",
+  }, () => extendText("down"));
+
+  return null;
+}
+
+/** Owns movement and directional growth of whole-block selections. */
+export function BlockSelectionNavigationPlugin() {
+  const editor = useEditor();
+  const { element: root } = useEditorRoot();
+
+  const move = (direction: VerticalDirection, extend: boolean): boolean => {
+    if (!root) return false;
+    const blocks = currentSelection(root, editor)
+      .find((item): item is BlockSelection => item.type === "block");
+    if (!blocks) return false;
+    const next = extend
+      ? extendBlockSelection(editor.getBlocks(), blocks, direction)
+      : adjacentBlockSelection(editor.getBlocks(), blocks, direction);
+    editor.execute("selection.set", { selection: [next] });
+    focusBlockSelection(root, next.focusBlockId);
+    return true;
+  };
+
+  const grow = (direction: VerticalDirection): boolean => {
+    if (!root) return false;
+    const selection = currentSelection(root, editor);
+    const blocks = selection.find((item): item is BlockSelection => item.type === "block");
+    const text = selection.find((item): item is TextSelection => item.type === "text");
+    const next = blocks
+      ? extendBlockSelection(editor.getBlocks(), blocks, direction)
+      : text ? blockSelection(editor.getBlocks(), text.head.blockId) : undefined;
+    if (!next) return false;
+    editor.execute("selection.set", { selection: [next] });
+    focusBlockSelection(root, next.focusBlockId);
+    return true;
+  };
+
+  const binding = (id: string, action: () => boolean) => useKeyboardEvent({
+    id,
+    keys: BUILTIN_KEYMAP[id],
+    mode: "block",
+  }, action);
+  binding(KEYBOARD_BINDING_IDS.blockSelectionUp, () => move("up", false));
+  binding(KEYBOARD_BINDING_IDS.blockSelectionDown, () => move("down", false));
+  binding(KEYBOARD_BINDING_IDS.blockSelectionExtendUp, () => move("up", true));
+  binding(KEYBOARD_BINDING_IDS.blockSelectionExtendDown, () => move("down", true));
+  binding(KEYBOARD_BINDING_IDS.blockSelectionGrowUp, () => grow("up"));
+  binding(KEYBOARD_BINDING_IDS.blockSelectionGrowDown, () => grow("down"));
+
+  return null;
+}
+
+/** Moves the active block or eligible same-parent block selection structurally. */
+export function KeyboardBlockMovePlugin() {
+  const editor = useEditor();
+  const { element: root } = useEditorRoot();
+
+  const move = (direction: VerticalDirection): boolean => {
+    if (!root) return false;
+    const selection = currentSelection(root, editor);
+    const text = selection.find((item): item is TextSelection => item.type === "text");
+    const blocks = selection.find((item): item is BlockSelection => item.type === "block");
+    const activeId = text?.head.blockId ?? blocks?.focusBlockId;
+    if (!activeId) return false;
+    const roots = selectedMoveRoots(editor.getBlocks(), selection, activeId);
+    const placement = keyboardMovePlacement(editor.getBlocks(), roots.ids, direction);
+    if (!placement) return false;
+    editor.moveBlocks(roots.ids, placement.targetId, placement.position);
+    if (roots.grouped && roots.selection) {
+      editor.execute("selection.set", { selection: [roots.selection] });
+    } else if (blocks) {
+      editor.execute("selection.set", {
+        selection: [blockSelection(editor.getBlocks(), activeId)],
+      });
     }
-    setCaret(root, editor, moved);
-  });
+    requestAnimationFrame(() => {
+      if (text && !blocks) restoreEditorDOMSelection(root, selection);
+      else focusBlockSelection(root, activeId);
+    });
+    return true;
+  };
+
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.blockMoveUp,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveUp],
+    mode: "block",
+  }, () => move("up"));
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.blockMoveDown,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveDown],
+    mode: "block",
+  }, () => move("down"));
 
   return null;
 }

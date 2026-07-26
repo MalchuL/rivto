@@ -1,0 +1,10 @@
+packages:
+  - shared
+  - web
+  - desktop
+  - server
+
+allowBuilds:
+  electron: true
+  esbuild: true
+  sharp: true

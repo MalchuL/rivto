@@ -1,13 +1,16 @@
+import type { SlashCommand } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-  restoreEditorDOMSelection,
+} from "../constants";
+import { restoreEditorDOMSelection } from "../events/utils/selection/editor-dom-selection";
+import {
+  useDOMEvent,
   useEditor,
-  useEditorEvent,
   useEditorRoot,
-  type SlashCommand,
-} from "../internal";
+  useKeyboardEvent,
+} from "../hooks";
 import {
   useCallback,
   useEffect,
@@ -17,7 +20,8 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import { findRenderedBlock } from "./utils/block-dom";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import { findRenderedBlock } from "../events/utils/dom/block-dom";
 import { keepNoResultMenuOpen, rankSlashCommands } from "./utils/slash-search";
 
 interface SlashSession {
@@ -152,7 +156,7 @@ export function PageSlashCommandPlugin() {
     });
   }, [editor]);
 
-  useEditorEvent("input", (event) => {
+  useDOMEvent("input", ({ event }) => {
     const content = event.target instanceof Element
       ? event.target.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR)
       : null;
@@ -171,17 +175,15 @@ export function PageSlashCommandPlugin() {
     if (session && !editor.getBlock(session.blockId)) close();
   }, [close, editor, editor.revision, session]);
 
-  useEffect(() => {
-    if (!root || !session) return;
-    const handleSelectionChange = () => {
-      const block = findRenderedBlock(root, session.blockId);
+  useDOMEvent("selectionchange", () => {
+    const current = sessionRef.current;
+    if (root && current) {
+      const block = findRenderedBlock(root, current.blockId);
       const content = block?.querySelector<HTMLElement>(BLOCK_CONTENT_SELECTOR);
       if (!content || content.closest(BLOCK_ID_SELECTOR) !== block) return close();
-      refresh(content, session.blockId, false);
-    };
-    root.ownerDocument.addEventListener("selectionchange", handleSelectionChange);
-    return () => root.ownerDocument.removeEventListener("selectionchange", handleSelectionChange);
-  }, [close, refresh, root, session]);
+      refresh(content, current.blockId, false);
+    }
+  }, { target: "document" });
 
   const execute = useCallback((command: SlashCommand) => {
     const current = sessionRef.current;
@@ -213,28 +215,60 @@ export function PageSlashCommandPlugin() {
     });
   }, [close, editor, root]);
 
-  useEditorEvent("keydown", (event) => {
+  const currentResults = useCallback(() => {
     const current = sessionRef.current;
-    if (!current || event.defaultPrevented || event.isComposing) return;
-    const results = rankSlashCommands(editor.slashCommands.getAll({ blockId: current.blockId }), current.query);
-    if (event.key === "Escape") {
-      event.preventDefault();
-      close(true);
-      return;
-    }
-    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && results.length) {
-      event.preventDefault();
-      const delta = event.key === "ArrowDown" ? 1 : -1;
-      setSession((value) => value && ({
-        ...value,
-        activeIndex: (value.activeIndex + delta + results.length) % results.length,
-      }));
-      return;
-    }
-    if (event.key === "Enter" && results.length) {
-      event.preventDefault();
-      execute(results[current.activeIndex]?.command ?? results[0]!.command);
-    }
+    return current
+      ? rankSlashCommands(editor.slashCommands.getAll({ blockId: current.blockId }), current.query)
+      : [];
+  }, [editor]);
+
+  const moveActive = useCallback((delta: number) => {
+    const results = currentResults();
+    if (!results.length) return false;
+    setSession((value) => value && ({
+      ...value,
+      activeIndex: (value.activeIndex + delta + results.length) % results.length,
+    }));
+    return true;
+  }, [currentResults]);
+
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.slashClose,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashClose],
+    mode: "block",
+    when: () => Boolean(sessionRef.current),
+  }, () => {
+    close(true);
+    return true;
+  });
+
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.slashPrevious,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashPrevious],
+    mode: "block",
+    when: () => Boolean(sessionRef.current),
+  }, () => moveActive(-1));
+
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.slashNext,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashNext],
+    mode: "block",
+    when: () => Boolean(sessionRef.current),
+  }, () => moveActive(1));
+
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.slashExecute,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashExecute],
+    mode: "block",
+    when: () => Boolean(sessionRef.current),
+  }, () => {
+    const current = sessionRef.current;
+    if (!current) return false;
+    const results = currentResults();
+    const command = results[current.activeIndex]?.command ?? results[0]?.command;
+    if (!command) return false;
+    execute(command);
+    return true;
   });
 
   if (!root || !session) return null;

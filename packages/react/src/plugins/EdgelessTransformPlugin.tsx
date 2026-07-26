@@ -1,11 +1,15 @@
+import type {
+  EdgelessSelection,
+  EditorBlockLayout,
+} from "@chulane/rivto";
 import {
+  useDOMEvent,
   useEditor,
-  useEditorEvent,
   useEditorRoot,
-  type EdgelessSelection,
-  type EditorBlockLayout,
-} from "../internal";
+  useKeyboardEvent,
+} from "../hooks";
 import { useEffect, useRef } from "react";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
 import { canvasDelta } from "./utils/edgeless-geometry";
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
@@ -16,6 +20,8 @@ interface TransformStart {
   readonly y: number;
   readonly ids: string[];
   readonly layouts: Map<string, EditorBlockLayout>;
+  lastX: number;
+  lastY: number;
   moved: boolean;
 }
 
@@ -35,7 +41,6 @@ export function EdgelessTransformPlugin() {
   const editor = useEditor();
   const { element: root } = useEditorRoot();
   const start = useRef<TransformStart | null>(null);
-  const cleanupGesture = useRef<() => void>(() => undefined);
 
   const clearPreview = (restoreSize = true) => {
     const current = start.current;
@@ -53,15 +58,14 @@ export function EdgelessTransformPlugin() {
     delete root.dataset.transforming;
   };
 
-  useEditorEvent("pointerdown", (event) => {
-    if (event.defaultPrevented || event.button !== 0 || !(event.target instanceof Element) || !root) return;
+  useDOMEvent("pointerdown", ({ event }) => {
+    if (event.button !== 0 || !(event.target instanceof Element) || !root) return false;
     const moveHandle = event.target.closest("[data-edgeless-drag-handle]");
     const resizeHandle = event.target.closest("[data-edgeless-resize-handle]");
-    if (!moveHandle && !resizeHandle) return;
+    if (!moveHandle && !resizeHandle) return false;
     const card = event.target.closest<HTMLElement>(ROOT_SELECTOR);
     const blockId = card?.dataset.edgelessRoot;
-    if (!card || !blockId) return;
-    event.preventDefault();
+    if (!card || !blockId) return false;
     event.stopPropagation();
 
     const current = editor.selection.get().find((item): item is EdgelessSelection => item.type === "edgeless");
@@ -80,17 +84,24 @@ export function EdgelessTransformPlugin() {
       y: event.clientY,
       ids: resizeHandle ? [blockId] : ids,
       layouts,
+      lastX: event.clientX,
+      lastY: event.clientY,
       moved: false,
     };
     root.dataset.transforming = start.current.kind;
+    card.focus({ preventScroll: true });
+    return true;
+  }, { capture: true });
 
-    const move = (next: PointerEvent) => {
+  useDOMEvent("pointermove", ({ event }) => {
       const active = start.current;
-      if (!active) return;
+      if (!active || !root) return false;
+      active.lastX = event.clientX;
+      active.lastY = event.clientY;
       const zoom = Number(root.dataset.edgelessZoom) || 1;
-      const dx = canvasDelta(next.clientX - active.x, zoom);
-      const dy = canvasDelta(next.clientY - active.y, zoom);
-      if (!active.moved && Math.hypot(dx, dy) < 2) return;
+      const dx = canvasDelta(event.clientX - active.x, zoom);
+      const dy = canvasDelta(event.clientY - active.y, zoom);
+      if (!active.moved && Math.hypot(dx, dy) < 2) return false;
       active.moved = true;
       if (active.kind === "move") {
         active.ids.forEach((id) => {
@@ -106,21 +117,21 @@ export function EdgelessTransformPlugin() {
           target.style.height = `${Math.max(100, layout.height + dy)}px`;
         }
       }
-    };
+      return true;
+  }, { target: "window", passive: false });
 
-    const finish = (commit: boolean) => {
+  const finish = (commit: boolean): boolean => {
       const active = start.current;
-      if (!active) return;
+      if (!active || !root) return false;
       const zoom = Number(root.dataset.edgelessZoom) || 1;
-      const dx = canvasDelta(lastPointer.x - active.x, zoom);
-      const dy = canvasDelta(lastPointer.y - active.y, zoom);
+      const dx = canvasDelta(active.lastX - active.x, zoom);
+      const dy = canvasDelta(active.lastY - active.y, zoom);
       // Keep the successful resize preview in place. Removing it here can
       // leave a briefly uncontrolled size because React still remembers the
       // preceding persisted style. A canceled gesture restores its snapshot.
       clearPreview(!commit);
       start.current = null;
-      cleanupGesture.current();
-      if (!commit || !active.moved) return;
+      if (!commit || !active.moved) return false;
       editor.document.transact(() => active.ids.forEach((id) => {
         const layout = active.layouts.get(id);
         if (!layout) return;
@@ -128,42 +139,32 @@ export function EdgelessTransformPlugin() {
           ? { x: layout.x + dx, y: layout.y + dy }
           : { width: Math.max(180, layout.width + dx), height: Math.max(100, layout.height + dy) });
       }));
-    };
+      return true;
+  };
 
-    const lastPointer = { x: event.clientX, y: event.clientY };
-    const rememberAndMove = (next: PointerEvent) => {
-      lastPointer.x = next.clientX;
-      lastPointer.y = next.clientY;
-      move(next);
-    };
-    const stop = (next: PointerEvent) => {
-      lastPointer.x = next.clientX;
-      lastPointer.y = next.clientY;
-      finish(true);
-    };
-    const cancel = () => finish(false);
-    cleanupGesture.current = () => {
-      window.removeEventListener("pointermove", rememberAndMove);
-      window.removeEventListener("pointerup", stop);
-      window.removeEventListener("pointercancel", cancel);
-    };
-    window.addEventListener("pointermove", rememberAndMove);
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("pointercancel", cancel);
-    card.focus({ preventScroll: true });
-  }, true);
+  useDOMEvent("pointerup", ({ event }) => {
+    const active = start.current;
+    if (active) {
+      active.lastX = event.clientX;
+      active.lastY = event.clientY;
+    }
+    return finish(true);
+  }, { target: "window" });
+  useDOMEvent("pointercancel", () => finish(false), { target: "window" });
 
-  useEditorEvent("keydown", (event) => {
-    if (event.key !== "Escape" || !start.current) return;
-    event.preventDefault();
-    clearPreview();
-    start.current = null;
-    cleanupGesture.current();
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.edgelessTransformCancel,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessTransformCancel],
+    mode: "edgeless",
+    when: () => Boolean(start.current),
+  }, () => {
+    if (!start.current) return false;
+    finish(false);
+    return true;
   });
 
   useEffect(() => () => {
     clearPreview();
-    cleanupGesture.current();
   }, [root]);
 
   return null;

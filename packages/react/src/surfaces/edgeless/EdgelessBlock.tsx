@@ -1,8 +1,8 @@
+import type { EditorBlockLayout } from "@chulane/rivto";
 import {
   useBlock,
   useBlockSelection,
-  type EditorBlockLayout,
-} from "../../internal";
+} from "../../hooks";
 import type { CSSProperties } from "react";
 import { PageBlock } from "../page/PageBlock";
 

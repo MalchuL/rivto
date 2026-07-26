@@ -48,21 +48,47 @@ test("switches cross-block drag to blocks and restores text on return", async ({
   const start = page.locator("[data-block-content]").nth(0);
   const next = page.locator("[data-block-content]").nth(1);
   const from = await textPoint(start, 2);
-  const across = await textPoint(next, 5);
-  const back = await textPoint(start, 8);
+  const source = await start.textContent();
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
+  await expect(start).toBeFocused();
+  // Pointer-down replaces the formatted preview with raw Markdown. Resolve
+  // movement coordinates from the geometry the user actually sees afterward.
+  const across = await textPoint(next, 5);
+  const back = await textPoint(start, 8);
   await page.mouse.move(across.x, across.y, { steps: 6 });
   await page.mouse.move(back.x, back.y, { steps: 6 });
   await page.mouse.up();
-  await expect.poll(() => page.evaluate(({ attribute, selector }) => {
+  const readSelection = () => page.evaluate(({ attribute, selector }) => {
     const selection = getSelection();
-    const blockId = (node: Node | null) => (node instanceof Element ? node : node?.parentElement)
-      ?.closest<HTMLElement>(selector)?.getAttribute(attribute);
-    return [blockId(selection?.anchorNode ?? null), blockId(selection?.focusNode ?? null)];
-  }, { attribute: BLOCK_ID_ATTRIBUTE, selector: BLOCK_ID_SELECTOR })).toEqual(
-    await start.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE).then((id) => [id, id]),
-  );
+    const endpoint = (node: Node | null, offset: number | undefined) => {
+      const element = node instanceof Element ? node : node?.parentElement;
+      const content = element?.closest<HTMLElement>("[data-block-content]");
+      const blockId = element?.closest<HTMLElement>(selector)?.getAttribute(attribute);
+      if (!content || !node || offset === undefined) return { blockId };
+      const range = document.createRange();
+      range.selectNodeContents(content);
+      range.setEnd(node, offset);
+      return { blockId, offset: range.toString().length };
+    };
+    return {
+      anchor: endpoint(selection?.anchorNode ?? null, selection?.anchorOffset),
+      focus: endpoint(selection?.focusNode ?? null, selection?.focusOffset),
+      text: selection?.toString(),
+    };
+  }, { attribute: BLOCK_ID_ATTRIBUTE, selector: BLOCK_ID_SELECTOR });
+  const blockId = await start.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
+  const expected = {
+    anchor: { blockId, offset: 2 },
+    focus: { blockId, offset: 8 },
+    text: source?.slice(2, 8),
+  };
+
+  await expect.poll(readSelection).toEqual(expected);
+  // Chromium and Firefox may publish another native selectionchange after
+  // pointerup. The final range must remain identical after that browser task.
+  await page.waitForTimeout(100);
+  expect(await readSelection()).toEqual(expected);
 });
 
 test("Alt drag keeps partial text across blocks", async ({ page }) => {

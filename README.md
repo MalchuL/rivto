@@ -91,21 +91,41 @@ the document and render through the configured fallback.
 ## Custom plugins and events
 
 ```ts
-const plugin = (keys = ["Primary+K"]) => ({
+const plugin = {
   id: "acme.command",
-  setup({ keyboard }) {
-    keyboard.bind(keys, ({ event, editor }) => {
-      event.preventDefault();
+  setup(reactEditor) {
+    reactEditor.events.bind({
+      id: "acme.command.open",
+      keys: ["Primary+K"],
+      when: ({ selection }) => selection.length > 0,
+    }, ({ editor }) => {
       editor.execute("acme.command");
+      return true;
     });
+  },
+};
+```
+
+`ReactEditor.events` is one `KeyboardEditorEvents` runtime, inheriting typed
+DOM behavior from `DOMEditorEvents` and ordered lifecycle behavior from
+`EditorEvent`. Returning `true` claims an event; plugins never call
+`preventDefault()` merely to announce ownership.
+
+Creation-time keymap overrides use stable binding IDs:
+
+```ts
+createReactEditor({
+  editor,
+  plugins,
+  keymap: {
+    "block.indent": ["Primary+ArrowRight"],
+    "history.redo": [],
   },
 });
 ```
 
-`EditorEvents` delegates typed native events to the active surface root.
-`KeyboardEvents` adds exact, portable shortcut matching. Registrations follow
-plugin declaration order, stop after `defaultPrevented`, and are removed when
-the React editor is destroyed.
+See [React events and keymaps](packages/react/docs/events.md) for DOM targets,
+conditions, composition policy, hooks, and the built-in binding IDs.
 
 ## Core-only usage
 

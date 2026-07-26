@@ -1,10 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
 import { RIVTO_CLIPBOARD_MIME } from "@chulane/rivto";
 import { useEditor } from "../hooks/editor/use-editor";
-import { useEditorEvent } from "../hooks/editor/use-editor-event";
+import { useDOMEvent } from "../hooks/editor/use-dom-event";
+import { useKeyboardEvent } from "../hooks/editor/use-keyboard-event";
 import { useEditorRoot } from "../hooks/editor/use-editor-root";
-import { readEditorDOMSelection } from "../hooks/utils/editor-dom-selection";
+import { readEditorDOMSelection } from "../events/utils/selection/editor-dom-selection";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
 
 /** Configuration for browser clipboard integration. */
 export interface ClipboardPluginProps {
@@ -21,13 +23,12 @@ export interface ClipboardPluginProps {
  * Its selection marker distinguishes copied text from complete copied blocks.
  * Ctrl/Cmd+Shift+V is remembered from keydown because ClipboardEvent has no
  * modifier fields; that shortcut explicitly keeps copied partial text as
- * blocks. Normal paste follows the copied selection type: text merges into a
- * text target, while complete blocks remain blocks.
+ * blocks. Normal paste follows the copied selection type.
  *
  * DOM selection is synchronized immediately before each command because the
  * browser's `selectionchange` event may arrive after a keyboard clipboard event.
  * Event listeners are delegated to the active surface root and are removed by
- * `useEditorEvent` when this component unmounts.
+ * the unified event runtime when this component unmounts.
  *
  * @example
  * ```tsx
@@ -74,76 +75,73 @@ export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: Clipb
     if (selection) editor.execute("selection.set", { selection });
   };
 
-  useEditorEvent("copy", (event) => {
-    if (event.defaultPrevented) return;
+  useDOMEvent("copy", ({ event }) => {
     synchronizeSelection();
     editor.execute("clipboard.copy", { event });
     rememberClipboard(event);
+    return true;
   });
 
-  useEditorEvent("cut", (event) => {
-    if (event.defaultPrevented) return;
+  useDOMEvent("cut", ({ event }) => {
     synchronizeSelection();
     editor.execute("clipboard.cut", { event });
     rememberClipboard(event);
+    return true;
   });
 
-  useEffect(() => {
-    if (!root) return;
-    const document = root.ownerDocument;
+  /** Handles Firefox clipboard events dispatched to body for block selection. */
+  const handleDocumentClipboard = (event: ClipboardEvent, insideRoot: boolean): boolean => {
+    if (!root || insideRoot) return false;
+    const activeElement = root.ownerDocument.activeElement;
+    const editorHasFocus = activeElement === root ||
+      (activeElement !== null && root.contains(activeElement));
+    const current = editor.selection.get();
+    if (!editorHasFocus || !current.length || current.some((item) => item.type === "text")) return false;
+    if (event.type === "paste") {
+      const mergeText = !pasteTextAsBlocks.current;
+      pasteTextAsBlocks.current = false;
+      editor.execute("clipboard.paste", {
+        event,
+        defaultBlockType,
+        mergeText,
+        structured: fallbackStructuredClipboard(event),
+      });
+      return true;
+    }
+    editor.execute(event.type === "cut" ? "clipboard.cut" : "clipboard.copy", { event });
+    rememberClipboard(event);
+    return true;
+  };
 
-    /**
-     * Handles Firefox's block-selection clipboard target.
-     *
-     * A whole-block selection deliberately has no native DOM Range. Firefox
-     * dispatches its copy, cut, and paste events to `body`, so root-delegated
-     * listeners cannot observe them. Restricting this fallback to a focused
-     * root with a block-only editor selection keeps clipboard events from
-     * root (or one of its block cards) with a block-only editor selection keeps
-     * clipboard events from unrelated controls outside this editor untouched.
-     */
-    const handleBlockClipboard = (event: ClipboardEvent): void => {
-      const activeElement = document.activeElement;
-      const editorHasFocus = activeElement === root || (activeElement !== null && root.contains(activeElement));
-      if (event.defaultPrevented || root.contains(event.target as Node) || !editorHasFocus) return;
-      const current = editor.selection.get();
-      if (!current.length || current.some((item) => item.type === "text")) return;
-      if (event.type === "paste") {
-        const mergeText = !pasteTextAsBlocks.current;
-        pasteTextAsBlocks.current = false;
-        editor.execute("clipboard.paste", {
-          event,
-          defaultBlockType,
-          mergeText,
-          structured: fallbackStructuredClipboard(event),
-        });
-        return;
-      }
-      editor.execute(event.type === "cut" ? "clipboard.cut" : "clipboard.copy", { event });
-      rememberClipboard(event);
-    };
+  useDOMEvent("copy", ({ event, insideRoot }) => (
+    handleDocumentClipboard(event, insideRoot)
+  ), { target: "document" });
+  useDOMEvent("cut", ({ event, insideRoot }) => (
+    handleDocumentClipboard(event, insideRoot)
+  ), { target: "document" });
+  useDOMEvent("paste", ({ event, insideRoot }) => (
+    handleDocumentClipboard(event, insideRoot)
+  ), { target: "document" });
 
-    document.addEventListener("copy", handleBlockClipboard);
-    document.addEventListener("cut", handleBlockClipboard);
-    document.addEventListener("paste", handleBlockClipboard);
-    return () => {
-      document.removeEventListener("copy", handleBlockClipboard);
-      document.removeEventListener("cut", handleBlockClipboard);
-      document.removeEventListener("paste", handleBlockClipboard);
-    };
-  }, [defaultBlockType, editor, root]);
-
-  useEditorEvent("keydown", (event) => {
-    if (event.key.toLowerCase() !== "v") return;
-    pasteTextAsBlocks.current = event.shiftKey && (event.ctrlKey || event.metaKey);
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.clipboardPasteAsBlocks,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.clipboardPasteAsBlocks]!,
+  }, () => {
+    pasteTextAsBlocks.current = true;
+    return false;
   });
 
-  useEditorEvent("keyup", (event) => {
-    if (event.key.toLowerCase() === "v") pasteTextAsBlocks.current = false;
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.clipboardPasteAsBlocksRelease,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.clipboardPasteAsBlocksRelease]!,
+    phase: "keyup",
+    target: "window",
+  }, () => {
+    pasteTextAsBlocks.current = false;
+    return false;
   });
 
-  useEditorEvent("paste", (event) => {
-    if (event.defaultPrevented) return;
+  useDOMEvent("paste", ({ event }) => {
     synchronizeSelection();
     const mergeText = !pasteTextAsBlocks.current;
     pasteTextAsBlocks.current = false;
@@ -153,6 +151,7 @@ export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: Clipb
       mergeText,
       structured: fallbackStructuredClipboard(event),
     });
+    return true;
   });
 
   return null;

@@ -1,18 +1,12 @@
 import { useEditor } from "../hooks/editor/use-editor";
-import { useEditorEvent } from "../hooks/editor/use-editor-event";
+import { useDOMEvent } from "../hooks/editor/use-dom-event";
+import { useKeyboardEvent } from "../hooks/editor/use-keyboard-event";
 import { useEditorRoot } from "../hooks/editor/use-editor-root";
-import { restoreEditorDOMSelection } from "../hooks/utils/editor-dom-selection";
-import { shortcutFromKeyboardEvent } from "../keyboard-events";
+import { restoreEditorDOMSelection } from "../events/utils/selection/editor-dom-selection";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
 
 /** One document-history action recognized from a browser editing event. */
 type HistoryAction = "undo" | "redo";
-
-/** Resolves the portable editor history shortcuts without platform sniffing. */
-function keyboardHistoryAction(event: KeyboardEvent, options: HistoryPluginProps): HistoryAction | undefined {
-  const shortcut = shortcutFromKeyboardEvent(event);
-  if ((options.undoKeys ?? ["Primary+z"]).includes(shortcut)) return "undo";
-  if ((options.redoKeys ?? ["Primary+Shift+z", "Primary+y"]).includes(shortcut)) return "redo";
-}
 
 /** Resolves history requests emitted directly by a contenteditable element. */
 function inputHistoryAction(event: InputEvent): HistoryAction | undefined {
@@ -40,7 +34,7 @@ function inputHistoryAction(event: InputEvent): HistoryAction | undefined {
  * empty selections focus the registered surface root and clear native ranges.
  *
  * Mount the plugin once inside `EditorView`. Its listeners are scoped to the
- * active surface root and automatically removed by `useEditorEvent`.
+ * active surface root and automatically removed by `useDOMEvent`.
  *
  * @example
  * ```tsx
@@ -73,25 +67,30 @@ export function HistoryPlugin(options: HistoryPluginProps = {}) {
     });
   };
 
-  useEditorEvent("keydown", (event) => {
-    if (event.defaultPrevented) return;
-    const action = keyboardHistoryAction(event, options);
-    if (!action) return;
-
-    // Even while an IME owns text input, never let the contenteditable's local
-    // undo stack diverge from collaborative history. The editor action itself
-    // waits until composition has finished.
-    event.preventDefault();
-    if (!event.isComposing) run(action);
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.historyUndo,
+    keys: options.undoKeys ?? BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.historyUndo]!,
+    composing: "prevent",
+  }, () => {
+    run("undo");
+    return true;
   });
 
-  useEditorEvent("beforeinput", (event) => {
-    if (event.defaultPrevented) return;
-    const action = inputHistoryAction(event);
-    if (!action) return;
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.historyRedo,
+    keys: options.redoKeys ?? BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.historyRedo]!,
+    composing: "prevent",
+  }, () => {
+    run("redo");
+    return true;
+  });
 
-    event.preventDefault();
+  useDOMEvent("beforeinput", ({ event }) => {
+    const action = inputHistoryAction(event);
+    if (!action) return false;
+
     if (!event.isComposing) run(action);
+    return true;
   });
 
   return null;

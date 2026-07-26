@@ -1,102 +1,112 @@
+import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
 import {
-  DEFAULT_BLOCK_TYPE,
   useEditor,
-  useEditorEvent,
   useEditorRoot,
-} from "../internal";
+  useKeyboardEvent,
+} from "../hooks";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
 import {
   findParentBlock,
   findPreviousEditableBlock,
   findRenderedBlock,
   focusBlock,
-} from "./utils/block-dom";
+} from "../events/utils/dom/block-dom";
 import {
   firstKeyboardTarget,
-  focusSelectionCaret,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "./utils/keyboard-selection";
+} from "../events/utils/keyboard/selection";
 
 /**
- * Installs page-specific Backspace behavior at the start of a block.
+ * Outdents a nested block when Backspace is pressed at offset zero.
  *
- * Expanded text or whole-block selections are deleted through the atomic
- * selection command. For one collapsed caret at offset zero, nested blocks
- * outdent and root blocks merge into the previous visible editable block. A
- * first empty non-paragraph becomes a paragraph; an empty paragraph remains as
- * the safe final editing target.
+ * This action is intentionally independent from merge and reset behavior.
+ * Returning `false` when the structural preconditions do not match lets the
+ * unified keyboard runtime try the next Backspace binding.
  */
-export interface PageBackspacePluginProps {
-  readonly behavior?: "selection" | "merge";
-}
-
-export function PageBackspacePlugin({ behavior }: PageBackspacePluginProps = {}) {
+export function BlockOutdentPlugin() {
   const editor = useEditor();
   const { element: root } = useEditorRoot();
 
-  useEditorEvent("keydown", (event) => {
-    if (
-      event.defaultPrevented ||
-      event.isComposing ||
-      event.key !== "Backspace" ||
-      event.shiftKey ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey ||
-      !root
-    ) return;
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.blockOutdentAtStart,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockOutdentAtStart],
+    mode: "block",
+    when: ({ selection, event }) =>
+      !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
+  }, () => {
+    if (!root) return false;
+    const target = firstKeyboardTarget(editor.selection.get());
+    if (!target?.collapsed || target.offset !== 0) return false;
+    const rendered = findRenderedBlock(root, target.blockId);
+    if (!rendered || !findParentBlock(rendered)) return false;
+    editor.outdentBlock(target.blockId);
+    requestAnimationFrame(() => focusBlock(root, target.blockId, 0));
+    return true;
+  });
 
-    const selection = editor.selection.get();
-    // Whole-block gestures deliberately clear the native Range and focus the
-    // page root. Handle that structural selection before requiring an editable
-    // event target; controls inside the page never satisfy this root-focus gate.
-    const rootBlockSelection = root.ownerDocument.activeElement === root &&
-      selection.some((item) => item.type === "block");
-    if (!rootBlockSelection && !isEditableKeyboardEvent(event)) return;
-    if (shouldDeleteSelection(selection)) {
-      if (behavior === "merge") return;
-      event.preventDefault();
-      editor.deleteSelection();
-      requestAnimationFrame(() => focusSelectionCaret(root, editor));
-      return;
-    }
-    if (behavior === "selection") return;
+  return null;
+}
 
-    const target = firstKeyboardTarget(selection);
-    if (!target?.collapsed || target.offset !== 0) return;
+/**
+ * Merges a root block into the previous visible editable block.
+ *
+ * Nested blocks are claimed by `BlockOutdentPlugin` first. If no previous
+ * editable block exists this binding falls through to `EmptyBlockResetPlugin`
+ * or to native contenteditable deletion.
+ */
+export function BackwardBlockMergePlugin() {
+  const editor = useEditor();
+  const { element: root } = useEditorRoot();
 
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.blockMergeBackward,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeBackward],
+    mode: "block",
+    when: ({ selection, event }) =>
+      !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
+  }, () => {
+    if (!root) return false;
+    const target = firstKeyboardTarget(editor.selection.get());
+    if (!target?.collapsed || target.offset !== 0) return false;
+    const rendered = findRenderedBlock(root, target.blockId);
+    if (rendered && findParentBlock(rendered)) return false;
+    const previous = findPreviousEditableBlock(root, target.blockId);
+    if (!previous) return false;
+    const joinOffset = editor.mergeBlocks(previous.blockId, target.blockId);
+    editor.execute("selection.set", { selection: [{
+      type: "text",
+      anchor: { blockId: previous.blockId, offset: joinOffset },
+      head: { blockId: previous.blockId, offset: joinOffset },
+    }] });
+    requestAnimationFrame(() => focusBlock(root, previous.blockId, joinOffset));
+    return true;
+  });
+
+  return null;
+}
+
+/** Resets the first empty custom block to the default paragraph type. */
+export function EmptyBlockResetPlugin() {
+  const editor = useEditor();
+  const { element: root } = useEditorRoot();
+
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.emptyBlockReset,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.emptyBlockReset],
+    mode: "block",
+    when: ({ selection, event }) =>
+      !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
+  }, () => {
+    if (!root) return false;
+    const target = firstKeyboardTarget(editor.selection.get());
+    if (!target?.collapsed || target.offset !== 0) return false;
     const block = editor.getBlock(target.blockId);
-    if (!block) return;
-
-    const renderedBlock = findRenderedBlock(root, block.id);
-    if (renderedBlock && findParentBlock(renderedBlock)) {
-      event.preventDefault();
-      editor.outdentBlock(block.id);
-      requestAnimationFrame(() => focusBlock(root, block.id, 0));
-      return;
-    }
-
-    const previous = findPreviousEditableBlock(root, block.id);
-    if (previous) {
-      event.preventDefault();
-      const joinOffset = editor.mergeBlocks(previous.blockId, block.id);
-      editor.execute("selection.set", { selection: [{
-        type: "text",
-        anchor: { blockId: previous.blockId, offset: joinOffset },
-        head: { blockId: previous.blockId, offset: joinOffset },
-      }] });
-      requestAnimationFrame(() => focusBlock(root, previous.blockId, joinOffset));
-      return;
-    }
-
-    // The first block has nowhere to merge. Empty structural types become a
-    // paragraph; an empty paragraph is retained instead of deleting the final
-    // place where the user can continue typing.
-    if (block.content === "") {
-      event.preventDefault();
-      if (block.type !== DEFAULT_BLOCK_TYPE) editor.setBlockType(block.id, DEFAULT_BLOCK_TYPE);
-      requestAnimationFrame(() => focusBlock(root, block.id, 0));
-    }
+    if (!block || block.content !== "" || block.type === DEFAULT_BLOCK_TYPE) return false;
+    if (findPreviousEditableBlock(root, block.id)) return false;
+    editor.setBlockType(block.id, DEFAULT_BLOCK_TYPE);
+    requestAnimationFrame(() => focusBlock(root, block.id, 0));
+    return true;
   });
 
   return null;

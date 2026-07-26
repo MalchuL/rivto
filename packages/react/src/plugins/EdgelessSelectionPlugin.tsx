@@ -1,16 +1,17 @@
+import type { EdgelessSelection } from "@chulane/rivto";
+import { BLOCK_CONTENT_SELECTOR } from "../constants";
 import {
-  BLOCK_CONTENT_SELECTOR,
+  useDOMEvent,
   useEditor,
-  useEditorEvent,
   useEditorRoot,
-  type EdgelessSelection,
-} from "../internal";
+  useKeyboardEvent,
+} from "../hooks";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
 import {
   owningRootIds,
   rootsInRect,
-  translatedLayouts,
   type EdgelessRect,
 } from "./utils/edgeless-geometry";
 
@@ -59,15 +60,15 @@ export function EdgelessSelectionPlugin() {
     selectRoots(editor, owningRootIds(editor.getBlocks(), blockIds));
   }, [editor, editor.revision]);
 
-  useEditorEvent("pointerdown", (event) => {
-    if (event.defaultPrevented || event.button !== 0 || !(event.target instanceof Element) || !root) return;
-    if (event.target.closest(HANDLE_SELECTOR)) return;
+  useDOMEvent("pointerdown", ({ event }) => {
+    if (event.button !== 0 || !(event.target instanceof Element) || !root) return false;
+    if (root.dataset.panningReady === "true") return false;
+    if (event.target.closest(HANDLE_SELECTOR)) return false;
     const card = event.target.closest<HTMLElement>(ROOT_SELECTOR);
     const blockId = card?.dataset.edgelessRoot;
     const primary = event.ctrlKey || event.metaKey;
 
     if (card && blockId && primary) {
-      event.preventDefault();
       const current = editor.selection.get().find((item): item is EdgelessSelection => item.type === "edgeless");
       const selected = new Set(current?.blockIds ?? []);
       if (selected.has(blockId)) selected.delete(blockId);
@@ -75,90 +76,67 @@ export function EdgelessSelectionPlugin() {
       selectRoots(editor, editor.getBlocks().map((block) => block.id).filter((id) => selected.has(id)));
       root.ownerDocument.getSelection()?.removeAllRanges();
       card.focus({ preventScroll: true });
-      return;
+      return true;
     }
 
     if (card) {
-      if (isInteractive(event.target)) return;
-      event.preventDefault();
+      if (isInteractive(event.target)) return false;
       selectRoots(editor, blockId ? [blockId] : []);
       card.focus({ preventScroll: true });
-      return;
+      return true;
     }
 
-    if (event.target.closest(".edgeless-zoom-controls")) return;
-    event.preventDefault();
+    if (event.target.closest(".edgeless-zoom-controls")) return false;
     root.focus({ preventScroll: true });
     editor.execute("selection.clear");
     gesture.current = { x: event.clientX, y: event.clientY, moved: false };
-  }, true);
+    return true;
+  }, { capture: true });
 
-  useEffect(() => {
-    if (!root) return;
-    const move = (event: PointerEvent) => {
-      const start = gesture.current;
-      if (!start || root.dataset.panning === "true") return;
-      if (!start.moved && Math.hypot(event.clientX - start.x, event.clientY - start.y) < 3) return;
-      event.preventDefault();
-      start.moved = true;
-      const next = {
-        left: Math.min(start.x, event.clientX),
-        top: Math.min(start.y, event.clientY),
-        right: Math.max(start.x, event.clientX),
-        bottom: Math.max(start.y, event.clientY),
-      };
-      setRectangle(next);
-      const cards = [...root.querySelectorAll<HTMLElement>(ROOT_SELECTOR)].flatMap((card) => {
-        const id = card.dataset.edgelessRoot;
-        const rect = card.getBoundingClientRect();
-        return id ? [{ id, rect }] : [];
-      });
-      selectRoots(editor, rootsInRect(cards, next));
+  useDOMEvent("pointermove", ({ event }) => {
+    const start = gesture.current;
+    if (!start || !root || root.dataset.panning === "true") return false;
+    if (!start.moved && Math.hypot(event.clientX - start.x, event.clientY - start.y) < 3) return false;
+    start.moved = true;
+    const next = {
+      left: Math.min(start.x, event.clientX),
+      top: Math.min(start.y, event.clientY),
+      right: Math.max(start.x, event.clientX),
+      bottom: Math.max(start.y, event.clientY),
     };
-    const stop = () => {
-      gesture.current = null;
-      setRectangle(null);
-    };
-    window.addEventListener("pointermove", move, { passive: false });
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("pointercancel", stop);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-      window.removeEventListener("pointercancel", stop);
-    };
-  }, [editor, root]);
+    setRectangle(next);
+    const cards = [...root.querySelectorAll<HTMLElement>(ROOT_SELECTOR)].flatMap((card) => {
+      const id = card.dataset.edgelessRoot;
+      const rect = card.getBoundingClientRect();
+      return id ? [{ id, rect }] : [];
+    });
+    selectRoots(editor, rootsInRect(cards, next));
+    return true;
+  }, { target: "window", passive: false });
 
-  useEditorEvent("keydown", (event) => {
-    if (event.defaultPrevented || event.isComposing || !root) return;
+  const stopRectangle = () => {
+    if (!gesture.current) return false;
+    gesture.current = null;
+    setRectangle(null);
+    return false;
+  };
+  useDOMEvent("pointerup", stopRectangle, { target: "window" });
+  useDOMEvent("pointercancel", stopRectangle, { target: "window" });
+
+  useKeyboardEvent({
+    id: KEYBOARD_BINDING_IDS.edgelessSelectionClear,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessSelectionClear],
+    mode: "edgeless",
+    when: ({ root: currentRoot, selection }) =>
+      !currentRoot.dataset.transforming &&
+      selection.some((item) => item.type === "edgeless"),
+  }, () => {
+    if (!root) return false;
     const selection = editor.selection.get().find((item): item is EdgelessSelection => item.type === "edgeless");
-    if (!selection) return;
-    const target = event.target as HTMLElement;
-    const handle = target.closest(HANDLE_SELECTOR);
-    if (target.isContentEditable || (!handle && /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName))) return;
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      editor.execute("selection.clear");
-      root.focus({ preventScroll: true });
-      return;
-    }
-    if ((event.key === "Backspace" || event.key === "Delete") && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      event.preventDefault();
-      editor.deleteSelection();
-      const current = editor.selection.get().find((item) => item.type === "text");
-      const owner = current ? owningRootIds(editor.getBlocks(), [current.head.blockId]) : [];
-      selectRoots(editor, owner.length ? owner : editor.getBlocks().slice(0, 1).map((block) => block.id));
-      requestAnimationFrame(() => root.focus({ preventScroll: true }));
-      return;
-    }
-    if (!event.key.startsWith("Arrow") || event.altKey || event.ctrlKey || event.metaKey) return;
-    event.preventDefault();
-    const step = event.shiftKey ? 10 : 1;
-    const dx = event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0;
-    const dy = event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0;
-    const patches = translatedLayouts(editor.getBlocks(), selection.blockIds, dx, dy);
-    editor.document.transact(() => patches.forEach(({ id, layout }) => editor.setBlockLayout(id, layout)));
+    if (!selection) return false;
+    editor.execute("selection.clear");
+    root.focus({ preventScroll: true });
+    return true;
   });
 
   return rectangle && root ? createPortal(

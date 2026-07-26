@@ -60,7 +60,7 @@ export function EditorView({ editor, children }: EditorViewProps) {
   const Surface = editor.getSurface(mode);
   if (!Surface) throw new Error(`No React surface is registered for editor mode ${mode}`);
   const components = editor.getComponents(mode);
-  const providers = editor.getProviders(mode);
+  const editorWrappers = editor.getEditorWrappers(mode);
   let content: ReactNode = (
     <>
       {children}
@@ -68,9 +68,9 @@ export function EditorView({ editor, children }: EditorViewProps) {
       <Surface />
     </>
   );
-  for (let index = providers.length - 1; index >= 0; index -= 1) {
-    const Provider = providers[index]!;
-    content = <Provider>{content}</Provider>;
+  for (let index = editorWrappers.length - 1; index >= 0; index -= 1) {
+    const EditorWrapper = editorWrappers[index]!;
+    content = <EditorWrapper>{content}</EditorWrapper>;
   }
 
   return (
