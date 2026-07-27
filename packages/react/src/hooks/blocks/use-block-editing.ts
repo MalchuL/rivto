@@ -24,14 +24,15 @@ export interface UseBlockEditingOptions<TextEdit extends boolean = boolean> {
   /**
    * Enables collaborative plain-text contenteditable synchronization.
    *
- * True by default. Set this to false for a contentless or control-based custom
- * block that should return a structural-selection anchor instead.
+   * True by default. Set this to false for a contentless or control-based
+   * custom block. Both modes return a selection-anchor marker; text mode also
+   * returns the content marker and synchronization handlers.
    */
   readonly textEdit?: TextEdit;
 }
 
 /** Props spread onto a collaborative plain-text contenteditable element. */
-export interface BlockTextEditingAttributes {
+export interface BlockTextEditingAttributes extends BlockSelectionAnchorAttributes {
   /** Ref used to synchronize external content and preserve DOM selections. */
   readonly ref: RefObject<HTMLDivElement | null>;
   /** Native plain-text editing mode; rich HTML is not persisted by this hook. */
@@ -48,12 +49,14 @@ export interface BlockTextEditingAttributes {
   readonly onCompositionEnd: NonNullable<HTMLAttributes<HTMLDivElement>["onCompositionEnd"]>;
 }
 
-/** Props spread onto a renderer region that anchors structural selection. */
-export interface BlockStructuralEditingAttributes {
+/** Props spread onto any renderer region from which selection may begin. */
+export interface BlockSelectionAnchorAttributes {
   /**
-   * Presence marker consumed by TextSelectionPlugin.
+   * Presence marker consumed by TextSelectionPlugin for gesture eligibility.
    *
-   * Interactive elements must ignore clicks whose event is `defaultPrevented`,
+   * Text mode places it on the contenteditable alongside `data-block-content`;
+   * structural mode places it on the region representing the complete block.
+   * Interactive elements must ignore clicks whose event is `defaultPrevented`
    * because a completed pointer drag claims the browser's synthetic click.
    */
   readonly [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "";
@@ -62,7 +65,7 @@ export interface BlockStructuralEditingAttributes {
 /** Mode-specific DOM attributes returned by {@link useBlockEditing}. */
 export type BlockEditingAttributes<TextEdit extends boolean> = TextEdit extends true
   ? BlockTextEditingAttributes
-  : BlockStructuralEditingAttributes;
+  : BlockSelectionAnchorAttributes;
 
 /**
  * Renderer-facing block state, property methods, commands, and DOM attributes.
@@ -197,11 +200,12 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
     editor.setBlockProp(blockId, String(key), value);
   }, [blockId, editor]);
 
-  const attributes: BlockTextEditingAttributes | BlockStructuralEditingAttributes = textEdit
+  const attributes: BlockTextEditingAttributes | BlockSelectionAnchorAttributes = textEdit
     ? {
       ref: elementRef,
       contentEditable: "plaintext-only",
       suppressContentEditableWarning: true,
+      [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "",
       [BLOCK_CONTENT_ATTRIBUTE]: "",
       onInput,
       onCompositionStart,

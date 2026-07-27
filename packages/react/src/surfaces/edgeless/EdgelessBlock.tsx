@@ -38,8 +38,7 @@ export function EdgelessRootBlock({ blockId }: { readonly blockId: string }) {
     <section
       className="edgeless-card"
       data-edgeless-root={block.id}
-      data-block-type={block.type}
-      data-selected={selection?.type === "edgeless" || undefined}
+      data-block-selected={selection?.type === "edgeless" || undefined}
       style={style}
       tabIndex={0}
     >

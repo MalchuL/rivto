@@ -4,8 +4,6 @@ import {
   blockTypeSelector,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-  BLOCK_SELECTED_ATTRIBUTE,
-  BLOCK_TYPE_ATTRIBUTE,
 } from "./dom-markers";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
@@ -79,13 +77,13 @@ test("filters typo queries, converts in place, and undoes query removal with con
   await page.keyboard.press("Enter");
 
   const converted = page.locator(blockIdSelector(id));
-  await expect(converted).toHaveAttribute(BLOCK_TYPE_ATTRIBUTE, "demo.slider");
+  await expect(converted).toHaveAttribute("data-block-type", "demo.slider");
   await converted.locator("[data-block-content]").click();
   await expect(converted.locator("[data-block-content]")).toHaveText(initial ?? "");
   await expect(menu).toHaveCount(0);
 
   await page.keyboard.press("Control+z");
-  await expect(converted).toHaveAttribute(BLOCK_TYPE_ATTRIBUTE, "paragraph");
+  await expect(converted).toHaveAttribute("data-block-type", "paragraph");
   await converted.locator("[data-block-content]").click();
   await expect(converted.locator("[data-block-content]")).toHaveText(`${initial}/sloder`);
 });
@@ -116,7 +114,7 @@ test("Escape preserves slash text and custom controls update or select their blo
   await page.keyboard.press("Control+y");
   await expect(button).toHaveText("Count: 3");
   await button.click({ modifiers: ["Control"] });
-  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
   await expect(button).toHaveText("Count: 3");
 });
 
@@ -133,11 +131,11 @@ test("mouse slash execution creates a contentless Counter and undo restores dorm
   await page.keyboard.type(" /count");
   await page.locator('[data-slash-command="type.demo.counter"]').click();
   const converted = page.locator(blockIdSelector(id));
-  await expect(converted).toHaveAttribute(BLOCK_TYPE_ATTRIBUTE, "demo.counter");
+  await expect(converted).toHaveAttribute("data-block-type", "demo.counter");
   await expect(converted.locator("[data-block-content]")).toHaveCount(0);
 
   await page.keyboard.press("Control+z");
-  await expect(converted).toHaveAttribute(BLOCK_TYPE_ATTRIBUTE, "paragraph");
+  await expect(converted).toHaveAttribute("data-block-type", "paragraph");
   await converted.locator("[data-block-content]").click();
   await expect(converted.locator("[data-block-content]")).toHaveText(`${initial} /count`);
 });

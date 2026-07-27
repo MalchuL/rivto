@@ -776,7 +776,7 @@ type SelectionManager = {
 
 Selection visual state должен рендериться через:
 
-* `data-selected` attributes;
+* `data-block-selected` attributes;
 * overlay layer;
 * decorations;
 * wrapper state.
@@ -784,7 +784,7 @@ Selection visual state должен рендериться через:
 Block Mode:
 
 ```html
-<div data-block-id="b1" data-selected="true">
+<div data-block-id="b1" data-block-selected="true">
   ...
 </div>
 ```
@@ -1198,7 +1198,7 @@ Every block wrapper should expose stable attributes:
   data-block-id="..."
   data-block-type="callout"
   data-editor-mode="block"
-  data-selected="true"
+  data-block-selected="true"
   data-hovered="false"
   data-dragging="false"
   data-empty="false"

@@ -3,7 +3,6 @@ import {
   blockIdSelector,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-  BLOCK_SELECTED_SELECTOR,
 } from "./dom-markers";
 
 /** Selects root blocks through the same Ctrl+click gesture used by the demo. */
@@ -31,7 +30,7 @@ test.beforeEach(async ({ page }) => {
 
 test("Backspace and Delete remove root-focused block selections atomically", async ({ page }) => {
   const [firstId, secondId] = await selectRoots(page, [0, 1]);
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
+  await expect(page.locator("[data-block-selected]")).toHaveCount(2);
 
   await page.keyboard.press("Backspace");
   await expect(blockById(page, firstId!)).toHaveCount(0);

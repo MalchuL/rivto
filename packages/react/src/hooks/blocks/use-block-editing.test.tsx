@@ -54,6 +54,7 @@ describe("useBlockEditing", () => {
     renderToStaticMarkup(createElement(EditorView, { editor: reactEditor }));
 
     expect(structural?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
+    expect(text?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
     expect(text?.attributes[BLOCK_CONTENT_ATTRIBUTE]).toBe("");
     expect(text?.attributes.contentEditable).toBe("plaintext-only");
     expect(structural?.getProps()).toEqual({ count: 1, label: "Initial" });

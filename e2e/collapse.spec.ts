@@ -3,8 +3,6 @@ import {
   blockIdSelector,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-  BLOCK_SELECTED_ATTRIBUTE,
-  BLOCK_SELECTED_SELECTOR,
 } from "./dom-markers";
 
 interface ClipboardBlock {
@@ -57,7 +55,7 @@ test("supports Logseq collapse keys for editing and multi-block selection", asyn
   await page.keyboard.press("Control+;");
   await expect(firstToggle).toHaveAttribute("aria-expanded", "false");
   await expect(secondToggle).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
+  await expect(page.locator("[data-block-selected]")).toHaveCount(2);
 });
 
 test("moves a hidden caret selection to its collapsed parent", async ({ page }) => {
@@ -67,8 +65,8 @@ test("moves a hidden caret selection to its collapsed parent", async ({ page }) 
 
   await parent.locator(":scope > .page-block-row [data-collapse-toggle]").click();
 
-  await expect(parent).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(1);
+  await expect(parent).toHaveAttribute("data-block-selected", "true");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => getSelection()?.rangeCount ?? 0)).toBe(0);
 });
 
@@ -136,7 +134,7 @@ test("drops inside a collapsed parent and keeps the moved subtree hidden", async
   await page.mouse.up();
 
   await expect(page.getByText(sourceText ?? "", { exact: true })).toHaveCount(0);
-  await expect(target).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(target).toHaveAttribute("data-block-selected", "true");
   await page.keyboard.press("Control+ArrowDown");
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(target.locator(":scope > .page-block-children [data-block-content]").filter({ hasText: sourceText ?? "" }).first()).toBeVisible();

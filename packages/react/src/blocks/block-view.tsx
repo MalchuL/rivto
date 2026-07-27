@@ -11,8 +11,13 @@ export interface BlockViewProps extends Omit<HTMLAttributes<HTMLDivElement>, "ch
   readonly block: EditorBlock;
   /** Content and nested block containers chosen by the active surface. */
   readonly children?: ReactNode;
-  /** Whether the active surface considers this block selected. */
-  readonly selected?: boolean;
+  /**
+   * Whether the active surface considers this complete block selected.
+   *
+   * This is presentation input, not selection storage. BlockView reflects it
+   * as `data-block-selected` for CSS and delegated DOM integrations.
+   */
+  readonly isSelected?: boolean;
 }
 
 /**
@@ -29,28 +34,28 @@ export interface BlockViewProps extends Omit<HTMLAttributes<HTMLDivElement>, "ch
  * selection means in its mode. BlockView does not recurse, edit text, install
  * events, render handles, apply layout, or choose visual styles.
  *
- * `data-block-id`, `data-block-type`, and `data-selected` are controlled by
+ * `data-block-id`, `data-block-type`, and `data-block-selected` are controlled by
  * BlockView and therefore cannot be replaced through the remaining div props.
  * The selection marker is omitted when false so presence selectors such as
- * `[data-selected]` remain useful. The ref points to the actual block div for
+ * `[data-block-selected]` remain useful. The ref points to the actual block div for
  * focus management, geometry measurement, and DOM selection integration.
  *
  * @example
  * ```tsx
- * <BlockView block={block} selected={isSelected} className="paragraph">
+ * <BlockView block={block} isSelected={isSelected} className="paragraph">
  *   <ParagraphContent blockId={block.id} />
  * </BlockView>
  * ```
  */
 export const BlockView = forwardRef<HTMLDivElement, BlockViewProps>(
-  function BlockView({ block, children, selected = false, ...attributes }, ref) {
+  function BlockView({ block, children, isSelected = false, ...attributes }, ref) {
     return (
       <div
         {...attributes}
         ref={ref}
         data-block-id={block.id}
         data-block-type={block.type}
-        data-selected={selected ? "true" : undefined}
+        data-block-selected={isSelected ? "true" : undefined}
       >
         {children}
       </div>

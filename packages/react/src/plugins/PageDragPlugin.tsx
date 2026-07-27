@@ -252,8 +252,7 @@ function subtreeSize(block: EditorBlock): number {
  *
  * The preview uses detached block data instead of PageBlock. Reusing PageBlock
  * here would mount duplicate contenteditable elements and register a second set
- * of draggable and droppable nodes with the same IDs. Stable type attributes
- * let the preview reuse the demo's Markdown and custom-block presentation.
+ * of draggable and droppable nodes with the same IDs.
  *
  * @param props - Detached root snapshots participating in this gesture.
  * @returns A capped list of visible rows plus a compact omitted-block count.
@@ -271,7 +270,6 @@ function PageDragPreview({ blocks }: { readonly blocks: EditorBlock[] }) {
         <div
           key={previewBlock.id}
           className="page-drag-preview-block"
-          data-block-type={previewBlock.type}
           style={{ marginLeft: depth * 20 }}
         >
           <div className="page-block-content">

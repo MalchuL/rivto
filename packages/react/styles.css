@@ -170,20 +170,20 @@
 }
 
 /* Older browsers receive a whole-content fallback marker instead. */
-[data-text-selected] {
+[data-text-selection-fallback] {
   background: #e5dfff;
 }
 
 /* A page block owns its recursively rendered children, so decorating the
    outer BlockView makes a whole-block selection cover the complete subtree as
    one rectangle. Nested selected markers do not draw additional rectangles. */
-.page-block[data-selected] {
+.page-block[data-block-selected] {
   border-radius: 4px;
   background: #e5dfff;
   outline: 1px solid #cfc4ff;
 }
 
-.page-block[data-selected] .page-block[data-selected] {
+.page-block[data-block-selected] .page-block[data-block-selected] {
   border-radius: 0;
   outline: none;
 }
@@ -401,7 +401,7 @@
   outline: none;
 }
 
-.edgeless-card[data-selected] {
+.edgeless-card[data-block-selected] {
   border-color: var(--rivto-accent, #6c5ce7);
   box-shadow: 0 0 0 2px var(--rivto-accent, #6c5ce7), 0 8px 24px rgb(0 0 0 / 12%);
 }

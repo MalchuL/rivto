@@ -160,8 +160,8 @@ endpoints become their collapsed ancestor (often converting text → block).
 | Caret / Shift+Arrow | `caretNavigationPlugin`, `blockSelectionNavigationPlugin` | Keyboard |
 | Delete expanded selection | `selectionDeletionPlugin` | Backspace/Delete |
 | Canvas object UX | `edgelessSelectionPlugin` | Card click / marquee |
-| Visual whole-block chrome | surfaces via `useBlockSelection` → `data-selected` | Outline/background |
-| Cross-host text paint | `updateTextSelectionHighlight` | CSS Highlight or `data-text-selected` |
+| Visual whole-block chrome | surfaces via `useBlockSelection` → `data-block-selected` | Outline/background |
+| Cross-host text paint | `updateTextSelectionHighlight` | CSS Highlight or `data-text-selection-fallback` |
 
 `EditorView` does **not** own selection sync. The plugins above do.
 
@@ -175,10 +175,10 @@ Selection code does not care about React component trees. It queries:
 | --- | --- | --- |
 | `data-block-id` | `BlockView` | Locate block containers |
 | `data-block-type` | `BlockView` | Type metadata |
-| `data-selected` | `BlockView` when surface says selected | Whole-block chrome |
+| `data-block-selected` | `BlockView` when surface says selected | Reflected whole-block presentation state |
 | `data-block-content` | `useBlockEditing()` | Editable host / offset origin |
-| `data-block-selection-anchor` | `useBlockEditing({ textEdit: false })` | Structural drag anchor |
-| `data-text-selected` | highlight fallback | Coarse cross-block paint |
+| `data-block-selection-anchor` | Every `useBlockEditing()` mode | Region from which a selection gesture may begin |
+| `data-text-selection-fallback` | highlight fallback | Coarse paint only when CSS Highlight is unavailable |
 | `data-block-selecting` | page block plugin | Root cursor while Ctrl/Cmd held |
 | `data-edgeless-root` | edgeless surface | Object selection target |
 
@@ -195,7 +195,8 @@ Implementation: `plugins/text-selection-plugin.tsx` +
 ### Same-block (browser owns the gesture)
 
 ```text
-pointerdown inside [data-block-content]
+pointerdown inside [data-block-selection-anchor]
+  → native isContentEditable chooses the text path
   → plugin records portable anchor (blockId + offset) in a ref
   → browser draws native caret/range inside that one host
   → document "selectionchange"
@@ -280,7 +281,7 @@ Ctrl/Cmd at pointer-down aborts text gesture setup so page block toggle can run
 | `setNativeSelection` | `setBaseAndExtent`, Range fallback if rejected |
 | `resolveDOMSelectionPoint` | portable position → live DOM endpoint |
 | `restoreEditorDOMSelection` | after structural commands: re-resolve + focus head + highlight |
-| `updateTextSelectionHighlight` | CSS `Highlight` named `rivto-text-selection`, else `data-text-selected` |
+| `updateTextSelectionHighlight` | CSS `Highlight` named `rivto-text-selection`, else `data-text-selection-fallback` |
 | `saveDOMSelection` / `restoreDOMSelection` | **intra-element** caret save while `textContent` is rewritten (`useBlockEditing`) |
 
 Do not confuse the two restore paths:
@@ -317,7 +318,8 @@ allow “root focused + block selection”, not only “event inside editable”
 
 Only `type: "block"` or `type: "edgeless"` items that include the ID.
 **Text selections never make a block look selected**, even if the caret is
-inside it. Surfaces pass that into `BlockView`’s `selected` → `data-selected`.
+inside it. Surfaces pass that into `BlockView.isSelected`, which reflects
+presentation state as `data-block-selected`.
 
 ### Visible order
 
@@ -437,7 +439,7 @@ subtree.
                               │                   EditorView / hooks
                               │                         │
                               ▼                         ▼
-                 restoreEditorDOMSelection      useBlockSelection → data-selected
+                 restoreEditorDOMSelection      useBlockSelection → data-block-selected
                  updateTextSelectionHighlight   Markdown focus / preview
                  focus surface root or content
 ```
@@ -480,7 +482,8 @@ geometry.
 It is per-user, high-churn, session UI state.
 
 **What breaks if I remove `data-block-content`?**  
-Offsets, text plugin, caret restore, and most keyboard targeting stop working.
+Text offsets, caret restore, and keyboard targeting stop working. Pointer
+eligibility still comes from `data-block-selection-anchor`.
 
 **What is `ownsCrossBlockSelection`?**  
 A short-lived “plugin owns the truth” flag so noisy browser

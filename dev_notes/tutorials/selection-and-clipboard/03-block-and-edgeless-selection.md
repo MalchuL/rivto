@@ -71,7 +71,7 @@ selectBlock(block.id, event.shiftKey, event.metaKey || event.ctrlKey)
 4. Выполняется `selection.set`.
 5. Runtime проверяет ID и порядок.
 6. `BlockView` на следующем render видит ID в selection.
-7. На block ставится `data-selected=true`.
+7. На block отражается presentation state: `data-block-selected=true`.
 8. CSS показывает фон и outline.
 
 ## 5. Shift-click: диапазон блоков
@@ -283,7 +283,7 @@ Edgeless renderer отображает blocks absolutely positioned внутри
 
 ```ts
 canvas={true}
-selected={selected === block.id}
+isSelected={selected === block.id}
 select={() => setSelected(block.id)}
 ```
 
@@ -295,7 +295,7 @@ editor.commands.execute("selection.set", {
 });
 ```
 
-Selected card получает outline через `data-selected=true`.
+Selected card получает outline через `data-block-selected=true`.
 
 ## 18. Два слоя canvas card
 

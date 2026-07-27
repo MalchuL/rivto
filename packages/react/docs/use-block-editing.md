@@ -36,6 +36,7 @@ wrapper. They provide:
 - the contenteditable ref;
 - `contentEditable="plaintext-only"`;
 - input and IME composition handlers;
+- `data-block-selection-anchor`, which permits a selection gesture to begin;
 - `data-block-content`.
 
 The hook writes the current block content into that element. Do not also render
@@ -83,10 +84,11 @@ outer block-level `<div>` lets empty space around the compact button start
 whole-block selection. Putting the attributes on the button limits the
 selection anchor to the button's own rectangle.
 
-The structural attributes provide `data-block-selection-anchor`; they do not
-make the element editable. Interactive descendants must ignore a click whose
-event is already `defaultPrevented`, because a completed selection drag claims
-the browser's follow-up click.
+Both modes provide `data-block-selection-anchor`. With `textEdit: false`, the
+anchor element is not contenteditable, so the selection plugin interprets its
+gesture structurally. Interactive descendants must ignore a click whose event
+is already `defaultPrevented`, because a completed selection drag claims the
+browser's follow-up click.
 
 Do not put a structural selection anchor around a nested text editor. The outer
 anchor could claim pointer gestures intended for `data-block-content`.

@@ -10,9 +10,9 @@ const commentsPlugin = (): ReactEditorPlugin => ({
   },
 });
 
-function CommentWrapper({ block, selected, children }: BlockWrapperProps) {
+function CommentWrapper({ block, children }: BlockWrapperProps) {
   return (
-    <CommentBoundary blockId={block.id} selected={selected}>
+    <CommentBoundary blockId={block.id}>
       {children}
     </CommentBoundary>
   );
@@ -42,6 +42,10 @@ relative order of remaining wrappers.
 The surface still owns the single `BlockView`, content renderer, controls, and
 recursive descendants. Wrappers must not create another `BlockView` with the
 same block ID.
+
+Selection presentation belongs to the surface shell, so decorators do not
+receive an `isSelected` prop. A decorator that truly needs current selection
+behavior can resolve it explicitly with `useBlockSelection(block.id)`.
 
 ## Observing the BlockView element
 

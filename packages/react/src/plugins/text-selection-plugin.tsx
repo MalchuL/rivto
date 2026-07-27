@@ -7,10 +7,7 @@ import type {
   EditorPosition,
   EditorSelection,
 } from "@chulane/rivto";
-import {
-  BLOCK_CONTENT_SELECTOR,
-  BLOCK_SELECTION_ANCHOR_SELECTOR,
-} from "../constants";
+import { BLOCK_SELECTION_ANCHOR_SELECTOR } from "../constants";
 import { useEditor, useReactEditor } from "../hooks/editor/use-editor";
 import { useDOMEvent } from "../hooks/editor/use-dom-event";
 import { useEditorRoot } from "../hooks/editor/use-editor-root";
@@ -50,13 +47,6 @@ interface PointerSelection {
   selection?: EditorSelection;
   /** True while the latest synthetic result selects complete blocks. */
   wholeBlocks: boolean;
-}
-
-/** Returns true when a pointer event began inside editable block content. */
-function isEditableTarget(root: HTMLElement, target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  const content = target.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
-  return Boolean(content && root.contains(content));
 }
 
 /**
@@ -142,33 +132,26 @@ export function TextSelectionPlugin() {
         return false;
       }
       if (event.button !== 0) return false;
-      const editableTarget = isEditableTarget(root, event.target);
-      const structuralTarget = Boolean(
-        blockId &&
-        event.target instanceof Element &&
-        event.target.closest(BLOCK_SELECTION_ANCHOR_SELECTOR),
-      );
-      if (!editableTarget && !structuralTarget) return false;
+      const selectionAnchor = event.target instanceof Element
+        ? event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR)
+        : null;
+      if (!selectionAnchor || !root.contains(selectionAnchor)) return false;
       if (releaseTimer.current !== undefined) view?.clearTimeout(releaseTimer.current);
       ownsCrossBlockSelection.current = false;
-      if (structuralTarget && blockId && !event.shiftKey) {
-        // `readDOMSelectionPoint` intentionally falls back to the nearest
-        // editable host. Explicit structural anchors bypass that fallback so
-        // they retain their own block ID before movement begins.
-        pointer.current = {
-          startX: event.clientX,
-          startY: event.clientY,
-          anchorPosition: { blockId, offset: 0 },
-          textAcrossBlocks: false,
-          crossBlock: false,
-          wholeBlocks: false,
-        };
-        return false;
-      }
-      const current = editor.selection.get();
-      const clicked = readDOMSelectionPoint(root, event.clientX, event.clientY);
-      const clickedPosition = clicked && readDOMPointPosition(root, clicked);
 
+      // The anchor marker is the only gesture-entry contract. Text mode puts
+      // it directly on a contenteditable; structural mode puts it on a normal
+      // renderer region. `data-block-content` remains an offset-mapping detail
+      // owned by the DOM-selection utilities rather than pointer routing.
+      const textTarget = selectionAnchor.isContentEditable;
+      const clicked = textTarget
+        ? readDOMSelectionPoint(root, event.clientX, event.clientY)
+        : undefined;
+      const clickedPosition = clicked
+        ? readDOMPointPosition(root, clicked)
+        : blockId ? { blockId, offset: 0 } : undefined;
+
+      const current = editor.selection.get();
       // Shift extends the existing selection instead of replacing its anchor.
       // A block selection has no character endpoint, so it extends as blocks.
       if (event.shiftKey && clickedPosition) {
@@ -203,6 +186,21 @@ export function TextSelectionPlugin() {
           publish(active, clicked, clickedPosition);
           return true;
         }
+      }
+
+      if (!textTarget && blockId) {
+        // `readDOMSelectionPoint` intentionally falls back to the nearest
+        // editable host. Explicit structural anchors bypass that fallback so
+        // they retain their own block ID before movement begins.
+        pointer.current = {
+          startX: event.clientX,
+          startY: event.clientY,
+          anchorPosition: { blockId, offset: 0 },
+          textAcrossBlocks: false,
+          crossBlock: false,
+          wholeBlocks: false,
+        };
+        return false;
       }
 
       const anchor = clicked;

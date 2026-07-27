@@ -305,7 +305,7 @@ Browser Selection (DOM node + offset)
   ↔ textSelectionPlugin / pageSelectionPlugin / edgelessSelectionPlugin
   ↔ editor.selection.set() | editor.selection.clear()
   ↔ SelectionManager list: text | block | edgeless items
-  ↔ data-selected / data-text-selected / CSS Highlight paint
+  ↔ data-block-selected / data-text-selection-fallback / CSS Highlight paint
 ```
 
 Facts that surprise most readers:
@@ -317,7 +317,7 @@ Facts that surprise most readers:
   pointer-down anchor and suppresses noisy `selectionchange` during synthetic
   drags.
 - `useBlockSelection` ignores text carets — only `block` / `edgeless` paint
-  `data-selected`.
+  `data-block-selected`.
 - After block select, focus often moves to the **surface root**, not an editable.
 
 ---
@@ -407,10 +407,10 @@ These markers are the integration surface between React and delegated events:
 | --- | --- |
 | `data-block-id` | Stable block identity on `BlockView` |
 | `data-block-type` | Persisted native type |
-| `data-selected` | Whole-block selection (attribute omitted when false) |
-| `data-block-content` | Plain-text editable host for typing/selection |
-| `data-block-selection-anchor` | Renderer region that may start structural drag selection |
-| `data-text-selected` | Fallback highlight for cross-block text ranges |
+| `data-block-selected` | Reflected whole-block presentation state; omitted when false |
+| `data-block-content` | Text host used for persisted offsets and DOM ranges |
+| `data-block-selection-anchor` | Every renderer region from which selection may begin |
+| `data-text-selection-fallback` | Presentation fallback when CSS Highlight is unavailable |
 
 Plugins and event utilities query these selectors. Do not replace them with CSS
 class names if you want events and selection to keep working.

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { BLOCK_ID_SELECTOR, BLOCK_SELECTED_SELECTOR } from "./dom-markers";
+import { BLOCK_ID_SELECTOR } from "./dom-markers";
 
 async function textPoint(
   content: import("@playwright/test").Locator,
@@ -135,7 +135,7 @@ test("copies and pastes a mouse-dragged multi-block selection", async ({ page })
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 10 });
   await page.mouse.up();
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(3);
+  await expect(page.locator("[data-block-selected]")).toHaveCount(3);
 
   await page.keyboard.press("Control+c");
   await page.keyboard.press("Control+v");
@@ -161,5 +161,5 @@ test("drags selected sibling roots together", async ({ page }) => {
   await expect(page.locator(".page-drag-overlay")).toContainText(firstText ?? "");
   await expect(page.locator(".page-drag-overlay")).toContainText(secondText ?? "");
   await page.mouse.up();
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
+  await expect(page.locator("[data-block-selected]")).toHaveCount(2);
 });

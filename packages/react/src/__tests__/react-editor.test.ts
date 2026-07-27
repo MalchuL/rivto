@@ -148,7 +148,7 @@ describe("ReactEditor", () => {
     const Surface = () => createElement(BlockWrapper, {
       fallback: Shell,
       block,
-      selected: false,
+      isSelected: false,
       content: null,
     });
     const reactEditor = createReactEditor({

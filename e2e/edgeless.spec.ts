@@ -4,8 +4,6 @@ import {
   blockTypeSelector,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-  BLOCK_SELECTED_ATTRIBUTE,
-  BLOCK_SELECTED_SELECTOR,
 } from "./dom-markers";
 
 const switchMode = async (page: Page, mode: "block" | "edgeless") => {
@@ -99,13 +97,17 @@ test("edits Markdown and custom controls without selecting their root cards", as
   await page.keyboard.type("!/sloder");
   await expect(page.locator('[data-slash-command="type.demo.slider"]')).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(first).not.toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(first).not.toHaveAttribute("data-block-selected", "true");
 
-  const slider = page.locator(`[data-edgeless-root]${blockTypeSelector("demo.slider")} input`);
+  const slider = page.locator(
+    `[data-edgeless-root] ${blockTypeSelector("demo.slider")} input`,
+  );
   await slider.focus();
   await page.keyboard.press("ArrowRight");
   await expect(slider).toHaveValue("36");
-  const counter = page.locator(`[data-edgeless-root]${blockTypeSelector("demo.counter")} .custom-counter-block`);
+  const counter = page.locator(
+    `[data-edgeless-root] ${blockTypeSelector("demo.counter")} .custom-counter-block`,
+  );
   await counter.click();
   await expect(counter).toHaveText("Count: 3");
 
@@ -120,7 +122,7 @@ test("toggles root selection and moves or resizes layouts atomically", async ({ 
   const second = cards.nth(1);
   await cardChrome(first).click({ position: { x: 280, y: 14 } });
   await cardChrome(second).click({ modifiers: ["Control"], position: { x: 280, y: 14 } });
-  await expect(page.locator(`[data-edgeless-root]${BLOCK_SELECTED_SELECTOR}`)).toHaveCount(2);
+  await expect(page.locator("[data-edgeless-root][data-block-selected]")).toHaveCount(2);
 
   const before = await Promise.all([first, second].map((card) => card.evaluate((element) => ({
     left: Number.parseFloat((element as HTMLElement).style.left),
@@ -162,7 +164,7 @@ test("rectangle-selects roots, moves them by keyboard, and deletes them atomical
   await page.mouse.move(secondBox.x + secondBox.width + 5, secondBox.y + secondBox.height + 5, { steps: 8 });
   await expect(page.locator("[data-edgeless-selection-rectangle]")).toBeVisible();
   await page.mouse.up();
-  await expect(page.locator(`[data-edgeless-root]${BLOCK_SELECTED_SELECTOR}`)).toHaveCount(2);
+  await expect(page.locator("[data-edgeless-root][data-block-selected]")).toHaveCount(2);
 
   const left = await cards.nth(0).evaluate((element) => Number.parseFloat((element as HTMLElement).style.left));
   await page.keyboard.press("Shift+ArrowRight");
@@ -204,7 +206,7 @@ test("zooms, pans, and pastes selected root subtrees with offset layouts", async
   await page.keyboard.press("Control+c");
   await page.keyboard.press("Control+v");
   await expect(cards).toHaveCount(before + 2);
-  await expect(page.locator(`[data-edgeless-root]${BLOCK_SELECTED_SELECTOR}`)).toHaveCount(1);
+  await expect(page.locator("[data-edgeless-root][data-block-selected]")).toHaveCount(1);
   const pastedPositions = await Promise.all([cards.nth(2), cards.nth(3)].map((card) => card.evaluate((element) => ({
     left: Number.parseFloat((element as HTMLElement).style.left),
     top: Number.parseFloat((element as HTMLElement).style.top),
@@ -231,7 +233,7 @@ test("duplicates a complete root subtree from slash with offset geometry", async
   await page.locator('[data-slash-command="block.duplicate"]').click();
 
   await expect(cards).toHaveCount(before + 1);
-  const duplicate = page.locator(`[data-edgeless-root]${BLOCK_SELECTED_SELECTOR}`);
+  const duplicate = page.locator("[data-edgeless-root][data-block-selected]");
   await expect(duplicate).toHaveCount(1);
   await expect(duplicate).not.toHaveAttribute("data-edgeless-root", originalId ?? "");
   await expect(duplicate.locator(BLOCK_ID_SELECTOR)).toHaveCount(originalDescendants);

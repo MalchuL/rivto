@@ -30,16 +30,16 @@ import { UnknownBlock } from "./block-renderers";
  * @param props - Resolved block, selection state, row slots, and descendants.
  * @returns One page block container with its row followed by nested children.
  */
-function PageBlockWrapper({ block, selected, content, controls, children }: BlockShellProps) {
+function PageBlockWrapper({ block, isSelected, content, controls, children }: BlockShellProps) {
   const blockElementRef = useBlockElementRef();
   return (
     <BlockView
       ref={blockElementRef}
       block={block}
-      selected={selected}
+      isSelected={isSelected}
       className="page-block"
     >
-      <div className="page-block-row" data-block-type={block.type}>
+      <div className="page-block-row">
         {controls}
         {content}
       </div>
@@ -95,7 +95,7 @@ export function PageBlock({ blockId, ignoreCollapse = false }: PageBlockProps) {
     <BlockWrapper
       fallback={PageBlockWrapper}
       block={block}
-      selected={!ignoreCollapse && Boolean(selection)}
+      isSelected={!ignoreCollapse && Boolean(selection)}
       controls={!ignoreCollapse && block.children.length > 0 && (
         <button
           type="button"

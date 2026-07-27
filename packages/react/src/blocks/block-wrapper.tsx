@@ -26,8 +26,8 @@ import { useEditorMode, useReactEditor } from "../hooks";
 export interface BlockShellProps {
   /** Latest detached block snapshot resolved by the active surface. */
   readonly block: EditorBlock;
-  /** Whether the surface currently considers the complete block selected. */
-  readonly selected: boolean;
+  /** Presentation state forwarded only to the surface-owned BlockView shell. */
+  readonly isSelected: boolean;
   /** Renderer output for the block's own content, excluding descendants. */
   readonly content: ReactNode;
   /** Surface-owned controls, such as the page collapse toggle. */
@@ -46,8 +46,6 @@ export interface BlockShellProps {
 export interface BlockWrapperProps {
   /** Latest detached block snapshot resolved by the active surface. */
   readonly block: EditorBlock;
-  /** Whether the surface considers the complete block selected. */
-  readonly selected: boolean;
   /** Next decorator, or the surface shell at the end of the chain. */
   readonly children: ReactNode;
 }
@@ -145,20 +143,20 @@ export function BlockElementRefBoundary({
 export function BlockWrapper({
   fallback: Fallback,
   block,
-  selected,
+  isSelected,
   ...slots
 }: BlockWrapperSlotProps) {
   const reactEditor = useReactEditor();
   const { mode } = useEditorMode();
   const wrappers = reactEditor.surfaces.getBlockWrappers(mode);
   let result: ReactNode = (
-    <Fallback block={block} selected={selected} {...slots} />
+    <Fallback block={block} isSelected={isSelected} {...slots} />
   );
 
   for (let index = wrappers.length - 1; index >= 0; index -= 1) {
     const Wrapper = wrappers[index]!;
     result = (
-      <Wrapper block={block} selected={selected}>
+      <Wrapper block={block}>
         {result}
       </Wrapper>
     );

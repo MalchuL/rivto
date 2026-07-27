@@ -57,7 +57,7 @@ import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-  TEXT_SELECTED_SELECTOR,
+  TEXT_SELECTION_FALLBACK_SELECTOR,
 } from "../../../../constants";
 
 /**
@@ -559,14 +559,14 @@ export function restoreEditorDOMSelection(root: HTMLElement, selection: EditorSe
 }
 
 /**
- * Removes supplemental CSS Highlight ranges and `data-text-selected` markers.
+ * Removes supplemental CSS Highlight ranges and fallback DOM paint markers.
  *
  * @param root - EditorView root whose highlight state should be cleared.
  */
 export function clearTextSelectionHighlight(root: HTMLElement): void {
   if ("highlights" in CSS) CSS.highlights.delete(TEXT_SELECTION_HIGHLIGHT_NAME);
-  root.querySelectorAll<HTMLElement>(TEXT_SELECTED_SELECTOR).forEach((content) => {
-    delete content.dataset.textSelected;
+  root.querySelectorAll<HTMLElement>(TEXT_SELECTION_FALLBACK_SELECTOR).forEach((content) => {
+    delete content.dataset.textSelectionFallback;
   });
 }
 
@@ -577,8 +577,8 @@ export function clearTextSelectionHighlight(root: HTMLElement): void {
  * highlights the focused host. This helper paints the rest:
  * - Prefer the CSS Custom Highlight API (`CSS.highlights`) with exact Ranges
  *   for partial boundary offsets.
- * - Fall back to `data-text-selected` on touched content Elements for engines
- *   without Highlights. Surfaces own the visual styling.
+ * - Fall back to `data-text-selection-fallback` on touched content elements
+ *   for engines without Highlights. Surfaces own the visual styling.
  *
  * @param root - EditorView root that owns the content hosts.
  * @param selection - Portable selection; only cross-block text items paint.
@@ -614,7 +614,7 @@ export function updateTextSelectionHighlight(root: HTMLElement, selection: Edito
     CSS.highlights.set(TEXT_SELECTION_HIGHLIGHT_NAME, new Highlight(...ranges));
   } else {
     contents.slice(firstIndex, lastIndex + 1).forEach((content) => {
-      content.dataset.textSelected = "true";
+      content.dataset.textSelectionFallback = "true";
     });
   }
 }

@@ -395,7 +395,8 @@ CSS:
 Highlight API не вставляет `<span>` в editable DOM. Это важно: дополнительные
 marker nodes изменили бы offset calculations и могли вызвать input bugs.
 
-Если API недоступен, fallback ставит `data-rivto-cross-selected=true` на hosts.
+Если API недоступен, presentation fallback ставит
+`data-text-selection-fallback=true` на затронутые hosts.
 Fallback грубее и подсвечивает host целиком, но selection semantics остаются
 правильными.
 

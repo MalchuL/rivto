@@ -2,8 +2,6 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-  BLOCK_SELECTED_ATTRIBUTE,
-  BLOCK_SELECTED_SELECTOR,
   blockTypeSelector,
 } from "./dom-markers";
 
@@ -42,8 +40,8 @@ test("switches cross-block drag to blocks and restores text on return", async ({
   const first = contents.nth(0);
   const second = contents.nth(1);
   await dragText(page, first, 2, second, 8);
-  await expect(first.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
-  await expect(second.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(first.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute("data-block-selected", "true");
+  await expect(second.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute("data-block-selected", "true");
 
   await page.reload();
   const start = page.locator("[data-block-content]").nth(0);
@@ -97,7 +95,7 @@ test("Alt drag keeps partial text across blocks", async ({ page }) => {
   await page.keyboard.down("Alt");
   await dragText(page, contents.nth(0), 2, contents.nth(1), 8);
   await page.keyboard.up("Alt");
-  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
   await expect.poll(() => page.evaluate(() => getSelection()?.toString().length ?? 0)).toBeGreaterThan(0);
 });
 
@@ -118,15 +116,15 @@ test("dragging onto a contentless Counter immediately extends block selection", 
 
   // Assert while the pointer is still down. Previously Counter was skipped
   // until the cursor reached another block containing editable text.
-  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
   await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
-    BLOCK_SELECTED_ATTRIBUTE,
+    "data-block-selected",
     "true",
   );
   await page.mouse.up();
-  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
   await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
-    BLOCK_SELECTED_ATTRIBUTE,
+    "data-block-selected",
     "true",
   );
 });
@@ -145,16 +143,16 @@ test("dragging from a contentless Counter anchors selection without incrementing
   );
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 8 });
-  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
   await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
-    BLOCK_SELECTED_ATTRIBUTE,
+    "data-block-selected",
     "true",
   );
   await page.mouse.up();
 
-  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
   await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
-    BLOCK_SELECTED_ATTRIBUTE,
+    "data-block-selected",
     "true",
   );
   await expect(button).toHaveText("Count: 2");
@@ -171,8 +169,8 @@ test("dragging within a contentless Counter selects only that block", async ({ p
   await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 4 });
   await page.mouse.up();
 
-  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(1);
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
   await expect(button).toHaveText("Count: 2");
 });
 
@@ -192,9 +190,9 @@ test("dragging from the empty right side of Counter starts structural selection"
   await page.mouse.move(to.x, to.y, { steps: 8 });
   await page.mouse.up();
 
-  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
   await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
-    BLOCK_SELECTED_ATTRIBUTE,
+    "data-block-selected",
     "true",
   );
   await expect(button).toHaveText("Count: 2");
@@ -204,19 +202,19 @@ test("Shift click ranges complete blocks", async ({ page }) => {
   const contents = page.locator("[data-block-content]");
   await contents.nth(0).click();
   await contents.nth(2).click({ modifiers: ["Shift"] });
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(3);
+  await expect(page.locator("[data-block-selected]")).toHaveCount(3);
 });
 
 test("Ctrl click toggles blocks with a pointer cursor", async ({ page }) => {
   const contents = page.locator("[data-block-content]");
   await contents.nth(0).click({ modifiers: ["Control"] });
   await contents.nth(1).click({ modifiers: ["Control"] });
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
+  await expect(page.locator("[data-block-selected]")).toHaveCount(2);
   await page.keyboard.down("Control");
   await expect(contents.nth(1)).toHaveCSS("cursor", "pointer");
   await page.keyboard.up("Control");
   await contents.nth(1).click({ modifiers: ["Control"] });
-  await expect(contents.nth(1).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(contents.nth(1).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
 });
 
 test("selecting a parent draws one selection rectangle around its subtree", async ({ page }) => {
@@ -224,7 +222,7 @@ test("selecting a parent draws one selection rectangle around its subtree", asyn
   const child = parent.locator(`.page-block-children ${BLOCK_ID_SELECTOR}`).last();
   await parent.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
 
-  await expect(parent).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(parent).toHaveAttribute("data-block-selected", "true");
   await expect(parent).toHaveCSS("background-color", "rgb(229, 223, 255)");
   const parentBox = await parent.boundingBox();
   const childBox = await child.boundingBox();
@@ -238,11 +236,11 @@ test("Alt selects block ranges and Alt+Shift moves a block", async ({ page }) =>
   const firstText = await contents.nth(0).textContent();
   await contents.nth(0).click();
   await page.keyboard.press("Alt+ArrowDown");
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(1);
+  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
   await page.keyboard.press("Alt+ArrowDown");
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
+  await expect(page.locator("[data-block-selected]")).toHaveCount(2);
   await page.keyboard.press("Alt+ArrowUp");
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(1);
+  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
   await page.keyboard.press("Alt+Shift+ArrowDown");
   await expect(page.locator("[data-block-content]").nth(1)).toHaveText(firstText ?? "");
 });
@@ -261,7 +259,7 @@ test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => 
 
   await expect(first.locator(BLOCK_ANCESTOR_XPATH)).toHaveCount(0);
   await expect(second.locator(BLOCK_ANCESTOR_XPATH)).toHaveCount(0);
-  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(2);
+  await expect(page.locator("[data-block-selected]")).toHaveCount(2);
 });
 
 test("Down follows wrapped visual lines at approximately the same x", async ({ page }) => {

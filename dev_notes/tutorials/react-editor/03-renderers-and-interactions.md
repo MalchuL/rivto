@@ -26,7 +26,7 @@ Root block element содержит:
 ```tsx
 data-rivto-block={block.id}
 data-type={markdownType(block)}
-data-selected={blockSelected}
+data-block-selected={blockSelected}
 ```
 
 Они используются:
@@ -288,4 +288,3 @@ Pointer gestures добавляют listeners вне React tree. Каждый pa
 
 Иначе stale handler продолжит вызывать commands после смены renderer или
 уничтожения editor.
-
