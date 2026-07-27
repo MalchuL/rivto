@@ -3,15 +3,16 @@ import type {
   EditorSelection,
   TextSelection,
 } from "@chulane/rivto";
-import { readEditorDOMSelection } from "../events/utils/selection/editor-dom-selection";
 import {
   useEditor,
+  useEditorMode,
   useEditorRoot,
   useKeyboardEvent,
+  useReactEditor,
 } from "../hooks";
 import { useEffect } from "react";
 import { reconcileCollapsedSelection } from "./utils/page-selection";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
 
 /** Resolves the edited block or all blocks in the active whole-block selection. */
 function collapseTargets(
@@ -33,27 +34,30 @@ function collapseTargets(
  */
 export function PageCollapsePlugin() {
   const editor = useEditor();
+  const reactEditor = useReactEditor();
+  const { mode } = useEditorMode();
   const { element: root } = useEditorRoot();
   const revision = editor.revision;
 
   useEffect(() => {
+    if (mode !== "block") return;
     const current = editor.selection.get();
     const next = reconcileCollapsedSelection(editor.getBlocks(), current);
     if (next !== current) {
-      editor.execute("selection.set", { selection: next });
+      editor.selection.set(next);
       // A native Range retains detached text nodes after React removes a
       // collapsed subtree. Clear it and focus the page's block-selection owner.
       root?.ownerDocument.getSelection()?.removeAllRanges();
       root?.focus({ preventScroll: true });
     }
-  }, [editor, revision, root]);
+  }, [editor, mode, revision, root]);
 
   const setCollapsed = (value: boolean | "toggle"): boolean => {
     if (!root) return false;
     const current = editor.selection.get();
     // Chromium may deliver the shortcut before its selectionchange event after
     // a click. Reading the native caret keeps the keybinding deterministic.
-    const nativeSelection = readEditorDOMSelection(root);
+    const nativeSelection = reactEditor.selection.readDOM();
     const selection = nativeSelection?.length ? nativeSelection : current;
     const ids = collapseTargets(selection);
     if (!ids.length) return false;

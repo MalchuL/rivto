@@ -1,6 +1,6 @@
 export * from "./blocks";
 export * from "./constants";
-export * from "./events";
+export * from "./managers";
 export * from "./editor-view";
 export * from "./hooks";
 export * from "./plugin-factories";
@@ -9,4 +9,4 @@ export { MarkdownContent } from "./blocks/markdown";
 export {
   readEditorDOMSelection,
   restoreEditorDOMSelection,
-} from "./events/utils/selection/editor-dom-selection";
+} from "./managers";

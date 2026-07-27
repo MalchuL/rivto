@@ -4,11 +4,12 @@ Review from the public composition inward:
 
 1. `demo/src/App.tsx` — core creation, functional plugin list, custom block
    registration, mode toolbar, and lifecycle.
-2. `packages/react/src/react-editor.tsx` — plugin setup/rollback, surfaces,
-   renderer registration, editor wrappers, and destruction.
-3. `packages/react/src/events/` — delegated DOM events, keyboard bindings,
-   focused utilities, ordering, root replacement, mode filtering, and shortcut
-   matching.
+2. `packages/react/src/react-editor.tsx` — construction/destruction order and
+   revision forwarding only.
+3. `packages/react/src/managers/` — focused ownership for blocks, renderers,
+   surfaces/wrappers, plugins, events, selection, and slash commands. Each
+   manager receives the complete ReactEditor owner, resolves dependencies
+   lazily, and includes focused tests.
 4. `packages/react/src/plugin-factories.tsx` — semantic built-in plugins and
    their mode ownership.
 5. `packages/react/src/surfaces/**` — page traversal versus edgeless root-card
@@ -21,7 +22,7 @@ Useful invariants:
 
 - Nothing under `src/` imports React, React DOM, or `@dnd-kit`.
 - React code does not import native Yjs.
-- A custom block uses one `registerBlock` call.
+- A custom block uses one `reactEditor.blocks.register` call.
 - Plugins are factories in `createReactEditor`, not JSX children.
 - Plugin setup is ordered, failure is atomic, and cleanup is reversed.
 - Later event handlers do not run after an earlier handler prevents default.

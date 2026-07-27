@@ -2,8 +2,7 @@ import {
   useState,
 } from "react";
 import {
-  useBlock,
-  useBlockTextEditing,
+  useBlockEditing,
 } from "../hooks";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
@@ -31,15 +30,14 @@ import {
  * @returns A stable raw editor and, while idle, its formatted preview.
  */
 export function MarkdownContent({ blockId }: { readonly blockId: string }) {
-  const { block } = useBlock(blockId);
-  const editing = useBlockTextEditing(blockId);
+  const editing = useBlockEditing(blockId);
   const [isEditing, setIsEditing] = useState(false);
-  const source = block?.content ?? "";
+  const source = editing.block?.content ?? "";
 
   return (
     <div className="markdown-content">
       <div
-        {...editing}
+        {...editing.attributes}
         className="page-block-content markdown-editor"
         role="textbox"
         aria-label="Markdown block content"

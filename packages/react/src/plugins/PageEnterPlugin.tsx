@@ -1,19 +1,19 @@
 import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
-import { readEditorDOMSelection } from "../events/utils/selection/editor-dom-selection";
 import {
   useEditor,
   useEditorRoot,
   useKeyboardEvent,
+  useReactEditor,
 } from "../hooks";
 import {
   focusBlock,
-} from "../events/utils/dom/block-dom";
+} from "../managers";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "../events/utils/keyboard/selection";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+} from "../managers";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
 
 /**
  * Installs outline block splitting for Page and Edgeless surfaces.
@@ -28,6 +28,7 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
  */
 export function PageEnterPlugin() {
   const editor = useEditor();
+  const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
 
   useKeyboardEvent({
@@ -37,8 +38,8 @@ export function PageEnterPlugin() {
     if (!root || !isEditableKeyboardEvent(event)) return false;
     // Read the key event's native caret synchronously. A newly focused editor
     // can receive Enter before the browser's deferred selectionchange event.
-    const nativeSelection = readEditorDOMSelection(root);
-    if (nativeSelection) editor.execute("selection.set", { selection: nativeSelection });
+    const nativeSelection = reactEditor.selection.readDOM();
+    if (nativeSelection) editor.selection.set(nativeSelection);
     const selection = nativeSelection ?? editor.selection.get();
     const initialTarget = firstKeyboardTarget(selection);
     if (!initialTarget || initialTarget.item.type === "edgeless") return false;
@@ -84,11 +85,11 @@ export function PageEnterPlugin() {
         });
       }
 
-      editor.execute("selection.set", { selection: [{
+      editor.selection.set([{
         type: "text",
         anchor: { blockId: nextBlockId, offset: 0 },
         head: { blockId: nextBlockId, offset: 0 },
-      }] });
+      }]);
     });
 
     if (!nextBlockId) return false;

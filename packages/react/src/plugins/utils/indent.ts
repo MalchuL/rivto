@@ -1,12 +1,9 @@
 import type { RivtoEditorApi } from "@chulane/rivto";
-import {
-  readEditorDOMSelection,
-  restoreEditorDOMSelection,
-} from "../../events/utils/selection/editor-dom-selection";
+import type { ReactSelectionManager } from "../../managers";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
-} from "../../events/utils/keyboard/selection";
+} from "../../managers";
 
 /**
  * Applies one semantic indent or outdent binding.
@@ -20,13 +17,14 @@ import {
  */
 export function applyIndentShortcut(
   editor: RivtoEditorApi,
+  selectionManager: ReactSelectionManager,
   root: HTMLElement,
   event: KeyboardEvent,
   outdent: boolean,
 ): boolean {
     const editable = isEditableKeyboardEvent(event);
-    const nativeSelection = editable ? readEditorDOMSelection(root) : undefined;
-    if (nativeSelection) editor.execute("selection.set", { selection: nativeSelection });
+    const nativeSelection = editable ? selectionManager.readDOM() : undefined;
+    if (nativeSelection) editor.selection.set(nativeSelection);
     const selection = nativeSelection ?? editor.selection.get();
     const target = firstKeyboardTarget(selection);
     if (!target) return false;
@@ -40,8 +38,8 @@ export function applyIndentShortcut(
     // a transient empty selectionchange. Re-publish the selection captured
     // before the command, then resolve its text endpoints in the committed DOM.
     requestAnimationFrame(() => {
-      editor.execute("selection.set", { selection });
-      restoreEditorDOMSelection(root, selection);
+      editor.selection.set(selection);
+      selectionManager.restoreDOM(selection);
     });
     return true;
 }

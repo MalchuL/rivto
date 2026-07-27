@@ -1,10 +1,10 @@
 import { useEditor, useEditorRoot, useKeyboardEvent } from "../hooks";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
 import {
   focusSelectionCaret,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "../events/utils/keyboard/selection";
+} from "../managers";
 
 /**
  * Deletes expanded text and whole-block page selections atomically.

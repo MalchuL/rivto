@@ -4,18 +4,18 @@ import {
   useEditorRoot,
   useKeyboardEvent,
 } from "../hooks";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
 import {
   findParentBlock,
   findPreviousEditableBlock,
   findRenderedBlock,
   focusBlock,
-} from "../events/utils/dom/block-dom";
+} from "../managers";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "../events/utils/keyboard/selection";
+} from "../managers";
 
 /**
  * Outdents a nested block when Backspace is pressed at offset zero.
@@ -74,11 +74,11 @@ export function BackwardBlockMergePlugin() {
     const previous = findPreviousEditableBlock(root, target.blockId);
     if (!previous) return false;
     const joinOffset = editor.mergeBlocks(previous.blockId, target.blockId);
-    editor.execute("selection.set", { selection: [{
+    editor.selection.set([{
       type: "text",
       anchor: { blockId: previous.blockId, offset: joinOffset },
       head: { blockId: previous.blockId, offset: joinOffset },
-    }] });
+    }]);
     requestAnimationFrame(() => focusBlock(root, previous.blockId, joinOffset));
     return true;
   });

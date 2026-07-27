@@ -71,7 +71,7 @@ Important ownership facts:
 - Plugins are installed **once at creation**, in declaration order. Setup is
   transactional: failure rolls back everything already registered.
 - Markdown is registered by default inside `ReactEditor`; other block types are
-  added with `reactEditor.registerBlock(...)`.
+  added with `reactEditor.blocks.register(...)`.
 
 ---
 
@@ -83,46 +83,48 @@ Read in this order. Each step answers one question.
 
 1. `demo/src/App.tsx` — real plugin list, keymap override example, custom blocks.
 2. `src/plugin-factories.tsx` — public plugin catalog and short descriptions.
-3. `src/react-editor.tsx` — public `ReactEditor` registration and plugin lifecycle.
+3. `src/react-editor.tsx` — manager construction, revision forwarding, and teardown.
+4. `src/managers/` — focused state ownership and public plugin APIs.
 
 Ask: *What does the runtime register, and who owns each registration?*
 
 ### Step B — Rendering (how pixels appear)
 
-4. `src/editor-view.tsx` — context provider, revision subscription, surface pick.
-5. `src/surfaces/page/PageSurface.tsx` + `PageBlock.tsx` — page outline.
-6. `src/blocks/block-view.tsx` + `block-wrapper.tsx` — DOM contract + decorators.
-7. `src/blocks/markdown.tsx` — default content renderer.
+5. `src/editor-view.tsx` — context provider, revision subscription, surface pick.
+6. `src/surfaces/page/PageSurface.tsx` + `PageBlock.tsx` — page outline.
+7. `src/blocks/block-view.tsx` + `block-wrapper.tsx` — DOM contract + decorators.
+8. `src/blocks/markdown.tsx` — default content renderer.
 
 Ask: *Who chooses the tree, who paints a block, who adds drag handles?*
 
 ### Step C — Data hooks (how React sees the document)
 
-8. `src/hooks/editor/use-editor.ts` / `use-editor-root.ts`
-9. `src/hooks/blocks/use-block.ts` / `use-block-text-editing.ts`
-10. `src/hooks/document/use-document.ts`
+9. `src/hooks/editor/use-editor.ts` / `use-editor-root.ts`
+10. `src/hooks/blocks/use-block.ts` / `use-block-editing.ts`
+11. `src/hooks/document/use-document.ts`
 
 Ask: *Why does typing update the document without local React state for content?*
 
 ### Step D — Selection (do not skip)
 
-11. [`docs/selection.md`](./selection.md) — full model and sync story.
-12. `src/editor/types.ts` + `src/managers/selection-manager.ts` (core).
-13. `src/plugins/text-selection-plugin.tsx` — browser ↔ portable bridge.
-14. `PageBlockSelectionPlugin` / `PageArrowPlugin` / `EdgelessSelectionPlugin`.
+12. [`docs/selection.md`](./selection.md) — full model and sync story.
+13. Core selection manager plus `src/managers/selection/selection-manager/`.
+14. `src/plugins/text-selection-plugin.tsx` — browser ↔ portable bridge.
+15. `PageBlockSelectionPlugin` / `PageArrowPlugin` / `EdgelessSelectionPlugin`.
 
 Ask: *Why are there two selections, and when does a drag become blocks vs text?*
 
 ### Step E — Interaction (how keys and pointers become commands)
 
-15. `src/events/` — `EditorEvent → DOMEditorEvents → KeyboardEditorEvents`
-16. One page plugin, e.g. `PageEnterPlugin.tsx` or `PageBackspacePlugin.tsx`
+16. `src/managers/events/` — `EditorEventManager → DOMEventManager →
+    KeyboardEventManager`
+17. One page plugin, e.g. `PageEnterPlugin.tsx` or `PageBackspacePlugin.tsx`
 
 Ask: *Where does Enter/Backspace live, and why is order of plugins important?*
 
 ### Step F — Second surface
 
-17. `src/surfaces/edgeless/` — same document, canvas layout + viewport gestures.
+18. `src/surfaces/edgeless/` — same document, canvas layout + viewport gestures.
 
 Ask: *What is shared between modes, and what is mode-specific?*
 
@@ -137,16 +139,24 @@ Ask: *What is shared between modes, and what is mode-specific?*
 
 ### `ReactEditor` (`react-editor.tsx`)
 
-Creation-time registry. Holds:
+Small coordinator. It holds the core reference, public managers, and a
+monotonic revision used to invalidate React. Concrete registries live in:
 
-- content **renderers** by block type
-- **surfaces** by mode (`block`, `edgeless`)
-- ordered **block wrappers** per mode
-- **mounted** plugin components and **editor wrappers**
-- unified **`events`** (`KeyboardEditorEvents`)
-- a monotonic **`revision`** used to invalidate React
+- `blocks` and `renderers`
+- `surfaces` (including block/editor wrappers)
+- `plugins` (setup lifecycle and globally mounted UI)
+- unified `events` (`KeyboardEventManager`)
+- `selection` and `slashCommands` delegates
 
 It does **not** render UI itself.
+
+Every manager is constructed with this complete runtime. Constructors retain
+the owner but defer sibling access until operations run, avoiding injected
+lifecycle callbacks without introducing a service container. Manager classes
+remain exported for typing; host code should use the owned instances.
+
+See [`managers.md`](./managers.md) for the public manager map and ownership
+rules.
 
 ### `EditorView` (`editor-view.tsx`)
 
@@ -154,7 +164,7 @@ React boundary. Responsibilities:
 
 - subscribe to `ReactEditor` via `useSyncExternalStore`
 - publish `{ editor, reactEditor, revision }` through context
-- hold the surface **root ref** and call `reactEditor.setRoot(...)`
+- hold the surface **root ref** and call `reactEditor.events.setRoot(...)`
 - compose editor wrappers → children + plugin components → active `Surface`
 
 It adds **no DOM wrapper**. Surfaces own the visible root element.
@@ -175,7 +185,7 @@ For each block ID, a surface roughly does:
 
 ```text
 useBlock(blockId)                 → detached snapshot + operations
-reactEditor.getRenderer(type)     → content component (e.g. MarkdownContent)
+reactEditor.renderers.get(type)   → content component (e.g. MarkdownContent)
 BlockWrapper                      → plugin decorators around a shell
   └─ fallback shell               → BlockView + controls + content + children
        └─ BlockView               → div with data-block-id / type / selected
@@ -192,7 +202,40 @@ Roles:
 
 A renderer receives `{ blockId }` and should resolve data through hooks.
 Default: `MarkdownContent`. Custom types register with
-`reactEditor.registerBlock({ definition, render, slashCommand? })`.
+`reactEditor.blocks.register({ definition, render, slashCommand? })`.
+
+`useBlockEditing` is the normal renderer entry point:
+
+```tsx
+const editing = useBlockEditing<{ count: number }>(
+  blockId,
+  { textEdit: false },
+);
+const count = editing.getProp("count") ?? 0;
+
+return (
+  <div {...editing.attributes}>
+    <button
+      onClick={(event) => {
+        if (!event.defaultPrevented) {
+          editing.setProp("count", (editing.getProp("count") ?? 0) + 1);
+        }
+      }}
+    >
+      Count: {count}
+    </button>
+  </div>
+);
+```
+
+The default attributes provide contenteditable synchronization. Contentless or
+control-based renderers pass `{ textEdit: false }` to opt their region into
+structural drag selection instead. `getProps` and `getProp` resolve current
+editor state when called; `setProps` patches several keys and `setProp` patches
+one validated key.
+
+See [`useBlockEditing`](./use-block-editing.md) for exact text, control, and
+mixed-renderer attribute placement.
 
 ### Hooks (public API surface for UI code)
 
@@ -203,7 +246,7 @@ Default: `MarkdownContent`. Custom types register with
 | `useEditorRoot` | Register/read the surface root element |
 | `useDocument` | Document model (roots via `document.document`) |
 | `useBlock` | Snapshot + bound commands for one ID |
-| `useBlockTextEditing` | Spread onto a plain-text `contenteditable` |
+| `useBlockEditing` | Renderer state, properties, commands, and text/structural attributes |
 | `useBlockSelection` | Whether a block is in the structural selection |
 | `useDOMEvent` / `useKeyboardEvent` | Register listeners/bindings from components |
 
@@ -216,7 +259,7 @@ Default: `MarkdownContent`. Custom types register with
 ```text
 createRivtoEditor
   → createReactEditor (install plugins, register Markdown)
-  → optional registerBlock for custom types
+  → optional blocks.register for custom types
   → insert initial content via core API
   → render <EditorView>
        → pick Surface for mode
@@ -228,7 +271,7 @@ createRivtoEditor
 
 ```text
 1. User types in contenteditable (.markdown-editor)
-2. useBlockTextEditing onInput → operations.setContent(plainText)
+2. useBlockEditing() onInput → operations.setContent(plainText)
 3. Core updates CRDT / document revision
 4. ReactEditor forwards revision → EditorView re-renders
 5. useBlock / MarkdownContent see new detached snapshot
@@ -242,7 +285,7 @@ documented in [`markdown-rendering.md`](./markdown-rendering.md).
 
 ```text
 1. Native keydown on root / window
-2. KeyboardEditorEvents matches binding IDs (and when predicates)
+2. KeyboardEventManager matches binding IDs (and `when` predicates)
 3. First handler returning true claims the event (preventDefault)
 4. Handler calls core commands (insertBlock, indentBlock, deleteSelection, …)
 5. Document revises → same React invalidation path as typing
@@ -260,7 +303,7 @@ Selection is the hardest subsystem. Full detail:
 ```text
 Browser Selection (DOM node + offset)
   ↔ textSelectionPlugin / pageSelectionPlugin / edgelessSelectionPlugin
-  ↔ editor.execute("selection.set" | "selection.clear")
+  ↔ editor.selection.set() | editor.selection.clear()
   ↔ SelectionManager list: text | block | edgeless items
   ↔ data-selected / data-text-selected / CSS Highlight paint
 ```
@@ -297,16 +340,23 @@ Plugins receive the complete `ReactEditor` runtime:
 | API | Use |
 | --- | --- |
 | `reactEditor.events.on` / `.bind` | DOM + keyboard |
-| `reactEditor.mount(Component, mode?)` | Headless or overlay UI beside the surface |
-| `reactEditor.wrapEditor(Wrapper, mode?)` | Wrap the complete editor UI (e.g. DnD context) |
-| `reactEditor.registerSurface(mode, Surface)` | Page / edgeless root |
-| `reactEditor.registerBlockWrapper(mode, Wrapper)` | Ordered block decorator |
+| `reactEditor.plugins.mount(Component)` | Mode-free headless or overlay UI beside the surface |
+| `reactEditor.surfaces.registerEditorWrapper(Wrapper, mode?)` | Wrap the complete editor UI (e.g. DnD context) |
+| `reactEditor.surfaces.register(mode, Surface)` | Page / edgeless root |
+| `reactEditor.surfaces.registerBlockWrapper(mode, Wrapper)` | Ordered block decorator |
+| `reactEditor.blocks.register(...)` | Atomic core definition + renderer + conversion command |
+| `reactEditor.renderers.register(type, Renderer)` | Low-level renderer-only registration |
+| `reactEditor.selection` | Active-root DOM selection conversion and highlighting |
+| `reactEditor.slashCommands` | React-owned registration over the shared core slash manager |
 | `reactEditor.events.getRoot()` | Read the current committed surface root |
 | `reactEditor.editor` | Core runtime, including live mode and selection |
 
 Presentation registrations are automatically owned by the active plugin and
 may also be created dynamically after editor construction. Every method returns
 an idempotent disposer. Mutable registration collections remain private.
+Keyed managers additionally expose `delete(key)`; ordered wrappers, mounted
+components, and DOM listeners use exact returned disposers because duplicates
+are valid.
 
 Factories in `plugin-factories.tsx` are the supported public catalog. Internal
 implementations live under `src/plugins/`. Prefer factories in application code.
@@ -331,9 +381,9 @@ required context.
 Public `reactEditor.events` is one object:
 
 ```text
-EditorEvent
-  └─ DOMEditorEvents
-       └─ KeyboardEditorEvents   ← this is what you hold
+EditorEventManager
+  └─ DOMEventManager
+       └─ KeyboardEventManager   ← this is what you hold
 ```
 
 - Handlers return `true` to claim; claimed events get `preventDefault` and stop
@@ -359,10 +409,17 @@ These markers are the integration surface between React and delegated events:
 | `data-block-type` | Persisted native type |
 | `data-selected` | Whole-block selection (attribute omitted when false) |
 | `data-block-content` | Plain-text editable host for typing/selection |
+| `data-block-selection-anchor` | Renderer region that may start structural drag selection |
 | `data-text-selected` | Fallback highlight for cross-block text ranges |
 
 Plugins and event utilities query these selectors. Do not replace them with CSS
 class names if you want events and selection to keep working.
+
+Custom controls opt into whole-block drag anchoring by placing
+`data-block-selection-anchor` on the exact interactive region. A normal click
+retains the control's behavior, while movement beyond the selection threshold
+starts structural selection. Because browsers may still dispatch `click` after
+pointer-up, the control must return early when `event.defaultPrevented` is true.
 
 ### Detached snapshots vs live CRDT
 
@@ -392,7 +449,8 @@ collapse/expand commands check `editor.mode.get() === "block"`.
 ### Revision is the React heartbeat
 
 There is no Redux-style store in this package. Core `subscribe` →
-`ReactEditor.changed()` → `revision++` → `EditorView` context update → hooks
+core subscription or manager `ReactEditor.invalidate()` → `revision++` →
+`EditorView` context update → hooks
 re-read. One subscription at the view boundary; hooks reuse that revision.
 
 ### Plugin order is behavior
@@ -425,7 +483,7 @@ packages/react/
     editor-view.tsx           React provider / surface composition
     plugin-factories.tsx      Public plugins
     plugins/                  Plugin implementations
-    events/                   DOM + keyboard runtime + selection helpers
+    managers/events/          DOM + keyboard runtime and event utilities
     blocks/                   BlockView, wrappers, Markdown
     surfaces/page|edgeless/   Mode presentations
     hooks/                    Document / block / editor / event hooks
@@ -446,7 +504,7 @@ packages/react/
 | Decorate every block | `registerBlockWrapper` (+ `wrapEditor` if shared context is needed) |
 | Change page layout | `PageSurface` / `PageBlock` shell only |
 | Change canvas UX | `EdgelessSurface` / edgeless plugins |
-| Persist different text model | Core + `useBlockTextEditing` / custom renderer together |
+| Persist different text model | Core + `useBlockEditing` / custom renderer together |
 | Understand a shortcut | Binding ID → plugin factory → `demo/KEYMAP.md` |
 | Understand selection | [`selection.md`](./selection.md), then `text-selection-plugin.tsx` |
 

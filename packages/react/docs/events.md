@@ -3,12 +3,12 @@
 `ReactEditor` owns one event object:
 
 ```text
-EditorEvent
-  └─ DOMEditorEvents
-       └─ KeyboardEditorEvents
+EditorEventManager
+  └─ DOMEventManager
+       └─ KeyboardEventManager
 ```
 
-The public `reactEditor.events` value is `KeyboardEditorEvents`, so the same
+The public `reactEditor.events` value is `KeyboardEventManager`, so the same
 ordered runtime handles ordinary DOM events and semantic keyboard actions.
 There is no second keyboard manager.
 
@@ -105,6 +105,10 @@ createReactEditor({
 An override replaces every default shortcut for that binding ID. An empty
 array disables it. Unknown IDs do nothing. Duplicate registered IDs throw
 immediately, and plugin setup rolls back registrations it already made.
+
+`reactEditor.events.delete(bindingId)` explicitly removes a keyboard binding
+and releases its ID for reuse. Ordinary DOM listeners have no stable ID and
+must be removed with the disposer returned by `events.on(...)`.
 
 `KEYBOARD_BINDING_IDS` and `BUILTIN_KEYMAP` are exported for discoverability.
 The complete demo mapping is listed in [`demo/KEYMAP.md`](../../../demo/KEYMAP.md).

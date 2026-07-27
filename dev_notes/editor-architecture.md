@@ -28,28 +28,36 @@ drag boundaries, canvas viewport state, and React subscriptions.
 The host creates both runtimes. It destroys `ReactEditor` first and then the
 core editor. Destroying the React runtime never destroys the document runtime.
 
+Each React manager retains the complete owning `ReactEditor` instead of
+receiving sibling managers, lifecycle interfaces, or mode/root callbacks.
+Dependencies are resolved only when manager operations run. ReactEditor creates
+managers in dependency-safe order, so no constructor reads a sibling field from
+the partially initialized owner.
+
 ## Extension flow
 
 `createReactEditor` installs functional plugins in declaration order. A plugin
 receives the complete public `ReactEditor`: `editor` exposes the core runtime,
-`events` handles DOM listeners and keyboard bindings, and public methods
-register surfaces, mounted UI, editor wrappers, and mode-specific block
-wrappers. The underlying registries remain private. Owned registrations roll
-back if setup fails and clean up in reverse order.
+`events` handles DOM listeners and keyboard bindings, and focused managers
+register blocks, renderers, surfaces, mounted UI, editor wrappers, selections,
+slash commands, and mode-specific block wrappers. Mutable collections remain
+private inside their manager. Owned registrations roll back if setup fails and
+clean up in reverse order.
 
-Those presentation methods also support dynamic registration after creation.
+Those manager registration methods also support dynamic registration after creation.
 Their idempotent disposers remove the exact registration, while
 `ReactEditor.destroy()` removes any registrations the host left active.
 
-The event hierarchy is `EditorEvent → DOMEditorEvents →
-KeyboardEditorEvents`. The React runtime owns only the final object. It follows
+The event hierarchy is `EditorEventManager → DOMEventManager →
+KeyboardEventManager`. The React runtime owns only the final object. It follows
 the active surface across root/document/window realms and resolves DOM markers
 centrally. Keyboard plugins define semantic actions and conditions; the event
 runtime alone parses keys and modifiers.
 
-`ReactEditor.registerBlock` is the only React block-extension entry point. It
+`reactEditor.blocks.register` is the normal React block-extension entry point. It
 atomically connects one core `BlockDefinition`, one renderer, and an optional
-slash conversion command. Persisted unknown types remain lossless.
+slash conversion command. `reactEditor.renderers.register` is the lower-level
+escape hatch for a persisted type whose core definition is owned elsewhere.
 
 ## Rendering flow
 

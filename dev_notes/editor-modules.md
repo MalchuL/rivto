@@ -15,10 +15,16 @@ React dependency.
 
 ## `@chulane/rivto-react`
 
-- `react-editor.tsx` — React runtime, functional plugin lifecycle, surfaces,
-  renderers, editor wrappers, and atomic block registration.
-- `events` — the inherited `EditorEvent → DOMEditorEvents →
-  KeyboardEditorEvents` runtime, keymap, and event-specific utilities.
+- `react-editor.tsx` — small coordinator that constructs public managers and
+  forwards revisions. Every manager receives this complete owner and lazily
+  resolves core or sibling capabilities through it.
+- `managers/blocks` — atomic block registration and renderer lookup.
+- `managers/events` — the inherited `EditorEventManager → DOMEventManager →
+  KeyboardEventManager` runtime, keymap, and event-specific utilities.
+- `managers/plugins` — plugin setup, rollback, cleanup, and mounted UI.
+- `managers/surfaces` — surfaces plus ordered block/editor wrappers.
+- `managers/selection` / `managers/slash` — React-aware delegates over the
+  corresponding core managers.
 - `editor-view.tsx` / `hooks` / `blocks` — React context, subscriptions,
   `BlockView`, the plugin-resolved `BlockWrapper`, editing hooks, DOM selection
   conversion, and Markdown.
@@ -33,4 +39,4 @@ React dependency.
 `demo` is a consumer, not a second editor implementation. It owns initial
 content, the mode toolbar, theme overrides, and the Slider/Counter examples.
 Each example registers its definition, renderer, and slash conversion through
-one `ReactEditor.registerBlock` call.
+one `reactEditor.blocks.register` call.

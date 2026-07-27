@@ -1,4 +1,5 @@
 export * from "./command-registry";
+export * from "./clipboard-manager";
 export * from "./mode-manager";
 export * from "./selection-manager";
 export * from "./slash-command-manager";

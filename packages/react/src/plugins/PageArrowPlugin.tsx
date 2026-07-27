@@ -6,21 +6,22 @@ import type {
 } from "@chulane/rivto";
 import { BLOCK_ID_ATTRIBUTE } from "../constants";
 import {
-  readEditorDOMSelection,
-  restoreEditorDOMSelection,
-} from "../events/utils/selection/editor-dom-selection";
-import {
   useEditor,
   useEditorRoot,
   useKeyboardEvent,
+  useReactEditor,
 } from "../hooks";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import {
+  BUILTIN_KEYMAP,
+  KEYBOARD_BINDING_IDS,
+  type ReactSelectionManager,
+} from "../managers";
 import {
   findNextEditableBlock,
   findPreviousEditableBlock,
   focusBlock,
   verticalCaretPosition,
-} from "../events/utils/dom/block-dom";
+} from "../managers";
 import {
   adjacentBlockSelection,
   blockSelection,
@@ -54,12 +55,12 @@ function textSelectionEdge(
 }
 
 function currentSelection(
-  root: HTMLElement,
+  selectionManager: ReactSelectionManager,
   editor: ReturnType<typeof useEditor>,
 ): EditorSelection {
   const managed = editor.selection.get();
   // A click followed immediately by a key can precede `selectionchange`.
-  return managed.length ? managed : readEditorDOMSelection(root) ?? [];
+  return managed.length ? managed : selectionManager.readDOM() ?? [];
 }
 
 function setCaret(
@@ -67,9 +68,7 @@ function setCaret(
   editor: ReturnType<typeof useEditor>,
   position: EditorPosition,
 ): void {
-  editor.execute("selection.set", {
-    selection: [{ type: "text", anchor: position, head: position }],
-  });
+  editor.selection.set([{ type: "text", anchor: position, head: position }]);
   focusBlock(root, position.blockId, position.offset);
 }
 
@@ -89,11 +88,12 @@ function focusBlockSelection(root: HTMLElement, blockId: string): void {
  */
 export function CaretNavigationPlugin() {
   const editor = useEditor();
+  const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
 
   const movePlain = (direction: "left" | "right" | VerticalDirection): boolean => {
     if (!root) return false;
-    const selection = currentSelection(root, editor);
+    const selection = currentSelection(reactEditor.selection, editor);
     const text = selection.find((item): item is TextSelection => item.type === "text");
     if (!text) return false;
     if (!collapsed(text)) {
@@ -123,20 +123,20 @@ export function CaretNavigationPlugin() {
 
   const extendText = (direction: VerticalDirection): boolean => {
     if (!root) return false;
-    const selection = currentSelection(root, editor);
+    const selection = currentSelection(reactEditor.selection, editor);
     const text = selection.find((item): item is TextSelection => item.type === "text");
     if (!text) return false;
     const moved = verticalCaretPosition(root, text.head, direction);
     if (!moved) return false;
     if (moved.blockId !== text.anchor.blockId) {
       const next = blockSelection(editor.getBlocks(), text.anchor.blockId, moved.blockId);
-      editor.execute("selection.set", { selection: [next] });
+      editor.selection.set([next]);
       focusBlockSelection(root, next.focusBlockId);
       return true;
     }
     const next: EditorSelection = [{ type: "text", anchor: text.anchor, head: moved }];
-    editor.execute("selection.set", { selection: next });
-    restoreEditorDOMSelection(root, next);
+    editor.selection.set(next);
+    reactEditor.selection.restoreDOM(next);
     return true;
   };
 
@@ -170,31 +170,32 @@ export function CaretNavigationPlugin() {
 /** Owns movement and directional growth of whole-block selections. */
 export function BlockSelectionNavigationPlugin() {
   const editor = useEditor();
+  const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
 
   const move = (direction: VerticalDirection, extend: boolean): boolean => {
     if (!root) return false;
-    const blocks = currentSelection(root, editor)
+    const blocks = currentSelection(reactEditor.selection, editor)
       .find((item): item is BlockSelection => item.type === "block");
     if (!blocks) return false;
     const next = extend
       ? extendBlockSelection(editor.getBlocks(), blocks, direction)
       : adjacentBlockSelection(editor.getBlocks(), blocks, direction);
-    editor.execute("selection.set", { selection: [next] });
+    editor.selection.set([next]);
     focusBlockSelection(root, next.focusBlockId);
     return true;
   };
 
   const grow = (direction: VerticalDirection): boolean => {
     if (!root) return false;
-    const selection = currentSelection(root, editor);
+    const selection = currentSelection(reactEditor.selection, editor);
     const blocks = selection.find((item): item is BlockSelection => item.type === "block");
     const text = selection.find((item): item is TextSelection => item.type === "text");
     const next = blocks
       ? extendBlockSelection(editor.getBlocks(), blocks, direction)
       : text ? blockSelection(editor.getBlocks(), text.head.blockId) : undefined;
     if (!next) return false;
-    editor.execute("selection.set", { selection: [next] });
+    editor.selection.set([next]);
     focusBlockSelection(root, next.focusBlockId);
     return true;
   };
@@ -217,11 +218,12 @@ export function BlockSelectionNavigationPlugin() {
 /** Moves the active block or eligible same-parent block selection structurally. */
 export function KeyboardBlockMovePlugin() {
   const editor = useEditor();
+  const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
 
   const move = (direction: VerticalDirection): boolean => {
     if (!root) return false;
-    const selection = currentSelection(root, editor);
+    const selection = currentSelection(reactEditor.selection, editor);
     const text = selection.find((item): item is TextSelection => item.type === "text");
     const blocks = selection.find((item): item is BlockSelection => item.type === "block");
     const activeId = text?.head.blockId ?? blocks?.focusBlockId;
@@ -231,14 +233,12 @@ export function KeyboardBlockMovePlugin() {
     if (!placement) return false;
     editor.moveBlocks(roots.ids, placement.targetId, placement.position);
     if (roots.grouped && roots.selection) {
-      editor.execute("selection.set", { selection: [roots.selection] });
+      editor.selection.set([roots.selection]);
     } else if (blocks) {
-      editor.execute("selection.set", {
-        selection: [blockSelection(editor.getBlocks(), activeId)],
-      });
+      editor.selection.set([blockSelection(editor.getBlocks(), activeId)]);
     }
     requestAnimationFrame(() => {
-      if (text && !blocks) restoreEditorDOMSelection(root, selection);
+      if (text && !blocks) reactEditor.selection.restoreDOM(selection);
       else focusBlockSelection(root, activeId);
     });
     return true;

@@ -1,0 +1,220 @@
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  type HTMLAttributes,
+  type RefObject,
+} from "react";
+import {
+  BLOCK_CONTENT_ATTRIBUTE,
+  BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
+} from "../../constants";
+import { useEditorContext } from "../../editor-context";
+import {
+  restoreDOMSelection,
+  saveDOMSelection,
+} from "../../managers";
+import {
+  useBlock,
+  type UseBlockResult,
+} from "./use-block";
+
+/** Selects which browser interaction attributes the hook returns. */
+export interface UseBlockEditingOptions<TextEdit extends boolean = boolean> {
+  /**
+   * Enables collaborative plain-text contenteditable synchronization.
+   *
+ * True by default. Set this to false for a contentless or control-based custom
+ * block that should return a structural-selection anchor instead.
+   */
+  readonly textEdit?: TextEdit;
+}
+
+/** Props spread onto a collaborative plain-text contenteditable element. */
+export interface BlockTextEditingAttributes {
+  /** Ref used to synchronize external content and preserve DOM selections. */
+  readonly ref: RefObject<HTMLDivElement | null>;
+  /** Native plain-text editing mode; rich HTML is not persisted by this hook. */
+  readonly contentEditable: "plaintext-only";
+  /** Acknowledges that the browser, rather than React children, owns the text. */
+  readonly suppressContentEditableWarning: true;
+  /** Stable marker used by delegated events and DOM-selection utilities. */
+  readonly [BLOCK_CONTENT_ATTRIBUTE]: "";
+  /** Persists native browser edits through the block command API. */
+  readonly onInput: NonNullable<HTMLAttributes<HTMLDivElement>["onInput"]>;
+  /** Defers synchronization while an IME composition is active. */
+  readonly onCompositionStart: NonNullable<HTMLAttributes<HTMLDivElement>["onCompositionStart"]>;
+  /** Commits the completed IME composition as one plain-text update. */
+  readonly onCompositionEnd: NonNullable<HTMLAttributes<HTMLDivElement>["onCompositionEnd"]>;
+}
+
+/** Props spread onto a renderer region that anchors structural selection. */
+export interface BlockStructuralEditingAttributes {
+  /**
+   * Presence marker consumed by TextSelectionPlugin.
+   *
+   * Interactive elements must ignore clicks whose event is `defaultPrevented`,
+   * because a completed pointer drag claims the browser's synthetic click.
+   */
+  readonly [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "";
+}
+
+/** Mode-specific DOM attributes returned by {@link useBlockEditing}. */
+export type BlockEditingAttributes<TextEdit extends boolean> = TextEdit extends true
+  ? BlockTextEditingAttributes
+  : BlockStructuralEditingAttributes;
+
+/**
+ * Renderer-facing block state, property methods, commands, and DOM attributes.
+ *
+ * `block` is the reactive detached snapshot from `useBlock`. Imperative getters
+ * resolve the latest editor state when called, which makes them safe inside
+ * callbacks created during an older render.
+ */
+export interface UseBlockEditingResult<
+  Props extends object,
+  TextEdit extends boolean,
+> extends UseBlockResult {
+  /** Reads the latest complete property object, or undefined after deletion. */
+  readonly getProps: () => Readonly<Props> | undefined;
+  /** Reads one latest property value, or undefined after deletion/removal. */
+  readonly getProp: <Key extends keyof Props>(key: Key) => Props[Key] | undefined;
+  /** Validates and patches multiple native properties without replacing others. */
+  readonly setProps: (props: Partial<Props>) => void;
+  /** Validates and sets one native property; undefined removes that key. */
+  readonly setProp: <Key extends keyof Props>(key: Key, value: Props[Key] | undefined) => void;
+  /** DOM props for the requested text or structural editing mode. */
+  readonly attributes: BlockEditingAttributes<TextEdit>;
+}
+
+/**
+ * Connects a renderer to one block's state, properties, and browser interaction.
+ *
+ * The hook always creates the same React refs, effects, and callbacks, even
+ * when `textEdit` changes. Only the returned `attributes` object varies, so
+ * changing mode cannot violate React's hook-order rules.
+ *
+ * In text mode, external commands, undo/redo, and remote CRDT updates reconcile
+ * into the contenteditable before paint. DOM selection offsets are saved and
+ * restored when replacement is necessary, while IME composition owns the DOM
+ * until composition end.
+ *
+ * In structural mode, the returned presence marker explicitly opts the spread
+ * region into whole-block drag anchoring. Enter/Tab behavior, clipboard policy,
+ * block selection, and slash commands remain plugin responsibilities.
+ *
+ * @example
+ * ```tsx
+ * const editing = useBlockEditing<{ count: number }>(
+ *   blockId,
+ *   { textEdit: false },
+ * );
+ * return (
+ *   <button {...editing.attributes}>
+ *     Count: {editing.getProp("count") ?? 0}
+ *   </button>
+ * );
+ * ```
+ *
+ * @param blockId - Stable ID permanently bound to returned methods.
+ * @param options - Interaction mode; collaborative text editing is the default.
+ * @returns Reactive block state, current-value property methods, commands, and DOM attributes.
+ * @throws If called outside an EditorView subtree.
+ */
+export function useBlockEditing<Props extends object = Record<string, unknown>>(
+  blockId: string,
+  options: { readonly textEdit: false },
+): UseBlockEditingResult<Props, false>;
+export function useBlockEditing<Props extends object = Record<string, unknown>>(
+  blockId: string,
+  options?: { readonly textEdit?: true },
+): UseBlockEditingResult<Props, true>;
+export function useBlockEditing<Props extends object = Record<string, unknown>>(
+  blockId: string,
+  options: UseBlockEditingOptions,
+): UseBlockEditingResult<Props, boolean>;
+export function useBlockEditing<Props extends object = Record<string, unknown>>(
+  blockId: string,
+  options: UseBlockEditingOptions = {},
+): UseBlockEditingResult<Props, boolean> {
+  const { editor } = useEditorContext();
+  const blockResult = useBlock(blockId);
+  const elementRef = useRef<HTMLDivElement>(null);
+  const composingRef = useRef(false);
+  const textEdit = options.textEdit !== false;
+
+  // Reconcile command-driven or remote content without treating the detached
+  // block snapshot as mutable React state. Structural mode never attaches this
+  // ref, but retaining the effect keeps hook ordering stable across modes.
+  useLayoutEffect(() => {
+    if (!textEdit) return;
+    const element = elementRef.current;
+    if (!element || composingRef.current) return;
+
+    const content = blockResult.block?.content ?? "";
+    if (element.textContent === content) return;
+
+    const selection = saveDOMSelection(element);
+    element.textContent = content;
+    restoreDOMSelection(element, selection);
+  }, [blockResult.block?.content, textEdit]);
+
+  const commit = useCallback((element: HTMLDivElement) => {
+    // ponytail: composition commits whole plain text; use beforeinput deltas if
+    // concurrent character-level IME merging becomes a demonstrated need.
+    blockResult.operations.setContent(element.textContent ?? "");
+  }, [blockResult.operations]);
+
+  const onInput = useCallback<BlockTextEditingAttributes["onInput"]>((event) => {
+    if (!composingRef.current) commit(event.currentTarget);
+  }, [commit]);
+
+  const onCompositionStart = useCallback<BlockTextEditingAttributes["onCompositionStart"]>(() => {
+    composingRef.current = true;
+  }, []);
+
+  const onCompositionEnd = useCallback<BlockTextEditingAttributes["onCompositionEnd"]>((event) => {
+    composingRef.current = false;
+    commit(event.currentTarget);
+  }, [commit]);
+
+  const getProps = useCallback((): Readonly<Props> | undefined => (
+    editor.getBlock(blockId)?.props as Props | undefined
+  ), [blockId, editor]);
+
+  const getProp = useCallback(<Key extends keyof Props,>(key: Key): Props[Key] | undefined => (
+    getProps()?.[key]
+  ), [getProps]);
+
+  const setProps = useCallback((props: Partial<Props>): void => {
+    editor.updateBlock(blockId, { props: props as Record<string, unknown> });
+  }, [blockId, editor]);
+
+  const setProp = useCallback(<Key extends keyof Props,>(
+    key: Key,
+    value: Props[Key] | undefined,
+  ): void => {
+    editor.setBlockProp(blockId, String(key), value);
+  }, [blockId, editor]);
+
+  const attributes: BlockTextEditingAttributes | BlockStructuralEditingAttributes = textEdit
+    ? {
+      ref: elementRef,
+      contentEditable: "plaintext-only",
+      suppressContentEditableWarning: true,
+      [BLOCK_CONTENT_ATTRIBUTE]: "",
+      onInput,
+      onCompositionStart,
+      onCompositionEnd,
+    }
+    : { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
+
+  return {
+    ...blockResult,
+    getProps,
+    getProp,
+    setProps,
+    setProp,
+    attributes,
+  } as UseBlockEditingResult<Props, boolean>;
+}

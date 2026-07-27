@@ -3,12 +3,13 @@ import { BLOCK_CONTENT_SELECTOR } from "../constants";
 import {
   useDOMEvent,
   useEditor,
+  useEditorMode,
   useEditorRoot,
   useKeyboardEvent,
 } from "../hooks";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
 import {
   owningRootIds,
   rootsInRect,
@@ -26,8 +27,8 @@ const HANDLE_SELECTOR = "[data-edgeless-drag-handle], [data-edgeless-resize-hand
 
 /** Publishes one root-only edgeless selection. */
 function selectRoots(editor: ReturnType<typeof useEditor>, blockIds: string[]): void {
-  if (!blockIds.length) editor.execute("selection.clear");
-  else editor.execute("selection.set", { selection: [{ type: "edgeless", blockIds }] });
+  if (!blockIds.length) editor.selection.clear();
+  else editor.selection.set([{ type: "edgeless", blockIds }]);
 }
 
 /** Returns true for controls that retain their normal interaction without Primary. */
@@ -45,6 +46,7 @@ function isInteractive(target: Element): boolean {
  */
 export function EdgelessSelectionPlugin() {
   const editor = useEditor();
+  const { mode } = useEditorMode();
   const { element: root } = useEditorRoot();
   const gesture = useRef<RectangleGesture | null>(null);
   const [rectangle, setRectangle] = useState<EdgelessRect | null>(null);
@@ -53,12 +55,17 @@ export function EdgelessSelectionPlugin() {
   // temporarily publish a block selection. In edgeless mode, a block-only
   // result means its unique owning root objects.
   useEffect(() => {
+    if (mode !== "edgeless") {
+      gesture.current = null;
+      setRectangle(null);
+      return;
+    }
     const selection = editor.selection.get();
     if (selection.some((item) => item.type === "text")) return;
     const blockIds = selection.flatMap((item) => item.type === "block" ? item.blockIds : []);
     if (!blockIds.length) return;
     selectRoots(editor, owningRootIds(editor.getBlocks(), blockIds));
-  }, [editor, editor.revision]);
+  }, [editor, editor.revision, mode]);
 
   useDOMEvent("pointerdown", ({ event }) => {
     if (event.button !== 0 || !(event.target instanceof Element) || !root) return false;
@@ -88,10 +95,10 @@ export function EdgelessSelectionPlugin() {
 
     if (event.target.closest(".edgeless-zoom-controls")) return false;
     root.focus({ preventScroll: true });
-    editor.execute("selection.clear");
+    editor.selection.clear();
     gesture.current = { x: event.clientX, y: event.clientY, moved: false };
     return true;
-  }, { capture: true });
+  }, { capture: true, mode: "edgeless" });
 
   useDOMEvent("pointermove", ({ event }) => {
     const start = gesture.current;
@@ -112,7 +119,7 @@ export function EdgelessSelectionPlugin() {
     });
     selectRoots(editor, rootsInRect(cards, next));
     return true;
-  }, { target: "window", passive: false });
+  }, { target: "window", mode: "edgeless", passive: false });
 
   const stopRectangle = () => {
     if (!gesture.current) return false;
@@ -120,8 +127,8 @@ export function EdgelessSelectionPlugin() {
     setRectangle(null);
     return false;
   };
-  useDOMEvent("pointerup", stopRectangle, { target: "window" });
-  useDOMEvent("pointercancel", stopRectangle, { target: "window" });
+  useDOMEvent("pointerup", stopRectangle, { target: "window", mode: "edgeless" });
+  useDOMEvent("pointercancel", stopRectangle, { target: "window", mode: "edgeless" });
 
   useKeyboardEvent({
     id: KEYBOARD_BINDING_IDS.edgelessSelectionClear,
@@ -134,7 +141,7 @@ export function EdgelessSelectionPlugin() {
     if (!root) return false;
     const selection = editor.selection.get().find((item): item is EdgelessSelection => item.type === "edgeless");
     if (!selection) return false;
-    editor.execute("selection.clear");
+    editor.selection.clear();
     root.focus({ preventScroll: true });
     return true;
   });

@@ -88,9 +88,9 @@ Meaning:
 - exact partial text at the ends (`A` and `C`);
 - every fully covered middle block (`B`) as a whole-block item.
 
-Commands that mutate content call `normalizeSelection()` in
-`src/editor/clipboard.ts`, which collapses the list into one document-order
-`start`/`end` range before Copy/Cut/Paste/delete.
+Commands that mutate content call `editor.selection.normalize()`, which
+collapses the list into one document-order `start`/`end` range before
+Copy/Cut/Paste/delete.
 
 ### Direction is intentional
 
@@ -106,23 +106,29 @@ Both are available because direction is preserved until a mutator normalizes.
 
 ### Selection is local, not collaborative
 
-`SelectionManager` (`src/managers/selection-manager.ts`) stores a detached copy
+`SelectionManager` (`src/managers/selection-manager/selection-manager.ts`) stores a detached copy
 per editor session. It is not in the CRDT document. Reasons: different users
 have different carets; caret churn is high; reloads do not need old carets.
 
-Public writes go through commands:
+Use the editor-owned selection manager:
 
 ```ts
-editor.execute("selection.set", { selection });
-editor.execute("selection.clear");
+editor.selection.set(selection);
+editor.selection.clear();
 ```
 
-Never mutate the array returned by `editor.selection.get()` — it is a clone,
-but writing through private manager APIs bypasses validation.
+Never mutate the array returned by `editor.selection.get()` — it is a clone.
+Because the manager owns its editor, `set()` validates against the latest
+document and active mode before publishing.
+
+`reactEditor.selection` is DOM-only. Its `readDOM`, `restoreDOM`,
+`clearDOMHighlight`, and `updateDOMHighlight` methods always resolve the current
+surface root through the event manager. Structured state always goes through
+`reactEditor.editor.selection`.
 
 ### Validation and reconciliation (`RivtoEditor`)
 
-On `selection.set`:
+On `editor.selection.set()` (and its compatibility `selection.set` command):
 
 - text positions must exist; offsets must be integers in
   `0 … content.length`;
@@ -147,9 +153,8 @@ endpoints become their collapsed ancestor (often converting text → block).
 
 | Layer | Owner | Responsibility |
 | --- | --- | --- |
-| Portable list | `@chulane/rivto` `SelectionManager` | Store, clone, notify |
-| Validation / reconcile | `RivtoEditor` | IDs, offsets, mode, tree order |
-| Normalize for mutation | `clipboard.ts` `normalizeSelection` | Direction → start/end |
+| Portable list and mutation range | `@chulane/rivto` `SelectionManager` | Store, validate, normalize, delete, notify |
+| Reconcile after document changes | `RivtoEditor` | Repair IDs, offsets, mode, tree order |
 | DOM ↔ portable bridge | `textSelectionPlugin` | Pointer + `selectionchange` |
 | Page whole-block UX | `pageSelectionPlugin` | Ctrl/Cmd click toggle |
 | Caret / Shift+Arrow | `caretNavigationPlugin`, `blockSelectionNavigationPlugin` | Keyboard |
@@ -171,7 +176,8 @@ Selection code does not care about React component trees. It queries:
 | `data-block-id` | `BlockView` | Locate block containers |
 | `data-block-type` | `BlockView` | Type metadata |
 | `data-selected` | `BlockView` when surface says selected | Whole-block chrome |
-| `data-block-content` | `useBlockTextEditing` | Editable host / offset origin |
+| `data-block-content` | `useBlockEditing()` | Editable host / offset origin |
+| `data-block-selection-anchor` | `useBlockEditing({ textEdit: false })` | Structural drag anchor |
 | `data-text-selected` | highlight fallback | Coarse cross-block paint |
 | `data-block-selecting` | page block plugin | Root cursor while Ctrl/Cmd held |
 | `data-edgeless-root` | edgeless surface | Object selection target |
@@ -184,7 +190,7 @@ Markdown preview HTML. That matches persisted `block.content`.
 ## 5. Text selection (page and inside cards)
 
 Implementation: `plugins/text-selection-plugin.tsx` +
-`events/utils/selection/editor-dom-selection.ts`.
+`managers/selection/selection-manager/utils/editor-dom-selection.ts`.
 
 ### Same-block (browser owns the gesture)
 
@@ -194,7 +200,7 @@ pointerdown inside [data-block-content]
   → browser draws native caret/range inside that one host
   → document "selectionchange"
   → readEditorDOMSelection(root)
-  → editor.execute("selection.set", { selection })
+  → editor.selection.set(selection)
   → updateTextSelectionHighlight (no-op for same-block)
 ```
 
@@ -209,7 +215,7 @@ pointer-down:
 ```text
 publish() sets wholeBlocks = true
   → createBlockSelection(orderedBlockIds(root), anchorBlockId, focusBlockId)
-  → selection.set([{ type: "block", … }])
+  → editor.selection.set([{ type: "block", … }])
   → removeAllRanges()  (no native text caret)
   → keep originating contenteditable focused during the gesture
   → on pointerup: focus the surface root
@@ -275,7 +281,7 @@ Ctrl/Cmd at pointer-down aborts text gesture setup so page block toggle can run
 | `resolveDOMSelectionPoint` | portable position → live DOM endpoint |
 | `restoreEditorDOMSelection` | after structural commands: re-resolve + focus head + highlight |
 | `updateTextSelectionHighlight` | CSS `Highlight` named `rivto-text-selection`, else `data-text-selected` |
-| `saveDOMSelection` / `restoreDOMSelection` | **intra-element** caret save while `textContent` is rewritten (`useBlockTextEditing`) |
+| `saveDOMSelection` / `restoreDOMSelection` | **intra-element** caret save while `textContent` is rewritten (`useBlockEditing`) |
 
 Do not confuse the two restore paths:
 
@@ -364,7 +370,8 @@ Text editing inside a card still uses `type: "text"` and the same text plugin.
 | Backspace at start / Delete at end | merge / outdent / empty-reset plugins | Only when selection is a collapsed caret |
 | Edgeless arrows | `edgelessMovementPlugin` | Nudge selected roots; does not create text carets |
 
-`firstKeyboardTarget(selection)` in `events/utils/keyboard/selection.ts` reads
+`firstKeyboardTarget(selection)` in
+`managers/events/keyboard-event-manager/utils/selection.ts` reads
 **only the first list item**. Enter creates one block after that target;
 structural indent expands from the full selection in core.
 
@@ -381,7 +388,7 @@ plugins call `currentSelection()` which falls back to
 
 ### Clipboard
 
-`normalizeSelection(document, selection)` produces `{ start, end, blocks }`.
+`editor.selection.normalize()` produces `{ start, end, blocks }`.
 
 - Text (and mixed text+middle-blocks): character range from earliest to latest
   endpoint.
@@ -393,7 +400,8 @@ ancestor are not duplicated). Paste replaces the normalized range.
 
 ### Deletion
 
-`editor.deleteSelection()` uses the same normalization. Afterward
+`editor.selection.delete()` owns the deletion; `editor.deleteSelection()` is
+the compatibility command delegate. Both use the same normalization. Afterward
 `SelectionDeletionPlugin` focuses the resulting caret on the next frame.
 
 ### Collapse
@@ -417,7 +425,7 @@ subtree.
                               ▼
                  React selection plugins
                               │
-              editor.execute("selection.set"|clear)
+              editor.selection.set() / clear()
                               │
                               ▼
                  RivtoEditor validation
@@ -479,7 +487,7 @@ A short-lived “plugin owns the truth” flag so noisy browser
 `selectionchange` events cannot clobber a synthetic cross-host gesture.
 
 **Same-block typing vs remote update?**  
-`useBlockTextEditing` skips rewriting DOM when focused text already matches
+`useBlockEditing` skips rewriting DOM when focused text already matches
 the model (caret stays). On mismatch it saves offsets, writes `textContent`,
 restores with `restoreDOMSelection`.
 
@@ -490,12 +498,14 @@ restores with `restoreDOMSelection`.
 | Path | Role |
 | --- | --- |
 | `src/editor/types.ts` | Position + selection item types |
-| `src/managers/selection-manager.ts` | Detached list store |
-| `src/editor/rivto-editor.ts` | `setSelection`, `reconcileSelection`, commands |
-| `src/editor/clipboard.ts` | `normalizeSelection`, copy/cut/paste |
+| `src/managers/selection-manager/selection-manager.ts` | Detached list, validation, normalization, deletion |
+| `src/editor/rivto-editor.ts` | Selection reconciliation and compatibility commands |
+| `src/managers/clipboard-manager/clipboard-manager.ts` | Clipboard workflows and history boundary |
+| `src/managers/clipboard-manager/utils/clipboard.ts` | Stateless clipboard transformations |
 | `packages/react/.../text-selection-plugin.tsx` | DOM ↔ portable sync, cross-host gestures |
-| `packages/react/.../editor-dom-selection.ts` | Conversion, restore, highlight |
-| `packages/react/.../dom-text-selection.ts` | Save/restore inside one editable |
+| `packages/react/src/managers/selection/selection-manager/` | Core delegate + active-root DOM API |
+| `packages/react/.../selection-manager/utils/editor-dom-selection.ts` | Conversion, restore, highlight |
+| `packages/react/.../selection-manager/utils/dom-text-selection.ts` | Save/restore inside one editable |
 | `packages/react/.../PageBlockSelectionPlugin.tsx` | Ctrl/Cmd block toggle |
 | `packages/react/.../PageArrowPlugin.tsx` | Caret + block keyboard navigation |
 | `packages/react/.../SelectionDeletionPlugin.tsx` | Delete expanded selection |
@@ -509,11 +519,11 @@ restores with `restoreDOMSelection`.
 ## 13. Suggested reading order for selection only
 
 1. `src/editor/types.ts` — shapes.
-2. `SelectionManager` + `RivtoEditor.setSelection` / `reconcileSelection`.
+2. `SelectionManager.set` + `RivtoEditor.reconcileSelection`.
 3. `editor-dom-selection.ts` — conversion primitives.
 4. `text-selection-plugin.tsx` top-to-bottom — same-block vs cross-block vs Alt.
 5. `PageBlockSelectionPlugin` + `page-selection.ts`.
 6. `PageArrowPlugin` caret vs block navigation.
 7. `EdgelessSelectionPlugin`.
-8. `normalizeSelection` + one clipboard test in `src/editor/__tests__/`.
+8. `SelectionManager.normalize` + its tests in `src/editor/__tests__/selection-manager.test.ts`.
 9. `e2e/selection.spec.ts` for user-visible invariants.

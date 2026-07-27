@@ -1,7 +1,7 @@
 import {
   createBlockSelection,
   createSelectionItems,
-} from "../events/utils/selection/editor-dom-selection";
+} from "../managers";
 
 const blocks = [
   { id: "first", length: 10 },

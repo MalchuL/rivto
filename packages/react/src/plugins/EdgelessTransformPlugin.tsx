@@ -9,7 +9,7 @@ import {
   useKeyboardEvent,
 } from "../hooks";
 import { useEffect, useRef } from "react";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
 import { canvasDelta } from "./utils/edgeless-geometry";
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
@@ -71,7 +71,7 @@ export function EdgelessTransformPlugin() {
     const current = editor.selection.get().find((item): item is EdgelessSelection => item.type === "edgeless");
     const ids = moveHandle && current?.blockIds.includes(blockId) ? current.blockIds : [blockId];
     if (!current?.blockIds.includes(blockId)) {
-      editor.execute("selection.set", { selection: [{ type: "edgeless", blockIds: [blockId] }] });
+      editor.selection.set([{ type: "edgeless", blockIds: [blockId] }]);
     }
     const roots = new Map(editor.getBlocks().map((block) => [block.id, block]));
     const layouts = new Map(ids.flatMap((id) => {
@@ -91,7 +91,7 @@ export function EdgelessTransformPlugin() {
     root.dataset.transforming = start.current.kind;
     card.focus({ preventScroll: true });
     return true;
-  }, { capture: true });
+  }, { capture: true, mode: "edgeless" });
 
   useDOMEvent("pointermove", ({ event }) => {
       const active = start.current;
@@ -118,7 +118,7 @@ export function EdgelessTransformPlugin() {
         }
       }
       return true;
-  }, { target: "window", passive: false });
+  }, { target: "window", mode: "edgeless", passive: false });
 
   const finish = (commit: boolean): boolean => {
       const active = start.current;
@@ -149,8 +149,11 @@ export function EdgelessTransformPlugin() {
       active.lastY = event.clientY;
     }
     return finish(true);
-  }, { target: "window" });
-  useDOMEvent("pointercancel", () => finish(false), { target: "window" });
+  }, { target: "window", mode: "edgeless" });
+  useDOMEvent("pointercancel", () => finish(false), {
+    target: "window",
+    mode: "edgeless",
+  });
 
   useKeyboardEvent({
     id: KEYBOARD_BINDING_IDS.edgelessTransformCancel,

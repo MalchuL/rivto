@@ -3,8 +3,9 @@
 Rivto is a collaborative block-document runtime backed by Yjs. The core and
 React view are separate packages:
 
-- `@chulane/rivto` owns documents, CRDT storage, blocks, commands, selection,
-  history, clipboard data, modes, and slash-command state.
+- `@chulane/rivto` owns documents, CRDT storage, blocks, commands, validated
+  selection and structured clipboard managers, history, modes, and
+  slash-command state.
 - `@chulane/rivto-react` owns React rendering, page and edgeless surfaces,
   Markdown, browser events, key bindings, and interaction plugins.
 
@@ -60,6 +61,9 @@ Plugins are ordinary factory calls supplied to `createReactEditor`; plugin
 components are never placed in `EditorView` children. Optional children are
 reserved for application chrome such as a mode toolbar.
 
+See [React editor managers](packages/react/docs/managers.md) for registration
+ownership, ordering, rollback, and cleanup.
+
 See [Markdown rendering and live block size](packages/react/docs/markdown-rendering.md)
 for the focused/raw presentation model and its CSS overrides.
 
@@ -69,7 +73,7 @@ One registration installs the core model definition, renderer, and optional
 in-place slash conversion:
 
 ```tsx
-view.registerBlock({
+view.blocks.register({
   definition: {
     type: "acme.counter",
     title: "Counter",
@@ -84,9 +88,27 @@ view.registerBlock({
 });
 ```
 
-Renderers receive `{ blockId }` and use `useBlock`, `useEditor`, and the other
-focused hooks from `@chulane/rivto-react`. Unknown persisted types remain in
-the document and render through the configured fallback.
+Renderers receive `{ blockId }` and use `useBlockEditing` for reactive block
+state, latest property access, bound mutations, and the DOM attributes required
+by text or structural selection. Unknown persisted types remain in the document
+and render through the configured fallback.
+
+See the [`useBlockEditing` renderer guide](packages/react/docs/use-block-editing.md)
+for where to spread attributes in text, control, and mixed-content blocks.
+
+```tsx
+function CounterBlock({ blockId }: { blockId: string }) {
+  const editing = useBlockEditing<{ count: number }>(
+    blockId,
+    { textEdit: false },
+  );
+  return (
+    <div {...editing.attributes}>
+      <button>Count: {editing.getProp("count") ?? 0}</button>
+    </div>
+  );
+}
+```
 
 ## Custom plugins and events
 
@@ -106,9 +128,9 @@ const plugin = {
 };
 ```
 
-`ReactEditor.events` is one `KeyboardEditorEvents` runtime, inheriting typed
-DOM behavior from `DOMEditorEvents` and ordered lifecycle behavior from
-`EditorEvent`. Returning `true` claims an event; plugins never call
+`ReactEditor.events` is one `KeyboardEventManager`, inheriting typed DOM
+behavior from `DOMEventManager` and ordered lifecycle behavior from
+`EditorEventManager`. Returning `true` claims an event; plugins never call
 `preventDefault()` merely to announce ownership.
 
 Creation-time keymap overrides use stable binding IDs:
@@ -140,6 +162,9 @@ editor.updateBlock(id, { content: "Hello world" });
 ```
 
 ## Development
+
+The demo resolves both workspace packages directly from TypeScript source.
+`pnpm demo` therefore starts only Vite; package builds remain publish checks.
 
 ```sh
 pnpm install --frozen-lockfile

@@ -1,11 +1,15 @@
 import { useEditor, useEditorRoot, useKeyboardEvent } from "../hooks";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
-import { findNextEditableBlock, focusBlock } from "../events/utils/dom/block-dom";
+import {
+  BUILTIN_KEYMAP,
+  findNextEditableBlock,
+  focusBlock,
+  KEYBOARD_BINDING_IDS,
+} from "../managers";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "../events/utils/keyboard/selection";
+} from "../managers";
 
 /** Merges the next visible editable block at a collapsed block-end caret. */
 export function ForwardBlockMergePlugin() {
@@ -29,11 +33,11 @@ export function ForwardBlockMergePlugin() {
     const next = findNextEditableBlock(root, block.id);
     if (!next) return false;
     const joinOffset = editor.mergeBlocks(block.id, next.blockId);
-    editor.execute("selection.set", { selection: [{
+    editor.selection.set([{
       type: "text",
       anchor: { blockId: block.id, offset: joinOffset },
       head: { blockId: block.id, offset: joinOffset },
-    }] });
+    }]);
     requestAnimationFrame(() => focusBlock(root, block.id, joinOffset));
     return true;
   });

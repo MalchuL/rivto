@@ -1,9 +1,11 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "rootDir": "src",
+    "rootDir": "../..",
     "baseUrl": ".",
-    "paths": {},
+    "paths": {
+      "@chulane/rivto": ["../../src/index.ts"]
+    },
     "jsx": "react-jsx"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"]

@@ -85,8 +85,8 @@ start = A:1
 end   = B:4
 ```
 
-`normalizeSelection()` создаёт временный `NormalizedSelection`, не меняя
-SelectionManager.
+`editor.selection.normalize()` создаёт временный `NormalizedSelection`, не
+меняя состояние `SelectionManager`.
 
 ## 5. NormalizedSelection
 
@@ -284,13 +284,12 @@ Synchronous event path важен: browsers часто разрешают зап
 `cut()` сохраняет selection до async Copy:
 
 ```ts
-const selection = this.selection.get();
-const text = await this.copy();
-const range = normalizeSelection(document, selection);
+const payload = editor.clipboard.copy();
+if (payload) editor.selection.delete();
 ```
 
-Это важно: во время ожидания browser API focus или selection теоретически могут
-измениться. Cut должен удалить именно то, что было скопировано.
+Core не ожидает browser API: React сначала синхронизирует DOM selection, затем
+`ClipboardManager` копирует и удаляет одну и ту же текущую selection.
 
 ## 18. Cut целых блоков
 
@@ -370,8 +369,7 @@ Transaction делает user operation атомарной для CRDT observers
 1. Plugins получают paste event первыми.
 2. Builtin handler вызывает `preventDefault()`.
 3. Проверяет custom Rivto MIME.
-4. Если его нет, проверяет HTML.
-5. Если HTML нет, берёт plain text.
+4. Если его нет, берёт plain text.
 
 Priority нужен, чтобы Paste из Rivto сохранял structure, но Paste из других apps
 всё равно работал.
@@ -494,15 +492,7 @@ ClipboardManager напрямую вызывает SelectionManager:
 Selection subscribers запускают React, а layout effect восстанавливает native
 caret в новом DOM.
 
-## 30. HTML Paste
-
-Если custom MIME отсутствует, HTML превращается в visible text через
-`DOMParser` и `body.textContent`.
-
-Текущая реализация не конвертирует rich HTML structure в Rivto block types. Это
-plain-text interoperability fallback.
-
-## 31. Error boundaries и доверие
+## 30. Error boundaries и доверие
 
 Structured JSON version и arrays проверяются в `remapClipboardBundle()`.
 
@@ -510,7 +500,7 @@ Structured JSON version и arrays проверяются в `remapClipboardBundl
 При расширении schema нельзя доверять TypeScript cast: runtime browser может
 передать любой JSON.
 
-## 32. Полный Copy → Paste пример
+## 31. Полный Copy → Paste пример
 
 Source:
 

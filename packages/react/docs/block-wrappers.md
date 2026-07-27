@@ -6,7 +6,7 @@ Block wrappers are React decorators registered by functional plugins:
 const commentsPlugin = (): ReactEditorPlugin => ({
   id: "comments",
   setup: (reactEditor) => {
-    reactEditor.registerBlockWrapper("block", CommentWrapper);
+    reactEditor.surfaces.registerBlockWrapper("block", CommentWrapper);
   },
 });
 

@@ -7,6 +7,27 @@ const textSelection = (blockId: string, anchor = 0, head = anchor) => ({
 });
 
 describe("EditorRuntime selection", () => {
+  it("exposes validated manager operations and subscription cleanup", () => {
+    const editor = createRivtoEditor();
+    const id = editor.insertBlock({ type: "paragraph", content: "Text" });
+    const listener = jest.fn();
+    const unsubscribe = editor.selection.subscribe(listener);
+    const selection = [textSelection(id, 1, 3)];
+
+    editor.selection.set(selection);
+    expect(editor.selection.get()).toEqual(selection);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(() => editor.selection.set([textSelection(id, 99)])).toThrow("outside block");
+
+    editor.selection.clear();
+    expect(editor.selection.get()).toEqual([]);
+    expect(listener).toHaveBeenCalledTimes(2);
+    unsubscribe();
+    editor.selection.set(selection);
+    expect(listener).toHaveBeenCalledTimes(2);
+    editor.destroy();
+  });
+
   it("validates text, block, and edgeless selections", () => {
     const editor = createRivtoEditor();
     const firstId = editor.insertBlock({ type: "paragraph", content: "First" });
@@ -48,6 +69,59 @@ describe("EditorRuntime selection", () => {
     editor.execute("selection.clear");
 
     expect(listener).toHaveBeenCalledTimes(2);
+    unsubscribe();
+    editor.destroy();
+  });
+
+  it("normalizes directed and heterogeneous selections in document order", () => {
+    const editor = createRivtoEditor();
+    const firstId = editor.insertBlock({ type: "paragraph", content: "First" });
+    const middleId = editor.insertBlock({ type: "paragraph", content: "Middle" }, firstId);
+    const lastId = editor.insertBlock({ type: "paragraph", content: "Last" }, middleId);
+    editor.selection.set([
+      {
+        type: "text",
+        anchor: { blockId: lastId, offset: 3 },
+        head: { blockId: firstId, offset: 1 },
+      },
+      {
+        type: "block",
+        blockIds: [middleId],
+        anchorBlockId: middleId,
+        focusBlockId: middleId,
+      },
+    ]);
+
+    expect(editor.selection.normalize()).toMatchObject({
+      start: { blockId: firstId, offset: 1 },
+      end: { blockId: lastId, offset: 3 },
+      blocks: [{ id: firstId }, { id: middleId }, { id: lastId }],
+    });
+    editor.destroy();
+  });
+
+  it("deletes directly through the manager as one undoable transaction", () => {
+    const editor = createRivtoEditor();
+    const firstId = editor.insertBlock({ type: "paragraph", content: "First" });
+    const secondId = editor.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    editor.selection.set([{
+      type: "block",
+      blockIds: [firstId, secondId],
+      anchorBlockId: firstId,
+      focusBlockId: secondId,
+    }]);
+    const documentUpdates = jest.fn();
+    const unsubscribe = editor.document.subscribe(documentUpdates);
+
+    editor.selection.delete();
+
+    expect(documentUpdates).toHaveBeenCalledTimes(1);
+    expect(editor.getBlocks()).toMatchObject([{ type: "paragraph", content: "" }]);
+    editor.undo();
+    expect(editor.getBlocks()).toMatchObject([
+      { id: firstId, content: "First" },
+      { id: secondId, content: "Second" },
+    ]);
     unsubscribe();
     editor.destroy();
   });

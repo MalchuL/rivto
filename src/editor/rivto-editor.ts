@@ -5,23 +5,16 @@ import {
   defaultBlockDefinitions,
   type BlockDefinition,
 } from "../blocks";
-import { CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
+import { ClipboardManager, CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
 import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type BlockPatch, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
 import { isBlockCollapsed } from "../utils";
 import {
-  createClipboardPayload,
-  cutSelection,
-  deleteSelection,
-  htmlToText,
-  normalizeSelection,
-  pasteClipboardBundle,
-  pastePlainText,
   RIVTO_CLIPBOARD_MIME,
   type ClipboardBundle,
-} from "./clipboard";
+} from "../managers/clipboard-manager";
 import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
-import type { CreateRivtoEditorOptions, EditorPosition, EditorSelection, EditorSelectionItem, RivtoEditorApi } from "./types";
+import type { CreateRivtoEditorOptions, EditorSelection, EditorSelectionItem, RivtoEditorApi } from "./types";
 
 type RuntimeBlockSelection = Extract<EditorSelectionItem, { type: "block" }>;
 
@@ -49,8 +42,9 @@ export class EditorRuntime implements RivtoEditorApi {
   readonly blocks = new BlockRegistry();
   readonly commands = new CommandRegistry();
   readonly mode: ModeManager;
-  readonly selection = new SelectionManager();
+  readonly selection: SelectionManager;
   readonly history: UndoManager;
+  readonly clipboard: ClipboardManager;
   readonly slashCommands = new SlashCommandManager();
   private readonly listeners = new Set<() => void>();
   /** Unsubscribe callbacks owned by the runtime and called during destroy(). */
@@ -66,7 +60,9 @@ export class EditorRuntime implements RivtoEditorApi {
   constructor(options: CreateRivtoEditorOptions = {}) {
     this.document = new DocumentModelImpl(options.document ?? new YjsDoc(`rivto-${crypto.randomUUID()}`));
     this.mode = new ModeManager(options.mode ?? "block");
+    this.selection = new SelectionManager(this);
     this.history = new UndoManager(this.document);
+    this.clipboard = new ClipboardManager(this);
     this.document.setPropsValidator((type, props) => this.blocks.validate(type, props));
     this.registerBlockCommands();
     this.registerClipboardCommands();
@@ -446,11 +442,9 @@ export class EditorRuntime implements RivtoEditorApi {
     }));
     this.commands.register("selection.set", (value) => {
       const data = payload(value);
-      this.setSelection(data.selection as EditorSelection);
+      this.selection.set(data.selection as EditorSelection);
     });
-    this.commands.register("selection.delete", documentCommand(() => {
-      deleteSelection(this.document, this.selection, this.selection.get());
-    }));
+    this.commands.register("selection.delete", () => this.selection.delete());
     this.commands.register("selection.clear", () => this.selection.clear());
     this.commands.register("history.undo", () => this.history.undo());
     this.commands.register("history.redo", () => this.history.redo());
@@ -459,9 +453,8 @@ export class EditorRuntime implements RivtoEditorApi {
   /**
    * Registers clipboard commands used by view bridges and tests.
    *
-   * The runtime keeps this as commands rather than a manager because clipboard
-   * behavior is just document mutation plus local selection updates. Browser
-   * event details are read here only to synchronously set custom MIME data.
+   * ClipboardManager owns typed behavior. These handlers only preserve the
+   * existing string-command payloads used by integrations and older tests.
    */
   private registerClipboardCommands(): void {
     type Payload = Record<string, unknown>;
@@ -473,19 +466,10 @@ export class EditorRuntime implements RivtoEditorApi {
         ? candidate as ClipboardEventLike
         : undefined;
     };
-    const documentCommand = (handler: (value?: unknown) => unknown): CommandHandler => (value) => {
-      this.history.stopCapturing();
-      try {
-        return handler(value);
-      } finally {
-        this.history.stopCapturing();
-      }
-    };
-
     this.commands.register("clipboard.copy", (value) => {
       const event = clipboardEvent(value);
       const data = payload(value);
-      const payloadData = createClipboardPayload(this.document, this.selection.get());
+      const payloadData = this.clipboard.copy();
       if (!payloadData) return "";
       if (event?.clipboardData) {
         event.preventDefault();
@@ -502,9 +486,9 @@ export class EditorRuntime implements RivtoEditorApi {
       return payloadData.text;
     });
 
-    this.commands.register("clipboard.cut", documentCommand((value) => {
+    this.commands.register("clipboard.cut", (value) => {
       const event = clipboardEvent(value);
-      const payloadData = cutSelection(this.document, this.selection, this.selection.get());
+      const payloadData = this.clipboard.cut();
       if (!payloadData) return "";
       if (event?.clipboardData) {
         event.preventDefault();
@@ -513,9 +497,9 @@ export class EditorRuntime implements RivtoEditorApi {
         event.clipboardData.setData("text/plain", payloadData.text);
       }
       return payloadData.text;
-    }));
+    });
 
-    this.commands.register("clipboard.paste", documentCommand((value) => {
+    this.commands.register("clipboard.paste", (value) => {
       const event = clipboardEvent(value);
       const data = payload(value);
       const defaultBlockType = text(data.defaultBlockType) ?? DEFAULT_BLOCK_TYPE;
@@ -523,27 +507,16 @@ export class EditorRuntime implements RivtoEditorApi {
         ?? (event?.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) || undefined);
       const bundle = data.bundle as ClipboardBundle | undefined;
       const mergeText = data.mergeText !== false;
+      const explicitText = text(data.text);
       if (event?.clipboardData) event.preventDefault();
-      if (bundle) {
-        pasteClipboardBundle(this.document, this.selection, this.selection.get(), bundle, mergeText);
-        return;
-      }
-      if (structured) {
-        pasteClipboardBundle(
-          this.document,
-          this.selection,
-          this.selection.get(),
-          JSON.parse(structured) as ClipboardBundle,
-          mergeText,
-        );
-        return;
-      }
-      const plain = text(data.text)
-        ?? (event?.clipboardData?.getData("text/html") ? htmlToText(event.clipboardData.getData("text/html")) : undefined)
-        ?? event?.clipboardData?.getData("text/plain")
-        ?? "";
-      pastePlainText(this.document, this.selection, this.selection.get(), defaultBlockType, plain);
-    }));
+      this.clipboard.paste({
+        bundle,
+        structured,
+        mergeText,
+        defaultBlockType,
+        text: explicitText ?? event?.clipboardData?.getData("text/plain"),
+      });
+    });
   }
 
   /**
@@ -557,7 +530,7 @@ export class EditorRuntime implements RivtoEditorApi {
 
   /** Resolves a structural command target to the complete active selection range. */
   private selectedStructuralBlockIds(id: string): string[] {
-    const range = normalizeSelection(this.document, this.selection.get());
+    const range = this.selection.normalize();
     return range?.blocks.some((block) => block.id === id)
       ? range.blocks.map((block) => block.id)
       : [id];
@@ -579,49 +552,7 @@ export class EditorRuntime implements RivtoEditorApi {
     const anchorBlockId = remaining.includes(blockSelection.anchorBlockId) ? blockSelection.anchorBlockId : remaining[0]!;
     const focusBlockId = remaining.includes(blockSelection.focusBlockId) ? blockSelection.focusBlockId : remaining.at(-1)!;
     const restored = { type: "block", blockIds: remaining, anchorBlockId, focusBlockId } satisfies RuntimeBlockSelection;
-    this.setSelection(previous.map((item, itemIndex) => itemIndex === index ? restored : item));
-  }
-
-  /**
-   * Validates and stores every item in the local selection list.
-   *
-   * Text offsets are checked against current block content. Block selections are
-   * stored in visible document order while preserving anchor/focus direction.
-   * Edgeless items are only valid while the editor is in edgeless mode. Items
-   * remain separate, allowing text and whole-block selection to coexist.
-   */
-  private setSelection(selection: EditorSelection): void {
-    if (!Array.isArray(selection)) throw new Error("Selection must be a list");
-    const normalized = selection.map((item): EditorSelectionItem => {
-      if (!item || !["text", "block", "edgeless"].includes(item.type)) throw new Error("Invalid selection");
-      if (item.type === "text") {
-        this.validatePosition(item.anchor);
-        this.validatePosition(item.head);
-        return item;
-      }
-
-      if (!item.blockIds.length) throw new Error("Selection requires at least one block");
-      item.blockIds.forEach((id) => {
-        if (!this.findBlock(id)) throw new Error(`Selection block ${id} not found`);
-      });
-      if (item.type === "edgeless") {
-        if (this.mode.get() !== "edgeless") throw new Error("Edgeless selection requires edgeless mode");
-        return item;
-      }
-      if (!item.blockIds.includes(item.anchorBlockId) || !item.blockIds.includes(item.focusBlockId)) {
-        throw new Error("Block selection endpoints must be selected");
-      }
-
-      const selected = new Set(item.blockIds);
-      const ordered: string[] = [];
-      const visit = (blocks: Block[]): void => blocks.forEach((block) => {
-        if (selected.has(block.id)) ordered.push(block.id);
-        visit(block.children);
-      });
-      visit(this.document.document);
-      return { ...item, blockIds: ordered };
-    });
-    this.selection.set(normalized);
+    this.selection.set(previous.map((item, itemIndex) => itemIndex === index ? restored : item));
   }
 
   /**
@@ -712,15 +643,6 @@ export class EditorRuntime implements RivtoEditorApi {
       if (child) return child;
     }
     return undefined;
-  }
-
-  /** Validates a UTF-16 text position against current document content. */
-  private validatePosition(position: EditorPosition): void {
-    const block = this.findBlock(position.blockId);
-    if (!block) throw new Error(`Selection block ${position.blockId} not found`);
-    if (!Number.isInteger(position.offset) || position.offset < 0 || position.offset > block.content.length) {
-      throw new Error(`Selection offset ${position.offset} is outside block ${position.blockId}`);
-    }
   }
 
   /**

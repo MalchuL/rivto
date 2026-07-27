@@ -4,12 +4,12 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../constants";
-import { restoreEditorDOMSelection } from "../events/utils/selection/editor-dom-selection";
 import {
   useDOMEvent,
   useEditor,
   useEditorRoot,
   useKeyboardEvent,
+  useReactEditor,
 } from "../hooks";
 import {
   useCallback,
@@ -20,8 +20,11 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
-import { findRenderedBlock } from "../events/utils/dom/block-dom";
+import {
+  BUILTIN_KEYMAP,
+  findRenderedBlock,
+  KEYBOARD_BINDING_IDS,
+} from "../managers";
 import { keepNoResultMenuOpen, rankSlashCommands } from "./utils/slash-search";
 
 interface SlashSession {
@@ -95,18 +98,20 @@ function groupCommands(commands: readonly SlashCommand[]): Array<{ group: string
  */
 export function PageSlashCommandPlugin() {
   const editor = useEditor();
+  const reactEditor = useReactEditor();
+  const slashCommands = reactEditor.slashCommands;
   const { element: root } = useEditorRoot();
   const [session, setSession] = useState<SlashSession | null>(null);
   const sessionRef = useRef(session);
   const ignoredTrigger = useRef<string | undefined>(undefined);
   sessionRef.current = session;
 
-  const subscribe = useCallback((listener: () => void) => editor.slashCommands.subscribe(listener), [editor]);
-  useSyncExternalStore(subscribe, () => editor.slashCommands.revision, () => editor.slashCommands.revision);
+  const subscribe = useCallback((listener: () => void) => slashCommands.subscribe(listener), [slashCommands]);
+  useSyncExternalStore(subscribe, () => slashCommands.revision, () => slashCommands.revision);
 
   const available = useMemo(() => session
-    ? editor.slashCommands.getAll({ blockId: session.blockId })
-    : [], [editor, editor.slashCommands.revision, session?.blockId]);
+    ? slashCommands.getAll({ blockId: session.blockId })
+    : [], [slashCommands, slashCommands.revision, session?.blockId]);
   const ranked = useMemo(() => rankSlashCommands(available, session?.query ?? ""), [available, session?.query]);
   const groups = useMemo(() => groupCommands(ranked.map(({ command }) => command)), [ranked]);
 
@@ -132,7 +137,7 @@ export function PageSlashCommandPlugin() {
 
     const key = `${blockId}:${trigger.slashOffset}`;
     if (!current && (!discover || ignoredTrigger.current === key)) return;
-    const commands = editor.slashCommands.getAll({ blockId });
+    const commands = slashCommands.getAll({ blockId });
     const matches = rankSlashCommands(commands, trigger.query);
     const lastMatchedLength = matches.length
       ? trigger.query.length
@@ -154,7 +159,7 @@ export function PageSlashCommandPlugin() {
         ? Math.min(current?.activeIndex ?? 0, matches.length - 1)
         : 0,
     });
-  }, [editor]);
+  }, [slashCommands]);
 
   useDOMEvent("input", ({ event }) => {
     const content = event.target instanceof Element
@@ -198,29 +203,29 @@ export function PageSlashCommandPlugin() {
       editor.updateBlock(current.blockId, {
         content: block.content.slice(0, current.slashOffset) + block.content.slice(caret),
       });
-      editor.execute("selection.set", { selection: [{
+      editor.selection.set([{
         type: "text",
         anchor: { blockId: current.blockId, offset: current.slashOffset },
         head: { blockId: current.blockId, offset: current.slashOffset },
-      }] });
-      editor.slashCommands.execute(command.id, { blockId: current.blockId });
+      }]);
+      slashCommands.execute(command.id, { blockId: current.blockId });
     });
     editor.history.stopCapturing();
     setSession(null);
 
     requestAnimationFrame(() => {
-      if (restoreEditorDOMSelection(root, editor.selection.get())) return;
+      if (reactEditor.selection.restoreDOM()) return;
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });
     });
-  }, [close, editor, root]);
+  }, [close, editor, reactEditor, root, slashCommands]);
 
   const currentResults = useCallback(() => {
     const current = sessionRef.current;
     return current
-      ? rankSlashCommands(editor.slashCommands.getAll({ blockId: current.blockId }), current.query)
+      ? rankSlashCommands(slashCommands.getAll({ blockId: current.blockId }), current.query)
       : [];
-  }, [editor]);
+  }, [slashCommands]);
 
   const moveActive = useCallback((delta: number) => {
     const results = currentResults();

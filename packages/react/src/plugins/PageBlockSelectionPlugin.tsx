@@ -6,12 +6,13 @@ import {
 import {
   useEditor,
   useDOMEvent,
+  useEditorMode,
   useEditorRoot,
   useKeyboardEvent,
 } from "../hooks";
 import { useEffect, useState } from "react";
 import { toggleBlockSelection } from "./utils/page-selection";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
 
 /**
  * Adds explicit whole-block selection to the demo page surface.
@@ -23,19 +24,21 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
  */
 export function PageBlockSelectionPlugin() {
   const editor = useEditor();
+  const { mode } = useEditorMode();
   const { element: root } = useEditorRoot();
   const [modifierDown, setModifierDown] = useState(false);
 
   useEffect(() => {
-    if (!root) return;
+    if (!root || mode !== "block") return;
     if (modifierDown) root.dataset.blockSelecting = "true";
     else delete root.dataset.blockSelecting;
     return () => { delete root.dataset.blockSelecting; };
-  }, [modifierDown, root]);
+  }, [mode, modifierDown, root]);
 
   useKeyboardEvent({
     id: KEYBOARD_BINDING_IDS.blockSelectionModifierDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierDown]!,
+    mode: "block",
     target: "window",
   }, () => {
     setModifierDown(true);
@@ -45,6 +48,7 @@ export function PageBlockSelectionPlugin() {
     id: KEYBOARD_BINDING_IDS.blockSelectionModifierUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierUp]!,
     phase: "keyup",
+    mode: "block",
     target: "window",
   }, () => {
     setModifierDown(false);
@@ -53,7 +57,7 @@ export function PageBlockSelectionPlugin() {
   useDOMEvent("blur", () => {
     setModifierDown(false);
     return false;
-  }, { target: "window" });
+  }, { target: "window", mode: "block" });
 
   useDOMEvent("pointerdown", ({ event }) => {
     if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) return false;
@@ -67,11 +71,12 @@ export function PageBlockSelectionPlugin() {
 
     const current = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
     const next = toggleBlockSelection(editor.getBlocks(), current, blockId);
-    editor.execute(next ? "selection.set" : "selection.clear", next ? { selection: [next] } : undefined);
+    if (next) editor.selection.set([next]);
+    else editor.selection.clear();
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });
     return true;
-  }, { capture: true });
+  }, { capture: true, mode: "block" });
 
   return null;
 }

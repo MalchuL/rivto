@@ -150,7 +150,7 @@ export function BlockWrapper({
 }: BlockWrapperSlotProps) {
   const reactEditor = useReactEditor();
   const { mode } = useEditorMode();
-  const wrappers = reactEditor.getBlockWrappers(mode);
+  const wrappers = reactEditor.surfaces.getBlockWrappers(mode);
   let result: ReactNode = (
     <Fallback block={block} selected={selected} {...slots} />
   );

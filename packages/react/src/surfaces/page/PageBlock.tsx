@@ -85,7 +85,7 @@ export function PageBlock({ blockId, ignoreCollapse = false }: PageBlockProps) {
 
   if (!block) return null;
   // Renderer policy belongs to the surface; BlockView only supplies DOM identity.
-  const Content = reactEditor.getRenderer(block.type) ?? UnknownBlock;
+  const Content = reactEditor.renderers.get(block.type) ?? UnknownBlock;
   const collapsed = getters.collapsed;
   // The stable relationship lets assistive technology associate the toggle
   // with the descendant container it shows or hides.

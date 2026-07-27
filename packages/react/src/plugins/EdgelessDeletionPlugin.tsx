@@ -4,7 +4,7 @@ import {
   useEditorRoot,
   useKeyboardEvent,
 } from "../hooks";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
 import { owningRootIds } from "./utils/edgeless-geometry";
 
 /** Deletes selected canvas roots as one structural transaction. */
@@ -33,9 +33,9 @@ export function EdgelessDeletionPlugin() {
     const owner = current ? owningRootIds(editor.getBlocks(), [current.head.blockId]) : [];
     const blockIds = owner.length ? owner : editor.getBlocks().slice(0, 1).map((block) => block.id);
     if (blockIds.length) {
-      editor.execute("selection.set", { selection: [{ type: "edgeless", blockIds }] });
+      editor.selection.set([{ type: "edgeless", blockIds }]);
     } else {
-      editor.execute("selection.clear");
+      editor.selection.clear();
     }
     requestAnimationFrame(() => root.focus({ preventScroll: true }));
     return true;

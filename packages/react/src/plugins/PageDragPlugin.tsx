@@ -372,7 +372,7 @@ export function PageDragPlugin({
           anchorBlockId: move.ids[0]!,
           focusBlockId: move.ids[0]!,
         };
-    editor.execute("selection.set", { selection: [selection] });
+    editor.selection.set([selection]);
   };
 
   return (

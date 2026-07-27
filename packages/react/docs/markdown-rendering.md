@@ -29,7 +29,7 @@ internal scrollbar.
 Typing updates the block through the following path:
 
 1. The raw `contenteditable` emits an `input` event.
-2. `useBlockTextEditing` persists its plain-text content through the editor.
+2. `useBlockEditing()` persists plain-text content through the editor.
 3. The editor revision rerenders `MarkdownContent`.
 4. The raw editor grows only according to source wrapping and line breaks.
 5. After blur, `react-markdown` mounts a preview from the latest source.

@@ -188,7 +188,7 @@ function DemoToolbar() {
   const { mode, setMode } = useEditorMode();
   const switchMode = (next: "block" | "edgeless") => {
     if (next === mode) return;
-    editor.execute("selection.clear");
+    editor.selection.clear();
     setMode(next);
   };
 

@@ -3,7 +3,7 @@ import type {
   KeyboardBinding,
   KeyboardEditorEventContext,
   EditorEventHandler,
-} from "../../events";
+} from "../../managers";
 import { useReactEditor } from "./use-editor";
 
 /**

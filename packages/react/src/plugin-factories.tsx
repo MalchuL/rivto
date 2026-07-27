@@ -39,8 +39,11 @@ import { SelectionDeletionPlugin } from "./plugins/SelectionDeletionPlugin";
 import { applyIndentShortcut } from "./plugins/utils/indent";
 import { EdgelessSurface } from "./surfaces/edgeless";
 import { PageSurface } from "./surfaces/page";
-import type { ReactEditorPlugin } from "./react-editor";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "./events/keymap";
+import {
+  BUILTIN_KEYMAP,
+  KEYBOARD_BINDING_IDS,
+  type ReactEditorPlugin,
+} from "./managers";
 
 /**
  * Adapts a React component to the functional plugin lifecycle.
@@ -50,17 +53,15 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "./events/keymap";
  *
  * @param id - Stable plugin identity used for duplicate detection.
  * @param component - Headless or visual component mounted by EditorView.
- * @param mode - Optional presentation modes in which it is mounted.
  * @returns A creation-time React editor plugin.
  */
 const componentPlugin = (
   id: string,
   component: ComponentType,
-  mode?: "block" | "edgeless" | readonly ("block" | "edgeless")[],
 ): ReactEditorPlugin => ({
   id,
   setup: (reactEditor) => {
-    reactEditor.mount(component, mode);
+    reactEditor.plugins.mount(component);
   },
 });
 
@@ -68,7 +69,7 @@ const componentPlugin = (
 export const pageSurfacePlugin = (): ReactEditorPlugin => ({
   id: "surface.page",
   setup: (reactEditor) => {
-    reactEditor.registerSurface("block", PageSurface);
+    reactEditor.surfaces.register("block", PageSurface);
   },
 });
 
@@ -76,7 +77,7 @@ export const pageSurfacePlugin = (): ReactEditorPlugin => ({
 export const edgelessSurfacePlugin = (): ReactEditorPlugin => ({
   id: "surface.edgeless",
   setup: (reactEditor) => {
-    reactEditor.registerSurface("edgeless", EdgelessSurface);
+    reactEditor.surfaces.register("edgeless", EdgelessSurface);
   },
 });
 
@@ -106,19 +107,19 @@ export const clipboardPlugin = (options: ClipboardPluginProps = {}): ReactEditor
 };
 
 /** @returns Pointer and modifier-based whole-block selection for page mode. */
-export const pageSelectionPlugin = (): ReactEditorPlugin => componentPlugin("selection.page", PageBlockSelectionPlugin, "block");
+export const pageSelectionPlugin = (): ReactEditorPlugin => componentPlugin("selection.page", PageBlockSelectionPlugin);
 
 /** @returns Visual-line and cross-block caret navigation for page mode. */
 export const caretNavigationPlugin = (): ReactEditorPlugin =>
-  componentPlugin("navigation.caret", CaretNavigationPlugin, "block");
+  componentPlugin("navigation.caret", CaretNavigationPlugin);
 
 /** @returns Keyboard growth, shrink, and movement of page block selections. */
 export const blockSelectionNavigationPlugin = (): ReactEditorPlugin =>
-  componentPlugin("navigation.block-selection", BlockSelectionNavigationPlugin, "block");
+  componentPlugin("navigation.block-selection", BlockSelectionNavigationPlugin);
 
 /** @returns Alt+Shift structural movement for eligible page blocks. */
 export const keyboardBlockMovePlugin = (): ReactEditorPlugin =>
-  componentPlugin("block.keyboard-move", KeyboardBlockMovePlugin, "block");
+  componentPlugin("block.keyboard-move", KeyboardBlockMovePlugin);
 
 /** @returns Enter-driven block splitting and creation in editable content. */
 export const blockCreationPlugin = (): ReactEditorPlugin => componentPlugin("block.create", PageEnterPlugin);
@@ -130,20 +131,20 @@ export const blockCreationPlugin = (): ReactEditorPlugin => componentPlugin("blo
  */
 export const blockMergePlugin = (): ReactEditorPlugin => {
   const Merge = () => <><BackwardBlockMergePlugin /><ForwardBlockMergePlugin /></>;
-  return componentPlugin("block.merge", Merge, "block");
+  return componentPlugin("block.merge", Merge);
 };
 
 /** @returns Backspace/Delete removal for expanded structural selections. */
 export const selectionDeletionPlugin = (): ReactEditorPlugin =>
-  componentPlugin("selection.delete", SelectionDeletionPlugin, "block");
+  componentPlugin("selection.delete", SelectionDeletionPlugin);
 
 /** @returns Backspace-at-start outdent behavior for nested page blocks. */
 export const blockOutdentPlugin = (): ReactEditorPlugin =>
-  componentPlugin("block.outdent-at-start", BlockOutdentPlugin, "block");
+  componentPlugin("block.outdent-at-start", BlockOutdentPlugin);
 
 /** @returns Reset of the first empty custom block to the default paragraph. */
 export const emptyBlockResetPlugin = (): ReactEditorPlugin =>
-  componentPlugin("block.reset-empty", EmptyBlockResetPlugin, "block");
+  componentPlugin("block.reset-empty", EmptyBlockResetPlugin);
 
 /** Shortcut configuration for structural indentation. */
 export interface IndentPluginOptions {
@@ -171,31 +172,43 @@ export const indentPlugin = (options: IndentPluginOptions = {}): ReactEditorPlug
       reactEditor.events.bind({
         id: KEYBOARD_BINDING_IDS.blockIndent,
         keys: indentKeys,
-      }, ({ editor, root, event }) => applyIndentShortcut(editor, root, event, false));
+      }, ({ editor, root, event }) => applyIndentShortcut(
+        editor,
+        reactEditor.selection,
+        root,
+        event,
+        false,
+      ));
       reactEditor.events.bind({
         id: KEYBOARD_BINDING_IDS.blockOutdent,
         keys: outdentKeys,
-      }, ({ editor, root, event }) => applyIndentShortcut(editor, root, event, true));
+      }, ({ editor, root, event }) => applyIndentShortcut(
+        editor,
+        reactEditor.selection,
+        root,
+        event,
+        true,
+      ));
     },
   };
 };
 
 /** @returns Page-only persisted collapse controls and keyboard actions. */
-export const collapsePlugin = (): ReactEditorPlugin => componentPlugin("block.collapse", PageCollapsePlugin, "block");
+export const collapsePlugin = (): ReactEditorPlugin => componentPlugin("block.collapse", PageCollapsePlugin);
 
 /** @returns Root-card click, toggle, and rectangle selection in edgeless mode. */
-export const edgelessSelectionPlugin = (): ReactEditorPlugin => componentPlugin("selection.edgeless", EdgelessSelectionPlugin, "edgeless");
+export const edgelessSelectionPlugin = (): ReactEditorPlugin => componentPlugin("selection.edgeless", EdgelessSelectionPlugin);
 
 /** @returns Atomic Backspace/Delete removal of selected edgeless roots. */
 export const edgelessDeletionPlugin = (): ReactEditorPlugin =>
-  componentPlugin("selection.edgeless-delete", EdgelessDeletionPlugin, "edgeless");
+  componentPlugin("selection.edgeless-delete", EdgelessDeletionPlugin);
 
 /** @returns One- or ten-pixel keyboard movement of selected canvas roots. */
 export const edgelessMovementPlugin = (): ReactEditorPlugin =>
-  componentPlugin("movement.edgeless", EdgelessMovementPlugin, "edgeless");
+  componentPlugin("movement.edgeless", EdgelessMovementPlugin);
 
 /** @returns Pointer drag and resize interactions for edgeless root cards. */
-export const edgelessTransformPlugin = (): ReactEditorPlugin => componentPlugin("transform.edgeless", EdgelessTransformPlugin, "edgeless");
+export const edgelessTransformPlugin = (): ReactEditorPlugin => componentPlugin("transform.edgeless", EdgelessTransformPlugin);
 
 /** Page drag configuration excluding the wrapper-owned React children slot. */
 export type PageDragOptions = Omit<PageDragPluginProps, "children">;
@@ -218,9 +231,9 @@ export const pageDragPlugin = (options: PageDragOptions = {}): ReactEditorPlugin
   return {
     id: "drag.page",
     setup: (reactEditor) => {
-      reactEditor.wrapEditor(DragBoundary);
-      reactEditor.registerBlockWrapper("block", PageDragBlockWrapper);
-      reactEditor.registerBlockWrapper("edgeless", PageDragBlockWrapper);
+      reactEditor.surfaces.registerEditorWrapper(DragBoundary);
+      reactEditor.surfaces.registerBlockWrapper("block", PageDragBlockWrapper);
+      reactEditor.surfaces.registerBlockWrapper("edgeless", PageDragBlockWrapper);
     },
   };
 };
@@ -237,10 +250,10 @@ export const slashCommandPlugin = (): ReactEditorPlugin => ({
   id: "slash.commands",
   setup: (reactEditor) => {
     const { editor } = reactEditor;
-    reactEditor.mount(PageSlashCommandPlugin);
+    reactEditor.plugins.mount(PageSlashCommandPlugin);
     const disposers = [
       // Clone the complete subtree while leaving persisted IDs for the store to generate.
-      editor.slashCommands.register({
+      reactEditor.slashCommands.register({
         id: "block.duplicate",
         title: "Duplicate block",
         group: "Actions",
@@ -254,33 +267,33 @@ export const slashCommandPlugin = (): ReactEditorPlugin => ({
             input.layout = { ...input.layout, x: (input.layout.x ?? 0) + 24, y: (input.layout.y ?? 0) + 24 };
           }
           const duplicateId = editor.insertBlock(input, block.id);
-          editor.execute("selection.set", { selection: [{
+          editor.selection.set([{
             type: "block",
             blockIds: [duplicateId],
             anchorBlockId: duplicateId,
             focusBlockId: duplicateId,
-          }] });
+          }]);
         },
       }),
       // Route deletion through structural selection so descendants are atomic.
-      editor.slashCommands.register({
+      reactEditor.slashCommands.register({
         id: "block.delete",
         title: "Delete block",
         group: "Actions",
         keywords: ["remove"],
         isAvailable: ({ blockId }) => Boolean(editor.getBlock(blockId)),
         execute: ({ blockId }) => {
-          editor.execute("selection.set", { selection: [{
+          editor.selection.set([{
             type: "block",
             blockIds: [blockId],
             anchorBlockId: blockId,
             focusBlockId: blockId,
-          }] });
+          }]);
           editor.deleteSelection();
         },
       }),
       // Collapse is page-only because edgeless deliberately renders all descendants.
-      editor.slashCommands.register({
+      reactEditor.slashCommands.register({
         id: "block.collapse",
         title: "Collapse block",
         group: "Actions",
@@ -292,7 +305,7 @@ export const slashCommandPlugin = (): ReactEditorPlugin => ({
         execute: ({ blockId }) => editor.setBlockCollapsed(blockId, true),
       }),
       // Expansion is offered only when it has a visible effect in page mode.
-      editor.slashCommands.register({
+      reactEditor.slashCommands.register({
         id: "block.expand",
         title: "Expand block",
         group: "Actions",

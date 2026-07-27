@@ -51,16 +51,16 @@ export function EditorView({ editor, children }: EditorViewProps) {
   // The callback ref identity never changes, preventing React from unregistering
   // and registering the same surface root on ordinary editor renders.
   const rootRef = useCallback((element: HTMLElement | null) => {
-    editor.setRoot(element);
+    editor.events.setRoot(element);
     setRoot(element);
   }, [editor]);
   const rootContext = useMemo(() => ({ element: root, ref: rootRef }), [root, rootRef]);
 
   const mode = editor.editor.mode.get();
-  const Surface = editor.getSurface(mode);
+  const Surface = editor.surfaces.get(mode);
   if (!Surface) throw new Error(`No React surface is registered for editor mode ${mode}`);
-  const components = editor.getComponents(mode);
-  const editorWrappers = editor.getEditorWrappers(mode);
+  const components = editor.plugins.getComponents();
+  const editorWrappers = editor.surfaces.getEditorWrappers(mode);
   let content: ReactNode = (
     <>
       {children}

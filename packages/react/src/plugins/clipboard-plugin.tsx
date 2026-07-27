@@ -1,12 +1,17 @@
 import { useRef } from "react";
-import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
-import { RIVTO_CLIPBOARD_MIME } from "@chulane/rivto";
-import { useEditor } from "../hooks/editor/use-editor";
+import {
+  DEFAULT_BLOCK_TYPE,
+  RIVTO_CLIPBOARD_MIME,
+  type ClipboardPayload,
+} from "@chulane/rivto";
+import { useEditor, useReactEditor } from "../hooks/editor/use-editor";
 import { useDOMEvent } from "../hooks/editor/use-dom-event";
 import { useKeyboardEvent } from "../hooks/editor/use-keyboard-event";
 import { useEditorRoot } from "../hooks/editor/use-editor-root";
-import { readEditorDOMSelection } from "../events/utils/selection/editor-dom-selection";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import {
+  BUILTIN_KEYMAP,
+  KEYBOARD_BINDING_IDS,
+} from "../managers";
 
 /** Configuration for browser clipboard integration. */
 export interface ClipboardPluginProps {
@@ -15,17 +20,17 @@ export interface ClipboardPluginProps {
 }
 
 /**
- * Routes browser copy, cut, and paste events through editor commands.
+ * Routes browser copy, cut, and paste events through the core clipboard manager.
  *
  * Without this bridge, a contenteditable handles paste itself and sees only
  * `text/plain`; native block types, hierarchy, props, and plugin data are lost.
- * The editor commands additionally read Rivto's structured clipboard MIME type.
- * Its selection marker distinguishes copied text from complete copied blocks.
+ * Core produces and consumes Rivto's structured clipboard MIME representation;
+ * this component only transfers those portable values to and from the browser.
  * Ctrl/Cmd+Shift+V is remembered from keydown because ClipboardEvent has no
  * modifier fields; that shortcut explicitly keeps copied partial text as
  * blocks. Normal paste follows the copied selection type.
  *
- * DOM selection is synchronized immediately before each command because the
+ * DOM selection is synchronized immediately before each action because the
  * browser's `selectionchange` event may arrive after a keyboard clipboard event.
  * Event listeners are delegated to the active surface root and are removed by
  * the unified event runtime when this component unmounts.
@@ -41,6 +46,7 @@ export interface ClipboardPluginProps {
  */
 export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: ClipboardPluginProps) {
   const editor = useEditor();
+  const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
   // ClipboardEvent does not expose keyboard modifiers. Remember only the
   // immediately preceding paste shortcut, then consume it in `paste` below.
@@ -50,13 +56,15 @@ export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: Clipb
   // as a fallback, but only use it when the browser's plain text still matches.
   const copiedClipboard = useRef<{ structured: string; text: string } | null>(null);
 
-  /** Remembers the portable representations just written by a copy or cut. */
-  const rememberClipboard = (event: ClipboardEvent): void => {
-    const structured = event.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) ?? "";
-    if (!structured) return;
+  /** Writes the three core-produced flavors into a native clipboard event. */
+  const writeClipboard = (event: ClipboardEvent, payload: ClipboardPayload): void => {
+    const structured = JSON.stringify(payload.bundle);
+    event.clipboardData?.setData(RIVTO_CLIPBOARD_MIME, structured);
+    event.clipboardData?.setData("text/html", payload.html);
+    event.clipboardData?.setData("text/plain", payload.text);
     copiedClipboard.current = {
       structured,
-      text: event.clipboardData?.getData("text/plain") ?? "",
+      text: payload.text,
     };
   };
 
@@ -71,21 +79,23 @@ export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: Clipb
   /** Publishes the exact native endpoints before an asynchronous event can lag. */
   const synchronizeSelection = (): void => {
     if (!root) return;
-    const selection = readEditorDOMSelection(root);
-    if (selection) editor.execute("selection.set", { selection });
+    const selection = reactEditor.selection.readDOM();
+    if (selection) editor.selection.set(selection);
   };
 
   useDOMEvent("copy", ({ event }) => {
     synchronizeSelection();
-    editor.execute("clipboard.copy", { event });
-    rememberClipboard(event);
+    const payload = editor.clipboard.copy();
+    if (!payload) return false;
+    writeClipboard(event, payload);
     return true;
   });
 
   useDOMEvent("cut", ({ event }) => {
     synchronizeSelection();
-    editor.execute("clipboard.cut", { event });
-    rememberClipboard(event);
+    const payload = editor.clipboard.cut();
+    if (!payload) return false;
+    writeClipboard(event, payload);
     return true;
   });
 
@@ -100,16 +110,20 @@ export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: Clipb
     if (event.type === "paste") {
       const mergeText = !pasteTextAsBlocks.current;
       pasteTextAsBlocks.current = false;
-      editor.execute("clipboard.paste", {
-        event,
+      editor.clipboard.paste({
         defaultBlockType,
         mergeText,
-        structured: fallbackStructuredClipboard(event),
+        structured: event.clipboardData?.getData(RIVTO_CLIPBOARD_MIME)
+          || fallbackStructuredClipboard(event),
+        text: event.clipboardData?.getData("text/plain"),
       });
       return true;
     }
-    editor.execute(event.type === "cut" ? "clipboard.cut" : "clipboard.copy", { event });
-    rememberClipboard(event);
+    const payload = event.type === "cut"
+      ? editor.clipboard.cut()
+      : editor.clipboard.copy();
+    if (!payload) return false;
+    writeClipboard(event, payload);
     return true;
   };
 
@@ -145,11 +159,12 @@ export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: Clipb
     synchronizeSelection();
     const mergeText = !pasteTextAsBlocks.current;
     pasteTextAsBlocks.current = false;
-    editor.execute("clipboard.paste", {
-      event,
+    editor.clipboard.paste({
       defaultBlockType,
       mergeText,
-      structured: fallbackStructuredClipboard(event),
+      structured: event.clipboardData?.getData(RIVTO_CLIPBOARD_MIME)
+        || fallbackStructuredClipboard(event),
+      text: event.clipboardData?.getData("text/plain"),
     });
     return true;
   });

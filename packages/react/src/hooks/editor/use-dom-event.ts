@@ -5,7 +5,7 @@ import type {
   DOMEditorEventOptions,
   DOMEditorEventTarget,
   EditorEventHandler,
-} from "../../events";
+} from "../../managers";
 import { useReactEditor } from "./use-editor";
 
 /**

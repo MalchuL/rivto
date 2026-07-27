@@ -1,5 +1,5 @@
 import type { BlockDefinition, BlockRegistry } from "../blocks";
-import type { CommandHandler, CommandRegistry, RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
+import type { ClipboardManager, CommandHandler, CommandRegistry, RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import type { CRDTDoc } from "../store/crdt-doc";
 import type { DocumentModelImpl } from "../store/document-model";
 import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
@@ -81,6 +81,8 @@ export interface RivtoEditorApi {
   readonly mode: ModeManager;
   /** Local owner for an ordered list of text, block, and edgeless selections. */
   readonly selection: SelectionManager;
+  /** Framework-neutral structured clipboard operations for this editor. */
+  readonly clipboard: ClipboardManager;
   /** Local undo/redo history scoped to document mutations from this runtime. */
   readonly history: UndoManager;
   /** Ordered application commands available to slash-command surfaces. */

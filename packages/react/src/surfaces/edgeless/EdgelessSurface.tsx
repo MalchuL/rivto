@@ -4,7 +4,7 @@ import {
   useEditorRoot,
   useKeyboardEvent,
 } from "../../hooks";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../events/keymap";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { useCallback, useRef, useState } from "react";
 import { EdgelessRootBlock } from "./EdgelessBlock";
 

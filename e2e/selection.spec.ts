@@ -4,6 +4,7 @@ import {
   BLOCK_ID_SELECTOR,
   BLOCK_SELECTED_ATTRIBUTE,
   BLOCK_SELECTED_SELECTOR,
+  blockTypeSelector,
 } from "./dom-markers";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
@@ -98,6 +99,105 @@ test("Alt drag keeps partial text across blocks", async ({ page }) => {
   await page.keyboard.up("Alt");
   await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
   await expect.poll(() => page.evaluate(() => getSelection()?.toString().length ?? 0)).toBeGreaterThan(0);
+});
+
+test("dragging onto a contentless Counter immediately extends block selection", async ({ page }) => {
+  const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+  const nextContent = counter.locator("xpath=following::*[@data-block-content][1]");
+  const from = await textPoint(nextContent, 5);
+  const counterBox = await counter.boundingBox();
+  if (!counterBox) throw new Error("Expected Counter geometry");
+
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(
+    counterBox.x + counterBox.width / 2,
+    counterBox.y + counterBox.height / 2,
+    { steps: 8 },
+  );
+
+  // Assert while the pointer is still down. Previously Counter was skipped
+  // until the cursor reached another block containing editable text.
+  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
+    BLOCK_SELECTED_ATTRIBUTE,
+    "true",
+  );
+  await page.mouse.up();
+  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
+    BLOCK_SELECTED_ATTRIBUTE,
+    "true",
+  );
+});
+
+test("dragging from a contentless Counter anchors selection without incrementing it", async ({ page }) => {
+  const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+  const button = counter.locator(".custom-counter-block");
+  const nextContent = counter.locator("xpath=following::*[@data-block-content][1]");
+  const counterBox = await button.boundingBox();
+  const to = await textPoint(nextContent, 5);
+  if (!counterBox) throw new Error("Expected Counter geometry");
+
+  await page.mouse.move(
+    counterBox.x + counterBox.width / 2,
+    counterBox.y + counterBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
+    BLOCK_SELECTED_ATTRIBUTE,
+    "true",
+  );
+  await page.mouse.up();
+
+  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
+    BLOCK_SELECTED_ATTRIBUTE,
+    "true",
+  );
+  await expect(button).toHaveText("Count: 2");
+});
+
+test("dragging within a contentless Counter selects only that block", async ({ page }) => {
+  const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+  const button = counter.locator(".custom-counter-block");
+  const box = await button.boundingBox();
+  if (!box) throw new Error("Expected Counter geometry");
+
+  await page.mouse.move(box.x + box.width / 2 - 6, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+
+  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(page.locator(BLOCK_SELECTED_SELECTOR)).toHaveCount(1);
+  await expect(button).toHaveText("Count: 2");
+});
+
+test("dragging from the empty right side of Counter starts structural selection", async ({ page }) => {
+  const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+  const region = counter.locator(".custom-counter-selection-region");
+  const button = counter.locator(".custom-counter-block");
+  const nextContent = counter.locator("xpath=following::*[@data-block-content][1]");
+  const regionBox = await region.boundingBox();
+  const buttonBox = await button.boundingBox();
+  const to = await textPoint(nextContent, 5);
+  if (!regionBox || !buttonBox) throw new Error("Expected Counter geometry");
+  expect(regionBox.x + regionBox.width).toBeGreaterThan(buttonBox.x + buttonBox.width + 20);
+
+  await page.mouse.move(regionBox.x + regionBox.width - 8, regionBox.y + regionBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await page.mouse.up();
+
+  await expect(counter).toHaveAttribute(BLOCK_SELECTED_ATTRIBUTE, "true");
+  await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
+    BLOCK_SELECTED_ATTRIBUTE,
+    "true",
+  );
+  await expect(button).toHaveText("Count: 2");
 });
 
 test("Shift click ranges complete blocks", async ({ page }) => {

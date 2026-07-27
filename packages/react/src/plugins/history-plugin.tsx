@@ -1,9 +1,11 @@
-import { useEditor } from "../hooks/editor/use-editor";
+import { useEditor, useReactEditor } from "../hooks/editor/use-editor";
 import { useDOMEvent } from "../hooks/editor/use-dom-event";
 import { useKeyboardEvent } from "../hooks/editor/use-keyboard-event";
 import { useEditorRoot } from "../hooks/editor/use-editor-root";
-import { restoreEditorDOMSelection } from "../events/utils/selection/editor-dom-selection";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import {
+  BUILTIN_KEYMAP,
+  KEYBOARD_BINDING_IDS,
+} from "../managers";
 
 /** One document-history action recognized from a browser editing event. */
 type HistoryAction = "undo" | "redo";
@@ -53,6 +55,7 @@ export interface HistoryPluginProps {
 
 export function HistoryPlugin(options: HistoryPluginProps = {}) {
   const editor = useEditor();
+  const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
 
   /** Executes one history step and restores focus after React renders it. */
@@ -60,8 +63,7 @@ export function HistoryPlugin(options: HistoryPluginProps = {}) {
     if (!root) return;
     editor[action]();
     requestAnimationFrame(() => {
-      const selection = editor.selection.get();
-      if (restoreEditorDOMSelection(root, selection)) return;
+      if (reactEditor.selection.restoreDOM()) return;
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });
     });

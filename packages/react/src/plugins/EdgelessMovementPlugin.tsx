@@ -3,7 +3,7 @@ import {
   useEditor,
   useKeyboardEvent,
 } from "../hooks";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../events/keymap";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
 import { translatedLayouts } from "./utils/edgeless-geometry";
 
 /** Moves selected canvas roots through eight exact arrow-key bindings. */

@@ -1,5 +1,5 @@
 import { useBlock } from "../../hooks";
-import type { BlockRendererProps } from "../../react-editor";
+import type { BlockRendererProps } from "../../managers";
 
 /** Keeps documents readable when the demo lacks a renderer for a stored type. */
 export function UnknownBlock({ blockId }: BlockRendererProps) {

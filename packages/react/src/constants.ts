@@ -16,6 +16,18 @@ export const BLOCK_CONTENT_ATTRIBUTE = "data-block-content";
 /** CSS selector matching every plain-text editable block element. */
 export const BLOCK_CONTENT_SELECTOR = `[${BLOCK_CONTENT_ATTRIBUTE}]`;
 
+/**
+ * Opt-in marker for a renderer region that may anchor structural drag selection.
+ *
+ * Interactive elements using this marker must ignore clicks whose event is
+ * already `defaultPrevented`, because a completed drag claims the synthetic
+ * click that browsers may dispatch after pointer-up.
+ */
+export const BLOCK_SELECTION_ANCHOR_ATTRIBUTE = "data-block-selection-anchor";
+
+/** CSS selector matching renderer regions that anchor structural selection. */
+export const BLOCK_SELECTION_ANCHOR_SELECTOR = `[${BLOCK_SELECTION_ANCHOR_ATTRIBUTE}]`;
+
 /** Stable DOM attribute present on a BlockView while it is selected. */
 export const BLOCK_SELECTED_ATTRIBUTE = "data-selected";
 

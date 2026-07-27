@@ -35,6 +35,10 @@ body { margin: 0; }
 .custom-slider-block { display: grid; gap: 6px; }
 .custom-slider-block input { width: min(320px, 100%); accent-color: var(--rivto-accent); }
 
+.custom-counter-selection-region {
+  width: 100%;
+}
+
 .custom-counter-block {
   padding: 6px 12px;
   border: 1px solid #d8d2ff;
