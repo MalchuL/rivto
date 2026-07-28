@@ -8,7 +8,7 @@ const plugin: ReactEditorPlugin = {
   id: "acme.cards",
   setup(reactEditor) {
     reactEditor.surfaces.registerBlockWrapper("block", CardControls);
-    reactEditor.events.bind(/* semantic shortcut */, /* action */);
+    reactEditor.events.register(/* DOM or keyboard definition */, /* action */);
     reactEditor.plugins.mount(CardOverlay);
   },
 };
@@ -19,11 +19,9 @@ runtime is active, preserves declaration order, returns an idempotent disposer,
 and is automatically released by `ReactEditor.destroy()`.
 
 Every manager constructor receives its owning `ReactEditor`. Managers resolve
-the core editor, active root, registration ownership, and sibling managers from
-that owner when an operation runs. Constructors only retain the owner; they do
-not read sibling fields while `ReactEditor` is still being initialized.
-Keyboard keymap overrides and the unknown-renderer fallback remain explicit
-second constructor arguments because they are manager-specific configuration.
+the core editor, active surface, registration ownership, and siblings from
+that owner when an operation runs. Keyboard keymap overrides and the
+unknown-renderer fallback remain explicit configuration.
 
 Manager classes remain exported as public types, but applications should use
 the instances exposed by `ReactEditor` rather than construct detached manager
@@ -38,12 +36,12 @@ reactEditor.renderers.delete("persisted.unknown");
 reactEditor.surfaces.delete("edgeless");
 reactEditor.slashCommands.delete("acme.command");
 reactEditor.events.delete("acme.shortcut");
+reactEditor.events.delete("acme.pointer");
 ```
 
-Each returns `true` only when it removed a React-owned registration. DOM event
-listeners, mounted components, and ordered wrappers intentionally use their
-returned disposers: duplicate registrations are valid, so deleting by function
-or component identity would be ambiguous.
+Each returns `true` only when it removed a React-owned registration. Mounted
+components and ordered wrappers use their returned disposers because duplicate
+component registrations are valid.
 
 ## Manager map
 
@@ -53,7 +51,7 @@ or component identity would be ambiguous.
 | `renderers` | Renderer lookup, duplicate checks, and unknown fallback |
 | `surfaces` | One root per mode plus ordered block/editor wrappers |
 | `plugins` | Plugin setup/rollback, reverse cleanup, and globally mounted UI |
-| `events` | Root/document/window DOM events and semantic keyboard bindings |
+| `events` | Surface ownership plus DOM and keyboard event registrations |
 | `selection` | Core selection delegation and active-root DOM synchronization |
 | `slashCommands` | Lifecycle-aware delegation to the core slash registry |
 

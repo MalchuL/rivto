@@ -87,7 +87,11 @@ export function HistoryPlugin(options: HistoryPluginProps = {}) {
     return true;
   });
 
-  useDOMEvent("beforeinput", ({ event }) => {
+  useDOMEvent({
+    id: "history.before-input",
+    type: "beforeinput",
+    scope: "surface",
+  }, ({ raw: event }) => {
     const action = inputHistoryAction(event);
     if (!action) return false;
 

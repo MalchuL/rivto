@@ -58,7 +58,12 @@ export function EdgelessTransformPlugin() {
     delete root.dataset.transforming;
   };
 
-  useDOMEvent("pointerdown", ({ event }) => {
+  useDOMEvent({
+    id: "edgeless.transform.pointer-start",
+    type: "pointerdown",
+    capture: true,
+    mode: "edgeless",
+  }, ({ raw: event }) => {
     if (event.button !== 0 || !(event.target instanceof Element) || !root) return false;
     const moveHandle = event.target.closest("[data-edgeless-drag-handle]");
     const resizeHandle = event.target.closest("[data-edgeless-resize-handle]");
@@ -91,9 +96,15 @@ export function EdgelessTransformPlugin() {
     root.dataset.transforming = start.current.kind;
     card.focus({ preventScroll: true });
     return true;
-  }, { capture: true, mode: "edgeless" });
+  });
 
-  useDOMEvent("pointermove", ({ event }) => {
+  useDOMEvent({
+    id: "edgeless.transform.pointer-move",
+    type: "pointermove",
+    target: "window",
+    mode: "edgeless",
+    passive: false,
+  }, ({ raw: event }) => {
       const active = start.current;
       if (!active || !root) return false;
       active.lastX = event.clientX;
@@ -118,7 +129,7 @@ export function EdgelessTransformPlugin() {
         }
       }
       return true;
-  }, { target: "window", mode: "edgeless", passive: false });
+  });
 
   const finish = (commit: boolean): boolean => {
       const active = start.current;
@@ -142,18 +153,25 @@ export function EdgelessTransformPlugin() {
       return true;
   };
 
-  useDOMEvent("pointerup", ({ event }) => {
+  useDOMEvent({
+    id: "edgeless.transform.pointer-end",
+    type: "pointerup",
+    target: "window",
+    mode: "edgeless",
+  }, ({ raw: event }) => {
     const active = start.current;
     if (active) {
       active.lastX = event.clientX;
       active.lastY = event.clientY;
     }
     return finish(true);
-  }, { target: "window", mode: "edgeless" });
-  useDOMEvent("pointercancel", () => finish(false), {
+  });
+  useDOMEvent({
+    id: "edgeless.transform.pointer-cancel",
+    type: "pointercancel",
     target: "window",
     mode: "edgeless",
-  });
+  }, () => finish(false));
 
   useKeyboardEvent({
     id: KEYBOARD_BINDING_IDS.edgelessTransformCancel,

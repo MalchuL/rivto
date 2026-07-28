@@ -25,7 +25,7 @@ export function EdgelessMovementPlugin() {
     id,
     keys: BUILTIN_KEYMAP[id],
     mode: "edgeless",
-    when: ({ selection, event }) => {
+    when: ({ selection, raw: event }) => {
       const target = event.target;
       return selection.some((item) => item.type === "edgeless") &&
         target instanceof HTMLElement &&

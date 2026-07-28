@@ -67,7 +67,12 @@ export function EdgelessSelectionPlugin() {
     selectRoots(editor, owningRootIds(editor.getBlocks(), blockIds));
   }, [editor, editor.revision, mode]);
 
-  useDOMEvent("pointerdown", ({ event }) => {
+  useDOMEvent({
+    id: "edgeless.selection.pointer-start",
+    type: "pointerdown",
+    capture: true,
+    mode: "edgeless",
+  }, ({ raw: event }) => {
     if (event.button !== 0 || !(event.target instanceof Element) || !root) return false;
     if (root.dataset.panningReady === "true") return false;
     if (event.target.closest(HANDLE_SELECTOR)) return false;
@@ -98,9 +103,15 @@ export function EdgelessSelectionPlugin() {
     editor.selection.clear();
     gesture.current = { x: event.clientX, y: event.clientY, moved: false };
     return true;
-  }, { capture: true, mode: "edgeless" });
+  });
 
-  useDOMEvent("pointermove", ({ event }) => {
+  useDOMEvent({
+    id: "edgeless.selection.pointer-move",
+    type: "pointermove",
+    target: "window",
+    mode: "edgeless",
+    passive: false,
+  }, ({ raw: event }) => {
     const start = gesture.current;
     if (!start || !root || root.dataset.panning === "true") return false;
     if (!start.moved && Math.hypot(event.clientX - start.x, event.clientY - start.y) < 3) return false;
@@ -119,7 +130,7 @@ export function EdgelessSelectionPlugin() {
     });
     selectRoots(editor, rootsInRect(cards, next));
     return true;
-  }, { target: "window", mode: "edgeless", passive: false });
+  });
 
   const stopRectangle = () => {
     if (!gesture.current) return false;
@@ -127,15 +138,25 @@ export function EdgelessSelectionPlugin() {
     setRectangle(null);
     return false;
   };
-  useDOMEvent("pointerup", stopRectangle, { target: "window", mode: "edgeless" });
-  useDOMEvent("pointercancel", stopRectangle, { target: "window", mode: "edgeless" });
+  useDOMEvent({
+    id: "edgeless.selection.pointer-end",
+    type: "pointerup",
+    target: "window",
+    mode: "edgeless",
+  }, stopRectangle);
+  useDOMEvent({
+    id: "edgeless.selection.pointer-cancel",
+    type: "pointercancel",
+    target: "window",
+    mode: "edgeless",
+  }, stopRectangle);
 
   useKeyboardEvent({
     id: KEYBOARD_BINDING_IDS.edgelessSelectionClear,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessSelectionClear],
     mode: "edgeless",
-    when: ({ root: currentRoot, selection }) =>
-      !currentRoot.dataset.transforming &&
+    when: ({ root, selection }) =>
+      !root.dataset.transforming &&
       selection.some((item) => item.type === "edgeless"),
   }, () => {
     if (!root) return false;

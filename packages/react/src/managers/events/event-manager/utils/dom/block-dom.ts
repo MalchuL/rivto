@@ -3,9 +3,9 @@ import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-} from "../../../../constants";
+} from "../../../../../constants";
 
-/** DOM elements and persisted identity resolved from an editor event target. */
+/** DOM elements and persisted identity resolved from a delegated event target. */
 export interface EventBlock {
   /** Stable BlockView container carrying block identity and type markers. */
   readonly block: HTMLElement;

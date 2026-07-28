@@ -1,91 +1,129 @@
 # React events and keymaps
 
-`ReactEditor` owns one event object:
+`ReactEditor` owns one `EventManager`. It stores both native DOM definitions
+and semantic keyboard definitions in one ordered registry and owns the active
+surface, listener transport, IDs, disposal, and destruction.
+
+Each native dispatch produces a data-only event value:
 
 ```text
-EditorEventManager
-  └─ DOMEventManager
-       └─ KeyboardEventManager
+EditorEvent
+└── KeyboardEditorEvent
 ```
 
-The public `reactEditor.events` value is `KeyboardEventManager`, so the same
-ordered runtime handles ordinary DOM events and semantic keyboard actions.
-There is no second keyboard manager.
+The manager—not these values—continues to own registration, ordering,
+claiming, and cleanup. Event values are shared unchanged between a
+registration's `when` predicate and handler.
 
 ## DOM events
 
-Register native events from a functional plugin:
+Functional plugins can register delegated native behavior directly:
 
 ```ts
-const plugin = {
+reactEditor.events.register({
   id: "acme.pointer",
-  setup(reactEditor) {
-    reactEditor.events.on("pointerdown", ({ blockId, insideRoot }) => {
-      if (!insideRoot || !blockId) return false;
-      return true;
-    }, {
-      target: "root",
-      mode: "block",
-      capture: true,
-      passive: false,
-    });
-  },
-};
+  type: "pointerdown",
+  target: "surface",
+  scope: "block",
+  mode: "block",
+  capture: true,
+  when: ({ blockId }) => Boolean(blockId),
+}, ({ blockId }) => {
+  selectBlock(blockId!);
+  return true;
+});
 ```
 
-`target` is `root` by default and may also be `document` or `window`. Document
-and window are taken from the active root's `ownerDocument`, not global browser
-objects. Replacing the surface root disconnects the old realm before connecting
-the new one.
+Every registration has a stable ID. Duplicate IDs throw, `delete(id)` removes
+one registration, and the returned disposer performs the same cleanup
+idempotently. Plugin setup rollback and editor destruction also dispose owned
+registrations.
 
-Context contains the core editor, mode, selection snapshot, root, native event,
-`insideRoot`, and resolved block/content markers. Events outside the root never
-receive Rivto block metadata.
+`target` chooses where the native listener is attached:
 
-A handler returns `true` to claim the event. The runtime calls
-`preventDefault()` and skips later Rivto handlers. `false` or `undefined`
-preserves native behavior and permits fallthrough. A natively prevented event
-does not enter later Rivto handlers.
+- `surface` (default): the currently rendered page or edgeless surface.
+- `document`: the surface's `ownerDocument`.
+- `window`: that document's `defaultView`.
 
-React components use `useDOMEvent`. It keeps the latest callback in a ref, so a
-render does not reconnect the native listener.
+`scope` optionally requires the native target to resolve inside a presentation
+boundary:
 
-## Keyboard bindings
+- `surface`: anywhere inside the active surface.
+- `block`: inside the nearest `data-block-id` container.
+- `content`: inside the nearest editable `data-block-content` host.
 
-Keyboard plugins declare which shortcuts invoke a semantic action:
+Leave `scope` unset for window pointer-move/up listeners that must continue
+after the pointer leaves the surface. Document and window are never read from
+browser globals, so iframe editors and multiple documents remain isolated.
+
+`EditorEvent` includes the core editor, mode, selection snapshot, `root`,
+`insideRoot`, and resolved block/content metadata. Its `raw` property is the
+original typed native event. `when(event)` runs immediately before the handler.
+
+Returning `true` claims the event, prevents its cancelable native default, and
+stops later Rivto handlers. Returning `false` or `undefined` preserves native
+behavior. An already prevented native event does not reach later handlers.
+
+React components use the same declarative definition:
 
 ```ts
-reactEditor.events.bind({
+useDOMEvent({
+  id: "acme.selection-change",
+  type: "selectionchange",
+  target: "document",
+}, event => {
+  console.log(event.raw);
+  // The hook retains the latest callback without reconnecting the listener.
+});
+```
+
+Local wrapper controls should keep ordinary React handlers. Use delegated
+block-scoped events only when behavior crosses block instances. DnD libraries
+and measurements continue using block element refs; there is no wrapper event
+registry.
+
+## Keyboard events
+
+Keyboard registrations describe semantic actions rather than checking keys
+inside plugins:
+
+```ts
+reactEditor.events.register({
   id: "block.indent",
   keys: ["Tab"],
+  target: "surface",
+  scope: "content",
   mode: ["block", "edgeless"],
-  phase: "keydown",
-  when: ({ selection, contentElement }) =>
-    selection.length > 0 && Boolean(contentElement),
-}, ({ editor }) => {
-  editor.indentBlock(/* selected block */);
+  when: ({ selection }) => selection.length > 0,
+}, ({ editor, raw }) => {
+  console.log(raw.key);
+  editor.indentBlock(/* active block */);
   return true;
 });
 ```
 
 Matching is exact. Supported tokens include `Primary`, `Ctrl`, `Meta`, `Alt`,
 `Shift`, arrows, `Space`, named keys, and single characters. `Primary` means
-Ctrl or Meta, but never both. A binding defaults to keydown on the root.
+Ctrl or Meta, but never both. Registrations default to keydown on the surface.
 
-Composition policy is:
+Several actions may share a shortcut. They run in declaration order; a false
+`when` result or handler return lets the next action try. Keyboard actions run
+before ordinary delegated DOM registrations for the same bubbling key event.
 
-- `ignore` (default): skip the binding while IME composition is active.
-- `handle`: run the action normally.
-- `prevent`: suppress the browser shortcut without running the action. History
-  uses this to prevent native contenteditable undo during composition.
+Composition policies are:
 
-Several actions may share one shortcut. They run in plugin declaration order;
-a false `when` predicate or false handler result lets the next action try it.
-For example, Backspace tries selection deletion, nested outdent, root merge,
-empty custom-block reset, and finally native deletion.
+- `ignore` (default): skip during IME composition.
+- `handle`: run normally during composition.
+- `prevent`: suppress the browser shortcut without executing the action.
 
-React components use `useKeyboardEvent`, which also keeps the latest condition
-and callback without reinstalling the binding.
+`useKeyboardEvent(definition, handler)` provides the same behavior to
+React-stateful plugin components while retaining their latest callback.
+Keyboard handlers receive `KeyboardEditorEvent`, which extends `EditorEvent`
+with `shortcut` and `phase`.
+
+The event classes and their constructor input types are exported for direct
+testing and advanced integrations. `EventManager` constructs only the built-in
+classes; semantic actions such as indent and delete remain handlers.
 
 ## Keymap overrides
 
@@ -102,13 +140,7 @@ createReactEditor({
 });
 ```
 
-An override replaces every default shortcut for that binding ID. An empty
-array disables it. Unknown IDs do nothing. Duplicate registered IDs throw
-immediately, and plugin setup rolls back registrations it already made.
-
-`reactEditor.events.delete(bindingId)` explicitly removes a keyboard binding
-and releases its ID for reuse. Ordinary DOM listeners have no stable ID and
-must be removed with the disposer returned by `events.on(...)`.
-
-`KEYBOARD_BINDING_IDS` and `BUILTIN_KEYMAP` are exported for discoverability.
-The complete demo mapping is listed in [`demo/KEYMAP.md`](../../../demo/KEYMAP.md).
+An override replaces a registration's default shortcuts. An empty array
+disables it, and unknown IDs are harmless. `KEYBOARD_BINDING_IDS` and
+`BUILTIN_KEYMAP` list the built-in semantic actions; the demo mapping is in
+[`demo/KEYMAP.md`](../../../demo/KEYMAP.md).

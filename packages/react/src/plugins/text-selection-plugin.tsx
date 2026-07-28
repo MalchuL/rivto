@@ -122,7 +122,11 @@ export function TextSelectionPlugin() {
       }
   };
 
-  useDOMEvent("pointerdown", ({ event, blockId }) => {
+  useDOMEvent({
+    id: "text-selection.pointer-start",
+    type: "pointerdown",
+    scope: "block",
+  }, ({ raw: event, blockId }) => {
       if (!root) return false;
       const view = root.ownerDocument.defaultView;
       if (event.ctrlKey || event.metaKey) {
@@ -217,7 +221,13 @@ export function TextSelectionPlugin() {
       return false;
   });
 
-  useDOMEvent("pointermove", ({ event }) => {
+  useDOMEvent({
+    id: "text-selection.pointer-move",
+    type: "pointermove",
+    target: "window",
+    capture: true,
+    passive: false,
+  }, ({ raw: event }) => {
       if (!root) return false;
       const active = pointer.current;
       if (!active || Math.hypot(event.clientX - active.startX, event.clientY - active.startY) < 3) return false;
@@ -252,7 +262,7 @@ export function TextSelectionPlugin() {
       ownsCrossBlockSelection.current = true;
       publish(active, head, headPosition);
       return true;
-  }, { target: "window", capture: true, passive: false });
+  });
 
   const stop = (): false => {
       const completed = pointer.current;
@@ -286,19 +296,38 @@ export function TextSelectionPlugin() {
       });
       return false;
   };
-  useDOMEvent("pointerup", stop, { target: "window", capture: true });
-  useDOMEvent("pointercancel", stop, { target: "window", capture: true });
+  useDOMEvent({
+    id: "text-selection.pointer-end",
+    type: "pointerup",
+    target: "window",
+    capture: true,
+  }, stop);
+  useDOMEvent({
+    id: "text-selection.pointer-cancel",
+    type: "pointercancel",
+    target: "window",
+    capture: true,
+  }, stop);
 
-  useDOMEvent("click", ({ blockId }) => {
+  useDOMEvent({
+    id: "text-selection.suppress-anchor-click",
+    type: "click",
+    capture: true,
+    scope: "block",
+  }, ({ blockId }) => {
       if (!blockId || blockId !== suppressClickBlockId.current) return false;
       // A control may still receive `click` after its pointer gesture became a
       // structural drag. Claim that click so controls respecting
       // `defaultPrevented` do not perform their normal action.
       suppressClickBlockId.current = undefined;
       return true;
-  }, { capture: true });
+  });
 
-  useDOMEvent("selectionchange", () => {
+  useDOMEvent({
+    id: "text-selection.selection-change",
+    type: "selectionchange",
+    target: "document",
+  }, () => {
       if (!root || ownsCrossBlockSelection.current) return false;
       const selection = reactEditor.selection.readDOM();
       if (selection) {
@@ -314,7 +343,7 @@ export function TextSelectionPlugin() {
       if (remaining.length !== current.length) editor.selection.set(remaining);
       reactEditor.selection.clearDOMHighlight();
       return false;
-  }, { target: "document" });
+  });
 
   useEffect(() => {
     return () => {

@@ -83,7 +83,11 @@ export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: Clipb
     if (selection) editor.selection.set(selection);
   };
 
-  useDOMEvent("copy", ({ event }) => {
+  useDOMEvent({
+    id: "clipboard.copy",
+    type: "copy",
+    scope: "surface",
+  }, ({ raw: event }) => {
     synchronizeSelection();
     const payload = editor.clipboard.copy();
     if (!payload) return false;
@@ -91,7 +95,11 @@ export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: Clipb
     return true;
   });
 
-  useDOMEvent("cut", ({ event }) => {
+  useDOMEvent({
+    id: "clipboard.cut",
+    type: "cut",
+    scope: "surface",
+  }, ({ raw: event }) => {
     synchronizeSelection();
     const payload = editor.clipboard.cut();
     if (!payload) return false;
@@ -127,15 +135,27 @@ export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: Clipb
     return true;
   };
 
-  useDOMEvent("copy", ({ event, insideRoot }) => (
+  useDOMEvent({
+    id: "clipboard.document-copy",
+    type: "copy",
+    target: "document",
+  }, ({ raw: event, insideRoot }) => (
     handleDocumentClipboard(event, insideRoot)
-  ), { target: "document" });
-  useDOMEvent("cut", ({ event, insideRoot }) => (
+  ));
+  useDOMEvent({
+    id: "clipboard.document-cut",
+    type: "cut",
+    target: "document",
+  }, ({ raw: event, insideRoot }) => (
     handleDocumentClipboard(event, insideRoot)
-  ), { target: "document" });
-  useDOMEvent("paste", ({ event, insideRoot }) => (
+  ));
+  useDOMEvent({
+    id: "clipboard.document-paste",
+    type: "paste",
+    target: "document",
+  }, ({ raw: event, insideRoot }) => (
     handleDocumentClipboard(event, insideRoot)
-  ), { target: "document" });
+  ));
 
   useKeyboardEvent({
     id: KEYBOARD_BINDING_IDS.clipboardPasteAsBlocks,
@@ -155,7 +175,11 @@ export function ClipboardPlugin({ defaultBlockType = DEFAULT_BLOCK_TYPE }: Clipb
     return false;
   });
 
-  useDOMEvent("paste", ({ event }) => {
+  useDOMEvent({
+    id: "clipboard.paste",
+    type: "paste",
+    scope: "surface",
+  }, ({ raw: event }) => {
     synchronizeSelection();
     const mergeText = !pasteTextAsBlocks.current;
     pasteTextAsBlocks.current = false;

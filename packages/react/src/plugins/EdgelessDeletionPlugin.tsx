@@ -16,7 +16,7 @@ export function EdgelessDeletionPlugin() {
     id: KEYBOARD_BINDING_IDS.edgelessSelectionDelete,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessSelectionDelete],
     mode: "edgeless",
-    when: ({ selection, event }) => {
+    when: ({ selection, raw: event }) => {
       if (!selection.some((item) => item.type === "edgeless")) return false;
       const target = event.target;
       return target instanceof HTMLElement &&

@@ -20,7 +20,7 @@ export function ForwardBlockMergePlugin() {
     id: KEYBOARD_BINDING_IDS.blockMergeForward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
     mode: "block",
-    when: ({ selection, event }) =>
+    when: ({ selection, raw: event }) =>
       !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
   }, () => {
     if (!root) return false;

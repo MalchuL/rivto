@@ -51,7 +51,7 @@ export function EdgelessSurface() {
     id: KEYBOARD_BINDING_IDS.edgelessPanStart,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessPanStart],
     mode: "edgeless",
-    when: ({ event }) => {
+    when: ({ raw: event }) => {
       const target = event.target;
       return target instanceof HTMLElement &&
         !target.isContentEditable &&
@@ -74,13 +74,21 @@ export function EdgelessSurface() {
     return false;
   });
 
-  useDOMEvent("blur", () => {
+  useDOMEvent({
+    id: "edgeless.pan.blur",
+    type: "blur",
+    target: "window",
+  }, () => {
     clearSpace();
     panGesture.current = null;
     viewport.current?.removeAttribute("data-panning");
-  }, { target: "window" });
+  });
 
-  useDOMEvent("pointerdown", ({ event }) => {
+  useDOMEvent({
+    id: "edgeless.pan.pointer-start",
+    type: "pointerdown",
+    capture: true,
+  }, ({ raw: event }) => {
     const root = viewport.current;
     const allowed = event.button === 1 || (event.button === 0 && spaceHeld.current);
     if (!root || !allowed) return false;
@@ -92,16 +100,21 @@ export function EdgelessSurface() {
     };
     root.dataset.panning = "true";
     return true;
-  }, { capture: true });
+  });
 
-  useDOMEvent("pointermove", ({ event }) => {
+  useDOMEvent({
+    id: "edgeless.pan.pointer-move",
+    type: "pointermove",
+    target: "window",
+    passive: false,
+  }, ({ raw: event }) => {
     const root = viewport.current;
     const start = panGesture.current;
     if (!root || !start) return false;
     root.scrollLeft = start.left - (event.clientX - start.x);
     root.scrollTop = start.top - (event.clientY - start.y);
     return true;
-  }, { target: "window", passive: false });
+  });
 
   const stopPan = () => {
     if (!panGesture.current) return false;
@@ -109,8 +122,16 @@ export function EdgelessSurface() {
     viewport.current?.removeAttribute("data-panning");
     return false;
   };
-  useDOMEvent("pointerup", stopPan, { target: "window" });
-  useDOMEvent("pointercancel", stopPan, { target: "window" });
+  useDOMEvent({
+    id: "edgeless.pan.pointer-end",
+    type: "pointerup",
+    target: "window",
+  }, stopPan);
+  useDOMEvent({
+    id: "edgeless.pan.pointer-cancel",
+    type: "pointercancel",
+    target: "window",
+  }, stopPan);
 
   const zoomAt = (nextZoom: number, clientX?: number, clientY?: number): void => {
     const root = viewport.current;
@@ -128,12 +149,16 @@ export function EdgelessSurface() {
     });
   };
 
-  useDOMEvent("wheel", ({ event }) => {
+  useDOMEvent({
+    id: "edgeless.zoom.wheel",
+    type: "wheel",
+    passive: false,
+  }, ({ raw: event }) => {
     // Wheel modifier policy is a pointer gesture rather than a key binding.
     if (!event.ctrlKey && !event.metaKey) return false;
     zoomAt(zoom * Math.exp(-event.deltaY * 0.002), event.clientX, event.clientY);
     return true;
-  }, { passive: false });
+  });
 
   return (
     <main

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type {
-  KeyboardBinding,
-  KeyboardEditorEventContext,
+  KeyboardEventDefinition,
+  KeyboardEditorEvent,
   EditorEventHandler,
 } from "../../managers";
 import { useReactEditor } from "./use-editor";
@@ -13,8 +13,8 @@ import { useReactEditor } from "./use-editor";
  * against the creation-time keymap once when the binding is installed.
  */
 export function useKeyboardEvent(
-  binding: KeyboardBinding,
-  listener: EditorEventHandler<KeyboardEditorEventContext>,
+  binding: KeyboardEventDefinition,
+  listener: EditorEventHandler<KeyboardEditorEvent>,
 ): void {
   const editor = useReactEditor();
   const bindingRef = useRef(binding);
@@ -22,8 +22,8 @@ export function useKeyboardEvent(
   bindingRef.current = binding;
   listenerRef.current = listener;
 
-  useEffect(() => editor.events.bind({
+  useEffect(() => editor.events.register({
     ...bindingRef.current,
-    when: (context) => bindingRef.current.when?.(context) ?? true,
-  }, (context) => listenerRef.current(context)), [binding.id, editor]);
+    when: (event) => bindingRef.current.when?.(event) ?? true,
+  }, (event) => listenerRef.current(event)), [binding.id, editor]);
 }

@@ -34,7 +34,7 @@ export function PageEnterPlugin() {
   useKeyboardEvent({
     id: KEYBOARD_BINDING_IDS.blockCreate,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,
-  }, ({ event }) => {
+  }, ({ raw: event }) => {
     if (!root || !isEditableKeyboardEvent(event)) return false;
     // Read the key event's native caret synchronously. A newly focused editor
     // can receive Enter before the browser's deferred selectionchange event.

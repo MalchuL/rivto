@@ -373,7 +373,7 @@ Text editing inside a card still uses `type: "text"` and the same text plugin.
 | Edgeless arrows | `edgelessMovementPlugin` | Nudge selected roots; does not create text carets |
 
 `firstKeyboardTarget(selection)` in
-`managers/events/keyboard-event-manager/utils/selection.ts` reads
+`managers/events/event-manager/utils/keyboard/selection.ts` reads
 **only the first list item**. Enter creates one block after that target;
 structural indent expands from the full selection in core.
 

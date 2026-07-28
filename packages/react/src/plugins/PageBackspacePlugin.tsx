@@ -32,7 +32,7 @@ export function BlockOutdentPlugin() {
     id: KEYBOARD_BINDING_IDS.blockOutdentAtStart,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockOutdentAtStart],
     mode: "block",
-    when: ({ selection, event }) =>
+    when: ({ selection, raw: event }) =>
       !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
   }, () => {
     if (!root) return false;
@@ -63,7 +63,7 @@ export function BackwardBlockMergePlugin() {
     id: KEYBOARD_BINDING_IDS.blockMergeBackward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeBackward],
     mode: "block",
-    when: ({ selection, event }) =>
+    when: ({ selection, raw: event }) =>
       !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
   }, () => {
     if (!root) return false;
@@ -95,7 +95,7 @@ export function EmptyBlockResetPlugin() {
     id: KEYBOARD_BINDING_IDS.emptyBlockReset,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.emptyBlockReset],
     mode: "block",
-    when: ({ selection, event }) =>
+    when: ({ selection, raw: event }) =>
       !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
   }, () => {
     if (!root) return false;

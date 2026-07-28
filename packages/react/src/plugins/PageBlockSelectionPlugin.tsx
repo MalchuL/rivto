@@ -54,12 +54,23 @@ export function PageBlockSelectionPlugin() {
     setModifierDown(false);
     return false;
   });
-  useDOMEvent("blur", () => {
+  useDOMEvent({
+    id: "block-selection.modifier-blur",
+    type: "blur",
+    target: "window",
+    mode: "block",
+  }, () => {
     setModifierDown(false);
     return false;
-  }, { target: "window", mode: "block" });
+  });
 
-  useDOMEvent("pointerdown", ({ event }) => {
+  useDOMEvent({
+    id: "block-selection.pointer-toggle",
+    type: "pointerdown",
+    capture: true,
+    mode: "block",
+    scope: "block",
+  }, ({ raw: event }) => {
     if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) return false;
     if (
       !(event.target instanceof Element) ||
@@ -76,7 +87,7 @@ export function PageBlockSelectionPlugin() {
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });
     return true;
-  }, { capture: true, mode: "block" });
+  });
 
   return null;
 }

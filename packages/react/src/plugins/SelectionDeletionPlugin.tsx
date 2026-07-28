@@ -22,7 +22,7 @@ export function SelectionDeletionPlugin() {
     id: KEYBOARD_BINDING_IDS.selectionDelete,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
     mode: "block",
-    when: ({ selection, event }) => {
+    when: ({ selection, raw: event }) => {
       if (!root || !shouldDeleteSelection(selection)) return false;
       const rootBlockSelection = root.ownerDocument.activeElement === root &&
         selection.some((item) => item.type === "block");

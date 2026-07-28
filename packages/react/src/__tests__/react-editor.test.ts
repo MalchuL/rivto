@@ -12,9 +12,9 @@ import {
 } from "../blocks";
 import { EditorView } from "../editor-view";
 import {
-  DOMEventManager,
-  EditorEventManager,
-  KeyboardEventManager,
+  EditorEvent,
+  EventManager,
+  KeyboardEditorEvent,
   type ReactEditorPlugin,
 } from "../managers";
 import {
@@ -310,11 +310,11 @@ describe("ReactEditor", () => {
         id: "duplicates",
         setup(runtime) {
           failedRuntime = runtime;
-          runtime.events.bind({
+          runtime.events.register({
             id: "test.duplicate",
             keys: ["Primary+K"],
           }, () => false);
-          runtime.events.bind({
+          runtime.events.register({
             id: "test.duplicate",
             keys: ["Primary+L"],
           }, () => false);
@@ -322,7 +322,7 @@ describe("ReactEditor", () => {
       }],
     })).toThrow(/already registered/);
 
-    expect(() => failedRuntime?.events.bind({
+    expect(() => failedRuntime?.events.register({
       id: "test.after-destroy",
       keys: ["Primary+J"],
     }, () => false)).toThrow(/destroyed/);
@@ -432,22 +432,31 @@ describe("delegated events", () => {
     return event as unknown as KeyboardEvent;
   }
 
-  test("uses one inheritance hierarchy and follows root realms", () => {
+  test("uses one event registry and follows surface realms", () => {
     const editor = createRivtoEditor();
     const reactEditor = createReactEditor({ editor });
     const events = reactEditor.events;
-    expect(events).toBeInstanceOf(KeyboardEventManager);
-    expect(events).toBeInstanceOf(DOMEventManager);
-    expect(events).toBeInstanceOf(EditorEventManager);
+    expect(events).toBeInstanceOf(EventManager);
     const first = realm();
     const second = realm();
+    const disposeDocument = events.register({
+      id: "test.selection-change",
+      type: "selectionchange",
+      target: "document",
+    }, () => undefined);
+    events.register({
+      id: "test.surface-key",
+      keys: "Enter",
+    }, () => false);
+    events.register({
+      id: "test.window-key",
+      keys: "Escape",
+      target: "window",
+    }, () => false);
     events.setRoot(first.root as unknown as HTMLElement);
     expect(first.root.count()).toBeGreaterThan(0);
-    expect(first.document.count()).toBe(0);
-    expect(first.window.count()).toBeGreaterThan(0);
-
-    const disposeDocument = events.on("selectionchange", () => undefined, { target: "document" });
     expect(first.document.count()).toBe(1);
+    expect(first.window.count()).toBeGreaterThan(0);
     events.setRoot(second.root as unknown as HTMLElement);
     expect(first.root.count()).toBe(0);
     expect(first.document.count()).toBe(0);
@@ -468,27 +477,38 @@ describe("delegated events", () => {
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    events.bind({ id: "first", keys: ["Tab"], when: () => false }, () => {
+    let predicateEvent: KeyboardEditorEvent | undefined;
+    let handlerEvent: KeyboardEditorEvent | undefined;
+    events.register({ id: "first", keys: ["Tab"], when: (event) => {
+      predicateEvent = event;
+      return false;
+    } }, () => {
       calls.push("skipped");
       return true;
     });
-    events.bind({ id: "second", keys: ["Tab"] }, ({ shortcut }) => {
-      calls.push(shortcut);
+    events.register({ id: "second", keys: ["Tab"] }, (event) => {
+      handlerEvent = event;
+      calls.push(event.shortcut);
       return true;
     });
-    events.bind({ id: "late", keys: ["Tab"] }, () => {
+    events.register({ id: "late", keys: ["Tab"] }, () => {
       calls.push("late");
       return true;
     });
     const event = keyboardEvent(root, "Tab");
     root.emit("keydown", event);
     expect(calls).toEqual(["Tab"]);
+    expect(handlerEvent).toBe(predicateEvent);
+    expect(handlerEvent).toBeInstanceOf(KeyboardEditorEvent);
+    expect(handlerEvent).toBeInstanceOf(EditorEvent);
+    expect(handlerEvent?.raw).toBe(event);
+    expect(handlerEvent?.phase).toBe("keydown");
     expect(event.defaultPrevented).toBe(true);
     reactEditor.destroy();
     editor.destroy();
   });
 
-  test("filters DOM modes and never resolves markers outside the active root", () => {
+  test("filters DOM modes and never resolves markers outside the active surface", () => {
     const editor = createRivtoEditor();
     const reactEditor = createReactEditor({ editor });
     const events = reactEditor.events;
@@ -502,9 +522,14 @@ describe("delegated events", () => {
     outside.ownerDocument = document;
     outside.attributes.set("data-block-id", "outside");
     const seen: Array<[boolean, string | undefined]> = [];
-    events.on("pointerdown", ({ insideRoot, blockId }) => {
+    events.register({
+      id: "test.pointer",
+      type: "pointerdown",
+      target: "document",
+      mode: "block",
+    }, ({ insideRoot, blockId }) => {
       seen.push([insideRoot, blockId]);
-    }, { target: "document", mode: "block" });
+    });
 
     document.emit("pointerdown", {
       type: "pointerdown",
@@ -533,6 +558,175 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
+  test("filters delegated events by surface, block, and content scope", () => {
+    const editor = createRivtoEditor();
+    const reactEditor = createReactEditor({ editor });
+    const events = reactEditor.events;
+    const { root } = realm();
+    events.setRoot(root as unknown as HTMLElement);
+    const block = new FakeElement();
+    block.ownerDocument = root.ownerDocument;
+    block.parent = root;
+    block.attributes.set("data-block-id", "block");
+    const content = new FakeElement();
+    content.ownerDocument = root.ownerDocument;
+    content.parent = block;
+    content.attributes.set("data-block-content", "");
+    const calls: string[] = [];
+
+    for (const scope of ["surface", "block", "content"] as const) {
+      events.register({
+        id: `scope.${scope}`,
+        type: "pointerdown",
+        scope,
+      }, () => {
+        calls.push(scope);
+      });
+    }
+
+    root.emit("pointerdown", {
+      type: "pointerdown",
+      target: content,
+      defaultPrevented: false,
+      cancelable: true,
+      preventDefault() {},
+    } as unknown as PointerEvent);
+    expect(calls).toEqual(["surface", "block", "content"]);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("deletes DOM registrations and releases their stable IDs", () => {
+    const editor = createRivtoEditor();
+    const reactEditor = createReactEditor({ editor });
+    const register = () => reactEditor.events.register({
+      id: "test.delete-dom",
+      type: "click",
+    }, () => false);
+
+    const staleDisposer = register();
+    expect(() => register()).toThrow(/already registered/);
+    expect(reactEditor.events.delete("test.delete-dom")).toBe(true);
+    expect(reactEditor.events.delete("test.delete-dom")).toBe(false);
+    expect(register).not.toThrow();
+    staleDisposer();
+    expect(() => register()).toThrow(/already registered/);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("dispatches keyboard actions before ordinary DOM key handlers", () => {
+    const editor = createRivtoEditor();
+    const reactEditor = createReactEditor({ editor });
+    const { root } = realm();
+    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    const calls: string[] = [];
+    reactEditor.events.register({
+      id: "test.keyboard-first",
+      keys: ["Enter"],
+    }, () => {
+      calls.push("keyboard");
+      return true;
+    });
+    reactEditor.events.register({
+      id: "test.dom-second",
+      type: "keydown",
+    }, () => {
+      calls.push("dom");
+      return true;
+    });
+
+    root.emit("keydown", keyboardEvent(root, "Enter"));
+    expect(calls).toEqual(["keyboard"]);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("orders DOM handlers, applies when, and stops after a claim", () => {
+    const editor = createRivtoEditor();
+    const reactEditor = createReactEditor({ editor });
+    const { root } = realm();
+    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    const calls: string[] = [];
+    let predicateEvent: EditorEvent | undefined;
+    let handlerEvent: EditorEvent | undefined;
+    reactEditor.events.register({
+      id: "test.dom-skipped",
+      type: "click",
+      when: (event) => {
+        predicateEvent = event;
+        return false;
+      },
+    }, () => {
+      calls.push("skipped");
+      return true;
+    });
+    reactEditor.events.register({
+      id: "test.dom-claimed",
+      type: "click",
+    }, (event) => {
+      handlerEvent = event;
+      calls.push("claimed");
+      return true;
+    });
+    reactEditor.events.register({
+      id: "test.dom-late",
+      type: "click",
+    }, () => {
+      calls.push("late");
+      return true;
+    });
+    const nativeEvent = {
+      type: "click",
+      target: root,
+      defaultPrevented: false,
+      cancelable: true,
+      preventDefault() { nativeEvent.defaultPrevented = true; },
+    };
+    const event = nativeEvent as unknown as MouseEvent;
+
+    root.emit("click", event);
+    expect(calls).toEqual(["claimed"]);
+    expect(handlerEvent).toBe(predicateEvent);
+    expect(handlerEvent).toBeInstanceOf(EditorEvent);
+    expect(handlerEvent?.raw).toBe(event);
+    expect(nativeEvent.defaultPrevented).toBe(true);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("constructs exported editor event values directly", () => {
+    const editor = createRivtoEditor();
+    const { root } = realm();
+    const surface = root as unknown as HTMLElement;
+    const raw = keyboardEvent(root, "Enter");
+    const selection = editor.selection.get();
+    const base = {
+      raw,
+      editor,
+      root: surface,
+      mode: editor.mode.get(),
+      selection,
+      eventTarget: "surface" as const,
+      insideRoot: true,
+      blockElement: null,
+      blockId: undefined,
+      contentElement: null,
+    };
+    const event = new EditorEvent(base);
+    const keyboardEventValue = new KeyboardEditorEvent({
+      ...base,
+      shortcut: "Enter",
+      phase: "keydown",
+    });
+
+    expect(event.raw).toBe(raw);
+    expect(event.selection).toBe(selection);
+    expect(keyboardEventValue).toBeInstanceOf(EditorEvent);
+    expect(keyboardEventValue.shortcut).toBe("Enter");
+    editor.destroy();
+  });
+
   test("applies overrides, disabling, exact modifiers, and duplicate IDs", () => {
     const editor = createRivtoEditor();
     const reactEditor = createReactEditor({
@@ -547,12 +741,16 @@ describe("delegated events", () => {
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    events.bind({ id: "remapped", keys: ["Tab"] }, () => { calls.push("remapped"); return true; });
-    events.bind({ id: "disabled", keys: ["Escape"] }, () => { calls.push("disabled"); return true; });
-    expect(() => events.bind({ id: "remapped", keys: ["Enter"] }, () => true)).toThrow(/already registered/);
-    const release = events.bind({ id: "temporary", keys: ["Enter"] }, () => true);
+    events.register({ id: "remapped", keys: ["Tab"] }, () => { calls.push("remapped"); return true; });
+    events.register({ id: "disabled", keys: ["Escape"] }, () => { calls.push("disabled"); return true; });
+    expect(() => events.register({ id: "remapped", keys: ["Enter"] }, () => true)).toThrow(/already registered/);
+    expect(() => events.register({
+      id: "remapped",
+      type: "click",
+    }, () => false)).toThrow(/already registered/);
+    const release = events.register({ id: "temporary", keys: ["Enter"] }, () => true);
     release();
-    expect(() => events.bind({ id: "temporary", keys: ["Enter"] }, () => true)).not.toThrow();
+    expect(() => events.register({ id: "temporary", keys: ["Enter"] }, () => true)).not.toThrow();
     root.emit("keydown", keyboardEvent(root, "Tab"));
     root.emit("keydown", keyboardEvent(root, "ArrowRight", { ctrlKey: true }));
     root.emit("keydown", keyboardEvent(root, "ArrowRight", { ctrlKey: true, shiftKey: true }));
@@ -569,10 +767,10 @@ describe("delegated events", () => {
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    events.bind({ id: "ignored", keys: ["a"] }, () => { calls.push("ignored"); return true; });
-    events.bind({ id: "handled", keys: ["b"], composing: "handle" }, () => { calls.push("handled"); return true; });
-    events.bind({ id: "prevented", keys: ["c"], composing: "prevent" }, () => { calls.push("prevented"); return true; });
-    events.bind({ id: "released", keys: ["d"], phase: "keyup" }, () => { calls.push("released"); return true; });
+    events.register({ id: "ignored", keys: ["a"] }, () => { calls.push("ignored"); return true; });
+    events.register({ id: "handled", keys: ["b"], composing: "handle" }, () => { calls.push("handled"); return true; });
+    events.register({ id: "prevented", keys: ["c"], composing: "prevent" }, () => { calls.push("prevented"); return true; });
+    events.register({ id: "released", keys: ["d"], phase: "keyup" }, () => { calls.push("released"); return true; });
     const ignored = keyboardEvent(root, "a", { isComposing: true });
     const handled = keyboardEvent(root, "b", { isComposing: true });
     const prevented = keyboardEvent(root, "c", { isComposing: true });

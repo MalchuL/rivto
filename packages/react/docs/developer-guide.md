@@ -116,8 +116,7 @@ Ask: *Why are there two selections, and when does a drag become blocks vs text?*
 
 ### Step E — Interaction (how keys and pointers become commands)
 
-16. `src/managers/events/` — `EditorEventManager → DOMEventManager →
-    KeyboardEventManager`
+16. `src/managers/events/` — one `EventManager` for DOM and keyboard definitions
 17. One page plugin, e.g. `PageEnterPlugin.tsx` or `PageBackspacePlugin.tsx`
 
 Ask: *Where does Enter/Backspace live, and why is order of plugins important?*
@@ -145,7 +144,7 @@ monotonic revision used to invalidate React. Concrete registries live in:
 - `blocks` and `renderers`
 - `surfaces` (including block/editor wrappers)
 - `plugins` (setup lifecycle and globally mounted UI)
-- unified `events` (`KeyboardEventManager`)
+- unified `events` (DOM definitions and semantic keyboard definitions)
 - `selection` and `slashCommands` delegates
 
 It does **not** render UI itself.
@@ -164,7 +163,7 @@ React boundary. Responsibilities:
 
 - subscribe to `ReactEditor` via `useSyncExternalStore`
 - publish `{ editor, reactEditor, revision }` through context
-- hold the surface **root ref** and call `reactEditor.events.setRoot(...)`
+- hold the surface root ref and call `reactEditor.events.setRoot(...)`
 - compose editor wrappers → children + plugin components → active `Surface`
 
 It adds **no DOM wrapper**. Surfaces own the visible root element.
@@ -284,8 +283,8 @@ documented in [`markdown-rendering.md`](./markdown-rendering.md).
 ### Structural command (Enter, indent, delete selection)
 
 ```text
-1. Native keydown on root / window
-2. KeyboardEventManager matches binding IDs (and `when` predicates)
+1. Native keydown on surface / window
+2. EventManager matches keyboard definitions (and `when` predicates)
 3. First handler returning true claims the event (preventDefault)
 4. Handler calls core commands (insertBlock, indentBlock, deleteSelection, …)
 5. Document revises → same React invalidation path as typing
@@ -339,7 +338,7 @@ Plugins receive the complete `ReactEditor` runtime:
 
 | API | Use |
 | --- | --- |
-| `reactEditor.events.on` / `.bind` | DOM + keyboard |
+| `reactEditor.events.register` | DOM or keyboard definition |
 | `reactEditor.plugins.mount(Component)` | Mode-free headless or overlay UI beside the surface |
 | `reactEditor.surfaces.registerEditorWrapper(Wrapper, mode?)` | Wrap the complete editor UI (e.g. DnD context) |
 | `reactEditor.surfaces.register(mode, Surface)` | Page / edgeless root |
@@ -354,8 +353,8 @@ Plugins receive the complete `ReactEditor` runtime:
 Presentation registrations are automatically owned by the active plugin and
 may also be created dynamically after editor construction. Every method returns
 an idempotent disposer. Mutable registration collections remain private.
-Keyed managers additionally expose `delete(key)`; ordered wrappers, mounted
-components, and DOM listeners use exact returned disposers because duplicates
+Keyed managers and the event manager additionally expose `delete(key)`;
+ordered wrappers and mounted components use exact returned disposers because duplicates
 are valid.
 
 Factories in `plugin-factories.tsx` are the supported public catalog. Internal
@@ -378,19 +377,17 @@ required context.
 
 ## 7. Events and keymaps (compact)
 
-Public `reactEditor.events` is one object:
-
-```text
-EditorEventManager
-  └─ DOMEventManager
-       └─ KeyboardEventManager   ← this is what you hold
-```
+Public `reactEditor.events` is the single DOM and keyboard registry.
 
 - Handlers return `true` to claim; claimed events get `preventDefault` and stop
   later Rivto handlers.
-- `target`: `root` (default), `document`, or `window` — taken from the active
-  root's owner document, not always `window` globals.
-- Replacing the surface root reconnects the whole event realm.
+- Handlers receive `EditorEvent` or `KeyboardEditorEvent`; `raw` contains the
+  original browser event.
+- `target`: `surface` (default), `document`, or `window` — taken from the active
+  surface's owner document, not browser globals.
+- Optional `scope` restricts a handler to the surface, a block, or editable
+  content.
+- Replacing the surface reconnects the whole event realm.
 - Keymap overrides are fixed at `createReactEditor({ keymap })` by binding ID.
   Empty array disables. See [`events.md`](./events.md) and `KEYBOARD_BINDING_IDS`.
 
@@ -499,8 +496,8 @@ packages/react/
 | Goal | Start here |
 | --- | --- |
 | New block type | `registerBlock` + renderer; see demo custom blocks |
-| New keyboard action | Plugin `events.bind` + stable ID in keymap if overridable |
-| New pointer UX | `events.on` or `useDOMEvent`; prefer root-scoped handlers |
+| New keyboard action | Plugin `events.register` + stable keymap ID |
+| New pointer UX | `events.register` or `useDOMEvent`; prefer delegated scopes |
 | Decorate every block | `registerBlockWrapper` (+ `wrapEditor` if shared context is needed) |
 | Change page layout | `PageSurface` / `PageBlock` shell only |
 | Change canvas UX | `EdgelessSurface` / edgeless plugins |

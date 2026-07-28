@@ -169,20 +169,20 @@ export const indentPlugin = (options: IndentPluginOptions = {}): ReactEditorPlug
   return {
     id: "block.indent",
     setup: (reactEditor) => {
-      reactEditor.events.bind({
+      reactEditor.events.register({
         id: KEYBOARD_BINDING_IDS.blockIndent,
         keys: indentKeys,
-      }, ({ editor, root, event }) => applyIndentShortcut(
+      }, ({ editor, root, raw: event }) => applyIndentShortcut(
         editor,
         reactEditor.selection,
         root,
         event,
         false,
       ));
-      reactEditor.events.bind({
+      reactEditor.events.register({
         id: KEYBOARD_BINDING_IDS.blockOutdent,
         keys: outdentKeys,
-      }, ({ editor, root, event }) => applyIndentShortcut(
+      }, ({ editor, root, raw: event }) => applyIndentShortcut(
         editor,
         reactEditor.selection,
         root,

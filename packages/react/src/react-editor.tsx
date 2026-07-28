@@ -14,7 +14,7 @@ import {
 import { MarkdownContent } from "./blocks/markdown";
 import {
   BlockManager,
-  KeyboardEventManager,
+  EventManager,
   PluginManager,
   ReactSelectionManager,
   ReactSlashCommandManager,
@@ -56,8 +56,8 @@ export class ReactEditor {
   readonly surfaces: SurfaceManager;
   /** Plugin setup, mounted UI, registration ownership, and cleanup. */
   readonly plugins: PluginManager;
-  /** Unified root/document/window DOM and keyboard event manager. */
-  readonly events: KeyboardEventManager;
+  /** Composed surface/document/window DOM and keyboard event runtime. */
+  readonly events: EventManager;
   /** Current-surface DOM selection conversion and highlighting. */
   readonly selection: ReactSelectionManager;
   /** React-owned access to the shared core slash-command registry. */
@@ -81,7 +81,7 @@ export class ReactEditor {
     // until an operation runs. This keeps the dependency graph cyclic in
     // capability while initialization itself remains strictly ordered.
     this.plugins = new PluginManager(this);
-    this.events = new KeyboardEventManager(this, options.keymap);
+    this.events = new EventManager(this, options.keymap);
     this.selection = new ReactSelectionManager(this);
     this.slashCommands = new ReactSlashCommandManager(this);
     this.renderers = new RendererManager(this, options.unknownBlockRenderer);

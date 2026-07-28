@@ -161,7 +161,11 @@ export function PageSlashCommandPlugin() {
     });
   }, [slashCommands]);
 
-  useDOMEvent("input", ({ event }) => {
+  useDOMEvent({
+    id: "slash.input",
+    type: "input",
+    scope: "content",
+  }, ({ raw: event }) => {
     const content = event.target instanceof Element
       ? event.target.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR)
       : null;
@@ -180,7 +184,11 @@ export function PageSlashCommandPlugin() {
     if (session && !editor.getBlock(session.blockId)) close();
   }, [close, editor, editor.revision, session]);
 
-  useDOMEvent("selectionchange", () => {
+  useDOMEvent({
+    id: "slash.selection-change",
+    type: "selectionchange",
+    target: "document",
+  }, () => {
     const current = sessionRef.current;
     if (root && current) {
       const block = findRenderedBlock(root, current.blockId);
@@ -188,7 +196,7 @@ export function PageSlashCommandPlugin() {
       if (!content || content.closest(BLOCK_ID_SELECTOR) !== block) return close();
       refresh(content, current.blockId, false);
     }
-  }, { target: "document" });
+  });
 
   const execute = useCallback((command: SlashCommand) => {
     const current = sessionRef.current;

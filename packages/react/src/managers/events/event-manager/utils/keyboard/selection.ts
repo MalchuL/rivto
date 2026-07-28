@@ -6,7 +6,7 @@ import type {
 import {
   findBlockFromEvent,
   focusBlock,
-} from "../../dom-event-manager/utils/block-dom";
+} from "../dom/block-dom";
 
 /** First selection item resolved to one page block for a keyboard command. */
 export interface KeyboardSelectionTarget {

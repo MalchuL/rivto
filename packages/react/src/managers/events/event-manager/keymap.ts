@@ -1,4 +1,4 @@
-/** Stable action IDs used by creation-time keymap overrides. */
+/** Stable action IDs used by creation-time keyboard overrides. */
 export const KEYBOARD_BINDING_IDS = {
   historyUndo: "history.undo",
   historyRedo: "history.redo",
