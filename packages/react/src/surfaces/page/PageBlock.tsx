@@ -79,14 +79,14 @@ export interface PageBlockProps {
 export function PageBlock({ blockId, ignoreCollapse = false }: PageBlockProps) {
   // Hooks resolve from the editor revision so renderers never receive stale
   // snapshots after local commands, remote CRDT changes, undo, or redo.
-  const { block, getters, operations } = useBlock(blockId);
+  const { block, operations } = useBlock(blockId);
   const reactEditor = useReactEditor();
   const selection = useBlockSelection(blockId);
 
   if (!block) return null;
   // Renderer policy belongs to the surface; BlockView only supplies DOM identity.
   const Content = reactEditor.renderers.get(block.type) ?? UnknownBlock;
-  const collapsed = getters.collapsed;
+  const collapsed = block.collapsed;
   // The stable relationship lets assistive technology associate the toggle
   // with the descendant container it shows or hides.
   const childrenId = `block-children-${block.id}`;
@@ -109,7 +109,7 @@ export function PageBlock({ blockId, ignoreCollapse = false }: PageBlockProps) {
             event.preventDefault();
             event.stopPropagation();
           }}
-          onClick={operations.toggleCollapsed}
+          onClick={() => operations.update({ collapsed: !block.collapsed })}
         >
           {collapsed ? "▸" : "▾"}
         </button>

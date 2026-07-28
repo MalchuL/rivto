@@ -11,6 +11,8 @@ export interface BlockLayout {
 export interface Block {
   id: string;
   type: string;
+  /** Persisted outline visibility; renderers decide whether to honor it. */
+  collapsed: boolean;
   props: Record<string, unknown>;
   pluginData: Record<string, unknown>;
   /** Plain Markdown source stored collaboratively as CRDTText. */
@@ -31,6 +33,8 @@ export interface Link {
 export interface BlockInput {
   type: string;
   id?: string;
+  /** Initial outline visibility; omitted creation values default to false. */
+  collapsed?: boolean;
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
   content?: string;
@@ -40,15 +44,23 @@ export interface BlockInput {
 
 /** Mutable block fields; a block's type and identity are intentionally immutable. */
 export interface BlockPatch {
+  /** Replaces the persisted outline visibility when supplied. */
+  collapsed?: boolean;
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
   content?: string;
   layout?: Partial<BlockLayout>;
 }
 
+/** One identified block patch used by atomic multi-block updates. */
+export interface BlockUpdate {
+  id: string;
+  patch: BlockPatch;
+}
+
 /** Lossless, versioned document value used for persistence. */
 export interface Snapshot {
-  version: 3;
+  version: 4;
   blocks: Block[];
   links: Link[];
   pluginData?: Record<string, unknown>;
@@ -56,7 +68,7 @@ export interface Snapshot {
 
 /** Sections received from persistence that should replace only supplied state. */
 export interface SnapshotUpdate {
-  version: 3;
+  version: 4;
   blocks?: Block[];
   links?: Link[];
   pluginData?: Record<string, unknown>;

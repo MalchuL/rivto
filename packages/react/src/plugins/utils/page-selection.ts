@@ -1,5 +1,4 @@
 import {
-  isBlockCollapsed,
   type BlockSelection,
   type EditorBlock,
   type EditorSelection,
@@ -16,7 +15,7 @@ export interface PageBlockEntry {
 export function pageEntries(blocks: EditorBlock[], parentId: string | null = null): PageBlockEntry[] {
   return blocks.flatMap((block) => [
     { block, parentId, siblings: blocks },
-    ...(isBlockCollapsed(block) ? [] : pageEntries(block.children, block.id)),
+    ...(block.collapsed ? [] : pageEntries(block.children, block.id)),
   ]);
 }
 
@@ -38,7 +37,7 @@ export function reconcileCollapsedSelection(
   const indexHidden = (items: EditorBlock[], collapsedAncestor?: string): void => {
     items.forEach((block) => {
       if (collapsedAncestor) hiddenBy.set(block.id, collapsedAncestor);
-      const ancestor = collapsedAncestor ?? (isBlockCollapsed(block) ? block.id : undefined);
+      const ancestor = collapsedAncestor ?? (block.collapsed ? block.id : undefined);
       indexHidden(block.children, ancestor);
     });
   };

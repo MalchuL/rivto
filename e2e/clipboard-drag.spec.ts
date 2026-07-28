@@ -19,11 +19,12 @@ async function textPoint(
 }
 
 const structuredBundle = JSON.stringify({
-  version: 1,
+  version: 2,
   startsWithText: true,
   blocks: [{
     id: "copied",
     type: "paragraph",
+    collapsed: false,
     content: "Copied",
     props: {},
     pluginData: {},

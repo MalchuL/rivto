@@ -10,7 +10,7 @@ const exchangeUpdates = (left: YjsDoc, right: YjsDoc): void => {
   Y.applyUpdate(right.doc, leftState);
 };
 
-describe("DocumentModelImpl schema v3 Markdown storage", () => {
+describe("DocumentModelImpl schema v4 Markdown storage", () => {
   it("merges concurrent property, plugin namespace, and text operations", () => {
     const docA = new YjsDoc("canonical-a");
     const docB = new YjsDoc("canonical-b");

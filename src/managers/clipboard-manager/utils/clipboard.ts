@@ -153,9 +153,16 @@ export function remapClipboardBundle(
   bundle: ClipboardBundle,
   firstTargetId?: string,
 ): RemappedClipboardBundle {
-  if (bundle.version !== 1 || !Array.isArray(bundle.blocks) || !Array.isArray(bundle.links)) {
+  if (bundle.version !== 2 || !Array.isArray(bundle.blocks) || !Array.isArray(bundle.links)) {
     throw new Error("Unsupported Rivto clipboard payload");
   }
+  const validateBlock = (block: Block): void => {
+    if (typeof block.collapsed !== "boolean" || !Array.isArray(block.children)) {
+      throw new Error("Invalid Rivto clipboard block");
+    }
+    block.children.forEach(validateBlock);
+  };
+  bundle.blocks.forEach(validateBlock);
 
   const idMap = new Map<string, string>();
   const remap = (block: Block): BlockInput => {

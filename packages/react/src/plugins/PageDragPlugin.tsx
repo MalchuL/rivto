@@ -20,10 +20,7 @@ import {
   type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import {
-  isBlockCollapsed,
-  type EditorBlock,
-} from "@chulane/rivto";
+import type { EditorBlock } from "@chulane/rivto";
 import {
   BlockElementRefProvider,
   type BlockWrapperProps,
@@ -231,7 +228,7 @@ interface PreviewEntry {
 function flattenPreview(block: EditorBlock, depth = 0): PreviewEntry[] {
   return [
     { block, depth },
-    ...(isBlockCollapsed(block)
+    ...(block.collapsed
       ? []
       : block.children.flatMap((child) => flattenPreview(child, depth + 1))),
   ];

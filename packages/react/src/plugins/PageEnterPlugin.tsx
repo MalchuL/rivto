@@ -69,7 +69,7 @@ export function PageEnterPlugin() {
         content: isTextTarget ? block.content.slice(splitAt) : "",
       }, block.id);
 
-      const childrenAreVisible = editor.mode.get() === "edgeless" || !editor.getBlockCollapsed(block.id);
+      const childrenAreVisible = editor.mode.get() === "edgeless" || !block.collapsed;
       if (block.children.length > 0 && childrenAreVisible) {
         // Insertion initially creates a sibling directly after `block`.
         // Indenting makes it the last child; moving it to position zero then

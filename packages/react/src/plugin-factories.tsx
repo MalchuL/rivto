@@ -300,9 +300,9 @@ export const slashCommandPlugin = (): ReactEditorPlugin => ({
         keywords: ["fold", "hide"],
         isAvailable: ({ blockId }) => {
           const block = editor.getBlock(blockId);
-          return editor.mode.get() === "block" && Boolean(block?.children.length && !editor.getBlockCollapsed(blockId));
+          return editor.mode.get() === "block" && Boolean(block?.children.length && !block.collapsed);
         },
-        execute: ({ blockId }) => editor.setBlockCollapsed(blockId, true),
+        execute: ({ blockId }) => editor.updateBlock(blockId, { collapsed: true }),
       }),
       // Expansion is offered only when it has a visible effect in page mode.
       reactEditor.slashCommands.register({
@@ -312,9 +312,9 @@ export const slashCommandPlugin = (): ReactEditorPlugin => ({
         keywords: ["unfold", "show"],
         isAvailable: ({ blockId }) => {
           const block = editor.getBlock(blockId);
-          return editor.mode.get() === "block" && Boolean(block?.children.length && editor.getBlockCollapsed(blockId));
+          return editor.mode.get() === "block" && Boolean(block?.children.length && block.collapsed);
         },
-        execute: ({ blockId }) => editor.setBlockCollapsed(blockId, false),
+        execute: ({ blockId }) => editor.updateBlock(blockId, { collapsed: false }),
       }),
     ];
     // Core slash registrations are stack-like and therefore dispose in reverse.

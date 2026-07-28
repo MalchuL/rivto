@@ -9,7 +9,7 @@ import type { Block, Link } from "../../store/document-model";
  */
 export interface ClipboardBundle {
   /** Clipboard schema version, independent from document snapshot versions. */
-  version: 1;
+  version: 2;
   /** Whether copied content begins with partial text; omitted legacy bundles mean blocks. */
   startsWithText?: boolean;
   /** Selected block subtrees preserving native types, props, plugin data, and layout. */

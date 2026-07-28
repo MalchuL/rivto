@@ -66,10 +66,11 @@ describe("EditorRuntime methods", () => {
     const editor = createRivtoEditor();
 
     editor.load({
-      version: 3,
+      version: 4,
       blocks: [{
         id: "loaded",
         type: "paragraph",
+        collapsed: false,
         props: { tone: "success" },
         pluginData: {},
         content: "Loaded",
@@ -80,7 +81,7 @@ describe("EditorRuntime methods", () => {
     });
 
     expect(editor.dump()).toMatchObject({
-      version: 3,
+      version: 4,
       blocks: [{ id: "loaded", content: "Loaded", props: { tone: "success" } }],
       links: [],
       pluginData: { app: { theme: "dark" } },

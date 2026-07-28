@@ -2,7 +2,7 @@ import type { BlockDefinition, BlockRegistry } from "../blocks";
 import type { ClipboardManager, CommandHandler, CommandRegistry, RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import type { CRDTDoc } from "../store/crdt-doc";
 import type { DocumentModelImpl } from "../store/document-model";
-import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
+import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorBlockUpdate, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
 /** Local presentation strategy; never persisted in collaborative state. */
 export type EditorMode = "block" | "edgeless";
@@ -131,9 +131,6 @@ export interface RivtoEditorApi {
    */
   getBlock(id: string): EditorBlock | undefined;
 
-  /** Reads one block's latest persisted collapse state; missing blocks are expanded. */
-  getBlockCollapsed(id: string): boolean;
-
   /**
    * Returns current root blocks as detached values.
    *
@@ -162,6 +159,9 @@ export interface RivtoEditorApi {
   /** Updates mutable block fields through the built-in `block.update` command. */
   updateBlock(id: string, patch: EditorBlockPatch): void;
 
+  /** Atomically updates several blocks through `block.update-many`. */
+  updateBlocks(updates: readonly EditorBlockUpdate[]): void;
+
   /** Converts a block through `block.type.set` without changing its identity. */
   setBlockType(id: string, type: string): void;
 
@@ -188,12 +188,6 @@ export interface RivtoEditorApi {
 
   /** Sets one block property through the built-in `block.prop.set` command. */
   setBlockProp(id: string, key: string, value: unknown): void;
-
-  /** Persists one block's collapse state through the atomic batch command. */
-  setBlockCollapsed(id: string, collapsed: boolean): void;
-
-  /** Atomically persists one collapse state for one ID or several IDs. */
-  setBlocksCollapsed(ids: string | string[], collapsed: boolean): void;
 
   /** Sets one block plugin-data namespace through `block.pluginData.set`. */
   setBlockPluginData(id: string, pluginId: string, value: unknown): void;

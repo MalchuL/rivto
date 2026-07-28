@@ -34,6 +34,7 @@ describe("core ClipboardManager", () => {
       focusBlockId: copiedId,
     }]);
     const payload = source.clipboard.copy()!;
+    expect(payload.bundle.version).toBe(2);
 
     const target = createRivtoEditor();
     const targetId = target.insertBlock({ type: "paragraph", content: "" });
@@ -55,6 +56,9 @@ describe("core ClipboardManager", () => {
     }]);
     target.clipboard.paste({ text: "plain" });
     expect(target.getBlock(targetId)?.content).toBe("plain");
+    expect(() => target.clipboard.paste({
+      structured: JSON.stringify({ ...payload.bundle, version: 1 }),
+    })).toThrow("Unsupported Rivto clipboard payload");
     source.destroy();
     target.destroy();
   });

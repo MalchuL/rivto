@@ -29,8 +29,8 @@ function collapseTargets(
  * local or remote document update hides their endpoints.
  *
  * Ctrl/Cmd+Up collapses, Ctrl/Cmd+Down expands, and Ctrl/Cmd+; toggles using
- * the first selected block's state. Multiple changes route through the atomic
- * editor command rather than producing one undo item per block.
+ * the first selected block's state. Multiple changes route through the generic
+ * atomic block-update command rather than producing one undo item per block.
  */
 export function PageCollapsePlugin() {
   const editor = useEditor();
@@ -61,13 +61,16 @@ export function PageCollapsePlugin() {
     const selection = nativeSelection?.length ? nativeSelection : current;
     const ids = collapseTargets(selection);
     if (!ids.length) return false;
-    const firstId = ids[0]!;
-    if (!editor.getBlock(firstId)) return false;
-
-    editor.setBlocksCollapsed(
-      ids,
-      value === "toggle" ? !editor.getBlockCollapsed(firstId) : value,
-    );
+    const blocks = [...new Set(ids)].map((id) => editor.getBlock(id));
+    if (blocks.some((block) => !block)) return false;
+    const first = blocks[0]!;
+    const collapsed = value === "toggle" ? !first.collapsed : value;
+    const updates = blocks.flatMap((block) => (
+      block && (!collapsed || block.children.length > 0) && block.collapsed !== collapsed
+        ? [{ id: block.id, patch: { collapsed } }]
+        : []
+    ));
+    if (updates.length) editor.updateBlocks(updates);
     return true;
   };
 

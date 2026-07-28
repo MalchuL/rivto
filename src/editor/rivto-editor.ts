@@ -1,5 +1,4 @@
 import {
-  BLOCK_COLLAPSED_PROP,
   BlockRegistry,
   DEFAULT_BLOCK_TYPE,
   defaultBlockDefinitions,
@@ -7,13 +6,12 @@ import {
 } from "../blocks";
 import { ClipboardManager, CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
-import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type BlockPatch, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
-import { isBlockCollapsed } from "../utils";
+import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type BlockPatch, type BlockUpdate, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
 import {
   RIVTO_CLIPBOARD_MIME,
   type ClipboardBundle,
 } from "../managers/clipboard-manager";
-import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
+import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorBlockUpdate, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
 import type { CreateRivtoEditorOptions, EditorSelection, EditorSelectionItem, RivtoEditorApi } from "./types";
 
 type RuntimeBlockSelection = Extract<EditorSelectionItem, { type: "block" }>;
@@ -145,12 +143,6 @@ export class EditorRuntime implements RivtoEditorApi {
     return find(this.getBlocks());
   }
 
-  /** Reads the latest collapse value without exposing native property access. */
-  getBlockCollapsed(id: string): boolean {
-    const block = this.getBlock(id);
-    return block ? isBlockCollapsed(block) : false;
-  }
-
   /** Returns current root blocks as detached values. */
   getBlocks(): EditorBlock[] {
     return this.document.document satisfies EditorBlock[];
@@ -176,6 +168,12 @@ export class EditorRuntime implements RivtoEditorApi {
   updateBlock(id: string, patch: EditorBlockPatch): void {
     const command = { id, patch } satisfies { id: string; patch: BlockPatch };
     this.execute("block.update", command);
+  }
+
+  /** Applies several identified block patches in one command and undo item. */
+  updateBlocks(updates: readonly EditorBlockUpdate[]): void {
+    const command = { updates } satisfies { updates: readonly BlockUpdate[] };
+    this.execute("block.update-many", command);
   }
 
   /** Converts a block to another registered native type. */
@@ -221,16 +219,6 @@ export class EditorRuntime implements RivtoEditorApi {
   /** Sets one block property through the built-in command path. */
   setBlockProp(id: string, key: string, value: unknown): void {
     this.execute("block.prop.set", { id, key, value });
-  }
-
-  /** Persists one block's collapse state through the shared batch command. */
-  setBlockCollapsed(id: string, collapsed: boolean): void {
-    this.setBlocksCollapsed(id, collapsed);
-  }
-
-  /** Persists one collapse state for one or several blocks in one undoable command. */
-  setBlocksCollapsed(ids: string | string[], collapsed: boolean): void {
-    this.execute("block.collapsed.set", { ids: typeof ids === "string" ? [ids] : ids, collapsed });
   }
 
   /** Sets one plugin-data namespace through the built-in command path. */
@@ -336,17 +324,23 @@ export class EditorRuntime implements RivtoEditorApi {
       const data = payload(value);
       this.document.updateBlock(string(data.id, "id"), payload(data.patch) as BlockPatch);
     });
+    this.commands.register("block.update-many", documentCommand((value) => {
+      const data = payload(value);
+      if (!Array.isArray(data.updates)) throw new Error("updates must be an array");
+      const updates = data.updates.map((item) => {
+        const update = payload(item);
+        return {
+          id: string(update.id, "id"),
+          patch: payload(update.patch) as BlockPatch,
+        };
+      });
+      this.document.updateBlocks(updates);
+    }));
     this.commands.register("block.type.set", documentCommand((value) => {
       const data = payload(value);
       const id = string(data.id, "id");
       const type = string(data.type, "type");
-      const current = this.getBlock(id);
-      const prepared = this.blocks.prepare({
-        type,
-        props: current && BLOCK_COLLAPSED_PROP in current.props
-          ? { [BLOCK_COLLAPSED_PROP]: current.props[BLOCK_COLLAPSED_PROP] }
-          : undefined,
-      });
+      const prepared = this.blocks.prepare({ type });
       this.document.setBlockType(id, type, prepared.props);
     }));
     this.commands.register("block.remove", documentCommand((value) => {
@@ -399,25 +393,6 @@ export class EditorRuntime implements RivtoEditorApi {
     this.commands.register("block.prop.set", documentCommand((value) => {
       const data = payload(value);
       this.document.setBlockProp(string(data.id, "id"), string(data.key, "key"), data.value);
-    }));
-    this.commands.register("block.collapsed.set", documentCommand((value) => {
-      const data = payload(value);
-      if (!Array.isArray(data.ids) || data.ids.some((id) => typeof id !== "string")) {
-        throw new Error("ids must be an array of strings");
-      }
-      if (typeof data.collapsed !== "boolean") throw new Error("collapsed must be a boolean");
-      const blocks = [...new Set(data.ids)].map((id) => {
-        const block = this.getBlock(id);
-        if (!block) throw new Error(`Block ${id} not found`);
-        return block;
-      });
-      this.document.transact(() => {
-        blocks.forEach((block) => {
-          if (data.collapsed && block.children.length === 0) return;
-          if (isBlockCollapsed(block) === data.collapsed) return;
-          this.document.setBlockProp(block.id, BLOCK_COLLAPSED_PROP, data.collapsed);
-        });
-      });
     }));
     this.commands.register("block.pluginData.set", documentCommand((value) => {
       const data = payload(value);

@@ -1,6 +1,5 @@
 import { DEFAULT_BLOCK_TYPE } from "../../blocks";
 import type { EditorRuntime } from "../../editor/rivto-editor";
-import { isBlockCollapsed } from "../../utils";
 import type { NormalizedSelection } from "../selection-manager";
 import type { ClipboardBundle, ClipboardPasteInput, ClipboardPayload } from "./types";
 import {
@@ -127,7 +126,7 @@ export class ClipboardManager {
       (link) => ids.has(link.from.blockId) && ids.has(link.to.blockId),
     );
     return {
-      bundle: { version: 1, startsWithText: current[0]?.type === "text", blocks, links },
+      bundle: { version: 2, startsWithText: current[0]?.type === "text", blocks, links },
       html: visible.map((block) => `<p>${escapeHtml(block.content)}</p>`).join(""),
       text: visible.map((block) => block.content).join("\n"),
     };
@@ -164,7 +163,7 @@ export class ClipboardManager {
 
       // Expanded parents receive pasted roots before their current first child.
       // Collapsed parents behave as visible leaves, so paste remains after them.
-      const beforeChildId = !caretBlock || isBlockCollapsed(caretBlock)
+      const beforeChildId = !caretBlock || caretBlock.collapsed
         ? undefined
         : caretBlock.children[0]?.id;
       this.insertBundleAsBlocks(bundle, { afterId, beforeChildId });

@@ -13,6 +13,7 @@ import type {
     BlockInput,
     BlockLayout,
     BlockPatch,
+    BlockUpdate,
     Link,
     Snapshot,
     SnapshotUpdate,
@@ -46,6 +47,13 @@ function strings(array: CRDTArray<string>): string[] {
  */
 function contentFrom(content: BlockInput["content"]): string {
     return content ?? "";
+}
+
+/** Validates persisted collapse state at the framework-neutral model boundary. */
+function collapsedFrom(value: unknown, fallback?: boolean): boolean {
+    if (value === undefined && fallback !== undefined) return fallback;
+    if (typeof value !== "boolean") throw new TypeError("block.collapsed must be a boolean");
+    return value;
 }
 
 /**
@@ -197,13 +205,50 @@ export class DocumentModelImpl {
      * @throws If the block does not exist.
      */
     updateBlock(id: string, patch: BlockPatch): void {
-        this.transact(() => {
+        this.updateBlocks([{ id, patch }]);
+    }
+
+    /**
+     * Applies identified block patches in order within one transaction.
+     *
+     * Every target, collapse value, and property patch is validated before the
+     * first shared write. Duplicate IDs are allowed and observe preceding
+     * property patches from the same batch.
+     *
+     * @param updates - Ordered block IDs and partial field updates.
+     * @throws If a target is missing or a supplied value fails validation.
+     */
+    updateBlocks(updates: readonly BlockUpdate[]): void {
+        const simulatedProps = new Map<string, Record<string, unknown>>();
+        const prepared = updates.map(({ id, patch }) => {
             const block = this.requiredBlock(id);
             const type = this.requiredType(block, id);
-            if (patch.props) this.patchProps(type, this.requiredMap(block, "props"), patch.props);
-            if (patch.pluginData) assignMap(this.requiredMap(block, "pluginData"), patch.pluginData, false);
-            if (patch.content !== undefined) assignText(this.requiredText(block, "content"), patch.content);
-            if (patch.layout) assignMap(this.requiredMap(block, "layout"), patch.layout, false);
+            if (patch.collapsed !== undefined) collapsedFrom(patch.collapsed);
+            let validatedProps: Record<string, unknown> | undefined;
+            if (patch.props) {
+                const current = simulatedProps.get(id)
+                    ?? this.requiredMap(block, "props").toObject() as Record<string, unknown>;
+                validatedProps = this.validateProps(type, { ...current, ...patch.props });
+                simulatedProps.set(id, validatedProps);
+            }
+            return { block, patch, validatedProps };
+        });
+
+        this.transact(() => {
+            prepared.forEach(({ block, patch, validatedProps }) => {
+                if (patch.collapsed !== undefined) block.set("collapsed", patch.collapsed);
+                if (patch.props && validatedProps) {
+                    const props = this.requiredMap(block, "props");
+                    for (const key of Object.keys(patch.props)) {
+                        const value = validatedProps[key];
+                        if (value === undefined) props.delete(key);
+                        else props.set(key, clone(value) as BasicCRDTType);
+                    }
+                }
+                if (patch.pluginData) assignMap(this.requiredMap(block, "pluginData"), patch.pluginData, false);
+                if (patch.content !== undefined) assignText(this.requiredText(block, "content"), patch.content);
+                if (patch.layout) assignMap(this.requiredMap(block, "layout"), patch.layout, false);
+            });
         });
     }
 
@@ -615,13 +660,13 @@ export class DocumentModelImpl {
     }
 
     /**
-     * Produces a lossless portable schema-v3 snapshot.
+     * Produces a lossless portable schema-v4 snapshot.
      *
      * @returns Detached blocks, links, and document-level plugin data.
      */
     getSnapshot(): Snapshot {
         return {
-            version: 3,
+            version: 4,
             blocks: clone(this.document),
             links: clone(this.links),
             pluginData: clone(this.storage.pluginData.toObject() as Record<string, unknown>),
@@ -629,7 +674,7 @@ export class DocumentModelImpl {
     }
 
     /**
-     * Applies supplied schema-v3 snapshot sections atomically.
+     * Applies supplied schema-v4 snapshot sections atomically.
      *
      * A complete snapshot replaces the complete document. A partial fetched
      * update replaces only its present sections, leaving omitted state intact.
@@ -638,9 +683,15 @@ export class DocumentModelImpl {
      * @throws If the snapshot version or supplied block collection is unsupported.
      */
     loadSnapshot(snapshot: SnapshotUpdate): void {
-        if (snapshot.version !== 3 || (snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks))) {
+        if (snapshot.version !== 4 || (snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks))) {
             throw new Error("Unsupported Rivto document snapshot");
         }
+        const validateSnapshotBlock = (block: Block): void => {
+            collapsedFrom(block.collapsed);
+            if (!Array.isArray(block.children)) throw new Error("Snapshot block children must be an array");
+            block.children.forEach(validateSnapshotBlock);
+        };
+        snapshot.blocks?.forEach(validateSnapshotBlock);
         this.transact(() => {
             // Persistence may fetch sections independently. Replacing only keys
             // present in the update avoids erasing newer links or plugin state.
@@ -696,6 +747,7 @@ export class DocumentModelImpl {
      */
     private insertInto(block: BlockInput, container: CRDTArray<string>, afterId?: string | null): string {
         if (!block.type) throw new Error("Block type is required");
+        const collapsed = collapsedFrom(block.collapsed, false);
         const id = block.id ?? crypto.randomUUID();
         if (this.storage.blocks.has(id)) throw new Error(`Block ${id} already exists`);
         const model = this.crdt.instantiator.createMap<BlockStorage>();
@@ -706,6 +758,7 @@ export class DocumentModelImpl {
         const pluginData = this.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
         model.set("id", id);
         model.set("type", block.type);
+        model.set("collapsed", collapsed);
         model.set("props", props);
         model.set("content", content);
         model.set("children", children);
@@ -752,6 +805,7 @@ export class DocumentModelImpl {
         return {
             id,
             type: this.requiredType(value, id),
+            collapsed: collapsedFrom(value.get("collapsed")),
             props,
             pluginData,
             content,

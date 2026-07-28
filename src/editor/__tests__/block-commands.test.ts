@@ -1,6 +1,5 @@
 import * as Y from "yjs";
 import { z } from "zod";
-import { BLOCK_COLLAPSED_PROP } from "../../blocks";
 import { YjsDoc } from "../../store/crdt-doc";
 import { createRivtoEditor } from "../rivto-editor";
 
@@ -85,7 +84,7 @@ describe("EditorRuntime block commands", () => {
     editor.destroy();
   });
 
-  it("validates and preserves the reserved collapse property across block types", () => {
+  it("validates and preserves top-level collapse state across block types", () => {
     const editor = createRivtoEditor();
     editor.defineBlock({ type: "heading2" });
     editor.defineBlock({
@@ -97,18 +96,32 @@ describe("EditorRuntime block commands", () => {
       props: { tone: "info" },
       children: [{ type: "paragraph", content: "Child" }],
     });
+    const initiallyCollapsed = editor.insertBlock({
+      type: "paragraph",
+      collapsed: true,
+      children: [{ type: "paragraph" }],
+    }, id);
 
-    editor.setBlockCollapsed(id, true);
-    expect(editor.getBlock(id)?.props).toEqual({ tone: "info", [BLOCK_COLLAPSED_PROP]: true });
-    expect(() => editor.setBlockProp(id, BLOCK_COLLAPSED_PROP, "yes")).toThrow("must be a boolean");
+    expect(editor.getBlock(id)?.collapsed).toBe(false);
+    expect(editor.getBlock(initiallyCollapsed)?.collapsed).toBe(true);
+    editor.updateBlock(id, { collapsed: true });
+    expect(editor.getBlock(id)).toMatchObject({
+      collapsed: true,
+      props: { tone: "info" },
+    });
+    expect(() => editor.execute("block.update", {
+      id,
+      patch: { collapsed: "yes" },
+    })).toThrow("block.collapsed must be a boolean");
+    expect(editor.getBlock(id)?.collapsed).toBe(true);
 
     editor.setBlockType(id, "heading2");
-    expect(editor.getBlock(id)?.props).toEqual({ [BLOCK_COLLAPSED_PROP]: true });
-    expect(editor.getBlockCollapsed(id)).toBe(true);
+    expect(editor.getBlock(id)?.props).toEqual({});
+    expect(editor.getBlock(id)?.collapsed).toBe(true);
     editor.destroy();
   });
 
-  it("collapses several parents atomically, ignores leaves, and undoes once", () => {
+  it("updates several blocks atomically in supplied order and undoes once", () => {
     const editor = createRivtoEditor();
     const first = editor.insertBlock({
       type: "paragraph",
@@ -124,16 +137,28 @@ describe("EditorRuntime block commands", () => {
     const updates = jest.fn();
     const unsubscribe = editor.document.subscribe(updates);
 
-    editor.setBlocksCollapsed([first, leaf, second, first], true);
+    editor.updateBlocks([
+      { id: first, patch: { collapsed: true, props: { order: "first" } } },
+      { id: leaf, patch: { collapsed: true } },
+      { id: second, patch: { collapsed: true } },
+      { id: first, patch: { props: { order: "last" } } },
+    ]);
 
     expect(updates).toHaveBeenCalledTimes(1);
-    expect(editor.getBlockCollapsed(first)).toBe(true);
-    expect(editor.getBlockCollapsed(second)).toBe(true);
-    expect(editor.getBlock(leaf)?.props).toEqual({});
+    expect(editor.getBlock(first)).toMatchObject({ collapsed: true, props: { order: "last" } });
+    expect(editor.getBlock(second)?.collapsed).toBe(true);
+    expect(editor.getBlock(leaf)?.collapsed).toBe(true);
+    expect(() => editor.updateBlocks([
+      { id: first, patch: { collapsed: false } },
+      { id: "missing", patch: { collapsed: true } },
+    ])).toThrow("Block missing not found");
+    expect(editor.getBlock(first)?.collapsed).toBe(true);
+    expect(updates).toHaveBeenCalledTimes(1);
 
     editor.undo();
-    expect(editor.getBlockCollapsed(first)).toBe(false);
-    expect(editor.getBlockCollapsed(second)).toBe(false);
+    expect(editor.getBlock(first)).toMatchObject({ collapsed: false, props: {} });
+    expect(editor.getBlock(second)?.collapsed).toBe(false);
+    expect(editor.getBlock(leaf)?.collapsed).toBe(false);
     unsubscribe();
     editor.destroy();
   });
@@ -150,10 +175,10 @@ describe("EditorRuntime block commands", () => {
     });
     Y.applyUpdate(rightDocument.doc, Y.encodeStateAsUpdate(leftDocument.doc));
 
-    left.setBlocksCollapsed(parent, true);
+    left.updateBlocks([{ id: parent, patch: { collapsed: true } }]);
     Y.applyUpdate(rightDocument.doc, Y.encodeStateAsUpdate(leftDocument.doc));
 
-    expect(right.getBlockCollapsed(parent)).toBe(true);
+    expect(right.getBlock(parent)?.collapsed).toBe(true);
     left.destroy();
     right.destroy();
   });
@@ -513,7 +538,7 @@ describe("EditorRuntime block commands", () => {
     editor.createLink({ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } });
 
     expect(editor.dump()).toMatchObject({
-      version: 3,
+      version: 4,
       blocks: [{ id: sourceId }, { id: targetId }],
       links: [{ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } }],
     });
@@ -522,10 +547,11 @@ describe("EditorRuntime block commands", () => {
     expect(editor.dump().links).toEqual([]);
 
     editor.load({
-      version: 3,
+      version: 4,
       blocks: [{
         id: "loaded",
         type: "paragraph",
+        collapsed: false,
         props: {},
         pluginData: {},
         content: "Loaded",
@@ -535,6 +561,23 @@ describe("EditorRuntime block commands", () => {
     });
 
     expect(editor.document.document).toMatchObject([{ id: "loaded", content: "Loaded" }]);
+    expect(() => editor.execute("document.load", {
+      snapshot: { version: 3, blocks: [], links: [] },
+    })).toThrow("Unsupported Rivto document snapshot");
+    expect(() => editor.execute("document.load", {
+      snapshot: {
+        version: 4,
+        blocks: [{
+          id: "invalid",
+          type: "paragraph",
+          props: {},
+          pluginData: {},
+          content: "",
+          children: [],
+        }],
+        links: [],
+      },
+    })).toThrow("block.collapsed must be a boolean");
     editor.destroy();
   });
 });

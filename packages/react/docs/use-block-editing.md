@@ -2,7 +2,7 @@
 
 `useBlockEditing` is the renderer-facing hook for one block. It returns:
 
-- `block`, `getters`, and `operations` from `useBlock`;
+- `block` and `operations` from `useBlock`;
 - typed native-property readers and writers;
 - DOM `attributes` for either text editing or structural selection.
 
@@ -134,7 +134,7 @@ const editing = useBlockEditing<MyProps>(blockId);
 ```
 
 - `editing.block` is the reactive snapshot for the current render.
-- `editing.getters` contains render-time derived values such as `collapsed`.
+- `editing.block?.collapsed` reads the reactive top-level collapse state.
 - `editing.operations` contains commands such as `remove`, `setType`, `indent`,
   and `outdent`.
 - `editing.getProps()` reads the latest complete property object.

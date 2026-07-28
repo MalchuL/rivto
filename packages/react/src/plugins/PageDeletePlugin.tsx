@@ -29,7 +29,7 @@ export function ForwardBlockMergePlugin() {
     if (!target?.collapsed || !block || target.offset !== block.content.length) return false;
     // A collapsed parent behaves as a visible leaf: Delete must not merge one
     // of its deliberately hidden descendants.
-    if (editor.getBlockCollapsed(block.id)) return false;
+    if (block.collapsed) return false;
     const next = findNextEditableBlock(root, block.id);
     if (!next) return false;
     const joinOffset = editor.mergeBlocks(block.id, next.blockId);

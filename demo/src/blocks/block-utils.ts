@@ -4,6 +4,7 @@ import type { EditorBlock, EditorBlockInput } from "@chulane/rivto";
 export function duplicateBlockInput(block: EditorBlock): EditorBlockInput {
   return {
     type: block.type,
+    collapsed: block.collapsed,
     content: block.content,
     props: structuredClone(block.props),
     pluginData: structuredClone(block.pluginData),

@@ -47,9 +47,11 @@ describe("clipboard commands", () => {
     editor.execute("clipboard.copy", { clipboardData: { setData: (type: string, value: string) => data.set(type, value) } });
 
     const bundle = JSON.parse(data.get(RIVTO_CLIPBOARD_MIME)!) as {
+      version: number;
       blocks: Array<{ id: string; props: Record<string, unknown>; pluginData: Record<string, unknown>; children: unknown[]; layout?: unknown }>;
       links: unknown[];
     };
+    expect(bundle.version).toBe(2);
     expect(bundle.blocks).toHaveLength(1);
     expect(bundle.blocks[0]?.id).toBe(parent);
     expect(bundle.blocks[0]?.props).toEqual({ level: 1 });
@@ -68,7 +70,7 @@ describe("clipboard commands", () => {
       content: "Parent",
       children: [{ type: "paragraph", content: "Hidden child" }],
     });
-    source.setBlockCollapsed(parent, true);
+    source.updateBlock(parent, { collapsed: true });
     source.execute("selection.set", {
       selection: [{ type: "block", blockIds: [parent], anchorBlockId: parent, focusBlockId: parent }],
     });
@@ -85,7 +87,7 @@ describe("clipboard commands", () => {
     target.execute("clipboard.paste", { structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
 
     const pasted = target.getBlocks()[1]!;
-    expect(target.getBlockCollapsed(pasted.id)).toBe(true);
+    expect(pasted.collapsed).toBe(true);
     expect(pasted.children).toMatchObject([{ content: "Hidden child" }]);
     source.destroy();
     target.destroy();
@@ -108,7 +110,7 @@ describe("clipboard commands", () => {
       content: "Parent",
       children: [{ type: "paragraph", content: "Hidden child" }],
     });
-    target.setBlocksCollapsed(parent, true);
+    target.updateBlock(parent, { collapsed: true });
     target.execute("selection.set", {
       selection: [{ type: "text", anchor: { blockId: parent, offset: 3 }, head: { blockId: parent, offset: 3 } }],
     });

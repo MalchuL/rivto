@@ -30,6 +30,8 @@ export type IDProp = string;
 export interface BlockStorage {
   id: IDBlock;
   type: string;
+  /** First-class collaborative outline visibility. */
+  collapsed: boolean;
   props: CRDTMap<Record<IDProp, BasicCRDTType>>;
   content: CRDTText;
   children: CRDTArray<IDBlock>;
