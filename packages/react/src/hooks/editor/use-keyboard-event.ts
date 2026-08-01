@@ -9,7 +9,7 @@ import { useReactEditor } from "./use-editor";
 /**
  * Registers one declarative shortcut while keeping React state closures fresh.
  *
- * Binding IDs are stable for the mounted plugin. Default keys are resolved
+ * Binding IDs are stable for the mounted extension. Default keys are resolved
  * against the creation-time keymap once when the binding is installed.
  */
 export function useKeyboardEvent(

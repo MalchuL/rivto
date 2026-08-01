@@ -36,6 +36,74 @@ test("renders every root as one card with its complete nested outline", async ({
   await expect(page.locator(`${blockIdSelector(parentId)} > .page-block-children`)).toHaveCount(0);
 });
 
+test("selects nested blocks and preserves block selection across surfaces", async ({ page }) => {
+  const parent = page.locator(".page-block:has(> .page-block-children)").first();
+  const child = parent.locator(`:scope > .page-block-children ${BLOCK_ID_SELECTOR}`).first();
+  const parentId = await parent.getAttribute(BLOCK_ID_ATTRIBUTE);
+  const childId = await child.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!parentId || !childId) throw new Error("Expected nested page IDs");
+
+  await child.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
+  await expect(child).toHaveAttribute("data-block-selected", "true");
+
+  await switchMode(page, "edgeless");
+  const card = page.locator(`[data-edgeless-root="${parentId}"]`);
+  const canvasChild = card.locator(blockIdSelector(childId));
+  await expect(canvasChild).toHaveAttribute("data-block-selected", "true");
+  await expect(card).not.toHaveAttribute("data-block-selected", "true");
+
+  await cardChrome(card).click({ position: { x: 280, y: 14 } });
+  await canvasChild.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
+  await expect(canvasChild).toHaveAttribute("data-block-selected", "true");
+
+  await switchMode(page, "block");
+  await expect(page.locator(blockIdSelector(childId))).toHaveAttribute("data-block-selected", "true");
+});
+
+test("undoes a grouped nested-block drag after switching from edgeless", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
+  const parentId = await card.getAttribute("data-edgeless-root");
+  const children = card.locator(":scope > .edgeless-card-body > .page-block > .page-block-children > .page-block");
+  const firstId = await children.nth(0).getAttribute(BLOCK_ID_ATTRIBUTE);
+  const secondId = await children.nth(1).getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!parentId || !firstId || !secondId) throw new Error("Expected nested sibling blocks");
+
+  await children.nth(0).locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
+  await children.nth(1).locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
+  await switchMode(page, "block");
+
+  const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
+  let targetId: string | null = null;
+  for (let index = 0; index < await roots.count(); index += 1) {
+    const id = await roots.nth(index).getAttribute(BLOCK_ID_ATTRIBUTE);
+    if (id && id !== parentId) {
+      targetId = id;
+      break;
+    }
+  }
+  if (!targetId) throw new Error("Expected a target root");
+
+  const source = page.locator(blockIdSelector(firstId));
+  const target = page.locator(blockIdSelector(targetId));
+  await source.locator(":scope > .page-block-row").hover();
+  const handleBox = await source.locator(":scope > .page-block-row .page-drag-handle").boundingBox();
+  const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
+  if (!handleBox || !targetBox) throw new Error("Expected drag geometry");
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 8 });
+  await page.mouse.up();
+
+  await expect(target.locator(`:scope > .page-block-children > ${blockIdSelector(firstId)}`)).toHaveCount(1);
+  await expect(target.locator(`:scope > .page-block-children > ${blockIdSelector(secondId)}`)).toHaveCount(1);
+
+  await page.keyboard.press("Control+z");
+  const originalParent = page.locator(blockIdSelector(parentId));
+  await expect(originalParent.locator(`:scope > .page-block-children > ${blockIdSelector(firstId)}`)).toHaveCount(1);
+  await expect(originalParent.locator(`:scope > .page-block-children > ${blockIdSelector(secondId)}`)).toHaveCount(1);
+});
+
 test("reuses Tab and Shift+Tab inside a canvas card", async ({ page }) => {
   await switchMode(page, "edgeless");
   const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
@@ -85,6 +153,159 @@ test("reuses page Enter and structural drag inside a canvas card", async ({ page
   await page.mouse.up();
   const movedTarget = rootBlock.locator(`.page-block${blockIdSelector(targetId!)}`);
   await expect(movedTarget.locator(`:scope > .page-block-children > ${blockIdSelector(sourceId!)}`)).toHaveCount(1);
+});
+
+test("keeps an indented block drag handle visible while moving onto it", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
+  const nested = card.locator(":scope > .edgeless-card-body > .page-block > .page-block-children > .page-block").first();
+  const row = nested.locator(":scope > .page-block-row");
+  const handle = row.locator(":scope > .page-drag-handle");
+
+  const box = await handle.boundingBox();
+  const bodyBox = await card.locator(":scope > .edgeless-card-body").boundingBox();
+  if (!box || !bodyBox) throw new Error("Expected an indented drag handle");
+  await page.mouse.move(bodyBox.x + 2, box.y + box.height / 2);
+
+  await expect(handle).toHaveCSS("opacity", "1");
+  await expect(handle).toHaveCSS("pointer-events", "auto");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 4 });
+  await expect.poll(() => handle.evaluate((element) => (
+    document.elementFromPoint(
+      element.getBoundingClientRect().left + element.getBoundingClientRect().width / 2,
+      element.getBoundingClientRect().top + element.getBoundingClientRect().height / 2,
+    ) === element
+  ))).toBe(true);
+});
+
+test("maps a zoomed cross-card drop to the block under the pointer", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  const cards = page.locator("[data-edgeless-root]");
+  const sourceCard = cards.filter({ has: page.locator(".page-block-children") }).first();
+  const sourceCardId = await sourceCard.getAttribute("data-edgeless-root");
+  const source = sourceCard.locator(":scope > .edgeless-card-body > .page-block > .page-block-children > .page-block").first();
+  const sourceId = await source.getAttribute(BLOCK_ID_ATTRIBUTE);
+  let targetCard: Locator | undefined;
+  for (let index = 0; index < await cards.count(); index += 1) {
+    const candidate = cards.nth(index);
+    if (await candidate.getAttribute("data-edgeless-root") !== sourceCardId) {
+      targetCard = candidate;
+      break;
+    }
+  }
+  if (!sourceId || !targetCard) throw new Error("Expected source and target cards");
+
+  const target = targetCard.locator(":scope > .edgeless-card-body > .page-block");
+  await source.locator(":scope > .page-block-row").hover();
+  const handleBox = await source.locator(":scope > .page-block-row .page-drag-handle").boundingBox();
+  const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
+  if (!handleBox || !targetBox) throw new Error("Expected cross-card drag geometry");
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 8 });
+  await expect(target.locator(":scope > .page-block-row")).toHaveAttribute("data-drop-inside", "true");
+  await page.mouse.up();
+
+  await expect(target.locator(`:scope > .page-block-children > ${blockIdSelector(sourceId)}`)).toHaveCount(1);
+});
+
+test("does not choose a structural drop target over blank canvas", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
+  const source = card.locator(":scope > .edgeless-card-body > .page-block > .page-block-children > .page-block").first();
+  const sourceId = await source.getAttribute(BLOCK_ID_ATTRIBUTE);
+  const parentId = await card.getAttribute("data-edgeless-root");
+  const handleBox = await source.locator(":scope > .page-block-row .page-drag-handle").boundingBox();
+  const viewportBox = await page.locator(".edgeless-viewport").boundingBox();
+  if (!sourceId || !parentId || !handleBox || !viewportBox) throw new Error("Expected blank-canvas drag geometry");
+
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(viewportBox.x + viewportBox.width - 30, viewportBox.y + viewportBox.height - 30, { steps: 8 });
+  await expect(page.locator("[data-drop-inside], .page-drop-line")).toHaveCount(0);
+  await page.mouse.up();
+
+  await expect(card.locator(`:scope > .edgeless-card-body > .page-block > .page-block-children > ${blockIdSelector(sourceId)}`)).toHaveCount(1);
+});
+
+test("Enter on an edgeless leaf root creates its first child", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const cards = page.locator("[data-edgeless-root]");
+  const beforeRoots = await cards.count();
+  const card = cards.filter({
+    has: page.locator("[data-block-content]"),
+    hasNot: page.locator(".page-block-children"),
+  }).first();
+  const root = card.locator(":scope > .edgeless-card-body > .page-block");
+  const rootId = await root.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!rootId) throw new Error("Expected an editable leaf root");
+  const stableRoot = page.locator(blockIdSelector(rootId));
+
+  await root.locator(":scope > .page-block-row [data-block-content]").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+
+  await expect(cards).toHaveCount(beforeRoots);
+  const children = stableRoot.locator(":scope > .page-block-children > .page-block");
+  await expect(children).toHaveCount(1);
+  await expect(children.locator("[data-block-content]")).toBeFocused();
+  await page.keyboard.press("Control+z");
+  await expect(stableRoot.locator(":scope > .page-block-children")).toHaveCount(0);
+});
+
+test("clears a selected edgeless root before deleting it", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const cards = page.locator("[data-edgeless-root]");
+  const beforeRoots = await cards.count();
+  const card = cards.filter({ has: page.locator(".page-block-children") }).first();
+  const root = card.locator(":scope > .edgeless-card-body > .page-block");
+  const rootId = await root.getAttribute(BLOCK_ID_ATTRIBUTE);
+  const type = await root.getAttribute("data-block-type");
+  const left = await card.evaluate((element) => (element as HTMLElement).style.left);
+  const content = root.locator(":scope > .page-block-row [data-block-content]");
+  const originalContent = await content.textContent();
+  const originalChildren = await root.locator(":scope > .page-block-children > .page-block").count();
+  if (!rootId || !type || !originalContent || !originalChildren) throw new Error("Expected a populated root");
+  const stableCard = page.locator(`[data-edgeless-root="${rootId}"]`);
+  const stableRoot = stableCard.locator(blockIdSelector(rootId));
+  const stableContent = stableRoot.locator(":scope > .page-block-row [data-block-content]");
+
+  await cardChrome(card).click({ position: { x: 280, y: 14 } });
+  await page.keyboard.press("Delete");
+  await expect(cards).toHaveCount(beforeRoots);
+  await expect(stableCard).toHaveAttribute("data-block-selected", "true");
+  await expect(stableRoot).toHaveAttribute("data-block-type", type);
+  await expect(stableCard).toHaveCSS("left", left);
+  await expect(stableContent).toHaveText("");
+  await expect(stableRoot.locator(":scope > .page-block-children")).toHaveCount(0);
+
+  await page.keyboard.press("Backspace");
+  await expect(cards).toHaveCount(beforeRoots - 1);
+  await expect(page.locator(`[data-edgeless-root="${rootId}"]`)).toHaveCount(0);
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(`[data-edgeless-root="${rootId}"] [data-block-content]`).first()).toHaveText("");
+  await page.keyboard.press("Control+z");
+  const restored = page.locator(`[data-edgeless-root="${rootId}"]`);
+  await expect(restored.locator("[data-block-content]").first()).toHaveText(originalContent);
+  await expect(restored.locator(":scope > .edgeless-card-body > .page-block > .page-block-children > .page-block")).toHaveCount(originalChildren);
+});
+
+test("clears a selected nested block before deleting it", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
+  const nested = card.locator(":scope > .edgeless-card-body > .page-block > .page-block-children > .page-block").first();
+  const nestedId = await nested.getAttribute(BLOCK_ID_ATTRIBUTE);
+  const content = nested.locator(":scope > .page-block-row [data-block-content]");
+  if (!nestedId || !(await content.textContent())) throw new Error("Expected a populated nested block");
+
+  await content.click({ modifiers: ["Control"] });
+  await page.keyboard.press("Delete");
+  await expect(card.locator(blockIdSelector(nestedId))).toHaveCount(1);
+  await expect(card.locator(blockIdSelector(nestedId)).locator("[data-block-content]").first()).toHaveText("");
+  await page.keyboard.press("Backspace");
+  await expect(card.locator(blockIdSelector(nestedId))).toHaveCount(0);
 });
 
 test("edits Markdown and custom controls without selecting their root cards", async ({ page }) => {
@@ -152,7 +373,7 @@ test("toggles root selection and moves or resizes layouts atomically", async ({ 
   await expect.poll(() => second.evaluate((element) => Number.parseFloat((element as HTMLElement).style.width))).toBe(before[1]!.width + 30);
 });
 
-test("rectangle-selects roots, moves them by keyboard, and deletes them atomically", async ({ page }) => {
+test("rectangle-selects roots, moves them, then clears and deletes them atomically", async ({ page }) => {
   await switchMode(page, "edgeless");
   const cards = page.locator("[data-edgeless-root]");
   const beforeCount = await cards.count();
@@ -170,9 +391,42 @@ test("rectangle-selects roots, moves them by keyboard, and deletes them atomical
   await page.keyboard.press("Shift+ArrowRight");
   await expect.poll(() => cards.nth(0).evaluate((element) => Number.parseFloat((element as HTMLElement).style.left))).toBe(left + 10);
   await page.keyboard.press("Delete");
+  await expect(cards).toHaveCount(beforeCount);
+  await expect(page.locator("[data-edgeless-root][data-block-selected]")).toHaveCount(2);
+  await page.keyboard.press("Backspace");
   await expect(cards).toHaveCount(beforeCount - 2);
   await page.keyboard.press("Control+z");
   await expect(cards).toHaveCount(beforeCount);
+  await page.keyboard.press("Control+z");
+  await expect(cards).toHaveCount(beforeCount);
+});
+
+test("retains empty members when clearing a mixed structural selection", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
+  const children = card.locator(":scope > .edgeless-card-body > .page-block > .page-block-children > .page-block");
+  const firstId = await children.nth(0).getAttribute(BLOCK_ID_ATTRIBUTE);
+  const secondId = await children.nth(1).getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!firstId || !secondId) throw new Error("Expected two populated nested blocks");
+
+  await children.nth(0).locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
+  await page.keyboard.press("Delete");
+  const first = card.locator(blockIdSelector(firstId));
+  await expect(first.locator("[data-block-content]").first()).toHaveText("");
+
+  await card.locator(blockIdSelector(secondId))
+    .locator(":scope > .page-block-row [data-block-content]")
+    .click({ modifiers: ["Control"] });
+  await expect(card.locator("[data-block-id][data-block-selected]")).toHaveCount(2);
+
+  await page.keyboard.press("Delete");
+  await expect(first).toHaveCount(1);
+  await expect(first).toHaveAttribute("data-block-selected", "true");
+  await expect(card.locator(blockIdSelector(secondId))).toHaveCount(1);
+  await expect(card.locator(blockIdSelector(secondId)).locator("[data-block-content]").first()).toHaveText("");
+
+  await page.keyboard.press("Backspace");
+  await expect(card.locator(`${blockIdSelector(firstId)}, ${blockIdSelector(secondId)}`)).toHaveCount(0);
 });
 
 test("zooms, pans, and pastes selected root subtrees with offset layouts", async ({ page }) => {

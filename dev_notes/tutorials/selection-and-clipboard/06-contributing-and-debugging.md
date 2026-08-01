@@ -339,7 +339,7 @@ E2E запускает Chromium и Firefox.
 
 Сначала определите intent:
 
-- gesture создаёт TextSelection, BlockSelection или EdgelessSelection?
+- gesture создаёт TextSelection или BlockSelection?
 - какой endpoint является anchor?
 - какой endpoint меняется?
 - нужно ли сохранять direction?

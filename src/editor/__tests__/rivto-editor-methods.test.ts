@@ -1,6 +1,31 @@
 import { createRivtoEditor } from "../rivto-editor";
 
 describe("EditorRuntime methods", () => {
+  it("supports a complete lifecycle without blocks", () => {
+    const editor = createRivtoEditor();
+
+    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.getRootIds()).toEqual([]);
+    expect(editor.getVisibleBlockIds()).toEqual([]);
+    expect(editor.getLinks()).toEqual([]);
+    expect(editor.selection.get()).toEqual([]);
+    expect(editor.dump()).toMatchObject({ version: 4, blocks: [], links: [] });
+
+    editor.deleteSelection();
+    editor.undo();
+    editor.redo();
+    expect(editor.getBlocks()).toEqual([]);
+
+    const id = editor.batchUpdates(() => editor.insertBlock({ type: "paragraph", content: "Created later" }));
+    editor.removeBlock(id);
+    expect(editor.getBlocks()).toEqual([]);
+    editor.undo();
+    expect(editor.getBlock(id)?.content).toBe("Created later");
+    editor.redo();
+    expect(editor.getBlocks()).toEqual([]);
+    editor.destroy();
+  });
+
   it("mutates blocks through editor methods", () => {
     const editor = createRivtoEditor();
 
@@ -13,7 +38,7 @@ describe("EditorRuntime methods", () => {
     editor.setBlockLayout(firstId, { x: 120, y: 80 });
     editor.indentBlock(secondId);
 
-    expect(editor.document.document).toMatchObject([
+    expect(editor.getBlocks()).toMatchObject([
       {
         id: firstId,
         content: "First updated",
@@ -27,11 +52,11 @@ describe("EditorRuntime methods", () => {
     editor.outdentBlock(secondId);
     editor.moveBlock(secondId, null);
 
-    expect(editor.document.document.map((block) => block.id)).toEqual([secondId, firstId]);
+    expect(editor.getBlocks().map((block) => block.id)).toEqual([secondId, firstId]);
 
     editor.removeBlock(secondId);
 
-    expect(editor.document.document.map((block) => block.id)).toEqual([firstId]);
+    expect(editor.getBlocks().map((block) => block.id)).toEqual([firstId]);
     editor.destroy();
   });
 
@@ -86,6 +111,10 @@ describe("EditorRuntime methods", () => {
       links: [],
       pluginData: { app: { theme: "dark" } },
     });
+
+    editor.load({ version: 4, blocks: [], links: [] });
+    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.dump()).toMatchObject({ version: 4, blocks: [], links: [] });
     editor.destroy();
   });
 });

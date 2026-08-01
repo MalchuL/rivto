@@ -13,7 +13,9 @@ import type {
     BlockInput,
     BlockLayout,
     BlockPatch,
+    BlockPropsValidator,
     BlockUpdate,
+    DocumentModel,
     Link,
     Snapshot,
     SnapshotUpdate,
@@ -29,7 +31,12 @@ const LINKS_KEY = "rivto.editor.links";
 const PLUGINS_KEY = "rivto.editor.plugins";
 const DEFAULT_LAYOUT: BlockLayout = { x: 40, y: 40, width: 320, height: 120, zIndex: 0 };
 
-type PropsValidator = (type: string, props: Record<string, unknown>) => Record<string, unknown>;
+interface LocatedBlock {
+    array: CRDTArray<string>;
+    index: number;
+    parentId?: string;
+    path: readonly number[];
+}
 
 /**
  * Converts a CRDT array of strings to an array of strings.
@@ -63,15 +70,23 @@ function collapsedFrom(value: unknown, fallback?: boolean): boolean {
  * the intended dependency direction: application → DocumentModel → CRDTDoc.
  * Native CRDT adapter types are never exposed here.
  *
+ * Tree placement stays in `rivto.editor.roots` and each block record's
+ * collaborative `children` array. For indexed access, `blockPaths` stores only
+ * paths that callers have requested (`[2, 0, 3]` means root 2 → child 0 →
+ * child 3). Each read validates its cached path against the live arrays.
+ * Stale or missing paths are repaired with one depth-first search; transactions
+ * never rebuild or invalidate the cache eagerly.
+ *
  * The optional model id is descriptive; the CRDT document remains authoritative.
  */
-export class DocumentModelImpl {
+export class DocumentModelImpl implements DocumentModel {
     readonly id: string;
     readonly crdt: CRDTDoc;
     readonly origin = Symbol("rivto-document");
     readonly undoScopes: CRDTUndoScope[];
     private readonly storage: DocumentStorage;
-    private validateProps: PropsValidator = (_type, props) => props;
+    private validateProps: BlockPropsValidator = (_type, props) => props;
+    private readonly blockPaths = new Map<IDBlock, readonly number[]>();
 
     /**
      * Creates a storage model over an adapter-neutral collaborative document.
@@ -117,37 +132,8 @@ export class DocumentModelImpl {
      *
      * @param validator - Function that validates and normalizes props by block type.
      */
-    setPropsValidator(validator: PropsValidator): void {
+    setPropsValidator(validator: BlockPropsValidator): void {
         this.validateProps = validator;
-    }
-
-    /**
-     * Returns the normalized ordered block tree as detached portable values.
-     *
-     * @returns Root blocks with recursively materialized children.
-     */
-    get document(): Block[] {
-        return strings(this.storage.roots).flatMap((id) => {
-            const block = this.readBlock(id, new Set());
-            return block ? [block] : [];
-        });
-    }
-
-    /**
-     * Returns all first-class links as detached portable values.
-     *
-     * @returns Links currently stored in the collaborative document.
-     */
-    get links(): Link[] {
-        return Array.from(this.storage.links.values()).flatMap((value: CRDTMap<LinkStorage>) => {
-            if (!isCRDTMap(value)) return [];
-            return [{
-                id: String(value.get("id")),
-                from: clone(value.get("from") as Link["from"]),
-                to: clone(value.get("to") as Link["to"]),
-                meta: clone((value.get("meta") as Record<string, unknown> | undefined) ?? {}),
-            }];
-        });
     }
 
     /**
@@ -157,6 +143,73 @@ export class DocumentModelImpl {
      */
     get isEmpty(): boolean {
         return this.storage.roots.length === 0;
+    }
+
+    /**
+     * Returns one placed block. Cached index paths are validated lazily, so
+     * moves and remote changes need no eager cache maintenance.
+     */
+    getBlock(id: string): Block | undefined {
+        if (!this.findContainer(id)) return undefined;
+        return this.readBlock(id, new Set());
+    }
+
+    /** Returns the complete ordered root tree. */
+    getBlocks(): Block[] {
+        return strings(this.storage.roots).flatMap((id) => {
+            const block = this.readBlock(id, new Set());
+            return block ? [block] : [];
+        });
+    }
+
+    /** Returns one link directly from the canonical link map. */
+    getLink(id: string): Link | undefined {
+        const value = this.storage.links.get(id);
+        return isCRDTMap(value) ? this.readLink(value) : undefined;
+    }
+
+    /** Returns all first-class links. */
+    getLinks(): Link[] {
+        return Array.from(this.storage.links.values()).flatMap((value: CRDTMap<LinkStorage>) => {
+            if (!isCRDTMap(value)) return [];
+            return [this.readLink(value)];
+        });
+    }
+
+    /** Returns root IDs in collaborative array order. */
+    getRootIds(): string[] {
+        return strings(this.storage.roots);
+    }
+
+    /** Returns direct child IDs in collaborative array order. */
+    getChildIds(id: string): string[] {
+        if (!this.findContainer(id)) return [];
+        const value = this.storage.blocks.get(id);
+        return isCRDTMap(value) ? strings(this.requiredArray(value, "children")) : [];
+    }
+
+    /** Returns null for a root, a parent ID for a child, or undefined when absent. */
+    getParentId(id: string): string | null | undefined {
+        const found = this.findContainer(id);
+        return found ? found.parentId ?? null : undefined;
+    }
+
+    /** Returns collapse-aware depth-first block IDs. */
+    getVisibleBlockIds(): string[] {
+        const visited = new Set<string>();
+        const visit = (id: string): string[] => {
+            if (visited.has(id)) return [];
+            const value = this.storage.blocks.get(id);
+            if (!isCRDTMap(value)) return [];
+            visited.add(id);
+            return [
+                id,
+                ...(collapsedFrom(value.get("collapsed"))
+                    ? []
+                    : strings(this.requiredArray(value, "children")).flatMap(visit)),
+            ];
+        };
+        return this.getRootIds().flatMap(visit);
     }
 
     /**
@@ -367,7 +420,7 @@ export class DocumentModelImpl {
             const removed = new Set(this.collectTreeIds(id));
             this.removeTree(id);
             found.array.delete(found.index, 1);
-            for (const link of this.links) {
+            for (const link of this.getLinks()) {
                 if (removed.has(link.from.blockId) || removed.has(link.to.blockId)) this.storage.links.delete(link.id);
             }
         });
@@ -440,7 +493,7 @@ export class DocumentModelImpl {
 
             // Links address blocks by ID. Once sourceId is gone, links touching
             // it cannot be resolved and must be removed in the same transaction.
-            for (const link of this.links) {
+            for (const link of this.getLinks()) {
                 if (link.from.blockId === sourceId || link.to.blockId === sourceId) {
                     this.storage.links.delete(link.id);
                 }
@@ -667,8 +720,8 @@ export class DocumentModelImpl {
     getSnapshot(): Snapshot {
         return {
             version: 4,
-            blocks: clone(this.document),
-            links: clone(this.links),
+            blocks: clone(this.getBlocks()),
+            links: clone(this.getLinks()),
             pluginData: clone(this.storage.pluginData.toObject() as Record<string, unknown>),
         };
     }
@@ -814,22 +867,78 @@ export class DocumentModelImpl {
         };
     }
 
+    /** Materializes one stored link as a detached value. */
+    private readLink(value: CRDTMap<LinkStorage>): Link {
+        return {
+            id: String(value.get("id")),
+            from: clone(value.get("from") as Link["from"]),
+            to: clone(value.get("to") as Link["to"]),
+            meta: clone((value.get("meta") as Record<string, unknown> | undefined) ?? {}),
+        };
+    }
+
     /**
-     * Locates the ordered array and index containing a block ID.
-     *
-     * @param id - Block ID to locate.
-     * @returns Container information, including parent ID for nested blocks.
+     * Resolves a validated cached path or searches the current CRDT tree.
+     * Paths are intentionally repaired only when the corresponding ID is read.
      */
-    private findContainer(id: string): { array: CRDTArray<string>; index: number; parentId?: string } | undefined {
-        const rootIndex = strings(this.storage.roots).indexOf(id);
-        if (rootIndex >= 0) return { array: this.storage.roots, index: rootIndex };
-        for (const [parentId, value] of Array.from(this.storage.blocks.entries())) {
-            if (!isCRDTMap(value)) continue;
-            const children = this.requiredArray(value, "children");
-            const index = strings(children).indexOf(id);
-            if (index >= 0) return { array: children, index, parentId };
+    private findContainer(id: string): LocatedBlock | undefined {
+        if (!this.storage.blocks.has(id)) {
+            this.blockPaths.delete(id);
+            return undefined;
+        }
+
+        const cached = this.blockPaths.get(id);
+        const resolved = cached ? this.resolvePath(cached) : undefined;
+        if (resolved?.id === id) return { ...resolved, path: cached! };
+
+        const path = this.findPath(id);
+        if (!path) {
+            this.blockPaths.delete(id);
+            return undefined;
+        }
+        this.blockPaths.set(id, path);
+        const found = this.resolvePath(path);
+        return found ? { ...found, path } : undefined;
+    }
+
+    /** Walks sibling indexes from roots to one current tree location. */
+    private resolvePath(path: readonly number[]): Omit<LocatedBlock, "path"> & { id: string } | undefined {
+        if (!path.length) return undefined;
+        let array = this.storage.roots;
+        let parentId: string | undefined;
+        for (let depth = 0; depth < path.length; depth += 1) {
+            const index = path[depth]!;
+            if (!Number.isInteger(index) || index < 0 || index >= array.length) return undefined;
+            const rawId = array.get(index);
+            if (typeof rawId !== "string") return undefined;
+            if (depth === path.length - 1) return { id: rawId, array, index, parentId };
+            const block = this.storage.blocks.get(rawId);
+            if (!isCRDTMap(block)) return undefined;
+            parentId = rawId;
+            array = this.requiredArray(block, "children");
         }
         return undefined;
+    }
+
+    /** Finds one ID by walking only root and child ID arrays. */
+    private findPath(id: string): readonly number[] | undefined {
+        const visited = new Set<string>();
+        const visit = (array: CRDTArray<string>, prefix: readonly number[]): readonly number[] | undefined => {
+            for (let index = 0; index < array.length; index += 1) {
+                const rawId = array.get(index);
+                if (typeof rawId !== "string") continue;
+                const path = [...prefix, index];
+                if (rawId === id) return path;
+                if (visited.has(rawId)) continue;
+                visited.add(rawId);
+                const block = this.storage.blocks.get(rawId);
+                if (!isCRDTMap(block)) continue;
+                const found = visit(this.requiredArray(block, "children"), path);
+                if (found) return found;
+            }
+            return undefined;
+        };
+        return visit(this.storage.roots, []);
     }
 
     /** Returns selected roots in visible order, excluding selected descendants. */

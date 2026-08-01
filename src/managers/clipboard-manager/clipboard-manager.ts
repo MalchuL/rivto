@@ -1,13 +1,13 @@
 import { DEFAULT_BLOCK_TYPE } from "../../blocks";
 import type { EditorRuntime } from "../../editor/rivto-editor";
-import type { NormalizedSelection } from "../selection-manager";
+import { isStructuralSelection, type NormalizedSelection } from "../selection-manager";
 import type { ClipboardBundle, ClipboardPasteInput, ClipboardPayload } from "./types";
 import {
-  escapeHtml,
   findBlock,
   flattenBlocks,
   remapClipboardBundle,
-  selectedTopLevelSubtrees,
+  cloneSelectedTopLevelSubtrees,
+  serializeClipboardBlocks,
 } from "./utils";
 
 /**
@@ -57,7 +57,7 @@ export class ClipboardManager {
    *
    * Copy happens first so the returned payload exactly describes the content
    * that deletion removes. `SelectionManager.delete()` owns structural and text
-   * deletion semantics, including the final-empty-paragraph invariant.
+   * deletion semantics; cutting every root leaves a valid empty document.
    *
    * @returns The copied flavors, or undefined when there is no selection.
    */
@@ -89,6 +89,7 @@ export class ClipboardManager {
       this.pastePlainText(
         input.defaultBlockType ?? DEFAULT_BLOCK_TYPE,
         input.text ?? "",
+        input.preserveNewlines === true,
       );
     });
   }
@@ -106,10 +107,12 @@ export class ClipboardManager {
     const current = this.editor.selection.get();
     const range = this.editor.selection.normalize(current);
     if (!range?.blocks.length) return undefined;
-    const blocks = selectedTopLevelSubtrees(
-      this.editor.document.document,
+    // Clone only top level blocks in selection range (we might have nested blocks inside selection).
+
+    const blocks = cloneSelectedTopLevelSubtrees(
+      this.editor.getBlocks(),
       range,
-      !current.some((item) => item.type === "text"),
+      isStructuralSelection(current),
     );
     const start = findBlock(blocks, range.start.blockId);
     const end = findBlock(blocks, range.end.blockId);
@@ -122,13 +125,19 @@ export class ClipboardManager {
 
     const visible = flattenBlocks(blocks);
     const ids = new Set(visible.map((block) => block.id));
-    const links = this.editor.document.links.filter(
+    const links = this.editor.getLinks().filter(
       (link) => ids.has(link.from.blockId) && ids.has(link.to.blockId),
     );
+    // Convert blocks to text, html and markdown bundles. Used for clipboard copy to paste to different apps.
+    const portable = serializeClipboardBlocks(blocks, (block) => {
+      const definition = this.editor.blocks.get(block.type);
+      // If definition has toRawText method, use it to convert block to text. Otherwise use block.content.
+      return definition?.toRawText ? definition.toRawText(block) : block.content;
+    });
     return {
+      // startsWithText means that clipboard bundle starts with text. It used to paste text into existing text block.
       bundle: { version: 2, startsWithText: current[0]?.type === "text", blocks, links },
-      html: visible.map((block) => `<p>${escapeHtml(block.content)}</p>`).join(""),
-      text: visible.map((block) => block.content).join("\n"),
+      ...portable,
     };
   }
 
@@ -147,18 +156,19 @@ export class ClipboardManager {
     if (!bundle.blocks.length) return;
     const current = this.editor.selection.get();
     const hasTextTarget = current.some((item) => item.type === "text");
+    // Handle case when clipboard contains only blocks or if we have block selection.
+    // We add them after selection.
     if (!mergeText || bundle.startsWithText !== true || !hasTextTarget) {
       const active = current.at(-1);
       const range = this.editor.selection.normalize(current);
-      const afterId = active?.type === "block"
-        ? active.focusBlockId
-        : active?.type === "edgeless"
-          ? active.blockIds.at(-1)
-          : active?.type === "text"
-            ? active.head.blockId
-            : range?.blocks.at(-1)?.id;
+      let afterId = range?.blocks.at(-1)?.id;
+      if (active?.type === "block") {
+        afterId = active.focusBlockId;
+      } else if (active?.type === "text") {
+        afterId = active.head.blockId;
+      }
       const caretBlock = active?.type === "text"
-        ? findBlock(this.editor.document.document, active.head.blockId)
+        ? this.editor.getBlock(active.head.blockId)
         : undefined;
 
       // Expanded parents receive pasted roots before their current first child.
@@ -170,11 +180,14 @@ export class ClipboardManager {
       return;
     }
 
+    // Handle case when we paste blocks into empty selection (wthout caret or text selection)
     const range = this.editor.selection.normalize(current);
     if (!range) {
       this.insertBundleAsBlocks(bundle);
       return;
     }
+
+    // Handle case when we paste text into existing selection and there is not block selection.
     const target = range.blocks[0]!;
     const first = bundle.blocks[0]!;
     const prefix = target.content.slice(0, range.start.offset);
@@ -219,10 +232,16 @@ export class ClipboardManager {
    *
    * @param defaultBlockType - Registered block type used for newly created lines.
    * @param value - Plain clipboard text, including possible newline delimiters.
+   * @param preserveNewlines - Whether all text stays inside one block.
    */
-  private pastePlainText(defaultBlockType: string, value: string): void {
+  private pastePlainText(
+    defaultBlockType: string,
+    value: string,
+    preserveNewlines: boolean,
+  ): void {
     const range = this.editor.selection.normalize();
-    const lines = value.split(/\r\n?|\n/);
+    const lines = preserveNewlines ? [value] : value.split(/\r\n?|\n/);
+    // Handle case when we paste text into empty selection (without caret or text selection).
     if (!range) {
       let lastId: string | undefined;
       this.editor.document.transact(() => {
@@ -237,6 +256,8 @@ export class ClipboardManager {
       return;
     }
 
+    // Handle case when we paste text into existing selection and there is not block selection.
+    // Paste text into first existing text block.
     const target = range.blocks[0]!;
     const end = range.blocks.at(-1) ?? target;
     const prefix = target.content.slice(0, range.start.offset);

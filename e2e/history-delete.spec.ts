@@ -51,6 +51,36 @@ test("Backspace and Delete remove root-focused block selections atomically", asy
   await expect(blockById(page, secondId!)).toHaveCount(0);
 });
 
+test("undo works immediately after deleting blocks from a focused editable", async ({ page }) => {
+  const [firstId, secondId] = await selectRoots(page, [0, 1]);
+  const focusedContent = blockById(page, secondId!).locator("[data-block-content]");
+
+  const focusAfterDelete = await focusedContent.evaluate(async (element) => {
+    const requestFrame = window.requestAnimationFrame;
+    window.requestAnimationFrame = () => 1;
+    (element as HTMLElement).focus();
+    element.dispatchEvent(new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Delete",
+    }));
+    await new Promise((resolve) => setTimeout(resolve));
+    const active = document.activeElement;
+    active?.dispatchEvent(new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+      key: "z",
+    }));
+    window.requestAnimationFrame = requestFrame;
+    return active?.getAttribute("data-block-content") !== null;
+  });
+
+  expect(focusAfterDelete).toBe(true);
+  await expect(blockById(page, firstId!)).toBeVisible();
+  await expect(blockById(page, secondId!)).toBeVisible();
+});
+
 test("history shortcuts replace native contenteditable history", async ({ page }) => {
   const content = page.locator("[data-block-content]").first();
   const initial = await content.textContent();

@@ -38,7 +38,7 @@ CRDT storage
 При каждом чтении:
 
 ```ts
-editor.document.document
+editor.getBlocks()
 ```
 
 `DocumentModelImpl` заново материализует обычный detached tree. После изменения
@@ -72,4 +72,3 @@ src/editor/
     ├── rivto-editor.tsx              subscription и renderer selection
     └── renderers.tsx                 Block tree → DOM
 ```
-

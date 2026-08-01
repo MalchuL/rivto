@@ -31,6 +31,8 @@ export interface ClipboardPayload {
   html: string;
   /** Universal plain-text fallback. */
   text: string;
+  /** Markdown source preserving descendants as nested lists. */
+  markdown: string;
 }
 
 /**
@@ -48,6 +50,8 @@ export interface ClipboardPasteInput {
   readonly text?: string;
   /** Whether copied partial text may merge into an active text selection. */
   readonly mergeText?: boolean;
+  /** Keep plain-text newline characters inside one block instead of creating siblings. */
+  readonly preserveNewlines?: boolean;
   /** Block type used for additional lines in a plain-text paste. */
   readonly defaultBlockType?: string;
 }

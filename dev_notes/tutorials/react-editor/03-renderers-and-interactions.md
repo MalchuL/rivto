@@ -214,8 +214,7 @@ caret, а не карточку.
 
 ## 14. Object selection против text selection
 
-Click на canvas card chrome вызывает `setSelected(block.id)` и создаёт
-`EdgelessSelection`.
+Click на canvas card chrome создаёт обычный `BlockSelection` для root block.
 
 Но click внутри:
 
@@ -224,14 +223,14 @@ contenteditable, input, textarea, select, link, button
 ```
 
 не выбирает объект. Иначе bubbling click заменил бы TextSelection на
-EdgelessSelection, и пользователь не смог бы редактировать текст.
+BlockSelection, и пользователь не смог бы редактировать текст.
 
 Эта маленькая проверка защищает основную возможность редактирования canvas
 blocks.
 
 ## 15. Canvas links
 
-Renderer читает `editor.document.links` и root block layouts, затем рисует SVG
+Renderer читает `editor.getLinks()` и root block layouts, затем рисует SVG
 lines между центрами cards.
 
 Сейчас lookup использует root `blocks.find()`, поэтому visual link rendering

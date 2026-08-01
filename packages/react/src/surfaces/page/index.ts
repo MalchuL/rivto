@@ -1,1 +1,1 @@
-export * from "./PageSurface";
+export * from "./page-surface";

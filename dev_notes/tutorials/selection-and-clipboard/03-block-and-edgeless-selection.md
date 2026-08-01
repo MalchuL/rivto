@@ -1,7 +1,7 @@
 # Глава 03. Выделение блоков и объектов edgeless canvas
 
-TextSelection выбирает символы. BlockSelection и EdgelessSelection выбирают
-структурные объекты.
+TextSelection выбирает символы. BlockSelection выбирает структурные объекты в
+page и edgeless mode.
 
 Главный файл этой главы: `src/editor/react/renderers.tsx`.
 
@@ -275,27 +275,14 @@ focusBlockId = first selected ID;
 
 Повторное clear защищает от позднего browser selection event после pointerup.
 
-## 17. EdgelessSelection: карточка как объект
+## 17. BlockSelection на canvas
 
-Edgeless renderer отображает blocks absolutely positioned внутри plane.
+Edgeless renderer отображает root blocks как absolutely positioned cards, но
+selection model остаётся тем же. Ctrl/Cmd-click по любому `BlockView`, включая
+nested block, создаёт или дополняет `BlockSelection`. Click по card chrome и
+rectangle gesture создают `BlockSelection` из root IDs.
 
-Каждый `BlockView` получает:
-
-```ts
-canvas={true}
-isSelected={selected === block.id}
-select={() => setSelected(block.id)}
-```
-
-`setSelected()` выполняет:
-
-```ts
-editor.commands.execute("selection.set", {
-  selection: { type: "edgeless", blockIds: [blockId] },
-});
-```
-
-Selected card получает outline через `data-block-selected=true`.
+Selected blocks получают `data-block-selected=true`.
 
 ## 18. Два слоя canvas card
 
@@ -304,7 +291,7 @@ Selected card получает outline через `data-block-selected=true`.
 1. object layer — card chrome, drag strip, resize behavior;
 2. content layer — editable text, inputs, links, buttons.
 
-Click по object layer выбирает EdgelessSelection.
+Click по object layer выбирает root через BlockSelection.
 
 Click по content layer должен оставить native focus и создать TextSelection.
 
@@ -332,7 +319,7 @@ click text
 → browser ставит caret
 → selectionchange создаёт TextSelection
 → click bubbles в card
-→ card создаёт EdgelessSelection
+→ card создаёт BlockSelection
 → typing больше не работает ожидаемо
 ```
 
@@ -343,12 +330,12 @@ click text
 Нормальный сценарий:
 
 1. Click `.rv-drag` или card chrome.
-2. Runtime selection становится `edgeless`.
+2. Runtime selection становится `block`.
 3. Click editable content.
 4. Browser создаёт caret.
 5. `selectionchange` записывает `text` selection.
 6. Typing меняет block text.
-7. Click card chrome снова записывает `edgeless` selection.
+7. Click card chrome снова записывает `block` selection.
 
 ## 21. Form controls в canvas card
 
@@ -359,25 +346,22 @@ Card guard всё равно не позволяет click выбрать object
 может редактировать URL.
 
 Runtime inspector при этом может показывать старое или отсутствующее selection,
-но не должен неожиданно показывать новое `edgeless` только из-за input click.
+но не должен неожиданно показывать новое `block` только из-за input click.
 
 ## 22. Смена mode
 
-EdgelessSelection имеет смысл только на canvas. При команде:
+При команде:
 
 ```ts
 editor.commands.execute("mode.set", { mode: "block" });
 ```
 
-ModeManager уведомляет EditorRuntime. `reconcileSelection()` видит несовместимый
-type и очищает его.
-
-TextSelection не очищается автоматически: один и тот же block text существует
-в обоих renderers.
+ModeManager переключает только presentation. TextSelection и BlockSelection
+сохраняются: один и тот же block tree существует в обоих renderer.
 
 ## 23. Clipboard и structural selection
 
-BlockSelection и EdgelessSelection нормализуются как whole blocks:
+BlockSelection нормализуется как whole blocks:
 
 ```text
 start = начало первого selected block
@@ -391,15 +375,15 @@ Cut удаляет blocks целиком, а не оставляет пусто�
 
 ## 24. Итог главы
 
-Теперь есть три разных пользовательских намерения:
+Теперь есть два selection намерения:
 
 ```text
 выбрать символы              TextSelection
 выбрать block structure      BlockSelection
-выбрать canvas object        EdgelessSelection
 ```
 
-Renderer определяет намерение по месту gesture и modifiers. Runtime затем
-проверяет и нормализует данные.
+Canvas object gesture тоже создаёт BlockSelection; layout-команды отдельно
+проецируют nested IDs на owning root cards. Runtime проверяет и нормализует
+данные одинаково для обоих mode.
 
 Следующая глава: [как React синхронизирует selection](./04-react-synchronization.md).

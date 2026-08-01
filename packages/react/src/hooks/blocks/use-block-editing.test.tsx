@@ -1,4 +1,4 @@
-import { createRivtoEditor } from "@chulane/rivto";
+import { createRivtoEditor as createEditor } from "@chulane/rivto";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -12,14 +12,14 @@ import {
   type UseBlockEditingResult,
 } from "./use-block-editing";
 
-interface TestProps {
+interface TestProps extends Record<string, unknown> {
   count: number;
   label?: string;
 }
 
 describe("useBlockEditing", () => {
   test("returns mode-specific attributes and latest validated property methods", () => {
-    const editor = createRivtoEditor();
+    const editor = createEditor();
     editor.defineBlock({
       type: "test.editing",
       defaultProps: { count: 1, label: "Initial" },

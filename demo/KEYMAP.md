@@ -1,7 +1,7 @@
 # Demo keymap
 
-This file describes the functional plugins registered by `demo/src/App.tsx`.
-The behavior is supplied by `@chulane/rivto-react`; consumers may omit plugins
+This file describes the functional extensions installed by `demo/src/App.tsx`.
+The behavior is supplied by `@chulane/rivto-react`; consumers may omit extensions
 or remap supported bindings.
 
 `Primary` means `Ctrl` on Windows/Linux and `Command` on macOS.
@@ -18,7 +18,7 @@ or remap supported bindings.
 | `Backspace` | Caret after the start of a block | Uses native character deletion. |
 | `Backspace` | Caret at the start of a nested block | Outdents the block. |
 | `Backspace` | Caret at the start of a root block | Merges it into the previous visible editable block. |
-| `Backspace` | First empty custom block | Converts it to a paragraph. The final empty paragraph is retained. |
+| `Backspace` | First empty custom block | Converts it to a paragraph. Structural deletion may leave the document empty; the trailing page affordance creates the next paragraph. |
 | `Delete` | Expanded text or block selection originating in editable content | Deletes the complete selection in one transaction. |
 | `Delete` | Caret before the end of a block | Uses native forward character deletion. |
 | `Delete` | Caret at the end of an expanded block | Merges the next visible editable block into the current block. A collapsed parent remains unchanged. |
@@ -41,6 +41,7 @@ Unmodified Enter, Backspace, and Delete ignore IME composition. Their
 | `Up` / `Down` | Text caret | Moves by rendered caret geometry, preserving the horizontal position across wrapped lines and adjacent blocks. |
 | `Shift+Up` / `Shift+Down` | Text | Extends text on the current visual line. Crossing a block boundary changes to an inclusive whole-block selection. |
 | `Up` / `Down` | Block selection | Replaces it with the adjacent visible block. |
+| `Left` / `Right` | Block selection | Places a text caret at offset zero on the focus block. The reverse (text → block via Left/Right) is not implemented. |
 | `Shift+Up` / `Shift+Down` | Block selection | Grows the selection in that direction, or shrinks it when reversing toward the anchor. |
 | `Alt+Up` / `Alt+Down` | Text caret/range | First selects the current complete block. Repeated presses grow the block selection. |
 | `Alt+Up` / `Alt+Down` | Block selection | Grows or shrinks from its active end. |
@@ -71,7 +72,7 @@ excluded from click and text selection.
 | `Primary+C` | Copies the editor selection as Rivto structured data plus HTML and plain text. Selected parent blocks carry their complete subtrees. |
 | `Primary+X` | Copies, then deletes the selection atomically. |
 | `Primary+V` | Follows the copied selection type. Copied text pastes into a text target; copied blocks stay blocks. An expanded block with children receives pasted blocks as its first children; a collapsed block receives them after itself. |
-| `Primary+Shift+V` | Explicitly keeps structured partial-text data as blocks. Whole-block and external plain-text data retain their normal behavior. |
+| `Primary+Shift+V` | Pastes plain text into one block, preserving newline characters instead of creating sibling blocks. |
 
 ## Drag and drop
 
@@ -109,16 +110,16 @@ or delete its complete subtree; and collapse or expand it when applicable.
 | --- | --- |
 | Click card chrome | Selects the complete root subtree as one canvas object. |
 | Click text or a control | Edits text or activates the control without selecting the canvas object. |
-| `Enter` in editable content | Uses the shared block splitter. Expanded roots with children receive the new first child; a split leaf root creates a nearby canvas card. |
+| `Enter` in editable content | Uses the shared block splitter. A root always receives the split result as its first child; nested blocks retain page-mode insertion behavior. |
 | `Tab` / `Shift+Tab` in editable content | Uses the shared structural indent/outdent behavior inside the card outline. |
 | `Primary+click` inside a card | Toggles its owning root object; controls do not activate. |
 | Drag empty canvas | Rectangle-selects intersecting root cards. |
 | Drag `Move` | Moves one root, or every selected root when the handle belongs to the selection. |
-| Drag a block `⋮⋮` handle | Uses the shared structural drag/drop behavior to reorder or nest blocks within or across root cards. |
+| Drag a block `⋮⋮` handle | Uses the shared structural drag/drop behavior within the exact card under the pointer, including cross-card reorder and nesting. Blank canvas is not a drop target. |
 | Drag resize corner | Resizes one root card, with a minimum size of 180×100. |
 | Arrow keys | Moves selected roots by one canvas pixel. |
 | `Shift+Arrow` | Moves selected roots by ten canvas pixels. |
-| `Backspace` / `Delete` | Removes selected root subtrees in one transaction. |
+| `Backspace` / `Delete` | For a structural block selection, the first press clears content and descendants while preserving each selected block; a second press deletes the empty blocks. Text selections keep native character deletion. |
 | `Escape` | Cancels an active transform or clears object selection. |
 | Native scroll / wheel | Scrolls the 2400×1600 canvas viewport. |
 | Space+drag / middle-button drag | Pans by changing native viewport scroll offsets. |
@@ -136,12 +137,12 @@ all nested descendants remain rendered inside an edgeless root card.
 
 Built-in actions are remapped once when `createReactEditor` is called. An empty
 array disables an action. Unknown IDs are ignored, so one preferences object
-can be shared by applications with different plugin sets.
+can be shared by applications with different extension sets.
 
 ```ts
 createReactEditor({
   editor,
-  plugins,
+  extensions: [standardPreset()],
   keymap: {
     "block.indent": ["Primary+ArrowRight"],
     "history.redo": [],
@@ -152,7 +153,7 @@ createReactEditor({
 | Binding ID | Default |
 | --- | --- |
 | `history.undo` / `history.redo` | `Primary+Z` / `Primary+Shift+Z`, `Primary+Y` |
-| `clipboard.paste-as-blocks` | `Primary+Shift+V` |
+| `clipboard.paste-as-plain-text` | `Primary+Shift+V` |
 | `block.create` | `Enter` |
 | `selection.delete` | `Backspace`, `Delete` |
 | `block.outdent-at-start` | `Backspace` |
@@ -162,6 +163,7 @@ createReactEditor({
 | `caret.left`, `caret.right`, `caret.up`, `caret.down` | Corresponding unmodified arrow |
 | `caret.extend-up` / `caret.extend-down` | `Shift+ArrowUp` / `Shift+ArrowDown` |
 | `selection.block-up` / `selection.block-down` | `ArrowUp` / `ArrowDown` |
+| `selection.block-caret-left` / `selection.block-caret-right` | `ArrowLeft` / `ArrowRight` |
 | `selection.block-extend-up` / `selection.block-extend-down` | `Shift+ArrowUp` / `Shift+ArrowDown` |
 | `selection.block-grow-up` / `selection.block-grow-down` | `Alt+ArrowUp` / `Alt+ArrowDown` |
 | `block.move-up` / `block.move-down` | `Alt+Shift+ArrowUp` / `Alt+Shift+ArrowDown` |

@@ -17,7 +17,7 @@ registration's `when` predicate and handler.
 
 ## DOM events
 
-Functional plugins can register delegated native behavior directly:
+Functional extensions can register delegated native behavior directly:
 
 ```ts
 reactEditor.events.register({
@@ -36,7 +36,7 @@ reactEditor.events.register({
 
 Every registration has a stable ID. Duplicate IDs throw, `delete(id)` removes
 one registration, and the returned disposer performs the same cleanup
-idempotently. Plugin setup rollback and editor destruction also dispose owned
+idempotently. Extension setup rollback and editor destruction also dispose owned
 registrations.
 
 `target` chooses where the native listener is attached:
@@ -85,7 +85,7 @@ registry.
 ## Keyboard events
 
 Keyboard registrations describe semantic actions rather than checking keys
-inside plugins:
+inside extensions:
 
 ```ts
 reactEditor.events.register({
@@ -117,7 +117,7 @@ Composition policies are:
 - `prevent`: suppress the browser shortcut without executing the action.
 
 `useKeyboardEvent(definition, handler)` provides the same behavior to
-React-stateful plugin components while retaining their latest callback.
+React-stateful UI components while retaining their latest callback.
 Keyboard handlers receive `KeyboardEditorEvent`, which extends `EditorEvent`
 with `shortcut` and `phase`.
 
@@ -132,7 +132,7 @@ Overrides are fixed when the React editor is created:
 ```ts
 createReactEditor({
   editor,
-  plugins,
+  extensions,
   keymap: {
     "block.indent": ["Primary+ArrowRight"],
     "history.redo": [],

@@ -1,23 +1,18 @@
 import { createContext, useContext } from "react";
-import type { RivtoEditorApi } from "@chulane/rivto";
-import type { ReactEditor } from "./react-editor";
+import type { RivtoEditorApi as Editor } from "@chulane/rivto";
+import type { ReactEditor } from "./types";
 
 /**
  * Reactive value shared by one EditorView subtree.
  *
  * The editor reference is stable for the lifetime of a mounted EditorView.
- * `revision` changes whenever the runtime publishes document, mode, or
- * selection changes. Hooks may only read `editor`, but consuming this context
- * still makes their component rerender when the context value receives a new
- * revision.
+ * Both references stay stable for the lifetime of the mounted EditorView.
  */
 export interface EditorContextValue {
   /** Runtime used for document access, commands, mode, and local selection. */
-  readonly editor: RivtoEditorApi;
-  /** React rendering and plugin runtime layered over the core editor. */
+  readonly editor: Editor;
+  /** React rendering and extension runtime layered over the core editor. */
   readonly reactEditor: ReactEditor;
-  /** Monotonic runtime snapshot used solely to invalidate React consumers. */
-  readonly revision: number;
 }
 
 /**
@@ -35,7 +30,7 @@ export const EditorContext = createContext<EditorContextValue | null>(null);
  * stay consistent. Consumers should normally use `useEditor`, `useBlock`, or
  * another focused hook rather than depending on the revision implementation.
  *
- * @returns The nearest EditorView's editor and reactive revision.
+ * @returns The nearest EditorView's stable editor references.
  * @throws If called outside an EditorView subtree.
  */
 export function useEditorContext(): EditorContextValue {

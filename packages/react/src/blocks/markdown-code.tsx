@@ -1,9 +1,13 @@
 import {
   Children,
+  cloneElement,
   isValidElement,
+  type HTMLAttributes,
+  type ReactElement,
   type ReactNode,
+  useLayoutEffect,
+  useRef,
 } from "react";
-import type { Components } from "react-markdown";
 
 /** Minimal HAST shape needed by the fenced-code metadata transform. */
 interface SyntaxNode {
@@ -171,20 +175,114 @@ interface AnnotatedCodeProps {
   readonly children?: ReactNode;
 }
 
+export interface PositionedNode {
+  readonly position?: {
+    readonly start: { readonly offset?: number };
+    readonly end: { readonly offset?: number };
+  };
+}
+
+/** Replaces one rendered code body's source while preserving its Markdown wrapper. */
+export function replaceMarkdownCode(
+  source: string,
+  node: PositionedNode,
+  value: string,
+): string {
+  const start = node.position?.start.offset;
+  const end = node.position?.end.offset;
+  if (start === undefined || end === undefined) return source;
+  const block = source.slice(start, end);
+  const opening = block.match(/^([ \t]*)(`{3,}|~{3,})[^\r\n]*(\r?\n)/);
+  const normalized = value.replace(/\r\n?/g, "\n").replace(/\n$/, "");
+  if (opening) {
+    const closingStart = block.lastIndexOf("\n");
+    if (closingStart >= opening[0].length) {
+      return source.slice(0, start)
+        + block.slice(0, opening[0].length)
+        + normalized
+        + block.slice(closingStart)
+        + source.slice(end);
+    }
+  }
+
+  const newline = block.includes("\r\n") ? "\r\n" : "\n";
+  const indent = block.match(/^(?: {4}|\t)/)?.[0] ?? "";
+  const replacement = normalized.split("\n").map((line) => indent + line).join(newline);
+  return source.slice(0, start) + replacement + source.slice(end);
+}
+
 /**
  * Renders a visible filename/language header around one fenced code block.
  *
  * Inline code never produces a `pre` element and therefore bypasses this
  * component. Syntax spans remain owned by `rehype-highlight`.
  */
-export const MarkdownCodeBlock: NonNullable<Components["pre"]> = ({
-  node: _node,
+/** Props supplied by react-markdown for one rendered preformatted block. */
+export interface MarkdownCodeBlockProps extends HTMLAttributes<HTMLPreElement> {
+  readonly node?: PositionedNode;
+  readonly onCodeChange?: (node: PositionedNode, value: string) => void;
+  readonly preventTextEditingAttributes?: HTMLAttributes<HTMLElement>;
+}
+
+function textContent(node: ReactNode): string {
+  return Children.toArray(node).map((child) => {
+    if (typeof child === "string" || typeof child === "number" || typeof child === "bigint") {
+      return String(child);
+    }
+    return isValidElement<{ readonly children?: ReactNode }>(child)
+      ? textContent(child.props.children)
+      : "";
+  }).join("");
+}
+
+function EditableCode({
+  children,
+  onChange,
+  preventTextEditingAttributes,
+}: {
+  readonly children: ReactNode;
+  readonly onChange: (value: string) => void;
+  readonly preventTextEditingAttributes?: HTMLAttributes<HTMLElement>;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  const value = textContent(children).replace(/\n$/, "");
+
+  // React owns the highlighted layer, while the browser owns this plaintext
+  // editor. Only reconcile external changes; local input already matches value.
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element || element.textContent === value) return;
+    element.textContent = value;
+  }, [value]);
+
+  return (
+    <code
+      {...preventTextEditingAttributes}
+      ref={ref}
+      className="markdown-code-editor"
+      aria-label="Code block content"
+      contentEditable="plaintext-only"
+      suppressContentEditableWarning
+      spellCheck={false}
+      tabIndex={0}
+      onInput={(event) => onChange(event.currentTarget.textContent ?? "")}
+    />
+  );
+}
+
+export function MarkdownCodeBlock({
+  node,
+  onCodeChange,
+  preventTextEditingAttributes,
   children,
   ...attributes
-}) => {
+}: MarkdownCodeBlockProps) {
   const code = Children.toArray(children)[0];
-  const metadata = isValidElement<AnnotatedCodeProps>(code)
-    ? code.props
+  const codeElement = isValidElement<AnnotatedCodeProps>(code)
+    ? code as ReactElement<AnnotatedCodeProps & HTMLAttributes<HTMLElement>>
+    : undefined;
+  const metadata = codeElement
+    ? codeElement.props
     : undefined;
   const label = metadata?.["data-code-label"];
   const language = metadata?.["data-code-language"];
@@ -194,6 +292,22 @@ export const MarkdownCodeBlock: NonNullable<Components["pre"]> = ({
   const showLanguage = Boolean(
     languageTitle && languageTitle.toLowerCase() !== label?.toLowerCase(),
   );
+  const codeContent = codeElement && node && onCodeChange
+    ? (
+        <span className="markdown-code-content">
+          {cloneElement(codeElement, {
+            "aria-hidden": true,
+            className: `${codeElement.props.className ?? ""} markdown-code-preview`.trim(),
+          })}
+          <EditableCode
+            preventTextEditingAttributes={preventTextEditingAttributes}
+            onChange={(value) => onCodeChange(node, value)}
+          >
+            {codeElement.props.children}
+          </EditableCode>
+        </span>
+      )
+    : code;
 
   return (
     <figure className="markdown-code-block">
@@ -205,7 +319,7 @@ export const MarkdownCodeBlock: NonNullable<Components["pre"]> = ({
           )}
         </figcaption>
       )}
-      <pre {...attributes}>{children}</pre>
+      <pre {...attributes}>{codeContent}</pre>
     </figure>
   );
-};
+}

@@ -3,6 +3,8 @@ export {
   findBlock,
   flattenBlocks,
   remapClipboardBundle,
-  selectedTopLevelSubtrees,
+  serializeClipboardBlocks,
+  cloneSelectedTopLevelSubtrees,
+  type PortableClipboardFormats,
   type RemappedClipboardBundle,
 } from "./clipboard";

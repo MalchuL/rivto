@@ -21,4 +21,5 @@ export const counterBlockDefinition: BlockDefinition = {
   title: "Counter",
   defaultProps: { count: 0 },
   propSchema: z.object({ count: z.number().int().nonnegative() }).strict(),
+  toRawText: (block) => `Count: ${block.props.count}`,
 };

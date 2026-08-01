@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { BLOCK_ID_SELECTOR } from "./dom-markers";
+import { BLOCK_ID_SELECTOR, blockTypeSelector } from "./dom-markers";
 
 async function textPoint(
   content: import("@playwright/test").Locator,
@@ -18,6 +18,17 @@ async function textPoint(
   }, offset);
 }
 
+async function caretOffset(content: import("@playwright/test").Locator): Promise<number> {
+  return content.evaluate((element) => {
+    const selection = element.ownerDocument.getSelection();
+    if (!selection?.focusNode || !element.contains(selection.focusNode)) return -1;
+    const range = element.ownerDocument.createRange();
+    range.selectNodeContents(element);
+    range.setEnd(selection.focusNode, selection.focusOffset);
+    return range.toString().length;
+  });
+}
+
 const structuredBundle = JSON.stringify({
   version: 2,
   startsWithText: true,
@@ -33,20 +44,25 @@ const structuredBundle = JSON.stringify({
   links: [],
 });
 
-async function paste(page: import("@playwright/test").Page, asBlocks: boolean): Promise<void> {
+async function paste(page: import("@playwright/test").Page, asPlainText: boolean): Promise<void> {
   const content = page.locator("[data-block-content]").first();
   await content.click();
   await page.keyboard.press("End");
-  await content.evaluate((element, { structured, forceBlocks }) => {
-    if (forceBlocks) element.dispatchEvent(new KeyboardEvent("keydown", {
+  await content.evaluate((element, { structured, plainText, forcePlainText }) => {
+    if (forcePlainText) element.dispatchEvent(new KeyboardEvent("keydown", {
       key: "v", ctrlKey: true, shiftKey: true, bubbles: true,
     }));
     const data = new DataTransfer();
     data.setData("application/x-rivto+json", structured);
+    data.setData("text/plain", plainText);
     const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "clipboardData", { value: data });
     element.dispatchEvent(event);
-  }, { structured: structuredBundle, forceBlocks: asBlocks });
+  }, {
+    structured: structuredBundle,
+    plainText: "Copied\n    second line",
+    forcePlainText: asPlainText,
+  });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -54,16 +70,24 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("normal structured text paste merges into the target", async ({ page }) => {
+  const content = page.locator("[data-block-content]").first();
   const original = await page.locator("[data-block-content]").first().textContent();
   await paste(page, false);
-  await expect(page.locator("[data-block-content]").first()).toHaveText(`${original}Copied`);
+  await expect(content).toHaveText(`${original}Copied`);
+  await expect.poll(() => caretOffset(content)).toBe(`${original}Copied`.length);
 });
 
-test("Ctrl+Shift+V keeps structured text as a block", async ({ page }) => {
+test("Ctrl+Shift+V pastes multiline plain text inside one block", async ({ page }) => {
+  const rootsBefore = await page.locator(`${BLOCK_ID_SELECTOR}.page-block`).count();
   const original = await page.locator("[data-block-content]").first().textContent();
   await paste(page, true);
-  await expect(page.locator("[data-block-content]").first()).toHaveText(original ?? "");
-  await expect(page.locator("[data-block-content]").nth(1)).toHaveText("Copied");
+  await expect.poll(() => page.locator("[data-block-content]").first().textContent()).toBe(
+    `${original}Copied\n    second line`,
+  );
+  await expect.poll(() => caretOffset(page.locator("[data-block-content]").first())).toBe(
+    `${original}Copied\n    second line`.length,
+  );
+  await expect(page.locator(`${BLOCK_ID_SELECTOR}.page-block`)).toHaveCount(rootsBefore);
 });
 
 test("copies a mouse text selection and pastes it inline", async ({ page }) => {
@@ -74,8 +98,9 @@ test("copies a mouse text selection and pastes it inline", async ({ page }) => {
   await source.selectText();
   await page.evaluate(() => {
     document.addEventListener("copy", (event) => {
-      (window as typeof window & { mouseCopy?: { text: string; structured: string } }).mouseCopy = {
+      (window as typeof window & { mouseCopy?: { text: string; markdown: string; structured: string } }).mouseCopy = {
         text: event.clipboardData?.getData("text/plain") ?? "",
+        markdown: event.clipboardData?.getData("text/markdown") ?? "",
         structured: event.clipboardData?.getData("application/x-rivto+json") ?? "",
       };
     }, { once: true });
@@ -85,6 +110,9 @@ test("copies a mouse text selection and pastes it inline", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => (
     window as typeof window & { mouseCopy?: { text: string } }
   ).mouseCopy?.text)).toBe(copiedText);
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { mouseCopy?: { markdown: string } }
+  ).mouseCopy?.markdown)).toBe(copiedText);
 
   await target.click();
   await page.keyboard.press("End");
@@ -100,6 +128,44 @@ test("copies a mouse text selection and pastes it inline", async ({ page }) => {
   });
 
   await expect(target).toHaveText(`${targetText}${copiedText}`);
+});
+
+test("copies Counter display text to every portable clipboard flavor", async ({ page }) => {
+  const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+  const button = counter.locator(".custom-counter-block");
+  const box = await button.boundingBox();
+  if (!box) throw new Error("Expected Counter geometry");
+  await page.mouse.move(box.x + box.width / 2 - 6, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
+
+  await page.evaluate(() => {
+    document.addEventListener("copy", (event) => {
+      (window as typeof window & { counterCopy?: Record<string, string> }).counterCopy = {
+        html: event.clipboardData?.getData("text/html") ?? "",
+        markdown: event.clipboardData?.getData("text/markdown") ?? "",
+        structured: event.clipboardData?.getData("application/x-rivto+json") ?? "",
+        text: event.clipboardData?.getData("text/plain") ?? "",
+      };
+    }, { once: true });
+  });
+  await page.keyboard.press("Control+c");
+
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { counterCopy?: Record<string, string> }
+  ).counterCopy)).not.toBeUndefined();
+  const flavors = await page.evaluate(() => (
+    window as typeof window & { counterCopy: Record<string, string> }
+  ).counterCopy);
+  expect(flavors.text).toBe("Count: 2");
+  expect(flavors.html).toBe("<p>Count: 2</p>");
+  expect(flavors.markdown).toBe("Count: 2");
+  expect(JSON.parse(flavors.structured).blocks[0]).toMatchObject({
+    content: "",
+    props: { count: 2 },
+  });
 });
 
 test("copies a multi-block selection from the focused page", async ({ page }) => {

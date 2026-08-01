@@ -7,6 +7,10 @@ export interface NormalizedSelection {
   start: EditorPosition;
   /** Later block and UTF-16 offset. */
   end: EditorPosition;
-  /** Detached blocks touched by the range in depth-first document order. */
+  /**
+   * Detached blocks in depth-first document order.
+   * For block-only selection: only selected IDs (gaps stay).
+   * For text or mixed selection: all blocks from start to end inclusive.
+   */
   blocks: Block[];
 }

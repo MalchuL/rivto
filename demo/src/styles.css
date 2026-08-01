@@ -18,6 +18,23 @@ body { margin: 0; }
 
 .demo-mode-switch { display: flex; gap: 4px; }
 
+.demo-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.demo-block-id-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.demo-block-id-toggle input {
+  accent-color: var(--rivto-accent);
+}
+
 .demo-mode-switch button {
   padding: 5px 9px;
   border: 1px solid #ddd;
@@ -30,6 +47,23 @@ body { margin: 0; }
   border-color: var(--rivto-accent);
   color: white;
   background: var(--rivto-accent);
+}
+
+.page-block-row > .demo-block-id {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  padding-left: 12px;
+  color: #999;
+  background: linear-gradient(to right, transparent, white 12px);
+  font: 11px/1 ui-monospace, monospace;
+  pointer-events: none;
+  transform: translateY(-50%);
+  user-select: none;
+}
+
+.edgeless-card .page-block-row > .demo-block-id {
+  background: linear-gradient(to right, transparent, var(--rivto-edgeless-card-background, white) 12px);
 }
 
 .custom-slider-block { display: grid; gap: 6px; }

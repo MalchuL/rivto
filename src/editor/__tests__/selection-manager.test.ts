@@ -28,7 +28,7 @@ describe("EditorRuntime selection", () => {
     editor.destroy();
   });
 
-  it("validates text, block, and edgeless selections", () => {
+  it("validates text and block selections in either editor mode", () => {
     const editor = createRivtoEditor();
     const firstId = editor.insertBlock({ type: "paragraph", content: "First" });
     const secondId = editor.insertBlock({ type: "paragraph", content: "Second" }, firstId);
@@ -49,13 +49,21 @@ describe("EditorRuntime selection", () => {
     expect(() => editor.execute("selection.set", {
       selection: [{ type: "text", anchor: { blockId: firstId, offset: 99 }, head: { blockId: firstId, offset: 99 } }],
     })).toThrow("outside block");
-    expect(() => editor.execute("selection.set", {
-      selection: [{ type: "edgeless", blockIds: [firstId] }],
-    })).toThrow("requires edgeless");
-
     editor.mode.set("edgeless");
-    editor.execute("selection.set", { selection: [{ type: "edgeless", blockIds: [firstId] }] });
-    expect(editor.selection.get()).toEqual([{ type: "edgeless", blockIds: [firstId] }]);
+    editor.execute("selection.set", {
+      selection: [{
+        type: "block",
+        blockIds: [firstId],
+        anchorBlockId: firstId,
+        focusBlockId: firstId,
+      }],
+    });
+    expect(editor.selection.get()).toEqual([{
+      type: "block",
+      blockIds: [firstId],
+      anchorBlockId: firstId,
+      focusBlockId: firstId,
+    }]);
     editor.destroy();
   });
 
@@ -100,7 +108,7 @@ describe("EditorRuntime selection", () => {
     editor.destroy();
   });
 
-  it("deletes directly through the manager as one undoable transaction", () => {
+  it("deletes every selected block without creating a fallback", () => {
     const editor = createRivtoEditor();
     const firstId = editor.insertBlock({ type: "paragraph", content: "First" });
     const secondId = editor.insertBlock({ type: "paragraph", content: "Second" }, firstId);
@@ -116,17 +124,21 @@ describe("EditorRuntime selection", () => {
     editor.selection.delete();
 
     expect(documentUpdates).toHaveBeenCalledTimes(1);
-    expect(editor.getBlocks()).toMatchObject([{ type: "paragraph", content: "" }]);
+    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.selection.get()).toEqual([]);
     editor.undo();
     expect(editor.getBlocks()).toMatchObject([
       { id: firstId, content: "First" },
       { id: secondId, content: "Second" },
     ]);
+    editor.redo();
+    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.selection.get()).toEqual([]);
     unsubscribe();
     editor.destroy();
   });
 
-  it("clears invalid selection after document or mode changes", () => {
+  it("clears deleted selections but preserves block selection across modes", () => {
     const editor = createRivtoEditor();
     const id = editor.insertBlock({ type: "paragraph" });
 
@@ -137,10 +149,22 @@ describe("EditorRuntime selection", () => {
 
     const nextId = editor.insertBlock({ type: "paragraph" });
     editor.mode.set("edgeless");
-    editor.execute("selection.set", { selection: [{ type: "edgeless", blockIds: [nextId] }] });
+    editor.execute("selection.set", {
+      selection: [{
+        type: "block",
+        blockIds: [nextId],
+        anchorBlockId: nextId,
+        focusBlockId: nextId,
+      }],
+    });
     editor.mode.set("block");
 
-    expect(editor.selection.get()).toEqual([]);
+    expect(editor.selection.get()).toEqual([{
+      type: "block",
+      blockIds: [nextId],
+      anchorBlockId: nextId,
+      focusBlockId: nextId,
+    }]);
     editor.destroy();
   });
 
@@ -182,17 +206,27 @@ describe("EditorRuntime selection", () => {
     editor.destroy();
   });
 
-  it("filters deleted IDs from an edgeless selection", () => {
+  it("filters deleted IDs and repairs block-selection endpoints", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
     const firstId = editor.insertBlock({ type: "paragraph" });
     const secondId = editor.insertBlock({ type: "paragraph" }, firstId);
     editor.execute("selection.set", {
-      selection: [{ type: "edgeless", blockIds: [firstId, secondId] }],
+      selection: [{
+        type: "block",
+        blockIds: [firstId, secondId],
+        anchorBlockId: firstId,
+        focusBlockId: secondId,
+      }],
     });
 
-    editor.removeBlock(secondId);
+    editor.document.removeBlock(secondId);
 
-    expect(editor.selection.get()).toEqual([{ type: "edgeless", blockIds: [firstId] }]);
+    expect(editor.selection.get()).toEqual([{
+      type: "block",
+      blockIds: [firstId],
+      anchorBlockId: firstId,
+      focusBlockId: firstId,
+    }]);
     editor.destroy();
   });
 

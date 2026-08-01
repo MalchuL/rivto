@@ -7,7 +7,48 @@ React view are separate packages:
   selection and structured clipboard managers, history, modes, and
   slash-command state.
 - `@chulane/rivto-react` owns React rendering, page and edgeless surfaces,
-  Markdown, browser events, key bindings, and interaction plugins.
+  Markdown, browser events, key bindings, and interaction extensions.
+
+## Document architecture
+
+An open document uses the original Yjs root/children schema:
+
+```text
+rivto.editor.roots       Y.Array<blockId>
+rivto.editor.blocks      Y.Map<blockId, {
+  type, content, props, pluginData, collapsed, layout,
+  children: Y.Array<blockId>
+}>
+```
+
+The root array stores top-level order. Every block's `children` array stores
+its direct child order. Moving a block transfers its ID between these arrays;
+the canonical block record stays in `rivto.editor.blocks`.
+
+`DocumentModel` keeps a lazy `blockId -> sibling-index path` cache. A read first
+walks and validates the cached path. A missing or stale path triggers one
+depth-first search and caches only that requested ID. Mutations, undo/redo, and
+remote updates never rebuild or eagerly invalidate the cache. Nested snapshot
+v4 remains the portable import/export format.
+
+Zero roots is a valid collaborative and snapshot state. Core deletion never
+invents a replacement block. The React `standardPreset()` adds three accessible
+“+ Add block” targets after the page roots. Activating target N creates N
+paragraphs in one undo step and focuses the last one. Use `standardPreset(N)`
+or `trailingBlockExtension(N)` to choose the number of targets.
+
+## Selection architecture
+
+Selection belongs to the editor session, not to either surface. Core exposes
+only `TextSelection` and `BlockSelection`; page and edgeless mode consume the
+same state. A block selection may contain roots or nested blocks and survives
+mode switches unchanged.
+
+On the canvas, Ctrl/Cmd-click selects any rendered block while card-background
+and rectangle gestures select roots. Canvas layout commands derive the unique
+owning roots from selected IDs without replacing the selection. See
+[Selection in Rivto](packages/react/docs/selection.md) for the DOM bridge,
+gesture ownership, and collapse behavior.
 
 ## Install
 
@@ -20,32 +61,17 @@ pnpm add @chulane/rivto @chulane/rivto-react react react-dom yjs
 ```tsx
 import { createRivtoEditor } from "@chulane/rivto";
 import {
-  blockCreationPlugin,
-  clipboardPlugin,
+  blockExtension,
   createReactEditor,
-  edgelessSurfacePlugin,
   EditorView,
-  historyPlugin,
-  indentPlugin,
-  pageSurfacePlugin,
-  slashCommandPlugin,
-  textSelectionPlugin,
+  standardPreset,
 } from "@chulane/rivto-react";
 import "@chulane/rivto-react/styles.css";
 
 const editor = createRivtoEditor();
 const view = createReactEditor({
   editor,
-  plugins: [
-    pageSurfacePlugin(),
-    edgelessSurfacePlugin(),
-    historyPlugin(),
-    clipboardPlugin(),
-    textSelectionPlugin(),
-    slashCommandPlugin(),
-    blockCreationPlugin(),
-    indentPlugin(),
-  ],
+  extensions: [standardPreset()],
 });
 
 export function Document() {
@@ -57,7 +83,7 @@ view.destroy();
 editor.destroy();
 ```
 
-Plugins are ordinary factory calls supplied to `createReactEditor`; plugin
+Extensions are ordinary factory calls supplied to `createReactEditor`; extension
 components are never placed in `EditorView` children. Optional children are
 reserved for application chrome such as a mode toolbar.
 
@@ -73,11 +99,12 @@ One registration installs the core model definition, renderer, and optional
 in-place slash conversion:
 
 ```tsx
-view.blocks.register({
+const counterExtension = blockExtension({
   definition: {
     type: "acme.counter",
     title: "Counter",
     defaultProps: { count: 0 },
+    toRawText: (block) => `Count: ${block.props.count}`,
   },
   render: CounterBlock,
   slashCommand: {
@@ -87,6 +114,9 @@ view.blocks.register({
   },
 });
 ```
+
+Pass block extensions to `createReactEditor({ extensions })`; registrations are
+installed atomically and released with the React runtime.
 
 Renderers receive `{ blockId }` and use `useBlockEditing` for reactive block
 state, latest property access, bound mutations, and the DOM attributes required
@@ -110,26 +140,30 @@ function CounterBlock({ blockId }: { blockId: string }) {
 }
 ```
 
-## Custom plugins and events
+## Custom extensions and events
 
 ```ts
-const plugin = {
+const extension = {
   id: "acme.command",
   setup(reactEditor) {
+    const command = reactEditor.editor.register("acme.command.open", () => {
+      // Open application UI.
+    });
     reactEditor.events.register({
       id: "acme.command.open",
       keys: ["Primary+K"],
       when: ({ selection }) => selection.length > 0,
     }, ({ editor }) => {
-      editor.execute("acme.command");
+      editor.execute("acme.command.open");
       return true;
     });
+    return () => command.dispose();
   },
 };
 ```
 
 `ReactEditor.events` is one registry for native and keyboard definitions.
-Returning `true` claims an event; plugins never call `preventDefault()` merely
+Returning `true` claims an event; extensions never call `preventDefault()` merely
 to announce ownership. Handlers receive `EditorEvent` or
 `KeyboardEditorEvent`; their `raw` property contains the browser event.
 
@@ -138,7 +172,7 @@ Creation-time keymap overrides use stable binding IDs:
 ```ts
 createReactEditor({
   editor,
-  plugins,
+  extensions: [standardPreset(), extension],
   keymap: {
     "block.indent": ["Primary+ArrowRight"],
     "history.redo": [],
@@ -159,6 +193,11 @@ import { createRivtoEditor, YjsDoc } from "@chulane/rivto";
 const editor = createRivtoEditor({ document: new YjsDoc("room-id") });
 const id = editor.insertBlock({ type: "paragraph", content: "Hello" });
 editor.updateBlock(id, { content: "Hello world" });
+
+editor.batchUpdates(() => {
+  editor.updateBlock(id, { content: "Hello again" });
+  editor.insertBlock({ type: "paragraph", content: "One undo step" }, id);
+});
 ```
 
 ## Development

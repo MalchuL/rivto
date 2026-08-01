@@ -85,29 +85,28 @@ Undo также получает согласованную операцию, о
 
 ## 5. Nested transactions
 
-`formatText()` в runtime открывает внешнюю transaction:
+Публичный runtime открывает внешнюю transaction через `batchUpdates()`:
 
 ```ts
-this.document.transact(() => {
-  this.document.insertText(id, from + length, suffix);
-  this.document.insertText(id, from, prefix);
+editor.batchUpdates(() => {
+  editor.updateBlock(firstId, firstPatch);
+  editor.updateBlock(secondId, secondPatch);
 });
 ```
 
-При этом `insertText()` сам вызывает `this.transact()`.
+При этом editor operations сами вызывают методы модели, открывающие вложенные
+transactions.
 
 Получается вложенность:
 
 ```text
-outer transaction: formatText
-├── nested transaction: insert suffix
-└── nested transaction: insert prefix
+outer transaction: batchUpdates
+├── nested transaction: first update
+└── nested transaction: second update
 ```
 
 Yjs выполняет вложенные вызовы в рамках активной outer transaction. Для
 наблюдателей обе вставки образуют атомарное изменение.
-
-Почему suffix вставляется первым:
 
 ```text
 Alpha
@@ -230,4 +229,3 @@ model changes.
 > операции?
 
 Если нет, операции обычно должны находиться в общей transaction.
-

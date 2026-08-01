@@ -1,10 +1,13 @@
 import { useMemo } from "react";
-import type { EditorBlock, EditorBlockInput } from "@chulane/rivto";
+import type {
+  EditorBlock as Block,
+  EditorBlockInput as BlockInput,
+} from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
 
 // Reuse one immutable-by-contract empty value so a missing/leaf block does not
 // create a new array identity on every render.
-const NO_CHILDREN: readonly EditorBlock[] = [];
+const NO_CHILDREN: readonly Block[] = [];
 
 /** Commands that mutate the direct children of one parent block. */
 export interface BlockChildrenOperations {
@@ -15,7 +18,7 @@ export interface BlockChildrenOperations {
    *
    * @returns The new child's stable block ID.
    */
-  add(block: EditorBlockInput, afterId?: string | null): string;
+  add(block: BlockInput, afterId?: string | null): string;
   /** Removes a direct child and its descendants. */
   remove(childId: string): void;
   /** Moves a direct child after a sibling, or first when `afterId` is null. */
@@ -25,7 +28,7 @@ export interface BlockChildrenOperations {
 /** Reactive child snapshots and stable commands returned by useBlockChildren. */
 export interface UseBlockChildrenResult {
   /** Current direct children in persisted sibling order. */
-  readonly children: readonly EditorBlock[];
+  readonly children: readonly Block[];
   /** Memoized commands bound to the requested parent ID. */
   readonly operations: BlockChildrenOperations;
 }
@@ -33,11 +36,9 @@ export interface UseBlockChildrenResult {
 /**
  * Resolves the direct children of one block and commands for changing them.
  *
- * Child values are detached snapshots. EditorView's revision subscription
- * causes this hook to resolve them again after local, command-driven, direct
- * document, or remote CRDT changes. Operations resolve the parent at call time
- * and only accept its current direct children, so stale rendered IDs cannot
- * mutate a different subtree.
+ * Child values are detached snapshots and resolve again when EditorView receives
+ * the core editor's global revision. Operations resolve the parent at call time and only accept its
+ * current direct children, so stale rendered IDs cannot mutate another subtree.
  *
  * Adding to a parent with no children uses the editor's existing insert and
  * indent commands. The hook owns no tree state and performs no optimistic
@@ -53,7 +54,7 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
   const parent = editor.getBlock(blockId);
 
   const operations = useMemo<BlockChildrenOperations>(() => {
-    const getChildren = (): EditorBlock[] => {
+    const getChildren = (): Block[] => {
       const currentParent = editor.getBlock(blockId);
       if (!currentParent) throw new Error(`Block ${blockId} not found`);
       return currentParent.children;

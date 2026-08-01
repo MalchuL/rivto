@@ -44,10 +44,10 @@ CRDT containers имеют стабильную identity. Отдельные map
 
 Concurrent изменения разных частей легче merge.
 
-## 3. Публичный getter `document`
+## 3. Публичный метод `getBlocks()`
 
 ```ts
-get document(): Block[] {
+getBlocks(): Block[] {
   return strings(this.storage.roots).flatMap((id) => {
     const block = this.readBlock(id, new Set());
     return block ? [block] : [];
@@ -62,7 +62,7 @@ get document(): Block[] {
 3. missing/malformed result пропускается;
 4. итог — новый обычный `Block[]`.
 
-Getter не возвращает ссылку на внутренний array storage.
+Метод не возвращает ссылку на внутренний array storage.
 
 ## 4. `readBlock()` материализует один subtree
 
@@ -172,12 +172,12 @@ document data.
 
 ## 10. `links` материализуются отдельно
 
-`document` getter возвращает block tree, а `links` getter возвращает first-class
+`getBlocks()` возвращает block tree, а `getLinks()` возвращает first-class
 connections. Edgeless renderer читает оба:
 
 ```ts
-blocks
-editor.document.links
+editor.getBlocks()
+editor.getLinks()
 ```
 
 Link не становится child block, потому что это другая domain relationship.
@@ -266,4 +266,3 @@ plugin отключён
 
 После повторной установки definition тот же persisted type снова resolve в
 renderer.
-

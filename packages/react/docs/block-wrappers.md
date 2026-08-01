@@ -1,9 +1,9 @@
 # Ordered block wrappers
 
-Block wrappers are React decorators registered by functional plugins:
+Block wrappers are React decorators registered by functional extensions:
 
 ```tsx
-const commentsPlugin = (): ReactEditorPlugin => ({
+const commentsExtension = (): ReactEditorExtension => ({
   id: "comments",
   setup: (reactEditor) => {
     reactEditor.surfaces.registerBlockWrapper("block", CommentWrapper);
@@ -36,7 +36,7 @@ A(
 ```
 
 The first registered wrapper is outermost. A wrapper must render `children`
-exactly once. Plugin cleanup removes its exact registration and preserves the
+exactly once. Extension cleanup removes its exact registration and preserves the
 relative order of remaining wrappers.
 
 The surface still owns the single `BlockView`, content renderer, controls, and
@@ -70,5 +70,5 @@ function MeasurementWrapper({ children }: BlockWrapperProps) {
 
 Multiple ref providers compose. Surface recursion resets the ref scope, so a
 parent wrapper observes only its own `BlockView`, never nested child elements.
-The page drag plugin uses this contract to attach dnd-kit to the existing row
+The page drag extension uses this contract to attach dnd-kit to the existing row
 and portal its handle without replacing the surface shell.

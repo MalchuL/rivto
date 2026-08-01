@@ -1,4 +1,4 @@
-import type { RivtoEditorApi } from "@chulane/rivto";
+import type { RivtoEditorApi as Editor } from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
 
 /**
@@ -11,11 +11,11 @@ import { useEditorContext } from "../../editor-context";
  * @returns The host-owned public editor API.
  * @throws If called outside an EditorView subtree.
  */
-export function useEditor(): RivtoEditorApi {
+export function useEditor(): Editor {
   return useEditorContext().editor;
 }
 
-/** Returns the React rendering/plugin runtime owned by the nearest EditorView. */
+/** Returns the React rendering/extension runtime owned by the nearest EditorView. */
 export function useReactEditor() {
   return useEditorContext().reactEditor;
 }

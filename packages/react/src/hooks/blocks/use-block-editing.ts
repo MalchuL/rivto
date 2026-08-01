@@ -1,6 +1,7 @@
 import {
   useCallback,
   useLayoutEffect,
+  useMemo,
   useRef,
   type HTMLAttributes,
   type RefObject,
@@ -52,7 +53,7 @@ export interface BlockTextEditingAttributes extends BlockSelectionAnchorAttribut
 /** Props spread onto any renderer region from which selection may begin. */
 export interface BlockSelectionAnchorAttributes {
   /**
-   * Presence marker consumed by TextSelectionPlugin for gesture eligibility.
+   * Presence marker consumed by the text-selection extension for gesture eligibility.
    *
    * Text mode places it on the contenteditable alongside `data-block-content`;
    * structural mode places it on the region representing the complete block.
@@ -60,6 +61,18 @@ export interface BlockSelectionAnchorAttributes {
    * because a completed pointer drag claims the browser's synthetic click.
    */
   readonly [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "";
+}
+
+/**
+ * Props for an interactive child that handles its own pointer-driven editing.
+ *
+ * Stopping propagation keeps an ancestor preview from switching the complete
+ * block to raw-text mode. The marker also gives delegated extensions a stable
+ * way to recognize the same opt-out without depending on component classes.
+ */
+export interface PreventTextEditingAttributes {
+  readonly "data-prevent-text-editing": "";
+  readonly onPointerDown: NonNullable<HTMLAttributes<HTMLElement>["onPointerDown"]>;
 }
 
 /** Mode-specific DOM attributes returned by {@link useBlockEditing}. */
@@ -88,6 +101,8 @@ export interface UseBlockEditingResult<
   readonly setProp: <Key extends keyof Props>(key: Key, value: Props[Key] | undefined) => void;
   /** DOM props for the requested text or structural editing mode. */
   readonly attributes: BlockEditingAttributes<TextEdit>;
+  /** Props for controls or nested editors that must not activate raw block editing. */
+  readonly preventTextEditingAttributes: PreventTextEditingAttributes;
 }
 
 /**
@@ -104,7 +119,7 @@ export interface UseBlockEditingResult<
  *
  * In structural mode, the returned presence marker explicitly opts the spread
  * region into whole-block drag anchoring. Enter/Tab behavior, clipboard policy,
- * block selection, and slash commands remain plugin responsibilities.
+ * block selection, and slash commands remain extension responsibilities.
  *
  * @example
  * ```tsx
@@ -181,6 +196,59 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
     commit(event.currentTarget);
   }, [commit]);
 
+  const preventTextEditingPointerDown = useCallback<PreventTextEditingAttributes["onPointerDown"]>((event) => {
+    event.stopPropagation();
+    const target = event.currentTarget;
+    if (!target.isContentEditable) return;
+    // This hook owns the editable child's selection gesture. Prevent the
+    // browser from running a second rich-content selection over highlighted DOM.
+    event.preventDefault();
+    const document = target.ownerDocument;
+    const selection = document.getSelection();
+    const anchor = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+    if (!selection || !anchor || !target.contains(anchor.offsetNode)) return;
+    target.focus({ preventScroll: true });
+    selection.setBaseAndExtent(
+      anchor.offsetNode,
+      anchor.offset,
+      anchor.offsetNode,
+      anchor.offset,
+    );
+
+    const view = document.defaultView;
+    if (!view) return;
+    const pointerId = event.pointerId;
+    let focus = anchor;
+    const extend = (move: PointerEvent) => {
+      if (move.pointerId !== pointerId) return;
+      const next = document.caretPositionFromPoint?.(move.clientX, move.clientY);
+      if (!next || !target.contains(next.offsetNode)) return;
+      focus = next;
+      selection.setBaseAndExtent(
+        anchor.offsetNode,
+        anchor.offset,
+        next.offsetNode,
+        next.offset,
+      );
+    };
+    const finish = (end: PointerEvent) => {
+      if (end.pointerId !== pointerId) return;
+      view.removeEventListener("pointermove", extend);
+      view.removeEventListener("pointerup", finish);
+      view.removeEventListener("pointercancel", finish);
+      target.focus({ preventScroll: true });
+      selection.setBaseAndExtent(
+        anchor.offsetNode,
+        anchor.offset,
+        focus.offsetNode,
+        focus.offset,
+      );
+    };
+    view.addEventListener("pointermove", extend);
+    view.addEventListener("pointerup", finish);
+    view.addEventListener("pointercancel", finish);
+  }, []);
+
   const getProps = useCallback((): Readonly<Props> | undefined => (
     editor.getBlock(blockId)?.props as Props | undefined
   ), [blockId, editor]);
@@ -212,6 +280,10 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
       onCompositionEnd,
     }
     : { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
+  const preventTextEditingAttributes = useMemo<PreventTextEditingAttributes>(() => ({
+    "data-prevent-text-editing": "",
+    onPointerDown: preventTextEditingPointerDown,
+  }), [preventTextEditingPointerDown]);
 
   return {
     ...blockResult,
@@ -220,5 +292,6 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
     setProps,
     setProp,
     attributes,
+    preventTextEditingAttributes,
   } as UseBlockEditingResult<Props, boolean>;
 }

@@ -1,12 +1,12 @@
 /**
- * Surface-to-plugin boundary for rendering the structural shell of a block.
+ * Surface-to-extension boundary for rendering the structural shell of a block.
  *
- * Surfaces prepare semantic slots; plugins may replace the shell without
+ * Surfaces prepare semantic slots; extensions may replace the shell without
  * acquiring responsibility for renderer lookup or recursive traversal.
  *
  * @module
  */
-import type { EditorBlock } from "@chulane/rivto";
+import type { EditorBlock as Block } from "@chulane/rivto";
 import {
   createContext,
   useContext,
@@ -25,7 +25,7 @@ import { useEditorMode, useReactEditor } from "../hooks";
  */
 export interface BlockShellProps {
   /** Latest detached block snapshot resolved by the active surface. */
-  readonly block: EditorBlock;
+  readonly block: Block;
   /** Presentation state forwarded only to the surface-owned BlockView shell. */
   readonly isSelected: boolean;
   /** Renderer output for the block's own content, excluding descendants. */
@@ -45,7 +45,7 @@ export interface BlockShellProps {
  */
 export interface BlockWrapperProps {
   /** Latest detached block snapshot resolved by the active surface. */
-  readonly block: EditorBlock;
+  readonly block: Block;
   /** Next decorator, or the surface shell at the end of the chain. */
   readonly children: ReactNode;
 }
@@ -55,7 +55,7 @@ export type BlockWrapperComponent = ComponentType<BlockWrapperProps>;
 
 /** Props used by the runtime-resolving BlockWrapper component. */
 export interface BlockWrapperSlotProps extends BlockShellProps {
-  /** Surface-owned rendering used when no plugin contributes a wrapper. */
+  /** Surface-owned rendering used when no extension contributes a wrapper. */
   readonly fallback: ComponentType<BlockShellProps>;
 }
 
@@ -74,7 +74,7 @@ export interface BlockElementRefProviderProps {
  * Composes one decorator's DOM ref with refs from every outer decorator.
  *
  * Context keeps decorator composition DOM-free. The surface shell attaches the
- * final callback to its single BlockView, allowing multiple plugins to observe
+ * final callback to its single BlockView, allowing multiple extensions to observe
  * the same stable element without cloning children or adding layout wrappers.
  *
  * @param props - Decorator callback and the remaining render chain.

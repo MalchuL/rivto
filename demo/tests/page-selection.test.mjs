@@ -9,7 +9,7 @@ import {
   reconcileCollapsedSelection,
   selectedMoveRoots,
   toggleBlockSelection,
-} from "../../packages/react/src/plugins/utils/page-selection.ts";
+} from "../../packages/react/src/extensions/page-selection-utils.ts";
 
 const block = (id, children = [], collapsed = false) => ({
   id,
@@ -25,6 +25,11 @@ test("visible traversal stops at collapsed parents", () => {
   const blocks = [block("a", [block("hidden", [block("deep")])], true), block("b")];
   assert.deepEqual(pageEntries(blocks).map(({ block: entry }) => entry.id), ["a", "b"]);
   assert.deepEqual(blockSelection(blocks, "a", "b").blockIds, ["a", "b"]);
+  assert.deepEqual(
+    pageEntries(blocks, null, true).map(({ block: entry }) => entry.id),
+    ["a", "hidden", "deep", "b"],
+  );
+  assert.deepEqual(toggleBlockSelection(blocks, undefined, "deep", true)?.blockIds, ["deep"]);
 });
 
 test("maps hidden text and block selections to the nearest collapsed parent", () => {

@@ -1,7 +1,7 @@
 # Selection in Rivto
 
 How selection really works: portable core state, browser DOM ranges, and the
-React plugins that keep them aligned. Written for developers who need to read
+React extensions that keep them aligned. Written for developers who need to read
 the code without already knowing browser selection APIs.
 
 Sibling docs: [`developer-guide.md`](./developer-guide.md),
@@ -22,7 +22,7 @@ Browser selection                          Rivto selection
 window.getSelection()                      editor.selection.get()
 DOM node + offset                          blockId + UTF-16 offset
 dies when React replaces nodes             survives rerender / mode switch
-drives the visible caret                   drives commands, clipboard, plugins
+drives the visible caret                   drives commands, clipboard, extensions
 ```
 
 Why both exist:
@@ -34,7 +34,7 @@ Why both exist:
 3. Clipboard and structural commands need a serializer-friendly value that does
    not depend on the current DOM tree.
 
-Core owns the portable list. React plugins own the bridge.
+Core owns the portable list. React extensions own the bridge.
 
 ---
 
@@ -51,7 +51,7 @@ interface EditorPosition {
 }
 ```
 
-### Three item kinds
+### Two item kinds
 
 ```ts
 type EditorSelectionItem =
@@ -61,8 +61,7 @@ type EditorSelectionItem =
       blockIds: string[];      // visible document order, top → bottom
       anchorBlockId: string;   // where the gesture started
       focusBlockId: string;    // active moving end
-    }
-  | { type: "edgeless"; blockIds: string[] };
+    };
 ```
 
 ### Selection is a list
@@ -119,32 +118,33 @@ editor.selection.clear();
 
 Never mutate the array returned by `editor.selection.get()` — it is a clone.
 Because the manager owns its editor, `set()` validates against the latest
-document and active mode before publishing.
+document before publishing.
 
 `reactEditor.selection` is DOM-only. Its `readDOM`, `restoreDOM`,
 `clearDOMHighlight`, and `updateDOMHighlight` methods always resolve the current
 surface root through the event manager. Structured state always goes through
 `reactEditor.editor.selection`.
 
-### Validation and reconciliation (`RivtoEditor`)
+### Validation and reconciliation (`Editor`)
 
-On `editor.selection.set()` (and its compatibility `selection.set` command):
+On `editor.selection.set()`:
 
 - text positions must exist; offsets must be integers in
   `0 … content.length`;
 - block IDs must exist; endpoints must be members of `blockIds`;
 - `blockIds` are reordered to tree traversal order;
-- edgeless items require `mode === "edgeless"`.
 
-On every document change / mode change, `reconcileSelection()`:
+On every document change, `reconcileSelection()`:
 
 - clamps text offsets if content shrank;
 - drops items whose blocks disappeared;
-- drops edgeless items when leaving edgeless mode;
 - rebuilds surviving block selections with directional endpoint repair.
 
+Changing page/edgeless mode does not translate or clear selection. Both
+surfaces render the same `BlockSelection`, including nested block IDs.
+
 Collapse of page outline is handled separately in React by
-`reconcileCollapsedSelection()` (`plugins/utils/page-selection.ts`): hidden
+`reconcileCollapsedSelection()` (`extensions/page-selection-utils.ts`): hidden
 endpoints become their collapsed ancestor (often converting text → block).
 
 ---
@@ -154,16 +154,16 @@ endpoints become their collapsed ancestor (often converting text → block).
 | Layer | Owner | Responsibility |
 | --- | --- | --- |
 | Portable list and mutation range | `@chulane/rivto` `SelectionManager` | Store, validate, normalize, delete, notify |
-| Reconcile after document changes | `RivtoEditor` | Repair IDs, offsets, mode, tree order |
-| DOM ↔ portable bridge | `textSelectionPlugin` | Pointer + `selectionchange` |
-| Page whole-block UX | `pageSelectionPlugin` | Ctrl/Cmd click toggle |
-| Caret / Shift+Arrow | `caretNavigationPlugin`, `blockSelectionNavigationPlugin` | Keyboard |
-| Delete expanded selection | `selectionDeletionPlugin` | Backspace/Delete |
-| Canvas object UX | `edgelessSelectionPlugin` | Card click / marquee |
+| Reconcile after document changes | `Editor` | Repair IDs, offsets, and tree order |
+| DOM ↔ portable bridge | `textSelectionExtension` | Pointer + `selectionchange` |
+| Whole-block UX | `blockSelectionExtension` | Ctrl/Cmd click toggle in either surface |
+| Caret / Shift+Arrow | `caretNavigationExtension`, `blockSelectionNavigationExtension` | Keyboard |
+| Delete expanded selection | `selectionDeletionExtension` | Backspace/Delete |
+| Canvas object UX | `edgelessSelectionExtension` | Card click / marquee |
 | Visual whole-block chrome | surfaces via `useBlockSelection` → `data-block-selected` | Outline/background |
 | Cross-host text paint | `updateTextSelectionHighlight` | CSS Highlight or `data-text-selection-fallback` |
 
-`EditorView` does **not** own selection sync. The plugins above do.
+`EditorView` does **not** own selection sync. The extensions above do.
 
 ---
 
@@ -179,7 +179,7 @@ Selection code does not care about React component trees. It queries:
 | `data-block-content` | `useBlockEditing()` | Editable host / offset origin |
 | `data-block-selection-anchor` | Every `useBlockEditing()` mode | Region from which a selection gesture may begin |
 | `data-text-selection-fallback` | highlight fallback | Coarse paint only when CSS Highlight is unavailable |
-| `data-block-selecting` | page block plugin | Root cursor while Ctrl/Cmd held |
+| `data-block-selecting` | block selection extension | Root cursor while Ctrl/Cmd held |
 | `data-edgeless-root` | edgeless surface | Object selection target |
 
 Offsets are measured from the plain text of `[data-block-content]`, not from
@@ -189,15 +189,15 @@ Markdown preview HTML. That matches persisted `block.content`.
 
 ## 5. Text selection (page and inside cards)
 
-Implementation: `plugins/text-selection-plugin.tsx` +
-`managers/selection/selection-manager/utils/editor-dom-selection.ts`.
+Implementation: `extensions/text-selection.ts` +
+`managers/selection/editor-dom-selection.ts`.
 
 ### Same-block (browser owns the gesture)
 
 ```text
 pointerdown inside [data-block-selection-anchor]
   → native isContentEditable chooses the text path
-  → plugin records portable anchor (blockId + offset) in a ref
+  → extension records portable anchor (blockId + offset)
   → browser draws native caret/range inside that one host
   → document "selectionchange"
   → readEditorDOMSelection(root)
@@ -293,7 +293,8 @@ Do not confuse the two restore paths:
 
 ## 6. Page whole-block selection
 
-Implementation: `PageBlockSelectionPlugin` + `plugins/utils/page-selection.ts`.
+Implementation: `extensions/block-selection.ts` and
+`extensions/page-selection-utils.ts`.
 
 ### How users get a block selection
 
@@ -302,9 +303,9 @@ Implementation: `PageBlockSelectionPlugin` + `plugins/utils/page-selection.ts`.
    selection (`toggleBlockSelection`). Capture-phase handler claims the event
    so the browser does not place a caret.
 3. **Shift+Arrow** once a block selection exists
-   (`BlockSelectionNavigationPlugin` / `extendBlockSelection`).
+   (`registerBlockSelectionNavigation` / `extendBlockSelection`).
 4. **Shift+Arrow from text** across a block boundary
-   (`CaretNavigationPlugin.extendText`) converts to a block selection.
+   (`registerCaretNavigation`) converts to a block selection.
 5. Slash delete / duplicate temporarily set a block selection around one ID.
 
 While Ctrl/Cmd is held, the root gets `data-block-selecting="true"` so CSS can
@@ -316,31 +317,32 @@ allow “root focused + block selection”, not only “event inside editable”
 
 ### What `useBlockSelection(blockId)` returns
 
-Only `type: "block"` or `type: "edgeless"` items that include the ID.
+Only a `type: "block"` item that includes the ID.
 **Text selections never make a block look selected**, even if the caret is
 inside it. Surfaces pass that into `BlockView.isSelected`, which reflects
 presentation state as `data-block-selected`.
 
 ### Visible order
 
-`pageEntries()` flattens the outline depth-first and **skips collapsed
-children**. Arrow/extend/toggle all use that visible list, matching what the
-user sees.
+`pageEntries()` flattens the outline depth-first and normally **skips collapsed
+children**. Page arrow/extend/toggle use that visible list. Edgeless block
+toggle includes collapsed descendants because cards render their complete
+subtrees.
 
 ---
 
 ## 7. Edgeless (canvas) selection
 
-Implementation: `EdgelessSelectionPlugin`.
+Implementation: `extensions/edgeless-selection.tsx`.
 
 Intent split:
 
 ```text
-click card chrome / empty plane     → type: "edgeless" (object)
+click card chrome                   → root BlockSelection
 click [data-block-content] / input  → leave alone → text plugin / native focus
-Ctrl/Cmd + click card               → toggle multi object selection
-drag on empty plane                 → marquee; rootsInRect → edgeless IDs
-Escape                              → clear edgeless selection
+Ctrl/Cmd + click any BlockView      → toggle that root or nested block
+drag on empty plane                 → marquee; rootsInRect → root BlockSelection
+Escape                              → clear block selection
 ```
 
 Guards that matter:
@@ -348,37 +350,46 @@ Guards that matter:
 - Interactive targets (`contenteditable`, `input`, `button`, …) must **not**
   become object selection, or typing breaks after a text click bubbles to the
   card.
-- Drag/resize handles are ignored by the selection plugin (transform plugin
+- Drag/resize handles are ignored by selection (the transform extension
   owns them).
 - Space-pan (`data-panning-ready`) suppresses object gestures.
-- Only `[data-edgeless-root]` cards are object targets; nested blocks are text
-  endpoints, not independently movable objects.
-- If something publishes a page-style `block` selection while in edgeless mode,
-  an effect remaps it to owning root IDs via `owningRootIds`.
+- Nested blocks remain independently selectable even though only
+  `[data-edgeless-root]` cards have canvas geometry.
+- Move/resize commands project selected nested IDs to unique owning roots via
+  `owningRootIds`; they do not rewrite the selection.
 
-Text editing inside a card still uses `type: "text"` and the same text plugin.
+Text editing inside a card still uses `type: "text"` and the same text-selection extension.
 
 ---
 
 ## 8. Keyboard paths that change selection
 
-| Binding family | Plugin | Behavior |
+| Binding family | Extension | Behavior |
 | --- | --- | --- |
-| Arrows | `CaretNavigationPlugin` | Move caret; at block edges jump hosts; wrapped-line geometry via `verticalCaretPosition` |
+| Arrows | `caretNavigationExtension` | Move caret; at block edges jump hosts; wrapped-line geometry via `verticalCaretPosition` |
 | Shift+Up/Down (text) | same | Extend text head; crossing hosts → **block** selection |
-| Arrows / Shift+Arrows (block) | `BlockSelectionNavigationPlugin` | Move or grow whole-block selection |
-| Alt+Shift+Up/Down | `KeyboardBlockMovePlugin` | Move selected sibling group structurally |
-| Backspace/Delete (expanded) | `SelectionDeletionPlugin` | `editor.deleteSelection()` then restore caret |
-| Backspace at start / Delete at end | merge / outdent / empty-reset plugins | Only when selection is a collapsed caret |
-| Edgeless arrows | `edgelessMovementPlugin` | Nudge selected roots; does not create text carets |
+| Up/Down / Shift+Up/Down (block) | `blockSelectionNavigationExtension` | Move or grow whole-block selection |
+| Left/Right (block) | same | Enter a text caret at offset 0 on the focus block (one-way) |
+| Alt+Shift+Up/Down | `keyboardBlockMoveExtension` | Move selected sibling group structurally |
+| Backspace/Delete (expanded) | `selectionDeletionExtension` | `editor.deleteSelection()` then restore caret |
+| Backspace at start / Delete at end | merge / outdent / empty-reset extensions | Only when selection is a collapsed caret |
+| Edgeless arrows | `edgelessMovementExtension` | Nudge selected roots; does not create text carets |
+| Edgeless Backspace/Delete (block) | `edgelessDeletionExtension` | Clear selected top-level blocks first; delete them only when all are already empty leaves |
 
 `firstKeyboardTarget(selection)` in
-`managers/events/event-manager/utils/keyboard/selection.ts` reads
-**only the first list item**. Enter creates one block after that target;
-structural indent expands from the full selection in core.
+`managers/events/selection.ts` reads
+**only the first list item**. Enter creates one block from that target; in
+edgeless mode a root always receives it as the first child. Structural indent
+expands from the full selection in core.
 
 `shouldDeleteSelection` is true unless the entire list is exactly one collapsed
 text caret — so multi-item Alt selections delete as a range.
+
+Edgeless two-stage deletion applies only to `BlockSelection`. It first reduces
+the selection to blocks without another selected ancestor. If any survivor has
+content or children, one batch clears every survivor and keeps the selection;
+the next Backspace/Delete removes those now-empty blocks. Text carets and ranges
+continue through the ordinary character/range deletion paths.
 
 Timing quirk: a keypress right after click can beat `selectionchange`. Arrow
 plugins call `currentSelection()` which falls back to
@@ -394,7 +405,7 @@ plugins call `currentSelection()` which falls back to
 
 - Text (and mixed text+middle-blocks): character range from earliest to latest
   endpoint.
-- Pure block/edgeless: whole blocks from first ID offset `0` through last ID
+- Pure block: whole blocks from first ID offset `0` through last ID
   `content.length`.
 
 Copy/cut clone top-level subtrees once (children already covered by a selected
@@ -402,14 +413,15 @@ ancestor are not duplicated). Paste replaces the normalized range.
 
 ### Deletion
 
-`editor.selection.delete()` owns the deletion; `editor.deleteSelection()` is
-the compatibility command delegate. Both use the same normalization. Afterward
-`SelectionDeletionPlugin` focuses the resulting caret on the next frame.
+`editor.deleteSelection()` delegates to the selection manager's normalized
+deletion workflow. Afterward
+The selection-deletion extension focuses the resulting caret on the next frame.
 
 ### Collapse
 
-`PageCollapsePlugin` runs `reconcileCollapsedSelection` so a selection cannot
-point at DOM that page mode no longer renders.
+The collapse extension runs `reconcileCollapsedSelection` after a collapse
+change so a newly hidden endpoint moves to its collapsed ancestor. A mode
+switch alone never rewrites selection.
 
 ### Drag / keyboard move
 
@@ -425,18 +437,15 @@ subtree.
                  pointer / keys / selectionchange
                               │
                               ▼
-                 React selection plugins
+                 React selection extensions
                               │
               editor.selection.set() / clear()
                               │
                               ▼
-                 RivtoEditor validation
+                 Editor validation
                               │
                               ▼
-                 SelectionManager  ──subscribe──► editor revision
-                              │                         │
-                              │                         ▼
-                              │                   EditorView / hooks
+                 SelectionManager  ──subscribe──► focused selection hooks
                               │                         │
                               ▼                         ▼
                  restoreEditorDOMSelection      useBlockSelection → data-block-selected
@@ -446,10 +455,9 @@ subtree.
 
 Important asymmetries:
 
-- Losing the browser range clears **only text items**. A block/edgeless
-  selection can remain while native ranges are empty (common after block
-  select).
-- Clicking a toolbar does not require clearing portable selection; text plugins
+- Losing the browser range clears **only text items**. A block selection can
+  remain while native ranges are empty (common after block select).
+- Clicking a toolbar does not require clearing portable selection; text selection
   ignore out-of-root `selectionchange` results instead of wiping state.
 - `updateTextSelectionHighlight` runs from a layout effect on every selection
   change **and** during active cross-block pointermove, because Chromium may
@@ -502,18 +510,18 @@ restores with `restoreDOMSelection`.
 | --- | --- |
 | `src/editor/types.ts` | Position + selection item types |
 | `src/managers/selection-manager/selection-manager.ts` | Detached list, validation, normalization, deletion |
-| `src/editor/rivto-editor.ts` | Selection reconciliation and compatibility commands |
+| `src/editor/rivto-editor.ts` | Selection reconciliation and typed editor methods |
 | `src/managers/clipboard-manager/clipboard-manager.ts` | Clipboard workflows and history boundary |
 | `src/managers/clipboard-manager/utils/clipboard.ts` | Stateless clipboard transformations |
-| `packages/react/.../text-selection-plugin.tsx` | DOM ↔ portable sync, cross-host gestures |
-| `packages/react/src/managers/selection/selection-manager/` | Core delegate + active-root DOM API |
-| `packages/react/.../selection-manager/utils/editor-dom-selection.ts` | Conversion, restore, highlight |
-| `packages/react/.../selection-manager/utils/dom-text-selection.ts` | Save/restore inside one editable |
-| `packages/react/.../PageBlockSelectionPlugin.tsx` | Ctrl/Cmd block toggle |
-| `packages/react/.../PageArrowPlugin.tsx` | Caret + block keyboard navigation |
-| `packages/react/.../SelectionDeletionPlugin.tsx` | Delete expanded selection |
-| `packages/react/.../EdgelessSelectionPlugin.tsx` | Canvas object / marquee |
-| `packages/react/.../page-selection.ts` | Visible order, toggle/extend/collapse reconcile |
+| `packages/react/src/extensions/text-selection.ts` | DOM ↔ portable sync, cross-host gestures |
+| `packages/react/src/managers/selection/selection-manager.ts` | Core delegate + active-root DOM API |
+| `packages/react/src/managers/selection/editor-dom-selection.ts` | Conversion, restore, highlight |
+| `packages/react/src/managers/selection/dom-text-selection.ts` | Save/restore inside one editable |
+| `packages/react/src/extensions/block-selection.ts` | Ctrl/Cmd block toggle on both surfaces |
+| `packages/react/src/extensions/page-navigation.ts` | Caret + block keyboard navigation |
+| `packages/react/src/extensions/selection-deletion.ts` | Delete expanded selection |
+| `packages/react/src/extensions/edgeless-selection.tsx` | Canvas object / marquee |
+| `packages/react/src/extensions/page-selection-utils.ts` | Visible order, toggle/extend/collapse reconcile |
 | `packages/react/.../use-block-selection.ts` | Whole-block selected? for UI |
 | `e2e/selection.spec.ts` | Browser-level selection regressions |
 
@@ -522,11 +530,11 @@ restores with `restoreDOMSelection`.
 ## 13. Suggested reading order for selection only
 
 1. `src/editor/types.ts` — shapes.
-2. `SelectionManager.set` + `RivtoEditor.reconcileSelection`.
+2. `SelectionManager.set` + `Editor.reconcileSelection`.
 3. `editor-dom-selection.ts` — conversion primitives.
-4. `text-selection-plugin.tsx` top-to-bottom — same-block vs cross-block vs Alt.
-5. `PageBlockSelectionPlugin` + `page-selection.ts`.
-6. `PageArrowPlugin` caret vs block navigation.
-7. `EdgelessSelectionPlugin`.
+4. `text-selection.ts` top-to-bottom — same-block vs cross-block vs Alt.
+5. `block-selection.ts` + `page-selection-utils.ts`.
+6. `page-navigation.ts` caret vs block navigation.
+7. `edgeless-selection.tsx`.
 8. `SelectionManager.normalize` + its tests in `src/editor/__tests__/selection-manager.test.ts`.
 9. `e2e/selection.spec.ts` for user-visible invariants.

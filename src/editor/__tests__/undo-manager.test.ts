@@ -8,10 +8,10 @@ describe("EditorRuntime undo manager", () => {
     editor.updateBlock(id, { content: "Updated" });
 
     editor.undo();
-    expect(editor.document.document).toMatchObject([{ id, content: "Initial" }]);
+    expect(editor.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
 
     editor.redo();
-    expect(editor.document.document).toMatchObject([{ id, content: "Updated" }]);
+    expect(editor.getBlocks()).toMatchObject([{ id, content: "Updated" }]);
     editor.destroy();
   });
 
@@ -22,10 +22,39 @@ describe("EditorRuntime undo manager", () => {
     editor.setBlockProp(id, "tone", "info");
 
     editor.undo();
-    expect(editor.document.document).toMatchObject([{ id, content: "Initial", props: {} }]);
+    expect(editor.getBlocks()).toMatchObject([{ id, content: "Initial", props: {} }]);
 
     editor.undo();
-    expect(editor.document.document).toEqual([]);
+    expect(editor.getBlocks()).toEqual([]);
+    editor.destroy();
+  });
+
+  it("batches nested editor updates into one revision and undo step", () => {
+    const editor = createRivtoEditor();
+    let revisions = 0;
+    const unsubscribe = editor.subscribe(() => {
+      revisions += 1;
+    });
+
+    const secondId = editor.batchUpdates(() => {
+      const firstId = editor.insertBlock({ type: "paragraph", content: "First" });
+      return editor.batchUpdates(() => (
+        editor.insertBlock({ type: "paragraph", content: "Second" }, firstId)
+      ));
+    });
+
+    expect(editor.getBlocks().map((block) => block.id)).toEqual([
+      expect.any(String),
+      secondId,
+    ]);
+    expect(revisions).toBe(1);
+
+    editor.undo();
+    expect(editor.getBlocks()).toEqual([]);
+    editor.redo();
+    expect(editor.getBlocks()).toHaveLength(2);
+
+    unsubscribe();
     editor.destroy();
   });
 
@@ -38,7 +67,7 @@ describe("EditorRuntime undo manager", () => {
 
     editor.undo();
 
-    expect(editor.document.document).toMatchObject([{ id, content: "Initial" }]);
+    expect(editor.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
     editor.destroy();
   });
 
@@ -51,10 +80,10 @@ describe("EditorRuntime undo manager", () => {
     editor.updateBlock(id, { content: "Second" });
 
     editor.undo();
-    expect(editor.document.document).toMatchObject([{ id, content: "First" }]);
+    expect(editor.getBlocks()).toMatchObject([{ id, content: "First" }]);
 
     editor.undo();
-    expect(editor.document.document).toMatchObject([{ id, content: "Initial" }]);
+    expect(editor.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
     editor.destroy();
   });
 
@@ -62,14 +91,14 @@ describe("EditorRuntime undo manager", () => {
     const editor = createRivtoEditor();
     const id = editor.insertBlock({ type: "paragraph", content: "Initial" });
     const calls: string[] = [];
-    const unsubscribe = editor.document.subscribe(() => calls.push(editor.document.document[0]?.content ?? ""));
+    const unsubscribe = editor.document.subscribe(() => calls.push(editor.getBlocks()[0]?.content ?? ""));
 
     editor.updateBlock(id, { content: "Updated" });
     editor.execute("history.undo");
     editor.execute("history.redo");
 
     expect(calls).toEqual(["Updated", "Initial", "Updated"]);
-    expect(editor.document.document).toMatchObject([{ id, content: "Updated" }]);
+    expect(editor.getBlocks()).toMatchObject([{ id, content: "Updated" }]);
     unsubscribe();
     editor.destroy();
   });
@@ -94,7 +123,7 @@ describe("EditorRuntime undo manager", () => {
 
     editor.undo();
 
-    expect(editor.document.document).toMatchObject([{ id: "loaded", content: "Loaded" }]);
+    expect(editor.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     editor.destroy();
   });
 

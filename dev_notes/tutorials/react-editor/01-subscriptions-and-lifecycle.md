@@ -1,11 +1,11 @@
 # Глава 01. Subscriptions, external stores и lifecycle
 
-## 1. Почему недостаточно прочитать `editor.document.document`
+## 1. Почему недостаточно вызвать `editor.getBlocks()`
 
 Обычное чтение external object не сообщает React, когда нужен rerender:
 
 ```ts
-const blocks = editor.document.document;
+const blocks = editor.getBlocks();
 ```
 
 React повторно выполнит component только после state/props/context update.
@@ -262,4 +262,3 @@ Handler замыкает старый editor instance.
 ### Ручной force update рядом с одним feature
 
 Это скрывает разрыв общего invalidation path и оставляет другие views stale.
-

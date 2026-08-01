@@ -26,7 +26,7 @@ EditorRuntime публикует revision после update
   ↓
 React useSyncExternalStore запускает render
   ↓
-RivtoEditor читает editor.document.document
+RivtoEditor вызывает editor.getBlocks()
   ↓
 BlockDOMRenderer или EdgelessCanvasRenderer получает blocks
   ↓
@@ -120,7 +120,7 @@ Portable value состоит из обычных JavaScript data:
 Detached object не является живым proxy CRDT storage.
 
 ```ts
-const block = editor.document.document[0];
+const block = editor.getBlocks()[0];
 block.content = "Changed locally";
 ```
 
@@ -191,7 +191,7 @@ Runtime/React содержат local presentation и interaction state:
 Block mode и edgeless mode читают одни blocks:
 
 ```ts
-const blocks = editor.document.document;
+const blocks = editor.getBlocks();
 ```
 
 Mode меняет выбор renderer strategy, но не создаёт вторую модель.
@@ -240,4 +240,3 @@ DOM event → event routing → command → validation → model transaction
 ```
 
 Это деление сразу уменьшает область поиска примерно вдвое.
-

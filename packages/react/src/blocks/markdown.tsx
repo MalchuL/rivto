@@ -1,15 +1,20 @@
 import {
+  useCallback,
+  useMemo,
   useState,
 } from "react";
 import {
   useBlockEditing,
+  useEditor,
 } from "../hooks";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import {
   MarkdownCodeBlock,
   rehypeCodeFenceMetadata,
+  replaceMarkdownCode,
+  type PositionedNode,
 } from "./markdown-code";
 
 /**
@@ -30,9 +35,25 @@ import {
  * @returns A stable raw editor and, while idle, its formatted preview.
  */
 export function MarkdownContent({ blockId }: { readonly blockId: string }) {
+  const editor = useEditor();
   const editing = useBlockEditing(blockId);
   const [isEditing, setIsEditing] = useState(false);
   const source = editing.block?.content ?? "";
+
+  const updateCode = useCallback((node: PositionedNode, value: string) => {
+    const current = editor.getBlock(blockId)?.content ?? "";
+    editor.updateBlock(blockId, { content: replaceMarkdownCode(current, node, value) });
+  }, [blockId, editor]);
+  const components = useMemo<Components>(() => ({
+    a: ({ node: _node, ...props }) => <a {...props} tabIndex={-1} />,
+    pre: (props) => (
+      <MarkdownCodeBlock
+        {...props}
+        onCodeChange={updateCode}
+        preventTextEditingAttributes={editing.preventTextEditingAttributes}
+      />
+    ),
+  }), [editing.preventTextEditingAttributes, updateCode]);
 
   return (
     <div className="markdown-content">
@@ -60,11 +81,9 @@ export function MarkdownContent({ blockId }: { readonly blockId: string }) {
       {!isEditing && (
         <div
           className="page-block-content markdown-preview"
-          aria-hidden="true"
-          inert
         >
           <ReactMarkdown
-            components={{ pre: MarkdownCodeBlock }}
+            components={components}
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeCodeFenceMetadata, [rehypeHighlight, {
               detect: true,

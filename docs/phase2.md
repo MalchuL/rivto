@@ -208,7 +208,6 @@ button.onClick = () => {
 type EditorSelection =
   | TextSelection
   | BlockSelection
-  | EdgelessSelection
   | null
 ```
 
@@ -262,7 +261,7 @@ Mode влияет на:
 SlashMenuPlugin
 BlockSelectionPlugin
 BlockDragDropPlugin
-EdgelessSelectionPlugin
+EdgelessCanvasPlugin
 EdgelessDragPlugin
 KeyboardPlugin
 ClipboardPlugin

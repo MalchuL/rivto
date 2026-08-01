@@ -1,4 +1,7 @@
-import { resolveCodeFenceInfo } from "../blocks/markdown-code";
+import {
+  replaceMarkdownCode,
+  resolveCodeFenceInfo,
+} from "../blocks/markdown-code";
 
 describe("resolveCodeFenceInfo", () => {
   it("preserves direct language labels", () => {
@@ -23,5 +26,31 @@ describe("resolveCodeFenceInfo", () => {
       language: undefined,
       filename: true,
     });
+  });
+});
+
+describe("replaceMarkdownCode", () => {
+  it("updates fenced code while preserving its fence and language", () => {
+    const source = "Before\n\n```ts\nconst old = true;\n```\n\nAfter";
+    const start = source.indexOf("```ts");
+    const end = source.indexOf("```", start + 3) + 3;
+
+    expect(replaceMarkdownCode(source, {
+      position: { start: { offset: start }, end: { offset: end } },
+    }, "const next = false;")).toBe(
+      "Before\n\n```ts\nconst next = false;\n```\n\nAfter",
+    );
+  });
+
+  it("retains indentation for indented Markdown code", () => {
+    const source = "Before\n\n    old()\n    value\n\nAfter";
+    const start = source.indexOf("    old()");
+    const end = source.indexOf("\n\nAfter");
+
+    expect(replaceMarkdownCode(source, {
+      position: { start: { offset: start }, end: { offset: end } },
+    }, "next()\nvalue")).toBe(
+      "Before\n\n    next()\n    value\n\nAfter",
+    );
   });
 });

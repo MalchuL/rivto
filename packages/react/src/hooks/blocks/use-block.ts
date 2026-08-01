@@ -1,15 +1,15 @@
 import { useMemo } from "react";
 import type {
-  EditorBlock,
-  EditorBlockLayout,
-  EditorBlockPatch,
+  EditorBlock as Block,
+  EditorBlockLayout as BlockLayout,
+  EditorBlockPatch as BlockPatch,
 } from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
 
 /** Commands bound to one stable block ID. */
 export interface BlockOperations {
   /** Applies any supported mutable block patch through `block.update`. */
-  update(patch: EditorBlockPatch): void;
+  update(patch: BlockPatch): void;
   /** Replaces the block's collaborative plain-text content. */
   setContent(content: string): void;
   /** Converts the block to another registered native type. */
@@ -19,7 +19,7 @@ export interface BlockOperations {
   /** Sets or removes data owned by one plugin namespace. */
   setPluginData(pluginId: string, value: unknown): void;
   /** Patches collaborative canvas geometry without replacing omitted fields. */
-  setLayout(layout: Partial<EditorBlockLayout>): void;
+  setLayout(layout: Partial<BlockLayout>): void;
   /** Removes the block subtree and links touching removed descendants. */
   remove(): void;
   /** Appends this block's content and children into a target, then removes it. */
@@ -39,7 +39,7 @@ export interface BlockOperations {
 /** Reactive block snapshot and stable commands returned by useBlock. */
 export interface UseBlockResult {
   /** Current detached block value, or undefined after deletion/for unknown IDs. */
-  readonly block: EditorBlock | undefined;
+  readonly block: Block | undefined;
   /** Memoized commands permanently bound to the requested block ID. */
   readonly operations: BlockOperations;
 }
@@ -47,10 +47,10 @@ export interface UseBlockResult {
 /**
  * Resolves one block and its bound operations from the current editor.
  *
- * `block` is a detached snapshot, not a live or mutable CRDT object. Document
- * changes increment the EditorView revision and cause that snapshot to be
- * resolved again; deletion changes it to undefined. `operations` remains
- * stable until either the editor instance or block ID changes.
+ * `block` is a detached snapshot, not a live or mutable CRDT object. EditorView's
+ * global revision subscription resolves it again after core changes. Deletion
+ * changes it to undefined. `operations` remains stable until either the editor
+ * instance or block ID changes.
  *
  * @param blockId - Stable persisted ID of the block to resolve.
  * @returns Current block snapshot together with commands bound to its ID.
@@ -58,6 +58,7 @@ export interface UseBlockResult {
  */
 export function useBlock(blockId: string): UseBlockResult {
   const { editor } = useEditorContext();
+  const block = editor.getBlock(blockId);
   // Commands target the ID rather than the detached snapshot, so they always
   // operate on the latest document state. Memoization keeps their references
   // stable for consumers that pass them into memoized child components.
@@ -78,7 +79,7 @@ export function useBlock(blockId: string): UseBlockResult {
   }), [blockId, editor]);
 
   return {
-    block: editor.getBlock(blockId),
+    block,
     operations,
   };
 }

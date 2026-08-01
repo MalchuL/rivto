@@ -2,12 +2,20 @@
 
 ## Decision
 
-Keep `DocumentModelImpl` as the runtime model for one open document.
+Keep the Yjs-backed `DocumentModel` as the runtime model for one open document.
+
+The runtime Yjs schema stores ordered roots in `rivto.editor.roots`. Each
+canonical record in `rivto.editor.blocks` owns its ordered collaborative
+`children` ID array alongside type, content, props, plugin data, collapse, and
+layout. Moving a block transfers its ID between collaborative arrays without
+rewriting its canonical record. Lookup paths are cached lazily and validated
+on access, so content edits do not scan or rebuild the tree. Snapshot v4 remains
+nested and portable.
 
 Store documents in normalized database tables and convert those rows to and
 from Rivto snapshots. Use snapshots for initial hydration and checkpoints.
-While a document is open, apply live changes through `DocumentModelImpl` or
-Yjs rather than repeatedly replacing the complete snapshot.
+While a document is open, apply live changes through `RivtoEditorApi`
+rather than repeatedly replacing the complete snapshot.
 
 Represent an embedded block as an ordinary local `embed` block whose props
 point to a canonical block in another document or source. Do not copy the
@@ -22,7 +30,7 @@ embeds without changing Rivto's current block schema.
 - Reconstruct a Rivto `Snapshot` deterministically.
 - Save complete checkpoints periodically and optionally retain incremental
   changes between checkpoints.
-- Use Yjs/`DocumentModelImpl` to synchronize two editors opened on the same
+- Use Yjs/`DocumentModel` to synchronize two editors opened on the same
   document.
 - Embed a block or subtree from another Rivto document.
 - Leave a clear path for database/API-backed embeds and editable transclusion.
@@ -86,9 +94,9 @@ document_changes       // optional
 to another document is stored as an `embed` block; the foreign block is not
 inserted into the host tree.
 
-The existing collapse property may remain in `props_json` while every block has
-one native placement. If canonical blocks later become direct members of
-multiple documents, collapse and layout must move to occurrence records.
+Collapse and layout belong to tree placement data while every block has one
+native placement. If canonical blocks later become direct members of multiple
+documents, tree records must gain occurrence IDs.
 
 ## Snapshot conversion
 
@@ -99,7 +107,7 @@ documents + blocks + document_tree + links
   -> validate rows
   -> order siblings by position
   -> recursively assemble Block.children
-  -> create Snapshot version 3
+  -> create Snapshot version 4
   -> editor.load(snapshot)
 ```
 
@@ -129,7 +137,7 @@ The conversion is expected to be one-to-one:
 | `documents.metadata_json` | `Snapshot.pluginData` |
 
 Conversion code belongs in the application persistence layer, not in
-`DocumentModelImpl`.
+`DocumentModel`.
 
 ## Checkpoints, revisions, and incremental changes
 
@@ -261,7 +269,7 @@ Start with the concrete operation needed by Rivto embeds:
 
 ```ts
 interface DocumentHandle {
-  readonly document: DocumentModelImpl;
+  readonly document: DocumentModel;
   release(): void;
 }
 
@@ -388,7 +396,7 @@ type AIChange = {
 ```
 
 If the target document is open, apply the operation through its current
-`DocumentModelImpl` so Yjs, subscriptions, selection reconciliation, and undo
+`Editor` so Yjs, subscriptions, selection reconciliation, and undo
 behavior remain coherent. If it is closed, apply the same validated operation
 through the persistence service with revision checking.
 
@@ -418,4 +426,3 @@ through the persistence service with revision checking.
 - A missing or unauthorized target renders an explicit state.
 - A self-embed or recursive embed chain is stopped.
 - Closing the last consumer releases the target document session.
-

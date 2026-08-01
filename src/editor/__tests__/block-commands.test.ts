@@ -27,7 +27,7 @@ describe("EditorRuntime block commands", () => {
     editor.setBlockLayout(firstId, { x: 120, y: 80 });
     editor.indentBlock(secondId);
 
-    expect(editor.document.document).toMatchObject([
+    expect(editor.getBlocks()).toMatchObject([
       {
         id: firstId,
         props: { tone: "info" },
@@ -38,7 +38,7 @@ describe("EditorRuntime block commands", () => {
 
     editor.removeBlock(firstId);
 
-    expect(editor.document.document).toEqual([]);
+    expect(editor.getBlocks()).toEqual([]);
     editor.destroy();
   });
 
@@ -81,6 +81,87 @@ describe("EditorRuntime block commands", () => {
     editor.undo();
     expect(editor.getBlock(id)).toMatchObject({ type: "paragraph", props: { old: true } });
     expect(() => editor.setBlockType(id, "missing")).toThrow("Unknown block type missing");
+    editor.destroy();
+  });
+
+  it("clears block content and descendants without losing block-owned data", () => {
+    const editor = createRivtoEditor();
+    const id = editor.insertBlock({
+      type: "paragraph",
+      collapsed: true,
+      props: { tone: "info" },
+      pluginData: { test: { pinned: true } },
+      content: "Parent",
+      layout: { x: 90, y: 70 },
+      children: [{
+        type: "paragraph",
+        content: "Child",
+        children: [{ type: "paragraph", content: "Grandchild" }],
+      }],
+    });
+    const childId = editor.getChildIds(id)[0]!;
+    const outsideId = editor.insertBlock({ type: "paragraph", content: "Outside" }, id);
+    editor.createLink({ id: "child-outside", from: { blockId: childId }, to: { blockId: outsideId } });
+    editor.history.clear();
+
+    expectOneUpdate(editor, () => editor.clearBlock(id));
+
+    expect(editor.getBlock(id)).toMatchObject({
+      id,
+      type: "paragraph",
+      collapsed: true,
+      props: { tone: "info" },
+      pluginData: { test: { pinned: true } },
+      content: "",
+      layout: { x: 90, y: 70 },
+      children: [],
+    });
+    expect(editor.getBlock(childId)).toBeUndefined();
+    expect(editor.getLinks()).toEqual([]);
+
+    editor.undo();
+    expect(editor.getBlock(id)).toMatchObject({
+      content: "Parent",
+      children: [{ id: childId, children: [{ content: "Grandchild" }] }],
+    });
+    expect(editor.getLinks()).toMatchObject([{ id: "child-outside" }]);
+    editor.redo();
+    expect(editor.getBlock(id)).toMatchObject({ content: "", children: [] });
+    editor.destroy();
+  });
+
+  it("batches several block clears into one update and undo step", () => {
+    const editor = createRivtoEditor();
+    const first = editor.insertBlock({
+      type: "paragraph",
+      content: "First",
+      children: [{ type: "paragraph", content: "First child" }],
+    });
+    const second = editor.insertBlock({
+      type: "paragraph",
+      content: "Second",
+      children: [{ type: "paragraph", content: "Second child" }],
+    }, first);
+    editor.history.clear();
+
+    expectOneUpdate(editor, () => {
+      editor.batchUpdates(() => {
+        editor.clearBlock(first);
+        editor.clearBlock(second);
+      });
+    });
+    expect(editor.getBlock(first)).toMatchObject({ content: "", children: [] });
+    expect(editor.getBlock(second)).toMatchObject({ content: "", children: [] });
+
+    editor.undo();
+    expect(editor.getBlock(first)).toMatchObject({
+      content: "First",
+      children: [{ content: "First child" }],
+    });
+    expect(editor.getBlock(second)).toMatchObject({
+      content: "Second",
+      children: [{ content: "Second child" }],
+    });
     editor.destroy();
   });
 
@@ -560,7 +641,7 @@ describe("EditorRuntime block commands", () => {
       links: [],
     });
 
-    expect(editor.document.document).toMatchObject([{ id: "loaded", content: "Loaded" }]);
+    expect(editor.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     expect(() => editor.execute("document.load", {
       snapshot: { version: 3, blocks: [], links: [] },
     })).toThrow("Unsupported Rivto document snapshot");

@@ -237,7 +237,7 @@ DocumentModel.
 
 ## 14. Links render отдельно от blocks
 
-Edgeless renderer читает `editor.document.links`, находит endpoint layouts и
+Edgeless renderer читает `editor.getLinks()`, находит endpoint layouts и
 рисует `<line>`.
 
 Link renderer — projection relation data. Он не меняет links во время render.
@@ -308,4 +308,3 @@ BlockRegistry.get(block.type)
        ↓
   React DOM commit
 ```
-

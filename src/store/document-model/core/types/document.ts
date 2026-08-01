@@ -1,3 +1,5 @@
+import type { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../../crdt-doc";
+
 /** Collaborative block geometry shared by all renderers. */
 export interface BlockLayout {
   x: number;
@@ -72,4 +74,54 @@ export interface SnapshotUpdate {
   blocks?: Block[];
   links?: Link[];
   pluginData?: Record<string, unknown>;
+}
+
+/** Library-neutral block property validator. */
+export type BlockPropsValidator = (
+  type: string,
+  props: Record<string, unknown>,
+) => Record<string, unknown>;
+
+/** Public contract implemented by the Yjs-backed document model. */
+export interface DocumentModel {
+  readonly id: string;
+  readonly crdt: CRDTDoc;
+  readonly origin: symbol;
+  readonly undoScopes: CRDTUndoScope[];
+  readonly isEmpty: boolean;
+
+  setPropsValidator(validator: BlockPropsValidator): void;
+  subscribe(listener: () => void): Unsubscribe;
+  transact(operation: () => void): void;
+  getBlock(id: string): Block | undefined;
+  getBlocks(): Block[];
+  getLink(id: string): Link | undefined;
+  getLinks(): Link[];
+  getRootIds(): string[];
+  getChildIds(id: string): string[];
+  getParentId(id: string): string | null | undefined;
+  getVisibleBlockIds(): string[];
+  insertBlock(block: BlockInput, afterId?: string | null): string;
+  updateBlock(id: string, patch: BlockPatch): void;
+  updateBlocks(updates: readonly BlockUpdate[]): void;
+  setBlockType(id: string, type: string, props?: Record<string, unknown>): void;
+  setBlockProp(id: string, key: string, value: unknown): void;
+  setPluginData(id: string, pluginId: string, value: unknown): void;
+  setBlockText(id: string, text: string): void;
+  insertText(id: string, offset: number, text: string): void;
+  deleteText(id: string, offset: number, length: number): void;
+  removeBlock(id: string): void;
+  mergeBlocks(targetId: string, sourceId: string): number;
+  moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
+  moveBlocks(ids: string[], targetId: string | null, position?: "before" | "after" | "inside"): void;
+  indentBlock(id: string): void;
+  indentBlocks(ids: string[]): void;
+  outdentBlock(id: string): void;
+  outdentBlocks(ids: string[]): void;
+  setBlockLayout(id: string, layout: Partial<BlockLayout>): void;
+  createLink(link: Link): void;
+  removeLink(id: string): void;
+  getSnapshot(): Snapshot;
+  loadSnapshot(snapshot: SnapshotUpdate): void;
+  normalize(): void;
 }

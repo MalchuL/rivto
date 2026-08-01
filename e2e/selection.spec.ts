@@ -245,6 +245,45 @@ test("Alt selects block ranges and Alt+Shift moves a block", async ({ page }) =>
   await expect(page.locator("[data-block-content]").nth(1)).toHaveText(firstText ?? "");
 });
 
+test("Left and Right enter a caret at offset 0 from a block selection", async ({ page }) => {
+  const contents = page.locator("[data-block-content]");
+  await contents.nth(0).click();
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
+
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(0);
+  await expect.poll(async () => contents.nth(0).evaluate((element) => {
+    const selection = element.ownerDocument.getSelection();
+    if (!selection || selection.rangeCount === 0 || !element.contains(selection.focusNode)) {
+      return -1;
+    }
+    const range = selection.getRangeAt(0);
+    if (!range.collapsed) return -1;
+    const prefix = range.cloneRange();
+    prefix.selectNodeContents(element);
+    prefix.setEnd(range.endContainer, range.endOffset);
+    return prefix.toString().length;
+  })).toBe(0);
+
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(0);
+  await expect.poll(async () => contents.nth(0).evaluate((element) => {
+    const selection = element.ownerDocument.getSelection();
+    if (!selection || selection.rangeCount === 0 || !element.contains(selection.focusNode)) {
+      return -1;
+    }
+    const range = selection.getRangeAt(0);
+    if (!range.collapsed) return -1;
+    const prefix = range.cloneRange();
+    prefix.selectNodeContents(element);
+    prefix.setEnd(range.endContainer, range.endOffset);
+    return prefix.toString().length;
+  })).toBe(0);
+});
+
 test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => {
   const blocks = page.locator(BLOCK_ID_SELECTOR);
   const first = blocks.nth(5);

@@ -282,7 +282,7 @@ Mode хранится отдельно в ModeManager и тоже читаетс
 При mode change:
 
 1. ModeManager уведомляет runtime и React.
-2. Runtime reconcile очищает несовместимый EdgelessSelection.
+2. Runtime сохраняет TextSelection или BlockSelection без mode-конверсии.
 3. React commit заменяет PageRenderer на CanvasRenderer или обратно.
 4. Layout effect на новом DOM пытается восстановить TextSelection.
 5. Если нужные blocks rendered, portable IDs снова превращаются в DOM nodes.

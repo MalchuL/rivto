@@ -95,7 +95,7 @@ function indexParents(blocks: Block[], parents = new Map<string, string>()): Map
  * @param wholeBlocks - Whether selected roots carry their complete subtrees.
  * @returns Independent cloned roots in document order without duplicates.
  */
-export function selectedTopLevelSubtrees(
+export function cloneSelectedTopLevelSubtrees(
   document: Block[],
   range: NormalizedSelection,
   wholeBlocks: boolean,
@@ -135,6 +135,66 @@ export function escapeHtml(value: string): string {
   })[character] ?? character);
 }
 
+/** Portable clipboard formats derived from one selected block forest. */
+export interface PortableClipboardFormats {
+  /** Plain text with descendants indented by two spaces per level. */
+  text: string;
+  /** Escaped semantic HTML with descendants represented as nested lists. */
+  html: string;
+  /** Markdown source with descendants represented as nested list items. */
+  markdown: string;
+}
+
+/**
+ * Serializes one detached block forest without discarding its hierarchy.
+ *
+ * The callback is evaluated once per block so custom block definitions produce
+ * identical text in every portable flavor. Top-level Markdown stays unchanged;
+ * only descendants receive list markers.
+ *
+ * @param blocks - Selected roots carrying their copied descendants.
+ * @param toRawText - Resolves the portable text for one detached block.
+ * @returns Plain-text, HTML, and Markdown clipboard flavors.
+ */
+export function serializeClipboardBlocks(
+  blocks: Block[],
+  toRawText: (block: Block) => string,
+): PortableClipboardFormats {
+  const serialize = (block: Block, depth: number): PortableClipboardFormats => {
+    const raw = toRawText(block);
+    const lines = raw.split(/\r\n?|\n/);
+    const children = block.children.map((child) => serialize(child, depth + 1));
+    const childHtml = children.length
+      ? `<ul>${children.map((child) => child.html).join("")}</ul>`
+      : "";
+    const escaped = escapeHtml(raw).replace(/\r\n?|\n/g, "<br>");
+    const plainIndent = "  ".repeat(depth);
+    const markdownIndent = "  ".repeat(Math.max(0, depth - 1));
+    const markdownContinuation = "  ".repeat(depth);
+    const ownText = lines.map((line) => plainIndent + line).join("\n");
+    const ownMarkdown = depth === 0
+      ? lines.join("\n")
+      : lines.map((line, index) => (
+        index === 0 ? `${markdownIndent}- ${line}` : markdownContinuation + line
+      )).join("\n");
+
+    return {
+      text: [ownText, ...children.map((child) => child.text)].join("\n"),
+      html: depth === 0
+        ? `<p>${escaped}</p>${childHtml}`
+        : `<li>${escaped}${childHtml}</li>`,
+      markdown: [ownMarkdown, ...children.map((child) => child.markdown)].join("\n"),
+    };
+  };
+
+  const roots = blocks.map((block) => serialize(block, 0));
+  return {
+    text: roots.map((root) => root.text).join("\n"),
+    html: roots.map((root) => root.html).join(""),
+    markdown: roots.map((root) => root.markdown).join("\n"),
+  };
+}
+
 /**
  * Re-identifies every block and link in an incoming clipboard bundle.
  *
@@ -147,13 +207,13 @@ export function escapeHtml(value: string): string {
  * @param bundle - Structured clipboard hierarchy to validate and remap.
  * @param firstTargetId - Existing destination ID reused for the first root.
  * @returns Fresh block inputs, detached first-root children, and remapped links.
- * @throws When the clipboard schema version or required arrays are unsupported.
+ * @throws When required clipboard arrays are missing.
  */
 export function remapClipboardBundle(
   bundle: ClipboardBundle,
   firstTargetId?: string,
 ): RemappedClipboardBundle {
-  if (bundle.version !== 2 || !Array.isArray(bundle.blocks) || !Array.isArray(bundle.links)) {
+  if (!Array.isArray(bundle.blocks) || !Array.isArray(bundle.links)) {
     throw new Error("Unsupported Rivto clipboard payload");
   }
   const validateBlock = (block: Block): void => {

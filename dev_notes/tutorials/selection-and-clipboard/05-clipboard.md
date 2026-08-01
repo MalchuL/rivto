@@ -31,7 +31,7 @@ Clipboard — потребитель selection. Он должен понять �
 Plain text Copy потеряет всё кроме content. Поэтому Rivto пишет несколько MIME
 formats одновременно.
 
-## 2. Три clipboard formats
+## 2. Четыре clipboard formats
 
 ### application/x-rivto+json
 
@@ -46,20 +46,27 @@ application/x-rivto+json
 
 ### text/html
 
-Fallback для rich editors, которые не знают Rivto MIME.
+Fallback для rich editors, которые не знают Rivto MIME. Descendants сохраняют
+иерархию через вложенные `ul`/`li` lists.
+
+### text/markdown
+
+Markdown-aware applications получают roots как raw block text, а descendants
+как вложенные list items.
 
 ### text/plain
 
 Universal fallback для terminal, textarea, messenger и любого приложения.
+Descendants получают отступ в два пробела на каждый уровень hierarchy.
 
-Все три создаются из одного normalized selection. Иначе JSON и text могли бы
+Все четыре создаются из одного normalized selection. Иначе JSON и text могли бы
 описывать разные границы.
 
 ## 3. ClipboardBundle
 
 ```ts
 interface ClipboardBundle {
-  version: 1;
+  version: 2;
   blocks: Block[];
   links: Link[];
 }
@@ -155,7 +162,7 @@ Selected text: `pha\nBe`.
 
 Stored runtime selection всё ещё `B:2 → A:2`.
 
-## 8. Нормализация BlockSelection и EdgelessSelection
+## 8. Нормализация BlockSelection
 
 Для structural selection offsets отсутствуют. Clipboard считает каждый block
 выбранным полностью:
@@ -179,7 +186,9 @@ Copy не должен менять document. Поэтому функция ра
 4. Найти boundary blocks внутри copies.
 5. Обрезать content first/last по offsets.
 6. Собрать internal links.
-7. Создать JSON, HTML и text.
+7. Получить portable text каждого block через `BlockDefinition.toRawText` с
+   fallback на `content`.
+8. Создать JSON, hierarchical HTML, Markdown и plain text.
 
 ## 10. Почему selected parent подавляет selected child
 

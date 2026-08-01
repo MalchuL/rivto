@@ -13,7 +13,7 @@ export const BLOCK_CONTENT_SELECTOR = `[${BLOCK_CONTENT_ATTRIBUTE}]`;
 /**
  * Opt-in marker for a renderer region from which selection may begin.
  *
- * Every `useBlockEditing` mode returns this marker. TextSelectionPlugin uses
+ * Every `useBlockEditing` mode returns this marker. The text-selection extension uses
  * the marked element's native `isContentEditable` state to distinguish text
  * editing from structural selection; `data-block-content` remains responsible
  * only for persisted text offsets and DOM range conversion.

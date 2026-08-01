@@ -704,7 +704,6 @@ Selection должен быть отдельной подсистемой, а н
 type EditorSelection =
   | TextSelection
   | BlockSelection
-  | EdgelessSelection
   | MixedSelection
   | null;
 ```
@@ -720,7 +719,7 @@ type BlockSelection = {
 };
 ```
 
-BlockSelection используется в Block Mode для:
+BlockSelection используется в обоих режимах для:
 
 * multi-select blocks;
 * copy/cut/delete;
@@ -728,25 +727,8 @@ BlockSelection используется в Block Mode для:
 * toolbar over selection;
 * AI actions over selected blocks.
 
-### 11.3 EdgelessSelection
-
-```ts
-type EdgelessSelection = {
-  kind: 'edgeless';
-  objectIds: BlockId[];
-  anchorObjectId?: BlockId;
-  bounds: Rect;
-};
-```
-
-EdgelessSelection используется для:
-
-* canvas object selection;
-* resize handles;
-* group operations;
-* z-index operations;
-* alignment;
-* AI actions over selected visual objects.
+В edgeless mode тот же BlockSelection может содержать root или nested blocks.
+Canvas move/resize вычисляет owning roots из выбранных IDs, не меняя selection.
 
 ### 11.4 SelectionManager
 
@@ -760,10 +742,6 @@ type SelectionManager = {
     blockIds: BlockId[];
     anchorBlockId?: BlockId;
     focusBlockId?: BlockId;
-  }): void;
-
-  setEdgelessSelection(input: {
-    objectIds: BlockId[];
   }): void;
 
   clear(): void;
@@ -807,8 +785,8 @@ Text selection
 Block selection
   handled by SelectionManager + BlockSelectionPlugin.
 
-Edgeless selection
-  handled by SelectionManager + EdgelessSelectionPlugin.
+Edgeless block gestures
+  handled by SelectionManager + BlockSelectionPlugin.
 
 Visual selection
   rendered by overlays and block wrappers.
@@ -1068,7 +1046,7 @@ MVP core plugins:
 ```txt
 BlockSelectionPlugin
 BlockDragDropPlugin
-EdgelessSelectionPlugin
+EdgelessCanvasPlugin
 EdgelessDragPlugin
 SlashMenuPlugin
 KeyboardShortcutsPlugin
@@ -1657,14 +1635,9 @@ SlashMenuPlugin
 When switching modes:
 
 ```txt
-BlockSelection -> EdgelessSelection
-  if selected blocks have edgeless representations.
-
-EdgelessSelection -> BlockSelection
-  if selected objects have block representations.
-
-Unsupported selection
-  clear selection or select closest valid parent.
+TextSelection and BlockSelection keep the same IDs and endpoints.
+No selection conversion occurs: page and edgeless are presentations of the
+same document and selection state.
 ```
 
 ---
@@ -1742,7 +1715,7 @@ edgeless connector
 5. `Block Mode Renderer`.
 6. `Edgeless Mode Renderer`.
 7. `BlockSelection`.
-8. `EdgelessSelection`.
+8. Edgeless gestures over `BlockSelection`.
 9. Block Mode drag-and-drop.
 10. Edgeless object move.
 11. Slash menu.
@@ -1845,7 +1818,7 @@ src/editor/
     SelectionManager.ts
     selectionTypes.ts
     BlockSelectionPlugin.ts
-    EdgelessSelectionPlugin.ts
+    EdgelessCanvasPlugin.ts
 
   drag/
     DragManager.ts

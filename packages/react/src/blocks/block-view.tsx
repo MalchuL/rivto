@@ -3,12 +3,12 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
-import type { EditorBlock } from "@chulane/rivto";
+import type { EditorBlock as Block } from "@chulane/rivto";
 
 /** Properties accepted by the stable DOM container for one editor block. */
 export interface BlockViewProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
   /** Detached block snapshot whose identity and native type mark the container. */
-  readonly block: EditorBlock;
+  readonly block: Block;
   /** Content and nested block containers chosen by the active surface. */
   readonly children?: ReactNode;
   /**
@@ -25,7 +25,7 @@ export interface BlockViewProps extends Omit<HTMLAttributes<HTMLDivElement>, "ch
  *
  * BlockView owns only the DOM contract shared by every surface: a block ID,
  * block type, optional selection marker, forwarded ref, and ordinary div
- * attributes. Stable data attributes let delegated events and future plugins
+ * attributes. Stable data attributes let delegated events and extensions
  * locate a block without coupling them to CSS classes or renderer components.
  *
  * The component deliberately receives a detached block snapshot instead of

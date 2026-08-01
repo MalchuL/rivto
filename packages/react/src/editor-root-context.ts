@@ -4,7 +4,7 @@ import {
   type RefCallback,
 } from "react";
 
-/** Internal value connecting one surface DOM root to editor plugins. */
+/** Internal value connecting one surface DOM root to editor extensions. */
 export interface EditorRootContextValue {
   /** Current root element, or null before mount and after unmount. */
   readonly element: HTMLElement | null;

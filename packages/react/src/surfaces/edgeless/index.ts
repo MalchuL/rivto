@@ -1,1 +1,1 @@
-export * from "./EdgelessSurface";
+export * from "./edgeless-surface";

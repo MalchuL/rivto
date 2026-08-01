@@ -59,7 +59,9 @@ describe("clipboard commands", () => {
     expect(bundle.blocks[0]?.children).toHaveLength(1);
     expect(bundle.blocks[0]?.layout).toEqual({ x: 10, y: 20, width: 300, height: 90, zIndex: 2 });
     expect(bundle.links).toHaveLength(1);
-    expect(data.get("text/plain")).toBe("Parent\nChild");
+    expect(data.get("text/plain")).toBe("Parent\n  Child");
+    expect(data.get("text/html")).toBe("<p>Parent</p><ul><li>Child</li></ul>");
+    expect(data.get("text/markdown")).toBe("Parent\n- Child");
     editor.destroy();
   });
 
@@ -390,7 +392,7 @@ describe("clipboard commands", () => {
     editor.destroy();
   });
 
-  it("deletes a block selection atomically and keeps one editable fallback", () => {
+  it("deletes a complete block selection atomically and leaves the document empty", () => {
     const editor = createRivtoEditor();
     const first = editor.insertBlock({ type: "paragraph", content: "First" });
     const child = editor.insertBlock({ type: "paragraph", content: "Nested" }, first);
@@ -405,12 +407,8 @@ describe("clipboard commands", () => {
     editor.deleteSelection();
 
     expect(documentUpdates).toHaveBeenCalledTimes(1);
-    expect(editor.getBlocks()).toMatchObject([{ type: "paragraph", content: "" }]);
-    expect(editor.selection.get()).toEqual([{
-      type: "text",
-      anchor: { blockId: editor.getBlocks()[0]!.id, offset: 0 },
-      head: { blockId: editor.getBlocks()[0]!.id, offset: 0 },
-    }]);
+    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.selection.get()).toEqual([]);
     unsubscribe();
 
     editor.undo();
@@ -420,7 +418,34 @@ describe("clipboard commands", () => {
     ]);
 
     editor.redo();
-    expect(editor.getBlocks()).toMatchObject([{ type: "paragraph", content: "" }]);
+    expect(editor.getBlocks()).toEqual([]);
+    editor.destroy();
+  });
+
+  it("cuts the final block and can paste plain text into the empty document", () => {
+    const editor = createRivtoEditor();
+    const id = editor.insertBlock({ type: "paragraph", content: "Only block" });
+    editor.selection.set([{
+      type: "block",
+      blockIds: [id],
+      anchorBlockId: id,
+      focusBlockId: id,
+    }]);
+
+    const clipboard = new Map<string, string>();
+    expect(editor.execute("clipboard.cut", {
+      clipboardData: {
+        getData: (type: string) => clipboard.get(type) ?? "",
+        setData: (type: string, value: string) => clipboard.set(type, value),
+      },
+      preventDefault: jest.fn(),
+    })).toBe("Only block");
+    expect(clipboard.get("text/markdown")).toBe("Only block");
+    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.selection.get()).toEqual([]);
+
+    editor.execute("clipboard.paste", { text: "First\nSecond" });
+    expect(editor.getBlocks().map((block) => block.content)).toEqual(["First", "Second"]);
     editor.destroy();
   });
 

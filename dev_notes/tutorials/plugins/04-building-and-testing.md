@@ -51,7 +51,7 @@ const demoPlugin: RivtoPlugin = {
           type: "callout",
           content: "A block inserted through CommandRegistry.",
         },
-        afterId: editor.document.document.at(-1)?.id,
+        afterId: editor.getBlocks().at(-1)?.id,
       }),
   },
   ui: [{
@@ -236,4 +236,3 @@ expect(editor.commands.has("demo.addCallout")).toBe(false);
 - Stored unknown blocks не удаляются при uninstall.
 - UI contribution ссылается на реально зарегистрированную command.
 - Atomic failure не оставляет частичные resources.
-

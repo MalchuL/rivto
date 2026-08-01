@@ -60,6 +60,50 @@ test("shows full GFM at rest and raw source while editing", async ({ page }) => 
   await expect(preview.locator("code.language-javascript .hljs-keyword")).toHaveText("const");
 });
 
+test("scrolls Markdown code without opening the raw editor", async ({ page }) => {
+  const block = page.locator(blockTypeSelector("paragraph")).first();
+  const editor = block.locator(":scope > .page-block-row .markdown-editor");
+  const preview = block.locator(":scope > .page-block-row .markdown-preview");
+
+  await editor.click();
+  await editor.evaluate((element) => {
+    element.textContent = `\`\`\`text\n${"const value = 42; ".repeat(40)}\n\`\`\``;
+    element.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    (element as HTMLElement).blur();
+  });
+
+  const code = preview.locator("pre");
+  await expect.poll(() => code.evaluate((element) => element.scrollWidth - element.clientWidth))
+    .toBeGreaterThan(100);
+  const box = await code.boundingBox();
+  if (!box) throw new Error("Expected rendered code block");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(300, 0);
+
+  await expect(preview).toBeVisible();
+  await expect.poll(() => code.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+
+  const sourceBeforeEdit = await editor.textContent();
+  const editableCode = code.locator(".markdown-code-editor");
+  await code.evaluate((element) => { element.scrollLeft = 0; });
+  const codeBox = await editableCode.boundingBox();
+  if (!codeBox) throw new Error("Expected editable code");
+  await page.mouse.move(codeBox.x + 10, codeBox.y + codeBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(codeBox.x + 130, codeBox.y + codeBox.height / 2);
+  await page.mouse.up();
+  await expect(editableCode).toBeFocused();
+  await expect(preview).toBeVisible();
+  await expect.poll(() => page.evaluate(() => getSelection()?.toString().length ?? 0))
+    .toBeGreaterThan(0);
+  await page.keyboard.insertText("Z");
+  await page.keyboard.type("ABC");
+  await expect(editableCode).toBeFocused();
+  await expect.poll(() => editor.textContent()).toContain("ZABC");
+  await expect.poll(async () => (await editor.textContent())?.length)
+    .toBeLessThanOrEqual((sourceBeforeEdit?.length ?? 0) + 3);
+});
+
 test("filters typo queries, converts in place, and undoes query removal with conversion", async ({ page }) => {
   const content = page.locator("[data-block-content]").last();
   const block = content.locator(BLOCK_ANCESTOR_XPATH);

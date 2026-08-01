@@ -1,4 +1,8 @@
-import { useBlockEditing, type ReactEditor } from "@chulane/rivto-react";
+import {
+  blockExtension,
+  useBlockEditing,
+  type ReactEditorExtension,
+} from "@chulane/rivto-react";
 import type { MouseEvent } from "react";
 import { MarkdownContent } from "@chulane/rivto-react";
 import {
@@ -72,19 +76,16 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
   );
 }
 
-/** Registers each demo block's model, renderer, and slash conversion together. */
-export function installCustomBlocks(editor: ReactEditor): () => void {
-  const disposers = [
-    editor.blocks.register({
+/** Creation-time extensions for the demo's two custom block types. */
+export const customBlockExtensions: readonly ReactEditorExtension[] = [
+    blockExtension({
       definition: sliderBlockDefinition,
       render: SliderBlock,
       slashCommand: { title: "Slider", group: "Turn into", keywords: ["range", "value"] },
     }),
-    editor.blocks.register({
+    blockExtension({
       definition: counterBlockDefinition,
       render: CounterBlock,
       slashCommand: { title: "Counter", group: "Turn into", keywords: ["count", "button"] },
     }),
-  ];
-  return () => disposers.reverse().forEach((dispose) => dispose());
-}
+];

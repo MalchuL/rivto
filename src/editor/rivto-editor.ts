@@ -6,7 +6,7 @@ import {
 } from "../blocks";
 import { ClipboardManager, CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
-import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type BlockPatch, type BlockUpdate, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
+import { DocumentModelImpl, type Block, type BlockInput, type BlockLayout, type BlockPatch, type BlockUpdate, type DocumentModel, type Link, type Snapshot, type SnapshotUpdate } from "../store/document-model";
 import {
   RIVTO_CLIPBOARD_MIME,
   type ClipboardBundle,
@@ -30,25 +30,40 @@ interface ClipboardEventLike {
 
 /**
  * Owns the active document, block registry, commands, and editor mode.
- *
+ * Runtime is the central hub of the editor. It owns the document, block registry, commands, and editor mode.
+ * "Runtime" means the editor works on the document at runtime.
+ * 
  * The runtime currently registers document mutation commands. It connects
  * document, block definition, and mode changes to a single revision stream
  * that any view layer can subscribe to.
  */
 export class EditorRuntime implements RivtoEditorApi {
-  readonly document: DocumentModelImpl;
+  /** Collaborative block, tree, link, and snapshot storage owned by this runtime. */
+  readonly document: DocumentModel;
+  /** Native block definitions used to validate and prepare persisted block data. */
   readonly blocks = new BlockRegistry();
+  /** Named command handlers exposed to integrations and typed runtime methods. */
   readonly commands = new CommandRegistry();
+  /** Local presentation mode shared by views of this runtime. */
   readonly mode: ModeManager;
+  /** Local text and structural selection state; never persisted to the document. */
   readonly selection: SelectionManager;
+  /** Local Yjs undo/redo history for document changes made through this runtime. */
   readonly history: UndoManager;
+  /** Framework-neutral structured and plain-text clipboard operations. */
   readonly clipboard: ClipboardManager;
+  /** Ordered slash-command registrations available to presentation layers. */
   readonly slashCommands = new SlashCommandManager();
+  /** Subscribers notified whenever the public runtime revision advances. */
   private readonly listeners = new Set<() => void>();
-  /** Unsubscribe callbacks owned by the runtime and called during destroy(). */
+  /** Owned subscription cleanup callbacks called during `destroy()`. */
   private readonly unsubscribeFns: Array<() => void> = [];
+  /** Block-definition cleanup callbacks called during explicit removal or teardown. */
   private readonly removeDefinitions = new Set<() => void>();
+  /** Monotonic snapshot incremented before notifying runtime subscribers. */
   private currentRevision = 0;
+  /** Zero outside a batch and positive while the outer transaction is active. */
+  private batchDepth = 0;
 
   /**
    * Creates a runtime with a collaborative document, default blocks, and mode.
@@ -67,6 +82,7 @@ export class EditorRuntime implements RivtoEditorApi {
     defaultBlockDefinitions.forEach((definition) => this.defineBlock(definition));
 
     // Document changes cover block commands and direct/remote document edits.
+    // !!!We subscribe to document changes to get updates and reconcile the selection with the latest document.
     const unsubscribeFromDocumentChanges = this.document.subscribe(() => {
       this.reconcileSelection();
       this.changed();
@@ -85,7 +101,14 @@ export class EditorRuntime implements RivtoEditorApi {
     this.unsubscribeFns.push(unsubscribeFromModeChanges);
   }
 
-  /** Current runtime revision, incremented after every observable change. */
+  /**
+   * Returns the current monotonic runtime revision.
+   *
+   * Document, selection, mode, and block-definition changes increment this
+   * value before runtime subscribers are notified.
+   *
+   * @returns Current editor revision.
+   */
   get revision(): number { return this.currentRevision; }
 
   /**
@@ -97,6 +120,36 @@ export class EditorRuntime implements RivtoEditorApi {
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * Groups synchronous editor mutations into one collaborative update and undo step.
+   *
+   * The outermost call owns the CRDT transaction and history boundaries.
+   * Nested calls reuse that active batch, so helpers can compose without
+   * publishing intermediate document revisions or creating extra undo items.
+   *
+   * This is a batching boundary, not a rollback mechanism. Yjs retains writes
+   * already made if `operation` throws; the original error is still propagated.
+   *
+   * @param operation - Synchronous editor work to execute inside the batch.
+   * @returns The value returned by `operation`.
+   * @throws The original error when `operation` fails.
+   */
+  batchUpdates<Result>(operation: () => Result): Result {
+    if (this.batchDepth > 0) return operation();
+    this.history.stopCapturing();
+    this.batchDepth += 1;
+    let result!: Result;
+    try {
+      this.document.transact(() => {
+        result = operation();
+      });
+      return result;
+    } finally {
+      this.batchDepth -= 1;
+      this.history.stopCapturing();
+    }
   }
 
   /**
@@ -130,137 +183,297 @@ export class EditorRuntime implements RivtoEditorApi {
     this.commands.remove(name);
   }
 
-  /** Finds one block in the current detached document tree. */
+  /**
+   * Resolves one currently placed block by its stable ID.
+   *
+   * @param id - Persisted block ID to resolve.
+   * @returns Detached block subtree, or undefined when the ID is absent.
+   */
   getBlock(id: string): EditorBlock | undefined {
-    const find = (blocks: EditorBlock[]): EditorBlock | undefined => {
-      for (const block of blocks) {
-        if (block.id === id) return block;
-        const child = find(block.children);
-        if (child) return child;
-      }
-      return undefined;
-    };
-    return find(this.getBlocks());
+    return this.document.getBlock(id) satisfies EditorBlock | undefined;
   }
 
-  /** Returns current root blocks as detached values. */
+  /**
+   * Materializes the current ordered root block tree.
+   *
+   * @returns Detached root blocks with recursively materialized children.
+   */
   getBlocks(): EditorBlock[] {
-    return this.document.document satisfies EditorBlock[];
+    return this.document.getBlocks() satisfies EditorBlock[];
   }
 
-  /** Finds one link by ID. */
+  /**
+   * Reads top-level block IDs without materializing their subtrees.
+   *
+   * @returns Root IDs in collaborative order.
+   */
+  getRootIds(): string[] {
+    return this.document.getRootIds();
+  }
+
+  /**
+   * Reads one block's direct child IDs without materializing child subtrees.
+   *
+   * @param id - Parent block ID.
+   * @returns Child IDs in collaborative order, or an empty list when absent.
+   */
+  getChildIds(id: string): string[] {
+    return this.document.getChildIds(id);
+  }
+
+  /**
+   * Resolves the current structural parent of one placed block.
+   *
+   * @param id - Block ID to locate.
+   * @returns Parent ID, null for a root, or undefined when the block is absent.
+   */
+  getParentId(id: string): string | null | undefined {
+    return this.document.getParentId(id);
+  }
+
+  /**
+   * Reads the block IDs currently visible in the page outline.
+   *
+   * Descendants of collapsed blocks are excluded.
+   *
+   * @returns Visible IDs in depth-first document order.
+   */
+  getVisibleBlockIds(): string[] {
+    return this.document.getVisibleBlockIds();
+  }
+
+  /**
+   * Resolves one first-class link by its stable ID.
+   *
+   * @param id - Persisted link ID.
+   * @returns Detached link value, or undefined when missing.
+   */
   getLink(id: string): EditorLink | undefined {
-    return this.getLinks().find((link) => link.id === id);
+    return this.document.getLink(id) satisfies EditorLink | undefined;
   }
 
-  /** Returns all current document links as detached values. */
+  /**
+   * Materializes every first-class document link.
+   *
+   * @returns Detached links in collaborative map iteration order.
+   */
   getLinks(): EditorLink[] {
-    return this.document.links satisfies EditorLink[];
+    return this.document.getLinks() satisfies EditorLink[];
   }
 
-  /** Inserts a block through the built-in command path. */
+  /**
+   * Inserts a validated block through the built-in command path.
+   *
+   * @param block - Block type and initial persisted values.
+   * @param afterId - Sibling to follow, null to prepend, or omitted to append.
+   * @returns Stable ID assigned to the new block.
+   */
   insertBlock(block: EditorBlockInput, afterId?: string | null): string {
     const command = { block, afterId } satisfies { block: BlockInput; afterId?: string | null };
     return this.execute("block.insert", command) as string;
   }
 
-  /** Updates mutable block fields through the built-in command path. */
+  /**
+   * Patches supplied mutable fields on one block.
+   *
+   * @param id - Block ID to update.
+   * @param patch - Content, properties, plugin data, collapse, or layout changes.
+   */
   updateBlock(id: string, patch: EditorBlockPatch): void {
     const command = { id, patch } satisfies { id: string; patch: BlockPatch };
     this.execute("block.update", command);
   }
 
-  /** Applies several identified block patches in one command and undo item. */
+  /**
+   * Applies several identified block patches in one command and undo item.
+   *
+   * @param updates - Ordered block IDs and patches to apply.
+   */
   updateBlocks(updates: readonly EditorBlockUpdate[]): void {
     const command = { updates } satisfies { updates: readonly BlockUpdate[] };
     this.execute("block.update-many", command);
   }
 
-  /** Converts a block to another registered native type. */
+  /**
+   * Clears content and descendants while preserving one block's identity.
+   *
+   * Descendant removal also removes links touching that subtree. Type,
+   * properties, plugin data, layout, and collapse state remain unchanged.
+   *
+   * @param id - Block ID to retain and clear.
+   */
+  clearBlock(id: string): void {
+    this.execute("block.clear", { id });
+  }
+
+  /**
+   * Converts a block to another registered native type without changing its ID.
+   *
+   * @param id - Block ID to convert.
+   * @param type - Registered destination block type.
+   */
   setBlockType(id: string, type: string): void {
     this.execute("block.type.set", { id, type });
   }
 
-  /** Removes a block through the built-in command path. */
+  /**
+   * Removes a block subtree through the built-in command path.
+   *
+   * An active structural selection containing `id` is removed as one operation.
+   *
+   * @param id - Block ID anchoring the removal.
+   */
   removeBlock(id: string): void {
     this.execute("block.remove", { id });
   }
 
-  /** Deletes every active selection item through one document command. */
+  /**
+   * Deletes the complete active selection as one undoable operation.
+   *
+   * Text boundaries are preserved according to SelectionManager normalization.
+   */
   deleteSelection(): void {
     this.execute("selection.delete");
   }
 
-  /** Atomically merges a source block into a target through the built-in command path. */
+  /**
+   * Appends a source block's content and children into a surviving target.
+   *
+   * @param targetId - Block that remains after the merge.
+   * @param sourceId - Block transferred and removed by the merge.
+   * @returns Target content offset where the source content begins.
+   */
   mergeBlocks(targetId: string, sourceId: string): number {
     return this.execute("block.merge", { targetId, sourceId }) as number;
   }
 
-  /** Moves a block before, after, or inside a target through the built-in command path. */
+  /**
+   * Moves one block relative to another block or to the start of its siblings.
+   *
+   * @param id - Block ID to move.
+   * @param targetId - Destination block, or null for the start of the sibling list.
+   * @param position - Placement relative to the destination; defaults to after.
+   */
   moveBlock(id: string, targetId: string | null, position: "before" | "after" | "inside" = "after"): void {
     this.execute("block.move", { id, targetId, position });
   }
 
-  /** Moves sibling block roots through one built-in command and undo item. */
+  /**
+   * Moves several sibling subtree roots as one command and undo item.
+   *
+   * @param ids - Ordered block IDs to move together.
+   * @param targetId - Destination block, or null for the start of the sibling list.
+   * @param position - Placement relative to the destination; defaults to after.
+   */
   moveBlocks(ids: string[], targetId: string | null, position: "before" | "after" | "inside" = "after"): void {
     this.execute("block.move-many", { ids, targetId, position });
   }
 
-  /** Indents a block through the built-in command path. */
+  /**
+   * Nests a block, or its eligible structural selection, under a previous sibling.
+   *
+   * @param id - Block ID anchoring the indent operation.
+   */
   indentBlock(id: string): void {
     this.execute("block.indent", { id });
   }
 
-  /** Outdents a block through the built-in command path. */
+  /**
+   * Moves a block, or its eligible structural selection, out of its parent.
+   *
+   * @param id - Block ID anchoring the outdent operation.
+   */
   outdentBlock(id: string): void {
     this.execute("block.outdent", { id });
   }
 
-  /** Sets one block property through the built-in command path. */
+  /**
+   * Sets or removes one validated native block property.
+   *
+   * @param id - Owning block ID.
+   * @param key - Native property key.
+   * @param value - New value, or undefined to remove the property.
+   */
   setBlockProp(id: string, key: string, value: unknown): void {
     this.execute("block.prop.set", { id, key, value });
   }
 
-  /** Sets one plugin-data namespace through the built-in command path. */
+  /**
+   * Sets or removes data owned by one block plugin namespace.
+   *
+   * @param id - Owning block ID.
+   * @param pluginId - Stable plugin namespace.
+   * @param value - New portable value, or undefined to remove the namespace.
+   */
   setBlockPluginData(id: string, pluginId: string, value: unknown): void {
     this.execute("block.pluginData.set", { id, pluginId, value });
   }
 
-  /** Patches block layout through the built-in command path. */
+  /**
+   * Patches supplied collaborative geometry fields on one block.
+   *
+   * @param id - Block ID whose layout should change.
+   * @param layout - Partial x, y, size, or stacking values.
+   */
   setBlockLayout(id: string, layout: Partial<EditorBlockLayout>): void {
     const command = { id, layout } satisfies { id: string; layout: Partial<BlockLayout> };
     this.execute("block.layout.set", command);
   }
 
-  /** Creates or replaces a link through the built-in command path. */
+  /**
+   * Creates or replaces a first-class link.
+   *
+   * @param link - Complete persisted link value.
+   */
   createLink(link: EditorLink): void {
     const command = { link } satisfies { link: Link };
     this.execute("link.create", command);
   }
 
-  /** Removes a link through the built-in command path. */
+  /**
+   * Removes one first-class link by ID.
+   *
+   * @param id - Persisted link ID to remove.
+   */
   removeLink(id: string): void {
     this.execute("link.remove", { id });
   }
 
-  /** Loads persisted document state through the built-in command path. */
+  /**
+   * Replaces supplied document sections from a snapshot v4 update.
+   *
+   * Loading establishes a new history baseline, so earlier local changes
+   * cannot be restored with undo.
+   *
+   * @param snapshot - Snapshot sections to validate and load.
+   */
   load(snapshot: EditorSnapshotUpdate): void {
     const command = { snapshot } satisfies { snapshot: SnapshotUpdate };
     this.execute("document.load", command);
   }
 
-  /** Dumps the current document snapshot for persistence. */
+  /**
+   * Materializes the complete portable document state.
+   *
+   * @returns Detached snapshot v4 suitable for persistence or transfer.
+   */
   dump(): EditorSnapshot {
     const snapshot = this.document.getSnapshot() satisfies Snapshot;
     return snapshot satisfies EditorSnapshot;
   }
 
-  /** Reverts the latest local document operation through the built-in command path. */
+  /**
+   * Reverts the latest captured local document operation.
+   *
+   * Remote collaborator updates are not part of this editor's undo history.
+   */
   undo(): void {
     this.execute("history.undo");
   }
 
-  /** Reapplies the latest undone document operation through the built-in command path. */
+  /**
+   * Reapplies the latest locally undone document operation.
+   */
   redo(): void {
     this.execute("history.redo");
   }
@@ -303,11 +516,12 @@ export class EditorRuntime implements RivtoEditorApi {
       return value;
     };
     const documentCommand = (handler: (value?: unknown) => unknown): CommandHandler => (value) => {
-      this.history.stopCapturing();
+      const ownsHistoryBoundary = this.batchDepth === 0;
+      if (ownsHistoryBoundary) this.history.stopCapturing();
       try {
         return handler(value);
       } finally {
-        this.history.stopCapturing();
+        if (ownsHistoryBoundary) this.history.stopCapturing();
       }
     };
 
@@ -335,6 +549,13 @@ export class EditorRuntime implements RivtoEditorApi {
         };
       });
       this.document.updateBlocks(updates);
+    }));
+    this.commands.register("block.clear", documentCommand((value) => {
+      const id = string(payload(value).id, "id");
+      this.document.transact(() => {
+        this.document.updateBlock(id, { content: "" });
+        this.document.getChildIds(id).forEach((childId) => this.document.removeBlock(childId));
+      });
     }));
     this.commands.register("block.type.set", documentCommand((value) => {
       const data = payload(value);
@@ -450,12 +671,14 @@ export class EditorRuntime implements RivtoEditorApi {
         event.preventDefault();
         event.clipboardData.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(payloadData.bundle));
         event.clipboardData.setData("text/html", payloadData.html);
+        event.clipboardData.setData("text/markdown", payloadData.markdown);
         event.clipboardData.setData("text/plain", payloadData.text);
       }
       if (data.clipboardData && typeof (data.clipboardData as { setData?: unknown }).setData === "function") {
         const transfer = data.clipboardData as Pick<ClipboardDataLike, "setData">;
         transfer.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(payloadData.bundle));
         transfer.setData("text/html", payloadData.html);
+        transfer.setData("text/markdown", payloadData.markdown);
         transfer.setData("text/plain", payloadData.text);
       }
       return payloadData.text;
@@ -469,6 +692,7 @@ export class EditorRuntime implements RivtoEditorApi {
         event.preventDefault();
         event.clipboardData.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(payloadData.bundle));
         event.clipboardData.setData("text/html", payloadData.html);
+        event.clipboardData.setData("text/markdown", payloadData.markdown);
         event.clipboardData.setData("text/plain", payloadData.text);
       }
       return payloadData.text;
@@ -482,12 +706,14 @@ export class EditorRuntime implements RivtoEditorApi {
         ?? (event?.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) || undefined);
       const bundle = data.bundle as ClipboardBundle | undefined;
       const mergeText = data.mergeText !== false;
+      const preserveNewlines = data.preserveNewlines === true;
       const explicitText = text(data.text);
       if (event?.clipboardData) event.preventDefault();
       this.clipboard.paste({
         bundle,
         structured,
         mergeText,
+        preserveNewlines,
         defaultBlockType,
         text: explicitText ?? event?.clipboardData?.getData("text/plain"),
       });
@@ -519,7 +745,7 @@ export class EditorRuntime implements RivtoEditorApi {
     // `ids` can be wider than this item. A mixed text selection uses partial
     // text boundary blocks plus a BlockSelection for only the fully covered
     // middle blocks. Preserve that distinction after moving the whole range.
-    const remaining = blockSelection.blockIds.filter((id) => this.findBlock(id));
+    const remaining = blockSelection.blockIds.filter((id) => this.getBlock(id));
     if (!remaining.length) {
       this.selection.set(previous.filter((_, itemIndex) => itemIndex !== index));
       return;
@@ -531,11 +757,11 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Reconciles local selection with the latest document and editor mode.
+   * Reconciles local selection with the latest document.
    *
    * Direct document edits, remote CRDT updates, undo/redo, and mode swaps can
-   * remove selected blocks, shorten selected text, or make edgeless selections
-   * illegal. Surviving text offsets are clamped, deleted structural IDs are
+   * remove selected blocks or shorten selected text. Surviving text offsets are
+   * clamped, deleted structural IDs are
    * filtered, and block selections are reordered to match the current tree.
    * When a block-selection endpoint disappeared, its replacement is chosen
    * from the same directional edge so top-down and bottom-up intent survives.
@@ -547,13 +773,13 @@ export class EditorRuntime implements RivtoEditorApi {
       visibleIds.push(block.id);
       visit(block.children);
     });
-    visit(this.document.document);
+    visit(this.getBlocks());
     const order = new Map(visibleIds.map((id, index) => [id, index]));
     let changed = false;
     const valid = selection.flatMap((item): EditorSelectionItem[] => {
       if (item.type === "text") {
-        const anchorBlock = this.findBlock(item.anchor.blockId);
-        const headBlock = this.findBlock(item.head.blockId);
+        const anchorBlock = this.getBlock(item.anchor.blockId);
+        const headBlock = this.getBlock(item.head.blockId);
         if (!anchorBlock || !headBlock) {
           changed = true;
           return [];
@@ -567,21 +793,6 @@ export class EditorRuntime implements RivtoEditorApi {
           anchor: { ...item.anchor, offset: anchorOffset },
           head: { ...item.head, offset: headOffset },
         }];
-      }
-
-      if (item.type === "edgeless") {
-        if (this.mode.get() !== "edgeless") {
-          changed = true;
-          return [];
-        }
-        const blockIds = item.blockIds.filter((id) => order.has(id));
-        if (!blockIds.length) {
-          changed = true;
-          return [];
-        }
-        if (blockIds.length === item.blockIds.length) return [item];
-        changed = true;
-        return [{ ...item, blockIds }];
       }
 
       const selected = new Set(item.blockIds);
@@ -608,16 +819,6 @@ export class EditorRuntime implements RivtoEditorApi {
       return [{ ...item, blockIds, anchorBlockId, focusBlockId }];
     });
     if (changed) this.selection.set(valid);
-  }
-
-  /** Finds one block recursively in detached document values. */
-  private findBlock(id: string, blocks: Block[] = this.document.document): Block | undefined {
-    for (const block of blocks) {
-      if (block.id === id) return block;
-      const child = this.findBlock(id, block.children);
-      if (child) return child;
-    }
-    return undefined;
   }
 
   /**

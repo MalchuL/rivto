@@ -164,27 +164,17 @@ blockIds: ["A", "B", "C"]
 - Shift+Arrow должен знать, что активный конец сейчас A;
 - UI должен уметь продолжить выделение от первоначального C.
 
-## 5. EdgelessSelection
+## 5. Selection в edgeless mode
 
-В edgeless-режиме блок одновременно является карточкой на canvas.
-Пользователь может редактировать текст карточки или выбрать карточку как
-объект.
-
-```ts
-interface EdgelessSelection {
-  type: "edgeless";
-  blockIds: string[];
-}
-```
-
-Сейчас React UI выбирает один объект, но массив оставляет runtime готовым к
-multi-selection.
+Page и edgeless используют один `BlockSelection`. Он может содержать root или
+nested blocks и не меняется при переключении mode. Если canvas-команда должна
+двигать карточку, React layer отдельно вычисляет owning root выбранного блока.
 
 Важно различать:
 
 ```text
-type: "text"       редактируем текст внутри canvas-карточки
-type: "edgeless"   выбрана сама canvas-карточка
+type: "text"    редактируем текст внутри canvas-карточки
+type: "block"   выбраны целые root или nested blocks
 ```
 
 ## 6. Почему selection не хранится в DocumentModel
@@ -328,18 +318,10 @@ blockIds: ["A", "C"]
 
 Anchor и focus при этом сохраняются.
 
-## 11. Проверка EdgelessSelection
+## 11. Проверка BlockSelection
 
-Runtime требует:
-
-1. непустой массив;
-2. существование всех блоков;
-3. текущий mode `edgeless`.
-
-Попытка установить edgeless selection в block mode бросает ошибку.
-
-TextSelection разрешён в edgeless mode, потому что текст внутри карточек
-редактируется.
+Runtime требует непустой массив, существование всех блоков и присутствие
+anchor/focus среди выбранных IDs. Проверка одинакова в обоих mode.
 
 ## 12. Что происходит при удалении блока
 
@@ -360,14 +342,8 @@ clipboard или toolbar могли бы обратиться к несущес�
 
 ## 13. Что происходит при смене mode
 
-Runtime также подписан на ModeManager.
-
-При переходе `edgeless → block` объектный `EdgelessSelection` очищается.
-
-TextSelection не очищается только из-за смены mode. Оба renderer показывают те
-же блоки, и текстовые позиции остаются осмысленными.
-
-BlockSelection тоже не запрещён типом mode.
+Selection не очищается и не конвертируется. Оба renderer показывают тот же
+document, поэтому TextSelection и BlockSelection сохраняют IDs и endpoints.
 
 ## 14. Важное текущее ограничение
 
@@ -388,7 +364,6 @@ IDs и совместимость mode.
 ```text
 TextSelection       anchor.blockId
 BlockSelection      focusBlockId
-EdgelessSelection   первый blockId
 ```
 
 Почему для block selection используется focus: это активный конец, который
@@ -400,7 +375,7 @@ EdgelessSelection   первый blockId
 
 ```text
 types               описывают возможные формы
-EditorRuntime       проверяет IDs, offsets, mode и порядок
+EditorRuntime       проверяет IDs, offsets и порядок
 SelectionManager    хранит detached локальное значение и уведомляет listeners
 ```
 

@@ -1,527 +1,285 @@
 # `@chulane/rivto-react` developer guide
 
-Guide for reading and changing this package when you are not primarily a
-frontend engineer. It explains ownership, the render/event loop, and the
-non-obvious contracts that make the editor behave correctly.
+Rivto has two deliberately separate layers:
 
-Related deep-dives in this folder:
+| Package | Owns |
+| --- | --- |
+| `@chulane/rivto` | Yjs document storage, root/children tree model, commands, history, portable selection |
+| `@chulane/rivto-react` | React rendering, browser events, DOM selection, surfaces, and extensions |
 
-- [`selection.md`](./selection.md) — portable vs browser selection (read this early)
-- [`events.md`](./events.md) — DOM listeners and keyboard bindings
-- [`block-wrappers.md`](./block-wrappers.md) — ordered block decorators
-- [`markdown-rendering.md`](./markdown-rendering.md) — preview vs raw editor
+The React package never owns or duplicates document data. It presents a core
+`RivtoEditorApi` and translates browser interactions into editor operations.
 
-Also useful outside this package:
-
-- [`dev_notes/editor-architecture.md`](../../../dev_notes/editor-architecture.md)
-- [`demo/KEYMAP.md`](../../../demo/KEYMAP.md)
-- Working host: `demo/src/App.tsx`
-
----
-
-## 1. What this package is
-
-`@chulane/rivto-react` is the **browser presentation layer** for Rivto.
-
-| Package | Owns | Does not own |
-| --- | --- | --- |
-| `@chulane/rivto` | Document, CRDT/Yjs, blocks, selection model, commands, undo, slash registry | React, DOM roots, CSS, pointer UX |
-| `@chulane/rivto-react` | Surfaces, block renderers, plugins, DOM events, keymaps, selection sync | Document lifetime, collaborative storage |
-
-Dependency direction is one-way:
-
-```text
-host / demo
-  → @chulane/rivto-react
-    → @chulane/rivto
-      → DocumentModel / CRDT
-```
-
-**Rule of thumb:** if a change is about *what the document stores*, it belongs in
-core. If it is about *how the browser shows or interacts with it*, it belongs
-here.
-
----
-
-## 2. Mental model: two runtimes
-
-Every host creates **two** objects:
-
-1. **`RivtoEditorApi`** (`createRivtoEditor`) — framework-neutral document API.
-2. **`ReactEditor`** (`createReactEditor`) — React registries + event runtime.
-
-```text
-createRivtoEditor()
-        │
-        ▼
-createReactEditor({ editor, plugins, keymap? })
-        │
-        ▼
-<EditorView editor={reactEditor} />
-        │
-        ├── editor-wide wrappers from plugins
-        ├── mounted plugin components (often headless)
-        └── Surface for current mode ("block" | "edgeless")
-```
-
-Important ownership facts:
-
-- Host creates and destroys both. Destroy **ReactEditor first**, then core.
-- `ReactEditor.destroy()` never destroys the document runtime.
-- Plugins are installed **once at creation**, in declaration order. Setup is
-  transactional: failure rolls back everything already registered.
-- Markdown is registered by default inside `ReactEditor`; other block types are
-  added with `reactEditor.blocks.register(...)`.
-
----
-
-## 3. Best path to understand the project
-
-Read in this order. Each step answers one question.
-
-### Step A — Bootstrapping (how the host wires it)
-
-1. `demo/src/App.tsx` — real plugin list, keymap override example, custom blocks.
-2. `src/plugin-factories.tsx` — public plugin catalog and short descriptions.
-3. `src/react-editor.tsx` — manager construction, revision forwarding, and teardown.
-4. `src/managers/` — focused state ownership and public plugin APIs.
-
-Ask: *What does the runtime register, and who owns each registration?*
-
-### Step B — Rendering (how pixels appear)
-
-5. `src/editor-view.tsx` — context provider, revision subscription, surface pick.
-6. `src/surfaces/page/PageSurface.tsx` + `PageBlock.tsx` — page outline.
-7. `src/blocks/block-view.tsx` + `block-wrapper.tsx` — DOM contract + decorators.
-8. `src/blocks/markdown.tsx` — default content renderer.
-
-Ask: *Who chooses the tree, who paints a block, who adds drag handles?*
-
-### Step C — Data hooks (how React sees the document)
-
-9. `src/hooks/editor/use-editor.ts` / `use-editor-root.ts`
-10. `src/hooks/blocks/use-block.ts` / `use-block-editing.ts`
-11. `src/hooks/document/use-document.ts`
-
-Ask: *Why does typing update the document without local React state for content?*
-
-### Step D — Selection (do not skip)
-
-12. [`docs/selection.md`](./selection.md) — full model and sync story.
-13. Core selection manager plus `src/managers/selection/selection-manager/`.
-14. `src/plugins/text-selection-plugin.tsx` — browser ↔ portable bridge.
-15. `PageBlockSelectionPlugin` / `PageArrowPlugin` / `EdgelessSelectionPlugin`.
-
-Ask: *Why are there two selections, and when does a drag become blocks vs text?*
-
-### Step E — Interaction (how keys and pointers become commands)
-
-16. `src/managers/events/` — one `EventManager` for DOM and keyboard definitions
-17. One page plugin, e.g. `PageEnterPlugin.tsx` or `PageBackspacePlugin.tsx`
-
-Ask: *Where does Enter/Backspace live, and why is order of plugins important?*
-
-### Step F — Second surface
-
-18. `src/surfaces/edgeless/` — same document, canvas layout + viewport gestures.
-
-Ask: *What is shared between modes, and what is mode-specific?*
-
-### Optional verification
-
-- Unit tests under `src/__tests__/` and `src/editor/__tests__/selection-manager.test.ts`
-- Playwright specs under `e2e/` (selection, keymap, markdown)
-
----
-
-## 4. Main components
-
-### `ReactEditor` (`react-editor.tsx`)
-
-Small coordinator. It holds the core reference, public managers, and a
-monotonic revision used to invalidate React. Concrete registries live in:
-
-- `blocks` and `renderers`
-- `surfaces` (including block/editor wrappers)
-- `plugins` (setup lifecycle and globally mounted UI)
-- unified `events` (DOM definitions and semantic keyboard definitions)
-- `selection` and `slashCommands` delegates
-
-It does **not** render UI itself.
-
-Every manager is constructed with this complete runtime. Constructors retain
-the owner but defer sibling access until operations run, avoiding injected
-lifecycle callbacks without introducing a service container. Manager classes
-remain exported for typing; host code should use the owned instances.
-
-See [`managers.md`](./managers.md) for the public manager map and ownership
-rules.
-
-### `EditorView` (`editor-view.tsx`)
-
-React boundary. Responsibilities:
-
-- subscribe to `ReactEditor` via `useSyncExternalStore`
-- publish `{ editor, reactEditor, revision }` through context
-- hold the surface root ref and call `reactEditor.events.setRoot(...)`
-- compose editor wrappers → children + plugin components → active `Surface`
-
-It adds **no DOM wrapper**. Surfaces own the visible root element.
-
-### Surfaces
-
-| Surface | Mode | Layout idea |
-| --- | --- | --- |
-| `PageSurface` | `block` | Nested outline; respects collapse |
-| `EdgelessSurface` | `edgeless` | Root cards on a zoom/pan plane; shows full subtree |
-
-Both traverse the same collaborative document. Mode is read from
-`editor.mode.get()`; switching mode swaps the registered surface.
-
-### Block rendering stack
-
-For each block ID, a surface roughly does:
-
-```text
-useBlock(blockId)                 → detached snapshot + operations
-reactEditor.renderers.get(type)   → content component (e.g. MarkdownContent)
-BlockWrapper                      → plugin decorators around a shell
-  └─ fallback shell               → BlockView + controls + content + children
-       └─ BlockView               → div with data-block-id / type / selected
-```
-
-Roles:
-
-- **`BlockView`** — stable DOM identity markers only. No recursion, no editing.
-- **`BlockWrapper`** — ordered decorators from plugins (outermost first registered).
-- **Surface shell** (e.g. `PageBlockWrapper`) — row layout, collapse controls,
-  recursive children. Surfaces never import optional DnD plugins directly.
-
-### Content renderers
-
-A renderer receives `{ blockId }` and should resolve data through hooks.
-Default: `MarkdownContent`. Custom types register with
-`reactEditor.blocks.register({ definition, render, slashCommand? })`.
-
-`useBlockEditing` is the normal renderer entry point:
+## Normal setup
 
 ```tsx
-const editing = useBlockEditing<{ count: number }>(
-  blockId,
-  { textEdit: false },
-);
-const count = editing.getProp("count") ?? 0;
+import { createRivtoEditor } from "@chulane/rivto";
+import {
+  createReactEditor,
+  EditorView,
+} from "@chulane/rivto-react";
+import {
+  blockExtension,
+  standardPreset,
+} from "@chulane/rivto-react/extensions";
 
-return (
-  <div {...editing.attributes}>
-    <button
-      onClick={(event) => {
-        if (!event.defaultPrevented) {
-          editing.setProp("count", (editing.getProp("count") ?? 0) + 1);
-        }
-      }}
-    >
-      Count: {count}
-    </button>
-  </div>
-);
+const editor = createRivtoEditor();
+const reactEditor = createReactEditor({
+  editor,
+  extensions: [
+    standardPreset(),
+    blockExtension({
+      definition: cardDefinition,
+      render: CardContent,
+      slashCommand: { title: "Card" },
+    }),
+  ],
+});
+
+root.render(<EditorView editor={reactEditor} />);
+
+// Host teardown:
+reactEditor.destroy();
+editor.destroy();
 ```
 
-The default attributes provide contenteditable synchronization. Contentless or
-control-based renderers pass `{ textEdit: false }` to opt their region into
-structural drag selection instead. `getProps` and `getProp` resolve current
-editor state when called; `setProps` patches several keys and `setProp` patches
-one validated key.
+`standardPreset()` installs the complete page and edgeless editing experience:
+surfaces, selection bridges, history, clipboard, slash commands, navigation,
+indent/outdent, creation/merge/delete, collapse, drag, canvas interactions, and
+the page's trailing paragraph-creation affordance.
+Individual built-ins are exported from `@chulane/rivto-react/extensions`.
 
-See [`useBlockEditing`](./use-block-editing.md) for exact text, control, and
-mixed-renderer attribute placement.
+Empty documents remain empty in core. `trailingBlockExtension(N)` owns the
+page-end targets whose labels and highlights appear on hover or keyboard focus.
+`trailingBlockExtension(N)` renders N targets; activating target K creates K
+paragraphs as one undo step and focuses the last. `standardPreset(N)` includes
+the same behavior with a default of three targets. It deliberately does not
+appear on the edgeless canvas.
 
-### Hooks (public API surface for UI code)
-
-| Hook | Purpose |
-| --- | --- |
-| `useEditor` / `useReactEditor` | Core API / React runtime |
-| `useEditorMode` | Current presentation mode |
-| `useEditorRoot` | Register/read the surface root element |
-| `useDocument` | Document model (roots via `document.document`) |
-| `useBlock` | Snapshot + bound commands for one ID |
-| `useBlockEditing` | Renderer state, properties, commands, and text/structural attributes |
-| `useBlockSelection` | Whether a block is in the structural selection |
-| `useDOMEvent` / `useKeyboardEvent` | Register listeners/bindings from components |
-
----
-
-## 5. End-to-end runtime flow
-
-### Cold start
+## Data flow
 
 ```text
-createRivtoEditor
-  → createReactEditor (install plugins, register Markdown)
-  → optional blocks.register for custom types
-  → insert initial content via core API
-  → render <EditorView>
-       → pick Surface for mode
-       → Surface calls useEditorRoot().ref on its container
-       → ReactEditor.events connects to that root
+Yjs transaction
+  → DocumentModel publishes a document update
+  → RivtoEditorApi increments its global revision
+  → EditorView rerenders the active React tree
+  → hooks resolve fresh detached values through document getters
+  → renderer calls editor operations for the next mutation
 ```
 
-### Local edit (typing in Markdown)
+Core storage uses ordered root and child ID arrays:
 
 ```text
-1. User types in contenteditable (.markdown-editor)
-2. useBlockEditing() onInput → operations.setContent(plainText)
-3. Core updates CRDT / document revision
-4. ReactEditor forwards revision → EditorView re-renders
-5. useBlock / MarkdownContent see new detached snapshot
-6. useLayoutEffect syncs DOM only if text differs (caret preserved)
+rivto.editor.roots:  Y.Array<blockId>
+rivto.editor.blocks: Y.Map<blockId, {
+  type, content, props, pluginData, collapsed, layout,
+  children: Y.Array<blockId>
+}>
 ```
 
-Markdown preview geometry (idle absolute layer vs focused raw editor) is
-documented in [`markdown-rendering.md`](./markdown-rendering.md).
-
-### Structural command (Enter, indent, delete selection)
+The root array is top-level order. A block's collaborative `children` array is
+its direct child order. For example:
 
 ```text
-1. Native keydown on surface / window
-2. EventManager matches keyboard definitions (and `when` predicates)
-3. First handler returning true claims the event (preventDefault)
-4. Handler calls core commands (insertBlock, indentBlock, deleteSelection, …)
-5. Document revises → same React invalidation path as typing
+roots = ["a", "b"]
+blocks[a].children = ["a1", "a2"]
 ```
 
-Several bindings may share one physical key (especially Backspace). They run in
-**plugin declaration order** until one returns `true`. That is why demo plugin
-order matters for merge vs outdent vs selection delete.
+These arrays are persisted order, not derived copies. The model does not build
+an eager whole-document index. Instead it lazily caches a sibling-index path
+for each requested block, such as `[2, 0, 3]`. Every access validates that path
+against the current root/children arrays. A stale or absent path causes a
+depth-first tree search and caches only that ID. This makes a cache hit
+proportional to tree depth, while a miss is O(N), without adding O(N) work to
+text transactions. Moves, deletes, undo/redo, and remote changes self-repair
+on the next access.
 
-### Pointer / selection (summary)
+The block record remains canonical. Getters return detached recursive
+`EditorBlock` values; React must not mutate them.
 
-Selection is the hardest subsystem. Full detail:
-[`selection.md`](./selection.md).
-
-```text
-Browser Selection (DOM node + offset)
-  ↔ textSelectionPlugin / pageSelectionPlugin / edgelessSelectionPlugin
-  ↔ editor.selection.set() | editor.selection.clear()
-  ↔ SelectionManager list: text | block | edgeless items
-  ↔ data-block-selected / data-text-selection-fallback / CSS Highlight paint
-```
-
-Facts that surprise most readers:
-
-- Portable selection is an **array** of items (text + middle blocks can coexist).
-- Normal cross-block drag becomes **whole-block** selection; hold **Alt** for
-  partial text across hosts.
-- Each block has its own `contenteditable`; the text plugin freezes the
-  pointer-down anchor and suppresses noisy `selectionchange` during synthetic
-  drags.
-- `useBlockSelection` ignores text carets — only `block` / `edgeless` paint
-  `data-block-selected`.
-- After block select, focus often moves to the **surface root**, not an editable.
-
----
-
-## 6. Plugin system
-
-Plugins are plain objects:
+Useful direct queries are:
 
 ```ts
-{
-  id: "stable.id",
-  setup(reactEditor) {
-    // Register through the runtime; return cleanup for external resources.
-  }
-}
+editor.getBlock(id);
+editor.getRootIds();
+editor.getChildIds(id);
+editor.getParentId(id);
+editor.getVisibleBlockIds();
 ```
 
-Plugins receive the complete `ReactEditor` runtime:
+Never walk `editor.getBlocks()` to find one ID and never mutate a snapshot.
+Use `editor.batchUpdates(() => { ... })` when several editor operations must
+produce one collaborative update and one undo step.
 
-| API | Use |
+## Rendering and subscriptions
+
+`EditorView` is the global core invalidation boundary. Its context contains
+stable core and React runtime references, while the provider subscribes to the
+`RivtoEditorApi` revision stream. Document, selection, and mode changes rerender
+the active editor tree. Surface and extension registries keep their own
+React-only revision streams.
+
+Hooks resolve current values through public getters:
+
+| Hook | Value |
 | --- | --- |
-| `reactEditor.events.register` | DOM or keyboard definition |
-| `reactEditor.plugins.mount(Component)` | Mode-free headless or overlay UI beside the surface |
-| `reactEditor.surfaces.registerEditorWrapper(Wrapper, mode?)` | Wrap the complete editor UI (e.g. DnD context) |
-| `reactEditor.surfaces.register(mode, Surface)` | Page / edgeless root |
-| `reactEditor.surfaces.registerBlockWrapper(mode, Wrapper)` | Ordered block decorator |
-| `reactEditor.blocks.register(...)` | Atomic core definition + renderer + conversion command |
-| `reactEditor.renderers.register(type, Renderer)` | Low-level renderer-only registration |
-| `reactEditor.selection` | Active-root DOM selection conversion and highlighting |
-| `reactEditor.slashCommands` | React-owned registration over the shared core slash manager |
-| `reactEditor.events.getRoot()` | Read the current committed surface root |
-| `reactEditor.editor` | Core runtime, including live mode and selection |
+| `useBlock(id)` | One detached block snapshot |
+| `useBlockChildren(id)` | Direct child snapshots |
+| `useRootBlockIds()` | Ordered root IDs |
+| `useDocument()` | Stable `DocumentModel` interface |
+| `useEditorMode()` | Mode manager |
+| `useEditorSelection()` / selection hooks | Detached selection |
+| slash hooks | Slash-command manager |
 
-Presentation registrations are automatically owned by the active plugin and
-may also be created dynamically after editor construction. Every method returns
-an idempotent disposer. Mutable registration collections remain private.
-Keyed managers and the event manager additionally expose `delete(key)`;
-ordered wrappers and mounted components use exact returned disposers because duplicates
-are valid.
+Global document rendering is intentional in this restored architecture.
+Renderer, surface, and extension registries still keep independent ownership
+and lifecycle state.
 
-Factories in `plugin-factories.tsx` are the supported public catalog. Internal
-implementations live under `src/plugins/`. Prefer factories in application code.
-
-### Built-in groups (demo order is a good reference)
-
-| Group | Examples | Notes |
-| --- | --- | --- |
-| Surfaces | `pageSurfacePlugin`, `edgelessSurfacePlugin` | Required for that mode |
-| Cross-cutting | `historyPlugin`, `textSelectionPlugin`, `clipboardPlugin`, `slashCommandPlugin` | Both modes |
-| Page structure | selection, caret, indent, enter, backspace/merge, collapse, drag | Mostly `mode: "block"` |
-| Edgeless | selection, transform, deletion, movement | `mode: "edgeless"` |
-
-`pageDragPlugin` is special: it **wraps the editor** in a DnD boundary and
-registers the same block wrapper for both modes, so every wrapper has its
-required context.
-
----
-
-## 7. Events and keymaps (compact)
-
-Public `reactEditor.events` is the single DOM and keyboard registry.
-
-- Handlers return `true` to claim; claimed events get `preventDefault` and stop
-  later Rivto handlers.
-- Handlers receive `EditorEvent` or `KeyboardEditorEvent`; `raw` contains the
-  original browser event.
-- `target`: `surface` (default), `document`, or `window` — taken from the active
-  surface's owner document, not browser globals.
-- Optional `scope` restricts a handler to the surface, a block, or editable
-  content.
-- Replacing the surface reconnects the whole event realm.
-- Keymap overrides are fixed at `createReactEditor({ keymap })` by binding ID.
-  Empty array disables. See [`events.md`](./events.md) and `KEYBOARD_BINDING_IDS`.
-
-IME: bindings default to `composing: "ignore"`. History uses `prevent` so native
-contenteditable undo does not fight CRDT undo during composition.
-
----
-
-## 8. DOM contracts non-frontend readers miss
-
-These markers are the integration surface between React and delegated events:
-
-| Attribute / selector | Meaning |
-| --- | --- |
-| `data-block-id` | Stable block identity on `BlockView` |
-| `data-block-type` | Persisted native type |
-| `data-block-selected` | Reflected whole-block presentation state; omitted when false |
-| `data-block-content` | Text host used for persisted offsets and DOM ranges |
-| `data-block-selection-anchor` | Every renderer region from which selection may begin |
-| `data-text-selection-fallback` | Presentation fallback when CSS Highlight is unavailable |
-
-Plugins and event utilities query these selectors. Do not replace them with CSS
-class names if you want events and selection to keep working.
-
-Custom controls opt into whole-block drag anchoring by placing
-`data-block-selection-anchor` on the exact interactive region. A normal click
-retains the control's behavior, while movement beyond the selection threshold
-starts structural selection. Because browsers may still dispatch `click` after
-pointer-up, the control must return early when `event.defaultPrevented` is true.
-
-### Detached snapshots vs live CRDT
-
-`useBlock` returns a **detached** snapshot. It is not a mutable live object.
-After any command or remote update, a new snapshot appears on the next revision.
-Commands on `operations` target the **ID**, so they always hit current document
-state even if the snapshot in hand is stale.
-
-### Why `contentEditable: "plaintext-only"`
-
-Rivto persists plain text (Markdown source), not HTML. Rich formatting in the
-DOM is presentation (`react-markdown` preview), not the source of truth.
-
-### Why every block has its own contenteditable
-
-Browsers do not reliably maintain a single native selection across multiple
-editing hosts. `textSelectionPlugin` compensates: it synthesizes editor
-selection (and sometimes whole-block selection) when the pointer crosses hosts.
-Alt at gesture start keeps partial text across blocks.
-
-### Collapse is page-only in practice
-
-Page omits collapsed descendants from the DOM. Edgeless reuses `PageBlock` with
-`ignoreCollapse` so canvas cards always show the full outline. Slash
-collapse/expand commands check `editor.mode.get() === "block"`.
-
-### Revision is the React heartbeat
-
-There is no Redux-style store in this package. Core `subscribe` →
-core subscription or manager `ReactEditor.invalidate()` → `revision++` →
-`EditorView` context update → hooks
-re-read. One subscription at the view boundary; hooks reuse that revision.
-
-### Plugin order is behavior
-
-Example: Backspace may try selection deletion, outdent-at-start, merge,
-empty-block reset, then fall through to native deletion. Changing factory order
-in `createReactEditor({ plugins })` changes product behavior without changing
-plugin source.
-
-### Wrappers must not re-create BlockView for the same ID
-
-Decorators wrap the shell; they must render `children` once. Creating a second
-`BlockView` with the same `data-block-id` breaks event resolution and DnD. See
-[`block-wrappers.md`](./block-wrappers.md).
-
-### Styles
-
-`styles.css` ships functional layout/interaction styles and CSS variables
-(including code highlighting). Product chrome and themes belong in the host
-(demo). Import `@chulane/rivto-react/styles.css` from the app.
-
----
-
-## 9. Source map (where to look)
+The page render stack is:
 
 ```text
-packages/react/
-  src/
-    react-editor.tsx          React runtime + plugin lifecycle
-    editor-view.tsx           React provider / surface composition
-    plugin-factories.tsx      Public plugins
-    plugins/                  Plugin implementations
-    managers/events/          DOM + keyboard runtime and event utilities
-    blocks/                   BlockView, wrappers, Markdown
-    surfaces/page|edgeless/   Mode presentations
-    hooks/                    Document / block / editor / event hooks
-    constants.ts              DOM attribute contract
-  styles.css
-  docs/                       This guide and focused topics
+PageSurface
+  → useRootBlockIds()
+  → PageBlock(blockId)
+    → useBlock(blockId)
+    → renderer for block.type
+    → ordered BlockWrapper decorators
+    → one BlockView DOM boundary
+    → child PageBlock components
 ```
 
----
+`BlockView` owns stable `data-block-*` DOM markers. A block renderer owns only
+its content. A surface owns traversal and layout. A wrapper decorates the
+surface shell and must render its children exactly once.
 
-## 10. Practical change recipes
+## Extensions and capabilities
 
-| Goal | Start here |
+An extension is a setup function with a stable ID:
+
+```ts
+const commentsExtension = (): ReactEditorExtension => ({
+  id: "acme.comments",
+  setup(reactEditor) {
+    const disposeExternalResource = connectComments();
+    reactEditor.events.register(definition, handler);
+    reactEditor.surfaces.registerBlockWrapper("block", CommentWrapper);
+    return disposeExternalResource;
+  },
+});
+```
+
+Extensions receive public capabilities:
+
+- `blocks`: atomic definition + renderer + optional slash conversion
+- `events`: delegated DOM and keyboard registrations
+- `surfaces`: surfaces and ordered block/editor wrappers
+- `selection`: DOM selection conversion/highlighting
+- `slashCommands`: shared typed slash registry
+- `renderers`: lower-level renderer lookup/registration
+- `extensions`: mounted visual components
+
+Concrete manager classes and lifecycle bookkeeping are internal package
+implementation. Registrations are owned automatically during extension setup,
+return idempotent disposers, roll back on setup failure, and unwind in reverse
+order during `ReactEditor.destroy()`.
+
+Use `blockExtension()` for a normal custom block. It prevents half-installed
+types by registering the core definition, React renderer, and slash conversion
+as one unit. Use `renderers.register()` only when definition ownership genuinely
+lives elsewhere.
+
+Event-only behavior belongs directly in `setup`; it does not need a headless
+React component. Mount a component only when it renders UI or supplies a React
+provider boundary. The built-ins currently mount the slash popup and edgeless
+selection overlay, plus a drag provider through a surface wrapper.
+
+## Events and selection
+
+`EventManager` attaches one ordered delegated runtime to the active surface.
+Definitions select target (`surface`, `document`, or `window`), optional DOM
+scope, editor mode, capture phase, and condition. Returning `true` claims and
+prevents the event; returning `false` lets later handlers/native behavior run.
+
+Keyboard definitions use stable binding IDs and semantic key strings. Hosts can
+override keys in `createReactEditor({ keymap })` without replacing behavior.
+
+There are two selection representations:
+
+- core `EditorSelection`: portable, serializable, used by commands/history;
+- browser `Selection`: DOM ranges used for caret painting and native editing.
+
+The text-selection extension keeps them aligned. Page and edgeless extensions
+add their mode-specific whole-block gestures. Selection code should use
+`reactEditor.selection` for DOM conversion and `editor.selection` for portable
+state.
+
+## Source map
+
+All feature files use lowercase names and shallow paths:
+
+```text
+src/
+  blocks/                 shared block DOM/rendering primitives
+  extensions/             built-in extension setup and behavior
+  hooks/                  focused external-store subscriptions
+  managers/
+    blocks/               internal block/renderer registries
+    events/               delegated browser event runtime
+    extensions/           setup ownership and mounted UI
+    selection/            DOM selection bridge
+    slash/                core slash capability adapter
+    surfaces/             surface/wrapper registry
+  surfaces/
+    page/
+    edgeless/
+  capabilities.ts         public capability interfaces
+  react-editor.tsx        small runtime coordinator
+  editor-view.tsx         stable provider + active surface
+```
+
+Recommended reading order:
+
+1. `demo/src/App.tsx`
+2. `src/react-editor.tsx`
+3. `src/extensions/built-ins.tsx`
+4. `src/editor-view.tsx`
+5. `src/hooks/blocks/use-block.ts`
+6. `src/surfaces/page/page-block.tsx`
+7. `src/managers/events/event-manager.ts`
+8. [`selection.md`](./selection.md) and [`events.md`](./events.md)
+
+## Adding behavior
+
+| Goal | Correct boundary |
 | --- | --- |
-| New block type | `registerBlock` + renderer; see demo custom blocks |
-| New keyboard action | Plugin `events.register` + stable keymap ID |
-| New pointer UX | `events.register` or `useDOMEvent`; prefer delegated scopes |
-| Decorate every block | `registerBlockWrapper` (+ `wrapEditor` if shared context is needed) |
-| Change page layout | `PageSurface` / `PageBlock` shell only |
-| Change canvas UX | `EdgelessSurface` / edgeless plugins |
-| Persist different text model | Core + `useBlockEditing` / custom renderer together |
-| Understand a shortcut | Binding ID → plugin factory → `demo/KEYMAP.md` |
-| Understand selection | [`selection.md`](./selection.md), then `text-selection-plugin.tsx` |
+| New persisted field or tree operation | Core `DocumentModel` + `RivtoEditorApi` method |
+| Custom block | `blockExtension({ definition, render, slashCommand })` |
+| Keyboard/pointer action | Extension `setup` + `events.register` |
+| Block chrome | `surfaces.registerBlockWrapper` |
+| Modal, popup, overlay | `extensions.mount` |
+| New root layout | `surfaces.register` |
+| React hook | Resolve from the stable editor context/global revision |
 
----
+Before adding another manager or state container, check whether a core
+operation or existing capability already owns the concern.
 
-## 11. Glossary
+## Verification
 
-| Term | Meaning |
-| --- | --- |
-| Core / `RivtoEditorApi` | Document + commands runtime |
-| ReactEditor | Presentation registries + events |
-| Surface | Full-mode root renderer |
-| BlockView | Stable block DOM node |
-| Block wrapper | Plugin decorator around the surface shell |
-| Renderer | Component for one block type's content |
-| Detached snapshot | Immutable-looking block value for one render |
-| Revision | Monotonic signal that React should re-read editor state |
-| Claimed event | Handler returned `true`; Rivto owns the native event |
-| Mode | `"block"` (page) or `"edgeless"` (canvas) |
+Run from the repository root:
 
-When something feels “magic,” it is usually one of: revision invalidation,
-delegated events via `data-*` markers, plugin declaration order, or selection
-sync across multiple contenteditables. Trace those four first.
+```sh
+pnpm check-types
+pnpm lint
+pnpm test
+pnpm --filter @chulane/rivto-react test
+pnpm --filter @chulane/rivto-react build
+pnpm demo
+pnpm test:e2e
+```
+
+The minimum regression coverage for subscription work is:
+
+- content and structural changes advance the global editor revision;
+- lazy paths repair after local, remote, and history changes;
+- registry changes update consumers of that registry;
+- extension setup rollback and Strict Mode teardown leave no registrations.

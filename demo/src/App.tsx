@@ -4,40 +4,23 @@ import {
   RIVTO_VERSION,
 } from "@chulane/rivto";
 import {
-  blockCreationPlugin,
-  blockMergePlugin,
-  blockOutdentPlugin,
-  blockSelectionNavigationPlugin,
-  caretNavigationPlugin,
-  clipboardPlugin,
-  collapsePlugin,
   createReactEditor,
-  edgelessDeletionPlugin,
-  edgelessMovementPlugin,
-  edgelessSelectionPlugin,
-  edgelessSurfacePlugin,
-  edgelessTransformPlugin,
   EditorView,
-  historyPlugin,
-  indentPlugin,
   KEYBOARD_BINDING_IDS,
-  keyboardBlockMovePlugin,
-  pageDragPlugin,
-  pageSelectionPlugin,
-  pageSurfacePlugin,
-  selectionDeletionPlugin,
-  slashCommandPlugin,
-  textSelectionPlugin,
-  emptyBlockResetPlugin,
+  standardPreset,
   useEditor,
   useEditorMode,
 } from "@chulane/rivto-react";
 import { useEffect, useState } from "react";
 import {
   COUNTER_BLOCK_TYPE,
-  installCustomBlocks,
+  customBlockExtensions,
   SLIDER_BLOCK_TYPE,
 } from "./blocks/custom-blocks";
+import {
+  blockIdExtension,
+  BlockIdsVisibleProvider,
+} from "./extensions/block-id";
 
 /**
  * Creates demo content for manual editing and selection checks.
@@ -58,32 +41,8 @@ function createDemoEditor() {
   const reactEditor = createReactEditor({
     editor,
     keymap: alternateKeymap,
-    plugins: [
-      pageSurfacePlugin(),
-      edgelessSurfacePlugin(),
-      historyPlugin(),
-      textSelectionPlugin(),
-      slashCommandPlugin(),
-      clipboardPlugin(),
-      pageSelectionPlugin(),
-      collapsePlugin(),
-      caretNavigationPlugin(),
-      blockSelectionNavigationPlugin(),
-      keyboardBlockMovePlugin(),
-      indentPlugin(),
-      blockCreationPlugin(),
-      selectionDeletionPlugin(),
-      blockOutdentPlugin(),
-      blockMergePlugin(),
-      emptyBlockResetPlugin(),
-      pageDragPlugin(),
-      edgelessSelectionPlugin(),
-      edgelessTransformPlugin(),
-      edgelessDeletionPlugin(),
-      edgelessMovementPlugin(),
-    ],
+    extensions: [standardPreset(), blockIdExtension(), ...customBlockExtensions],
   });
-  installCustomBlocks(reactEditor);
   const introId = editor.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "**Rivto editor**",
@@ -169,35 +128,53 @@ function createDemoEditor() {
   // The core gives every new block the same safe geometry. Spread demo roots
   // into a small persisted grid so the first edgeless view is immediately
   // usable while still exercising the normal layout API.
-  editor.document.transact(() => editor.getBlocks().forEach((block, index) => {
-    editor.setBlockLayout(block.id, {
-      x: 60 + (index % 4) * 380,
-      y: 60 + Math.floor(index / 4) * 270,
-      width: 340,
-      height: 220,
-    });
-  }));
+  editor.updateBlocks(editor.getBlocks().map((block, index) => ({
+    id: block.id,
+    patch: {
+      layout: {
+        x: 60 + (index % 4) * 380,
+        y: 60 + Math.floor(index / 4) * 270,
+        width: 340,
+        height: 220,
+      },
+    },
+  })));
   editor.history.clear();
 
   return { editor, reactEditor };
 }
 
 /** Demo toolbar for switching the local presentation of one shared document. */
-function DemoToolbar() {
+function DemoToolbar({
+  showBlockIds,
+  onShowBlockIdsChange,
+}: {
+  readonly showBlockIds: boolean;
+  readonly onShowBlockIdsChange: (visible: boolean) => void;
+}) {
   const editor = useEditor();
   const { mode, setMode } = useEditorMode();
   const switchMode = (next: "block" | "edgeless") => {
     if (next === mode) return;
-    editor.selection.clear();
     setMode(next);
   };
 
   return (
     <header className="demo-header">
       <span>Rivto v{RIVTO_VERSION}</span>
-      <div className="demo-mode-switch" role="group" aria-label="Editor mode">
-        <button type="button" data-editor-mode="block" aria-pressed={mode === "block"} onClick={() => switchMode("block")}>Page</button>
-        <button type="button" data-editor-mode="edgeless" aria-pressed={mode === "edgeless"} onClick={() => switchMode("edgeless")}>Edgeless</button>
+      <div className="demo-toolbar-controls">
+        <label className="demo-block-id-toggle">
+          <input
+            type="checkbox"
+            checked={showBlockIds}
+            onChange={(event) => onShowBlockIdsChange(event.currentTarget.checked)}
+          />
+          Block IDs
+        </label>
+        <div className="demo-mode-switch" role="group" aria-label="Editor mode">
+          <button type="button" data-editor-mode="block" aria-pressed={mode === "block"} onClick={() => switchMode("block")}>Page</button>
+          <button type="button" data-editor-mode="edgeless" aria-pressed={mode === "edgeless"} onClick={() => switchMode("edgeless")}>Edgeless</button>
+        </div>
       </div>
     </header>
   );
@@ -206,6 +183,7 @@ function DemoToolbar() {
 /** Hosts the editor runtime and explicitly selects the active demo surface. */
 export function App() {
   const [{ editor, reactEditor }] = useState(createDemoEditor);
+  const [showBlockIds, setShowBlockIds] = useState(true);
 
   // EditorView consumes but does not own the runtime, so the application that
   // created it also releases its subscriptions and command registrations.
@@ -216,8 +194,13 @@ export function App() {
   }, [editor, reactEditor]);
 
   return (
-    <EditorView editor={reactEditor}>
-      <DemoToolbar />
-    </EditorView>
+    <BlockIdsVisibleProvider visible={showBlockIds}>
+      <EditorView editor={reactEditor}>
+        <DemoToolbar
+          showBlockIds={showBlockIds}
+          onShowBlockIdsChange={setShowBlockIds}
+        />
+      </EditorView>
+    </BlockIdsVisibleProvider>
   );
 }

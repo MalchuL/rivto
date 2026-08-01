@@ -1,15 +1,15 @@
 # React editor managers
 
-`ReactEditor` is a coordinator, not a registry. Plugins receive the complete
+`ReactEditor` is a coordinator, not a registry. Extensions receive the complete
 runtime and extend it through focused public managers:
 
 ```ts
-const plugin: ReactEditorPlugin = {
+const extension: ReactEditorExtension = {
   id: "acme.cards",
   setup(reactEditor) {
     reactEditor.surfaces.registerBlockWrapper("block", CardControls);
     reactEditor.events.register(/* DOM or keyboard definition */, /* action */);
-    reactEditor.plugins.mount(CardOverlay);
+    reactEditor.extensions.mount(CardOverlay);
   },
 };
 ```
@@ -23,10 +23,8 @@ the core editor, active surface, registration ownership, and siblings from
 that owner when an operation runs. Keyboard keymap overrides and the
 unknown-renderer fallback remain explicit configuration.
 
-Manager classes remain exported as public types, but applications should use
-the instances exposed by `ReactEditor` rather than construct detached manager
-graphs. This is an owner-based service design, not a strategy registry or DI
-container.
+Applications use the capability interfaces exposed by `ReactEditor`. Concrete
+manager classes and lifecycle bookkeeping stay internal to the package.
 
 Registries with stable keys also expose explicit deletion:
 
@@ -50,25 +48,25 @@ component registrations are valid.
 | `blocks` | Atomic core definition + renderer + optional slash conversion |
 | `renderers` | Renderer lookup, duplicate checks, and unknown fallback |
 | `surfaces` | One root per mode plus ordered block/editor wrappers |
-| `plugins` | Plugin setup/rollback, reverse cleanup, and globally mounted UI |
+| `extensions` | Extension setup/rollback, reverse cleanup, and mounted visual UI |
 | `events` | Surface ownership plus DOM and keyboard event registrations |
 | `selection` | Core selection delegation and active-root DOM synchronization |
 | `slashCommands` | Lifecycle-aware delegation to the core slash registry |
 
-`plugins.mount` has no mode argument. A mounted component is present beside
+`extensions.mount` has no mode argument. A mounted component is present beside
 every surface. Its DOM/keyboard registrations declare `mode`, and any React
 effect with surface-specific behavior checks `useEditorMode()`.
 
 `surfaces` owns wrappers because their composition is a property of rendering,
-not plugin lifecycle. The first registered block or editor wrapper is
+not extension lifecycle. The first registered block or editor wrapper is
 outermost. Defensive read methods return new arrays.
 
 `selection` and `slashCommands` never copy core state. They add React ownership
 or DOM behavior to the existing core managers.
 
-Presentation managers call the owner’s internal `invalidate()` hook after
-visible registry changes. Plugins should never call this hook directly; normal
-manager operations and core commands publish their own revisions.
+Presentation registries publish focused revisions. Document, tree, mode,
+selection, slash, renderer, surface, and extension consumers subscribe to their
+own store rather than one editor-wide invalidation counter.
 
 ## Block registration
 
@@ -92,7 +90,7 @@ loaded persisted type.
 
 ## Destruction order
 
-Plugin custom cleanup runs before registrations created by that plugin.
+Extension custom cleanup runs before registrations created by that extension.
 Manager-owned registrations then unwind in reverse order. The event manager
-disconnects native listeners after plugin teardown. Destroying `ReactEditor`
+disconnects native listeners after extension teardown. Destroying `ReactEditor`
 does not destroy its core editor.

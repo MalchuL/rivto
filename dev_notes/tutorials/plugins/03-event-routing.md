@@ -46,7 +46,7 @@ Global plugins могут переопределить поведение нез
 
 Router получает только `blockId`, а block type хранится в document. Поэтому он:
 
-1. читает detached `editor.document.document`;
+1. читает detached `editor.getBlocks()`;
 2. рекурсивно flatten tree;
 3. находит block по ID;
 4. читает `block.type`;
@@ -224,4 +224,3 @@ ID не сообщает block type. Используйте block-scoped contrib
 
 Portable runtime state не должно зависеть от lifetime React SyntheticEvent.
 Извлеките необходимые простые values во время normalization.
-

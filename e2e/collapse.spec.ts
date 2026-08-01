@@ -125,6 +125,7 @@ test("drops inside a collapsed parent and keeps the moved subtree hidden", async
   const toggle = target.locator(":scope > .page-block-row [data-collapse-toggle]");
   await toggle.click();
 
+  await source.locator(":scope > .page-block-row").hover();
   const handleBox = await source.locator(":scope > .page-block-row .page-drag-handle").boundingBox();
   const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
   if (!handleBox || !targetBox) throw new Error("Expected drag geometry");

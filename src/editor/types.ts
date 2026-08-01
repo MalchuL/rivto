@@ -1,7 +1,7 @@
 import type { BlockDefinition, BlockRegistry } from "../blocks";
 import type { ClipboardManager, CommandHandler, CommandRegistry, RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import type { CRDTDoc } from "../store/crdt-doc";
-import type { DocumentModelImpl } from "../store/document-model";
+import type { DocumentModel } from "../store/document-model";
 import type { EditorBlock, EditorBlockInput, EditorBlockLayout, EditorBlockPatch, EditorBlockUpdate, EditorLink, EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
 /** Local presentation strategy; never persisted in collaborative state. */
@@ -25,28 +25,42 @@ export interface TextSelection {
   head: EditorPosition;
 }
 
-/** Ordered selection of document blocks. */
+/**
+ * Ordered selection of document blocks.
+ *
+ * `blockIds` are always stored in visible document order and may be
+ * non-contiguous (Ctrl/Cmd+click toggle). Contiguous ranges from Shift+Arrow
+ * still use the same shape, with every ID between the endpoints present.
+ *
+ * `anchorBlockId` / `focusBlockId` record gesture direction, not document
+ * order. Both must be members of `blockIds`. For a toggle multi-select,
+ * anchor is the first click that remains selected and focus is the last block
+ * toggled on — so click order `1 → 10 → 3` and `3 → 10 → 1` share
+ * `blockIds: ["1","3","10"]` but differ in anchor/focus.
+ */
 export interface BlockSelection {
   /** Discriminant for ordered document-block selection. */
   type: "block";
-  /** Selected IDs in visible document order. */
+  /**
+   * Selected IDs in visible document order.
+   * Gaps are allowed; missing IDs between the first and last selected block
+   * are not invented.
+   */
   blockIds: string[];
-  /** Block where the selection gesture began. */
+  /**
+   * Block where the multi-select / range gesture began.
+   * Sticky across Ctrl/Cmd+click toggles while it remains selected.
+   */
   anchorBlockId: string;
-  /** Active block where the gesture currently ends. */
+  /**
+   * Active end of the gesture (last block toggled on, or the moving
+   * Shift+Arrow endpoint). May precede `anchorBlockId` in document order.
+   */
   focusBlockId: string;
 }
 
-/** Local selection of blocks on the edgeless canvas. */
-export interface EdgelessSelection {
-  /** Discriminant for canvas object selection. */
-  type: "edgeless";
-  /** Selected object block IDs. */
-  blockIds: string[];
-}
-
 /** One independently meaningful selection segment owned by SelectionManager. */
-export type EditorSelectionItem = TextSelection | BlockSelection | EdgelessSelection;
+export type EditorSelectionItem = TextSelection | BlockSelection;
 
 /**
  * Ordered local selection state.
@@ -72,14 +86,14 @@ export interface CreateRivtoEditorOptions {
  */
 export interface RivtoEditorApi {
   /** Canonical collaborative document and persistence boundary. */
-  readonly document: DocumentModelImpl;
+  readonly document: DocumentModel;
   /** Native block definition registry. */
   readonly blocks: BlockRegistry;
   /** Single action entry point for UI, integrations, and later document mutations. */
   readonly commands: CommandRegistry;
   /** Local block/edgeless mode owner. */
   readonly mode: ModeManager;
-  /** Local owner for an ordered list of text, block, and edgeless selections. */
+  /** Local owner for an ordered list of text and whole-block selections. */
   readonly selection: SelectionManager;
   /** Framework-neutral structured clipboard operations for this editor. */
   readonly clipboard: ClipboardManager;
@@ -97,6 +111,22 @@ export interface RivtoEditorApi {
    * @returns Function that removes this listener.
    */
   subscribe(listener: () => void): () => void;
+
+  /**
+   * Groups synchronous editor mutations into one collaborative update and undo step.
+   *
+   * Nested batches join the active outer batch. Subscribers receive no
+   * intermediate document revision, and all captured mutations share one
+   * history item.
+   *
+   * Batching does not provide rollback: writes completed before an exception
+   * remain applied.
+   *
+   * @param operation - Synchronous editor work to execute inside the batch.
+   * @returns The value returned by `operation`.
+   * @throws The original error when `operation` fails.
+   */
+  batchUpdates<Result>(operation: () => Result): Result;
 
   /**
    * Registers one command on the runtime command registry.
@@ -139,6 +169,36 @@ export interface RivtoEditorApi {
   getBlocks(): EditorBlock[];
 
   /**
+   * Reads top-level block IDs without materializing their subtrees.
+   *
+   * @returns Root IDs in collaborative order.
+   */
+  getRootIds(): string[];
+
+  /**
+   * Reads one block's direct child IDs.
+   *
+   * @param id - Parent block ID.
+   * @returns Child IDs in collaborative order, or an empty list when absent.
+   */
+  getChildIds(id: string): string[];
+
+  /**
+   * Resolves the current structural parent of one placed block.
+   *
+   * @param id - Block ID to locate.
+   * @returns Parent ID, null for a root, or undefined when absent.
+   */
+  getParentId(id: string): string | null | undefined;
+
+  /**
+   * Reads IDs currently visible in the page outline.
+   *
+   * @returns Collapse-aware IDs in depth-first document order.
+   */
+  getVisibleBlockIds(): string[];
+
+  /**
    * Finds one link by ID.
    *
    * @param id - Stable link ID.
@@ -153,64 +213,163 @@ export interface RivtoEditorApi {
    */
   getLinks(): EditorLink[];
 
-  /** Inserts a block through the built-in `block.insert` command. */
+  /**
+   * Inserts a validated block through the built-in command path.
+   *
+   * @param block - Block type and initial persisted values.
+   * @param afterId - Sibling to follow, null to prepend, or omitted to append.
+   * @returns Stable ID assigned to the new block.
+   */
   insertBlock(block: EditorBlockInput, afterId?: string | null): string;
 
-  /** Updates mutable block fields through the built-in `block.update` command. */
+  /**
+   * Patches supplied mutable fields on one block.
+   *
+   * @param id - Block ID to update.
+   * @param patch - Mutable block fields to apply.
+   */
   updateBlock(id: string, patch: EditorBlockPatch): void;
 
-  /** Atomically updates several blocks through `block.update-many`. */
+  /**
+   * Applies several identified block patches as one command and undo item.
+   *
+   * @param updates - Ordered block IDs and patches to apply.
+   */
   updateBlocks(updates: readonly EditorBlockUpdate[]): void;
 
-  /** Converts a block through `block.type.set` without changing its identity. */
+  /**
+   * Clears one block while preserving its identity and block-owned metadata.
+   *
+   * Content becomes empty and every descendant is removed recursively. Type,
+   * properties, plugin data, layout, and collapse state remain unchanged.
+   *
+   * @param id - Block ID to retain and clear.
+   */
+  clearBlock(id: string): void;
+
+  /**
+   * Converts a block to another registered type without changing its ID.
+   *
+   * @param id - Block ID to convert.
+   * @param type - Registered destination block type.
+   */
   setBlockType(id: string, type: string): void;
 
-  /** Removes a block through the built-in `block.remove` command. */
+  /**
+   * Removes a block subtree or its active structural selection.
+   *
+   * @param id - Block ID anchoring the removal.
+   */
   removeBlock(id: string): void;
 
-  /** Deletes the complete active selection through one undoable transaction. */
+  /**
+   * Deletes the complete active selection as one undoable operation.
+   */
   deleteSelection(): void;
 
-  /** Atomically appends a source block into a target and returns the text join offset. */
+  /**
+   * Appends a source block's content and children into a surviving target.
+   *
+   * @param targetId - Block that remains after the merge.
+   * @param sourceId - Block transferred and removed by the merge.
+   * @returns Target content offset where source content begins.
+   */
   mergeBlocks(targetId: string, sourceId: string): number;
 
-  /** Moves a block before, after, or inside another block through `block.move`. */
+  /**
+   * Moves one block relative to a destination block.
+   *
+   * @param id - Block ID to move.
+   * @param targetId - Destination block, or null for the sibling-list start.
+   * @param position - Placement relative to the destination; defaults to after.
+   */
   moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
 
-  /** Atomically moves sibling block roots through `block.move-many`. */
+  /**
+   * Moves several sibling subtree roots as one command and undo item.
+   *
+   * @param ids - Ordered block IDs to move together.
+   * @param targetId - Destination block, or null for the sibling-list start.
+   * @param position - Placement relative to the destination; defaults to after.
+   */
   moveBlocks(ids: string[], targetId: string | null, position?: "before" | "after" | "inside"): void;
 
-  /** Indents a block through the built-in `block.indent` command. */
+  /**
+   * Nests a block or eligible structural selection under a previous sibling.
+   *
+   * @param id - Block ID anchoring the indent operation.
+   */
   indentBlock(id: string): void;
 
-  /** Outdents a block through the built-in `block.outdent` command. */
+  /**
+   * Moves a block or eligible structural selection out of its parent.
+   *
+   * @param id - Block ID anchoring the outdent operation.
+   */
   outdentBlock(id: string): void;
 
-  /** Sets one block property through the built-in `block.prop.set` command. */
+  /**
+   * Sets or removes one validated native block property.
+   *
+   * @param id - Owning block ID.
+   * @param key - Native property key.
+   * @param value - New value, or undefined to remove the property.
+   */
   setBlockProp(id: string, key: string, value: unknown): void;
 
-  /** Sets one block plugin-data namespace through `block.pluginData.set`. */
+  /**
+   * Sets or removes one block plugin-data namespace.
+   *
+   * @param id - Owning block ID.
+   * @param pluginId - Stable plugin namespace.
+   * @param value - New value, or undefined to remove the namespace.
+   */
   setBlockPluginData(id: string, pluginId: string, value: unknown): void;
 
-  /** Patches block layout through the built-in `block.layout.set` command. */
+  /**
+   * Patches supplied collaborative geometry fields on one block.
+   *
+   * @param id - Block ID whose layout should change.
+   * @param layout - Partial x, y, size, or stacking values.
+   */
   setBlockLayout(id: string, layout: Partial<EditorBlockLayout>): void;
 
-  /** Creates or replaces a link through the built-in `link.create` command. */
+  /**
+   * Creates or replaces a first-class link.
+   *
+   * @param link - Complete persisted link value.
+   */
   createLink(link: EditorLink): void;
 
-  /** Removes a link through the built-in `link.remove` command. */
+  /**
+   * Removes one first-class link by ID.
+   *
+   * @param id - Persisted link ID to remove.
+   */
   removeLink(id: string): void;
 
-  /** Loads persisted document state through the built-in `document.load` command. */
+  /**
+   * Replaces supplied document sections and clears previous local history.
+   *
+   * @param snapshot - Snapshot v4 sections to validate and load.
+   */
   load(snapshot: EditorSnapshotUpdate): void;
 
-  /** Dumps the current document snapshot for persistence. */
+  /**
+   * Materializes the complete portable document state.
+   *
+   * @returns Detached snapshot v4 suitable for persistence or transfer.
+   */
   dump(): EditorSnapshot;
 
-  /** Reverts the latest local document operation through `history.undo`. */
+  /**
+   * Reverts the latest captured local document operation.
+   */
   undo(): void;
 
-  /** Reapplies the latest undone document operation through `history.redo`. */
+  /**
+   * Reapplies the latest locally undone document operation.
+   */
   redo(): void;
 
   /**
@@ -221,6 +380,8 @@ export interface RivtoEditorApi {
    */
   defineBlock(definition: BlockDefinition): () => void;
 
-  /** Releases runtime-owned resources. */
+  /**
+   * Releases runtime subscriptions, registries, and history resources.
+   */
   destroy(): void;
 }

@@ -7,13 +7,13 @@ import {
 } from "react";
 import { EditorContext } from "./editor-context";
 import { EditorRootContext } from "./editor-root-context";
-import type { ReactEditor } from "./react-editor";
+import type { ReactEditor } from "./types";
 
 /** Properties accepted by the React editor boundary. */
 export interface EditorViewProps {
   /** React runtime created and destroyed by the host application. */
   readonly editor: ReactEditor;
-  /** Optional application chrome; plugins are registered at runtime creation. */
+  /** Optional application chrome; extensions are registered at runtime creation. */
   readonly children?: ReactNode;
 }
 
@@ -25,14 +25,8 @@ export interface EditorViewProps {
  * or render a DOM wrapper. The host owns runtime lifetime and the child surface
  * owns presentation and registers its own DOM root through `useEditorRoot`.
  *
- * One `useSyncExternalStore` subscription converts the runtime's monotonic
- * revision into React updates. The revision is included in the context value,
- * so every focused hook observes current state without opening another runtime
- * subscription. Changing the `editor` prop safely unsubscribes from the old
- * runtime and subscribes to the new one.
- *
- * The server snapshot reads the same revision because the runtime is supplied
- * by the host and currently has no separate serialized React snapshot.
+ * Core document changes use one global revision subscription. The focused
+ * surface and extension subscriptions cover React-only registration changes.
  *
  * @param props - Editor runtime and React subtree to bind together.
  * @returns A context provider; EditorView adds no DOM element.
@@ -40,14 +34,44 @@ export interface EditorViewProps {
 export function EditorView({ editor, children }: EditorViewProps) {
   const [root, setRoot] = useState<HTMLElement | null>(null);
 
-  // Keep the subscribe function stable until the editor instance changes;
-  // otherwise useSyncExternalStore would unsubscribe on every React render.
-  const subscribe = useCallback((listener: () => void) => editor.subscribe(listener), [editor]);
-  const revision = useSyncExternalStore(subscribe, () => editor.revision, () => editor.revision);
+  const subscribeEditor = useCallback(
+    (listener: () => void) => editor.subscribe(listener),
+    [editor],
+  );
+  useSyncExternalStore(
+    subscribeEditor,
+    () => editor.revision,
+    () => editor.revision,
+  );
+  const subscribeSurfaces = useCallback(
+    (listener: () => void) => editor.surfaces.subscribe(listener),
+    [editor],
+  );
+  useSyncExternalStore(
+    subscribeSurfaces,
+    () => editor.surfaces.revision,
+    () => editor.surfaces.revision,
+  );
+  const subscribeExtensions = useCallback(
+    (listener: () => void) => editor.extensions.subscribe(listener),
+    [editor],
+  );
+  useSyncExternalStore(
+    subscribeExtensions,
+    () => editor.extensions.revision,
+    () => editor.extensions.revision,
+  );
+  const subscribeMode = useCallback(
+    (listener: () => void) => editor.editor.mode.subscribe(listener),
+    [editor],
+  );
+  const mode = useSyncExternalStore(
+    subscribeMode,
+    () => editor.editor.mode.get(),
+    () => editor.editor.mode.get(),
+  );
 
-  // A new value is published only for an editor swap or runtime revision. The
-  // revision is not an API feature; it is the invalidation signal for hooks.
-  const context = useMemo(() => ({ editor: editor.editor, reactEditor: editor, revision }), [editor, revision]);
+  const context = useMemo(() => ({ editor: editor.editor, reactEditor: editor }), [editor]);
   // The callback ref identity never changes, preventing React from unregistering
   // and registering the same surface root on ordinary editor renders.
   const rootRef = useCallback((element: HTMLElement | null) => {
@@ -56,10 +80,9 @@ export function EditorView({ editor, children }: EditorViewProps) {
   }, [editor]);
   const rootContext = useMemo(() => ({ element: root, ref: rootRef }), [root, rootRef]);
 
-  const mode = editor.editor.mode.get();
   const Surface = editor.surfaces.get(mode);
   if (!Surface) throw new Error(`No React surface is registered for editor mode ${mode}`);
-  const components = editor.plugins.getComponents();
+  const components = editor.extensions.getComponents();
   const editorWrappers = editor.surfaces.getEditorWrappers(mode);
   let content: ReactNode = (
     <>

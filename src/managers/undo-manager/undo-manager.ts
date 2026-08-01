@@ -1,5 +1,5 @@
 import type { CRDTUndoManager } from "../../store/crdt-doc";
-import type { DocumentModelImpl } from "../../store/document-model";
+import type { DocumentModel } from "../../store/document-model";
 
 /**
  * Owns local undo and redo history for one document model.
@@ -18,7 +18,7 @@ export class UndoManager {
    *
    * @param document - Document whose block, link, and plugin-data scopes should be undoable.
    */
-  constructor(document: DocumentModelImpl) {
+  constructor(document: DocumentModel) {
     this.manager = document.crdt.createUndoManager(document.undoScopes, [document.origin]);
   }
 

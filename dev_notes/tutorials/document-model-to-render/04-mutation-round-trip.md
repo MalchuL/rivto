@@ -191,7 +191,7 @@ command не дошла до model.
 ### Шаг 2. Model value изменилась
 
 ```ts
-editor.document.document
+editor.getBlocks()
 ```
 
 Если нет, проблема в payload, validation или model operation.
@@ -374,4 +374,3 @@ READ PATH начинается снова
 Если эта схема понятна, большая часть editor architecture перестаёт быть
 набором случайных файлов: каждый module занимает конкретное место на одном из
 двух направлений.
-
