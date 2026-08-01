@@ -8,6 +8,7 @@ import type {
   BlocksCapability,
   EventsCapability,
   ExtensionsCapability,
+  KeyboardCapability,
   RenderersCapability,
   SelectionCapability,
   SlashCommandsCapability,
@@ -30,9 +31,9 @@ export interface CreateReactEditorOptions {
  * Coordinates React presentation managers around one core editor.
  *
  * Managers are public extension boundaries. Extensions register directly through
- * `blocks`, `renderers`, `surfaces`, `extensions`, `events`, `selection`, and
- * `slashCommands`; ReactEditor deliberately exposes no forwarding registry
- * methods or mutable collections.
+ * `blocks`, `renderers`, `surfaces`, `extensions`, `events`, `keyboard`,
+ * `selection`, and `slashCommands`; ReactEditor deliberately exposes no
+ * forwarding registry methods or mutable collections.
  */
 export interface ReactEditor {
   readonly editor: Editor;
@@ -42,7 +43,10 @@ export interface ReactEditor {
   readonly blocks: BlocksCapability;
   readonly surfaces: SurfacesCapability;
   readonly extensions: ExtensionsCapability;
+  /** Delegated native DOM event registration. */
   readonly events: EventsCapability;
+  /** Semantic keyboard actions and runtime shortcut overrides. */
+  readonly keyboard: KeyboardCapability;
   readonly selection: SelectionCapability;
   readonly slashCommands: SlashCommandsCapability;
   /** Subscribes to document, mode, and selection changes from the core editor. */

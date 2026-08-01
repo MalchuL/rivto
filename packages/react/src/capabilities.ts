@@ -16,6 +16,8 @@ import type {
   ExtensionComponent,
   KeyboardEditorEvent,
   KeyboardEventDefinition,
+  KeyboardShortcut,
+  KeymapOverrides,
   ReactBlockRegistration,
   SurfaceComponent,
 } from "./managers";
@@ -42,13 +44,26 @@ export interface EventsCapability {
     definition: DOMEventDefinition<Target, Type>,
     listener: EditorEventHandler<EditorEvent<Target, Type>>,
   ): () => void;
+  delete(id: string): boolean;
+  setRoot(root: HTMLElement | null): void;
+  getRoot(): HTMLElement | null;
+}
+
+export interface KeyboardCapability {
+  /** Registers one stable semantic action and returns its idempotent disposer. */
   register(
     definition: KeyboardEventDefinition,
     listener: EditorEventHandler<KeyboardEditorEvent>,
   ): () => void;
+  /** Deletes a registered semantic action by ID. */
   delete(id: string): boolean;
-  setRoot(root: HTMLElement | null): void;
-  getRoot(): HTMLElement | null;
+  /** Replaces every override, restoring defaults for omitted IDs. */
+  replaceKeymap(keymap: KeymapOverrides): void;
+  /** Sets one override; an empty array disables it and undefined restores defaults. */
+  setKeymapOverride(
+    id: string,
+    keys: readonly KeyboardShortcut[] | undefined,
+  ): void;
 }
 
 export interface SurfacesCapability {

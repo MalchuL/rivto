@@ -149,7 +149,7 @@ const extension = {
     const command = reactEditor.editor.register("acme.command.open", () => {
       // Open application UI.
     });
-    reactEditor.events.register({
+    reactEditor.keyboard.register({
       id: "acme.command.open",
       keys: ["Primary+K"],
       when: ({ selection }) => selection.length > 0,
@@ -162,12 +162,13 @@ const extension = {
 };
 ```
 
-`ReactEditor.events` is one registry for native and keyboard definitions.
+`ReactEditor.events` registers delegated native DOM behavior, while
+`ReactEditor.keyboard` registers semantic shortcuts using that DOM transport.
 Returning `true` claims an event; extensions never call `preventDefault()` merely
 to announce ownership. Handlers receive `EditorEvent` or
 `KeyboardEditorEvent`; their `raw` property contains the browser event.
 
-Creation-time keymap overrides use stable binding IDs:
+Initial keymap overrides use stable binding IDs:
 
 ```ts
 createReactEditor({
@@ -178,6 +179,9 @@ createReactEditor({
     "history.redo": [],
   },
 });
+
+reactEditor.keyboard.setKeymapOverride("block.indent", ["Alt+ArrowRight"]);
+reactEditor.keyboard.replaceKeymap({ "history.redo": ["Primary+y"] });
 ```
 
 See [React events and keymaps](packages/react/docs/events.md) for targets,

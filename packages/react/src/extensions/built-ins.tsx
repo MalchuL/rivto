@@ -199,7 +199,7 @@ export const indentExtension = (options: IndentExtensionOptions = {}): ReactEdit
   return {
     id: "block.indent",
     setup: (reactEditor) => {
-      reactEditor.events.register({
+      reactEditor.keyboard.register({
         id: KEYBOARD_BINDING_IDS.blockIndent,
         keys: indentKeys,
       }, ({ editor, root, raw: event }) => applyIndentShortcut(
@@ -209,7 +209,7 @@ export const indentExtension = (options: IndentExtensionOptions = {}): ReactEdit
         event,
         false,
       ));
-      reactEditor.events.register({
+      reactEditor.keyboard.register({
         id: KEYBOARD_BINDING_IDS.blockOutdent,
         keys: outdentKeys,
       }, ({ editor, root, raw: event }) => applyIndentShortcut(

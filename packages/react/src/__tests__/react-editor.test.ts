@@ -15,6 +15,7 @@ import {
   EditorEvent,
   EventManager,
   KeyboardEditorEvent,
+  KeyboardManager,
   type ReactEditorExtension,
 } from "../managers";
 import {
@@ -366,11 +367,11 @@ describe("ReactEditor", () => {
         id: "duplicates",
         setup(runtime) {
           failedRuntime = runtime;
-          runtime.events.register({
+          runtime.keyboard.register({
             id: "test.duplicate",
             keys: ["Primary+K"],
           }, () => false);
-          runtime.events.register({
+          runtime.keyboard.register({
             id: "test.duplicate",
             keys: ["Primary+L"],
           }, () => false);
@@ -378,7 +379,7 @@ describe("ReactEditor", () => {
       }],
     })).toThrow(/already registered/);
 
-    expect(() => failedRuntime?.events.register({
+    expect(() => failedRuntime?.keyboard.register({
       id: "test.after-destroy",
       keys: ["Primary+J"],
     }, () => false)).toThrow(/destroyed/);
@@ -488,11 +489,12 @@ describe("delegated events", () => {
     return event as unknown as KeyboardEvent;
   }
 
-  test("uses one event registry and follows surface realms", () => {
+  test("uses separate event and keyboard managers across surface realms", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
     const events = reactEditor.events;
     expect(events).toBeInstanceOf(EventManager);
+    expect(reactEditor.keyboard).toBeInstanceOf(KeyboardManager);
     const first = realm();
     const second = realm();
     const disposeDocument = events.register({
@@ -500,11 +502,11 @@ describe("delegated events", () => {
       type: "selectionchange",
       target: "document",
     }, () => undefined);
-    events.register({
+    reactEditor.keyboard.register({
       id: "test.surface-key",
       keys: "Enter",
     }, () => false);
-    events.register({
+    reactEditor.keyboard.register({
       id: "test.window-key",
       keys: "Escape",
       target: "window",
@@ -530,24 +532,25 @@ describe("delegated events", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
     const events = reactEditor.events;
+    const keyboard = reactEditor.keyboard;
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     let predicateEvent: KeyboardEditorEvent | undefined;
     let handlerEvent: KeyboardEditorEvent | undefined;
-    events.register({ id: "first", keys: ["Tab"], when: (event) => {
+    keyboard.register({ id: "first", keys: ["Tab"], when: (event) => {
       predicateEvent = event;
       return false;
     } }, () => {
       calls.push("skipped");
       return true;
     });
-    events.register({ id: "second", keys: ["Tab"] }, (event) => {
+    keyboard.register({ id: "second", keys: ["Tab"] }, (event) => {
       handlerEvent = event;
       calls.push(event.shortcut);
       return true;
     });
-    events.register({ id: "late", keys: ["Tab"] }, () => {
+    keyboard.register({ id: "late", keys: ["Tab"] }, () => {
       calls.push("late");
       return true;
     });
@@ -560,6 +563,49 @@ describe("delegated events", () => {
     expect(handlerEvent?.raw).toBe(event);
     expect(handlerEvent?.phase).toBe("keydown");
     expect(event.defaultPrevented).toBe(true);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("filters keyboard targets, modes, and scopes before applying priority", () => {
+    const editor = createEditor();
+    const reactEditor = createReactEditor({ editor });
+    const { document, root, window } = realm();
+    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    const content = new FakeElement();
+    content.ownerDocument = document;
+    content.parent = root;
+    content.attributes.set("data-block-content", "");
+    const calls: string[] = [];
+    reactEditor.keyboard.register({ id: "low", keys: ["Tab"] }, () => {
+      calls.push("low");
+      return true;
+    });
+    reactEditor.keyboard.register({
+      id: "high",
+      keys: ["Tab"],
+      mode: "block",
+      scope: "content",
+      priority: 10,
+    }, () => {
+      calls.push("high");
+      return true;
+    });
+    reactEditor.keyboard.register({
+      id: "window",
+      keys: ["Escape"],
+      target: "window",
+    }, () => {
+      calls.push("window");
+      return true;
+    });
+
+    root.emit("keydown", keyboardEvent(root, "Tab"));
+    root.emit("keydown", keyboardEvent(content, "Tab"));
+    editor.mode.set("edgeless");
+    root.emit("keydown", keyboardEvent(content, "Tab"));
+    window.emit("keydown", keyboardEvent(root, "Escape"));
+    expect(calls).toEqual(["low", "high", "low", "window"]);
     reactEditor.destroy();
     editor.destroy();
   });
@@ -677,7 +723,7 @@ describe("delegated events", () => {
     const { root } = realm();
     reactEditor.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    reactEditor.events.register({
+    reactEditor.keyboard.register({
       id: "test.keyboard-first",
       keys: ["Enter"],
     }, () => {
@@ -794,19 +840,20 @@ describe("delegated events", () => {
       },
     });
     const events = reactEditor.events;
+    const keyboard = reactEditor.keyboard;
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    events.register({ id: "remapped", keys: ["Tab"] }, () => { calls.push("remapped"); return true; });
-    events.register({ id: "disabled", keys: ["Escape"] }, () => { calls.push("disabled"); return true; });
-    expect(() => events.register({ id: "remapped", keys: ["Enter"] }, () => true)).toThrow(/already registered/);
+    keyboard.register({ id: "remapped", keys: ["Tab"] }, () => { calls.push("remapped"); return true; });
+    keyboard.register({ id: "disabled", keys: ["Escape"] }, () => { calls.push("disabled"); return true; });
+    expect(() => keyboard.register({ id: "remapped", keys: ["Enter"] }, () => true)).toThrow(/already registered/);
     expect(() => events.register({
       id: "remapped",
       type: "click",
-    }, () => false)).toThrow(/already registered/);
-    const release = events.register({ id: "temporary", keys: ["Enter"] }, () => true);
+    }, () => false)).not.toThrow();
+    const release = keyboard.register({ id: "temporary", keys: ["Enter"] }, () => true);
     release();
-    expect(() => events.register({ id: "temporary", keys: ["Enter"] }, () => true)).not.toThrow();
+    expect(() => keyboard.register({ id: "temporary", keys: ["Enter"] }, () => true)).not.toThrow();
     root.emit("keydown", keyboardEvent(root, "Tab"));
     root.emit("keydown", keyboardEvent(root, "ArrowRight", { ctrlKey: true }));
     root.emit("keydown", keyboardEvent(root, "ArrowRight", { ctrlKey: true, shiftKey: true }));
@@ -816,17 +863,84 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
+  test("replaces the complete keymap and applies overrides registered later", () => {
+    const editor = createEditor();
+    const reactEditor = createReactEditor({ editor });
+    const { root } = realm();
+    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    const calls: string[] = [];
+    const defaults = ["a"];
+    reactEditor.keyboard.register({ id: "dynamic", keys: defaults }, () => {
+      calls.push("dynamic");
+      return true;
+    });
+
+    reactEditor.keyboard.replaceKeymap({
+      dynamic: ["b"],
+      future: ["c"],
+    });
+    reactEditor.keyboard.register({ id: "future", keys: ["d"] }, () => {
+      calls.push("future");
+      return true;
+    });
+    root.emit("keydown", keyboardEvent(root, "a"));
+    root.emit("keydown", keyboardEvent(root, "b"));
+    root.emit("keydown", keyboardEvent(root, "c"));
+    expect(calls).toEqual(["dynamic", "future"]);
+
+    calls.length = 0;
+    defaults[0] = "x";
+    reactEditor.keyboard.replaceKeymap({});
+    root.emit("keydown", keyboardEvent(root, "b"));
+    root.emit("keydown", keyboardEvent(root, "a"));
+    root.emit("keydown", keyboardEvent(root, "d"));
+    expect(calls).toEqual(["dynamic", "future"]);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("updates one override defensively and rejects invalid keymaps atomically", () => {
+    const editor = createEditor();
+    const reactEditor = createReactEditor({ editor });
+    const { root } = realm();
+    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    const calls: string[] = [];
+    reactEditor.keyboard.register({ id: "dynamic", keys: ["a"] }, () => {
+      calls.push("dynamic");
+      return true;
+    });
+    const keys = ["b"];
+    reactEditor.keyboard.setKeymapOverride("dynamic", keys);
+    keys[0] = "c";
+    expect(() => reactEditor.keyboard.replaceKeymap({
+      dynamic: ["Unknown+b"],
+    })).toThrow(/Unknown keyboard modifier/);
+    root.emit("keydown", keyboardEvent(root, "b"));
+    root.emit("keydown", keyboardEvent(root, "c"));
+    expect(calls).toEqual(["dynamic"]);
+
+    calls.length = 0;
+    reactEditor.keyboard.setKeymapOverride("dynamic", []);
+    root.emit("keydown", keyboardEvent(root, "b"));
+    reactEditor.keyboard.setKeymapOverride("dynamic", undefined);
+    root.emit("keydown", keyboardEvent(root, "a"));
+    expect(calls).toEqual(["dynamic"]);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
   test("supports keyup and all composition policies", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
     const events = reactEditor.events;
+    const keyboard = reactEditor.keyboard;
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    events.register({ id: "ignored", keys: ["a"] }, () => { calls.push("ignored"); return true; });
-    events.register({ id: "handled", keys: ["b"], composing: "handle" }, () => { calls.push("handled"); return true; });
-    events.register({ id: "prevented", keys: ["c"], composing: "prevent" }, () => { calls.push("prevented"); return true; });
-    events.register({ id: "released", keys: ["d"], phase: "keyup" }, () => { calls.push("released"); return true; });
+    keyboard.register({ id: "ignored", keys: ["a"] }, () => { calls.push("ignored"); return true; });
+    keyboard.register({ id: "handled", keys: ["b"], composing: "handle" }, () => { calls.push("handled"); return true; });
+    keyboard.register({ id: "prevented", keys: ["c"], composing: "prevent" }, () => { calls.push("prevented"); return true; });
+    keyboard.register({ id: "released", keys: ["d"], phase: "keyup" }, () => { calls.push("released"); return true; });
     const ignored = keyboardEvent(root, "a", { isComposing: true });
     const handled = keyboardEvent(root, "b", { isComposing: true });
     const prevented = keyboardEvent(root, "c", { isComposing: true });

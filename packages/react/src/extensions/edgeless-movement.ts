@@ -19,7 +19,7 @@ export function registerEdgelessMovement(reactEditor: ReactEditor): void {
     return true;
   };
 
-  const bind = (id: string, dx: number, dy: number) => reactEditor.events.register({
+  const bind = (id: string, dx: number, dy: number) => reactEditor.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
     mode: "edgeless",

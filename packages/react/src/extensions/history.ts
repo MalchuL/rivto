@@ -73,7 +73,7 @@ export function registerHistory(
     });
   };
 
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.historyUndo,
     keys: options.undoKeys ?? BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.historyUndo]!,
     composing: "prevent",
@@ -82,7 +82,7 @@ export function registerHistory(
     return true;
   });
 
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.historyRedo,
     keys: options.redoKeys ?? BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.historyRedo]!,
     composing: "prevent",

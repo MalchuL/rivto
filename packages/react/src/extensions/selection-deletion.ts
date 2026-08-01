@@ -16,7 +16,7 @@ import {
  */
 export function registerSelectionDeletion(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.selectionDelete,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
     mode: "block",

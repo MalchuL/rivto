@@ -3,6 +3,7 @@ export * from "./block-dom";
 export * from "./dom-types";
 export * from "./editor-event";
 export * from "./keyboard-editor-event";
+export * from "./keyboard-manager";
 export * from "./keyboard-types";
 export * from "./keymap";
 export * from "./selection";

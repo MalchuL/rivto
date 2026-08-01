@@ -9,7 +9,7 @@ import {
  * Applies one semantic indent or outdent binding.
  *
  * `indentExtension` maps configurable shortcuts to this operation through the
- * unified keyboard event registry. The first editor selection item supplies the command entry point; the
+ * keyboard registry. The first editor selection item supplies the command entry point; the
  * runtime expands that point to the complete normalized selection range. The
  * DOM event is used only to confirm that the shortcut originated in editable
  * page content or from a whole-block selection focused on the page root.

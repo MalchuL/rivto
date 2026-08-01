@@ -38,7 +38,7 @@ the partially initialized owner.
 
 `createReactEditor` installs functional plugins in declaration order. A plugin
 receives the complete public `ReactEditor`: `editor` exposes the core runtime,
-`events` handles DOM listeners and keyboard bindings, and focused managers
+`events` handles DOM listeners, `keyboard` handles semantic bindings, and focused managers
 register blocks, renderers, surfaces, mounted UI, editor wrappers, selections,
 slash commands, and mode-specific block wrappers. Mutable collections remain
 private inside their manager. Owned registrations roll back if setup fails and

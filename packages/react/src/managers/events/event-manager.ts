@@ -11,28 +11,12 @@ import type {
   DOMEventScope,
   DOMEventTarget,
 } from "./dom-types";
-import {
-  KeyboardEditorEvent,
-} from "./keyboard-editor-event";
-import type {
-  KeyboardEventDefinition,
-  KeyboardEventPhase,
-  KeyboardEventTarget,
-  KeymapOverrides,
-} from "./keyboard-types";
-import {
-  matchesShortcut,
-  parseShortcut,
-  shortcutFromKeyboardEvent,
-  type ParsedShortcut,
-} from "./shortcut";
 import { EditorEvent } from "./editor-event";
 import type { EditorEventHandler } from "./types";
 
 type AnyEditorEvent = EditorEvent<DOMEventTarget, never>;
 
 interface DOMRegistration {
-  readonly kind: "dom";
   readonly id: string;
   readonly type: string;
   readonly target: DOMEventTarget;
@@ -43,16 +27,6 @@ interface DOMRegistration {
   readonly passive: boolean;
   readonly when?: (event: AnyEditorEvent) => boolean;
 }
-
-interface KeyboardRegistration {
-  readonly kind: "keyboard";
-  readonly id: string;
-  readonly definition: KeyboardEventDefinition;
-  readonly shortcuts: ParsedShortcut[];
-  readonly listener: EditorEventHandler<KeyboardEditorEvent>;
-}
-
-type EventRegistration = DOMRegistration | KeyboardRegistration;
 
 interface NativeListenerGroup {
   readonly target: DOMEventTarget;
@@ -67,37 +41,26 @@ interface ConnectedListener extends NativeListenerGroup {
 }
 
 /**
- * Owns every delegated browser event and keyboard action for one React editor.
+ * Owns every delegated native browser event for one React editor.
  *
- * DOM and keyboard definitions share one ordered registry, stable-ID namespace,
- * native-listener transport, lifecycle, and deletion API. Keyboard definitions
- * are merely specialized keydown/keyup registrations: they are dispatched
- * before ordinary DOM handlers, but do not require a second manager.
+ * Semantic keyboard actions belong to KeyboardManager, which uses this manager
+ * for surface/window keydown and keyup transport.
  */
 export class EventManager {
-  private readonly registrations: EventRegistration[] = [];
+  private readonly registrations: DOMRegistration[] = [];
   private readonly registrationIds = new Set<string>();
   private readonly registrationDisposers = new Map<string, () => void>();
   private readonly connected: ConnectedListener[] = [];
   private readonly claimedEvents = new WeakSet<globalThis.Event>();
-  private readonly keymap: KeymapOverrides;
   private root: HTMLElement | null = null;
   private destroyed = false;
 
   /**
-   * Creates the sole browser-event runtime before extensions are installed.
+   * Creates the browser-event runtime before extensions are installed.
    *
    * @param reactEditor - Complete owning React runtime.
-   * @param keymap - Creation-time replacements indexed by registration ID.
    */
-  constructor(
-    private readonly reactEditor: ReactEditorImpl,
-    keymap: KeymapOverrides = {},
-  ) {
-    this.keymap = Object.fromEntries(
-      Object.entries(keymap).map(([id, keys]) => [id, [...keys]]),
-    );
-  }
+  constructor(private readonly reactEditor: ReactEditorImpl) {}
 
   /**
    * Registers a typed delegated DOM event.
@@ -114,24 +77,9 @@ export class EventManager {
     listener: EditorEventHandler<EditorEvent<Target, Type>>,
   ): () => void;
 
-  /**
-   * Registers a declarative keyboard action through the same event registry.
-   *
-   * Keyboard definitions are distinguished by their `keys` property. Keymap
-   * overrides are resolved once during registration.
-   *
-   * @param definition - Shortcuts, restrictions, composition policy, and ID.
-   * @param listener - Action returning true only when it handled the shortcut.
-   * @returns Idempotent disposer for this registration.
-   */
   register(
-    definition: KeyboardEventDefinition,
-    listener: EditorEventHandler<KeyboardEditorEvent>,
-  ): () => void;
-
-  register(
-    definition: DOMEventDefinition | KeyboardEventDefinition,
-    listener: unknown,
+    definition: DOMEventDefinition,
+    listener: EditorEventHandler<AnyEditorEvent>,
   ): () => void {
     this.assertActive();
     const id = definition.id.trim();
@@ -140,15 +88,7 @@ export class EventManager {
       throw new Error(`Event registration ${id} is already registered`);
     }
 
-    const registration = isKeyboardDefinition(definition)
-      ? this.createKeyboardRegistration(
-        { ...definition, id },
-        listener as EditorEventHandler<KeyboardEditorEvent>,
-      )
-      : this.createDOMRegistration(
-        { ...definition, id },
-        listener as EditorEventHandler<AnyEditorEvent>,
-      );
+    const registration = this.createDOMRegistration({ ...definition, id }, listener);
     this.registrationIds.add(id);
     this.registrations.push(registration);
     this.reconnect();
@@ -171,7 +111,7 @@ export class EventManager {
   }
 
   /**
-   * Deletes either a DOM or keyboard registration by its shared stable ID.
+   * Deletes one DOM registration by its stable ID.
    *
    * @param id - Identity supplied to register().
    * @returns True when a registration existed and was disposed.
@@ -230,7 +170,6 @@ export class EventManager {
     listener: EditorEventHandler<AnyEditorEvent>,
   ): DOMRegistration {
     return {
-      kind: "dom",
       id: definition.id,
       type: definition.type,
       target: definition.target ?? "surface",
@@ -243,35 +182,12 @@ export class EventManager {
     };
   }
 
-  private createKeyboardRegistration(
-    definition: KeyboardEventDefinition,
-    listener: EditorEventHandler<KeyboardEditorEvent>,
-  ): KeyboardRegistration {
-    const configured = Object.prototype.hasOwnProperty.call(this.keymap, definition.id)
-      ? this.keymap[definition.id] ?? []
-      : typeof definition.keys === "string" ? [definition.keys] : definition.keys;
-    return {
-      kind: "keyboard",
-      id: definition.id,
-      definition,
-      shortcuts: configured.map(parseShortcut),
-      listener,
-    };
-  }
-
   private reconnect(): void {
     this.disconnect();
     if (!this.root) return;
     const groups = new Map<string, NativeListenerGroup>();
     for (const registration of this.registrations) {
-      const group: NativeListenerGroup = registration.kind === "dom"
-        ? registration
-        : {
-          target: registration.definition.target ?? "surface",
-          type: registration.definition.phase ?? "keydown",
-          capture: false,
-          passive: false,
-        };
+      const group: NativeListenerGroup = registration;
       const key = [group.target, group.type, group.capture, group.passive].join(":");
       if (!groups.has(key)) groups.set(key, group);
     }
@@ -306,21 +222,9 @@ export class EventManager {
     if (!root || raw.defaultPrevented || this.claimedEvents.has(raw)) return;
 
     const event = this.createEditorEvent(group.target, raw, root);
-    if (
-      (group.type === "keydown" || group.type === "keyup") &&
-      this.dispatchKeyboard(
-        event as EditorEvent<KeyboardEventTarget, "keydown" | "keyup">,
-        group.type,
-      )
-    ) {
-      this.claim(raw);
-      return;
-    }
-
     for (const registration of [...this.registrations]) {
       if (raw.defaultPrevented || this.claimedEvents.has(raw)) return;
       if (
-        registration.kind !== "dom" ||
         registration.type !== group.type ||
         registration.target !== group.target ||
         registration.capture !== group.capture ||
@@ -334,46 +238,6 @@ export class EventManager {
         return;
       }
     }
-  }
-
-  private dispatchKeyboard(
-    domEvent: EditorEvent<KeyboardEventTarget, "keydown" | "keyup">,
-    phase: KeyboardEventPhase,
-  ): boolean {
-    const raw = domEvent.raw;
-    const event = new KeyboardEditorEvent({
-      raw,
-      editor: domEvent.editor,
-      root: domEvent.root,
-      mode: domEvent.mode,
-      selection: domEvent.selection,
-      eventTarget: domEvent.eventTarget,
-      insideRoot: domEvent.insideRoot,
-      blockElement: domEvent.blockElement,
-      blockId: domEvent.blockId,
-      contentElement: domEvent.contentElement,
-      shortcut: shortcutFromKeyboardEvent(raw),
-      phase,
-    });
-    const registrations = this.registrations
-      .filter((registration): registration is KeyboardRegistration => registration.kind === "keyboard")
-      .sort((left, right) => (right.definition.priority ?? 0) - (left.definition.priority ?? 0));
-    for (const registration of registrations) {
-      const definition = registration.definition;
-      if (
-        (definition.phase ?? "keydown") !== phase ||
-        (definition.target ?? "surface") !== event.eventTarget ||
-        !modeMatches(definition.mode, event.mode) ||
-        !scopeMatches(definition.scope, event) ||
-        !registration.shortcuts.some((shortcut) => matchesShortcut(shortcut, raw))
-      ) continue;
-      const composition = definition.composing ?? "ignore";
-      if (raw.isComposing && composition === "ignore") continue;
-      if (raw.isComposing && composition === "prevent") return true;
-      if (definition.when && !definition.when(event)) continue;
-      if (registration.listener(event)) return true;
-    }
-    return false;
   }
 
   private createEditorEvent(
@@ -422,17 +286,13 @@ export class EventManager {
   }
 }
 
-const isKeyboardDefinition = (
-  definition: DOMEventDefinition | KeyboardEventDefinition,
-): definition is KeyboardEventDefinition => "keys" in definition;
-
-const modeMatches = (
+export const modeMatches = (
   expected: EditorMode | readonly EditorMode[] | undefined,
   actual: EditorMode,
 ): boolean => !expected ||
   (Array.isArray(expected) ? expected.includes(actual) : expected === actual);
 
-const scopeMatches = (
+export const scopeMatches = (
   scope: DOMEventScope | undefined,
   event: Pick<
     AnyEditorEvent,

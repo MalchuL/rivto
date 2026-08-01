@@ -8,7 +8,8 @@ const extension: ReactEditorExtension = {
   id: "acme.cards",
   setup(reactEditor) {
     reactEditor.surfaces.registerBlockWrapper("block", CardControls);
-    reactEditor.events.register(/* DOM or keyboard definition */, /* action */);
+    reactEditor.events.register(/* DOM definition */, /* action */);
+    reactEditor.keyboard.register(/* keyboard definition */, /* action */);
     reactEditor.extensions.mount(CardOverlay);
   },
 };
@@ -33,7 +34,7 @@ reactEditor.blocks.delete("acme.card");
 reactEditor.renderers.delete("persisted.unknown");
 reactEditor.surfaces.delete("edgeless");
 reactEditor.slashCommands.delete("acme.command");
-reactEditor.events.delete("acme.shortcut");
+reactEditor.keyboard.delete("acme.shortcut");
 reactEditor.events.delete("acme.pointer");
 ```
 
@@ -49,7 +50,8 @@ component registrations are valid.
 | `renderers` | Renderer lookup, duplicate checks, and unknown fallback |
 | `surfaces` | One root per mode plus ordered block/editor wrappers |
 | `extensions` | Extension setup/rollback, reverse cleanup, and mounted visual UI |
-| `events` | Surface ownership plus DOM and keyboard event registrations |
+| `events` | Active-surface ownership and delegated native DOM events |
+| `keyboard` | Semantic bindings, shortcut matching, and dynamic keymaps |
 | `selection` | Core selection delegation and active-root DOM synchronization |
 | `slashCommands` | Lifecycle-aware delegation to the core slash registry |
 

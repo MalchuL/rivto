@@ -14,7 +14,7 @@ import {
 /** Merges the next visible editable block at a collapsed block-end caret. */
 export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMergeForward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
     mode: "block",

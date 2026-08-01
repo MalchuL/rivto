@@ -23,7 +23,7 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
  */
 export function registerBlockCreation(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockCreate,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,
   }, ({ raw: event, root }) => {

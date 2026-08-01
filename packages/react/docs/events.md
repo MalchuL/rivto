@@ -1,8 +1,9 @@
 # React events and keymaps
 
-`ReactEditor` owns one `EventManager`. It stores both native DOM definitions
-and semantic keyboard definitions in one ordered registry and owns the active
-surface, listener transport, IDs, disposal, and destruction.
+`ReactEditor` owns an `EventManager` for delegated native DOM events and a
+`KeyboardManager` for semantic shortcuts. The keyboard manager registers its
+surface/window keydown and keyup transport through the event manager, so both
+follow the active surface's browser realm and share event claiming.
 
 Each native dispatch produces a data-only event value:
 
@@ -88,7 +89,7 @@ Keyboard registrations describe semantic actions rather than checking keys
 inside extensions:
 
 ```ts
-reactEditor.events.register({
+reactEditor.keyboard.register({
   id: "block.indent",
   keys: ["Tab"],
   target: "surface",
@@ -122,12 +123,13 @@ Keyboard handlers receive `KeyboardEditorEvent`, which extends `EditorEvent`
 with `shortcut` and `phase`.
 
 The event classes and their constructor input types are exported for direct
-testing and advanced integrations. `EventManager` constructs only the built-in
-classes; semantic actions such as indent and delete remain handlers.
+testing and advanced integrations. `EventManager` constructs `EditorEvent` and
+`KeyboardManager` enriches it as `KeyboardEditorEvent`; semantic actions such
+as indent and delete remain handlers.
 
 ## Keymap overrides
 
-Overrides are fixed when the React editor is created:
+Initial overrides can be supplied when the React editor is created:
 
 ```ts
 createReactEditor({
@@ -144,3 +146,19 @@ An override replaces a registration's default shortcuts. An empty array
 disables it, and unknown IDs are harmless. `KEYBOARD_BINDING_IDS` and
 `BUILTIN_KEYMAP` list the built-in semantic actions; the demo mapping is in
 [`demo/KEYMAP.md`](../../../demo/KEYMAP.md).
+
+The active map can be replaced without reinstalling extensions:
+
+```ts
+reactEditor.keyboard.replaceKeymap({
+  "block.indent": ["Primary+ArrowRight"],
+});
+
+reactEditor.keyboard.setKeymapOverride("history.redo", []); // disable
+reactEditor.keyboard.setKeymapOverride("history.redo", undefined); // defaults
+```
+
+`replaceKeymap` restores declared defaults for omitted IDs.
+`setKeymapOverride` changes one ID; an empty array disables it and `undefined`
+removes the override. Updates are synchronous and validated before any active
+binding changes.

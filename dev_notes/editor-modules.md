@@ -19,8 +19,8 @@ React dependency.
   forwards revisions. Every manager receives this complete owner and lazily
   resolves core or sibling capabilities through it.
 - `managers/blocks` — atomic block registration and renderer lookup.
-- `managers/events` — the inherited `EditorEventManager → DOMEventManager →
-  KeyboardEventManager` runtime, keymap, and event-specific utilities.
+- `managers/events` — separate DOM transport and semantic keyboard managers,
+  plus keymap and event-specific utilities.
 - `managers/plugins` — plugin setup, rollback, cleanup, and mounted UI.
 - `managers/surfaces` — surfaces plus ordered block/editor wrappers.
 - `managers/selection` / `managers/slash` — React-aware delegates over the

@@ -24,7 +24,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     else delete root.dataset.blockSelecting;
   };
 
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockSelectionModifierDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierDown]!,
     target: "window",
@@ -32,7 +32,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     setModifierDown(true);
     return false;
   });
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockSelectionModifierUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierUp]!,
     phase: "keyup",

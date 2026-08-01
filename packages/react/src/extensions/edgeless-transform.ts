@@ -174,7 +174,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     mode: "edgeless",
   }, () => finish(false));
 
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.edgelessTransformCancel,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessTransformCancel],
     mode: "edgeless",

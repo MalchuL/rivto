@@ -30,7 +30,7 @@ export interface ClipboardExtensionOptions {
  * DOM selection is synchronized immediately before each action because the
  * browser's `selectionchange` event may arrive after a keyboard clipboard event.
  * Event listeners are delegated to the active surface root and are removed by
- * the unified event runtime when this component unmounts.
+ * the keyboard and DOM event runtimes when this component unmounts.
  *
  * @example
  * ```tsx
@@ -165,7 +165,7 @@ export function registerClipboard(
     handleDocumentClipboard(root, event, insideRoot)
   ));
 
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.clipboardPasteAsPlainText,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.clipboardPasteAsPlainText]!,
   }, () => {
@@ -173,7 +173,7 @@ export function registerClipboard(
     return false;
   });
 
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.clipboardPasteAsPlainTextRelease,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.clipboardPasteAsPlainTextRelease]!,
     phase: "keyup",

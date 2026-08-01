@@ -18,7 +18,7 @@ function topLevelSelection(editor: ReactEditor["editor"], blockIds: readonly str
 /** Deletes selected blocks, including nested blocks, as one structural transaction. */
 export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.edgelessSelectionDelete,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessSelectionDelete],
     mode: "edgeless",

@@ -134,7 +134,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
   const bindPlain = (
     id: string,
     direction: "left" | "right" | VerticalDirection,
-  ) => reactEditor.events.register({
+  ) => reactEditor.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
     mode: "block",
@@ -144,12 +144,12 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
   bindPlain(KEYBOARD_BINDING_IDS.caretUp, "up");
   bindPlain(KEYBOARD_BINDING_IDS.caretDown, "down");
 
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.caretExtendUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendUp],
     mode: "block",
   }, ({ root }) => extendText(root, "up"));
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.caretExtendDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendDown],
     mode: "block",
@@ -196,7 +196,7 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void
   const binding = (
     id: string,
     action: (root: HTMLElement) => boolean,
-  ) => reactEditor.events.register({
+  ) => reactEditor.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
     mode: "block",
@@ -236,12 +236,12 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
     return true;
   };
 
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMoveUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveUp],
     mode: "block",
   }, ({ root }) => move(root, "up"));
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMoveDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveDown],
     mode: "block",

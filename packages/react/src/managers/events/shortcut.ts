@@ -1,4 +1,4 @@
-/** Parsed exact shortcut used internally by EventManager. */
+/** Parsed exact shortcut used internally by KeyboardManager. */
 export interface ParsedShortcut {
   readonly source: string;
   readonly key: string;

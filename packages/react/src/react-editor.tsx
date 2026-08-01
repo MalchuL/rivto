@@ -16,6 +16,7 @@ import {
   BlockManager,
   EventManager,
   ExtensionManager,
+  KeyboardManager,
   ReactSelectionManager,
   ReactSlashCommandManager,
   RendererManager,
@@ -37,8 +38,10 @@ export class ReactEditorImpl implements ReactEditor {
   readonly surfaces: SurfaceManager;
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
   readonly extensions: ExtensionManager;
-  /** Composed surface/document/window DOM and keyboard event runtime. */
+  /** Delegated surface/document/window DOM event runtime. */
   readonly events: EventManager;
+  /** Semantic keyboard bindings and runtime keymap overrides. */
+  readonly keyboard: KeyboardManager;
   /** Current-surface DOM selection conversion and highlighting. */
   readonly selection: ReactSelectionManager;
   /** React-owned access to the shared core slash-command registry. */
@@ -64,7 +67,8 @@ export class ReactEditorImpl implements ReactEditor {
     // until an operation runs. This keeps the dependency graph cyclic in
     // capability while initialization itself remains strictly ordered.
     this.extensions = new ExtensionManager(this);
-    this.events = new EventManager(this, options.keymap);
+    this.events = new EventManager(this);
+    this.keyboard = new KeyboardManager(this, options.keymap);
     this.selection = new ReactSelectionManager(this);
     this.slashCommands = new ReactSlashCommandManager(this);
     this.renderers = new RendererManager(this, options.unknownBlockRenderer);
@@ -102,6 +106,7 @@ export class ReactEditorImpl implements ReactEditor {
     if (this.destroyed) return;
     this.destroyed = true;
     this.extensions.destroy();
+    this.keyboard.destroy();
     this.events.destroy();
   }
 }

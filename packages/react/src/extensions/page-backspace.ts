@@ -18,11 +18,11 @@ import {
  *
  * This action is intentionally independent from merge and reset behavior.
  * Returning `false` when the structural preconditions do not match lets the
- * unified keyboard runtime try the next Backspace binding.
+ * keyboard runtime try the next Backspace binding.
  */
 export function registerBlockOutdent(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockOutdentAtStart,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockOutdentAtStart],
     mode: "block",
@@ -48,7 +48,7 @@ export function registerBlockOutdent(reactEditor: ReactEditor): void {
  */
 export function registerBackwardBlockMerge(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMergeBackward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeBackward],
     mode: "block",
@@ -75,7 +75,7 @@ export function registerBackwardBlockMerge(reactEditor: ReactEditor): void {
 /** Resets the first empty custom block to the default paragraph type. */
 export function registerEmptyBlockReset(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.emptyBlockReset,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.emptyBlockReset],
     mode: "block",

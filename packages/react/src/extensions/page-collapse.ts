@@ -64,17 +64,17 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     return true;
   };
 
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockCollapse,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCollapse]!,
     mode: "block",
   }, ({ root }) => setCollapsed(root, true));
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockExpand,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockExpand]!,
     mode: "block",
   }, ({ root }) => setCollapsed(root, false));
-  reactEditor.events.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockToggleCollapse,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockToggleCollapse]!,
     mode: "block",

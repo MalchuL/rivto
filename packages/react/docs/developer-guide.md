@@ -161,7 +161,7 @@ const commentsExtension = (): ReactEditorExtension => ({
   id: "acme.comments",
   setup(reactEditor) {
     const disposeExternalResource = connectComments();
-    reactEditor.events.register(definition, handler);
+    reactEditor.keyboard.register(definition, handler);
     reactEditor.surfaces.registerBlockWrapper("block", CommentWrapper);
     return disposeExternalResource;
   },
@@ -171,7 +171,8 @@ const commentsExtension = (): ReactEditorExtension => ({
 Extensions receive public capabilities:
 
 - `blocks`: atomic definition + renderer + optional slash conversion
-- `events`: delegated DOM and keyboard registrations
+- `events`: delegated native DOM registrations
+- `keyboard`: semantic bindings and runtime keymap overrides
 - `surfaces`: surfaces and ordered block/editor wrappers
 - `selection`: DOM selection conversion/highlighting
 - `slashCommands`: shared typed slash registry
