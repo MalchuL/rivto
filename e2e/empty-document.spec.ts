@@ -6,8 +6,10 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("creates every paragraph through the chosen trailing insertion target", async ({ page }) => {
-  const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
-  const affordances = page.locator(".page-trailing-block");
+  const document = page.locator('[data-journal-document="today"]');
+  const surface = document.locator(".page-surface");
+  const roots = surface.locator(`:scope > ${BLOCK_ID_SELECTOR}`);
+  const affordances = document.locator(".page-trailing-block");
   await expect(affordances).toHaveCount(3);
   const paragraphHeight = await roots.first()
     .locator(":scope > .page-block-row .page-block-content")
@@ -26,9 +28,9 @@ test("creates every paragraph through the chosen trailing insertion target", asy
 
   await page.keyboard.press("Delete");
   await expect(roots).toHaveCount(0);
-  await expect(page.locator(".page-surface")).toHaveAttribute("data-empty", "true");
+  await expect(surface).toHaveAttribute("data-empty", "true");
   await expect(affordances).toHaveCount(3);
-  const affordance = page.getByRole("button", { name: "Add 3 blocks" });
+  const affordance = document.getByRole("button", { name: "Add 3 blocks" });
   await expect(affordance).toBeVisible();
   await expect(affordance).toHaveText("+ Add block");
   await expect(affordance).toHaveCSS("color", "rgba(0, 0, 0, 0)");
@@ -47,7 +49,7 @@ test("creates every paragraph through the chosen trailing insertion target", asy
   ))).toEqual(["paragraph", "paragraph", "paragraph"]);
   await expect(roots.last().locator("[data-block-content]")).toBeFocused();
   await expect(affordances).toHaveCount(3);
-  await expect.poll(() => page.locator(".page-surface").evaluate(
+  await expect.poll(() => surface.evaluate(
     (element) => element.lastElementChild?.hasAttribute("data-page-end-slot"),
   )).toBe(true);
 

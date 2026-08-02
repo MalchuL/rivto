@@ -102,6 +102,7 @@ test("Alt drag keeps partial text across blocks", async ({ page }) => {
 test("dragging onto a contentless Counter immediately extends block selection", async ({ page }) => {
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
   const nextContent = counter.locator("xpath=following::*[@data-block-content][1]");
+  await nextContent.scrollIntoViewIfNeeded();
   const from = await textPoint(nextContent, 5);
   const counterBox = await counter.boundingBox();
   if (!counterBox) throw new Error("Expected Counter geometry");
@@ -133,6 +134,7 @@ test("dragging from a contentless Counter anchors selection without incrementing
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
   const button = counter.locator(".custom-counter-block");
   const nextContent = counter.locator("xpath=following::*[@data-block-content][1]");
+  await nextContent.scrollIntoViewIfNeeded();
   const counterBox = await button.boundingBox();
   const to = await textPoint(nextContent, 5);
   if (!counterBox) throw new Error("Expected Counter geometry");
@@ -161,6 +163,7 @@ test("dragging from a contentless Counter anchors selection without incrementing
 test("dragging within a contentless Counter selects only that block", async ({ page }) => {
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
   const button = counter.locator(".custom-counter-block");
+  await button.scrollIntoViewIfNeeded();
   const box = await button.boundingBox();
   if (!box) throw new Error("Expected Counter geometry");
 
@@ -179,6 +182,7 @@ test("dragging from the empty right side of Counter starts structural selection"
   const region = counter.locator(".custom-counter-selection-region");
   const button = counter.locator(".custom-counter-block");
   const nextContent = counter.locator("xpath=following::*[@data-block-content][1]");
+  await nextContent.scrollIntoViewIfNeeded();
   const regionBox = await region.boundingBox();
   const buttonBox = await button.boundingBox();
   const to = await textPoint(nextContent, 5);
@@ -302,7 +306,8 @@ test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => 
 });
 
 test("Down follows wrapped visual lines at approximately the same x", async ({ page }) => {
-  await page.locator(".page-surface").evaluate((element) => { element.style.width = "300px"; });
+  await page.locator('[data-journal-document="today"] .page-surface')
+    .evaluate((element) => { element.style.width = "300px"; });
   const content = page.locator("[data-block-content]").nth(1);
   const point = await textPoint(content, 8);
   await page.mouse.click(point.x, point.y);

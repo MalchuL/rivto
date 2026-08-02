@@ -37,6 +37,10 @@ import {
 import { createPortal } from "react-dom";
 import { resolveAfterDropPlacement } from "./page-drag-placement";
 import { selectedMoveRoots, type SelectedMoveRoots } from "./page-selection-utils";
+import {
+  crossDocumentBlockTransfer,
+  type CrossDocumentBlockTransferPlacement,
+} from "./cross-document-block-transfer";
 
 /** Maximum number of block rows rendered inside the floating preview. */
 const MAX_PREVIEW_BLOCKS = 4;
@@ -44,6 +48,8 @@ const MAX_PREVIEW_BLOCKS = 4;
 /** Visual nesting used by `.page-block-children` in the demo stylesheet. */
 const PAGE_INDENT = 24;
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
+const CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE = "data-rivto-cross-document-page-root";
+const CROSS_DOCUMENT_PAGE_ROOT_SELECTOR = `[${CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE}]`;
 
 /**
  * Normalized document destination and visual feedback for the current pointer.
@@ -63,6 +69,40 @@ interface DropPlacement {
   readonly indicatorEdge?: "before" | "after";
   /** Horizontal line offset relative to the hovered row. */
   readonly indicatorOffset: number;
+}
+
+interface CrossDocumentPageRootController {
+  editor: ReturnType<typeof useEditor>;
+  root: HTMLElement;
+  setPlacement: (placement: DropPlacement | null, empty?: boolean) => void;
+  resolvePlacement: (x: number, y: number) => CrossDocumentBlockTransferPlacement & {
+    readonly indicator: DropPlacement | null;
+  } | null;
+}
+
+/** Mounted page surfaces in this JavaScript realm; weak keys avoid retaining DOM. */
+const crossDocumentPageRootControllers = new WeakMap<HTMLElement, CrossDocumentPageRootController>();
+
+interface PointerCoordinates {
+  readonly x: number;
+  readonly y: number;
+}
+
+function eventPointer(event: DragMoveEvent): PointerCoordinates | null {
+  const activator = event.activatorEvent as Event & { clientX?: unknown; clientY?: unknown };
+  if (typeof activator.clientX !== "number" || typeof activator.clientY !== "number") return null;
+  return { x: activator.clientX + event.delta.x, y: activator.clientY + event.delta.y };
+}
+
+function findCrossDocumentPageController(
+  sourceRoot: HTMLElement | null,
+  pointer: PointerCoordinates,
+): CrossDocumentPageRootController | null {
+  const document = sourceRoot?.ownerDocument;
+  const pageRoot = document?.elementsFromPoint(pointer.x, pointer.y)
+    .map((element) => element.closest<HTMLElement>(CROSS_DOCUMENT_PAGE_ROOT_SELECTOR))
+    .find((element): element is HTMLElement => Boolean(element && element !== sourceRoot));
+  return pageRoot ? crossDocumentPageRootControllers.get(pageRoot) ?? null : null;
 }
 
 /** Drag state shared with recursively rendered page blocks. */
@@ -160,6 +200,91 @@ const edgelessCollisionDetection: CollisionDetection = (arguments_) => {
   });
 };
 
+interface RowGeometry {
+  readonly id: string;
+  readonly rect: Pick<DOMRect, "top" | "bottom" | "left" | "height">;
+}
+
+function closestPageRow(rows: readonly RowGeometry[], y: number): RowGeometry | undefined {
+  const hovered = rows
+    .filter(({ rect }) => y >= rect.top && y <= rect.bottom)
+    .sort((left, right) => Math.abs(y - (left.rect.top + left.rect.height / 2))
+      - Math.abs(y - (right.rect.top + right.rect.height / 2)))[0];
+  const preceding = rows
+    .filter(({ rect }) => rect.bottom < y)
+    .sort((left, right) => right.rect.bottom - left.rect.bottom)[0];
+  const following = [...rows].sort((left, right) => left.rect.top - right.rect.top)[0];
+  return hovered ?? preceding ?? following;
+}
+
+function resolveGeometryPlacement(
+  blocks: Block[],
+  row: RowGeometry,
+  cursorX: number,
+  cursorY: number,
+  childDropIndent: number,
+  gapDropZone: number,
+): DropPlacement | null {
+  const edgeSize = Math.min(gapDropZone, row.rect.height / 3);
+  if (cursorY >= row.rect.top + edgeSize && cursorY <= row.rect.bottom - edgeSize) {
+    return {
+      targetId: row.id,
+      position: "inside",
+      indicatorId: row.id,
+      indicatorOffset: 0,
+    };
+  }
+  if (cursorY <= row.rect.bottom - edgeSize) {
+    return {
+      targetId: row.id,
+      position: "before",
+      indicatorId: row.id,
+      indicatorEdge: "before",
+      indicatorOffset: 0,
+    };
+  }
+  const depthOffset = Math.trunc((cursorX - row.rect.left) / childDropIndent);
+  const placement = resolveAfterDropPlacement(blocks, row.id, depthOffset);
+  return placement ? {
+    targetId: placement.targetId,
+    position: placement.position,
+    indicatorId: row.id,
+    indicatorEdge: "after",
+    indicatorOffset: placement.depthOffset * PAGE_INDENT,
+  } : null;
+}
+
+function resolveCrossDocumentPageRootPlacement(
+  editor: ReturnType<typeof useEditor>,
+  root: HTMLElement,
+  x: number,
+  y: number,
+  childDropIndent: number,
+  gapDropZone: number,
+): (CrossDocumentBlockTransferPlacement & { readonly indicator: DropPlacement | null }) | null {
+  const rows = [...root.querySelectorAll<HTMLElement>("[data-block-id]")].flatMap((block) => {
+    const row = block.querySelector<HTMLElement>(":scope > .page-block-row");
+    const id = block.dataset.blockId;
+    return row && id ? [{ id, rect: row.getBoundingClientRect() }] : [];
+  });
+  if (rows.length === 0) return { targetId: null, position: "after", indicator: null };
+  const row = closestPageRow(rows, y);
+  if (!row) return null;
+  const indicator = resolveGeometryPlacement(
+    editor.getBlocks(),
+    row,
+    x,
+    y,
+    childDropIndent,
+    gapDropZone,
+  );
+  return indicator ? {
+    targetId: indicator.targetId,
+    position: indicator.position,
+    indicator,
+  } : null;
+}
+
 /**
  * Resolves the insertion line nearest the pointer.
  *
@@ -192,6 +317,16 @@ function resolveDropPlacement(
     ? activator.clientY + event.delta.y
     : activeRect ? activeRect.top + activeRect.height / 2 : event.over.rect.top;
   const hasPointerY = typeof activator.clientY === "number";
+  if (pointerX !== undefined && hasPointerY) {
+    return resolveGeometryPlacement(
+      blocks,
+      { id: indicatorId, rect: event.over.rect },
+      cursorX,
+      cursorY,
+      childDropIndent,
+      gapDropZone,
+    );
+  }
   const edgeSize = Math.min(gapDropZone, event.over.rect.height / 3);
   if (hasPointerY
     && cursorY >= event.over.rect.top + edgeSize
@@ -216,9 +351,7 @@ function resolveDropPlacement(
     };
   }
 
-  const depthOffset = pointerX === undefined
-    ? 0
-    : Math.trunc((cursorX - event.over.rect.left) / childDropIndent);
+  const depthOffset = 0;
   const placement = resolveAfterDropPlacement(blocks, indicatorId, depthOffset);
   if (!placement) return null;
   return {
@@ -332,6 +465,10 @@ export function PageDragProvider({
   const editor = useEditor();
   const { element: root } = useEditorRoot();
   const activeMove = useRef<SelectedMoveRoots | undefined>(undefined);
+  const crossDocumentTarget = useRef<{
+    controller: CrossDocumentPageRootController;
+    placement: CrossDocumentBlockTransferPlacement;
+  } | null>(null);
   const [activeIds, setActiveIds] = useState<string[]>([]);
   const [dropPlacement, setDropPlacement] = useState<DropPlacement | null>(null);
   const sensors = useSensors(
@@ -342,6 +479,59 @@ export function PageDragProvider({
     const block = editor.getBlock(id);
     return block ? [block] : [];
   });
+
+  useLayoutEffect(() => {
+    if (!root || editor.mode.get() !== "block") return;
+    const controller: CrossDocumentPageRootController = {
+      editor,
+      root,
+      setPlacement: (placement, empty = false) => {
+        setDropPlacement(placement);
+        if (empty) root.setAttribute("data-drop-empty", "true");
+        else root.removeAttribute("data-drop-empty");
+      },
+      resolvePlacement: (x, y) => resolveCrossDocumentPageRootPlacement(
+        editor,
+        root,
+        x,
+        y,
+        childDropIndent,
+        gapDropZone,
+      ),
+    };
+    crossDocumentPageRootControllers.set(root, controller);
+    root.setAttribute(CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE, "true");
+    return () => {
+      if (crossDocumentPageRootControllers.get(root) === controller) {
+        crossDocumentPageRootControllers.delete(root);
+      }
+      root.removeAttribute(CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE);
+      root.removeAttribute("data-drop-empty");
+    };
+  }, [childDropIndent, editor, gapDropZone, root]);
+
+  const clearCrossDocumentTarget = () => {
+    crossDocumentTarget.current?.controller.setPlacement(null);
+    crossDocumentTarget.current = null;
+  };
+
+  const updateCrossDocumentTarget = (event: DragMoveEvent): boolean => {
+    if (editor.mode.get() !== "block") return false;
+    const pointer = eventPointer(event);
+    const controller = pointer ? findCrossDocumentPageController(root, pointer) : null;
+    if (!pointer || !controller) {
+      clearCrossDocumentTarget();
+      return false;
+    }
+    if (crossDocumentTarget.current?.controller !== controller) clearCrossDocumentTarget();
+    const placement = controller.resolvePlacement(pointer.x, pointer.y);
+    controller.setPlacement(placement?.indicator ?? null, placement?.targetId === null);
+    crossDocumentTarget.current = placement ? {
+      controller,
+      placement: { targetId: placement.targetId, position: placement.position },
+    } : null;
+    return true;
+  };
 
   /** Removes feedback for targets owned by any currently moved subtree. */
   const validPlacement = (event: DragMoveEvent): DropPlacement | null => {
@@ -356,11 +546,12 @@ export function PageDragProvider({
     });
     return invalid ? null : placement;
   };
-  const collisionDetection: CollisionDetection = (arguments_) => (
-    editor.mode.get() === "edgeless"
-      ? edgelessCollisionDetection(arguments_)
-      : pageCollisionDetection(arguments_)
-  );
+  const collisionDetection: CollisionDetection = (arguments_) => {
+    if (editor.mode.get() === "edgeless") return edgelessCollisionDetection(arguments_);
+    const pointer = arguments_.pointerCoordinates;
+    if (pointer && findCrossDocumentPageController(root, pointer)) return [];
+    return pageCollisionDetection(arguments_);
+  };
 
   /**
    * Freezes the eligible move roots when activation begins.
@@ -371,6 +562,7 @@ export function PageDragProvider({
    * @param event - dnd-kit start event containing the handle's block ID.
    */
   const handleDragStart = ({ active }: DragStartEvent) => {
+    clearCrossDocumentTarget();
     const move = selectedMoveRoots(editor.getBlocks(), editor.selection.get(), String(active.id));
     activeMove.current = move;
     setActiveIds(move.ids);
@@ -383,10 +575,35 @@ export function PageDragProvider({
    */
   const handleDragEnd = (event: DragEndEvent) => {
     const move = activeMove.current;
-    const placement = validPlacement(event);
+    const crossDocument = crossDocumentTarget.current;
+    const placement = crossDocument ? null : validPlacement(event);
     activeMove.current = undefined;
     setActiveIds([]);
     setDropPlacement(null);
+    clearCrossDocumentTarget();
+    if (crossDocument && move) {
+      try {
+        crossDocumentBlockTransfer(
+          editor,
+          crossDocument.controller.editor,
+          move.ids,
+          crossDocument.placement,
+        );
+      } catch {
+        return;
+      }
+      editor.selection.clear();
+      const firstId = move.ids[0]!;
+      const lastId = move.ids.at(-1)!;
+      crossDocument.controller.editor.selection.set([{
+        type: "block",
+        blockIds: [...move.ids],
+        anchorBlockId: firstId,
+        focusBlockId: lastId,
+      }]);
+      requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));
+      return;
+    }
     if (!placement || !move) return;
 
     const { targetId, position } = placement;
@@ -409,11 +626,15 @@ export function PageDragProvider({
         sensors={sensors}
         collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
-        onDragMove={(event) => setDropPlacement(validPlacement(event))}
+        onDragMove={(event) => {
+          if (updateCrossDocumentTarget(event)) setDropPlacement(null);
+          else setDropPlacement(validPlacement(event));
+        }}
         onDragCancel={() => {
           activeMove.current = undefined;
           setActiveIds([]);
           setDropPlacement(null);
+          clearCrossDocumentTarget();
         }}
         onDragEnd={handleDragEnd}
       >

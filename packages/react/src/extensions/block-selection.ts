@@ -28,6 +28,9 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     id: KEYBOARD_BINDING_IDS.blockSelectionModifierDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierDown]!,
     target: "window",
+    // Every editor in a realm observes the same window keyboard event. Only
+    // the surface containing its native target may expose modifier UI.
+    when: ({ insideRoot }) => insideRoot,
   }, () => {
     setModifierDown(true);
     return false;
@@ -37,6 +40,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierUp]!,
     phase: "keyup",
     target: "window",
+    when: ({ insideRoot }) => insideRoot,
   }, () => {
     setModifierDown(false);
     return false;
@@ -47,6 +51,17 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     target: "window",
   }, () => {
     setModifierDown(false);
+    return false;
+  });
+  reactEditor.events.register({
+    id: "block-selection.modifier-focus-owner",
+    type: "focusin",
+    target: "document",
+  }, ({ insideRoot }) => {
+    // Keyup is delivered to the newly focused editor when focus changes while
+    // Ctrl/Meta is held. Clear the old root at focus time so it cannot retain
+    // stale modifier styling indefinitely.
+    if (!insideRoot) setModifierDown(false);
     return false;
   });
 

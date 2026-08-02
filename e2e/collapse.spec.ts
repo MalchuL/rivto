@@ -124,6 +124,7 @@ test("drops inside a collapsed parent and keeps the moved subtree hidden", async
   const target = await collapsibleRoot(page);
   const toggle = target.locator(":scope > .page-block-row [data-collapse-toggle]");
   await toggle.click();
+  await target.scrollIntoViewIfNeeded();
 
   await source.locator(":scope > .page-block-row").hover();
   const handleBox = await source.locator(":scope > .page-block-row .page-drag-handle").boundingBox();

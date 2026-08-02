@@ -23,6 +23,11 @@
   overflow-x: clip;
 }
 
+.page-surface[data-drop-empty] {
+  border-color: var(--rivto-accent, #6c5ce7);
+  background: color-mix(in srgb, var(--rivto-accent, #6c5ce7) 4%, white);
+}
+
 .page-block {
   margin: 4px 0;
 }

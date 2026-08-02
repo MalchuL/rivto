@@ -35,12 +35,90 @@ body { margin: 0; }
   accent-color: var(--rivto-accent);
 }
 
-.demo-mode-switch button {
+.demo-toolbar-controls button {
   padding: 5px 9px;
   border: 1px solid #ddd;
   border-radius: 6px;
   background: white;
   cursor: pointer;
+}
+
+.journal-stack {
+  width: min(720px, calc(100% - 32px));
+  margin: 24px auto 64px;
+  overflow: hidden;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 6%);
+}
+
+.journal-document + .journal-document {
+  border-top: 1px solid #eee;
+}
+
+.journal-date {
+  margin: 0;
+  padding: 20px 64px 4px;
+  font-size: 24px;
+}
+
+.journal-document .page-surface {
+  width: 100%;
+  min-height: 160px;
+  margin: 0;
+  padding-top: 12px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.journal-document:first-child .demo-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #eee;
+}
+
+/* Canvas gestures need the viewport, not the journal paper, as their clipping
+   boundary. Page mode returns to the seamless dated stack automatically. */
+.journal-stack:has(.edgeless-viewport) {
+  width: 100%;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.journal-document:has(.edgeless-viewport) .journal-date {
+  display: none;
+}
+
+.multi-editor-page {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.multi-editor-fixture {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  background: white;
+}
+
+.multi-editor-fixture .demo-header {
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.multi-editor-fixture .demo-toolbar-controls { gap: 6px; }
+.multi-editor-fixture .demo-block-id-toggle { display: none; }
+.multi-editor-fixture .page-surface { min-height: 360px; }
+
+@media (max-width: 900px) {
+  .multi-editor-page { grid-template-columns: 1fr; }
 }
 
 .demo-mode-switch button[aria-pressed="true"] {
