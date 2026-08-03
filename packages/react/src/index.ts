@@ -12,6 +12,20 @@ export {
 } from "./react-editor";
 export type { CreateReactEditorOptions, ReactEditor } from "./types";
 export { MarkdownContent } from "./blocks/markdown";
+export { edgelessVisualsExtension } from "./extensions/edgeless-visuals";
+export type {
+  CreateVisualPayload,
+  EdgelessAlignment,
+  EdgelessReorder,
+  EdgelessStickerOption,
+  EdgelessSelectionRef,
+  EdgelessVisual,
+  EdgelessVisualCommandMap,
+  EdgelessVisualsOptions,
+  UpdateVisualPayload,
+  VisualFrame,
+  VisualGroup,
+} from "./extensions/edgeless-visuals";
 export {
   readEditorDOMSelection,
   restoreEditorDOMSelection,

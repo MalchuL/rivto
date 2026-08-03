@@ -1,6 +1,7 @@
 import { DEFAULT_BLOCK_TYPE } from "../../blocks";
 import type { EditorRuntime } from "../../editor/rivto-editor";
 import { isStructuralSelection, type NormalizedSelection } from "../selection-manager";
+import type { EditorSelection } from "../../editor/types";
 import type { ClipboardBundle, ClipboardPasteInput, ClipboardPayload } from "./types";
 import {
   findBlock,
@@ -45,11 +46,12 @@ export class ClipboardManager {
    * The payload contains lossless Rivto structure plus interoperable HTML and
    * plain-text flavors for the host to write into a native clipboard event.
    *
+   * @param selection - Optional detached selection used without changing editor state.
    * @returns Structured, HTML, and plain-text flavors, or undefined when there
    * is no copyable selection.
    */
-  copy(): ClipboardPayload | undefined {
-    return this.createClipboardPayload();
+  copy(selection?: EditorSelection): ClipboardPayload | undefined {
+    return this.createClipboardPayload(selection);
   }
 
   /**
@@ -101,16 +103,17 @@ export class ClipboardManager {
    * Links are included only when both endpoints are carried by the copied
    * forest. This method performs no document or selection write.
    *
+   * @param selection - Optional selection override for surface-local objects.
    * @returns Portable clipboard flavors, or undefined for an empty selection.
    */
-  private createClipboardPayload(): ClipboardPayload | undefined {
-    const current = this.editor.selection.get();
+  private createClipboardPayload(selection?: EditorSelection): ClipboardPayload | undefined {
+    const current = selection ?? this.editor.selection.get();
     const range = this.editor.selection.normalize(current);
     if (!range?.blocks.length) return undefined;
     // Clone only top level blocks in selection range (we might have nested blocks inside selection).
 
     const blocks = cloneSelectedTopLevelSubtrees(
-      this.editor.getBlocks(),
+      this.editor.blocks.getBlocks(),
       range,
       isStructuralSelection(current),
     );
@@ -125,12 +128,12 @@ export class ClipboardManager {
 
     const visible = flattenBlocks(blocks);
     const ids = new Set(visible.map((block) => block.id));
-    const links = this.editor.getLinks().filter(
+    const links = this.editor.links.getLinks().filter(
       (link) => ids.has(link.from.blockId) && ids.has(link.to.blockId),
     );
     // Convert blocks to text, html and markdown bundles. Used for clipboard copy to paste to different apps.
     const portable = serializeClipboardBlocks(blocks, (block) => {
-      const definition = this.editor.blocks.get(block.type);
+      const definition = this.editor.blocks.registry.get(block.type);
       // If definition has toRawText method, use it to convert block to text. Otherwise use block.content.
       return definition?.toRawText ? definition.toRawText(block) : block.content;
     });
@@ -168,7 +171,7 @@ export class ClipboardManager {
         afterId = active.head.blockId;
       }
       const caretBlock = active?.type === "text"
-        ? this.editor.getBlock(active.head.blockId)
+        ? this.editor.blocks.getBlock(active.head.blockId)
         : undefined;
 
       // Expanded parents receive pasted roots before their current first child.
@@ -200,24 +203,24 @@ export class ClipboardManager {
     // observed as one atomic document change and one manager history action.
     this.editor.document.transact(() => {
       this.removeRangeTail(range);
-      this.editor.document.setBlockText(
+      this.editor.document.blocks.setBlockText(
         target.id,
         prefix + first.content + (remapped.blocks.length ? "" : suffix),
       );
       remapped.firstChildren.forEach((child) => {
-        const childId = this.editor.document.insertBlock(child, target.id);
-        this.editor.document.indentBlock(childId);
+        const childId = this.editor.document.blocks.insertBlock(child, target.id);
+        this.editor.document.blocks.indentBlock(childId);
       });
       remapped.blocks.forEach((block, index) => {
         const pastedLength = block.content?.length ?? 0;
         const isLast = index === remapped.blocks.length - 1;
-        previous = this.editor.document.insertBlock(
+        previous = this.editor.document.blocks.insertBlock(
           { ...block, content: `${block.content ?? ""}${isLast ? suffix : ""}` },
           previous,
         );
         if (isLast) caretOffset = pastedLength;
       });
-      remapped.links.forEach((link) => this.editor.document.createLink(link));
+      remapped.links.forEach((link) => this.editor.document.links.createLink(link));
     });
     this.collapse(previous, caretOffset);
   }
@@ -246,7 +249,7 @@ export class ClipboardManager {
       let lastId: string | undefined;
       this.editor.document.transact(() => {
         lines.forEach((line) => {
-          lastId = this.editor.document.insertBlock(
+          lastId = this.editor.document.blocks.insertBlock(
             { type: defaultBlockType, content: line },
             lastId,
           );
@@ -265,7 +268,7 @@ export class ClipboardManager {
     if (lines.length === 1) {
       this.editor.document.transact(() => {
         this.removeRangeTail(range);
-        this.editor.document.setBlockText(target.id, prefix + value + suffix);
+        this.editor.document.blocks.setBlockText(target.id, prefix + value + suffix);
       });
       this.collapse(target.id, prefix.length + value.length);
       return;
@@ -275,10 +278,10 @@ export class ClipboardManager {
     let lastId = target.id;
     this.editor.document.transact(() => {
       this.removeRangeTail(range);
-      this.editor.document.setBlockText(target.id, prefix + lines[0]!);
+      this.editor.document.blocks.setBlockText(target.id, prefix + lines[0]!);
       lines.slice(1).forEach((line, index, rest) => {
         const isLast = index === rest.length - 1;
-        lastId = this.editor.document.insertBlock(
+        lastId = this.editor.document.blocks.insertBlock(
           { type: defaultBlockType, content: `${line}${isLast ? suffix : ""}` },
           previous,
         );
@@ -307,14 +310,14 @@ export class ClipboardManager {
       const insertedIds: string[] = [];
       let previous = placement.afterId;
       remapped.blocks.forEach((block) => {
-        previous = this.editor.document.insertBlock(block, previous ?? undefined);
+        previous = this.editor.document.blocks.insertBlock(block, previous ?? undefined);
         insertedIds.push(previous);
       });
       if (placement.beforeChildId && insertedIds.length) {
-        this.editor.document.moveBlocks(insertedIds, placement.beforeChildId, "before");
+        this.editor.document.blocks.moveBlocks(insertedIds, placement.beforeChildId, "before");
       }
       lastId = insertedIds.at(-1);
-      remapped.links.forEach((link) => this.editor.document.createLink(link));
+      remapped.links.forEach((link) => this.editor.document.links.createLink(link));
     });
     if (lastId) {
       this.editor.selection.set([{
@@ -335,7 +338,7 @@ export class ClipboardManager {
    * @param range - Ordered range whose trailing blocks should be removed.
    */
   private removeRangeTail(range: NormalizedSelection): void {
-    range.blocks.slice(1).forEach((block) => this.editor.document.removeBlock(block.id));
+    range.blocks.slice(1).forEach((block) => this.editor.document.blocks.removeBlock(block.id));
   }
 
   /**

@@ -3,29 +3,29 @@ import { createRivtoEditor } from "../rivto-editor";
 describe("EditorRuntime undo manager", () => {
   it("undoes and redoes one document command at a time", () => {
     const editor = createRivtoEditor();
-    const id = editor.insertBlock({ type: "paragraph", content: "Initial" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
 
-    editor.updateBlock(id, { content: "Updated" });
+    editor.blocks.updateBlock(id, { content: "Updated" });
 
     editor.undo();
-    expect(editor.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
 
     editor.redo();
-    expect(editor.getBlocks()).toMatchObject([{ id, content: "Updated" }]);
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Updated" }]);
     editor.destroy();
   });
 
   it("keeps fast consecutive commands as separate undo steps", () => {
     const editor = createRivtoEditor();
 
-    const id = editor.insertBlock({ type: "paragraph", content: "Initial" });
-    editor.setBlockProp(id, "tone", "info");
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
+    editor.blocks.setBlockProp(id, "tone", "info");
 
     editor.undo();
-    expect(editor.getBlocks()).toMatchObject([{ id, content: "Initial", props: {} }]);
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Initial", props: {} }]);
 
     editor.undo();
-    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.blocks.getBlocks()).toEqual([]);
     editor.destroy();
   });
 
@@ -37,22 +37,22 @@ describe("EditorRuntime undo manager", () => {
     });
 
     const secondId = editor.batchUpdates(() => {
-      const firstId = editor.insertBlock({ type: "paragraph", content: "First" });
+      const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
       return editor.batchUpdates(() => (
-        editor.insertBlock({ type: "paragraph", content: "Second" }, firstId)
+        editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId)
       ));
     });
 
-    expect(editor.getBlocks().map((block) => block.id)).toEqual([
+    expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([
       expect.any(String),
       secondId,
     ]);
     expect(revisions).toBe(1);
 
     editor.undo();
-    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.blocks.getBlocks()).toEqual([]);
     editor.redo();
-    expect(editor.getBlocks()).toHaveLength(2);
+    expect(editor.blocks.getBlocks()).toHaveLength(2);
 
     unsubscribe();
     editor.destroy();
@@ -60,45 +60,45 @@ describe("EditorRuntime undo manager", () => {
 
   it("keeps consecutive block updates in one capture group", () => {
     const editor = createRivtoEditor();
-    const id = editor.insertBlock({ type: "paragraph", content: "Initial" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
 
-    editor.updateBlock(id, { content: "First" });
-    editor.updateBlock(id, { content: "Second" });
+    editor.blocks.updateBlock(id, { content: "First" });
+    editor.blocks.updateBlock(id, { content: "Second" });
 
     editor.undo();
 
-    expect(editor.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
     editor.destroy();
   });
 
   it("keeps undo history across mode switches and splits typing capture", () => {
     const editor = createRivtoEditor();
-    const id = editor.insertBlock({ type: "paragraph", content: "Initial" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
 
-    editor.updateBlock(id, { content: "First" });
+    editor.blocks.updateBlock(id, { content: "First" });
     editor.mode.set("edgeless");
-    editor.updateBlock(id, { content: "Second" });
+    editor.blocks.updateBlock(id, { content: "Second" });
 
     editor.undo();
-    expect(editor.getBlocks()).toMatchObject([{ id, content: "First" }]);
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "First" }]);
 
     editor.undo();
-    expect(editor.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
     editor.destroy();
   });
 
   it("publishes document updates for undo and redo", () => {
     const editor = createRivtoEditor();
-    const id = editor.insertBlock({ type: "paragraph", content: "Initial" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
     const calls: string[] = [];
-    const unsubscribe = editor.document.subscribe(() => calls.push(editor.getBlocks()[0]?.content ?? ""));
+    const unsubscribe = editor.document.subscribe(() => calls.push(editor.blocks.getBlocks()[0]?.content ?? ""));
 
-    editor.updateBlock(id, { content: "Updated" });
+    editor.blocks.updateBlock(id, { content: "Updated" });
     editor.execute("history.undo");
     editor.execute("history.redo");
 
     expect(calls).toEqual(["Updated", "Initial", "Updated"]);
-    expect(editor.getBlocks()).toMatchObject([{ id, content: "Updated" }]);
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Updated" }]);
     unsubscribe();
     editor.destroy();
   });
@@ -106,7 +106,7 @@ describe("EditorRuntime undo manager", () => {
   it("clears history after loading persisted state", () => {
     const editor = createRivtoEditor();
 
-    editor.insertBlock({ type: "paragraph", content: "Before load" });
+    editor.blocks.insertBlock({ type: "paragraph", content: "Before load" });
     editor.load({
       version: 4,
       blocks: [{
@@ -123,16 +123,16 @@ describe("EditorRuntime undo manager", () => {
 
     editor.undo();
 
-    expect(editor.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     editor.destroy();
   });
 
   it("tracks link commands in the same local history", () => {
     const editor = createRivtoEditor();
-    const sourceId = editor.insertBlock({ type: "paragraph" });
-    const targetId = editor.insertBlock({ type: "paragraph" }, sourceId);
+    const sourceId = editor.blocks.insertBlock({ type: "paragraph" });
+    const targetId = editor.blocks.insertBlock({ type: "paragraph" }, sourceId);
 
-    editor.createLink({ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } });
+    editor.links.createLink({ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } });
     expect(editor.dump().links).toHaveLength(1);
 
     editor.undo();

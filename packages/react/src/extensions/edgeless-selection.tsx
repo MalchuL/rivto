@@ -1,10 +1,9 @@
-import type { BlockSelection } from "@chulane/rivto";
 import { BLOCK_CONTENT_SELECTOR } from "../constants";
 import {
   useDOMEvent,
-  useEditor,
   useEditorMode,
   useEditorRoot,
+  useReactEditor,
   useKeyboardEvent,
 } from "../hooks";
 import { useEffect, useRef, useState } from "react";
@@ -14,7 +13,10 @@ import {
   rootsInRect,
   type EdgelessRect,
 } from "./edgeless-geometry";
-import { toggleBlockSelection } from "./page-selection-utils";
+import {
+  getEdgelessRuntime,
+  type EdgelessSelectionRef,
+} from "./edgeless-runtime";
 
 interface RectangleGesture {
   readonly x: number;
@@ -23,18 +25,8 @@ interface RectangleGesture {
 }
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
+const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
 const HANDLE_SELECTOR = "[data-edgeless-drag-handle], [data-edgeless-resize-handle]";
-
-/** Publishes one ordered whole-block selection. */
-function selectBlocks(editor: ReturnType<typeof useEditor>, blockIds: string[]): void {
-  if (!blockIds.length) editor.selection.clear();
-  else editor.selection.set([{
-    type: "block",
-    blockIds,
-    anchorBlockId: blockIds[0]!,
-    focusBlockId: blockIds.at(-1)!,
-  }]);
-}
 
 /** Returns true for controls that retain their normal interaction without Primary. */
 function isInteractive(target: Element): boolean {
@@ -50,7 +42,8 @@ function isInteractive(target: Element): boolean {
  * owning roots when a canvas move is requested.
  */
 export function EdgelessInteractionOverlay() {
-  const editor = useEditor();
+  const reactEditor = useReactEditor();
+  const selection = getEdgelessRuntime(reactEditor);
   const { mode } = useEditorMode();
   const { element: root } = useEditorRoot();
   const gesture = useRef<RectangleGesture | null>(null);
@@ -74,13 +67,27 @@ export function EdgelessInteractionOverlay() {
     if (event.target.closest(HANDLE_SELECTOR)) return false;
     const card = event.target.closest<HTMLElement>(ROOT_SELECTOR);
     const blockId = card?.dataset.edgelessRoot;
+    const object = event.target.closest<HTMLElement>(OBJECT_SELECTOR);
+    const objectId = object?.dataset.edgelessObjectId;
+    const objectKind = object?.dataset.edgelessObjectKind as EdgelessSelectionRef["kind"] | undefined;
     const primary = event.ctrlKey || event.metaKey;
 
-    if (card && blockId && primary) {
-      const current = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
-      const next = toggleBlockSelection(editor.getBlocks(), current, blockId, true);
-      if (next) editor.selection.set([next]);
-      else editor.selection.clear();
+    if (object && objectId && objectKind && objectKind !== "block") {
+      const current = selection.get().items;
+      const exists = current.some((item) => item.kind === objectKind && item.id === objectId);
+      selection.set(primary
+        ? exists ? current.filter((item) => !(item.kind === objectKind && item.id === objectId)) : [...current, { kind: objectKind, id: objectId }]
+        : [{ kind: objectKind, id: objectId }]);
+      root.ownerDocument.getSelection()?.removeAllRanges();
+      return false;
+    }
+
+    if (card && blockId && primary && !isInteractive(event.target)) {
+      const current = selection.get().items;
+      const exists = current.some((item) => item.kind === "block" && item.id === blockId);
+      selection.set(exists
+        ? current.filter((item) => !(item.kind === "block" && item.id === blockId))
+        : [...current, { kind: "block", id: blockId }]);
       root.ownerDocument.getSelection()?.removeAllRanges();
       card.focus({ preventScroll: true });
       return true;
@@ -88,14 +95,14 @@ export function EdgelessInteractionOverlay() {
 
     if (card) {
       if (isInteractive(event.target)) return false;
-      selectBlocks(editor, blockId ? [blockId] : []);
+      selection.set(blockId ? [{ kind: "block", id: blockId }] : []);
       card.focus({ preventScroll: true });
       return true;
     }
 
-    if (event.target.closest(".edgeless-zoom-controls")) return false;
+    if (event.target.closest(".edgeless-zoom-controls, .edgeless-visual-toolbar, .edgeless-drawing-capture[data-active]")) return false;
     root.focus({ preventScroll: true });
-    editor.selection.clear();
+    selection.clear();
     gesture.current = { x: event.clientX, y: event.clientY, moved: false };
     return true;
   });
@@ -118,12 +125,15 @@ export function EdgelessInteractionOverlay() {
       bottom: Math.max(start.y, event.clientY),
     };
     setRectangle(next);
-    const cards = [...root.querySelectorAll<HTMLElement>(ROOT_SELECTOR)].flatMap((card) => {
-      const id = card.dataset.edgelessRoot;
-      const rect = card.getBoundingClientRect();
-      return id ? [{ id, rect }] : [];
+    const objects = [...root.querySelectorAll<HTMLElement>(OBJECT_SELECTOR)].flatMap((element) => {
+      const id = element.dataset.edgelessObjectId;
+      const kind = element.dataset.edgelessObjectKind as EdgelessSelectionRef["kind"] | undefined;
+      return id && kind && kind !== "group" ? [{ id: `${kind}:${id}`, rect: element.getBoundingClientRect() }] : [];
     });
-    selectBlocks(editor, rootsInRect(cards, next));
+    selection.set(rootsInRect(objects, next).map((value) => {
+      const separator = value.indexOf(":");
+      return { kind: value.slice(0, separator) as EdgelessSelectionRef["kind"], id: value.slice(separator + 1) };
+    }));
     return true;
   });
 
@@ -150,14 +160,13 @@ export function EdgelessInteractionOverlay() {
     id: KEYBOARD_BINDING_IDS.edgelessSelectionClear,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessSelectionClear],
     mode: "edgeless",
-    when: ({ root, selection }) =>
+    when: ({ root }) =>
       !root.dataset.transforming &&
-      selection.some((item) => item.type === "block"),
+      selection.get().active && selection.get().items.length > 0,
   }, () => {
     if (!root) return false;
-    const selection = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
-    if (!selection) return false;
-    editor.selection.clear();
+    if (!selection.get().items.length) return false;
+    selection.clear();
     root.focus({ preventScroll: true });
     return true;
   });

@@ -46,11 +46,3 @@ export interface LinkStorage {
   to: Link["to"];
   meta: Record<string, BasicType>;
 }
-
-/** Top-level collaborative containers owned by DocumentModelImpl. */
-export interface DocumentStorage {
-  roots: CRDTArray<IDBlock>;
-  blocks: CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>;
-  links: CRDTMap<Record<IDLink, CRDTMap<LinkStorage>>>;
-  pluginData: CRDTMap<Record<IDPlugin, BasicCRDTType>>;
-}

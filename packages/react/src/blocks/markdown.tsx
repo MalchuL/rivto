@@ -41,8 +41,8 @@ export function MarkdownContent({ blockId }: { readonly blockId: string }) {
   const source = editing.block?.content ?? "";
 
   const updateCode = useCallback((node: PositionedNode, value: string) => {
-    const current = editor.getBlock(blockId)?.content ?? "";
-    editor.updateBlock(blockId, { content: replaceMarkdownCode(current, node, value) });
+    const current = editor.blocks.getBlock(blockId)?.content ?? "";
+    editor.blocks.updateBlock(blockId, { content: replaceMarkdownCode(current, node, value) });
   }, [blockId, editor]);
   const components = useMemo<Components>(() => ({
     a: ({ node: _node, ...props }) => <a {...props} tabIndex={-1} />,

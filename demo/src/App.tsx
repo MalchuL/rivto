@@ -5,6 +5,7 @@ import {
 } from "@chulane/rivto";
 import {
   createReactEditor,
+  edgelessVisualsExtension,
   EditorView,
   KEYBOARD_BINDING_IDS,
   standardPreset,
@@ -41,86 +42,86 @@ function createDemoEditor() {
   const reactEditor = createReactEditor({
     editor,
     keymap: alternateKeymap,
-    extensions: [standardPreset(), blockIdExtension(), ...customBlockExtensions],
+    extensions: [standardPreset(), edgelessVisualsExtension(), blockIdExtension(), ...customBlockExtensions],
   });
-  const introId = editor.insertBlock({
+  const introId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "**Rivto editor**",
   });
-  const paragraphId = editor.insertBlock({
+  const paragraphId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "This paragraph renders *Markdown*, ~~old text~~, and `inline code` when it is not edited.",
   }, introId);
 
-  const selectionStartId = editor.insertBlock({
+  const selectionStartId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Start a selection in the middle of this sentence and drag downward. See [Rivto](https://example.com).",
   }, paragraphId);
-  const middleParagraphId = editor.insertBlock({
+  const middleParagraphId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "This complete **Markdown paragraph** should be included between partial selections.",
   }, selectionStartId);
-  const listId = editor.insertBlock({
+  const listId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Nested branch one owns several Markdown children.",
   }, middleParagraphId);
-  const childId = editor.insertBlock({
+  const childId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Level 2: this child owns another nested branch.",
   }, listId);
-  editor.indentBlock(childId);
-  const grandchildId = editor.insertBlock({
+  editor.blocks.indentBlock(childId);
+  const grandchildId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Level 3: selection now crosses two indentation boundaries.",
   }, childId);
-  editor.indentBlock(grandchildId);
-  const greatGrandchildId = editor.insertBlock({
+  editor.blocks.indentBlock(grandchildId);
+  const greatGrandchildId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Level 4: deepest item for recursive rendering and outdent checks.",
   }, grandchildId);
-  editor.indentBlock(greatGrandchildId);
-  editor.insertBlock({
+  editor.blocks.indentBlock(greatGrandchildId);
+  editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Level 2: sibling after the deep branch.",
   }, childId);
 
-  const reverseSelectionId = editor.insertBlock({
+  const reverseSelectionId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Reverse selection should preserve the browser's anchor and focus direction.",
   }, listId);
-  const secondBranchId = editor.insertBlock({
+  const secondBranchId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Nested branch two is a second independent structure.",
   }, reverseSelectionId);
-  const numberedChildId = editor.insertBlock({
+  const numberedChildId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Second branch level 2 child.",
   }, secondBranchId);
-  editor.indentBlock(numberedChildId);
-  const numberedGrandchildId = editor.insertBlock({
+  editor.blocks.indentBlock(numberedChildId);
+  const numberedGrandchildId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Second branch level 3 descendant.",
   }, numberedChildId);
-  editor.indentBlock(numberedGrandchildId);
-  editor.insertBlock({
+  editor.blocks.indentBlock(numberedGrandchildId);
+  editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Second branch level 2 sibling.",
   }, numberedChildId);
 
-  const sliderId = editor.insertBlock({
+  const sliderId = editor.blocks.insertBlock({
     type: SLIDER_BLOCK_TYPE,
     content: "const selectedBlocks = selection.filter(item => item.type === 'block');",
     props: { value: 35 },
   }, secondBranchId);
-  const selectionEndId = editor.insertBlock({
+  const selectionEndId = editor.blocks.insertBlock({
     type: COUNTER_BLOCK_TYPE,
     props: { count: 2 },
   }, sliderId);
-  const finalId = editor.insertBlock({
+  const finalId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Finish the selection in the middle of this sentence, then try copy or cut.",
   }, selectionEndId);
-  editor.insertBlock({
+  editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Type `/` anywhere here to open searchable slash commands.",
   }, finalId);
@@ -128,7 +129,7 @@ function createDemoEditor() {
   // The core gives every new block the same safe geometry. Spread demo roots
   // into a small persisted grid so the first edgeless view is immediately
   // usable while still exercising the normal layout API.
-  editor.updateBlocks(editor.getBlocks().map((block, index) => ({
+  editor.blocks.updateBlocks(editor.blocks.getBlocks().map((block, index) => ({
     id: block.id,
     patch: {
       layout: {
@@ -149,7 +150,7 @@ function createEmptyDemoEditor() {
   const editor = createRivtoEditor();
   const reactEditor = createReactEditor({
     editor,
-    extensions: [standardPreset(), blockIdExtension(), ...customBlockExtensions],
+    extensions: [standardPreset(), edgelessVisualsExtension(), blockIdExtension(), ...customBlockExtensions],
   });
   return { editor, reactEditor };
 }
@@ -260,10 +261,10 @@ function createFixtureEditor(
   const editor = createRivtoEditor();
   const reactEditor = createReactEditor({
     editor,
-    extensions: [standardPreset(), blockIdExtension(), ...customBlockExtensions],
+    extensions: [standardPreset(), edgelessVisualsExtension(), blockIdExtension(), ...customBlockExtensions],
   });
   if (side === "left") {
-    editor.insertBlock({
+    editor.blocks.insertBlock({
       id: "left-parent",
       type: DEFAULT_BLOCK_TYPE,
       content: "Movable parent",
@@ -276,26 +277,26 @@ function createFixtureEditor(
         content: "Nested child",
       }],
     });
-    editor.insertBlock({
+    editor.blocks.insertBlock({
       id: "left-counter",
       type: COUNTER_BLOCK_TYPE,
       props: { count: 7 },
       pluginData: { fixture: { counter: true } },
     });
-    editor.insertBlock({ id: "left-stay", type: DEFAULT_BLOCK_TYPE, content: "Stays in the source" });
-    editor.createLink({
+    editor.blocks.insertBlock({ id: "left-stay", type: DEFAULT_BLOCK_TYPE, content: "Stays in the source" });
+    editor.links.createLink({
       id: "left-internal-link",
       from: { blockId: "left-parent" },
       to: { blockId: "left-child" },
       meta: { fixture: "internal" },
     });
-    editor.createLink({
+    editor.links.createLink({
       id: "left-external-link",
       from: { blockId: "left-child" },
       to: { blockId: "left-stay" },
     });
   } else if (!options.empty) {
-    editor.insertBlock({
+    editor.blocks.insertBlock({
       id: "right-target",
       type: DEFAULT_BLOCK_TYPE,
       content: "Destination parent",
@@ -306,9 +307,9 @@ function createFixtureEditor(
           : []),
       ],
     });
-    editor.insertBlock({ id: "right-counter", type: COUNTER_BLOCK_TYPE, props: { count: 20 } });
+    editor.blocks.insertBlock({ id: "right-counter", type: COUNTER_BLOCK_TYPE, props: { count: 20 } });
     if (options.conflict === "link") {
-      editor.createLink({
+      editor.links.createLink({
         id: "left-internal-link",
         from: { blockId: "right-target" },
         to: { blockId: "right-nested" },

@@ -2,10 +2,10 @@
 
 Self-contained nested workspace for the Rivto product shell:
 
-- `web/` — Next.js App Router UI
+- `web/` — Next.js App Router UI (app shell: left sidebar, tabs, journal, projects, pages, contextual right sidebar)
+- `chulane/` — product kit: domain types, in-memory mock services, TanStack Query hooks, TipTap editor adapter
 - `desktop/` — Electron window around the web UI
-- `server/` — Encore.ts page API + SQL
-- `shared/` — DDD domain/application layers, TipTap editor adapter, UI chrome
+- `server/` — Encore.ts page API + SQL (not used by V1; storage is mocked in-memory)
 
 This folder is independent of the Rivto library workspace at the repo root. Install and run from here only.
 
@@ -13,28 +13,24 @@ This folder is independent of the Rivto library workspace at the repo root. Inst
 
 - Node.js 20+
 - pnpm 11+
-- [Encore CLI](https://encore.dev/docs/ts/install) for the real SQL-backed API
 
-If the Encore CLI is not installed, `pnpm server` / `pnpm dev` starts an
-in-memory HTTP fallback with the same `/page` routes so the UI remains usable
-locally. Install Encore for persistence and production.
+V1 stores everything in in-memory mocks seeded at boot (see
+`chulane/src/lib/mock/db.ts`), so no server or database is required. Data
+resets on dev-server restart / full page reload.
 
-## Setup
+**What to replace when adding a real API:** see [MOCKS.md](MOCKS.md).
+
+## Run
 
 ```sh
 cd app
 pnpm install
+pnpm web        # Next.js on http://127.0.0.1:3000
 ```
 
-## Develop
-
-Terminal A / combined:
-
-```sh
-pnpm dev
-```
-
-This starts Encore (`server`) and Next.js (`web` on http://127.0.0.1:3000).
+`pnpm dev` is an alias for `pnpm web` in V1. `pnpm server` still starts the
+Encore (or fallback) page API for later stages, but the web app does not call
+it yet.
 
 Desktop (with web already running):
 
@@ -47,29 +43,34 @@ pnpm desktop
 Copy `web/.env.example` to `web/.env.local` if needed:
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:4000
+PUBLIC_API_BASE_URL=http://127.0.0.1:4000
+SERVER_API_BASE_URL=http://127.0.0.1:4000
 ```
 
-Encore local APIs typically listen on port `4000`.
+Both are read at **request time** (no `NEXT_PUBLIC_*` inlining), so the same
+build can be repointed at a different backend by restarting the container with
+new env. They are unused while storage is mocked.
 
-## API client
+## Architecture
 
-Stage 1 uses a hand-written typed client in
-`shared/src/infrastructure/api/client.ts`.
+- `chulane/src/domain/<context>/` — `types.ts`, `service.ts` (mock CRUD),
+  `hooks.ts` (TanStack Query) per bounded context (`project`, `page`, `journal`)
+- `web/src/app/(core)/(workspace)/` — thin route pages composing domain views
+- `web/src/components/ui/` — shadcn/ui primitives
+- `web/src/components/shared/` — app shell (sidebar, tab bar, palette, context sidebar)
+- `web/src/domain/<context>/` — view components and client-state stores (Zustand)
 
-After installing the Encore CLI:
-
-```sh
-pnpm gen:client
-```
+Journal days are ordinary pages with `kind: "journal"` living in the system
+`Journal` project; Inbox/Templates/Archive/Trash are system containers in the
+same model.
 
 ## Imports
 
-- Domain / API (server-safe): `@chulane/rivto-app-shared`
-- React UI / hooks (client): `@chulane/rivto-app-shared/client`
+- Domain / services (server-safe): `@chulane/app`
+- React hooks / editor (client): `@chulane/app/client`
 
 ## Editor swap
 
-`shared/client` exposes `DocumentEditor` (TipTap today). Replace the
+`@chulane/app/client` exposes `DocumentEditor` (TipTap today). Replace the
 implementation behind that export with `@chulane/rivto-react` later without
-changing sidebar routing or page CRUD.
+changing the shell, tabs or page CRUD.

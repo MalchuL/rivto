@@ -271,7 +271,7 @@ function resolveCrossDocumentPageRootPlacement(
   const row = closestPageRow(rows, y);
   if (!row) return null;
   const indicator = resolveGeometryPlacement(
-    editor.getBlocks(),
+    editor.blocks.getBlocks(),
     row,
     x,
     y,
@@ -476,7 +476,7 @@ export function PageDragProvider({
     useSensor(KeyboardSensor),
   );
   const activeBlocks = activeIds.flatMap((id) => {
-    const block = editor.getBlock(id);
+    const block = editor.blocks.getBlock(id);
     return block ? [block] : [];
   });
 
@@ -538,10 +538,10 @@ export function PageDragProvider({
     const zoom = editor.mode.get() === "edgeless"
       ? Number(root?.dataset.edgelessZoom) || 1
       : 1;
-    const placement = resolveDropPlacement(event, editor.getBlocks(), childDropIndent * zoom, gapDropZone);
+    const placement = resolveDropPlacement(event, editor.blocks.getBlocks(), childDropIndent * zoom, gapDropZone);
     if (!placement) return null;
     const invalid = activeMove.current?.ids.some((id) => {
-      const block = editor.getBlock(id);
+      const block = editor.blocks.getBlock(id);
       return block ? containsBlock(block, placement.targetId) : false;
     });
     return invalid ? null : placement;
@@ -563,7 +563,7 @@ export function PageDragProvider({
    */
   const handleDragStart = ({ active }: DragStartEvent) => {
     clearCrossDocumentTarget();
-    const move = selectedMoveRoots(editor.getBlocks(), editor.selection.get(), String(active.id));
+    const move = selectedMoveRoots(editor.blocks.getBlocks(), editor.selection.get(), String(active.id));
     activeMove.current = move;
     setActiveIds(move.ids);
   };
@@ -607,7 +607,7 @@ export function PageDragProvider({
     if (!placement || !move) return;
 
     const { targetId, position } = placement;
-    editor.moveBlocks(move.ids, targetId, position);
+    editor.blocks.moveBlocks(move.ids, targetId, position);
     const selection = move.grouped && move.selection
       ? move.selection
       : {

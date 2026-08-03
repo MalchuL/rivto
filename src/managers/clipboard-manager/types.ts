@@ -16,6 +16,8 @@ export interface ClipboardBundle {
   blocks: Block[];
   /** Links whose endpoints are both inside the copied block set. */
   links: Link[];
+  /** Optional lossless namespaces contributed by installed editor plugins. */
+  pluginData?: Record<string, unknown>;
 }
 
 /**

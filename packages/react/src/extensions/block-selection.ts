@@ -6,6 +6,7 @@ import {
 import type { ReactEditor } from "../types";
 import { toggleBlockSelection } from "./page-selection-utils";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
+import { findEdgelessRuntime } from "./edgeless-runtime";
 
 /**
  * Adds explicit whole-block selection to every editor surface.
@@ -82,11 +83,12 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
 
     const current = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
     const next = toggleBlockSelection(
-      editor.getBlocks(),
+      editor.blocks.getBlocks(),
       current,
       blockId,
       editor.mode.get() === "edgeless",
     );
+    if (editor.mode.get() === "edgeless") findEdgelessRuntime(reactEditor)?.deactivate();
     if (next) editor.selection.set([next]);
     else editor.selection.clear();
     root.ownerDocument.getSelection()?.removeAllRanges();

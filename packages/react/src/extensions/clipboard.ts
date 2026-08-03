@@ -3,12 +3,14 @@ import {
   isStructuralSelection,
   RIVTO_CLIPBOARD_MIME,
   type ClipboardPayload,
+  type BlockSelection,
 } from "@chulane/rivto";
 import type { ReactEditor } from "../types";
 import {
   BUILTIN_KEYMAP,
   KEYBOARD_BINDING_IDS,
 } from "../managers";
+import { findEdgelessRuntime } from "./edgeless-runtime";
 
 /** Configuration for browser clipboard integration. */
 export interface ClipboardExtensionOptions {
@@ -54,6 +56,19 @@ export function registerClipboard(
   // as a fallback, but only use it when the browser's plain text still matches.
   let copiedClipboard: { structured: string; text: string } | null = null;
 
+  /** Returns a core-compatible block selection for active canvas root objects. */
+  const canvasSelection = (): BlockSelection | undefined => {
+    if (editor.mode.get() !== "edgeless") return undefined;
+    const snapshot = findEdgelessRuntime(reactEditor)?.get();
+    const blockIds = snapshot?.active ? snapshot.items.filter((item) => item.kind === "block").map((item) => item.id) : [];
+    return blockIds.length ? {
+      type: "block",
+      blockIds,
+      anchorBlockId: blockIds[0]!,
+      focusBlockId: blockIds.at(-1)!,
+    } : undefined;
+  };
+
   /** Writes the core-produced flavors into a native clipboard event. */
   const writeClipboard = (event: ClipboardEvent, payload: ClipboardPayload): void => {
     const structured = JSON.stringify(payload.bundle);
@@ -77,6 +92,7 @@ export function registerClipboard(
 
   /** Publishes the exact native endpoints before an asynchronous event can lag. */
   const synchronizeSelection = (): void => {
+    if (canvasSelection()) return;
     const selection = reactEditor.selection.readDOM();
     if (selection) editor.selection.set(selection);
   };
@@ -90,12 +106,24 @@ export function registerClipboard(
       structured = event.clipboardData?.getData(RIVTO_CLIPBOARD_MIME)
         || fallbackStructuredClipboard(event);
     }
+    const canvas = canvasSelection();
+    const saved = canvas ? editor.selection.get() : undefined;
+    // Temporarily project canvas block references into the core clipboard
+    // placement API. The preserved page selection is restored below, so the
+    // bridge affects insertion order without merging the two selection stores.
+    if (canvas) editor.selection.set([canvas]);
     editor.clipboard.paste({
       defaultBlockType,
       preserveNewlines: plainText,
       structured,
+      mergeText: canvas ? false : undefined,
       text: event.clipboardData?.getData("text/plain"),
     });
+    if (canvas && saved) {
+      const pasted = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
+      editor.selection.set(saved);
+      if (pasted) findEdgelessRuntime(reactEditor)?.set(pasted.blockIds.map((id) => ({ kind: "block", id })));
+    }
     requestAnimationFrame(() => reactEditor.selection.restoreDOM());
   };
 
@@ -105,7 +133,7 @@ export function registerClipboard(
     scope: "surface",
   }, ({ raw: event }) => {
     synchronizeSelection();
-    const payload = editor.clipboard.copy();
+    const payload = editor.clipboard.copy(canvasSelection() ? [canvasSelection()!] : undefined);
     if (!payload) return false;
     writeClipboard(event, payload);
     return true;
@@ -117,9 +145,14 @@ export function registerClipboard(
     scope: "surface",
   }, ({ raw: event }) => {
     synchronizeSelection();
-    const payload = editor.clipboard.cut();
+    const canvas = canvasSelection();
+    const payload = canvas ? editor.clipboard.copy([canvas]) : editor.clipboard.cut();
     if (!payload) return false;
     writeClipboard(event, payload);
+    if (canvas) {
+      editor.batchUpdates(() => canvas.blockIds.forEach((id) => editor.blocks.removeBlock(id)));
+      findEdgelessRuntime(reactEditor)?.clear();
+    }
     return true;
   });
 
@@ -130,16 +163,21 @@ export function registerClipboard(
     const editorHasFocus = activeElement === root ||
       (activeElement !== null && root.contains(activeElement));
     const current = editor.selection.get();
-    if (!editorHasFocus || !current.length || !isStructuralSelection(current)) return false;
+    const canvas = canvasSelection();
+    if (!editorHasFocus || (!canvas && (!current.length || !isStructuralSelection(current)))) return false;
     if (event.type === "paste") {
       pasteClipboard(event);
       return true;
     }
-    const payload = event.type === "cut"
-      ? editor.clipboard.cut()
-      : editor.clipboard.copy();
+    const payload = canvas
+      ? editor.clipboard.copy([canvas])
+      : event.type === "cut" ? editor.clipboard.cut() : editor.clipboard.copy();
     if (!payload) return false;
     writeClipboard(event, payload);
+    if (canvas && event.type === "cut") {
+      editor.batchUpdates(() => canvas.blockIds.forEach((id) => editor.blocks.removeBlock(id)));
+      findEdgelessRuntime(reactEditor)?.clear();
+    }
     return true;
   };
 

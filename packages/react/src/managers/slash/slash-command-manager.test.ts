@@ -4,7 +4,7 @@ import { createReactEditor } from "../../react-editor";
 describe("ReactSlashCommandManager", () => {
   test("delegates storage, execution, revision, and disposal to core", () => {
     const editor = createEditor();
-    const blockId = editor.insertBlock({ type: "paragraph" });
+    const blockId = editor.blocks.insertBlock({ type: "paragraph" });
     const reactEditor = createReactEditor({ editor });
     const manager = reactEditor.slashCommands;
     let executed = false;

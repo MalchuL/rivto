@@ -98,7 +98,7 @@ function groupCommands(commands: readonly SlashCommand[]): Array<{ group: string
  */
 export function SlashMenu() {
   const editor = useEditor();
-  const roots = editor.getBlocks();
+  const roots = editor.blocks.getBlocks();
   const reactEditor = useReactEditor();
   const slashCommands = reactEditor.slashCommands;
   const { element: root } = useEditorRoot();
@@ -182,7 +182,7 @@ export function SlashMenu() {
   });
 
   useEffect(() => {
-    if (session && !editor.getBlock(session.blockId)) close();
+    if (session && !editor.blocks.getBlock(session.blockId)) close();
   }, [close, editor, roots, session]);
 
   useDOMEvent({
@@ -202,13 +202,13 @@ export function SlashMenu() {
   const execute = useCallback((command: SlashCommand) => {
     const current = sessionRef.current;
     if (!current || !root) return;
-    const block = editor.getBlock(current.blockId);
+    const block = editor.blocks.getBlock(current.blockId);
     if (!block) return close();
     const caret = current.slashOffset + current.query.length + 1;
     if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
 
     editor.batchUpdates(() => {
-      editor.updateBlock(current.blockId, {
+      editor.blocks.updateBlock(current.blockId, {
         content: block.content.slice(0, current.slashOffset) + block.content.slice(caret),
       });
       editor.selection.set([{

@@ -1,20 +1,25 @@
-import type { BlockSelection } from "@chulane/rivto";
 import type { ReactEditor } from "../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
 import { owningRootIds, translatedLayouts } from "./edgeless-geometry";
+import { getEdgelessRuntime } from "./edgeless-runtime";
 
 /** Moves selected canvas roots through eight exact arrow-key bindings. */
 export function registerEdgelessMovement(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
+  const selection = getEdgelessRuntime(reactEditor);
 
   const move = (dx: number, dy: number): boolean => {
-    const selection = editor.selection.get()
-      .find((item): item is BlockSelection => item.type === "block");
-    if (!selection) return false;
-    const blocks = editor.getBlocks();
-    const patches = translatedLayouts(blocks, owningRootIds(blocks, selection.blockIds), dx, dy);
+    const items = selection.get().items;
+    if (!items.length) return false;
+    if (editor.commands.has("edgeless.selection.move")) {
+      editor.execute("edgeless.selection.move", { dx, dy });
+      return true;
+    }
+    const blocks = editor.blocks.getBlocks();
+    const blockIds = items.filter((item) => item.kind === "block").map((item) => item.id);
+    const patches = translatedLayouts(blocks, owningRootIds(blocks, blockIds), dx, dy);
     editor.batchUpdates(() => {
-      patches.forEach(({ id, layout }) => editor.setBlockLayout(id, layout));
+      patches.forEach(({ id, layout }) => editor.blocks.setBlockLayout(id, layout));
     });
     return true;
   };
@@ -23,9 +28,9 @@ export function registerEdgelessMovement(reactEditor: ReactEditor): void {
     id,
     keys: BUILTIN_KEYMAP[id],
     mode: "edgeless",
-    when: ({ selection, raw: event }) => {
+    when: ({ raw: event }) => {
       const target = event.target;
-      return selection.some((item) => item.type === "block") &&
+      return selection.get().active && selection.get().items.length > 0 &&
         target instanceof HTMLElement &&
         !target.isContentEditable &&
         !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName);

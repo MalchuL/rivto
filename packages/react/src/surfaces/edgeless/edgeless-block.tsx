@@ -1,8 +1,6 @@
 import type { EditorBlockLayout as BlockLayout } from "@chulane/rivto";
-import {
-  useBlock,
-  useBlockSelection,
-} from "../../hooks";
+import { useBlock } from "../../hooks";
+import { useEdgelessSelection } from "../../extensions/edgeless-runtime";
 import type { CSSProperties } from "react";
 import { PageBlock } from "../page/page-block";
 
@@ -23,7 +21,7 @@ const FALLBACK_LAYOUT: BlockLayout = {
  */
 export function EdgelessRootBlock({ blockId }: { readonly blockId: string }) {
   const { block } = useBlock(blockId);
-  const selection = useBlockSelection(blockId);
+  const selection = useEdgelessSelection();
   if (!block) return null;
   const layout = block.layout ?? FALLBACK_LAYOUT;
   const style: CSSProperties = {
@@ -38,7 +36,9 @@ export function EdgelessRootBlock({ blockId }: { readonly blockId: string }) {
     <section
       className="edgeless-card"
       data-edgeless-root={block.id}
-      data-block-selected={Boolean(selection) || undefined}
+      data-edgeless-object-kind="block"
+      data-edgeless-object-id={block.id}
+      data-block-selected={selection.active && selection.items.some((item) => item.kind === "block" && item.id === block.id) || undefined}
       style={style}
       tabIndex={0}
     >

@@ -16,6 +16,14 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
+test("loads the visual-object plugin in the demo", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
+  await expect(toolbar).toBeVisible();
+  await toolbar.getByRole("button", { name: "Rectangle" }).click();
+  await expect(page.locator('[data-edgeless-visual-kind="rectangle"]')).toHaveCount(1);
+});
+
 test("renders every root as one card with its complete nested outline", async ({ page }) => {
   const pageRoots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
   const rootCount = await pageRoots.count();
@@ -53,7 +61,9 @@ test("selects nested blocks and preserves block selection across surfaces", asyn
   await expect(card).not.toHaveAttribute("data-block-selected", "true");
 
   await cardChrome(card).click({ position: { x: 280, y: 14 } });
-  await canvasChild.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
+  await expect(card).toHaveAttribute("data-block-selected", "true");
+  // Selecting the card shell does not overwrite the independent core block
+  // selection retained inside its content.
   await expect(canvasChild).toHaveAttribute("data-block-selected", "true");
 
   await switchMode(page, "block");
@@ -255,44 +265,29 @@ test("Enter on an edgeless leaf root creates its first child", async ({ page }) 
   await expect(stableRoot.locator(":scope > .page-block-children")).toHaveCount(0);
 });
 
-test("clears a selected edgeless root before deleting it", async ({ page }) => {
+test("deletes a selected edgeless root structurally", async ({ page }) => {
   await switchMode(page, "edgeless");
   const cards = page.locator("[data-edgeless-root]");
   const beforeRoots = await cards.count();
   const card = cards.filter({ has: page.locator(".page-block-children") }).first();
   const root = card.locator(":scope > .edgeless-card-body > .page-block");
   const rootId = await root.getAttribute(BLOCK_ID_ATTRIBUTE);
-  const type = await root.getAttribute("data-block-type");
-  const left = await card.evaluate((element) => (element as HTMLElement).style.left);
   const content = root.locator(":scope > .page-block-row [data-block-content]");
   const originalContent = await content.textContent();
   const originalChildren = await root.locator(":scope > .page-block-children > .page-block").count();
-  if (!rootId || !type || !originalContent || !originalChildren) throw new Error("Expected a populated root");
-  const stableCard = page.locator(`[data-edgeless-root="${rootId}"]`);
-  const stableRoot = stableCard.locator(blockIdSelector(rootId));
-  const stableContent = stableRoot.locator(":scope > .page-block-row [data-block-content]");
+  if (!rootId || !originalContent || !originalChildren) throw new Error("Expected a populated root");
 
   await cardChrome(card).click({ position: { x: 280, y: 14 } });
   await page.keyboard.press("Delete");
-  await expect(cards).toHaveCount(beforeRoots);
-  await expect(stableCard).toHaveAttribute("data-block-selected", "true");
-  await expect(stableRoot).toHaveAttribute("data-block-type", type);
-  await expect(stableCard).toHaveCSS("left", left);
-  await expect(stableContent).toHaveText("");
-  await expect(stableRoot.locator(":scope > .page-block-children")).toHaveCount(0);
-
-  await page.keyboard.press("Backspace");
   await expect(cards).toHaveCount(beforeRoots - 1);
   await expect(page.locator(`[data-edgeless-root="${rootId}"]`)).toHaveCount(0);
-  await page.keyboard.press("Control+z");
-  await expect(page.locator(`[data-edgeless-root="${rootId}"] [data-block-content]`).first()).toHaveText("");
   await page.keyboard.press("Control+z");
   const restored = page.locator(`[data-edgeless-root="${rootId}"]`);
   await expect(restored.locator("[data-block-content]").first()).toHaveText(originalContent);
   await expect(restored.locator(":scope > .edgeless-card-body > .page-block > .page-block-children > .page-block")).toHaveCount(originalChildren);
 });
 
-test("clears a selected nested block before deleting it", async ({ page }) => {
+test("deletes a selected nested block structurally", async ({ page }) => {
   await switchMode(page, "edgeless");
   const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
   const nested = card.locator(":scope > .edgeless-card-body > .page-block > .page-block-children > .page-block").first();
@@ -302,9 +297,6 @@ test("clears a selected nested block before deleting it", async ({ page }) => {
 
   await content.click({ modifiers: ["Control"] });
   await page.keyboard.press("Delete");
-  await expect(card.locator(blockIdSelector(nestedId))).toHaveCount(1);
-  await expect(card.locator(blockIdSelector(nestedId)).locator("[data-block-content]").first()).toHaveText("");
-  await page.keyboard.press("Backspace");
   await expect(card.locator(blockIdSelector(nestedId))).toHaveCount(0);
 });
 
@@ -373,7 +365,7 @@ test("toggles root selection and moves or resizes layouts atomically", async ({ 
   await expect.poll(() => second.evaluate((element) => Number.parseFloat((element as HTMLElement).style.width))).toBe(before[1]!.width + 30);
 });
 
-test("rectangle-selects roots, moves them, then clears and deletes them atomically", async ({ page }) => {
+test("rectangle-selects roots, moves them, then deletes them atomically", async ({ page }) => {
   await switchMode(page, "edgeless");
   const cards = page.locator("[data-edgeless-root]");
   const beforeCount = await cards.count();
@@ -391,17 +383,12 @@ test("rectangle-selects roots, moves them, then clears and deletes them atomical
   await page.keyboard.press("Shift+ArrowRight");
   await expect.poll(() => cards.nth(0).evaluate((element) => Number.parseFloat((element as HTMLElement).style.left))).toBe(left + 10);
   await page.keyboard.press("Delete");
-  await expect(cards).toHaveCount(beforeCount);
-  await expect(page.locator("[data-edgeless-root][data-block-selected]")).toHaveCount(2);
-  await page.keyboard.press("Backspace");
   await expect(cards).toHaveCount(beforeCount - 2);
-  await page.keyboard.press("Control+z");
-  await expect(cards).toHaveCount(beforeCount);
   await page.keyboard.press("Control+z");
   await expect(cards).toHaveCount(beforeCount);
 });
 
-test("retains empty members when clearing a mixed structural selection", async ({ page }) => {
+test("deletes successive structural block selections immediately", async ({ page }) => {
   await switchMode(page, "edgeless");
   const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
   const children = card.locator(":scope > .edgeless-card-body > .page-block > .page-block-children > .page-block");
@@ -412,20 +399,14 @@ test("retains empty members when clearing a mixed structural selection", async (
   await children.nth(0).locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
   await page.keyboard.press("Delete");
   const first = card.locator(blockIdSelector(firstId));
-  await expect(first.locator("[data-block-content]").first()).toHaveText("");
+  await expect(first).toHaveCount(0);
 
   await card.locator(blockIdSelector(secondId))
     .locator(":scope > .page-block-row [data-block-content]")
     .click({ modifiers: ["Control"] });
-  await expect(card.locator("[data-block-id][data-block-selected]")).toHaveCount(2);
+  await expect(card.locator("[data-block-id][data-block-selected]")).toHaveCount(1);
 
   await page.keyboard.press("Delete");
-  await expect(first).toHaveCount(1);
-  await expect(first).toHaveAttribute("data-block-selected", "true");
-  await expect(card.locator(blockIdSelector(secondId))).toHaveCount(1);
-  await expect(card.locator(blockIdSelector(secondId)).locator("[data-block-content]").first()).toHaveText("");
-
-  await page.keyboard.press("Backspace");
   await expect(card.locator(`${blockIdSelector(firstId)}, ${blockIdSelector(secondId)}`)).toHaveCount(0);
 });
 
@@ -487,7 +468,9 @@ test("duplicates a complete root subtree from slash with offset geometry", async
   await page.locator('[data-slash-command="block.duplicate"]').click();
 
   await expect(cards).toHaveCount(before + 1);
-  const duplicate = page.locator("[data-edgeless-root][data-block-selected]");
+  // A slash command originates inside block content, so its resulting core
+  // block selection remains distinct from the canvas-card selection.
+  const duplicate = cards.filter({ has: page.locator(".page-block[data-block-selected]") });
   await expect(duplicate).toHaveCount(1);
   await expect(duplicate).not.toHaveAttribute("data-edgeless-root", originalId ?? "");
   await expect(duplicate.locator(BLOCK_ID_SELECTOR)).toHaveCount(originalDescendants);

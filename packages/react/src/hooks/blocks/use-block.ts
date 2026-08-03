@@ -58,24 +58,24 @@ export interface UseBlockResult {
  */
 export function useBlock(blockId: string): UseBlockResult {
   const { editor } = useEditorContext();
-  const block = editor.getBlock(blockId);
+  const block = editor.blocks.getBlock(blockId);
   // Commands target the ID rather than the detached snapshot, so they always
   // operate on the latest document state. Memoization keeps their references
   // stable for consumers that pass them into memoized child components.
   const operations = useMemo<BlockOperations>(() => ({
-    update: (patch) => editor.updateBlock(blockId, patch),
-    setContent: (content) => editor.updateBlock(blockId, { content }),
-    setType: (type) => editor.setBlockType(blockId, type),
-    setProp: (key, value) => editor.setBlockProp(blockId, key, value),
-    setPluginData: (pluginId, value) => editor.setBlockPluginData(blockId, pluginId, value),
-    setLayout: (layout) => editor.setBlockLayout(blockId, layout),
-    remove: () => editor.removeBlock(blockId),
-    mergeInto: (targetId) => editor.mergeBlocks(targetId, blockId),
-    moveAfter: (afterId) => editor.moveBlock(blockId, afterId),
-    moveBefore: (beforeId) => editor.moveBlock(blockId, beforeId, "before"),
-    moveInside: (parentId) => editor.moveBlock(blockId, parentId, "inside"),
-    indent: () => editor.indentBlock(blockId),
-    outdent: () => editor.outdentBlock(blockId),
+    update: (patch) => editor.blocks.updateBlock(blockId, patch),
+    setContent: (content) => editor.blocks.updateBlock(blockId, { content }),
+    setType: (type) => editor.blocks.setBlockType(blockId, type),
+    setProp: (key, value) => editor.blocks.setBlockProp(blockId, key, value),
+    setPluginData: (pluginId, value) => editor.blocks.setBlockPluginData(blockId, pluginId, value),
+    setLayout: (layout) => editor.blocks.setBlockLayout(blockId, layout),
+    remove: () => editor.blocks.removeBlock(blockId),
+    mergeInto: (targetId) => editor.blocks.mergeBlocks(targetId, blockId),
+    moveAfter: (afterId) => editor.blocks.moveBlock(blockId, afterId),
+    moveBefore: (beforeId) => editor.blocks.moveBlock(blockId, beforeId, "before"),
+    moveInside: (parentId) => editor.blocks.moveBlock(blockId, parentId, "inside"),
+    indent: () => editor.blocks.indentBlock(blockId),
+    outdent: () => editor.blocks.outdentBlock(blockId),
   }), [blockId, editor]);
 
   return {

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node ./scripts/run-dev.mjs",
     "check-types": "tsc --noEmit",
-    "gen:client": "encore gen client --lang=ts --env=local --output=../shared/src/infrastructure/api/encore-client.gen.ts || node ./scripts/gen-client-fallback.mjs"
+    "gen:client": "encore gen client --lang=ts --env=local --output=../chulane/src/infrastructure/api/encore-client.gen.ts || node ./scripts/gen-client-fallback.mjs"
   },
   "dependencies": {
     "encore.dev": "^1.48.0"

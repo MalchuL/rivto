@@ -25,7 +25,7 @@ function collectBlockIds(block: EditorBlock, ids: Set<string>): void {
 }
 
 function prepareBlock(editor: RivtoEditorApi, block: EditorBlock): EditorBlockInput {
-  return editor.blocks.prepare({
+  return editor.blocks.registry.prepare({
     id: block.id,
     type: block.type,
     collapsed: block.collapsed,
@@ -51,26 +51,26 @@ function createCrossDocumentBlockTransferBundle(
   placement: CrossDocumentBlockTransferPlacement,
 ): CrossDocumentBlockTransferBundle {
   if (source === destination) throw new Error("Cross-document transfer requires different editors");
-  if (placement.targetId !== null && !destination.getBlock(placement.targetId)) {
+  if (placement.targetId !== null && !destination.blocks.getBlock(placement.targetId)) {
     throw new Error(`Destination block ${placement.targetId} does not exist`);
   }
 
   const roots = rootIds.map((id) => {
-    const block = source.getBlock(id);
+    const block = source.blocks.getBlock(id);
     if (!block) throw new Error(`Source block ${id} does not exist`);
     return block;
   });
   const blockIds = new Set<string>();
   roots.forEach((block) => collectBlockIds(block, blockIds));
   for (const id of blockIds) {
-    if (destination.getBlock(id)) throw new Error(`Destination already contains block ${id}`);
+    if (destination.blocks.getBlock(id)) throw new Error(`Destination already contains block ${id}`);
   }
 
-  const links = source.getLinks()
+  const links = source.links.getLinks()
     .filter(({ from, to }) => blockIds.has(from.blockId) && blockIds.has(to.blockId))
     .map((link) => structuredClone(link));
   for (const link of links) {
-    if (destination.getLink(link.id)) throw new Error(`Destination already contains link ${link.id}`);
+    if (destination.links.getLink(link.id)) throw new Error(`Destination already contains link ${link.id}`);
   }
 
   return {
@@ -94,13 +94,13 @@ export function crossDocumentBlockTransfer(
 ): void {
   const bundle = createCrossDocumentBlockTransferBundle(source, destination, rootIds, placement);
   destination.batchUpdates(() => {
-    const insertedIds = bundle.blocks.map((block) => destination.insertBlock(block));
+    const insertedIds = bundle.blocks.map((block) => destination.blocks.insertBlock(block));
     if (placement.targetId !== null) {
-      destination.moveBlocks(insertedIds, placement.targetId, placement.position);
+      destination.blocks.moveBlocks(insertedIds, placement.targetId, placement.position);
     }
-    bundle.links.forEach((link) => destination.createLink(link));
+    bundle.links.forEach((link) => destination.links.createLink(link));
   });
   source.batchUpdates(() => {
-    rootIds.forEach((id) => source.removeBlock(id));
+    rootIds.forEach((id) => source.blocks.removeBlock(id));
   });
 }

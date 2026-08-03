@@ -31,8 +31,8 @@ export function applyIndentShortcut(
     const blockSelectionAtRoot = event.target === root && target.item.type === "block";
     if (!editable && !blockSelectionAtRoot) return false;
 
-    if (outdent) editor.outdentBlock(target.blockId);
-    else editor.indentBlock(target.blockId);
+    if (outdent) editor.blocks.outdentBlock(target.blockId);
+    else editor.blocks.indentBlock(target.blockId);
 
     // React may reparent every selected BlockView and cause the browser to emit
     // a transient empty selectionchange. Re-publish the selection captured

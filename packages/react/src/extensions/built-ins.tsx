@@ -15,6 +15,7 @@ import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard";
 import { registerHistory, type HistoryExtensionOptions } from "./history";
 import { registerTextSelection } from "./text-selection";
 import { EdgelessInteractionOverlay } from "./edgeless-selection";
+import { installEdgelessRuntime } from "./edgeless-runtime";
 import { registerEdgelessDeletion } from "./edgeless-deletion";
 import { registerEdgelessMovement } from "./edgeless-movement";
 import { registerEdgelessTransform } from "./edgeless-transform";
@@ -231,7 +232,14 @@ export const collapseExtension = (): ReactEditorExtension => ({
 
 /** @returns Root-card click, toggle, and rectangle selection in edgeless mode. */
 export const edgelessSelectionExtension = (): ReactEditorExtension =>
-  componentExtension("selection.edgeless", EdgelessInteractionOverlay);
+  ({
+    id: "selection.edgeless",
+    setup: (reactEditor) => {
+      const disposeRuntime = installEdgelessRuntime(reactEditor);
+      reactEditor.extensions.mount(EdgelessInteractionOverlay);
+      return disposeRuntime;
+    },
+  });
 
 /** @returns Atomic Backspace/Delete removal of selected canvas blocks. */
 export const edgelessDeletionExtension = (): ReactEditorExtension =>
@@ -295,15 +303,15 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         title: "Duplicate block",
         group: "Actions",
         keywords: ["copy", "clone"],
-        isAvailable: ({ blockId }) => Boolean(editor.getBlock(blockId)),
+        isAvailable: ({ blockId }) => Boolean(editor.blocks.getBlock(blockId)),
         execute: ({ blockId }) => {
-          const block = editor.getBlock(blockId);
+          const block = editor.blocks.getBlock(blockId);
           if (!block) return;
           const input = duplicateBlockInput(block);
-          if (editor.mode.get() === "edgeless" && editor.getBlocks().some((root) => root.id === blockId) && input.layout) {
+          if (editor.mode.get() === "edgeless" && editor.blocks.getBlocks().some((root) => root.id === blockId) && input.layout) {
             input.layout = { ...input.layout, x: (input.layout.x ?? 0) + 24, y: (input.layout.y ?? 0) + 24 };
           }
-          const duplicateId = editor.insertBlock(input, block.id);
+          const duplicateId = editor.blocks.insertBlock(input, block.id);
           editor.selection.set([{
             type: "block",
             blockIds: [duplicateId],
@@ -318,7 +326,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         title: "Delete block",
         group: "Actions",
         keywords: ["remove"],
-        isAvailable: ({ blockId }) => Boolean(editor.getBlock(blockId)),
+        isAvailable: ({ blockId }) => Boolean(editor.blocks.getBlock(blockId)),
         execute: ({ blockId }) => {
           editor.selection.set([{
             type: "block",
@@ -336,10 +344,10 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         group: "Actions",
         keywords: ["fold", "hide"],
         isAvailable: ({ blockId }) => {
-          const block = editor.getBlock(blockId);
+          const block = editor.blocks.getBlock(blockId);
           return editor.mode.get() === "block" && Boolean(block?.children.length && !block.collapsed);
         },
-        execute: ({ blockId }) => editor.updateBlock(blockId, { collapsed: true }),
+        execute: ({ blockId }) => editor.blocks.updateBlock(blockId, { collapsed: true }),
       }),
       // Expansion is offered only when it has a visible effect in page mode.
       reactEditor.slashCommands.register({
@@ -348,10 +356,10 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         group: "Actions",
         keywords: ["unfold", "show"],
         isAvailable: ({ blockId }) => {
-          const block = editor.getBlock(blockId);
+          const block = editor.blocks.getBlock(blockId);
           return editor.mode.get() === "block" && Boolean(block?.children.length && block.collapsed);
         },
-        execute: ({ blockId }) => editor.updateBlock(blockId, { collapsed: false }),
+        execute: ({ blockId }) => editor.blocks.updateBlock(blockId, { collapsed: false }),
       }),
     ];
     // Core slash registrations are stack-like and therefore dispose in reverse.

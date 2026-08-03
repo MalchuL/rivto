@@ -4,6 +4,7 @@ import type {
 } from "@chulane/rivto";
 import { BLOCK_SELECTION_ANCHOR_SELECTOR } from "../constants";
 import type { ReactEditor } from "../types";
+import { findEdgelessRuntime } from "./edgeless-runtime";
 import {
   createBlockSelection,
   createDOMSelectionItems,
@@ -76,6 +77,9 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
   let suppressClickBlockId: string | undefined;
   let ownsCrossBlockSelection = false;
   const unsubscribeSelection = editor.selection.subscribe(() => {
+    if (editor.mode.get() === "edgeless" && editor.selection.get().length) {
+      findEdgelessRuntime(reactEditor)?.deactivate();
+    }
     reactEditor.selection.updateDOMHighlight(editor.selection.get());
   });
 
@@ -320,6 +324,13 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       if (selection) {
         editor.selection.set(selection);
         reactEditor.selection.updateDOMHighlight(selection);
+        return false;
+      }
+
+      // Canvas selection owns visibility only. Keep the portable page text or
+      // block selection available for a later return to block mode.
+      if (editor.mode.get() === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active) {
+        reactEditor.selection.clearDOMHighlight();
         return false;
       }
 

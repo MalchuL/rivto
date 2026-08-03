@@ -4,41 +4,41 @@ describe("EditorRuntime methods", () => {
   it("supports a complete lifecycle without blocks", () => {
     const editor = createRivtoEditor();
 
-    expect(editor.getBlocks()).toEqual([]);
-    expect(editor.getRootIds()).toEqual([]);
-    expect(editor.getVisibleBlockIds()).toEqual([]);
-    expect(editor.getLinks()).toEqual([]);
+    expect(editor.blocks.getBlocks()).toEqual([]);
+    expect(editor.blocks.getRootIds()).toEqual([]);
+    expect(editor.blocks.getVisibleBlockIds()).toEqual([]);
+    expect(editor.links.getLinks()).toEqual([]);
     expect(editor.selection.get()).toEqual([]);
     expect(editor.dump()).toMatchObject({ version: 4, blocks: [], links: [] });
 
     editor.deleteSelection();
     editor.undo();
     editor.redo();
-    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.blocks.getBlocks()).toEqual([]);
 
-    const id = editor.batchUpdates(() => editor.insertBlock({ type: "paragraph", content: "Created later" }));
-    editor.removeBlock(id);
-    expect(editor.getBlocks()).toEqual([]);
+    const id = editor.batchUpdates(() => editor.blocks.insertBlock({ type: "paragraph", content: "Created later" }));
+    editor.blocks.removeBlock(id);
+    expect(editor.blocks.getBlocks()).toEqual([]);
     editor.undo();
-    expect(editor.getBlock(id)?.content).toBe("Created later");
+    expect(editor.blocks.getBlock(id)?.content).toBe("Created later");
     editor.redo();
-    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.blocks.getBlocks()).toEqual([]);
     editor.destroy();
   });
 
   it("mutates blocks through editor methods", () => {
     const editor = createRivtoEditor();
 
-    const firstId = editor.insertBlock({ type: "paragraph", content: "First" });
-    const secondId = editor.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
 
-    editor.updateBlock(firstId, { content: "First updated" });
-    editor.setBlockProp(firstId, "tone", "info");
-    editor.setBlockPluginData(firstId, "test", { seen: true });
-    editor.setBlockLayout(firstId, { x: 120, y: 80 });
-    editor.indentBlock(secondId);
+    editor.blocks.updateBlock(firstId, { content: "First updated" });
+    editor.blocks.setBlockProp(firstId, "tone", "info");
+    editor.blocks.setBlockPluginData(firstId, "test", { seen: true });
+    editor.blocks.setBlockLayout(firstId, { x: 120, y: 80 });
+    editor.blocks.indentBlock(secondId);
 
-    expect(editor.getBlocks()).toMatchObject([
+    expect(editor.blocks.getBlocks()).toMatchObject([
       {
         id: firstId,
         content: "First updated",
@@ -49,23 +49,23 @@ describe("EditorRuntime methods", () => {
       },
     ]);
 
-    editor.outdentBlock(secondId);
-    editor.moveBlock(secondId, null);
+    editor.blocks.outdentBlock(secondId);
+    editor.blocks.moveBlock(secondId, null);
 
-    expect(editor.getBlocks().map((block) => block.id)).toEqual([secondId, firstId]);
+    expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([secondId, firstId]);
 
-    editor.removeBlock(secondId);
+    editor.blocks.removeBlock(secondId);
 
-    expect(editor.getBlocks().map((block) => block.id)).toEqual([firstId]);
+    expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([firstId]);
     editor.destroy();
   });
 
   it("mutates links through editor methods", () => {
     const editor = createRivtoEditor();
-    const sourceId = editor.insertBlock({ type: "paragraph" });
-    const targetId = editor.insertBlock({ type: "paragraph" }, sourceId);
+    const sourceId = editor.blocks.insertBlock({ type: "paragraph" });
+    const targetId = editor.blocks.insertBlock({ type: "paragraph" }, sourceId);
 
-    editor.createLink({
+    editor.links.createLink({
       id: "source-target",
       from: { blockId: sourceId },
       to: { blockId: targetId },
@@ -81,7 +81,7 @@ describe("EditorRuntime methods", () => {
       },
     ]);
 
-    editor.removeLink("source-target");
+    editor.links.removeLink("source-target");
 
     expect(editor.dump().links).toEqual([]);
     editor.destroy();
@@ -113,7 +113,7 @@ describe("EditorRuntime methods", () => {
     });
 
     editor.load({ version: 4, blocks: [], links: [] });
-    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.dump()).toMatchObject({ version: 4, blocks: [], links: [] });
     editor.destroy();
   });

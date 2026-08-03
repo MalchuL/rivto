@@ -33,7 +33,7 @@ export function registerBlockOutdent(reactEditor: ReactEditor): void {
     if (!target?.collapsed || target.offset !== 0) return false;
     const rendered = findRenderedBlock(root, target.blockId);
     if (!rendered || !findParentBlock(rendered)) return false;
-    editor.outdentBlock(target.blockId);
+    editor.blocks.outdentBlock(target.blockId);
     requestAnimationFrame(() => focusBlock(root, target.blockId, 0));
     return true;
   });
@@ -61,7 +61,7 @@ export function registerBackwardBlockMerge(reactEditor: ReactEditor): void {
     if (rendered && findParentBlock(rendered)) return false;
     const previous = findPreviousEditableBlock(root, target.blockId);
     if (!previous) return false;
-    const joinOffset = editor.mergeBlocks(previous.blockId, target.blockId);
+    const joinOffset = editor.blocks.mergeBlocks(previous.blockId, target.blockId);
     editor.selection.set([{
       type: "text",
       anchor: { blockId: previous.blockId, offset: joinOffset },
@@ -84,10 +84,10 @@ export function registerEmptyBlockReset(reactEditor: ReactEditor): void {
   }, ({ root }) => {
     const target = firstKeyboardTarget(editor.selection.get());
     if (!target?.collapsed || target.offset !== 0) return false;
-    const block = editor.getBlock(target.blockId);
+    const block = editor.blocks.getBlock(target.blockId);
     if (!block || block.content !== "" || block.type === DEFAULT_BLOCK_TYPE) return false;
     if (findPreviousEditableBlock(root, block.id)) return false;
-    editor.setBlockType(block.id, DEFAULT_BLOCK_TYPE);
+    editor.blocks.setBlockType(block.id, DEFAULT_BLOCK_TYPE);
     requestAnimationFrame(() => focusBlock(root, block.id, 0));
     return true;
   });

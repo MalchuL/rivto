@@ -1,4 +1,9 @@
 import type { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../../crdt-doc";
+import type {
+  DocumentBlockManager,
+  DocumentLinkManager,
+  DocumentPluginDataManager,
+} from "../managers";
 
 /** Collaborative block geometry shared by all renderers. */
 export interface BlockLayout {
@@ -82,46 +87,57 @@ export type BlockPropsValidator = (
   props: Record<string, unknown>,
 ) => Record<string, unknown>;
 
-/** Public contract implemented by the Yjs-backed document model. */
+/**
+ * Public collaborative document coordinator used by editors and persistence.
+ *
+ * Block and link behavior is intentionally available only through `.blocks`
+ * and `.links`. The document itself owns lifecycle, transactions, undo scopes,
+ * and complete snapshot orchestration.
+ */
 export interface DocumentModel {
+  /** Descriptive document identifier that does not control persistence. */
   readonly id: string;
+  /** Adapter-neutral collaborative document containing canonical shared state. */
   readonly crdt: CRDTDoc;
+  /** Stable local transaction origin used to scope undo history. */
   readonly origin: symbol;
+  /** Collaborative containers included in local undo tracking. */
   readonly undoScopes: CRDTUndoScope[];
-  readonly isEmpty: boolean;
+  /** Block records, text, layout, hierarchy, and block snapshot operations. */
+  readonly blocks: DocumentBlockManager;
+  /** First-class link records and link snapshot operations. */
+  readonly links: DocumentLinkManager;
+  /** Generic namespaced collaborative storage for optional document plugins. */
+  readonly pluginData: DocumentPluginDataManager;
 
-  setPropsValidator(validator: BlockPropsValidator): void;
+  /**
+   * Subscribes to local and remote collaborative updates.
+   *
+   * @param listener - Callback invoked after a document update.
+   * @returns Function that removes the subscription.
+   */
   subscribe(listener: () => void): Unsubscribe;
+
+  /**
+   * Executes one synchronous mutation under the model's local origin.
+   *
+   * @param operation - Collaborative mutation to execute atomically.
+   * @returns No value.
+   */
   transact(operation: () => void): void;
-  getBlock(id: string): Block | undefined;
-  getBlocks(): Block[];
-  getLink(id: string): Link | undefined;
-  getLinks(): Link[];
-  getRootIds(): string[];
-  getChildIds(id: string): string[];
-  getParentId(id: string): string | null | undefined;
-  getVisibleBlockIds(): string[];
-  insertBlock(block: BlockInput, afterId?: string | null): string;
-  updateBlock(id: string, patch: BlockPatch): void;
-  updateBlocks(updates: readonly BlockUpdate[]): void;
-  setBlockType(id: string, type: string, props?: Record<string, unknown>): void;
-  setBlockProp(id: string, key: string, value: unknown): void;
-  setPluginData(id: string, pluginId: string, value: unknown): void;
-  setBlockText(id: string, text: string): void;
-  insertText(id: string, offset: number, text: string): void;
-  deleteText(id: string, offset: number, length: number): void;
-  removeBlock(id: string): void;
-  mergeBlocks(targetId: string, sourceId: string): number;
-  moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
-  moveBlocks(ids: string[], targetId: string | null, position?: "before" | "after" | "inside"): void;
-  indentBlock(id: string): void;
-  indentBlocks(ids: string[]): void;
-  outdentBlock(id: string): void;
-  outdentBlocks(ids: string[]): void;
-  setBlockLayout(id: string, layout: Partial<BlockLayout>): void;
-  createLink(link: Link): void;
-  removeLink(id: string): void;
+
+  /**
+   * Produces a lossless schema-v4 snapshot.
+   *
+   * @returns Detached blocks, links, and document plugin data.
+   */
   getSnapshot(): Snapshot;
+
+  /**
+   * Replaces only supplied schema-v4 snapshot sections.
+   *
+   * @param snapshot - Complete snapshot or partial persistence update.
+   * @returns No value.
+   */
   loadSnapshot(snapshot: SnapshotUpdate): void;
-  normalize(): void;
 }

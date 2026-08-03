@@ -39,7 +39,7 @@ function textSelectionEdge(
   selection: TextSelection,
   edge: "start" | "end",
 ): EditorPosition {
-  const ids = pageEntries(editor.getBlocks()).map(({ block }) => block.id);
+  const ids = pageEntries(editor.blocks.getBlocks()).map(({ block }) => block.id);
   const anchorIndex = ids.indexOf(selection.anchor.blockId);
   const headIndex = ids.indexOf(selection.head.blockId);
   const forward = anchorIndex < headIndex || (
@@ -94,7 +94,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
       return true;
     }
     if (direction === "left" || direction === "right") {
-      const block = editor.getBlock(text.head.blockId);
+      const block = editor.blocks.getBlock(text.head.blockId);
       const adjacent = direction === "left" && text.head.offset === 0
         ? findPreviousEditableBlock(root, text.head.blockId)
         : direction === "right" && text.head.offset === (block?.content.length ?? -1)
@@ -120,7 +120,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     const moved = verticalCaretPosition(root, text.head, direction);
     if (!moved) return false;
     if (moved.blockId !== text.anchor.blockId) {
-      const next = blockSelection(editor.getBlocks(), text.anchor.blockId, moved.blockId);
+      const next = blockSelection(editor.blocks.getBlocks(), text.anchor.blockId, moved.blockId);
       editor.selection.set([next]);
       focusBlockSelection(root, next.focusBlockId);
       return true;
@@ -164,8 +164,8 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void
       .find((item): item is BlockSelection => item.type === "block");
     if (!blocks) return false;
     const next = extend
-      ? extendBlockSelection(editor.getBlocks(), blocks, direction)
-      : adjacentBlockSelection(editor.getBlocks(), blocks, direction);
+      ? extendBlockSelection(editor.blocks.getBlocks(), blocks, direction)
+      : adjacentBlockSelection(editor.blocks.getBlocks(), blocks, direction);
     editor.selection.set([next]);
     focusBlockSelection(root, next.focusBlockId);
     return true;
@@ -176,8 +176,8 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void
     const blocks = selection.find((item): item is BlockSelection => item.type === "block");
     const text = selection.find((item): item is TextSelection => item.type === "text");
     const next = blocks
-      ? extendBlockSelection(editor.getBlocks(), blocks, direction)
-      : text ? blockSelection(editor.getBlocks(), text.head.blockId) : undefined;
+      ? extendBlockSelection(editor.blocks.getBlocks(), blocks, direction)
+      : text ? blockSelection(editor.blocks.getBlocks(), text.head.blockId) : undefined;
     if (!next) return false;
     editor.selection.set([next]);
     focusBlockSelection(root, next.focusBlockId);
@@ -220,14 +220,14 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
     const blocks = selection.find((item): item is BlockSelection => item.type === "block");
     const activeId = text?.head.blockId ?? blocks?.focusBlockId;
     if (!activeId) return false;
-    const roots = selectedMoveRoots(editor.getBlocks(), selection, activeId);
-    const placement = keyboardMovePlacement(editor.getBlocks(), roots.ids, direction);
+    const roots = selectedMoveRoots(editor.blocks.getBlocks(), selection, activeId);
+    const placement = keyboardMovePlacement(editor.blocks.getBlocks(), roots.ids, direction);
     if (!placement) return false;
-    editor.moveBlocks(roots.ids, placement.targetId, placement.position);
+    editor.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
     if (roots.grouped && roots.selection) {
       editor.selection.set([roots.selection]);
     } else if (blocks) {
-      editor.selection.set([blockSelection(editor.getBlocks(), activeId)]);
+      editor.selection.set([blockSelection(editor.blocks.getBlocks(), activeId)]);
     }
     requestAnimationFrame(() => {
       if (text && !blocks) reactEditor.selection.restoreDOM(selection);

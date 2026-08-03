@@ -31,7 +31,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     if (editor.mode.get() !== "block") return;
     const root = reactEditor.events.getRoot();
     const current = editor.selection.get();
-    const next = reconcileCollapsedSelection(editor.getBlocks(), current);
+    const next = reconcileCollapsedSelection(editor.blocks.getBlocks(), current);
     if (next !== current) {
       editor.selection.set(next);
       // A native Range retains detached text nodes after React removes a
@@ -51,7 +51,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     const selection = nativeSelection?.length ? nativeSelection : current;
     const ids = collapseTargets(selection);
     if (!ids.length) return false;
-    const blocks = [...new Set(ids)].map((id) => editor.getBlock(id));
+    const blocks = [...new Set(ids)].map((id) => editor.blocks.getBlock(id));
     if (blocks.some((block) => !block)) return false;
     const first = blocks[0]!;
     const collapsed = value === "toggle" ? !first.collapsed : value;
@@ -60,7 +60,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
         ? [{ id: block.id, patch: { collapsed } }]
         : []
     ));
-    if (updates.length) editor.updateBlocks(updates);
+    if (updates.length) editor.blocks.updateBlocks(updates);
     return true;
   };
 

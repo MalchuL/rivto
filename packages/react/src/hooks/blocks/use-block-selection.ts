@@ -14,7 +14,8 @@ import { useEditorSelection } from "../editor/use-editor-selection";
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockSelection(blockId: string): BlockSelection | null {
-  return useEditorSelection().find((selection): selection is BlockSelection => (
-    selection.type === "block" && selection.blockIds.includes(blockId)
+  const selection = useEditorSelection();
+  return selection.find((item): item is BlockSelection => (
+    item.type === "block" && item.blockIds.includes(blockId)
   )) ?? null;
 }

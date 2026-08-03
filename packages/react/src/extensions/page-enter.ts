@@ -49,26 +49,26 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
         target = collapsed;
       }
 
-      const block = editor.getBlock(target.blockId);
+      const block = editor.blocks.getBlock(target.blockId);
       if (!block) return;
       const isTextTarget = target.item.type === "text";
       const splitAt = isTextTarget
         ? Math.min(target.offset ?? 0, block.content.length)
         : block.content.length;
-      if (isTextTarget) editor.updateBlock(block.id, { content: block.content.slice(0, splitAt) });
-      nextBlockId = editor.insertBlock({
+      if (isTextTarget) editor.blocks.updateBlock(block.id, { content: block.content.slice(0, splitAt) });
+      nextBlockId = editor.blocks.insertBlock({
         type: DEFAULT_BLOCK_TYPE,
         content: isTextTarget ? block.content.slice(splitAt) : "",
       }, block.id);
 
-      const edgelessRoot = editor.mode.get() === "edgeless" && editor.getParentId(block.id) === null;
+      const edgelessRoot = editor.mode.get() === "edgeless" && editor.blocks.getParentId(block.id) === null;
       const childrenAreVisible = editor.mode.get() === "edgeless" || !block.collapsed;
       if (edgelessRoot || (block.children.length > 0 && childrenAreVisible)) {
         // Insertion initially creates a sibling directly after `block`.
         // Indenting makes it the last child; moving it to position zero then
         // gives Enter the requested first-child placement.
-        editor.indentBlock(nextBlockId);
-        editor.moveBlock(nextBlockId, null);
+        editor.blocks.indentBlock(nextBlockId);
+        editor.blocks.moveBlock(nextBlockId, null);
       }
 
       editor.selection.set([{

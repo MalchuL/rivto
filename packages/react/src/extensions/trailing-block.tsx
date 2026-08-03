@@ -29,7 +29,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
             let id = "";
             editor.batchUpdates(() => {
               for (let current = 0; current < amount; current += 1) {
-                id = editor.insertBlock(
+                id = editor.blocks.insertBlock(
                   { type: DEFAULT_BLOCK_TYPE, content: "" },
                   id || undefined,
                 );

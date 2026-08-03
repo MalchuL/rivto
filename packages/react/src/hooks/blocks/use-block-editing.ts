@@ -250,7 +250,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   }, []);
 
   const getProps = useCallback((): Readonly<Props> | undefined => (
-    editor.getBlock(blockId)?.props as Props | undefined
+    editor.blocks.getBlock(blockId)?.props as Props | undefined
   ), [blockId, editor]);
 
   const getProp = useCallback(<Key extends keyof Props,>(key: Key): Props[Key] | undefined => (
@@ -258,14 +258,14 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   ), [getProps]);
 
   const setProps = useCallback((props: Partial<Props>): void => {
-    editor.updateBlock(blockId, { props: props as Record<string, unknown> });
+    editor.blocks.updateBlock(blockId, { props: props as Record<string, unknown> });
   }, [blockId, editor]);
 
   const setProp = useCallback(<Key extends keyof Props,>(
     key: Key,
     value: Props[Key] | undefined,
   ): void => {
-    editor.setBlockProp(blockId, String(key), value);
+    editor.blocks.setBlockProp(blockId, String(key), value);
   }, [blockId, editor]);
 
   const attributes: BlockTextEditingAttributes | BlockSelectionAnchorAttributes = textEdit

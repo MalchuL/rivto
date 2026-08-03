@@ -22,14 +22,14 @@ export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
       !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
   }, ({ root }) => {
     const target = firstKeyboardTarget(editor.selection.get());
-    const block = target?.collapsed ? editor.getBlock(target.blockId) : undefined;
+    const block = target?.collapsed ? editor.blocks.getBlock(target.blockId) : undefined;
     if (!target?.collapsed || !block || target.offset !== block.content.length) return false;
     // A collapsed parent behaves as a visible leaf: Delete must not merge one
     // of its deliberately hidden descendants.
     if (block.collapsed) return false;
     const next = findNextEditableBlock(root, block.id);
     if (!next) return false;
-    const joinOffset = editor.mergeBlocks(block.id, next.blockId);
+    const joinOffset = editor.blocks.mergeBlocks(block.id, next.blockId);
     editor.selection.set([{
       type: "text",
       anchor: { blockId: block.id, offset: joinOffset },

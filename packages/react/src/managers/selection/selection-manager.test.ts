@@ -4,7 +4,7 @@ import { createReactEditor } from "../../react-editor";
 describe("ReactSelectionManager", () => {
   test("keeps structured state in core and tolerates a missing active surface", () => {
     const editor = createEditor();
-    const id = editor.insertBlock({ type: "paragraph", content: "text" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "text" });
     const reactEditor = createReactEditor({ editor });
     const manager = reactEditor.selection;
     const selection = [{

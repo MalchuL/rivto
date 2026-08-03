@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@chulane/rivto-app-shared"],
+  transpilePackages: ["@chulane/app"],
   output: "standalone",
   outputFileTracingRoot: path.join(appDir, ".."),
   eslint: {

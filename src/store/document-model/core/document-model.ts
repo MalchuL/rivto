@@ -1,1098 +1,135 @@
+import { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../crdt-doc";
 import {
-    BasicCRDTType,
-    BasicType,
-    CRDTArray,
-    CRDTMap,
-    CRDTDoc,
-    CRDTText,
-    CRDTUndoScope,
-    Unsubscribe,
-} from "../../crdt-doc";
+  DocumentBlockManager,
+  DocumentLinkManager,
+  DocumentPluginDataManager,
+} from "./managers";
 import type {
-    Block,
-    BlockInput,
-    BlockLayout,
-    BlockPatch,
-    BlockPropsValidator,
-    BlockUpdate,
-    DocumentModel,
-    Link,
-    Snapshot,
-    SnapshotUpdate,
+  DocumentModel,
+  Snapshot,
+  SnapshotUpdate,
 } from "./types";
-import type { BlockLayoutStorage, BlockStorage, DocumentStorage, IDBlock, IDLink, IDPlugin, IDProp, LinkStorage } from "./types/storage";
-import { assignMap, assignText, clone, isCRDTArray, isCRDTMap, isCRDTText } from "./utils";
-
-// Persisted keys retain their original namespace so existing CRDT
-// documents remain readable; this is wire format, not an editor dependency.
-const ROOTS_KEY = "rivto.editor.roots";
-const BLOCKS_KEY = "rivto.editor.blocks";
-const LINKS_KEY = "rivto.editor.links";
-const PLUGINS_KEY = "rivto.editor.plugins";
-const DEFAULT_LAYOUT: BlockLayout = { x: 40, y: 40, width: 320, height: 120, zIndex: 0 };
-
-interface LocatedBlock {
-    array: CRDTArray<string>;
-    index: number;
-    parentId?: string;
-    path: readonly number[];
-}
+import { clone } from "./utils";
 
 /**
- * Converts a CRDT array of strings to an array of strings.
- * @param array - The CRDT array of strings.
- * @returns The array of strings.
- */
-function strings(array: CRDTArray<string>): string[] {
-    return array.toArray().map(String);
-}
-
-/**
- * Converts optional block content to its stored string value.
- * @param content - The optional creation content.
- * @returns The string content.
- */
-function contentFrom(content: BlockInput["content"]): string {
-    return content ?? "";
-}
-
-/** Validates persisted collapse state at the framework-neutral model boundary. */
-function collapsedFrom(value: unknown, fallback?: boolean): boolean {
-    if (value === undefined && fallback !== undefined) return fallback;
-    if (typeof value !== "boolean") throw new TypeError("block.collapsed must be a boolean");
-    return value;
-}
-
-/**
- * Canonical collaborative storage model used by applications such as the editor.
+ * Coordinates collaborative document lifecycle through block and link managers.
  *
- * The class owns the document-model boundary so consumers keep
- * the intended dependency direction: application → DocumentModel → CRDTDoc.
- * Native CRDT adapter types are never exposed here.
- *
- * Tree placement stays in `rivto.editor.roots` and each block record's
- * collaborative `children` array. For indexed access, `blockPaths` stores only
- * paths that callers have requested (`[2, 0, 3]` means root 2 → child 0 →
- * child 3). Each read validates its cached path against the live arrays.
- * Stale or missing paths are repaired with one depth-first search; transactions
- * never rebuild or invalidate the cache eagerly.
- *
- * The optional model id is descriptive; the CRDT document remains authoritative.
+ * Block, tree, text, layout, and link APIs live exclusively on `.blocks` and
+ * `.links`. This class retains CRDT transactions, undo scope aggregation,
+ * document-level plugin data, subscriptions, and complete snapshot orchestration.
  */
 export class DocumentModelImpl implements DocumentModel {
-    readonly id: string;
-    readonly crdt: CRDTDoc;
-    readonly origin = Symbol("rivto-document");
-    readonly undoScopes: CRDTUndoScope[];
-    private readonly storage: DocumentStorage;
-    private validateProps: BlockPropsValidator = (_type, props) => props;
-    private readonly blockPaths = new Map<IDBlock, readonly number[]>();
+  /** Descriptive model identifier; persistence remains controlled by the CRDT document. */
+  readonly id: string;
+  /** Adapter-neutral collaborative document containing canonical shared state. */
+  readonly crdt: CRDTDoc;
+  /** Stable local transaction origin used to scope undo history. */
+  readonly origin = Symbol("rivto-document");
+  /** Block records, text, layout, hierarchy, and block snapshot behavior. */
+  readonly blocks: DocumentBlockManager;
+  /** First-class link records and link snapshot behavior. */
+  readonly links: DocumentLinkManager;
+  /** Generic namespaced collaborative document plugin data. */
+  readonly pluginData: DocumentPluginDataManager;
+  /** Collaborative containers tracked by document undo managers. */
+  readonly undoScopes: CRDTUndoScope[];
 
-    /**
-     * Creates a storage model over an adapter-neutral collaborative document.
-     *
-     * @param crdt - Collaborative document that owns the shared state.
-     */
-    constructor(crdt: CRDTDoc);
-    /**
-     * Creates a named storage model over a collaborative document.
-     *
-     * @param id - Descriptive model identifier; it does not control persistence.
-     * @param crdt - Collaborative document that owns the shared state.
-    */
-    constructor(id: string, crdt: CRDTDoc);
-    /**
-     * Initializes typed top-level storage containers for either constructor form.
-     *
-     * @param idOrCrdt - Descriptive ID or the collaborative document itself.
-     * @param maybeCrdt - Collaborative document when a descriptive ID is supplied.
-     */
-    constructor(idOrCrdt: string | CRDTDoc, maybeCrdt?: CRDTDoc) {
-        const crdt = typeof idOrCrdt === "string" ? maybeCrdt : idOrCrdt;
-        if (!crdt) throw new Error("DocumentModelImpl requires a CRDTDoc");
-        this.crdt = crdt;
-        this.id = typeof idOrCrdt === "string" ? idOrCrdt : crdt.id;
-        this.storage = {
-            roots: crdt.getArray<IDBlock>(ROOTS_KEY),  // Only root blocks are stored
-            blocks: crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY),  // All blocks are stored in a map of IDBlock
-            links: crdt.getMap<Record<IDLink, CRDTMap<LinkStorage>>>(LINKS_KEY),
-            pluginData: crdt.getMap<Record<IDPlugin, BasicCRDTType>>(PLUGINS_KEY),
-        };
-        this.undoScopes = [
-            this.storage.blocks,
-            this.storage.roots,
-            this.storage.links,
-            this.storage.pluginData,
-        ];
-        this.normalize();
+  /**
+   * Creates a storage model over an adapter-neutral collaborative document.
+   *
+   * @param crdt - Collaborative document that owns the shared state.
+   */
+  constructor(crdt: CRDTDoc);
+  /**
+   * Creates a named storage model over a collaborative document.
+   *
+   * @param id - Descriptive model identifier; it does not control persistence.
+   * @param crdt - Collaborative document that owns the shared state.
+   */
+  constructor(id: string, crdt: CRDTDoc);
+  /**
+   * Initializes document-level storage and focused managers.
+   *
+   * Managers retain this DocumentModel interface and resolve sibling managers
+   * lazily, so constructor ordering does not create a dependency cycle.
+   *
+   * @param idOrCrdt - Descriptive identifier or the collaborative document.
+   * @param maybeCrdt - Collaborative document when an identifier is supplied.
+   * @throws {Error} When the named constructor form omits its document.
+   */
+  constructor(idOrCrdt: string | CRDTDoc, maybeCrdt?: CRDTDoc) {
+    const crdt = typeof idOrCrdt === "string" ? maybeCrdt : idOrCrdt;
+    if (!crdt) throw new Error("DocumentModelImpl requires a CRDTDoc");
+
+    this.crdt = crdt;
+    this.id = typeof idOrCrdt === "string" ? idOrCrdt : crdt.id;
+    this.blocks = new DocumentBlockManager(this);
+    this.links = new DocumentLinkManager(this);
+    this.pluginData = new DocumentPluginDataManager(this);
+    this.undoScopes = [
+      ...this.blocks.undoScopes,
+      ...this.links.undoScopes,
+      ...this.pluginData.undoScopes,
+    ];
+    this.blocks.normalize();
+  }
+
+  /**
+   * Subscribes to local and remote collaborative document updates.
+   *
+   * @param listener - Callback invoked after a collaborative update.
+   * @returns Function that removes the subscription.
+   */
+  subscribe(listener: () => void): Unsubscribe {
+    return this.crdt.on("update", listener);
+  }
+
+  /**
+   * Executes one synchronous mutation under the model's local undo origin.
+   *
+   * @param operation - Mutation to execute atomically.
+   * @returns No value.
+   */
+  transact(operation: () => void): void {
+    this.crdt.transact(operation, this.origin);
+  }
+
+  /**
+   * Produces a lossless portable schema-v4 snapshot.
+   *
+   * @returns Detached blocks, links, and document-level plugin data.
+   */
+  getSnapshot(): Snapshot {
+    return {
+      version: 4,
+      blocks: clone(this.blocks.getBlocks()),
+      links: clone(this.links.getLinks()),
+      pluginData: this.pluginData.getAll(),
+    };
+  }
+
+  /**
+   * Applies supplied schema-v4 snapshot sections atomically.
+   *
+   * Complete snapshots replace the complete document; partial updates replace
+   * only present sections and leave omitted collaborative state unchanged.
+   *
+   * @param snapshot - Complete snapshot or partial persistence update.
+   * @returns No value.
+   * @throws {Error} When the snapshot version or block collection is unsupported.
+   */
+  loadSnapshot(snapshot: SnapshotUpdate): void {
+    if (snapshot.version !== 4 || (snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks))) {
+      throw new Error("Unsupported Rivto document snapshot");
     }
-
-    /**
-     * Installs block-property validation without coupling storage to plugins.
-     *
-     * @param validator - Function that validates and normalizes props by block type.
-     */
-    setPropsValidator(validator: BlockPropsValidator): void {
-        this.validateProps = validator;
-    }
-
-    /**
-     * Reports whether the document has no root blocks.
-     *
-     * @returns `true` when the ordered root list is empty.
-     */
-    get isEmpty(): boolean {
-        return this.storage.roots.length === 0;
-    }
-
-    /**
-     * Returns one placed block. Cached index paths are validated lazily, so
-     * moves and remote changes need no eager cache maintenance.
-     */
-    getBlock(id: string): Block | undefined {
-        if (!this.findContainer(id)) return undefined;
-        return this.readBlock(id, new Set());
-    }
-
-    /** Returns the complete ordered root tree. */
-    getBlocks(): Block[] {
-        return strings(this.storage.roots).flatMap((id) => {
-            const block = this.readBlock(id, new Set());
-            return block ? [block] : [];
-        });
-    }
-
-    /** Returns one link directly from the canonical link map. */
-    getLink(id: string): Link | undefined {
-        const value = this.storage.links.get(id);
-        return isCRDTMap(value) ? this.readLink(value) : undefined;
-    }
-
-    /** Returns all first-class links. */
-    getLinks(): Link[] {
-        return Array.from(this.storage.links.values()).flatMap((value: CRDTMap<LinkStorage>) => {
-            if (!isCRDTMap(value)) return [];
-            return [this.readLink(value)];
-        });
-    }
-
-    /** Returns root IDs in collaborative array order. */
-    getRootIds(): string[] {
-        return strings(this.storage.roots);
-    }
-
-    /** Returns direct child IDs in collaborative array order. */
-    getChildIds(id: string): string[] {
-        if (!this.findContainer(id)) return [];
-        const value = this.storage.blocks.get(id);
-        return isCRDTMap(value) ? strings(this.requiredArray(value, "children")) : [];
-    }
-
-    /** Returns null for a root, a parent ID for a child, or undefined when absent. */
-    getParentId(id: string): string | null | undefined {
-        const found = this.findContainer(id);
-        return found ? found.parentId ?? null : undefined;
-    }
-
-    /** Returns collapse-aware depth-first block IDs. */
-    getVisibleBlockIds(): string[] {
-        const visited = new Set<string>();
-        const visit = (id: string): string[] => {
-            if (visited.has(id)) return [];
-            const value = this.storage.blocks.get(id);
-            if (!isCRDTMap(value)) return [];
-            visited.add(id);
-            return [
-                id,
-                ...(collapsedFrom(value.get("collapsed"))
-                    ? []
-                    : strings(this.requiredArray(value, "children")).flatMap(visit)),
-            ];
-        };
-        return this.getRootIds().flatMap(visit);
-    }
-
-    /**
-     * Subscribes to local and remote document changes through the CRDT abstraction.
-     *
-     * @param listener - Callback invoked after a collaborative update.
-     * @returns Function that removes the subscription.
-     */
-    subscribe(listener: () => void): Unsubscribe {
-        return this.crdt.on("update", listener);
-    }
-
-    /**
-     * Groups a semantic mutation under this model's local undo origin.
-     *
-     * @param operation - Synchronous mutation to execute atomically.
-     */
-    transact(operation: () => void): void {
-        this.crdt.transact(operation, this.origin);
-    }
-
-    /**
-     * Inserts a block into an ordered root or sibling list.
-     *
-     * @param block - Initial portable block data including its required native type.
-     * @param afterId - Sibling to insert after block id, `null` for first, or omitted for last.
-     * @returns Stable ID of the inserted block.
-     * @throws If the ID already exists or the requested sibling is missing.
-     */
-    insertBlock(block: BlockInput, afterId?: string | null): string {
-        if (!block.type) throw new Error("Block type is required");
-        let id = "";
-        this.transact(() => {
-            const container = afterId ? this.findContainer(afterId)?.array ?? this.storage.roots : this.storage.roots;
-            id = this.insertInto(block, container, afterId);
-        });
-        return id;
-    }
-
-    /**
-     * Patch only supplied block fields. Nested CRDT containers stay alive so
-     * unrelated concurrent edits are not discarded by whole-object replacement.
-     *
-     * @param id - ID of the block to update.
-     * @param patch - Fields to validate and apply.
-     * @throws If the block does not exist.
-     */
-    updateBlock(id: string, patch: BlockPatch): void {
-        this.updateBlocks([{ id, patch }]);
-    }
-
-    /**
-     * Applies identified block patches in order within one transaction.
-     *
-     * Every target, collapse value, and property patch is validated before the
-     * first shared write. Duplicate IDs are allowed and observe preceding
-     * property patches from the same batch.
-     *
-     * @param updates - Ordered block IDs and partial field updates.
-     * @throws If a target is missing or a supplied value fails validation.
-     */
-    updateBlocks(updates: readonly BlockUpdate[]): void {
-        const simulatedProps = new Map<string, Record<string, unknown>>();
-        const prepared = updates.map(({ id, patch }) => {
-            const block = this.requiredBlock(id);
-            const type = this.requiredType(block, id);
-            if (patch.collapsed !== undefined) collapsedFrom(patch.collapsed);
-            let validatedProps: Record<string, unknown> | undefined;
-            if (patch.props) {
-                const current = simulatedProps.get(id)
-                    ?? this.requiredMap(block, "props").toObject() as Record<string, unknown>;
-                validatedProps = this.validateProps(type, { ...current, ...patch.props });
-                simulatedProps.set(id, validatedProps);
-            }
-            return { block, patch, validatedProps };
-        });
-
-        this.transact(() => {
-            prepared.forEach(({ block, patch, validatedProps }) => {
-                if (patch.collapsed !== undefined) block.set("collapsed", patch.collapsed);
-                if (patch.props && validatedProps) {
-                    const props = this.requiredMap(block, "props");
-                    for (const key of Object.keys(patch.props)) {
-                        const value = validatedProps[key];
-                        if (value === undefined) props.delete(key);
-                        else props.set(key, clone(value) as BasicCRDTType);
-                    }
-                }
-                if (patch.pluginData) assignMap(this.requiredMap(block, "pluginData"), patch.pluginData, false);
-                if (patch.content !== undefined) assignText(this.requiredText(block, "content"), patch.content);
-                if (patch.layout) assignMap(this.requiredMap(block, "layout"), patch.layout, false);
-            });
-        });
-    }
-
-    /** Changes a block's native type while preserving its identity and nested data. */
-    setBlockType(id: string, type: string, props: Record<string, unknown> = {}): void {
-        if (!type) throw new Error("Block type is required");
-        this.transact(() => {
-            const block = this.requiredBlock(id);
-            const nextProps = this.validateProps(type, props);
-            block.set("type", type);
-            assignMap(this.requiredMap(block, "props"), nextProps);
-        });
-    }
-
-    /**
-     * Update one block property without replacing the shared props map.
-     * Stable CRDT container identities let concurrent edits to different keys merge.
-     *
-     * @param id - ID of the block to update.
-     * @param key - Property name to set or remove.
-     * @param value - Portable value, or `undefined` to remove the property.
-     * @throws If the block does not exist or validation fails.
-     */
-    setBlockProp(id: string, key: string, value: unknown): void {
-        this.transact(() => {
-            const block = this.requiredBlock(id);
-            this.patchProps(String(block.get("type")), this.requiredMap(block, "props"), { [key]: value });
-        });
-    }
-
-    /**
-     * Updates one plugin namespace without touching data owned by other plugins.
-     *
-     * @param id - ID of the owning block.
-     * @param pluginId - Stable plugin namespace.
-     * @param value - Portable plugin data, or `undefined` to remove it.
-     * @throws If the block does not exist.
-     */
-    setPluginData(id: string, pluginId: string, value: unknown): void {
-        this.transact(() => {
-            const data = this.requiredMap(this.requiredBlock(id), "pluginData");
-            if (value === undefined) data.delete(pluginId);
-            else data.set(pluginId, clone(value) as BasicCRDTType);
-        });
-    }
-
-    /**
-     * Reconcile DOM plain text as the smallest delete/insert range possible.
-     * This preserves CRDTText identity and unchanged formatted runs.
-     *
-     * @param id - ID of the text block.
-     * @param text - Complete plain-text value received from the view.
-     * @throws If the block or its content field does not exist.
-     */
-    setBlockText(id: string, text: string): void {
-        this.transact(() => {
-            const content = this.requiredText(this.requiredBlock(id), "content");
-            const current = content.toString();
-            if (current === text) return;
-            let start = 0;
-            while (start < current.length && start < text.length && current[start] === text[start]) start += 1;
-            let oldEnd = current.length;
-            let newEnd = text.length;
-            while (oldEnd > start && newEnd > start && current[oldEnd - 1] === text[newEnd - 1]) {
-                oldEnd -= 1;
-                newEnd -= 1;
-            }
-            if (oldEnd > start) content.delete(start, oldEnd - start);
-            if (newEnd > start) content.insert(start, text.slice(start, newEnd));
-        });
-    }
-
-    /**
-     * Inserts collaborative text at a block-relative offset.
-     *
-     * @param id - ID of the text block.
-     * @param offset - Requested insertion offset, clamped to the content bounds.
-     * @param text - Text to insert.
-     * @throws If the block or its content field does not exist.
-     */
-    insertText(id: string, offset: number, text: string): void {
-        if (!text) return;
-        this.transact(() => {
-            const content = this.requiredText(this.requiredBlock(id), "content");
-            const position = Math.max(0, Math.min(offset, content.length));
-            content.insert(position, text);
-        });
-    }
-
-    /**
-     * Deletes a collaborative text range without rewriting unaffected content.
-     *
-     * @param id - ID of the text block.
-     * @param offset - Requested start offset, clamped to the content bounds.
-     * @param length - Maximum number of characters to delete.
-     * @throws If the block or its content field does not exist.
-     */
-    deleteText(id: string, offset: number, length: number): void {
-        if (length <= 0) return;
-        this.transact(() => {
-            const content = this.requiredText(this.requiredBlock(id), "content");
-            const position = Math.max(0, Math.min(offset, content.length));
-            content.delete(position, Math.min(length, content.length - position));
-        });
-    }
-
-    /**
-     * Removes a block subtree and every link touching a removed descendant.
-     *
-     * @param id - Root ID of the subtree to remove.
-     */
-    removeBlock(id: string): void {
-        this.transact(() => {
-            const found = this.findContainer(id);
-            if (!found) return;
-            const removed = new Set(this.collectTreeIds(id));
-            this.removeTree(id);
-            found.array.delete(found.index, 1);
-            for (const link of this.getLinks()) {
-                if (removed.has(link.from.blockId) || removed.has(link.to.blockId)) this.storage.links.delete(link.id);
-            }
-        });
-    }
-
-    /**
-     * Joins two blocks while preserving the target block's identity.
-     *
-     * This is the document operation used when Backspace is pressed at the
-     * beginning of a block. For example, merging `"World"` into `"Hello "`
-     * produces one target block containing `"Hello World"`; the source block
-     * no longer exists.
-     *
-     * A merge transfers more than text. Source children are appended after the
-     * target's existing children, preserving their relative order. Links that
-     * point directly to the removed source are deleted because their endpoint
-     * would otherwise be invalid. The source's other fields are intentionally
-     * discarded: the target keeps its type, props, layout, and plugin data.
-     *
-     * Every mutation runs inside one CRDT transaction. Remote collaborators see
-     * one coherent change, and Undo restores the entire source block—including
-     * its text and children—in one step.
-     *
-     * @param targetId - Block that remains in the document and receives content.
-     * @param sourceId - Block whose text and children are transferred, then removed.
-     * @returns The target's original text length. A view can place the caret at
-     * this offset, which is the boundary between the old target and source text.
-     * @throws If either block is missing, both IDs match, or target is inside source.
-     */
-    mergeBlocks(targetId: string, sourceId: string): number {
-        if (targetId === sourceId) throw new Error("Cannot merge a block into itself");
-
-        let joinOffset = 0;
-        this.transact(() => {
-            // Keep the source's parent array and index so its tree entry can be
-            // removed after its transferable data has been copied to the target.
-            const sourceContainer = this.findContainer(sourceId);
-            if (!sourceContainer) throw new Error(`Block ${sourceId} not found`);
-
-            // Moving a source into one of its own descendants would leave that
-            // descendant referring to a deleted ancestor and corrupt the tree.
-            if (this.collectTreeIds(sourceId).includes(targetId)) {
-                throw new Error(`Cannot merge block ${sourceId} into its descendant ${targetId}`);
-            }
-
-            const target = this.requiredBlock(targetId);
-            const source = this.requiredBlock(sourceId);
-            const targetContent = this.requiredText(target, "content");
-            const sourceContent = this.requiredText(source, "content").toString();
-            const targetChildren = this.requiredArray(target, "children");
-            const sourceChildren = this.requiredArray(source, "children");
-            const sourceChildIds = strings(sourceChildren);
-
-            // Capture this before inserting source text. The Backspace plugin
-            // uses the returned boundary to restore the caret after React rerenders.
-            joinOffset = targetContent.length;
-            if (sourceContent) targetContent.insert(joinOffset, sourceContent);
-            if (sourceChildIds.length > 0) {
-                // A CRDT child array is ownership, not a copy. Detach the child
-                // IDs from the source before attaching them to the target so a
-                // child appears in exactly one parent list throughout the change.
-                sourceChildren.delete(0, sourceChildIds.length);
-                targetChildren.push(...sourceChildIds);
-            }
-
-            // Remove both representations of the source: its ID in the tree and
-            // its stored block record. The moved children remain stored normally.
-            sourceContainer.array.delete(sourceContainer.index, 1);
-            this.storage.blocks.delete(sourceId);
-
-            // Links address blocks by ID. Once sourceId is gone, links touching
-            // it cannot be resolved and must be removed in the same transaction.
-            for (const link of this.getLinks()) {
-                if (link.from.blockId === sourceId || link.to.blockId === sourceId) {
-                    this.storage.links.delete(link.id);
-                }
-            }
-        });
-        return joinOffset;
-    }
-
-    /**
-     * Moves a block within its sibling list by editing the ordered CRDT array.
-     *
-     * @param id - ID of the block to move.
-     * @param targetId - Sibling to move beside, or `null` to move to the start.
-     * @param position - Whether to insert before, after, or inside the target.
-     * @throws If the block or target sibling does not exist.
-     */
-    moveBlock(id: string, targetId: string | null, position: "before" | "after" | "inside" = "after"): void {
-        if (id === targetId) return;
-        this.transact(() => {
-            const source = this.findContainer(id);
-            if (!source) throw new Error(`Block ${id} not found`);
-            // A subtree cannot be inserted into its own descendants. Besides
-            // being an invalid outline operation, doing so would create a
-            // recursive ownership cycle that detached snapshots cannot render.
-            if (targetId !== null && this.collectTreeIds(id).includes(targetId)) {
-                throw new Error(`Cannot move block ${id} relative to its descendant ${targetId}`);
-            }
-            const targetBlock = targetId === null ? undefined : this.requiredBlock(targetId);
-            const target = position === "inside" && targetBlock
-                ? this.requiredArray(targetBlock, "children")
-                : targetId === null ? source.array : this.findContainer(targetId)?.array;
-            if (!target) throw new Error(`Target block ${targetId} not found`);
-            source.array.delete(source.index, 1);
-            const targetIndex = targetId === null ? 0 : strings(target).indexOf(targetId);
-            const index = position === "inside"
-                ? target.length
-                : targetId === null ? 0 : Math.max(0, targetIndex + (position === "after" ? 1 : 0));
-            target.insert(index, id);
-        });
-    }
-
-    /**
-     * Moves sibling block roots as one ordered, atomic operation.
-     *
-     * Selected descendants are ignored because moving their selected ancestor
-     * already carries them. Every remaining root must belong to the same direct
-     * parent; accepting mixed source levels would make one drag silently change
-     * the relative hierarchy of otherwise independent branches.
-     *
-     * @param ids - Selected block IDs in any order, including descendants.
-     * @param targetId - Block beside or inside which the roots are inserted.
-     * @param position - Placement relative to `targetId`.
-     * @throws If selected roots are not siblings or target their own subtree.
-     */
-    moveBlocks(
-        ids: string[],
-        targetId: string | null,
-        position: "before" | "after" | "inside" = "after",
-    ): void {
-        this.transact(() => {
-            const roots = this.selectedTopLevelRoots(ids);
-            if (!roots.length) return;
-            const parentId = this.findContainer(roots[0]!)?.parentId;
-            if (roots.some((id) => this.findContainer(id)?.parentId !== parentId)) {
-                throw new Error("Moved blocks must share the same parent");
-            }
-            if (targetId !== null && roots.some((id) => this.collectTreeIds(id).includes(targetId))) {
-                throw new Error(`Cannot move blocks relative to their descendant ${targetId}`);
-            }
-
-            // Repeated "after" and root-start insertions target the same index,
-            // so process from the end to retain visible source order. "before"
-            // and "inside" naturally retain order when processed forwards.
-            const ordered = targetId === null || position === "after" ? [...roots].reverse() : roots;
-            ordered.forEach((id) => this.moveBlock(id, targetId, position));
-        });
-    }
-
-    /**
-     * Nests a block under its preceding sibling.
-     *
-     * @param id - ID of the block to indent.
-     */
-    indentBlock(id: string): void {
-        this.indentBlocks([id]);
-    }
-
-    /**
-     * Nests consecutive selected roots under the first root's previous sibling.
-     *
-     * Descendants whose ancestors are also selected are removed from the move
-     * list: moving the selected ancestor already carries its complete subtree.
-     * The remaining roots must cover one uninterrupted visible range. If the
-     * first root has no previous sibling, the complete operation is a no-op;
-     * later roots are never partially indented. This matches Logseq's grouped
-     * outliner behavior and keeps the supplied roots at the same new depth.
-     *
-     * @param ids - Selected block IDs in any order, including descendants.
-     */
-    indentBlocks(ids: string[]): void {
-        this.transact(() => {
-            const roots = this.selectedTopLevelRoots(ids);
-            if (!this.isConsecutiveSelection(roots)) return;
-            const source = this.findContainer(roots[0]!);
-            if (!source || source.index === 0) return;
-            const parent = this.requiredBlock(String(source.array.get(source.index - 1)));
-            roots.forEach((rootId) => {
-                const current = this.findContainer(rootId);
-                if (current) current.array.delete(current.index, 1);
-            });
-            this.requiredArray(parent, "children").push(...roots);
-        });
-    }
-
-    /**
-     * Moves a nested block directly after its parent and adopts later siblings.
-     *
-     * Following siblings become children of the outdented block, preserving the
-     * visible tree order: the block's existing children stay first, followed by
-     * the siblings that previously appeared after it. Removing and reinserting
-     * every affected ID inside this method's transaction publishes one update
-     * and creates one undoable tree operation.
-     *
-     * @param id - ID of the block to outdent.
-     */
-    outdentBlock(id: string): void {
-        this.outdentBlocks([id]);
-    }
-
-    /**
-     * Outdents consecutive selected roots as one ordered group.
-     *
-     * Only top-level selected roots move, so selected descendants travel with
-     * their selected ancestor exactly once. The group is inserted directly
-     * after its parent. Unselected siblings following the last moved root become
-     * children of that last root, preserving the visible outline order and the
-     * direct-outdent behavior used by Logseq and Rivto's single-block command.
-     *
-     * Selection that begins at root depth or skips visible blocks is a no-op.
-     * All detach, insert, and adoption mutations share one CRDT transaction.
-     *
-     * @param ids - Selected block IDs in any order, including descendants.
-     */
-    outdentBlocks(ids: string[]): void {
-        this.transact(() => {
-            const roots = this.selectedTopLevelRoots(ids);
-            if (!this.isConsecutiveSelection(roots)) return;
-            const source = this.findContainer(roots[0]!);
-            if (!source?.parentId) return;
-            const parentContainer = this.findContainer(source.parentId);
-            if (!parentContainer) return;
-
-            // A range may continue with blocks already at the destination depth.
-            // Stop before them instead of moving them one level too far.
-            const firstDestinationLevel = roots.findIndex(
-                (rootId) => this.findContainer(rootId)?.parentId === parentContainer.parentId,
-            );
-            const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
-            if (!moving.length) return;
-            const last = this.findContainer(moving.at(-1)!);
-            if (!last) return;
-            const followingSiblingIds = strings(last.array).slice(last.index + 1);
-
-            moving.forEach((rootId) => {
-                const current = this.findContainer(rootId);
-                if (current) current.array.delete(current.index, 1);
-            });
-            followingSiblingIds.forEach((siblingId) => {
-                const current = this.findContainer(siblingId);
-                if (current) current.array.delete(current.index, 1);
-            });
-            parentContainer.array.insert(parentContainer.index + 1, ...moving);
-            if (followingSiblingIds.length > 0) {
-                this.requiredArray(this.requiredBlock(moving.at(-1)!), "children").push(...followingSiblingIds);
-            }
-        });
-    }
-
-    /**
-     * Patches supplied geometry keys so independent concurrent edits can merge.
-     *
-     * @param id - ID of the block to reposition or resize.
-     * @param layout - Geometry fields to update.
-     * @throws If the block or its layout field does not exist.
-     */
-    setBlockLayout(id: string, layout: Partial<BlockLayout>): void {
-        this.transact(() => assignMap(this.requiredMap(this.requiredBlock(id), "layout"), layout, false));
-    }
-
-    /**
-     * Creates or replaces a first-class link between existing blocks.
-     *
-     * @param link - Portable link record to store.
-     * @throws If either endpoint references a missing block.
-     */
-    createLink(link: Link): void {
-        this.transact(() => {
-            if (!this.storage.blocks.has(link.from.blockId) || !this.storage.blocks.has(link.to.blockId)) {
-                throw new Error("Link endpoints must reference existing blocks");
-            }
-            const model = this.crdt.instantiator.createMap<LinkStorage>();
-            model.set("id", link.id);
-            model.set("from", clone(link.from));
-            model.set("to", clone(link.to));
-            model.set("meta", clone(link.meta ?? {}) as Record<string, BasicType>);
-            this.storage.links.set(link.id, model);
-        });
-    }
-
-    /**
-     * Removes a link by ID.
-     *
-     * @param id - ID of the link to remove.
-     */
-    removeLink(id: string): void {
-        this.transact(() => this.storage.links.delete(id));
-    }
-
-    /**
-     * Produces a lossless portable schema-v4 snapshot.
-     *
-     * @returns Detached blocks, links, and document-level plugin data.
-     */
-    getSnapshot(): Snapshot {
-        return {
-            version: 4,
-            blocks: clone(this.getBlocks()),
-            links: clone(this.getLinks()),
-            pluginData: clone(this.storage.pluginData.toObject() as Record<string, unknown>),
-        };
-    }
-
-    /**
-     * Applies supplied schema-v4 snapshot sections atomically.
-     *
-     * A complete snapshot replaces the complete document. A partial fetched
-     * update replaces only its present sections, leaving omitted state intact.
-     *
-     * @param snapshot - Complete snapshot or partial persistence update.
-     * @throws If the snapshot version or supplied block collection is unsupported.
-     */
-    loadSnapshot(snapshot: SnapshotUpdate): void {
-        if (snapshot.version !== 4 || (snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks))) {
-            throw new Error("Unsupported Rivto document snapshot");
-        }
-        const validateSnapshotBlock = (block: Block): void => {
-            collapsedFrom(block.collapsed);
-            if (!Array.isArray(block.children)) throw new Error("Snapshot block children must be an array");
-            block.children.forEach(validateSnapshotBlock);
-        };
-        snapshot.blocks?.forEach(validateSnapshotBlock);
-        this.transact(() => {
-            // Persistence may fetch sections independently. Replacing only keys
-            // present in the update avoids erasing newer links or plugin state.
-            if (snapshot.blocks) {
-                this.storage.roots.delete(0, this.storage.roots.length);
-                this.storage.blocks.clear();
-                snapshot.blocks.forEach((block) => this.insertInto(block, this.storage.roots));
-            }
-            if (snapshot.links) {
-                this.storage.links.clear();
-                snapshot.links.forEach((link) => this.createLink(link));
-            }
-            if (snapshot.pluginData) {
-                this.storage.pluginData.clear();
-                assignMap(this.storage.pluginData, snapshot.pluginData);
-            }
-        });
-    }
-
-    /**
-     * Repair duplicate, missing, and orphaned tree references deterministically.
-     * Block payloads are retained even when a concurrent move leaves an orphan.
-     *
-     * Orphaned blocks are appended to the root list, while duplicate and missing
-     * references are removed.
-     */
-    normalize(): void {
-        this.transact(() => {
-            const seen = new Set<string>();
-            const clean = (array: CRDTArray<string>) => {
-                for (let index = array.length - 1; index >= 0; index -= 1) {
-                    const id = String(array.get(index));
-                    if (!this.storage.blocks.has(id) || seen.has(id)) array.delete(index, 1);
-                    else seen.add(id);
-                }
-            };
-            clean(this.storage.roots);
-            for (const value of Array.from(this.storage.blocks.values())) {
-                if (isCRDTMap(value)) clean(this.requiredArray(value, "children"));
-            }
-            for (const id of Array.from(this.storage.blocks.keys())) if (!seen.has(id)) this.storage.roots.push(id);
-        });
-    }
-
-    /**
-     * Creates CRDT containers for a block and inserts its ID into an ordered list.
-     *
-     * @param block - Portable block data, including its type and optional descendants.
-     * @param container - Root or child array that receives the block ID.
-     * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
-     * @returns Stable ID assigned to the block.
-     * @throws If the ID already exists or the requested sibling is missing.
-     */
-    private insertInto(block: BlockInput, container: CRDTArray<string>, afterId?: string | null): string {
-        if (!block.type) throw new Error("Block type is required");
-        const collapsed = collapsedFrom(block.collapsed, false);
-        const id = block.id ?? crypto.randomUUID();
-        if (this.storage.blocks.has(id)) throw new Error(`Block ${id} already exists`);
-        const model = this.crdt.instantiator.createMap<BlockStorage>();
-        const props = this.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
-        const content = this.crdt.instantiator.createText();
-        const children = this.crdt.instantiator.createArray<string>();
-        const layout = this.crdt.instantiator.createMap<BlockLayoutStorage>();
-        const pluginData = this.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
-        model.set("id", id);
-        model.set("type", block.type);
-        model.set("collapsed", collapsed);
-        model.set("props", props);
-        model.set("content", content);
-        model.set("children", children);
-        model.set("layout", layout);
-        model.set("pluginData", pluginData);
-        this.storage.blocks.set(id, model);
-        assignMap(props, this.validateProps(block.type, block.props ?? {}));
-        assignText(content, contentFrom(block.content));
-        const flowIndex = container.length;
-        assignMap(layout, {
-            ...DEFAULT_LAYOUT,
-            x: 60 + (flowIndex % 4) * 350,
-            y: 60 + Math.floor(flowIndex / 4) * 180,
-            ...block.layout,
-        }, false);
-        assignMap(pluginData, block.pluginData ?? {});
-        block.children?.forEach((child) => this.insertInto(child, children));
-        const index = afterId === undefined ? container.length : afterId === null ? 0 : strings(container).indexOf(afterId) + 1;
-        if (index < 0) throw new Error(`Target block ${afterId} not found`);
-        container.insert(index, id);
-        return id;
-    }
-
-    /**
-     * Materializes one stored block and its descendants as detached values.
-     *
-     * @param id - ID of the block to read.
-     * @param visited - IDs already traversed, used to break malformed cycles.
-     * @returns Materialized block, or `undefined` when missing or already visited.
-     */
-    private readBlock(id: IDBlock, visited: Set<IDBlock>): Block | undefined {
-        if (visited.has(id)) return undefined;
-        const value = this.storage.blocks.get(id);
-        if (!isCRDTMap(value)) return undefined;
-        visited.add(id);
-        const props = this.requiredMap(value, "props").toObject() as Record<IDProp, unknown>;
-        const pluginData = this.requiredMap(value, "pluginData").toObject() as Record<IDPlugin, unknown>;
-        const content = this.requiredText(value, "content").toString();
-        const children = strings(this.requiredArray(value, "children")).flatMap((childId: IDBlock) => {
-            const child = this.readBlock(childId, visited);
-            return child ? [child] : [];
-        });
-        const layout = this.requiredMap(value, "layout").toObject() as unknown as Partial<BlockLayout>;
-        return {
-            id,
-            type: this.requiredType(value, id),
-            collapsed: collapsedFrom(value.get("collapsed")),
-            props,
-            pluginData,
-            content,
-            children,
-            layout: { ...DEFAULT_LAYOUT, ...layout },
-        };
-    }
-
-    /** Materializes one stored link as a detached value. */
-    private readLink(value: CRDTMap<LinkStorage>): Link {
-        return {
-            id: String(value.get("id")),
-            from: clone(value.get("from") as Link["from"]),
-            to: clone(value.get("to") as Link["to"]),
-            meta: clone((value.get("meta") as Record<string, unknown> | undefined) ?? {}),
-        };
-    }
-
-    /**
-     * Resolves a validated cached path or searches the current CRDT tree.
-     * Paths are intentionally repaired only when the corresponding ID is read.
-     */
-    private findContainer(id: string): LocatedBlock | undefined {
-        if (!this.storage.blocks.has(id)) {
-            this.blockPaths.delete(id);
-            return undefined;
-        }
-
-        const cached = this.blockPaths.get(id);
-        const resolved = cached ? this.resolvePath(cached) : undefined;
-        if (resolved?.id === id) return { ...resolved, path: cached! };
-
-        const path = this.findPath(id);
-        if (!path) {
-            this.blockPaths.delete(id);
-            return undefined;
-        }
-        this.blockPaths.set(id, path);
-        const found = this.resolvePath(path);
-        return found ? { ...found, path } : undefined;
-    }
-
-    /** Walks sibling indexes from roots to one current tree location. */
-    private resolvePath(path: readonly number[]): Omit<LocatedBlock, "path"> & { id: string } | undefined {
-        if (!path.length) return undefined;
-        let array = this.storage.roots;
-        let parentId: string | undefined;
-        for (let depth = 0; depth < path.length; depth += 1) {
-            const index = path[depth]!;
-            if (!Number.isInteger(index) || index < 0 || index >= array.length) return undefined;
-            const rawId = array.get(index);
-            if (typeof rawId !== "string") return undefined;
-            if (depth === path.length - 1) return { id: rawId, array, index, parentId };
-            const block = this.storage.blocks.get(rawId);
-            if (!isCRDTMap(block)) return undefined;
-            parentId = rawId;
-            array = this.requiredArray(block, "children");
-        }
-        return undefined;
-    }
-
-    /** Finds one ID by walking only root and child ID arrays. */
-    private findPath(id: string): readonly number[] | undefined {
-        const visited = new Set<string>();
-        const visit = (array: CRDTArray<string>, prefix: readonly number[]): readonly number[] | undefined => {
-            for (let index = 0; index < array.length; index += 1) {
-                const rawId = array.get(index);
-                if (typeof rawId !== "string") continue;
-                const path = [...prefix, index];
-                if (rawId === id) return path;
-                if (visited.has(rawId)) continue;
-                visited.add(rawId);
-                const block = this.storage.blocks.get(rawId);
-                if (!isCRDTMap(block)) continue;
-                const found = visit(this.requiredArray(block, "children"), path);
-                if (found) return found;
-            }
-            return undefined;
-        };
-        return visit(this.storage.roots, []);
-    }
-
-    /** Returns selected roots in visible order, excluding selected descendants. */
-    private selectedTopLevelRoots(ids: string[]): string[] {
-        const selected = new Set(ids.filter((id) => this.storage.blocks.has(id)));
-        const hasSelectedAncestor = (id: string): boolean => {
-            let parentId = this.findContainer(id)?.parentId;
-            while (parentId) {
-                if (selected.has(parentId)) return true;
-                parentId = this.findContainer(parentId)?.parentId;
-            }
-            return false;
-        };
-        return this.visibleBlockIds().filter((id) => selected.has(id) && !hasSelectedAncestor(id));
-    }
-
-    /** Checks that selected subtrees cover one uninterrupted visible range. */
-    private isConsecutiveSelection(roots: string[]): boolean {
-        if (!roots.length) return false;
-        const visible = this.visibleBlockIds();
-        const covered = new Set(roots.flatMap((id) => this.collectTreeIds(id)));
-        const first = visible.indexOf(roots[0]!);
-        const lastTree = this.collectTreeIds(roots.at(-1)!);
-        const last = visible.indexOf(lastTree.at(-1)!);
-        return first >= 0 && last >= first && visible.slice(first, last + 1).every((id) => covered.has(id));
-    }
-
-    /** Returns every stored tree ID in visible depth-first order. */
-    private visibleBlockIds(): string[] {
-        return strings(this.storage.roots).flatMap((id) => this.collectTreeIds(id));
-    }
-
-    /**
-     * Deletes a block and all descendants from the block map.
-     *
-     * @param id - Root ID of the subtree to delete.
-     */
-    private removeTree(id: string): void {
-        const value = this.storage.blocks.get(id);
-        if (!isCRDTMap(value)) return;
-        strings(this.requiredArray(value, "children")).forEach((child) => this.removeTree(child));
-        this.storage.blocks.delete(id);
-    }
-
-    /**
-     * Collects every block ID in a subtree.
-     *
-     * @param id - Root ID of the subtree.
-     * @returns Root and descendant IDs in depth-first order.
-     */
-    private collectTreeIds(id: string): string[] {
-        const value = this.storage.blocks.get(id);
-        if (!isCRDTMap(value)) return [];
-        return [id, ...strings(this.requiredArray(value, "children")).flatMap((child) => this.collectTreeIds(child))];
-    }
-
-    /**
-     * Applies caller-owned prop keys without rebuilding the live CRDT map.
-     *
-     * @param type - Block type passed to the installed validator.
-     * @param props - Shared property map to patch.
-     * @param patch - Property keys owned by this operation.
-     */
-    private patchProps(
-        type: string,
-        props: CRDTMap<Record<string, BasicCRDTType>>,
-        patch: Record<string, unknown>,
-    ): void {
-        const validated = this.validateProps(type, { ...props.toObject(), ...patch } as Record<string, unknown>);
-        for (const key of Object.keys(patch)) {
-            const value = validated[key];
-            if (value === undefined) props.delete(key);
-            else props.set(key, clone(value) as BasicCRDTType);
-        }
-    }
-
-    /**
-     * Reads a block map or fails with a domain-specific message.
-     *
-     * @param id - Block ID to resolve.
-     * @returns Stored block map.
-     * @throws If the block does not exist.
-     */
-    private requiredBlock(id: string): CRDTMap<BlockStorage> {
-        const value = this.storage.blocks.get(id);
-        if (!isCRDTMap(value)) throw new Error(`Block ${id} not found`);
-        return value;
-    }
-
-    /**
-     * Reads the immutable native type stored on a block.
-     *
-     * Missing types indicate malformed shared data and are rejected instead of
-     * silently changing the block into a built-in editor type.
-     *
-     * @param block - Stored block map to inspect.
-     * @param id - Block ID included in a descriptive error.
-     * @returns The non-empty native block type.
-     * @throws If shared storage does not contain a valid type.
-     */
-    private requiredType(block: CRDTMap<BlockStorage>, id: string): string {
-        const type = block.get("type");
-        if (typeof type !== "string" || !type) throw new Error(`Block ${id} has no type`);
-        return type;
-    }
-
-    /**
-     * Reads a required map field from a parent map.
-     *
-     * @param parent - Parent shared map.
-     * @param key - Field expected to contain a CRDT map.
-     * @returns Nested shared map.
-     * @throws If the field is absent or has the wrong shared type.
-     */
-    private requiredMap<Schema extends object, Key extends keyof Schema & string>(
-        parent: CRDTMap<Schema>,
-        key: Key,
-    ): Extract<Schema[Key], CRDTMap<any>> {
-        const value = parent.get(key);
-        if (!isCRDTMap(value)) throw new Error(`Expected CRDTMap at ${key}`);
-        return value as Extract<Schema[Key], CRDTMap<any>>;
-    }
-
-    /**
-     * Reads a required array field from a parent map.
-     *
-     * @param parent - Parent shared map.
-     * @param key - Field expected to contain a CRDT array.
-     * @returns Nested shared array.
-     * @throws If the field is absent or has the wrong shared type.
-     */
-    private requiredArray<Schema extends object, Key extends keyof Schema & string>(
-        parent: CRDTMap<Schema>,
-        key: Key,
-    ): Extract<Schema[Key], CRDTArray<any>> {
-        const value = parent.get(key);
-        if (!isCRDTArray(value)) throw new Error(`Expected CRDTArray at ${key}`);
-        return value as Extract<Schema[Key], CRDTArray<any>>;
-    }
-
-    /**
-     * Reads a required text field from a parent map.
-     *
-     * @param parent - Parent shared map.
-     * @param key - Field expected to contain collaborative text.
-     * @returns Nested collaborative text.
-     * @throws If the field is absent or has the wrong shared type.
-     */
-    private requiredText<Schema extends object, Key extends keyof Schema & string>(
-        parent: CRDTMap<Schema>,
-        key: Key,
-    ): Extract<Schema[Key], CRDTText> {
-        const value = parent.get(key);
-        if (!isCRDTText(value)) throw new Error(`Expected CRDTText at ${key}`);
-        return value as Extract<Schema[Key], CRDTText>;
-    }
+    if (snapshot.blocks) this.blocks.validateBlocks(snapshot.blocks);
+
+    this.transact(() => {
+      if (snapshot.blocks) this.blocks.loadBlocks(snapshot.blocks);
+      if (snapshot.links) this.links.loadLinks(snapshot.links);
+      if (snapshot.pluginData) {
+        this.pluginData.load(snapshot.pluginData);
+      }
+    });
+  }
 }

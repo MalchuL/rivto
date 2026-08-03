@@ -16,22 +16,24 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
     const doc = new YjsDoc("empty-document");
     const model = new DocumentModelImpl(doc);
 
-    expect(model.getBlocks()).toEqual([]);
-    expect(model.getRootIds()).toEqual([]);
-    expect(model.getVisibleBlockIds()).toEqual([]);
-    expect(model.getLinks()).toEqual([]);
+    expect("getBlocks" in model).toBe(false);
+    expect("createLink" in model).toBe(false);
+    expect(model.blocks.getBlocks()).toEqual([]);
+    expect(model.blocks.getRootIds()).toEqual([]);
+    expect(model.blocks.getVisibleBlockIds()).toEqual([]);
+    expect(model.links.getLinks()).toEqual([]);
 
     model.loadSnapshot({ version: 4, blocks: [], links: [] });
-    const id = model.insertBlock({ id: "only", type: "paragraph", content: "Only" });
-    model.createLink({ id: "self", from: { blockId: id }, to: { blockId: id } });
-    model.removeBlock(id);
+    const id = model.blocks.insertBlock({ id: "only", type: "paragraph", content: "Only" });
+    model.links.createLink({ id: "self", from: { blockId: id }, to: { blockId: id } });
+    model.blocks.removeBlock(id);
 
-    expect(model.getBlocks()).toEqual([]);
-    expect(model.getRootIds()).toEqual([]);
-    expect(model.getVisibleBlockIds()).toEqual([]);
-    expect(model.getLinks()).toEqual([]);
+    expect(model.blocks.getBlocks()).toEqual([]);
+    expect(model.blocks.getRootIds()).toEqual([]);
+    expect(model.blocks.getVisibleBlockIds()).toEqual([]);
+    expect(model.links.getLinks()).toEqual([]);
     expect(model.getSnapshot()).toMatchObject({ version: 4, blocks: [], links: [] });
-    expect(model.insertBlock({ id: "later", type: "paragraph" })).toBe("later");
+    expect(model.blocks.insertBlock({ id: "later", type: "paragraph" })).toBe("later");
     doc.destroy();
   });
 
@@ -40,14 +42,14 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
     const docB = new YjsDoc("empty-remote-b");
     const modelA = new DocumentModelImpl(docA);
     const modelB = new DocumentModelImpl(docB);
-    modelA.insertBlock({ id: "only", type: "paragraph" });
+    modelA.blocks.insertBlock({ id: "only", type: "paragraph" });
     exchangeUpdates(docA, docB);
 
-    modelB.removeBlock("only");
+    modelB.blocks.removeBlock("only");
     exchangeUpdates(docA, docB);
 
-    expect(modelA.getBlocks()).toEqual([]);
-    expect(modelB.getBlocks()).toEqual([]);
+    expect(modelA.blocks.getBlocks()).toEqual([]);
+    expect(modelB.blocks.getBlocks()).toEqual([]);
     docA.destroy();
     docB.destroy();
   });
@@ -55,34 +57,35 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
   it("lazily caches and repairs nested block paths", () => {
     const doc = new YjsDoc("lazy-paths");
     const model = new DocumentModelImpl(doc);
-    model.insertBlock({
+    model.blocks.insertBlock({
       id: "parent",
       type: "paragraph",
       children: [{ id: "child", type: "paragraph", content: "Child" }],
     });
-    model.insertBlock({ id: "target", type: "paragraph" });
-    const findPath = jest.spyOn(model as unknown as {
+    model.blocks.insertBlock({ id: "target", type: "paragraph" });
+    const blockManager = model.blocks as unknown as {
       findPath(id: string): readonly number[] | undefined;
-    }, "findPath");
+    };
+    const findPath = jest.spyOn(blockManager, "findPath");
 
-    expect(model.getBlock("child")?.content).toBe("Child");
+    expect(model.blocks.getBlock("child")?.content).toBe("Child");
     expect(findPath).toHaveBeenCalledTimes(1);
-    expect(model.getBlock("child")?.id).toBe("child");
+    expect(model.blocks.getBlock("child")?.id).toBe("child");
     expect(findPath).toHaveBeenCalledTimes(1);
 
-    model.moveBlock("child", "target", "inside");
+    model.blocks.moveBlock("child", "target", "inside");
     const searchesBeforeRepair = findPath.mock.calls.length;
-    expect(model.getParentId("child")).toBe("target");
+    expect(model.blocks.getParentId("child")).toBe("target");
     expect(findPath).toHaveBeenCalledTimes(searchesBeforeRepair + 1);
-    expect(model.getRootIds()).toEqual(["parent", "target"]);
-    expect(model.getChildIds("target")).toEqual(["child"]);
-    expect(model.getVisibleBlockIds()).toEqual(["parent", "target", "child"]);
-    model.updateBlock("target", { collapsed: true });
-    expect(model.getVisibleBlockIds()).toEqual(["parent", "target"]);
-    model.updateBlock("target", { collapsed: false });
+    expect(model.blocks.getRootIds()).toEqual(["parent", "target"]);
+    expect(model.blocks.getChildIds("target")).toEqual(["child"]);
+    expect(model.blocks.getVisibleBlockIds()).toEqual(["parent", "target", "child"]);
+    model.blocks.updateBlock("target", { collapsed: true });
+    expect(model.blocks.getVisibleBlockIds()).toEqual(["parent", "target"]);
+    model.blocks.updateBlock("target", { collapsed: false });
 
-    model.removeBlock("child");
-    expect(model.getBlock("child")).toBeUndefined();
+    model.blocks.removeBlock("child");
+    expect(model.blocks.getBlock("child")).toBeUndefined();
     doc.destroy();
   });
 
@@ -91,18 +94,18 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
     const docB = new YjsDoc("lazy-path-b");
     const modelA = new DocumentModelImpl(docA);
     const modelB = new DocumentModelImpl(docB);
-    modelA.insertBlock({ id: "left", type: "paragraph" });
-    modelA.insertBlock({ id: "child", type: "paragraph" }, "left");
-    modelA.indentBlock("child");
-    modelA.insertBlock({ id: "right", type: "paragraph" }, "left");
+    modelA.blocks.insertBlock({ id: "left", type: "paragraph" });
+    modelA.blocks.insertBlock({ id: "child", type: "paragraph" }, "left");
+    modelA.blocks.indentBlock("child");
+    modelA.blocks.insertBlock({ id: "right", type: "paragraph" }, "left");
     Y.applyUpdate(docB.doc, Y.encodeStateAsUpdate(docA.doc));
 
-    expect(modelA.getParentId("child")).toBe("left");
-    modelB.moveBlock("child", "right", "inside");
+    expect(modelA.blocks.getParentId("child")).toBe("left");
+    modelB.blocks.moveBlock("child", "right", "inside");
     Y.applyUpdate(docA.doc, Y.encodeStateAsUpdate(docB.doc));
 
-    expect(modelA.getParentId("child")).toBe("right");
-    expect(modelA.getBlock("child")?.id).toBe("child");
+    expect(modelA.blocks.getParentId("child")).toBe("right");
+    expect(modelA.blocks.getBlock("child")?.id).toBe("child");
     docA.destroy();
     docB.destroy();
   });
@@ -110,30 +113,30 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
   it("repairs cached paths after indent, outdent, deletion, undo, and redo", () => {
     const doc = new YjsDoc("lazy-path-history");
     const model = new DocumentModelImpl(doc);
-    model.insertBlock({ id: "parent", type: "paragraph" });
-    model.insertBlock({ id: "child", type: "paragraph" }, "parent");
+    model.blocks.insertBlock({ id: "parent", type: "paragraph" });
+    model.blocks.insertBlock({ id: "child", type: "paragraph" }, "parent");
     const history = new UndoManager(model);
     history.clear();
 
-    expect(model.getParentId("child")).toBeNull();
-    model.indentBlock("child");
-    expect(model.getParentId("child")).toBe("parent");
-    model.outdentBlock("child");
-    expect(model.getParentId("child")).toBeNull();
+    expect(model.blocks.getParentId("child")).toBeNull();
+    model.blocks.indentBlock("child");
+    expect(model.blocks.getParentId("child")).toBe("parent");
+    model.blocks.outdentBlock("child");
+    expect(model.blocks.getParentId("child")).toBeNull();
 
     history.clear();
-    model.moveBlock("child", "parent", "inside");
-    expect(model.getParentId("child")).toBe("parent");
+    model.blocks.moveBlock("child", "parent", "inside");
+    expect(model.blocks.getParentId("child")).toBe("parent");
     history.undo();
-    expect(model.getParentId("child")).toBeNull();
+    expect(model.blocks.getParentId("child")).toBeNull();
     history.redo();
-    expect(model.getParentId("child")).toBe("parent");
+    expect(model.blocks.getParentId("child")).toBe("parent");
 
     history.clear();
-    model.removeBlock("child");
-    expect(model.getBlock("child")).toBeUndefined();
+    model.blocks.removeBlock("child");
+    expect(model.blocks.getBlock("child")).toBeUndefined();
     history.undo();
-    expect(model.getParentId("child")).toBe("parent");
+    expect(model.blocks.getParentId("child")).toBe("parent");
 
     history.destroy();
     doc.destroy();
@@ -142,18 +145,18 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
   it("provides direct block and link getters", () => {
     const doc = new YjsDoc("direct-getters");
     const model = new DocumentModelImpl(doc);
-    model.insertBlock({ id: "from", type: "paragraph" });
-    model.insertBlock({ id: "to", type: "paragraph" });
-    model.createLink({ id: "edge", from: { blockId: "from" }, to: { blockId: "to" } });
+    model.blocks.insertBlock({ id: "from", type: "paragraph" });
+    model.blocks.insertBlock({ id: "to", type: "paragraph" });
+    model.links.createLink({ id: "edge", from: { blockId: "from" }, to: { blockId: "to" } });
 
-    expect(model.getBlocks().map((block) => block.id)).toEqual(["from", "to"]);
-    expect(model.getLink("edge")).toEqual({
+    expect(model.blocks.getBlocks().map((block) => block.id)).toEqual(["from", "to"]);
+    expect(model.links.getLink("edge")).toEqual({
       id: "edge",
       from: { blockId: "from" },
       to: { blockId: "to" },
       meta: {},
     });
-    expect(model.getLinks()).toEqual([model.getLink("edge")]);
+    expect(model.links.getLinks()).toEqual([model.links.getLink("edge")]);
     doc.destroy();
   });
 
@@ -163,26 +166,26 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
     const modelA = new DocumentModelImpl(docA);
     const modelB = new DocumentModelImpl(docB);
 
-    modelA.insertBlock({ id: "image", type: "image", content: "Hello", props: { url: "old.png", width: 300 } });
+    modelA.blocks.insertBlock({ id: "image", type: "image", content: "Hello", props: { url: "old.png", width: 300 } });
     Y.applyUpdate(docB.doc, Y.encodeStateAsUpdate(docA.doc));
 
-    modelA.setBlockProp("image", "width", 600);
-    modelA.setPluginData("image", "rivto.comments", { threadIds: ["thread-1"] });
-    modelA.insertText("image", 5, " Alice");
+    modelA.blocks.setBlockProp("image", "width", 600);
+    modelA.blocks.setPluginData("image", "rivto.comments", { threadIds: ["thread-1"] });
+    modelA.blocks.insertText("image", 5, " Alice");
 
-    modelB.setBlockProp("image", "url", "new.png");
-    modelB.setPluginData("image", "acme.review", { status: "approved" });
-    modelB.insertText("image", 0, "Hi ");
+    modelB.blocks.setBlockProp("image", "url", "new.png");
+    modelB.blocks.setPluginData("image", "acme.review", { status: "approved" });
+    modelB.blocks.insertText("image", 0, "Hi ");
 
     exchangeUpdates(docA, docB);
 
     expect(modelA.getSnapshot()).toEqual(modelB.getSnapshot());
-    expect(modelA.getBlocks()[0].props).toEqual({ url: "new.png", width: 600 });
-    expect(modelA.getBlocks()[0].pluginData).toEqual({
+    expect(modelA.blocks.getBlocks()[0].props).toEqual({ url: "new.png", width: 600 });
+    expect(modelA.blocks.getBlocks()[0].pluginData).toEqual({
       "acme.review": { status: "approved" },
       "rivto.comments": { threadIds: ["thread-1"] },
     });
-    expect(modelA.getBlocks()[0].content).toBe("Hi Hello Alice");
+    expect(modelA.blocks.getBlocks()[0].content).toBe("Hi Hello Alice");
 
     docA.destroy();
     docB.destroy();
@@ -192,28 +195,28 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
     const doc = new YjsDoc("canonical-tree");
     const model = new DocumentModelImpl("canonical-tree", doc);
 
-    model.insertBlock({ id: "parent", type: "group", children: [{ id: "child", type: "paragraph", content: "Nested" }] });
-    model.insertBlock({ id: "target", type: "paragraph" });
-    model.createLink({ id: "child-target", from: { blockId: "child" }, to: { blockId: "target" } });
-    model.removeBlock("parent");
+    model.blocks.insertBlock({ id: "parent", type: "group", children: [{ id: "child", type: "paragraph", content: "Nested" }] });
+    model.blocks.insertBlock({ id: "target", type: "paragraph" });
+    model.links.createLink({ id: "child-target", from: { blockId: "child" }, to: { blockId: "target" } });
+    model.blocks.removeBlock("parent");
 
-    expect(model.getBlocks().map((block) => block.id)).toEqual(["target"]);
-    expect(model.getLinks()).toEqual([]);
+    expect(model.blocks.getBlocks().map((block) => block.id)).toEqual(["target"]);
+    expect(model.links.getLinks()).toEqual([]);
     doc.destroy();
   });
 
   it("stores Markdown syntax as plain collaborative text", () => {
     const doc = new YjsDoc("canonical-rich-text");
     const model = new DocumentModelImpl(doc);
-    model.insertBlock({
+    model.blocks.insertBlock({
       id: "text",
       type: "paragraph",
       content: "**Bold** plain",
     });
 
-    model.setBlockText("text", "**Bold!** plain");
+    model.blocks.setBlockText("text", "**Bold!** plain");
 
-    expect(model.getBlocks()[0].content).toBe("**Bold!** plain");
+    expect(model.blocks.getBlocks()[0].content).toBe("**Bold!** plain");
     doc.destroy();
   });
 
@@ -221,11 +224,11 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
     const doc = new YjsDoc("canonical-types");
     const model = new DocumentModelImpl(doc);
 
-    expect(() => model.insertBlock({ id: "missing" } as BlockInput)).toThrow("Block type is required");
-    model.insertBlock({ id: "custom", type: "acme.chart" });
-    model.updateBlock("custom", { type: "paragraph" } as unknown as BlockPatch);
+    expect(() => model.blocks.insertBlock({ id: "missing" } as BlockInput)).toThrow("Block type is required");
+    model.blocks.insertBlock({ id: "custom", type: "acme.chart" });
+    model.blocks.updateBlock("custom", { type: "paragraph" } as unknown as BlockPatch);
 
-    expect(model.getBlocks()[0].type).toBe("acme.chart");
+    expect(model.blocks.getBlocks()[0].type).toBe("acme.chart");
     doc.destroy();
   });
 });

@@ -3,7 +3,7 @@ import { createRivtoEditor } from "../../editor";
 describe("core ClipboardManager", () => {
   it("copies and atomically cuts the current structured selection", () => {
     const editor = createRivtoEditor();
-    const id = editor.insertBlock({ type: "paragraph", content: "Selected" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Selected" });
     editor.selection.set([{
       type: "block",
       blockIds: [id],
@@ -17,17 +17,17 @@ describe("core ClipboardManager", () => {
     expect(updates).not.toHaveBeenCalled();
     expect(editor.clipboard.cut()?.bundle.blocks).toMatchObject([{ id, content: "Selected" }]);
     expect(updates).toHaveBeenCalledTimes(1);
-    expect(editor.getBlocks()).toEqual([]);
+    expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.selection.get()).toEqual([]);
 
     editor.undo();
-    expect(editor.getBlocks()).toMatchObject([{ id, content: "Selected" }]);
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Selected" }]);
     editor.destroy();
   });
 
   it("preserves copied hierarchy in plain text, HTML, and Markdown", () => {
     const editor = createRivtoEditor();
-    const first = editor.insertBlock({
+    const first = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Root <one>\nline",
       children: [{
@@ -36,8 +36,8 @@ describe("core ClipboardManager", () => {
         children: [{ type: "paragraph", content: "Grandchild" }],
       }],
     });
-    editor.updateBlock(first, { collapsed: true });
-    const second = editor.insertBlock({ type: "paragraph", content: "Second" }, first);
+    editor.blocks.updateBlock(first, { collapsed: true });
+    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first);
     editor.selection.set([{
       type: "block",
       blockIds: [first, second],
@@ -62,11 +62,11 @@ describe("core ClipboardManager", () => {
 
   it("uses block raw-text converters after trimming copied text", () => {
     const editor = createRivtoEditor();
-    editor.defineBlock({
+    editor.blocks.defineBlock({
       type: "test.raw",
       toRawText: (block) => `Raw: ${block.content}`,
     });
-    const id = editor.insertBlock({ type: "test.raw", content: "Selected text" });
+    const id = editor.blocks.insertBlock({ type: "test.raw", content: "Selected text" });
     editor.selection.set([{
       type: "text",
       anchor: { blockId: id, offset: 0 },
@@ -84,7 +84,7 @@ describe("core ClipboardManager", () => {
 
   it("prefers structured data over plain text", () => {
     const source = createRivtoEditor();
-    const copiedId = source.insertBlock({ type: "paragraph", content: "Structured" });
+    const copiedId = source.blocks.insertBlock({ type: "paragraph", content: "Structured" });
     source.selection.set([{
       type: "block",
       blockIds: [copiedId],
@@ -95,7 +95,7 @@ describe("core ClipboardManager", () => {
     expect(payload.bundle.version).toBe(2);
 
     const target = createRivtoEditor();
-    const targetId = target.insertBlock({ type: "paragraph", content: "" });
+    const targetId = target.blocks.insertBlock({ type: "paragraph", content: "" });
     target.selection.set([{
       type: "text",
       anchor: { blockId: targetId, offset: 0 },
@@ -105,7 +105,7 @@ describe("core ClipboardManager", () => {
       structured: JSON.stringify(payload.bundle),
       text: "plain",
     });
-    expect(target.getBlocks().map(({ content }) => content)).toEqual(["", "Structured"]);
+    expect(target.blocks.getBlocks().map(({ content }) => content)).toEqual(["", "Structured"]);
 
     target.selection.set([{
       type: "text",
@@ -113,11 +113,11 @@ describe("core ClipboardManager", () => {
       head: { blockId: targetId, offset: 0 },
     }]);
     target.clipboard.paste({ text: "plain" });
-    expect(target.getBlock(targetId)?.content).toBe("plain");
+    expect(target.blocks.getBlock(targetId)?.content).toBe("plain");
     expect(() => target.clipboard.paste({
       structured: JSON.stringify({ ...payload.bundle, version: 1 }),
     })).not.toThrow();
-    expect(target.getBlocks().map(({ content }) => content)).toEqual([
+    expect(target.blocks.getBlocks().map(({ content }) => content)).toEqual([
       "plain",
       "Structured",
       "Structured",
@@ -128,7 +128,7 @@ describe("core ClipboardManager", () => {
 
   it("preserves multiline plain text inside one block when requested", () => {
     const editor = createRivtoEditor();
-    const id = editor.insertBlock({ type: "paragraph", content: "Before " });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Before " });
     editor.selection.set([{
       type: "text",
       anchor: { blockId: id, offset: 7 },
@@ -140,8 +140,8 @@ describe("core ClipboardManager", () => {
       preserveNewlines: true,
     });
 
-    expect(editor.getRootIds()).toEqual([id]);
-    expect(editor.getBlock(id)?.content).toBe("Before first\n    second");
+    expect(editor.blocks.getRootIds()).toEqual([id]);
+    expect(editor.blocks.getBlock(id)?.content).toBe("Before first\n    second");
     editor.destroy();
   });
 });

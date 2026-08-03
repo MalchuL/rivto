@@ -51,11 +51,11 @@ export interface UseBlockChildrenResult {
  */
 export function useBlockChildren(blockId: string): UseBlockChildrenResult {
   const { editor } = useEditorContext();
-  const parent = editor.getBlock(blockId);
+  const parent = editor.blocks.getBlock(blockId);
 
   const operations = useMemo<BlockChildrenOperations>(() => {
     const getChildren = (): Block[] => {
-      const currentParent = editor.getBlock(blockId);
+      const currentParent = editor.blocks.getBlock(blockId);
       if (!currentParent) throw new Error(`Block ${blockId} not found`);
       return currentParent.children;
     };
@@ -72,27 +72,27 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
         if (afterId !== undefined && afterId !== null) requireChild(afterId);
 
         if (children.length === 0) {
-          const childId = editor.insertBlock(block, blockId);
-          editor.indentBlock(childId);
+          const childId = editor.blocks.insertBlock(block, blockId);
+          editor.blocks.indentBlock(childId);
           return childId;
         }
 
         if (afterId === null) {
-          const childId = editor.insertBlock(block, children[0].id);
-          editor.moveBlock(childId, null);
+          const childId = editor.blocks.insertBlock(block, children[0].id);
+          editor.blocks.moveBlock(childId, null);
           return childId;
         }
 
-        return editor.insertBlock(block, afterId ?? children.at(-1)?.id);
+        return editor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
       },
       remove: (childId) => {
         requireChild(childId);
-        editor.removeBlock(childId);
+        editor.blocks.removeBlock(childId);
       },
       move: (childId, afterId) => {
         requireChild(childId);
         if (afterId !== null) requireChild(afterId);
-        editor.moveBlock(childId, afterId);
+        editor.blocks.moveBlock(childId, afterId);
       },
     };
   }, [blockId, editor]);

@@ -35,9 +35,9 @@ export class BlockManager {
 
     const disposers: Array<() => void> = [];
     try {
-      const existing = editor.blocks.get(definition.type);
+      const existing = editor.blocks.registry.get(definition.type);
       if (!existing) {
-        disposers.push(extensions.own(editor.defineBlock(definition)));
+        disposers.push(extensions.own(editor.blocks.defineBlock(definition)));
       } else if (existing !== definition) {
         throw new Error(`Block type ${definition.type} is already registered`);
       }
@@ -48,14 +48,14 @@ export class BlockManager {
           ...slashCommand,
           id: slashCommand.id ?? `type.${definition.type}`,
           isAvailable: (context) => {
-            const block = editor.getBlock(context.blockId);
+            const block = editor.blocks.getBlock(context.blockId);
             return Boolean(
               block &&
               block.type !== definition.type &&
               slashCommand.isAvailable?.(context) !== false
             );
           },
-          execute: ({ blockId }) => editor.setBlockType(blockId, definition.type),
+          execute: ({ blockId }) => editor.blocks.setBlockType(blockId, definition.type),
         }));
       }
     } catch (error) {

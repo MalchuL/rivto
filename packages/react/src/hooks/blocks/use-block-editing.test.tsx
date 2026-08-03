@@ -20,7 +20,7 @@ interface TestProps extends Record<string, unknown> {
 describe("useBlockEditing", () => {
   test("returns mode-specific attributes and latest validated property methods", () => {
     const editor = createEditor();
-    editor.defineBlock({
+    editor.blocks.defineBlock({
       type: "test.editing",
       defaultProps: { count: 1, label: "Initial" },
       propSchema: {
@@ -34,7 +34,7 @@ describe("useBlockEditing", () => {
         },
       } as never,
     });
-    const blockId = editor.insertBlock({ type: "test.editing", content: "Text" });
+    const blockId = editor.blocks.insertBlock({ type: "test.editing", content: "Text" });
     let structural: UseBlockEditingResult<TestProps, false> | undefined;
     let text: UseBlockEditingResult<TestProps, true> | undefined;
 
@@ -61,7 +61,7 @@ describe("useBlockEditing", () => {
     expect(structural && "getters" in structural).toBe(false);
     expect(structural && "setCollapsed" in structural.operations).toBe(false);
     structural?.operations.update({ collapsed: true });
-    expect(editor.getBlock(blockId)?.collapsed).toBe(true);
+    expect(editor.blocks.getBlock(blockId)?.collapsed).toBe(true);
     expect(structural?.getProps()).toEqual({ count: 1, label: "Initial" });
     expect(structural?.getProp("count")).toBe(1);
 
@@ -74,7 +74,7 @@ describe("useBlockEditing", () => {
     expect(structural?.getProps()).toEqual({ count: 3 });
     expect(() => structural?.setProp("count", -1)).toThrow("count must be non-negative");
 
-    editor.removeBlock(blockId);
+    editor.blocks.removeBlock(blockId);
     expect(structural?.getProps()).toBeUndefined();
     expect(structural?.getProp("count")).toBeUndefined();
     expect(() => structural?.setProp("count", 4)).toThrow(/not found/);

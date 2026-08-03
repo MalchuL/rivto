@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(
   root,
-  "../shared/src/infrastructure/api/encore-client.gen.ts",
+  "../chulane/src/infrastructure/api/encore-client.gen.ts",
 );
 
 const contents = `/**

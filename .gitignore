@@ -1,5 +1,6 @@
 *.tsbuildinfo
 dist/
+.pnpm-store/
 .stuff/
 node_modules/
 *.tgz

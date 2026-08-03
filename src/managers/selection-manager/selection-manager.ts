@@ -83,7 +83,7 @@ export class SelectionManager {
   normalize(selection: EditorSelection = this.get()): NormalizedSelection | undefined {
     if (!selection.length) return undefined;
     // Get all blocks in document order
-    const all = flattenBlocks(this.editor.getBlocks());
+    const all = flattenBlocks(this.editor.blocks.getBlocks());
     const indices = new Map(all.map((block, index) => [block.id, index]));  // id to index
 
     // Editor selection to ordered range with blocks
@@ -197,7 +197,7 @@ export class SelectionManager {
 
       if (!item.blockIds.length) throw new Error("Selection requires at least one block");
       item.blockIds.forEach((id) => {
-        if (!this.editor.getBlock(id)) throw new Error(`Selection block ${id} not found`);
+        if (!this.editor.blocks.getBlock(id)) throw new Error(`Selection block ${id} not found`);
       });
       // We check by includes because we can select in order 1, 3, 10 or 3, 10, 1
       // So we can have non-consecutive blocks selected.
@@ -209,11 +209,11 @@ export class SelectionManager {
       const ordered: string[] = [];
       // Visit all blocks and add them to the ordered array if they are selected
       // Also filter blocks that don't exist.
-      const visit = (blocks: ReturnType<EditorRuntime["getBlocks"]>): void => blocks.forEach((block) => {
+      const visit = (blocks: Block[]): void => blocks.forEach((block) => {
         if (selected.has(block.id)) ordered.push(block.id);
         visit(block.children);
       });
-      visit(this.editor.getBlocks());
+      visit(this.editor.blocks.getBlocks());
       return { ...item, blockIds: ordered };
     });
 
@@ -240,7 +240,7 @@ export class SelectionManager {
       // If selection has only block selections
       if (isStructuralSelection(current)) {
         // Get all blocks in document order before removal
-        const visibleBefore = flattenBlocks(this.editor.getBlocks());
+        const visibleBefore = flattenBlocks(this.editor.blocks.getBlocks());
         // Find document index of first removal block
         const firstRemovedIndex = Math.max(
           0,
@@ -249,9 +249,9 @@ export class SelectionManager {
         let caretBlockId: string | undefined = undefined;
         this.editor.document.transact(() => {
           // Remove all blocks in selection (because only blocks inside selection without text)
-          range.blocks.forEach((block) => this.editor.document.removeBlock(block.id));
+          range.blocks.forEach((block) => this.editor.document.blocks.removeBlock(block.id));
           // Get all blocks in document order after removal
-          const remaining = flattenBlocks(this.editor.getBlocks());
+          const remaining = flattenBlocks(this.editor.blocks.getBlocks());
           caretBlockId = remaining[Math.min(firstRemovedIndex, remaining.length - 1)]?.id;
         });
         if (caretBlockId) {
@@ -272,8 +272,8 @@ export class SelectionManager {
         // E.g. we have 4 blocks and selection keeps first part from first block and last part from last block.
         // 1. "The" 2. "quick" 3. "brown" 4. "fox" and selection is start 1. offset 2 and end 4 offset 1.
         // The results after removal and text merge will be: 1. "Thox" (remaining part of "The" and "fox") with id of first block
-        range.blocks.slice(1).forEach((block) => this.editor.document.removeBlock(block.id));
-        this.editor.document.setBlockText(target.id, prefix + suffix);
+        range.blocks.slice(1).forEach((block) => this.editor.document.blocks.removeBlock(block.id));
+        this.editor.document.blocks.setBlockText(target.id, prefix + suffix);
       });
       this.collapse(target.id, prefix.length);
     } finally {
@@ -320,7 +320,7 @@ export class SelectionManager {
 
   /** Validates one UTF-16 position against current block content. */
   private validatePosition(blockId: string, offset: number): void {
-    const block = this.editor.getBlock(blockId);
+    const block = this.editor.blocks.getBlock(blockId);
     if (!block) throw new Error(`Selection block ${blockId} not found`);
     if (!Number.isInteger(offset) || offset < 0 || offset > block.content.length) {
       throw new Error(`Selection offset ${offset} is outside block ${blockId}`);

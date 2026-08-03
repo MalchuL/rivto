@@ -90,12 +90,12 @@ describe("ReactEditor", () => {
       render: Empty,
       slashCommand: { title: "Card" },
     });
-    expect(editor.blocks.has("test.card")).toBe(true);
+    expect(editor.blocks.registry.has("test.card")).toBe(true);
     expect(reactEditor.renderers.get("test.card")).toBe(Empty);
-    const paragraphId = editor.insertBlock({ type: "paragraph" });
+    const paragraphId = editor.blocks.insertBlock({ type: "paragraph" });
     expect(editor.slashCommands.getAll({ blockId: paragraphId }).some(({ id }) => id === "type.test.card")).toBe(true);
     dispose();
-    expect(editor.blocks.has("test.card")).toBe(false);
+    expect(editor.blocks.registry.has("test.card")).toBe(false);
     expect(reactEditor.renderers.get("test.card")).toBeUndefined();
     reactEditor.destroy();
     editor.destroy();
@@ -110,7 +110,7 @@ describe("ReactEditor", () => {
       render: Empty,
       slashCommand: { title: "Conflict" },
     })).toThrow(/already registered/);
-    expect(editor.blocks.has("test.conflict")).toBe(false);
+    expect(editor.blocks.registry.has("test.conflict")).toBe(false);
     expect(reactEditor.renderers.get("test.conflict")).toBeUndefined();
     releaseConflict();
     reactEditor.destroy();
@@ -141,8 +141,8 @@ describe("ReactEditor", () => {
 
   test("composes the first registered block wrapper outermost", () => {
     const editor = createEditor();
-    const blockId = editor.insertBlock({ type: "paragraph", content: "Order" });
-    const block = editor.getBlock(blockId)!;
+    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Order" });
+    const block = editor.blocks.getBlock(blockId)!;
     const Shell: ComponentType<BlockShellProps> = () => createElement("span", { "data-layer": "shell" });
     const Outer: ComponentType<BlockWrapperProps> = ({ children }) => (
       createElement("div", { "data-layer": "outer" }, children)
@@ -311,22 +311,22 @@ describe("ReactEditor", () => {
 
   test("forwards core changes through one global revision stream", () => {
     const editor = createEditor();
-    const leftId = editor.insertBlock({ type: "paragraph", content: "left" });
-    const rightId = editor.insertBlock({ type: "paragraph", content: "right" }, leftId);
-    const parentId = editor.insertBlock({
+    const leftId = editor.blocks.insertBlock({ type: "paragraph", content: "left" });
+    const rightId = editor.blocks.insertBlock({ type: "paragraph", content: "right" }, leftId);
+    const parentId = editor.blocks.insertBlock({
       type: "paragraph",
       content: "parent",
       children: [{ type: "paragraph", content: "child" }],
     }, rightId);
-    const childId = editor.getBlock(parentId)!.children[0]!.id;
+    const childId = editor.blocks.getBlock(parentId)!.children[0]!.id;
     const reactEditor = createReactEditor({ editor });
     let updates = 0;
     const dispose = reactEditor.subscribe(() => { updates += 1; });
     const initialRevision = reactEditor.revision;
 
-    editor.updateBlock(leftId, { content: "changed" });
-    editor.updateBlock(childId, { content: "changed child" });
-    editor.moveBlock(childId, rightId, "inside");
+    editor.blocks.updateBlock(leftId, { content: "changed" });
+    editor.blocks.updateBlock(childId, { content: "changed child" });
+    editor.blocks.moveBlock(childId, rightId, "inside");
     expect(updates).toBe(3);
     expect(reactEditor.revision).toBe(initialRevision + 3);
 
