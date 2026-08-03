@@ -1,6 +1,7 @@
 import type { EditorPosition, EditorSelection, EditorSelectionItem } from "../../editor/types";
 import type { EditorRuntime } from "../../editor/rivto-editor";
 import type { Block } from "../../store/document-model";
+import { Listeners } from "../../utils";
 import type { NormalizedSelection } from "./types";
 import { isStructuralSelection } from "./utils";
 
@@ -28,7 +29,7 @@ function cloneSelection(selection: EditorSelectionItem): EditorSelectionItem {
  */
 export class SelectionManager {
   private value: EditorSelection = [];
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ selectionChanged: void }>();
 
   /**
    * Creates the selection manager owned by one editor runtime.
@@ -295,13 +296,12 @@ export class SelectionManager {
    * @returns Function that removes this listener.
    */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.listeners.subscribe("selectionChanged", listener);
   }
 
   /** Notifies a stable listener snapshot so callbacks can unsubscribe safely. */
   private notify(): void {
-    [...this.listeners].forEach((listener) => listener());
+    this.listeners.emit("selectionChanged");
   }
 
   /** Publishes a collapsed text caret without exposing mutable point objects. 

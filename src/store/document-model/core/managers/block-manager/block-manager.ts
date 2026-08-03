@@ -45,9 +45,13 @@ export class DocumentBlockManager {
     /** Collaborative containers tracked by the owning document's undo manager. */
     readonly undoScopes: readonly [CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>, CRDTArray<IDBlock>];
 
+    /** Block property validator. */
     private validateProps: BlockPropsValidator = (_type, props) => props;
+    /** Cached block paths for each block. */
     private readonly blockPaths = new Map<IDBlock, readonly number[]>();
+    /** Root blocks. */
     private readonly roots: CRDTArray<IDBlock>;
+    /** Block storage. */
     private readonly storage: CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>;
 
     /**

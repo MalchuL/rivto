@@ -1,7 +1,7 @@
-import type { CommandHandler, RegisteredCommand } from "../../../managers";
-import type { Link } from "../../../store/document-model";
-import type { EditorLink } from "../../model";
-import type { RivtoEditorApi } from "../../types";
+import type { CommandHandler, RegisteredCommand } from "../command-registry";
+import type { Link } from "../../store/document-model";
+import type { EditorLink } from "../../editor/model";
+import type { RivtoEditorApi } from "../../editor/types";
 import { commandPayload, commandString } from "../utils";
 
 /**

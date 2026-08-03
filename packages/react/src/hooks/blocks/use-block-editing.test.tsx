@@ -20,7 +20,7 @@ interface TestProps extends Record<string, unknown> {
 describe("useBlockEditing", () => {
   test("returns mode-specific attributes and latest validated property methods", () => {
     const editor = createEditor();
-    editor.blocks.defineBlock({
+    editor.blocksRegistry.defineBlock({
       type: "test.editing",
       defaultProps: { count: 1, label: "Initial" },
       propSchema: {

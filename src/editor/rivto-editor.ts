@@ -2,7 +2,7 @@ import {
   DEFAULT_BLOCK_TYPE,
   defaultBlockDefinitions,
 } from "../blocks";
-import { ClipboardManager, CommandRegistry, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
+import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, type CommandHandler, type RegisteredCommand, LinkManager, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
 import { DocumentModelImpl, type Block, type DocumentModel, type Snapshot, type SnapshotUpdate } from "../store/document-model";
 import {
@@ -10,9 +10,9 @@ import {
   type ClipboardBundle,
 } from "../managers/clipboard-manager";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
-import { BlockManager, LinkManager } from "./managers";
-import { commandPayload } from "./managers/utils";
+import { commandPayload } from "../managers/utils";
 import type { CreateRivtoEditorOptions, EditorSelectionItem, RivtoEditorApi } from "./types";
+import { Listeners } from "../utils";
 
 /** Framework-neutral subset of browser or host clipboard data. */
 interface ClipboardDataLike {
@@ -55,8 +55,10 @@ interface ClipboardEventLike {
 export class EditorRuntime implements RivtoEditorApi {
   /** Collaborative block, tree, link, and snapshot storage owned by this runtime. */
   readonly document: DocumentModel;
-  /** Public owner of block definitions, commands, and typed block operations. */
+  /** Public owner of block commands and typed block operations. */
   readonly blocks: BlockManager;
+  /** Public owner of native block definitions and property validation. */
+  readonly blocksRegistry: BlockRegistryManager;
   /** Public owner of link commands and typed link operations. */
   readonly links: LinkManager;
   /** Named command handlers exposed to integrations and typed runtime methods. */
@@ -71,8 +73,8 @@ export class EditorRuntime implements RivtoEditorApi {
   readonly clipboard: ClipboardManager;
   /** Ordered slash-command registrations available to presentation layers. */
   readonly slashCommands = new SlashCommandManager();
-  /** Subscribers notified whenever the public runtime revision advances. */
-  private readonly listeners = new Set<() => void>();
+  /** Named subscribers notified whenever public runtime state changes. */
+  private readonly listeners = new Listeners<{ editorChanged: void }>();
   /** Owned subscription cleanup callbacks called during `destroy()`. */
   private readonly unsubscribeFns: Array<() => void> = [];
   /** Monotonic snapshot incremented before notifying runtime subscribers. */
@@ -90,29 +92,32 @@ export class EditorRuntime implements RivtoEditorApi {
     this.mode = new ModeManager(options.mode ?? "block");
     this.selection = new SelectionManager(this);
     this.history = new UndoManager(this.document);
+    this.blocksRegistry = new BlockRegistryManager();
+    const unsubscribeFromBlockRegistryChanges = this.blocksRegistry.subscribe(() => this.notifyChanges());
+    this.unsubscribeFns.push(unsubscribeFromBlockRegistryChanges);
     this.blocks = new BlockManager(this);
     this.links = new LinkManager(this);
     this.clipboard = new ClipboardManager(this);
-    this.document.blocks.setPropsValidator((type, props) => this.blocks.registry.validate(type, props));
+    this.document.blocks.setPropsValidator((type, props) => this.blocksRegistry.validate(type, props));
     this.registerRuntimeCommands();
     this.registerClipboardCommands();
-    defaultBlockDefinitions.forEach((definition) => this.blocks.defineBlock(definition));
+    defaultBlockDefinitions.forEach((definition) => this.blocksRegistry.defineBlock(definition));
 
     // Document changes cover block commands and direct/remote document edits.
     // !!!We subscribe to document changes to get updates and reconcile the selection with the latest document.
     const unsubscribeFromDocumentChanges = this.document.subscribe(() => {
       this.reconcileSelection();
-      this.changed();
+      this.notifyChanges();
     });
     this.unsubscribeFns.push(unsubscribeFromDocumentChanges);
     // Selection is local view state, but renderers still need to redraw selected blocks.
-    const unsubscribeFromSelectionChanges = this.selection.subscribe(() => this.changed());
+    const unsubscribeFromSelectionChanges = this.selection.subscribe(() => this.notifyChanges());
     this.unsubscribeFns.push(unsubscribeFromSelectionChanges);
     // Mode changes are local runtime state, so they still notify directly.
     const unsubscribeFromModeChanges = this.mode.subscribe(() => {
       this.history.stopCapturing();
       this.reconcileSelection();
-      this.changed();
+      this.notifyChanges();
       this.history.stopCapturing();
     });
     this.unsubscribeFns.push(unsubscribeFromModeChanges);
@@ -135,8 +140,7 @@ export class EditorRuntime implements RivtoEditorApi {
    * @returns Function that removes this listener.
    */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.listeners.subscribe("editorChanged", listener);
   }
 
   /**
@@ -439,15 +443,6 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Publishes one runtime revision after manager-owned state changes.
-   *
-   * @returns No value.
-   */
-  notifyChanged(): void {
-    this.changed();
-  }
-
-  /**
    * Releases subscriptions owned by the runtime.
    *
    * Registered block definitions are removed in reverse order so callers see a
@@ -458,6 +453,7 @@ export class EditorRuntime implements RivtoEditorApi {
     this.unsubscribeFns.splice(0).forEach((unsubscribe) => unsubscribe());
     this.links.destroy();
     this.blocks.destroy();
+    this.blocksRegistry.destroy();
     this.history.destroy();
     this.slashCommands.clear();
     this.commands.clear();
@@ -469,9 +465,9 @@ export class EditorRuntime implements RivtoEditorApi {
    *
    * @returns No value.
    */
-  private changed(): void {
+  private notifyChanges(): void {
     this.currentRevision += 1;
-    this.listeners.forEach((listener) => listener());
+    this.listeners.emit("editorChanged");
   }
 }
 

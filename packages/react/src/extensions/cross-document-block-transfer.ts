@@ -25,7 +25,7 @@ function collectBlockIds(block: EditorBlock, ids: Set<string>): void {
 }
 
 function prepareBlock(editor: RivtoEditorApi, block: EditorBlock): EditorBlockInput {
-  return editor.blocks.registry.prepare({
+  return editor.blocksRegistry.prepare({
     id: block.id,
     type: block.type,
     collapsed: block.collapsed,

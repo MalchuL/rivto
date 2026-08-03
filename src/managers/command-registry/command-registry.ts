@@ -1,3 +1,5 @@
+import { Listeners } from "../../utils";
+
 /** Function shape accepted by this editor's command registry. */
 export type CommandHandler = (payload?: unknown) => unknown;
 
@@ -25,7 +27,7 @@ export interface RegisteredCommand {
  */
 export class CommandRegistry {
   private readonly handlers = new Map<string, CommandHandler>();
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ commandExecuted: void }>();
   private currentLastExecuted: string | null = null;
 
   /** Returns the last command whose handler completed without throwing. */
@@ -99,8 +101,7 @@ export class CommandRegistry {
    * @returns Function that removes this listener.
    */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.listeners.subscribe("commandExecuted", listener);
   }
 
   /** Removes all commands and observers during runtime destruction. */
@@ -111,6 +112,6 @@ export class CommandRegistry {
 
   /** Notifies a stable listener snapshot after successful command execution. */
   private notify(): void {
-    [...this.listeners].forEach((listener) => listener());
+    this.listeners.emit("commandExecuted");
   }
 }

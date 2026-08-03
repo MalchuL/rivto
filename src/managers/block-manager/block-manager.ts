@@ -1,38 +1,34 @@
-import { BlockRegistry, type BlockDefinition } from "../../../blocks";
 import type {
   CommandHandler,
   RegisteredCommand,
-} from "../../../managers";
+} from "../command-registry";
 import type {
   BlockInput,
   BlockLayout,
   BlockPatch,
   BlockUpdate,
-} from "../../../store/document-model";
+} from "../../store/document-model";
 import type {
   EditorBlock,
   EditorBlockInput,
   EditorBlockLayout,
   EditorBlockPatch,
   EditorBlockUpdate,
-} from "../../model";
-import type { EditorSelection, RivtoEditorApi } from "../../types";
+} from "../../editor/model";
+import type { EditorSelection, RivtoEditorApi } from "../../editor/types";
 import { commandPayload, commandString } from "../utils";
 import type { RuntimeBlockSelection } from "./utils";
 
 /**
- * Owns editor block definitions, commands, and typed block operations.
+ * Owns editor block commands and typed block operations.
  *
  * Collaborative block state remains in DocumentModel. This manager composes a
- * public BlockRegistry for native definitions, validates command payloads, and
- * expands structural commands through the current local selection.
+ * Block definitions remain in the editor's separate `.blocksRegistry`
+ * manager. This manager validates command payloads and expands structural
+ * commands through the current local selection.
  */
 export class BlockManager {
-  /** Native block-definition registry intentionally nested under the manager. */
-  readonly registry = new BlockRegistry();
-
   private readonly registrations: RegisteredCommand[] = [];
-  private readonly removeDefinitions = new Set<() => void>();
 
   /**
    * Creates the public block manager and installs its built-in commands.
@@ -266,33 +262,11 @@ export class BlockManager {
   }
 
   /**
-   * Registers one native block definition for this editor instance.
-   *
-   * @param definition - Definition for a unique, non-empty native type.
-   * @returns Idempotent disposer that removes this exact definition.
-   */
-  defineBlock(definition: BlockDefinition): () => void {
-    const unregister = this.registry.register(definition);
-    let active = true;
-    const dispose = (): void => {
-      if (!active) return;
-      active = false;
-      unregister();
-      this.removeDefinitions.delete(dispose);
-      this.editor.notifyChanged();
-    };
-    this.removeDefinitions.add(dispose);
-    this.editor.notifyChanged();
-    return dispose;
-  }
-
-  /**
-   * Releases built-in commands and manager-owned block definitions.
+   * Releases the built-in block command registrations.
    *
    * @returns No value.
    */
   destroy(): void {
-    [...this.removeDefinitions].reverse().forEach((dispose) => dispose());
     this.registrations.splice(0).reverse().forEach((registration) => registration.dispose());
   }
 
@@ -315,12 +289,12 @@ export class BlockManager {
       const data = commandPayload(value);
       const block = commandPayload(data.block) as unknown as BlockInput;
       if (typeof block.type !== "string") throw new Error("block.type must be a string");
-      const definition = this.registry.get(block.type);
+      const definition = this.editor.blocksRegistry.get(block.type);
       if (!definition) throw new Error(`Block type ${block.type} is unavailable in ${this.editor.mode.get()} mode`);
       const afterId = data.afterId === undefined
         ? undefined
         : data.afterId === null ? null : commandString(data.afterId, "afterId");
-      return this.editor.document.blocks.insertBlock(this.registry.prepare(block), afterId);
+      return this.editor.document.blocks.insertBlock(this.editor.blocksRegistry.prepare(block), afterId);
     }));
     register("block.update", (value) => {
       const data = commandPayload(value);
@@ -348,7 +322,7 @@ export class BlockManager {
       const data = commandPayload(value);
       const id = commandString(data.id, "id");
       const type = commandString(data.type, "type");
-      const prepared = this.registry.prepare({ type });
+      const prepared = this.editor.blocksRegistry.prepare({ type });
       this.editor.document.blocks.setBlockType(id, type, prepared.props);
     }));
     register("block.remove", documentCommand((value) => {

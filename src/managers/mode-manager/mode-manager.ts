@@ -1,4 +1,5 @@
 import type { EditorMode } from "../../editor/types";
+import { Listeners } from "../../utils";
 
 /**
  * Owns the local editor presentation mode.
@@ -7,7 +8,7 @@ import type { EditorMode } from "../../editor/types";
  * changes independently from registered block definitions.
  */
 export class ModeManager {
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ modeChanged: void }>();
 
   /**
    * Creates a mode owner with the provided initial mode.
@@ -46,12 +47,11 @@ export class ModeManager {
    * @returns Function that removes this listener.
    */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.listeners.subscribe("modeChanged", listener);
   }
 
   /** Notifies a stable listener snapshot so callbacks can unsubscribe safely. */
   private notify(): void {
-    [...this.listeners].forEach((listener) => listener());
+    this.listeners.emit("modeChanged");
   }
 }

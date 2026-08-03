@@ -62,7 +62,7 @@ describe("core ClipboardManager", () => {
 
   it("uses block raw-text converters after trimming copied text", () => {
     const editor = createRivtoEditor();
-    editor.blocks.defineBlock({
+    editor.blocksRegistry.defineBlock({
       type: "test.raw",
       toRawText: (block) => `Raw: ${block.content}`,
     });

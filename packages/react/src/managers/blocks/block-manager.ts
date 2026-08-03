@@ -35,9 +35,9 @@ export class BlockManager {
 
     const disposers: Array<() => void> = [];
     try {
-      const existing = editor.blocks.registry.get(definition.type);
+      const existing = editor.blocksRegistry.get(definition.type);
       if (!existing) {
-        disposers.push(extensions.own(editor.blocks.defineBlock(definition)));
+        disposers.push(extensions.own(editor.blocksRegistry.defineBlock(definition)));
       } else if (existing !== definition) {
         throw new Error(`Block type ${definition.type} is already registered`);
       }

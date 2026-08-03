@@ -22,7 +22,7 @@ describe("BlockManager", () => {
     expect(reactEditor.blocks.delete("test.manager-block")).toBe(true);
     expect(reactEditor.blocks.delete("test.manager-block")).toBe(false);
     dispose();
-    expect(editor.blocks.registry.has("test.manager-block")).toBe(false);
+    expect(editor.blocksRegistry.has("test.manager-block")).toBe(false);
     expect(reactEditor.renderers.has("test.manager-block")).toBe(false);
     reactEditor.destroy();
     editor.destroy();

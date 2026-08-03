@@ -133,7 +133,7 @@ export class ClipboardManager {
     );
     // Convert blocks to text, html and markdown bundles. Used for clipboard copy to paste to different apps.
     const portable = serializeClipboardBlocks(blocks, (block) => {
-      const definition = this.editor.blocks.registry.get(block.type);
+      const definition = this.editor.blocksRegistry.get(block.type);
       // If definition has toRawText method, use it to convert block to text. Otherwise use block.content.
       return definition?.toRawText ? definition.toRawText(block) : block.content;
     });

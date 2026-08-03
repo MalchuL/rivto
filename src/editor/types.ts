@@ -1,8 +1,7 @@
-import type { ClipboardManager, CommandHandler, CommandRegistry, RegisteredCommand, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
+import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, RegisteredCommand, LinkManager, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import type { CRDTDoc } from "../store/crdt-doc";
 import type { DocumentModel } from "../store/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
-import type { BlockManager, LinkManager } from "./managers";
 
 /** Local presentation strategy; never persisted in collaborative state. */
 export type EditorMode = "block" | "edgeless";
@@ -87,8 +86,10 @@ export interface CreateRivtoEditorOptions {
 export interface RivtoEditorApi {
   /** Canonical collaborative document and persistence boundary. */
   readonly document: DocumentModel;
-  /** Block definitions, commands, and typed block operations. */
+  /** Block commands and typed block operations. */
   readonly blocks: BlockManager;
+  /** Native block definitions, defaults, and property validation. */
+  readonly blocksRegistry: BlockRegistryManager;
   /** First-class link commands and typed link operations. */
   readonly links: LinkManager;
   /** Named command registry shared by managers and integrations. */
@@ -183,16 +184,6 @@ export interface RivtoEditorApi {
    * @returns No value.
    */
   redo(): void;
-
-  /**
-   * Publishes one runtime revision after manager-owned state changes.
-   *
-   * This coordination hook lets managers notify views while depending only on
-   * the public editor interface.
-   *
-   * @returns No value.
-   */
-  notifyChanged(): void;
 
   /**
    * Releases runtime subscriptions, managers, registries, and history.

@@ -7,7 +7,7 @@ import { crossDocumentBlockTransfer } from "./cross-document-block-transfer";
 
 function createEditor(): RivtoEditorApi {
   const editor = createRivtoEditor();
-  editor.blocks.defineBlock({ type: "test.counter", defaultProps: { count: 0 } });
+  editor.blocksRegistry.defineBlock({ type: "test.counter", defaultProps: { count: 0 } });
   return editor;
 }
 

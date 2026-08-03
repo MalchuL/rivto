@@ -90,12 +90,12 @@ describe("ReactEditor", () => {
       render: Empty,
       slashCommand: { title: "Card" },
     });
-    expect(editor.blocks.registry.has("test.card")).toBe(true);
+    expect(editor.blocksRegistry.has("test.card")).toBe(true);
     expect(reactEditor.renderers.get("test.card")).toBe(Empty);
     const paragraphId = editor.blocks.insertBlock({ type: "paragraph" });
     expect(editor.slashCommands.getAll({ blockId: paragraphId }).some(({ id }) => id === "type.test.card")).toBe(true);
     dispose();
-    expect(editor.blocks.registry.has("test.card")).toBe(false);
+    expect(editor.blocksRegistry.has("test.card")).toBe(false);
     expect(reactEditor.renderers.get("test.card")).toBeUndefined();
     reactEditor.destroy();
     editor.destroy();
@@ -110,7 +110,7 @@ describe("ReactEditor", () => {
       render: Empty,
       slashCommand: { title: "Conflict" },
     })).toThrow(/already registered/);
-    expect(editor.blocks.registry.has("test.conflict")).toBe(false);
+    expect(editor.blocksRegistry.has("test.conflict")).toBe(false);
     expect(reactEditor.renderers.get("test.conflict")).toBeUndefined();
     releaseConflict();
     reactEditor.destroy();

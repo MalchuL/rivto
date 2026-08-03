@@ -1,3 +1,5 @@
+import { Listeners } from "../../utils";
+
 /** Block-local context supplied when listing or executing a slash command. */
 export interface SlashCommandContext {
   /** Stable ID of the block containing the command trigger. */
@@ -29,7 +31,7 @@ export interface SlashCommand {
  */
 export class SlashCommandManager {
   private readonly commands = new Map<string, SlashCommand>();
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ slashCommandsChanged: void }>();
   private currentRevision = 0;
 
   /** Monotonic snapshot used by reactive menu implementations. */
@@ -73,10 +75,14 @@ export class SlashCommandManager {
     command.execute(context);
   }
 
-  /** Subscribes to registration changes and returns automatic cleanup. */
+  /**
+   * Subscribes to slash-command registration changes.
+   *
+   * @param listener - Callback invoked after commands are added or removed.
+   * @returns Function that removes this listener.
+   */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.listeners.subscribe("slashCommandsChanged", listener);
   }
 
   /** Removes all registrations and listeners during editor destruction. */
@@ -91,6 +97,6 @@ export class SlashCommandManager {
   /** Publishes a stable listener snapshot so disposal during notification is safe. */
   private notify(): void {
     this.currentRevision += 1;
-    [...this.listeners].forEach((listener) => listener());
+    this.listeners.emit("slashCommandsChanged");
   }
 }

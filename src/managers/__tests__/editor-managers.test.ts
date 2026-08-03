@@ -1,10 +1,10 @@
-import { createRivtoEditor } from "../../rivto-editor";
+import { createRivtoEditor } from "../../editor/rivto-editor";
 
 describe("editor block and link managers", () => {
-  it("exposes the nested registry and direct typed manager operations", () => {
+  it("exposes separate registry, block, and link managers", () => {
     const editor = createRivtoEditor();
 
-    expect(editor.blocks.registry.has("paragraph")).toBe(true);
+    expect(editor.blocksRegistry.has("paragraph")).toBe(true);
     expect(editor.commands.has("block.insert")).toBe(true);
     expect(editor.commands.has("link.create")).toBe(true);
     expect("getBlock" in editor).toBe(false);

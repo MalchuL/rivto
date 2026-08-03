@@ -1,7 +1,17 @@
-import type { EditorBlockInput } from "../editor/model";
-import type { BlockDefinition } from "./types";
+import type { BlockDefinition } from "../../blocks/types";
+import type { EditorBlockInput } from "../../editor/model";
+import { Listeners } from "../../utils";
 
-/** True only for mergeable records; arrays and class instances are values. */
+/**
+ * Determines whether a value can participate in recursive property merging.
+ *
+ * Arrays, primitives, and class instances are treated as complete leaf values.
+ * Plain records from the current realm, another realm, or a null-prototype
+ * object are safe to merge by key.
+ *
+ * @param value - Unknown property value to inspect.
+ * @returns `true` when the value is a mergeable plain record.
+ */
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value) as object | null;
@@ -15,6 +25,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
  *
  * Only plain objects merge. Arrays and other values are intentional leaves and
  * are replaced as a whole, which avoids surprising index-by-index merging.
+ *
+ * @param defaults - Registered default properties used as the detached base.
+ * @param input - Caller properties that override or extend the defaults.
+ * @returns A detached recursively merged property record.
  */
 const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unknown>): Record<string, unknown> => {
   const result: Record<string, unknown> = structuredClone(defaults);
@@ -26,6 +40,16 @@ const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unk
   return result;
 };
 
+/**
+ * Validates complete block properties when a definition supplies a schema.
+ *
+ * Unknown or schema-less definitions preserve their properties unchanged so
+ * documents remain readable without every optional block extension installed.
+ *
+ * @param definition - Registered definition, or undefined for an unknown type.
+ * @param props - Complete candidate properties to validate.
+ * @returns Schema output when available, otherwise the original properties.
+ */
 const validateProps = (
   definition: BlockDefinition | undefined,
   props: Record<string, unknown>,
@@ -34,30 +58,57 @@ const validateProps = (
 /**
  * Owns the runtime mapping from persisted native types to block definitions.
  *
- * The registry does not render UI. It only validates type ownership and
- * prepares editor-level creation data.
+ * The manager does not render UI or mutate document blocks. It validates type
+ * ownership, prepares editor-level creation data, and publishes definition
+ * lifecycle changes to its own subscribers.
  */
-export class BlockRegistry {
+export class BlockRegistryManager {
   // Block name to definition
   private readonly definitions = new Map<string, BlockDefinition>();
 
-  /** Creates an empty block-definition registry. */
+  /** Definition disposers retained for deterministic editor teardown. */
+  private readonly removeDefinitions = new Set<() => void>();
+  /** Named subscribers notified after registry lifecycle changes. */
+  private readonly listeners = new Listeners<{ blockRegistryChanged: void }>();
+
+  /** Creates an empty block-definition registry manager. */
   constructor() {}
 
   /**
-   * Registers one definition until the returned disposer is called.
+   * Defines one native block type until the returned disposer is called.
    *
    * @param definition - Definition for a unique, non-empty native type.
    * @returns Idempotent function that unregisters this exact definition.
    * @throws If the type is empty or already registered.
    */
-  register(definition: BlockDefinition): () => void {
+  defineBlock(definition: BlockDefinition): () => void {
     if (!definition.type) throw new Error("Block definition type is required");
     if (this.definitions.has(definition.type)) throw new Error(`Block type ${definition.type} is already registered`);
     this.definitions.set(definition.type, definition);
-    return () => {
+    let active = true;
+    const dispose = (): void => {
+      if (!active) return;
+      active = false;
       if (this.definitions.get(definition.type) === definition) this.definitions.delete(definition.type);
+      this.removeDefinitions.delete(dispose);
+      this.notify();
     };
+    this.removeDefinitions.add(dispose);
+    this.notify();
+    return dispose;
+  }
+
+  /**
+   * Subscribes to block-definition lifecycle changes.
+   *
+   * The listener runs after a definition is successfully added or removed.
+   * Calling the returned function repeatedly is safe.
+   *
+   * @param listener - Callback invoked after the registry changes.
+   * @returns Function that removes this listener.
+   */
+  subscribe(listener: () => void): () => void {
+    return this.listeners.subscribe("blockRegistryChanged", listener);
   }
 
   /**
@@ -105,6 +156,31 @@ export class BlockRegistry {
    */
   validate(type: string, props: Record<string, unknown>): Record<string, unknown> {
     return validateProps(this.get(type), props);
+  }
+
+  /**
+   * Removes every definition owned by this manager.
+   *
+   * Definitions are disposed in reverse registration order so dependent
+   * extensions observe a predictable teardown sequence.
+   *
+   * @returns No value.
+   */
+  destroy(): void {
+    [...this.removeDefinitions].reverse().forEach((dispose) => dispose());
+    this.listeners.clear();
+  }
+
+  /**
+   * Notifies a stable listener snapshot after a definition change.
+   *
+   * Snapshot iteration allows listeners to unsubscribe safely while handling
+   * the current notification.
+   *
+   * @returns No value.
+   */
+  private notify(): void {
+    this.listeners.emit("blockRegistryChanged");
   }
 
   /**
