@@ -149,7 +149,7 @@ export function toggleBlockSelection(
   };
 }
 
-/** Grows or shrinks a contiguous block selection like Logseq. */
+/** Grows or shrinks a contiguous block selection. */
 export function extendBlockSelection(
   blocks: Block[],
   current: BlockSelection,
@@ -222,7 +222,7 @@ export interface KeyboardMovePlacement {
   readonly position: "before" | "after";
 }
 
-/** Resolves Logseq-style sibling swapping and parent-boundary movement. */
+/** Resolves sibling swapping and parent-boundary movement. */
 export function keyboardMovePlacement(
   blocks: Block[],
   movedIds: string[],

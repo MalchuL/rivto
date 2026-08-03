@@ -94,8 +94,11 @@ export function EdgelessVisualLayer({
 
   if (mode !== "edgeless" || !root || !plane) return null;
   const path = (points: Array<{ x: number; y: number }>) => points.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ");
+  const panX = Number(root.dataset.edgelessPanX) || 0;
+  const panY = Number(root.dataset.edgelessPanY) || 0;
 
-  return createPortal(
+  return <>
+    {createPortal(
     <>
       <div className="edgeless-visual-layer">
         {visuals.map((visual) => (
@@ -147,6 +150,10 @@ export function EdgelessVisualLayer({
           );
         })}
       </div>
+    </>,
+    plane,
+    )}
+    {createPortal(
       <svg
         className="edgeless-drawing-capture"
         data-active={controller.getTool() === "drawing" || undefined}
@@ -155,8 +162,14 @@ export function EdgelessVisualLayer({
         onPointerUp={finishDrawing}
         onPointerCancel={finishDrawing}
       >
-        {preview.length > 1 && <path d={path(preview)} fill="none" stroke="#222" strokeWidth="3" />}
-      </svg>
+        {preview.length > 1 && (
+          <g transform={`translate(${panX} ${panY}) scale(${zoom})`}>
+            <path d={path(preview)} fill="none" stroke="#222" strokeWidth={3 / zoom} />
+          </g>
+        )}
+      </svg>,
+      root,
+    )}
       {options.toolbar !== false && createPortal(
         <div className="edgeless-visual-toolbar" role="toolbar" aria-label="Visual objects">
           <button type="button" onClick={() => controller.create({ kind: "rectangle" })}>Rectangle</button>
@@ -177,9 +190,7 @@ export function EdgelessVisualLayer({
         </div>,
         root,
       )}
-    </>,
-    plane,
-  );
+  </>;
 }
 
 /**

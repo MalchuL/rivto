@@ -5,6 +5,7 @@ import {
 } from "@chulane/rivto";
 import {
   createReactEditor,
+  type MarkdownLinkClick,
   edgelessVisualsExtension,
   EditorView,
   KEYBOARD_BINDING_IDS,
@@ -22,6 +23,13 @@ import {
   blockIdExtension,
   BlockIdsVisibleProvider,
 } from "./extensions/block-id";
+
+/** Routes demo-local Markdown protocols while leaving ordinary links native. */
+const handleMarkdownLink = ({ href, event }: MarkdownLinkClick): void => {
+  if (!/^(?:rivto|chulane):/i.test(href)) return;
+  event.preventDefault();
+  window.dispatchEvent(new CustomEvent("rivto:markdown-link", { detail: href }));
+};
 
 /**
  * Creates demo content for manual editing and selection checks.
@@ -42,6 +50,7 @@ function createDemoEditor() {
   const reactEditor = createReactEditor({
     editor,
     keymap: alternateKeymap,
+    onMarkdownLinkClick: handleMarkdownLink,
     extensions: [standardPreset(), edgelessVisualsExtension(), blockIdExtension(), ...customBlockExtensions],
   });
   const introId = editor.blocks.insertBlock({
@@ -150,6 +159,7 @@ function createEmptyDemoEditor() {
   const editor = createRivtoEditor();
   const reactEditor = createReactEditor({
     editor,
+    onMarkdownLinkClick: handleMarkdownLink,
     extensions: [standardPreset(), edgelessVisualsExtension(), blockIdExtension(), ...customBlockExtensions],
   });
   return { editor, reactEditor };
@@ -261,6 +271,7 @@ function createFixtureEditor(
   const editor = createRivtoEditor();
   const reactEditor = createReactEditor({
     editor,
+    onMarkdownLinkClick: handleMarkdownLink,
     extensions: [standardPreset(), edgelessVisualsExtension(), blockIdExtension(), ...customBlockExtensions],
   });
   if (side === "left") {

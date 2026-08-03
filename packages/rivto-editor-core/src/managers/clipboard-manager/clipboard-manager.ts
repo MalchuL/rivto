@@ -294,7 +294,7 @@ export class ClipboardManager {
   /**
    * Inserts a complete structured bundle without merging its first root.
    *
-   * The resulting selection contains the final pasted root; each root already
+   * The resulting selection contains every pasted root; each root already
    * carries its complete nested subtree.
    *
    * @param bundle - Portable structured data to remap and insert.
@@ -305,9 +305,8 @@ export class ClipboardManager {
     placement: BlockPastePlacement = {},
   ): void {
     const remapped = remapClipboardBundle(bundle);
-    let lastId: string | undefined;
+    const insertedIds: string[] = [];
     this.editor.document.transact(() => {
-      const insertedIds: string[] = [];
       let previous = placement.afterId;
       remapped.blocks.forEach((block) => {
         previous = this.editor.document.blocks.insertBlock(block, previous ?? undefined);
@@ -316,15 +315,14 @@ export class ClipboardManager {
       if (placement.beforeChildId && insertedIds.length) {
         this.editor.document.blocks.moveBlocks(insertedIds, placement.beforeChildId, "before");
       }
-      lastId = insertedIds.at(-1);
       remapped.links.forEach((link) => this.editor.document.links.createLink(link));
     });
-    if (lastId) {
+    if (insertedIds.length) {
       this.editor.selection.set([{
         type: "block",
-        blockIds: [lastId],
-        anchorBlockId: lastId,
-        focusBlockId: lastId,
+        blockIds: insertedIds,
+        anchorBlockId: insertedIds[0]!,
+        focusBlockId: insertedIds.at(-1)!,
       }]);
     }
   }

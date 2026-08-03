@@ -208,7 +208,7 @@ pointerdown inside [data-block-selection-anchor]
 Inside one host, Rivto mostly trusts the browser. The portable value is still
 recorded so commands/clipboard work after focus leaves the editable.
 
-### Cross-block default = whole blocks (Logseq-like)
+### Cross-block default = whole blocks
 
 If the pointer crosses into another editable host **without Alt** at
 pointer-down:
@@ -468,7 +468,7 @@ Important asymmetries:
 ## 11. Mental FAQs
 
 **Why does dragging across paragraphs select whole blocks?**  
-Product choice (Logseq-like). Hold Alt at pointer-down for partial text across
+Product choice. Hold Alt at pointer-down for partial text across
 hosts.
 
 **Why is selection an array?**  

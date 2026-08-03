@@ -72,7 +72,7 @@ describe("EditorRuntime block commands", () => {
     expect(editor.blocks.getBlock(id)).toMatchObject({
       id,
       type: "heading2",
-      props: {},
+      props: { old: true },
       pluginData: { demo: { pinned: true } },
       content: "Title",
       children: [{ content: "Child" }],
@@ -81,6 +81,56 @@ describe("EditorRuntime block commands", () => {
     editor.undo();
     expect(editor.blocks.getBlock(id)).toMatchObject({ type: "paragraph", props: { old: true } });
     expect(() => editor.blocks.setBlockType(id, "missing")).toThrow("Unknown block type missing");
+    editor.destroy();
+  });
+
+  it("merges and repairs destination properties when changing type", () => {
+    const editor = createRivtoEditor();
+    editor.blocksRegistry.defineBlock({
+      type: "card",
+      defaultProps: {
+        count: 1,
+        title: "Untitled",
+        style: { color: "black", size: 12 },
+      },
+      propSchema: z.object({
+        count: z.number().int().nonnegative(),
+        title: z.string(),
+        style: z.object({ color: z.string(), size: z.number() }),
+        required: z.string(),
+      }).strict(),
+    });
+    const id = editor.blocks.insertBlock({
+      type: "paragraph",
+      props: {
+        count: "invalid",
+        title: "Preserved",
+        style: { color: "purple", size: "invalid" },
+        required: "Present",
+        extensionValue: { enabled: true },
+      },
+    });
+    editor.history.clear();
+
+    editor.blocks.setBlockType(id, "card");
+    expect(editor.blocks.getBlock(id)?.props).toEqual({
+      count: 1,
+      title: "Preserved",
+      style: { color: "black", size: 12 },
+      required: "Present",
+      extensionValue: { enabled: true },
+    });
+    editor.undo();
+    expect(editor.blocks.getBlock(id)).toMatchObject({
+      type: "paragraph",
+      props: { count: "invalid", title: "Preserved", required: "Present" },
+    });
+    editor.redo();
+    expect(editor.blocks.getBlock(id)).toMatchObject({ type: "card", props: { count: 1 } });
+
+    const failing = editor.blocks.insertBlock({ type: "paragraph", props: { required: 3 } });
+    expect(() => editor.blocks.setBlockType(failing, "card")).toThrow();
+    expect(editor.blocks.getBlock(failing)).toMatchObject({ type: "paragraph", props: { required: 3 } });
     editor.destroy();
   });
 
@@ -197,7 +247,7 @@ describe("EditorRuntime block commands", () => {
     expect(editor.blocks.getBlock(id)?.collapsed).toBe(true);
 
     editor.blocks.setBlockType(id, "heading2");
-    expect(editor.blocks.getBlock(id)?.props).toEqual({});
+    expect(editor.blocks.getBlock(id)?.props).toEqual({ tone: "info" });
     expect(editor.blocks.getBlock(id)?.collapsed).toBe(true);
     editor.destroy();
   });

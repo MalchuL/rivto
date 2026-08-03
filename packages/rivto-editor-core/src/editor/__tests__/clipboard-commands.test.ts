@@ -247,6 +247,13 @@ describe("clipboard commands", () => {
       "Pasted second",
       "Old child",
     ]);
+    const pastedIds = target.blocks.getChildIds(parent).slice(0, 2);
+    expect(target.selection.get()).toEqual([{
+      type: "block",
+      blockIds: pastedIds,
+      anchorBlockId: pastedIds[0],
+      focusBlockId: pastedIds[1],
+    }]);
     target.undo();
     expect(target.blocks.getBlock(parent)?.children.map((block) => block.content)).toEqual(["Old child"]);
     unsubscribe();

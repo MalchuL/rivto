@@ -322,8 +322,10 @@ export class BlockManager {
       const data = commandPayload(value);
       const id = commandString(data.id, "id");
       const type = commandString(data.type, "type");
-      const prepared = this.editor.blocksRegistry.prepare({ type });
-      this.editor.document.blocks.setBlockType(id, type, prepared.props);
+      const current = this.getBlock(id);
+      if (!current) throw new Error(`Block ${id} not found`);
+      const props = this.editor.blocksRegistry.prepareTypeChange(type, current.props);
+      this.editor.document.blocks.setBlockType(id, type, props);
     }));
     register("block.remove", documentCommand((value) => {
       const data = commandPayload(value);

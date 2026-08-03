@@ -3,11 +3,12 @@ import {
   useMemo,
   useState,
 } from "react";
+import type { MarkdownLinkClick } from "../types";
 import {
   useBlockEditing,
   useEditor,
 } from "../hooks";
-import ReactMarkdown, { type Components } from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import {
@@ -31,10 +32,16 @@ import {
  * Raw HTML is deliberately ignored, and ReactMarkdown sanitizes link
  * destinations without rendering through `dangerouslySetInnerHTML`.
  *
- * @param props - Stable ID of the block whose Markdown source is rendered.
+ * @param props - Stable block ID and optional application link interceptor.
  * @returns A stable raw editor and, while idle, its formatted preview.
  */
-export function MarkdownContent({ blockId }: { readonly blockId: string }) {
+export function MarkdownContent({
+  blockId,
+  onLinkClick,
+}: {
+  readonly blockId: string;
+  readonly onLinkClick?: (context: MarkdownLinkClick) => void;
+}) {
   const editor = useEditor();
   const editing = useBlockEditing(blockId);
   const [isEditing, setIsEditing] = useState(false);
@@ -44,8 +51,20 @@ export function MarkdownContent({ blockId }: { readonly blockId: string }) {
     const current = editor.blocks.getBlock(blockId)?.content ?? "";
     editor.blocks.updateBlock(blockId, { content: replaceMarkdownCode(current, node, value) });
   }, [blockId, editor]);
+  const transformUrl = useCallback<UrlTransform>((url) => {
+    const safe = defaultUrlTransform(url);
+    if (safe || !onLinkClick) return safe;
+    return /^(?!javascript:|vbscript:|data:)[a-z][a-z\d+.-]*:/i.test(url) ? url : safe;
+  }, [onLinkClick]);
   const components = useMemo<Components>(() => ({
-    a: ({ node: _node, ...props }) => <a {...props} tabIndex={-1} />,
+    a: ({ node: _node, href = "", ...props }) => (
+      <a
+        {...props}
+        href={href}
+        tabIndex={-1}
+        onClick={(event) => onLinkClick?.({ blockId, href, event })}
+      />
+    ),
     pre: (props) => (
       <MarkdownCodeBlock
         {...props}
@@ -53,7 +72,7 @@ export function MarkdownContent({ blockId }: { readonly blockId: string }) {
         preventTextEditingAttributes={editing.preventTextEditingAttributes}
       />
     ),
-  }), [editing.preventTextEditingAttributes, updateCode]);
+  }), [blockId, editing.preventTextEditingAttributes, onLinkClick, updateCode]);
 
   return (
     <div className="markdown-content">
@@ -84,6 +103,7 @@ export function MarkdownContent({ blockId }: { readonly blockId: string }) {
         >
           <ReactMarkdown
             components={components}
+            urlTransform={transformUrl}
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeCodeFenceMetadata, [rehypeHighlight, {
               detect: true,

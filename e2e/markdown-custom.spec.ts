@@ -60,6 +60,31 @@ test("shows full GFM at rest and raw source while editing", async ({ page }) => 
   await expect(preview.locator("code.language-javascript .hljs-keyword")).toHaveText("const");
 });
 
+test("opens ordinary Markdown links and delegates custom protocols", async ({ page }) => {
+  const block = page.locator(blockTypeSelector("paragraph")).first();
+  const editor = block.locator(":scope > .page-block-row .markdown-editor");
+  const preview = block.locator(":scope > .page-block-row .markdown-preview");
+  await editor.click();
+  await editor.evaluate((element) => {
+    element.textContent = "[Browser](#markdown-target) [Local](chulane:page/example)";
+    element.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    (element as HTMLElement).blur();
+  });
+  await page.evaluate(() => {
+    window.addEventListener("rivto:markdown-link", ((event: CustomEvent<string>) => {
+      (window as typeof window & { markdownLink?: string }).markdownLink = event.detail;
+    }) as EventListener, { once: true });
+  });
+
+  await preview.getByRole("link", { name: "Browser" }).click();
+  await expect(page).toHaveURL(/#markdown-target$/);
+  await preview.getByRole("link", { name: "Local" }).click();
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { markdownLink?: string }
+  ).markdownLink)).toBe("chulane:page/example");
+  await expect(page).toHaveURL(/#markdown-target$/);
+});
+
 test("scrolls Markdown code without opening the raw editor", async ({ page }) => {
   const block = page.locator(blockTypeSelector("paragraph")).first();
   const editor = block.locator(":scope > .page-block-row .markdown-editor");

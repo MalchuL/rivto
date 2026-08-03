@@ -38,7 +38,7 @@ test("toggles an accessible collapsed subtree without exposing hidden rows", asy
   await expect(parent.locator(":scope > .page-block-children [data-block-content]").first()).toHaveText(childValue ?? "");
 });
 
-test("supports Logseq collapse keys for editing and multi-block selection", async ({ page }) => {
+test("supports collapse keys for editing and multi-block selection", async ({ page }) => {
   const first = await collapsibleRoot(page, 0);
   const second = await collapsibleRoot(page, 1);
   const firstToggle = first.locator(":scope > .page-block-row [data-collapse-toggle]");

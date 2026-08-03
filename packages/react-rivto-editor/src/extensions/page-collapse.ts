@@ -18,7 +18,7 @@ function collapseTargets(
 }
 
 /**
- * Installs Logseq-style collapse shortcuts and repairs selections after any
+ * Installs outliner collapse shortcuts and repairs selections after any
  * local or remote document update hides their endpoints.
  *
  * Ctrl/Cmd+Up collapses, Ctrl/Cmd+Down expands, and Ctrl/Cmd+; toggles using

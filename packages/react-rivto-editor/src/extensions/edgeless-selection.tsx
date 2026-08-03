@@ -21,6 +21,7 @@ import {
 interface RectangleGesture {
   readonly x: number;
   readonly y: number;
+  readonly base: readonly EdgelessSelectionRef[];
   moved: boolean;
 }
 
@@ -79,7 +80,8 @@ export function EdgelessInteractionOverlay() {
         ? exists ? current.filter((item) => !(item.kind === objectKind && item.id === objectId)) : [...current, { kind: objectKind, id: objectId }]
         : [{ kind: objectKind, id: objectId }]);
       root.ownerDocument.getSelection()?.removeAllRanges();
-      return false;
+      if (primary) event.stopPropagation();
+      return primary;
     }
 
     if (card && blockId && primary && !isInteractive(event.target)) {
@@ -102,8 +104,13 @@ export function EdgelessInteractionOverlay() {
 
     if (event.target.closest(".edgeless-zoom-controls, .edgeless-visual-toolbar, .edgeless-drawing-capture[data-active]")) return false;
     root.focus({ preventScroll: true });
-    selection.clear();
-    gesture.current = { x: event.clientX, y: event.clientY, moved: false };
+    if (!primary) selection.clear();
+    gesture.current = {
+      x: event.clientX,
+      y: event.clientY,
+      base: primary ? selection.get().items : [],
+      moved: false,
+    };
     return true;
   });
 
@@ -130,10 +137,11 @@ export function EdgelessInteractionOverlay() {
       const kind = element.dataset.edgelessObjectKind as EdgelessSelectionRef["kind"] | undefined;
       return id && kind && kind !== "group" ? [{ id: `${kind}:${id}`, rect: element.getBoundingClientRect() }] : [];
     });
-    selection.set(rootsInRect(objects, next).map((value) => {
+    const intersecting = rootsInRect(objects, next).map((value) => {
       const separator = value.indexOf(":");
       return { kind: value.slice(0, separator) as EdgelessSelectionRef["kind"], id: value.slice(separator + 1) };
-    }));
+    });
+    selection.set([...start.base, ...intersecting]);
     return true;
   });
 

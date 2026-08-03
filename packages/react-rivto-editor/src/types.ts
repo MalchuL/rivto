@@ -14,6 +14,17 @@ import type {
   SlashCommandsCapability,
   SurfacesCapability,
 } from "./capabilities";
+import type { MouseEvent } from "react";
+
+/** Context supplied when a rendered Markdown link is activated. */
+export interface MarkdownLinkClick {
+  /** Block containing the rendered link. */
+  readonly blockId: string;
+  /** Sanitized standard URL or explicitly enabled custom-protocol URL. */
+  readonly href: string;
+  /** Native React click wrapper; prevent its default action for local routing. */
+  readonly event: MouseEvent<HTMLAnchorElement>;
+}
 
 /** Creation options for the React presentation runtime. */
 export interface CreateReactEditorOptions {
@@ -25,6 +36,8 @@ export interface CreateReactEditorOptions {
   readonly keymap?: KeymapOverrides;
   /** Renderer used for persisted block types unknown to this React runtime. */
   readonly unknownBlockRenderer?: BlockRenderer;
+  /** Observes Markdown links and may prevent browser navigation for local routing. */
+  readonly onMarkdownLinkClick?: (context: MarkdownLinkClick) => void;
 }
 
 /**

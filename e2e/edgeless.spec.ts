@@ -24,6 +24,21 @@ test("loads the visual-object plugin in the demo", async ({ page }) => {
   await expect(page.locator('[data-edgeless-visual-kind="rectangle"]')).toHaveCount(1);
 });
 
+test("uses one Ctrl selection across block and visual canvas objects", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  await page.getByRole("toolbar", { name: "Visual objects" }).getByRole("button", { name: "Rectangle" }).click();
+  const visual = page.locator('[data-edgeless-object-kind="visual"]');
+  const card = page.locator("[data-edgeless-root]").first();
+  await expect(visual).toHaveAttribute("data-selected", "true");
+
+  await cardChrome(card).click({ modifiers: ["Control"], position: { x: 280, y: 14 } });
+  await expect(visual).toHaveAttribute("data-selected", "true");
+  await expect(card).toHaveAttribute("data-block-selected", "true");
+  await visual.click({ modifiers: ["Control"] });
+  await expect(visual).not.toHaveAttribute("data-selected", "true");
+  await expect(card).toHaveAttribute("data-block-selected", "true");
+});
+
 test("renders every root as one card with its complete nested outline", async ({ page }) => {
   const pageRoots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
   const rootCount = await pageRoots.count();
@@ -427,9 +442,13 @@ test("zooms, pans, and pastes selected root subtrees with offset layouts", async
   await page.mouse.move(box.x + box.width - 150, box.y + box.height - 100, { steps: 6 });
   await page.mouse.up();
   await page.keyboard.up("Space");
-  await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  await expect.poll(async () => Number(await viewport.getAttribute("data-edgeless-pan-x"))).toBeLessThan(0);
+  await expect(viewport).toHaveCSS("overflow", "hidden");
+  await expect.poll(() => viewport.evaluate((element) => ({
+    position: element.style.backgroundPosition,
+    size: element.style.backgroundSize,
+  }))).toEqual({ position: "-120px -70px", size: "20px 20px" });
 
-  await viewport.evaluate((element) => { element.scrollLeft = 0; element.scrollTop = 0; });
   const cards = page.locator("[data-edgeless-root]");
   const before = await cards.count();
   const originalPositions = await Promise.all([cards.nth(0), cards.nth(1)].map((card) => card.evaluate((element) => ({
@@ -441,12 +460,61 @@ test("zooms, pans, and pastes selected root subtrees with offset layouts", async
   await page.keyboard.press("Control+c");
   await page.keyboard.press("Control+v");
   await expect(cards).toHaveCount(before + 2);
-  await expect(page.locator("[data-edgeless-root][data-block-selected]")).toHaveCount(1);
+  await expect(page.locator("[data-edgeless-root][data-block-selected]")).toHaveCount(2);
   const pastedPositions = await Promise.all([cards.nth(2), cards.nth(3)].map((card) => card.evaluate((element) => ({
     left: Number.parseFloat((element as HTMLElement).style.left),
     top: Number.parseFloat((element as HTMLElement).style.top),
   }))));
   expect(pastedPositions).toEqual(originalPositions.map(({ left, top }) => ({ left: left + 24, top: top + 24 })));
+});
+
+test("uses middle mouse only for unbounded canvas panning", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const viewport = page.locator(".edgeless-viewport");
+  const box = await viewport.boundingBox();
+  if (!box) throw new Error("Expected viewport geometry");
+  await page.evaluate(() => {
+    const state = { copy: 0, paste: 0 };
+    (window as typeof window & { middleClipboard?: typeof state }).middleClipboard = state;
+    document.addEventListener("copy", () => { state.copy += 1; });
+    document.addEventListener("paste", () => { state.paste += 1; });
+  });
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down({ button: "middle" });
+  await page.mouse.move(box.x + box.width / 2 + 180, box.y + box.height / 2 + 120, { steps: 5 });
+  await page.mouse.up({ button: "middle" });
+
+  await expect.poll(async () => Number(await viewport.getAttribute("data-edgeless-pan-x"))).toBe(180);
+  await expect.poll(async () => Number(await viewport.getAttribute("data-edgeless-pan-y"))).toBe(120);
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { middleClipboard?: { copy: number; paste: number } }
+  ).middleClipboard)).toEqual({ copy: 0, paste: 0 });
+});
+
+test("keeps drawing coordinates aligned after pan and zoom", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const viewport = page.locator(".edgeless-viewport");
+  const box = await viewport.boundingBox();
+  if (!box) throw new Error("Expected viewport geometry");
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await page.mouse.move(box.x + 200, box.y + 180);
+  await page.mouse.down({ button: "middle" });
+  await page.mouse.move(box.x + 300, box.y + 230, { steps: 4 });
+  await page.mouse.up({ button: "middle" });
+  await page.getByRole("toolbar", { name: "Visual objects" }).getByRole("button", { name: "Draw" }).click();
+
+  const start = { x: box.x + box.width - 220, y: box.y + 180 };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 80, start.y + 40, { steps: 6 });
+  await page.mouse.up();
+
+  const drawing = page.locator('[data-edgeless-visual-kind="drawing"]');
+  await expect(drawing).toHaveCount(1);
+  await expect.poll(async () => {
+    const drawn = await drawing.boundingBox();
+    return drawn && { x: Math.round(drawn.x), y: Math.round(drawn.y), width: Math.round(drawn.width) };
+  }).toEqual({ x: Math.round(start.x), y: Math.round(start.y), width: 80 });
 });
 
 test("duplicates a complete root subtree from slash with offset geometry", async ({ page }) => {

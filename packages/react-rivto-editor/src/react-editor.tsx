@@ -77,7 +77,9 @@ export class ReactEditorImpl implements ReactEditor {
     try {
       this.blocks.register({
         definition: defaultBlockDefinitions[0]!,
-        render: MarkdownContent,
+        render: options.onMarkdownLinkClick
+          ? (props) => <MarkdownContent {...props} onLinkClick={options.onMarkdownLinkClick} />
+          : MarkdownContent,
         slashCommand: {
           title: "Markdown",
           group: "Turn into",

@@ -13,7 +13,7 @@ import {
  * runtime expands that point to the complete normalized selection range. The
  * DOM event is used only to confirm that the shortcut originated in editable
  * page content or from a whole-block selection focused on the page root.
- * Selected roots then move as one Logseq-style structural group.
+ * Selected roots then move as one structural group.
  */
 export function applyIndentShortcut(
   editor: Editor,

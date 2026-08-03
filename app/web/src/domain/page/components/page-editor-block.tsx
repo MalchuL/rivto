@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 type SaveState = "saved" | "dirty" | "saving";
 
-/** Compact in-stack editor (Logseq-style linked view). No chrome / sidebars. */
+/** Compact in-stack linked editor without surrounding chrome or sidebars. */
 export function PageEditorBlock({
   page,
   heading,

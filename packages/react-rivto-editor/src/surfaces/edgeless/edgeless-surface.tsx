@@ -8,22 +8,21 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { useCallback, useRef, useState } from "react";
 import { EdgelessRootBlock } from "./edgeless-block";
 
-export const EDGELESS_PLANE_WIDTH = 2400;
-export const EDGELESS_PLANE_HEIGHT = 1600;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
+const GRID_SIZE = 20;
 
 interface PanGesture {
   readonly x: number;
   readonly y: number;
-  readonly left: number;
-  readonly top: number;
+  readonly panX: number;
+  readonly panY: number;
 }
 
 const clampZoom = (value: number): number => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
 
 /**
- * Projects root block layouts onto a scrollable, zoomable demo canvas.
+ * Projects root block layouts onto an unbounded, zoomable canvas.
  *
  * Viewport gestures are registered through the editor event runtime. This is
  * important when a surface is replaced: its root, document, and window
@@ -36,6 +35,7 @@ export function EdgelessSurface() {
   const spaceHeld = useRef(false);
   const panGesture = useRef<PanGesture | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
 
   const rootRef = useCallback((element: HTMLElement | null) => {
     viewport.current = element;
@@ -95,8 +95,8 @@ export function EdgelessSurface() {
     panGesture.current = {
       x: event.clientX,
       y: event.clientY,
-      left: root.scrollLeft,
-      top: root.scrollTop,
+      panX: pan.x,
+      panY: pan.y,
     };
     root.dataset.panning = "true";
     return true;
@@ -111,8 +111,10 @@ export function EdgelessSurface() {
     const root = viewport.current;
     const start = panGesture.current;
     if (!root || !start) return false;
-    root.scrollLeft = start.left - (event.clientX - start.x);
-    root.scrollTop = start.top - (event.clientY - start.y);
+    setPan({
+      x: start.panX + event.clientX - start.x,
+      y: start.panY + event.clientY - start.y,
+    });
     return true;
   });
 
@@ -120,7 +122,7 @@ export function EdgelessSurface() {
     if (!panGesture.current) return false;
     panGesture.current = null;
     viewport.current?.removeAttribute("data-panning");
-    return false;
+    return true;
   };
   useDOMEvent({
     id: "edgeless.pan.pointer-end",
@@ -133,6 +135,12 @@ export function EdgelessSurface() {
     target: "window",
   }, stopPan);
 
+  useDOMEvent({
+    id: "edgeless.pan.middle-auxclick",
+    type: "auxclick",
+    mode: "edgeless",
+  }, ({ raw: event }) => event.button === 1);
+
   const zoomAt = (nextZoom: number, clientX?: number, clientY?: number): void => {
     const root = viewport.current;
     const next = clampZoom(nextZoom);
@@ -140,13 +148,10 @@ export function EdgelessSurface() {
     const rect = root.getBoundingClientRect();
     const x = (clientX ?? rect.left + root.clientWidth / 2) - rect.left;
     const y = (clientY ?? rect.top + root.clientHeight / 2) - rect.top;
-    const canvasX = (root.scrollLeft + x) / zoom;
-    const canvasY = (root.scrollTop + y) / zoom;
+    const canvasX = (x - pan.x) / zoom;
+    const canvasY = (y - pan.y) / zoom;
     setZoom(next);
-    requestAnimationFrame(() => {
-      root.scrollLeft = canvasX * next - x;
-      root.scrollTop = canvasY * next - y;
-    });
+    setPan({ x: x - canvasX * next, y: y - canvasY * next });
   };
 
   useDOMEvent({
@@ -165,8 +170,14 @@ export function EdgelessSurface() {
       ref={rootRef}
       className="edgeless-viewport"
       data-edgeless-zoom={zoom}
+      data-edgeless-pan-x={pan.x}
+      data-edgeless-pan-y={pan.y}
       aria-label="Edgeless document canvas"
       tabIndex={-1}
+      style={{
+        backgroundPosition: `${pan.x}px ${pan.y}px`,
+        backgroundSize: `${GRID_SIZE * zoom}px ${GRID_SIZE * zoom}px`,
+      }}
     >
       <div className="edgeless-zoom-controls" role="toolbar" aria-label="Canvas zoom">
         <button type="button" aria-label="Zoom out" onClick={() => zoomAt(zoom - 0.1)}>−</button>
@@ -174,22 +185,13 @@ export function EdgelessSurface() {
         <button type="button" aria-label="Zoom in" onClick={() => zoomAt(zoom + 0.1)}>+</button>
       </div>
       <div
-        className="edgeless-scaled-plane"
-        style={{ width: EDGELESS_PLANE_WIDTH * zoom, height: EDGELESS_PLANE_HEIGHT * zoom }}
+        className="edgeless-plane"
+        data-edgeless-plane="true"
+        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
       >
-        <div
-          className="edgeless-plane"
-          data-edgeless-plane="true"
-          style={{
-            width: EDGELESS_PLANE_WIDTH,
-            height: EDGELESS_PLANE_HEIGHT,
-            transform: `scale(${zoom})`,
-          }}
-        >
-          {rootIds.map((blockId) => (
-            <EdgelessRootBlock key={blockId} blockId={blockId} />
-          ))}
-        </div>
+        {rootIds.map((blockId) => (
+          <EdgelessRootBlock key={blockId} blockId={blockId} />
+        ))}
       </div>
     </main>
   );

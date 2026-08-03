@@ -12,7 +12,7 @@ export function normalizeSlashText(value: string): string {
   return value.normalize("NFKC").toLowerCase();
 }
 
-/** Maximum typo distance used by the demo's Logseq-style command search. */
+/** Maximum typo distance used by the command search. */
 export function slashSearchDistance(queryLength: number): number {
   if (queryLength <= 2) return 0;
   if (queryLength <= 5) return 1;

@@ -53,7 +53,7 @@ interface PointerSelection {
  * uses `Selection.setBaseAndExtent` to display the correct directed range.
  *
  * A normal drag that crosses block hosts becomes an inclusive BlockSelection,
- * matching Logseq. Alt at pointer-down retains the previous partial-text mode:
+ * using whole blocks. Alt at pointer-down retains the partial-text mode:
  * one directed TextSelection records exact endpoints and a BlockSelection item
  * records fully covered middle blocks. Returning to the original block restores
  * its exact text range from gesture-local endpoints.

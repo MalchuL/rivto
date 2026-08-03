@@ -555,7 +555,7 @@ export class DocumentBlockManager {
      * list: moving the selected ancestor already carries its complete subtree.
      * The remaining roots must cover one uninterrupted visible range. If the
      * first root has no previous sibling, the complete operation is a no-op;
-     * later roots are never partially indented. This matches Logseq's grouped
+     * later roots are never partially indented. This matches grouped
      * outliner behavior and keeps the supplied roots at the same new depth.
      *
      * @param ids - Selected block IDs in any order, including descendants.
@@ -599,7 +599,7 @@ export class DocumentBlockManager {
      * their selected ancestor exactly once. The group is inserted directly
      * after its parent. Unselected siblings following the last moved root become
      * children of that last root, preserving the visible outline order and the
-     * direct-outdent behavior used by Logseq and Rivto's single-block command.
+     * direct-outdent behavior used by the single-block command.
      *
      * Selection that begins at root depth or skips visible blocks is a no-op.
      * All detach, insert, and adoption mutations share one CRDT transaction.

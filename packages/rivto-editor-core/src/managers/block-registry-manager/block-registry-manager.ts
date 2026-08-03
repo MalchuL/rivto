@@ -1,6 +1,7 @@
 import type { BlockDefinition } from "../../blocks/types";
 import type { EditorBlockInput } from "../../editor/model";
 import { Listeners } from "../../utils";
+import type { ZodType } from "zod";
 
 /**
  * Determines whether a value can participate in recursive property merging.
@@ -43,8 +44,10 @@ const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unk
 /**
  * Validates complete block properties when a definition supplies a schema.
  *
- * Unknown or schema-less definitions preserve their properties unchanged so
- * documents remain readable without every optional block extension installed.
+ * Object schemas validate their declared fields while preserving additional
+ * extension-owned properties. Unknown or schema-less definitions preserve all
+ * properties unchanged so documents remain readable without every optional
+ * block extension installed.
  *
  * @param definition - Registered definition, or undefined for an unknown type.
  * @param props - Complete candidate properties to validate.
@@ -53,7 +56,12 @@ const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unk
 const validateProps = (
   definition: BlockDefinition | undefined,
   props: Record<string, unknown>,
-): Record<string, unknown> => definition?.propSchema?.parse(props) ?? props;
+): Record<string, unknown> => {
+  const schema = definition?.propSchema as (ZodType<Record<string, unknown>> & {
+    loose?: () => ZodType<Record<string, unknown>>;
+  }) | undefined;
+  return schema ? (schema.loose?.() ?? schema).parse(props) : props;
+};
 
 /**
  * Owns the runtime mapping from persisted native types to block definitions.
@@ -142,6 +150,34 @@ export class BlockRegistryManager {
     const definition = this.require(input.type);
     const props = mergeProps(definition.defaultProps ?? {}, input.props ?? {});
     return { ...input, props: validateProps(definition, props) };
+  }
+
+  /**
+   * Prepares properties when an existing block changes native type.
+   *
+   * Existing values and unknown extension properties survive conversion. A
+   * destination-owned field that no longer satisfies its Zod field schema is
+   * replaced with that field's registered default. Nested objects are merged
+   * first and validated as one destination field.
+   *
+   * @param type - Registered destination native type.
+   * @param current - Detached properties owned by the existing block.
+   * @returns Merged, repaired, and validated destination properties.
+   * @throws If the type is unknown or invalid data has no valid default.
+   */
+  prepareTypeChange(type: string, current: Record<string, unknown>): Record<string, unknown> {
+    const definition = this.require(type);
+    const defaults = definition.defaultProps ?? {};
+    const props = mergeProps(defaults, current);
+    const shape = (definition.propSchema as { shape?: Record<string, ZodType> } | undefined)?.shape;
+    if (shape) {
+      for (const [key, schema] of Object.entries(shape)) {
+        if (Object.hasOwn(defaults, key) && !schema.safeParse(props[key]).success) {
+          props[key] = structuredClone(defaults[key]);
+        }
+      }
+    }
+    return validateProps(definition, props);
   }
 
   /**

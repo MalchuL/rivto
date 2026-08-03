@@ -104,7 +104,7 @@ test("groups selected top-level roots only when they are siblings", () => {
   assert.deepEqual(selectedMoveRoots(blocks, mixed, "child"), { ids: ["child"], grouped: false });
 });
 
-test("resolves sibling swaps and Logseq parent-boundary moves", () => {
+test("resolves sibling swaps and parent-boundary moves", () => {
   const blocks = [block("parent", [block("a"), block("b")]), block("after")];
   assert.deepEqual(keyboardMovePlacement(blocks, ["b"], "up"), {
     targetId: "a", position: "before",
