@@ -10,15 +10,15 @@ export default defineConfig({
     alias: [
       {
         find: "@chulane/rivto-react/styles.css",
-        replacement: fileURLToPath(new URL("../packages/react/styles.css", import.meta.url)),
+        replacement: fileURLToPath(new URL("../packages/react-rivto-editor/styles.css", import.meta.url)),
       },
       {
         find: /^@chulane\/rivto-react$/,
-        replacement: fileURLToPath(new URL("../packages/react/src/index.ts", import.meta.url)),
+        replacement: fileURLToPath(new URL("../packages/react-rivto-editor/src/index.ts", import.meta.url)),
       },
       {
         find: /^@chulane\/rivto$/,
-        replacement: fileURLToPath(new URL("../src/index.ts", import.meta.url)),
+        replacement: fileURLToPath(new URL("../packages/rivto-editor-core/src/index.ts", import.meta.url)),
       },
     ],
     // Source imports originate in two workspace packages. Force both to share

@@ -47,7 +47,7 @@ mode switches unchanged.
 On the canvas, Ctrl/Cmd-click selects any rendered block while card-background
 and rectangle gestures select roots. Canvas layout commands derive the unique
 owning roots from selected IDs without replacing the selection. See
-[Selection in Rivto](packages/react/docs/selection.md) for the DOM bridge,
+[Selection in Rivto](packages/react-rivto-editor/docs/selection.md) for the DOM bridge,
 gesture ownership, and collapse behavior.
 
 ## Install
@@ -87,10 +87,10 @@ Extensions are ordinary factory calls supplied to `createReactEditor`; extension
 components are never placed in `EditorView` children. Optional children are
 reserved for application chrome such as a mode toolbar.
 
-See [React editor managers](packages/react/docs/managers.md) for registration
+See [React editor managers](packages/react-rivto-editor/docs/managers.md) for registration
 ownership, ordering, rollback, and cleanup.
 
-See [Markdown rendering and live block size](packages/react/docs/markdown-rendering.md)
+See [Markdown rendering and live block size](packages/react-rivto-editor/docs/markdown-rendering.md)
 for the focused/raw presentation model and its CSS overrides.
 
 ## Custom React blocks
@@ -123,7 +123,7 @@ state, latest property access, bound mutations, and the DOM attributes required
 by text or structural selection. Unknown persisted types remain in the document
 and render through the configured fallback.
 
-See the [`useBlockEditing` renderer guide](packages/react/docs/use-block-editing.md)
+See the [`useBlockEditing` renderer guide](packages/react-rivto-editor/docs/use-block-editing.md)
 for where to spread attributes in text, control, and mixed-content blocks.
 
 ```tsx
@@ -184,7 +184,7 @@ reactEditor.keyboard.setKeymapOverride("block.indent", ["Alt+ArrowRight"]);
 reactEditor.keyboard.replaceKeymap({ "history.redo": ["Primary+y"] });
 ```
 
-See [React events and keymaps](packages/react/docs/events.md) for targets,
+See [React events and keymaps](packages/react-rivto-editor/docs/events.md) for targets,
 scopes, conditions, composition policy, hooks, and built-in binding IDs.
 
 ## Core-only usage

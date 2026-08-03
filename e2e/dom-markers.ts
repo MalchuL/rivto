@@ -1,7 +1,7 @@
 import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-} from "../packages/react/src/constants";
+} from "../packages/react-rivto-editor/src/constants";
 
 export {
   BLOCK_ID_ATTRIBUTE,

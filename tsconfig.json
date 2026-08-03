@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "rootDir": "src",
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
@@ -13,19 +12,6 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "isolatedModules": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/store/crdt-doc": [
-        "./src/store/crdt-doc"
-      ],
-      "@/store/document-model": [
-        "./src/store/document-model"
-      ],
-      "@/utils": [
-        "./src/utils"
-      ]
-    }
-  },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+    "isolatedModules": true
+  }
 }

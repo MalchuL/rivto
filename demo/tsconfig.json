@@ -6,8 +6,8 @@
     "moduleResolution": "Bundler",
     "baseUrl": ".",
     "paths": {
-      "@chulane/rivto": ["../src/index.ts"],
-      "@chulane/rivto-react": ["../packages/react/src/index.ts"]
+      "@chulane/rivto": ["../packages/rivto-editor-core/src/index.ts"],
+      "@chulane/rivto-react": ["../packages/react-rivto-editor/src/index.ts"]
     },
     "jsx": "react-jsx",
     "strict": true,

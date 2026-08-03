@@ -4,20 +4,20 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", "packages/*/dist", "demo/dist", "node_modules", "src/.stuff"],
+    ignores: ["dist", "packages/*/dist", "demo/dist", "node_modules", "packages/rivto-editor-core/src/.stuff"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["src/**/*.ts", "src/**/*.tsx", "packages/react/src/**/*.ts", "packages/react/src/**/*.tsx"],
+    files: ["packages/rivto-editor-core/src/**/*.ts", "packages/rivto-editor-core/src/**/*.tsx", "packages/react-rivto-editor/src/**/*.ts", "packages/react-rivto-editor/src/**/*.tsx"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
     },
   },
   {
-    files: ["src/editor/**/*.ts", "src/editor/**/*.tsx", "src/store/document-model/**/*.ts"],
-    ignores: ["src/**/__tests__/**"],
+    files: ["packages/rivto-editor-core/src/editor/**/*.ts", "packages/rivto-editor-core/src/editor/**/*.tsx", "packages/rivto-editor-core/src/store/document-model/**/*.ts"],
+    ignores: ["packages/rivto-editor-core/src/**/__tests__/**"],
     plugins: { jsdoc },
     rules: {
       "jsdoc/require-jsdoc": ["error", {
@@ -37,7 +37,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/**/__tests__/**/*.ts", "src/**/*.test.ts", "packages/react/src/**/__tests__/**/*.ts", "packages/react/src/**/*.test.ts"],
+    files: ["packages/rivto-editor-core/src/**/__tests__/**/*.ts", "packages/rivto-editor-core/src/**/*.test.ts", "packages/react-rivto-editor/src/**/__tests__/**/*.ts", "packages/react-rivto-editor/src/**/*.test.ts"],
     rules: {
       "@typescript-eslint/ban-ts-comment": "off",
       "@typescript-eslint/no-unused-vars": "off",

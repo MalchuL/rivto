@@ -6,7 +6,7 @@ import {
   normalizeSlashText,
   rankSlashCommands,
   slashSearchDistance,
-} from "../../packages/react/src/extensions/slash-search.ts";
+} from "../../packages/react-rivto-editor/src/extensions/slash-search.ts";
 
 const command = (id, title, keywords = []) => ({ id, title, keywords, execute() {} });
 

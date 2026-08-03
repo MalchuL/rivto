@@ -513,16 +513,16 @@ restores with `restoreDOMSelection`.
 | `src/editor/rivto-editor.ts` | Selection reconciliation and typed editor methods |
 | `src/managers/clipboard-manager/clipboard-manager.ts` | Clipboard workflows and history boundary |
 | `src/managers/clipboard-manager/utils/clipboard.ts` | Stateless clipboard transformations |
-| `packages/react/src/extensions/text-selection.ts` | DOM ↔ portable sync, cross-host gestures |
-| `packages/react/src/managers/selection/selection-manager.ts` | Core delegate + active-root DOM API |
-| `packages/react/src/managers/selection/editor-dom-selection.ts` | Conversion, restore, highlight |
-| `packages/react/src/managers/selection/dom-text-selection.ts` | Save/restore inside one editable |
-| `packages/react/src/extensions/block-selection.ts` | Ctrl/Cmd block toggle on both surfaces |
-| `packages/react/src/extensions/page-navigation.ts` | Caret + block keyboard navigation |
-| `packages/react/src/extensions/selection-deletion.ts` | Delete expanded selection |
-| `packages/react/src/extensions/edgeless-selection.tsx` | Canvas object / marquee |
-| `packages/react/src/extensions/page-selection-utils.ts` | Visible order, toggle/extend/collapse reconcile |
-| `packages/react/.../use-block-selection.ts` | Whole-block selected? for UI |
+| `packages/react-rivto-editor/src/extensions/text-selection.ts` | DOM ↔ portable sync, cross-host gestures |
+| `packages/react-rivto-editor/src/managers/selection/selection-manager.ts` | Core delegate + active-root DOM API |
+| `packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts` | Conversion, restore, highlight |
+| `packages/react-rivto-editor/src/managers/selection/dom-text-selection.ts` | Save/restore inside one editable |
+| `packages/react-rivto-editor/src/extensions/block-selection.ts` | Ctrl/Cmd block toggle on both surfaces |
+| `packages/react-rivto-editor/src/extensions/page-navigation.ts` | Caret + block keyboard navigation |
+| `packages/react-rivto-editor/src/extensions/selection-deletion.ts` | Delete expanded selection |
+| `packages/react-rivto-editor/src/extensions/edgeless-selection.tsx` | Canvas object / marquee |
+| `packages/react-rivto-editor/src/extensions/page-selection-utils.ts` | Visible order, toggle/extend/collapse reconcile |
+| `packages/react-rivto-editor/.../use-block-selection.ts` | Whole-block selected? for UI |
 | `e2e/selection.spec.ts` | Browser-level selection regressions |
 
 ---

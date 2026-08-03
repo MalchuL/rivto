@@ -6,7 +6,7 @@ import {
   rootOwnerId,
   rootsInRect,
   translatedLayouts,
-} from "../../packages/react/src/extensions/edgeless-geometry.ts";
+} from "../../packages/react-rivto-editor/src/extensions/edgeless-geometry.ts";
 
 const block = (id, children = [], x = 0, y = 0) => ({
   id, type: "paragraph", content: id, props: {}, pluginData: {}, children,

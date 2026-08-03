@@ -4,7 +4,7 @@
     "rootDir": "../..",
     "baseUrl": ".",
     "paths": {
-      "@chulane/rivto": ["../../src/index.ts"]
+      "@chulane/rivto": ["../rivto-editor-core/src/index.ts"]
     },
     "jsx": "react-jsx"
   },

@@ -9,7 +9,7 @@ import {
   reconcileCollapsedSelection,
   selectedMoveRoots,
   toggleBlockSelection,
-} from "../../packages/react/src/extensions/page-selection-utils.ts";
+} from "../../packages/react-rivto-editor/src/extensions/page-selection-utils.ts";
 
 const block = (id, children = [], collapsed = false) => ({
   id,

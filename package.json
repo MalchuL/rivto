@@ -1,52 +1,27 @@
 {
-  "name": "@chulane/rivto",
-  "version": "0.3.0",
+  "name": "rivto-workspace",
+  "private": true,
   "type": "module",
   "packageManager": "pnpm@11.8.0",
-  "main": "./dist/esm/index.js",
-  "module": "./dist/esm/index.js",
-  "types": "./dist/esm/index.d.ts",
-  "files": [
-    "dist/esm"
-  ],
-  "exports": {
-    ".": {
-      "import": "./dist/esm/index.js",
-      "types": "./dist/esm/index.d.ts",
-      "default": "./dist/esm/index.js"
-    }
-  },
   "scripts": {
-    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean --out-dir dist/esm",
-    "dev": "tsup src/index.ts --format esm --dts --sourcemap --clean --out-dir dist/esm --watch",
+    "clean": "pnpm --filter @chulane/rivto clean && pnpm --filter @chulane/rivto-react clean",
+    "build": "pnpm --filter @chulane/rivto build && pnpm --filter @chulane/rivto-react build",
+    "dev": "pnpm --filter @chulane/rivto dev",
     "demo": "pnpm --dir demo dev",
     "demo:build": "pnpm --dir demo build",
     "demo:check": "pnpm --dir demo check-types",
-    "lint": "eslint src packages/react/src --max-warnings=0",
-    "test": "scripts/run-test.sh",
+    "lint": "eslint packages/rivto-editor-core/src packages/react-rivto-editor/src --max-warnings=0",
+    "test": "pnpm --filter @chulane/rivto test",
     "test:e2e": "pnpm demo:build && playwright test --project=chromium --project=firefox",
-    "check-types:core": "tsc --noEmit",
+    "check-types:core": "pnpm --filter @chulane/rivto check-types",
     "check-types": "pnpm check-types:core && pnpm --filter @chulane/rivto-react check-types && pnpm --dir demo check-types"
-  },
-  "peerDependencies": {
-    "yjs": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
     "@playwright/test": "^1.58.0",
-    "@types/jest": "^29.5.14",
     "eslint": "^9.39.0",
     "eslint-plugin-jsdoc": "^63.0.10",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.4.5",
-    "tsup": "^8.5.0",
     "typescript": "5.8.3",
-    "typescript-eslint": "^8.46.0",
-    "yjs": "^13.0.0"
-  },
-  "dependencies": {
-    "y-webrtc": "^10.3.0",
-    "zod": "^4.1.13"
+    "typescript-eslint": "^8.46.0"
   }
 }
