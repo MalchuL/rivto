@@ -24,7 +24,7 @@ import {
 } from "./managers";
 import type { CreateReactEditorOptions, ReactEditor } from "./types";
 
-export type { CreateReactEditorOptions, ReactEditor } from "./types";
+export type { CreateReactEditorOptions, DefaultBlockOptions, ReactEditor } from "./types";
 
 /** Internal implementation; applications receive the capability-only interface. */
 export class ReactEditorImpl implements ReactEditor {
@@ -75,16 +75,18 @@ export class ReactEditorImpl implements ReactEditor {
     this.blocks = new BlockManager(this);
     this.surfaces = new SurfaceManager(this);
     try {
+      const slashCommand = {
+        title: "Markdown",
+        group: "Turn into",
+        keywords: ["paragraph", "text"],
+        ...options.defaultBlock?.slashCommand,
+      };
       this.blocks.register({
         definition: defaultBlockDefinitions[0]!,
         render: options.onMarkdownLinkClick
           ? (props) => <MarkdownContent {...props} onLinkClick={options.onMarkdownLinkClick} />
           : MarkdownContent,
-        slashCommand: {
-          title: "Markdown",
-          group: "Turn into",
-          keywords: ["paragraph", "text"],
-        },
+        slashCommand,
       });
       this.extensions.initialize(options.extensions ?? []);
     } catch (error) {

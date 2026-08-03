@@ -101,6 +101,29 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
+  test("configures the default paragraph slash command", () => {
+    const editor = createEditor();
+    editor.blocksRegistry.defineBlock({ type: "test.source" });
+    const blockId = editor.blocks.insertBlock({ type: "test.source" });
+    const reactEditor = createReactEditor({
+      editor,
+      defaultBlock: { slashCommand: { group: "Writing" } },
+    });
+
+    expect(reactEditor.slashCommands.getAll({ blockId })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "type.paragraph",
+          title: "Markdown",
+          group: "Writing",
+          keywords: ["paragraph", "text"],
+        }),
+      ]),
+    );
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
   test("rolls block registration back when its slash command conflicts", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });

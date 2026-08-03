@@ -2,6 +2,7 @@ import type { RivtoEditorApi as Editor } from "@chulane/rivto";
 import type {
   BlockRenderer,
   KeymapOverrides,
+  ReactBlockSlashCommand,
   ReactEditorExtension,
 } from "./managers";
 import type {
@@ -26,6 +27,17 @@ export interface MarkdownLinkClick {
   readonly event: MouseEvent<HTMLAnchorElement>;
 }
 
+/** Configuration for the paragraph integration installed by default. */
+export interface DefaultBlockOptions {
+  /**
+   * Overrides fields of the default paragraph conversion shown in the slash menu.
+   *
+   * The omitted fields retain their defaults: `Markdown`, `Turn into`, and the
+   * `paragraph`/`text` search keywords.
+   */
+  readonly slashCommand?: Partial<ReactBlockSlashCommand>;
+}
+
 /** Creation options for the React presentation runtime. */
 export interface CreateReactEditorOptions {
   /** Existing framework-neutral editor; ReactEditor never destroys it. */
@@ -36,6 +48,8 @@ export interface CreateReactEditorOptions {
   readonly keymap?: KeymapOverrides;
   /** Renderer used for persisted block types unknown to this React runtime. */
   readonly unknownBlockRenderer?: BlockRenderer;
+  /** Options for the built-in paragraph renderer and slash conversion. */
+  readonly defaultBlock?: DefaultBlockOptions;
   /** Observes Markdown links and may prevent browser navigation for local routing. */
   readonly onMarkdownLinkClick?: (context: MarkdownLinkClick) => void;
 }

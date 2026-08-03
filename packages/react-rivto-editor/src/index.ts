@@ -10,7 +10,12 @@ export {
 export {
   createReactEditor,
 } from "./react-editor";
-export type { CreateReactEditorOptions, MarkdownLinkClick, ReactEditor } from "./types";
+export type {
+  CreateReactEditorOptions,
+  DefaultBlockOptions,
+  MarkdownLinkClick,
+  ReactEditor,
+} from "./types";
 export { MarkdownContent } from "./blocks/markdown";
 export { edgelessVisualsExtension } from "./extensions/edgeless-visuals";
 export type {

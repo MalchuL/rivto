@@ -26,6 +26,9 @@ import {
 const editor = createRivtoEditor();
 const reactEditor = createReactEditor({
   editor,
+  defaultBlock: {
+    slashCommand: { group: "Formatting" },
+  },
   extensions: [
     standardPreset(),
     blockExtension({
@@ -42,6 +45,10 @@ root.render(<EditorView editor={reactEditor} />);
 reactEditor.destroy();
 editor.destroy();
 ```
+
+`defaultBlock.slashCommand` can override the built-in paragraph command's
+`id`, `title`, `group`, keywords, or availability while omitted fields retain
+their defaults.
 
 `standardPreset()` installs the complete page and edgeless editing experience:
 surfaces, selection bridges, history, clipboard, slash commands, navigation,
