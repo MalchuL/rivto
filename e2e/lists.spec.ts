@@ -69,7 +69,7 @@ test("numbers adjacent blocks and resumes through a list gap from slash commands
 test("does not add markers to ordinary lists in edgeless cards", async ({ page }) => {
   await page.locator('[data-editor-mode="edgeless"]').click();
   const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
-  const root = card.locator(":scope > .edgeless-card-body > .page-block");
+  const root = card.locator(":scope > .edgeless-card-content > .page-block");
   await expect(root.locator(":scope > .page-block-row > .page-list-marker")).toHaveCount(0);
   await expect(root.locator(".page-list-marker")).toHaveCount(0);
 });

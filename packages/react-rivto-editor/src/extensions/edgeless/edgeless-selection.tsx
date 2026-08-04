@@ -27,7 +27,7 @@ interface RectangleGesture {
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
 const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
-const HANDLE_SELECTOR = "[data-edgeless-drag-handle], [data-edgeless-resize-handle]";
+const HANDLE_SELECTOR = "[data-edgeless-resize-handle]";
 
 /** Returns true for controls that retain their normal interaction without Primary. */
 function isInteractive(target: Element): boolean {
@@ -102,7 +102,7 @@ export function EdgelessInteractionOverlay() {
       return true;
     }
 
-    if (event.target.closest(".edgeless-zoom-controls, .edgeless-visual-toolbar, .edgeless-drawing-capture[data-active]")) return false;
+    if (event.target.closest("[data-edgeless-ui], .edgeless-drawing-capture[data-active]")) return false;
     root.focus({ preventScroll: true });
     if (!primary) selection.clear();
     gesture.current = {

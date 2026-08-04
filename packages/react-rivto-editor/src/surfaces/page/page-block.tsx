@@ -84,7 +84,11 @@ export interface PageBlockProps {
  * @returns The complete rendered block subtree, or null if the block was
  * concurrently removed.
  */
-export function PageBlock({ blockId, ignoreCollapse = false, showListMarker = true }: PageBlockProps) {
+export function PageBlock({
+  blockId,
+  ignoreCollapse = false,
+  showListMarker = true,
+}: PageBlockProps) {
   // The block and renderer registries publish independent snapshots.
   const { block, operations } = useBlock(blockId);
   const reactEditor = useReactEditor();

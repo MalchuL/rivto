@@ -4,7 +4,8 @@ import { useEdgelessSelection } from "../../extensions/edgeless/edgeless-runtime
 import type { CSSProperties } from "react";
 import { PageBlock } from "../page/page-block";
 
-const FALLBACK_LAYOUT: BlockLayout = {
+/** Default geometry shared by rendered and newly created canvas cards. */
+export const EDGELESS_CARD_DEFAULT_LAYOUT: BlockLayout = {
   x: 60,
   y: 60,
   width: 320,
@@ -23,7 +24,7 @@ export function EdgelessRootBlock({ blockId }: { readonly blockId: string }) {
   const { block } = useBlock(blockId);
   const selection = useEdgelessSelection();
   if (!block) return null;
-  const layout = block.layout ?? FALLBACK_LAYOUT;
+  const layout = block.layout ?? EDGELESS_CARD_DEFAULT_LAYOUT;
   const style: CSSProperties = {
     left: layout.x,
     top: layout.y,
@@ -42,18 +43,12 @@ export function EdgelessRootBlock({ blockId }: { readonly blockId: string }) {
       style={style}
       tabIndex={0}
     >
-      <header className="edgeless-card-header">
-        <button
-          type="button"
-          className="edgeless-drag-handle"
-          data-edgeless-drag-handle="true"
-          aria-label={`Move canvas block: ${block.content || block.type}`}
-        >
-          Move
-        </button>
-      </header>
-      <div className="edgeless-card-body">
-        <PageBlock blockId={block.id} ignoreCollapse showListMarker={false} />
+      <div className="edgeless-card-content" data-edgeless-card-content="true">
+        <PageBlock
+          blockId={block.id}
+          ignoreCollapse
+          showListMarker={false}
+        />
       </div>
       <button
         type="button"

@@ -1,6 +1,7 @@
 import {
   useMemo,
   Fragment,
+  useEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -10,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { useEditorMode, useEditorRoot } from "../../../hooks";
 import { useEdgelessSelection } from "../edgeless-runtime";
+import { EdgelessToolButton, type EdgelessToolIcon } from "../edgeless-tool-button";
 import type { EdgelessVisualController } from "./controller";
 import type { EdgelessVisual, EdgelessVisualsOptions, VisualFrame } from "./types";
 
@@ -46,6 +48,25 @@ export function EdgelessVisualLayer({
   const zoom = Number(root?.dataset.edgelessZoom) || 1;
   const visuals = controller.getVisuals();
   const groups = controller.getGroups();
+
+  /** Returns every rendered leaf and nested group marker moved by one group. */
+  const groupPreviewElements = (id: string): HTMLElement[] => {
+    if (!plane) return [];
+    const keys = new Set<string>();
+    const visit = (kind: "block" | "visual" | "group", itemId: string) => {
+      const key = `${kind}:${itemId}`;
+      if (keys.has(key)) return;
+      keys.add(key);
+      if (kind === "group") groups.find((group) => group.id === itemId)?.children.forEach((child) => visit(child.kind, child.id));
+    };
+    visit("group", id);
+    return [...plane.querySelectorAll<HTMLElement>("[data-edgeless-object-kind][data-edgeless-object-id], [data-edgeless-group-bound-id]")]
+      .filter((element) => {
+        const kind = element.dataset.edgelessObjectKind ?? "group";
+        const itemId = element.dataset.edgelessObjectId ?? element.dataset.edgelessGroupBoundId;
+        return !!itemId && keys.has(`${kind}:${itemId}`);
+      });
+  };
 
   /** Converts a viewport pointer into unscaled canvas coordinates. */
   const canvasPoint = (event: Pick<PointerEvent, "clientX" | "clientY">) => {
@@ -96,6 +117,19 @@ export function EdgelessVisualLayer({
   const path = (points: Array<{ x: number; y: number }>) => points.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ");
   const panX = Number(root.dataset.edgelessPanX) || 0;
   const panY = Number(root.dataset.edgelessPanY) || 0;
+  const centeredFrame = (): VisualFrame => {
+    const rect = root.getBoundingClientRect();
+    const center = canvasPoint({ clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 });
+    return { x: center.x - 80, y: center.y - 60, width: 160, height: 120 };
+  };
+  const createCentered = (payload: { kind: "rectangle" | "ellipse" | "text" } | {
+    kind: "sticker";
+    source: { type: "image"; src: string } | { type: "emoji"; value: string };
+    alt: string;
+  }) => controller.create({ ...payload, frame: centeredFrame() });
+  const oneSelectedVisual = selection.active && selection.items.length === 1 && selection.items[0]?.kind === "visual"
+    ? selection.items[0].id
+    : undefined;
 
   return <>
     {createPortal(
@@ -107,7 +141,9 @@ export function EdgelessVisualLayer({
             visual={visual}
             zoom={zoom}
             selected={selection.active && selection.items.some((item) => item.kind === "visual" && item.id === visual.id)}
+            showProperties={options.toolbar !== false && oneSelectedVisual === visual.id}
             onText={(text) => controller.update({ id: visual.id, patch: { text } as never })}
+            onUpdate={(patch) => controller.update({ id: visual.id, patch: patch as never })}
             onMove={(dx, dy) => controller.move(dx, dy)}
             onResize={(width, height) => controller.resize(width, height)}
           />
@@ -117,14 +153,16 @@ export function EdgelessVisualLayer({
           const selected = selection.active && selection.items.some((item) => item.kind === "group" && item.id === group.id);
           return bounds && (
             <Fragment key={group.id}>
-              {selected && <div className="edgeless-group-bound" style={{ left: bounds.x, top: bounds.y, width: bounds.width, height: bounds.height }} />}
+              {selected && <div className="edgeless-group-bound" data-edgeless-group-bound-id={group.id} style={{ left: bounds.x, top: bounds.y, width: bounds.width, height: bounds.height }} />}
               <button
                 className="edgeless-group-label"
                 data-edgeless-object-kind="group"
                 data-edgeless-object-id={group.id}
+                data-edgeless-group-drag-handle="true"
                 style={{ left: bounds.x, top: bounds.y }}
                 type="button"
                 title={group.title}
+                aria-label={`Move ${group.title}`}
                 onDoubleClick={() => controller.reactEditor.editor.execute("edgeless.selection.set", group.children)}
                 onPointerDown={(event) => {
                   if (event.button !== 0) return;
@@ -134,17 +172,24 @@ export function EdgelessVisualLayer({
                 onPointerMove={(event) => {
                   const start = groupDrag.current;
                   if (!start || start.id !== group.id || start.pointerId !== event.pointerId) return;
-                  event.currentTarget.style.transform = `translate(${(event.clientX - start.x) / zoom}px, ${(event.clientY - start.y) / zoom}px)`;
+                  const transform = `translate(${(event.clientX - start.x) / zoom}px, ${(event.clientY - start.y) / zoom}px)`;
+                  groupPreviewElements(group.id).forEach((element) => { element.style.transform = transform; });
                 }}
                 onPointerUp={(event) => {
                   const start = groupDrag.current;
                   if (!start || start.id !== group.id || start.pointerId !== event.pointerId) return;
                   groupDrag.current = null;
-                  event.currentTarget.style.removeProperty("transform");
-                  controller.move((event.clientX - start.x) / zoom, (event.clientY - start.y) / zoom);
+                  groupPreviewElements(group.id).forEach((element) => { element.style.removeProperty("transform"); });
+                  const dx = (event.clientX - start.x) / zoom;
+                  const dy = (event.clientY - start.y) / zoom;
+                  if (dx || dy) controller.move(dx, dy);
+                }}
+                onPointerCancel={() => {
+                  groupDrag.current = null;
+                  groupPreviewElements(group.id).forEach((element) => { element.style.removeProperty("transform"); });
                 }}
               >
-                {group.title}
+                <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M5 4h2v2H5zm6 0h2v2h-2zM5 8h2v2H5zm6 0h2v2h-2zM5 12h2v2H5zm6 0h2v2h-2z" /></svg>
               </button>
             </Fragment>
           );
@@ -170,24 +215,22 @@ export function EdgelessVisualLayer({
       </svg>,
       root,
     )}
-      {options.toolbar !== false && createPortal(
-        <div className="edgeless-visual-toolbar" role="toolbar" aria-label="Visual objects">
-          <button type="button" onClick={() => controller.create({ kind: "rectangle" })}>Rectangle</button>
-          <button type="button" onClick={() => controller.create({ kind: "ellipse" })}>Ellipse</button>
-          <button type="button" onClick={() => controller.create({ kind: "text" })}>Text</button>
-          <button type="button" aria-pressed={controller.getTool() === "drawing"} onClick={() => controller.reactEditor.editor.execute("edgeless.tool.set", { tool: controller.getTool() === "drawing" ? "select" : "drawing" })}>Draw</button>
+      {options.toolbar !== false && createPortal(<>
+        <div className="edgeless-create-toolbar" data-edgeless-ui="true" role="toolbar" aria-label="Visual objects">
+          <EdgelessToolButton label="Rectangle" icon="rectangle" onClick={() => createCentered({ kind: "rectangle" })} />
+          <EdgelessToolButton label="Ellipse" icon="ellipse" onClick={() => createCentered({ kind: "ellipse" })} />
+          <EdgelessToolButton label="Text" icon="text" onClick={() => createCentered({ kind: "text" })} />
+          <EdgelessToolButton label="Draw" icon="draw" aria-pressed={controller.getTool() === "drawing"} onClick={() => controller.reactEditor.editor.execute("edgeless.tool.set", { tool: controller.getTool() === "drawing" ? "select" : "drawing" })} />
           {options.stickers?.map((sticker) => (
-            <button key={sticker.id} type="button" title={sticker.label} onClick={() => controller.create({ kind: "sticker", source: sticker.source, alt: sticker.alt ?? sticker.label })}>{sticker.source.type === "emoji" ? sticker.source.value : sticker.label}</button>
+            <EdgelessToolButton key={sticker.id} label={sticker.label} onClick={() => createCentered({ kind: "sticker", source: sticker.source, alt: sticker.alt ?? sticker.label })}>
+              {sticker.source.type === "emoji" ? sticker.source.value : <img src={sticker.source.src} alt="" />}
+            </EdgelessToolButton>
           ))}
-          {selection.active && selection.items.length > 1 && <>
-            <button type="button" onClick={() => controller.reactEditor.editor.execute("edgeless.selection.group")}>Group</button>
-            {(["left", "center", "right", "top", "middle", "bottom"] as const).map((alignment) => <button key={alignment} type="button" onClick={() => controller.reactEditor.editor.execute("edgeless.selection.align", alignment)}>{alignment}</button>)}
-            <button type="button" onClick={() => controller.reactEditor.editor.execute("edgeless.selection.distribute", "horizontal")}>Distribute H</button>
-            <button type="button" onClick={() => controller.reactEditor.editor.execute("edgeless.selection.distribute", "vertical")}>Distribute V</button>
-          </>}
-          {selection.active && selection.items.some((item) => item.kind === "group") && <button type="button" onClick={() => controller.reactEditor.editor.execute("edgeless.selection.ungroup")}>Ungroup</button>}
-          {selection.active && selection.items.length > 0 && (["front", "forward", "backward", "back"] as const).map((direction) => <button key={direction} type="button" onClick={() => controller.reactEditor.editor.execute("edgeless.selection.reorder", direction)}>{direction}</button>)}
-        </div>,
+        </div>
+        {selection.active && selection.items.length > 0 && (
+          <SelectionToolbar controller={controller} items={selection.items} />
+        )}
+        </>,
         root,
       )}
   </>;
@@ -203,19 +246,29 @@ function VisualElement({
   visual,
   zoom,
   selected,
+  showProperties,
   onText,
+  onUpdate,
   onMove,
   onResize,
 }: {
   readonly visual: EdgelessVisual;
   readonly zoom: number;
   readonly selected: boolean;
+  readonly showProperties: boolean;
   readonly onText: (text: string) => void;
+  readonly onUpdate: (patch: Record<string, unknown>) => void;
   readonly onMove: (dx: number, dy: number) => void;
   readonly onResize: (width: number, height: number) => void;
 }) {
   const [preview, setPreview] = useState<{ dx: number; dy: number; resize: boolean } | null>(null);
+  const [editing, setEditing] = useState(false);
+  const text = useRef<HTMLDivElement | null>(null);
   const gesture = useRef<{ x: number; y: number; pointerId: number; resize: boolean } | null>(null);
+  useEffect(() => {
+    if (!editing) return;
+    text.current?.focus({ preventScroll: true });
+  }, [editing]);
   const style: CSSProperties = {
     left: visual.frame.x,
     top: visual.frame.y,
@@ -227,6 +280,7 @@ function VisualElement({
   };
   const pointerStart = (event: ReactPointerEvent<HTMLDivElement>, resize: boolean) => {
     if (event.button !== 0) return;
+    if (!resize && (editing || event.target instanceof Element && event.target.closest("[data-edgeless-ui], input, textarea, select, button"))) return;
     gesture.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId, resize };
     event.currentTarget.setPointerCapture(event.pointerId);
     event.stopPropagation();
@@ -257,15 +311,20 @@ function VisualElement({
     );
     if (visual.kind === "text") return (
       <div
+        ref={text}
         className="edgeless-visual-text"
-        contentEditable
+        contentEditable={editing}
+        data-editing={editing || undefined}
         suppressContentEditableWarning
         style={{ color: visual.color, fontSize: visual.fontSize, textAlign: visual.align }}
-        onBlur={(event) => onText(event.currentTarget.textContent ?? "")}
+        onBlur={(event) => {
+          onText(event.currentTarget.textContent ?? "");
+          setEditing(false);
+        }}
       >{visual.text}</div>
     );
     return <svg viewBox="0 0 100 100" preserveAspectRatio="none"><rect x="1" y="1" width="98" height="98" rx={visual.kind === "ellipse" ? 50 : 0} fill={visual.fill} stroke={visual.stroke} strokeWidth={visual.strokeWidth} vectorEffect="non-scaling-stroke" /></svg>;
-  }, [onText, visual]);
+  }, [editing, onText, visual]);
   return (
     <div
       className="edgeless-visual"
@@ -273,13 +332,22 @@ function VisualElement({
       data-edgeless-object-id={visual.id}
       data-edgeless-visual-kind={visual.kind}
       data-selected={selected || undefined}
+      data-editing={editing || undefined}
       style={style}
+      onDoubleClick={(event) => {
+        if (visual.kind !== "text") return;
+        event.stopPropagation();
+        setEditing(true);
+      }}
       onPointerDown={(event) => pointerStart(event, false)}
       onPointerMove={pointerMove}
       onPointerUp={pointerEnd}
       onPointerCancel={pointerEnd}
     >
       {content}
+      {showProperties && visual.kind !== "sticker" && (
+        <VisualProperties visual={visual} zoom={zoom} onUpdate={onUpdate} />
+      )}
       {selected && <button
         className="edgeless-visual-resize"
         data-edgeless-resize-handle="true"
@@ -288,5 +356,122 @@ function VisualElement({
         onPointerDown={(event) => pointerStart(event as unknown as ReactPointerEvent<HTMLDivElement>, true)}
       />}
     </div>
+  );
+}
+
+const alignments = [
+  ["left", "Align left", "align-left"],
+  ["center", "Align horizontal centers", "align-center"],
+  ["right", "Align right", "align-right"],
+  ["top", "Align top", "align-top"],
+  ["middle", "Align vertical centers", "align-middle"],
+  ["bottom", "Align bottom", "align-bottom"],
+] as const satisfies readonly (readonly [string, string, EdgelessToolIcon])[];
+
+/** Renders actions that operate on the current mixed canvas selection. */
+function SelectionToolbar({
+  controller,
+  items,
+}: {
+  readonly controller: EdgelessVisualController;
+  readonly items: readonly { kind: "block" | "visual" | "group"; id: string }[];
+}) {
+  const execute = (name: string, payload?: unknown) => controller.reactEditor.editor.execute(name, payload);
+  return (
+    <div className="edgeless-selection-toolbar" data-edgeless-ui="true" role="toolbar" aria-label="Selected objects">
+      {items.length > 1 && <EdgelessToolButton label="Group" icon="group" onClick={() => execute("edgeless.selection.group")} />}
+      {items.some((item) => item.kind === "group") && <EdgelessToolButton label="Ungroup" icon="ungroup" onClick={() => execute("edgeless.selection.ungroup")} />}
+      {items.length > 1 && alignments.map(([alignment, label, icon]) => (
+        <EdgelessToolButton key={alignment} label={label} icon={icon} onClick={() => execute("edgeless.selection.align", alignment)} />
+      ))}
+      {items.length > 2 && <>
+        <EdgelessToolButton label="Distribute horizontally" icon="distribute-h" onClick={() => execute("edgeless.selection.distribute", "horizontal")} />
+        <EdgelessToolButton label="Distribute vertically" icon="distribute-v" onClick={() => execute("edgeless.selection.distribute", "vertical")} />
+      </>}
+      {(["front", "forward", "backward", "back"] as const).map((direction) => (
+        <EdgelessToolButton key={direction} label={`Move ${direction}`} icon={direction} onClick={() => execute("edgeless.selection.reorder", direction)} />
+      ))}
+    </div>
+  );
+}
+
+/** Renders immediately applied controls for one selected visual record. */
+function VisualProperties({
+  visual,
+  zoom,
+  onUpdate,
+}: {
+  readonly visual: Exclude<EdgelessVisual, { kind: "sticker" }>;
+  readonly zoom: number;
+  readonly onUpdate: (patch: Record<string, unknown>) => void;
+}) {
+  const color = (label: string, value: string, name: "fill" | "stroke" | "color") => (
+    <ColorControl label={label} value={value} onCommit={(next) => onUpdate({ [name]: next })} />
+  );
+  const width = "strokeWidth" in visual && (
+    <label>
+      <span>Stroke</span>
+      <input type="number" aria-label="Stroke width" min={1} max={24} value={visual.strokeWidth} onChange={(event) => onUpdate({ strokeWidth: Number(event.currentTarget.value) })} />
+    </label>
+  );
+  return (
+    <div
+      className="edgeless-visual-properties"
+      data-edgeless-ui="true"
+      role="toolbar"
+      aria-label="Visual properties"
+      style={{ "--edgeless-properties-scale": 1 / zoom } as CSSProperties}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      {(visual.kind === "rectangle" || visual.kind === "ellipse") && <>
+        {color("Fill color", visual.fill, "fill")}
+        {color("Stroke color", visual.stroke, "stroke")}
+        {width}
+      </>}
+      {visual.kind === "drawing" && <>
+        {color("Stroke color", visual.stroke, "stroke")}
+        {width}
+      </>}
+      {visual.kind === "text" && <>
+        {color("Text color", visual.color, "color")}
+        <label>
+          <span>Size</span>
+          <input type="number" aria-label="Font size" min={8} max={160} value={visual.fontSize} onChange={(event) => onUpdate({ fontSize: Number(event.currentTarget.value) })} />
+        </label>
+        {(["left", "center", "right"] as const).map((alignment) => (
+          <EdgelessToolButton key={alignment} label={`Text align ${alignment}`} icon={`align-${alignment}` as EdgelessToolIcon} aria-pressed={visual.align === alignment} onClick={() => onUpdate({ align: alignment })} />
+        ))}
+      </>}
+    </div>
+  );
+}
+
+/** Keeps rapid native picker previews local and persists only the committed color. */
+function ColorControl({
+  label,
+  value,
+  onCommit,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly onCommit: (value: string) => void;
+}) {
+  const input = useRef<HTMLInputElement | null>(null);
+  const commit = useRef(onCommit);
+  const [draft, setDraft] = useState(value);
+  commit.current = onCommit;
+  useEffect(() => setDraft(value), [value]);
+  useEffect(() => {
+    const element = input.current;
+    if (!element) return;
+    const handleChange = () => commit.current(element.value);
+    element.addEventListener("change", handleChange);
+    return () => element.removeEventListener("change", handleChange);
+  }, []);
+  return (
+    <label title={label}>
+      <span>{label}</span>
+      <input ref={input} type="color" aria-label={label} value={draft} onInput={(event) => setDraft(event.currentTarget.value)} />
+    </label>
   );
 }

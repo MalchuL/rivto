@@ -5,6 +5,18 @@ import { canvasDelta, owningRootIds } from "./edgeless-geometry";
 import { getEdgelessRuntime } from "./edgeless-runtime";
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
+const BLOCK_SELECTOR = "[data-block-id]";
+const CARD_CONTROL_SELECTOR = [
+  "[data-block-content]",
+  "[data-edgeless-resize-handle]",
+  "[data-edgeless-ui]",
+  "button",
+  "input",
+  "textarea",
+  "select",
+  "a",
+  "[contenteditable=true]",
+].join(",");
 
 interface TransformStart {
   readonly kind: "move" | "resize";
@@ -23,7 +35,7 @@ function cardFor(root: HTMLElement, id: string): HTMLElement | undefined {
 }
 
 /**
- * Adds atomic root dragging and resizing through delegated canvas handles.
+ * Adds atomic root dragging and resizing through delegated canvas chrome.
  *
  * Pointer movement changes only temporary inline styles. Persisted CRDT layout
  * is patched once on pointer-up, so a grouped gesture is one transaction and
@@ -58,22 +70,31 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     mode: "edgeless",
   }, ({ raw: event, root }) => {
     if (event.button !== 0 || !(event.target instanceof Element)) return false;
-    const moveHandle = event.target.closest("[data-edgeless-drag-handle]");
     const resizeHandle = event.target.closest("[data-edgeless-resize-handle]");
-    if (!moveHandle && !resizeHandle) return false;
     const card = event.target.closest<HTMLElement>(ROOT_SELECTOR);
     const blockId = card?.dataset.edgelessRoot;
     if (!card || !blockId) return false;
+    const hitBlock = event.target.closest<HTMLElement>(BLOCK_SELECTOR);
+    const movableChrome = !event.target.closest(CARD_CONTROL_SELECTOR) &&
+      (!hitBlock || hitBlock.dataset.blockId === blockId);
+    if (!resizeHandle && !movableChrome) return false;
     event.stopPropagation();
 
     const selectedRoots = owningRootIds(
       editor.blocks.getBlocks(),
       selection.get().items.filter((item) => item.kind === "block").map((item) => item.id),
     );
-    const ids = moveHandle && selectedRoots.includes(blockId) ? selectedRoots : [blockId];
-    if (!selectedRoots.includes(blockId)) {
+    const current = selection.get().items;
+    const selected = current.some((item) => item.kind === "block" && item.id === blockId);
+    if (event.ctrlKey || event.metaKey) {
+      selection.set(selected
+        ? current.filter((item) => !(item.kind === "block" && item.id === blockId))
+        : [...current, { kind: "block", id: blockId }]);
+      if (selected) return true;
+    } else if (!selectedRoots.includes(blockId)) {
       selection.set([{ kind: "block", id: blockId }]);
     }
+    const ids = !resizeHandle && selectedRoots.includes(blockId) ? selectedRoots : [blockId];
     const roots = new Map(editor.blocks.getBlocks().map((block) => [block.id, block]));
     const layouts = new Map(ids.flatMap((id) => {
       const layout = roots.get(id)?.layout;

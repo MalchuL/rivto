@@ -1,12 +1,15 @@
 import {
   useDOMEvent,
+  useEditor,
   useEditorRoot,
   useKeyboardEvent,
   useRootBlockIds,
 } from "../../hooks";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
-import { useCallback, useRef, useState } from "react";
-import { EdgelessRootBlock } from "./edgeless-block";
+import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
+import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
+import { useCallback, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { EdgelessToolButton } from "../../extensions/edgeless/edgeless-tool-button";
+import { EDGELESS_CARD_DEFAULT_LAYOUT, EdgelessRootBlock } from "./edgeless-block";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
@@ -29,6 +32,7 @@ const clampZoom = (value: number): number => Math.max(MIN_ZOOM, Math.min(MAX_ZOO
  * listeners move together instead of leaving global listeners behind.
  */
 export function EdgelessSurface() {
+  const editor = useEditor();
   const rootIds = useRootBlockIds();
   const { ref: registerRoot } = useEditorRoot();
   const viewport = useRef<HTMLElement | null>(null);
@@ -102,6 +106,31 @@ export function EdgelessSurface() {
     return true;
   });
 
+  /** Appends and focuses one default root card at an empty canvas point. */
+  const createBlockAt = (event: ReactMouseEvent<HTMLElement>): void => {
+    const root = viewport.current;
+    const target = event.target;
+    if (!root || !(target instanceof Element) || event.button !== 0) return;
+    if (target.closest("[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], button, input, textarea, select, a") ||
+      target.closest(".edgeless-drawing-capture[data-active]")) return;
+    const rect = root.getBoundingClientRect();
+    const x = (event.clientX - rect.left - pan.x) / zoom;
+    const y = (event.clientY - rect.top - pan.y) / zoom;
+    const roots = editor.blocks.getBlocks();
+    const zIndex = Math.max(0, ...roots.map((block) => block.layout?.zIndex ?? 0)) + 1;
+    const id = editor.blocks.insertBlock({
+      type: DEFAULT_BLOCK_TYPE,
+      content: "",
+      layout: { ...EDGELESS_CARD_DEFAULT_LAYOUT, x, y, zIndex },
+    }, roots.at(-1)?.id);
+    editor.selection.set([{
+      type: "text",
+      anchor: { blockId: id, offset: 0 },
+      head: { blockId: id, offset: 0 },
+    }]);
+    requestAnimationFrame(() => focusBlock(root, id, 0));
+  };
+
   useDOMEvent({
     id: "edgeless.pan.pointer-move",
     type: "pointermove",
@@ -174,15 +203,16 @@ export function EdgelessSurface() {
       data-edgeless-pan-y={pan.y}
       aria-label="Edgeless document canvas"
       tabIndex={-1}
+      onDoubleClick={createBlockAt}
       style={{
         backgroundPosition: `${pan.x}px ${pan.y}px`,
         backgroundSize: `${GRID_SIZE * zoom}px ${GRID_SIZE * zoom}px`,
       }}
     >
-      <div className="edgeless-zoom-controls" role="toolbar" aria-label="Canvas zoom">
-        <button type="button" aria-label="Zoom out" onClick={() => zoomAt(zoom - 0.1)}>−</button>
-        <button type="button" aria-label="Reset zoom" onClick={() => zoomAt(1)}>{Math.round(zoom * 100)}%</button>
-        <button type="button" aria-label="Zoom in" onClick={() => zoomAt(zoom + 0.1)}>+</button>
+      <div className="edgeless-zoom-controls" data-edgeless-ui="true" role="toolbar" aria-label="Canvas zoom">
+        <EdgelessToolButton label="Zoom out" icon="zoom-out" onClick={() => zoomAt(zoom - 0.1)} />
+        <EdgelessToolButton label="Reset zoom" className="edgeless-zoom-value" onClick={() => zoomAt(1)}>{Math.round(zoom * 100)}%</EdgelessToolButton>
+        <EdgelessToolButton label="Zoom in" icon="zoom-in" onClick={() => zoomAt(zoom + 0.1)} />
       </div>
       <div
         className="edgeless-plane"

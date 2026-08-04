@@ -2,14 +2,6 @@
   --rivto-default-block-height: 1.5em;
 }
 
-.edgeless-zoom-controls button {
-  padding: 5px 9px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-}
-
 .page-surface {
   width: min(720px, calc(100% - 32px));
   min-height: 70vh;
@@ -466,10 +458,10 @@
   min-height: 520px;
   margin: 8px 16px 24px;
   overflow: hidden;
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  background-color: #f8f7fb;
-  background-image: radial-gradient(#c9c4d0 1px, transparent 1px);
+  border: 1px solid #dedbe7;
+  border-radius: 16px;
+  background-color: #f7f6fa;
+  background-image: radial-gradient(#c8c3d3 1px, transparent 1px);
   background-repeat: repeat;
   outline: none;
   overscroll-behavior: contain;
@@ -488,16 +480,16 @@
 .edgeless-zoom-controls {
   position: absolute;
   z-index: 20;
-  top: 12px;
+  bottom: 14px;
   left: 12px;
   display: flex;
   width: max-content;
-  gap: 4px;
-  padding: 5px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: rgb(255 255 255 / 92%);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 8%);
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid #dedbe7;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 8px 24px rgb(42 34 72 / 10%);
 }
 
 .edgeless-plane {
@@ -514,10 +506,10 @@
   flex-direction: column;
   box-sizing: border-box;
   overflow: hidden;
-  border: 1px solid #d8d5df;
-  border-radius: 10px;
+  border: 1px solid #d8d4e2;
+  border-radius: 12px;
   background: white;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 8%);
+  box-shadow: 0 8px 24px rgb(42 34 72 / 9%);
   outline: none;
 }
 
@@ -526,37 +518,23 @@
   box-shadow: 0 0 0 2px var(--rivto-accent, #6c5ce7), 0 8px 24px rgb(0 0 0 / 12%);
 }
 
-.edgeless-card-header {
-  display: flex;
-  flex: 0 0 28px;
-  align-items: center;
-  padding: 2px 7px;
-  border-bottom: 1px solid #eee;
-  background: #faf9fc;
-}
-
-.edgeless-drag-handle {
-  padding: 2px 5px;
-  border: 0;
-  color: #777;
-  background: transparent;
-  font-size: 0.75rem;
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-}
-
-.edgeless-drag-handle:active {
-  cursor: grabbing;
-}
-
-.edgeless-card-body {
+.edgeless-card-content {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 10px 12px 18px 40px;
+  box-sizing: border-box;
+  padding: 12px 16px 16px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  cursor: grab;
+}
+
+.edgeless-card-content > .page-block {
+  margin: 0;
+}
+
+.edgeless-card-content:active {
+  cursor: grabbing;
 }
 
 /* Match page-mode row hover across the card, including indented blocks. */
@@ -637,19 +615,38 @@
   overflow: hidden;
   outline: none;
   white-space: pre-wrap;
+  user-select: none;
+}
+
+.edgeless-visual-text[data-editing] {
+  cursor: text;
+  user-select: text;
 }
 
 .edgeless-group-label {
   position: absolute;
   z-index: 2147483640;
-  width: 24px;
-  height: 24px;
+  width: 38px;
+  height: 22px;
+  translate: 0 -26px;
   padding: 0;
   border: 1px solid var(--rivto-accent, #6c5ce7);
-  border-radius: 50%;
-  color: transparent;
+  border-radius: 7px;
+  color: var(--rivto-accent, #6c5ce7);
   background: #eeeaff;
+  cursor: grab;
   pointer-events: auto;
+  touch-action: none;
+}
+
+.edgeless-group-label:active {
+  cursor: grabbing;
+}
+
+.edgeless-group-label svg {
+  width: 18px;
+  height: 18px;
+  fill: currentcolor;
 }
 
 .edgeless-group-bound {
@@ -681,29 +678,132 @@
   touch-action: none;
 }
 
-.edgeless-visual-toolbar {
+.edgeless-create-toolbar,
+.edgeless-selection-toolbar {
   position: absolute;
   z-index: 21;
-  top: auto;
-  bottom: 12px;
+  top: 12px;
   left: 12px;
   display: flex;
-  width: fit-content;
-  gap: 4px;
-  max-width: calc(100% - 24px);
-  margin: 0;
-  flex-wrap: wrap;
-  padding: 6px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: white;
-  box-shadow: 0 4px 18px rgb(0 0 0 / 12%);
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid #dedbe7;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 95%);
+  box-shadow: 0 8px 24px rgb(42 34 72 / 12%);
 }
 
-.edgeless-visual-toolbar button {
-  padding: 5px 8px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
+.edgeless-create-toolbar {
+  flex-direction: column;
+  max-height: calc(100% - 86px);
+  overflow-y: auto;
+}
+
+.edgeless-selection-toolbar {
+  left: 66px;
+  max-width: calc(100% - 80px);
+  overflow-x: auto;
+}
+
+.edgeless-tool-button {
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  padding: 7px;
+  border: 0;
+  border-radius: 8px;
+  color: #514a61;
+  background: transparent;
+  cursor: pointer;
+  font: 600 0.75rem/1 system-ui, sans-serif;
+}
+
+.edgeless-tool-button:hover,
+.edgeless-tool-button[aria-pressed="true"] {
+  color: var(--rivto-accent, #6c5ce7);
+  background: color-mix(in srgb, var(--rivto-accent, #6c5ce7) 10%, white);
+}
+
+.edgeless-tool-button:focus-visible {
+  outline: 2px solid var(--rivto-accent, #6c5ce7);
+  outline-offset: 1px;
+}
+
+.edgeless-tool-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.edgeless-tool-button svg,
+.edgeless-tool-button img {
+  width: 22px;
+  height: 22px;
+}
+
+.edgeless-tool-button svg path {
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.edgeless-tool-button img {
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.edgeless-zoom-value {
+  width: 52px;
+}
+
+.edgeless-visual-properties {
+  position: absolute;
+  z-index: 10;
+  bottom: calc(100% + 10px);
+  left: 0;
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid #dedbe7;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 97%);
+  box-shadow: 0 8px 24px rgb(42 34 72 / 14%);
+  color: #514a61;
+  cursor: default;
+  transform: scale(var(--edgeless-properties-scale));
+  transform-origin: bottom left;
+  user-select: none;
+}
+
+.edgeless-visual-properties label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 0.7rem/1 system-ui, sans-serif;
+}
+
+.edgeless-visual-properties input[type="color"] {
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid #d8d4e2;
+  border-radius: 7px;
+  background: white;
+}
+
+.edgeless-visual-properties input[type="number"] {
+  width: 50px;
+  box-sizing: border-box;
+  padding: 6px;
+  border: 1px solid #d8d4e2;
+  border-radius: 7px;
+  color: inherit;
   background: white;
 }
 
