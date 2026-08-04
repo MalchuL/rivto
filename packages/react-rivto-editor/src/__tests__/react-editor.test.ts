@@ -101,6 +101,30 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
+  test("registers list slash commands that atomically reset checkbox state", () => {
+    const editor = createEditor();
+    const blockId = editor.blocks.insertBlock({
+      type: "paragraph",
+      listProps: { type: "checkbox", checked: true },
+    });
+    const reactEditor = createReactEditor({ editor, extensions: [standardPreset()] });
+
+    expect(reactEditor.slashCommands.getAll({ blockId }).map(({ id }) => id)).toEqual(
+      expect.arrayContaining([
+        "list.list",
+        "list.numbered_list",
+        "list.start_numbered_list",
+        "list.continue_numbered_list",
+      ]),
+    );
+    reactEditor.slashCommands.execute("list.start_numbered_list", { blockId });
+    expect(editor.blocks.getBlock(blockId)).toMatchObject({
+      listProps: { type: "start_numbered_list", checked: false },
+    });
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
   test("configures the default paragraph slash command", () => {
     const editor = createEditor();
     editor.blocksRegistry.defineBlock({ type: "test.source" });
@@ -493,7 +517,7 @@ describe("delegated events", () => {
   function keyboardEvent(
     target: FakeElement,
     key: string,
-    modifiers: Partial<Pick<KeyboardEvent, "ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "isComposing">> = {},
+    modifiers: Partial<Pick<KeyboardEvent, "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "isComposing">> = {},
   ): KeyboardEvent {
     const event = {
       type: "keydown",
@@ -586,6 +610,37 @@ describe("delegated events", () => {
     expect(handlerEvent?.raw).toBe(event);
     expect(handlerEvent?.phase).toBe("keydown");
     expect(event.defaultPrevented).toBe(true);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("matches primary letter shortcuts by physical key across keyboard layouts", () => {
+    const editor = createEditor();
+    const reactEditor = createReactEditor({ editor });
+    const { root } = realm();
+    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    const calls: string[] = [];
+    reactEditor.keyboard.register({ id: "test.undo", keys: ["Primary+z"] }, () => {
+      calls.push("undo");
+      return true;
+    });
+    reactEditor.keyboard.register({
+      id: "test.redo",
+      keys: ["Primary+Shift+z", "Primary+y"],
+    }, () => {
+      calls.push("redo");
+      return true;
+    });
+
+    root.emit("keydown", keyboardEvent(root, "я", { code: "KeyZ", ctrlKey: true }));
+    root.emit("keydown", keyboardEvent(root, "Я", {
+      code: "KeyZ",
+      ctrlKey: true,
+      shiftKey: true,
+    }));
+    root.emit("keydown", keyboardEvent(root, "н", { code: "KeyY", ctrlKey: true }));
+
+    expect(calls).toEqual(["undo", "redo", "redo"]);
     reactEditor.destroy();
     editor.destroy();
   });

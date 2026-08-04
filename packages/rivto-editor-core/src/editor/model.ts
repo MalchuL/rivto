@@ -1,3 +1,5 @@
+import type { BlockListProps } from "../blocks";
+
 /** Collaborative block geometry as seen by editor features. */
 export interface EditorBlockLayout {
   x: number;
@@ -13,6 +15,8 @@ export interface EditorBlock {
   type: string;
   /** Persisted outline visibility exposed directly to editor features. */
   collapsed: boolean;
+  /** Presentation used when this block renders among sibling blocks. */
+  listProps: BlockListProps;
   props: Record<string, unknown>;
   pluginData: Record<string, unknown>;
   content: string;
@@ -26,6 +30,8 @@ export interface EditorBlockInput {
   id?: string;
   /** Initial outline visibility; defaults to false when omitted. */
   collapsed?: boolean;
+  /** Initial multi-block presentation; omitted members receive their defaults. */
+  listProps?: Partial<BlockListProps>;
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
   content?: string;
@@ -37,6 +43,8 @@ export interface EditorBlockInput {
 export interface EditorBlockPatch {
   /** Replaces the persisted outline visibility when supplied. */
   collapsed?: boolean;
+  /** Merges supplied multi-block presentation fields. */
+  listProps?: Partial<BlockListProps>;
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
   content?: string;

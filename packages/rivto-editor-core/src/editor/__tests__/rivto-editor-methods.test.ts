@@ -96,6 +96,7 @@ describe("EditorRuntime methods", () => {
         id: "loaded",
         type: "paragraph",
         collapsed: false,
+        listProps: { type: "list", checked: false },
         props: { tone: "success" },
         pluginData: {},
         content: "Loaded",
@@ -107,7 +108,12 @@ describe("EditorRuntime methods", () => {
 
     expect(editor.dump()).toMatchObject({
       version: 4,
-      blocks: [{ id: "loaded", content: "Loaded", props: { tone: "success" } }],
+      blocks: [{
+        id: "loaded",
+        content: "Loaded",
+        listProps: { type: "list", checked: false },
+        props: { tone: "success" },
+      }],
       links: [],
       pluginData: { app: { theme: "dark" } },
     });

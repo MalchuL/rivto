@@ -22,7 +22,7 @@ export interface ClipboardExtensionOptions {
  * Routes browser copy, cut, and paste events through the core clipboard manager.
  *
  * Without this bridge, a contenteditable handles paste itself and sees only
- * `text/plain`; native block types, hierarchy, props, and plugin data are lost.
+ * `text/plain`; native block types, list state, hierarchy, props, and plugin data are lost.
  * Core produces and consumes Rivto's structured clipboard MIME representation;
  * this component only transfers those portable values to and from the browser.
  * Ctrl/Cmd+Shift+V is remembered from keydown because ClipboardEvent has no

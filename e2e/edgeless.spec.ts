@@ -113,11 +113,17 @@ test("undoes a grouped nested-block drag after switching from edgeless", async (
   const target = page.locator(blockIdSelector(targetId));
   await source.locator(":scope > .page-block-row").hover();
   const handleBox = await source.locator(":scope > .page-block-row .page-drag-handle").boundingBox();
-  const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
-  if (!handleBox || !targetBox) throw new Error("Expected drag geometry");
+  if (!handleBox) throw new Error("Expected drag geometry");
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
+  await page.mouse.move(handleBox.x + handleBox.width / 2 + 8, handleBox.y + handleBox.height / 2);
+  await expect(page.locator(".page-drag-overlay")).toBeVisible();
+  const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
+  if (!targetBox) throw new Error("Expected target drag geometry");
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 8 });
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  await page.mouse.move(targetBox.x + targetBox.width / 2 + 1, targetBox.y + targetBox.height / 2);
+  await expect(target.locator(":scope > .page-block-row")).toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
 
   await expect(target.locator(`:scope > .page-block-children > ${blockIdSelector(firstId)}`)).toHaveCount(1);

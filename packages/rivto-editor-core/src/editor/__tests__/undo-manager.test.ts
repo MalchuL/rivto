@@ -113,6 +113,7 @@ describe("EditorRuntime undo manager", () => {
         id: "loaded",
         type: "paragraph",
         collapsed: false,
+        listProps: { type: "list", checked: false },
         props: {},
         pluginData: {},
         content: "Loaded",

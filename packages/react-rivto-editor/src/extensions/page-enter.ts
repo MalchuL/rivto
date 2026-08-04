@@ -1,4 +1,4 @@
-import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
+import { DEFAULT_BLOCK_TYPE, isNumberedListType } from "@chulane/rivto";
 import type { ReactEditor } from "../types";
 import {
   focusBlock,
@@ -51,6 +51,11 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
 
       const block = editor.blocks.getBlock(target.blockId);
       if (!block) return;
+      if (block.content === "" && block.listProps.type !== "list") {
+        editor.blocks.updateBlock(block.id, { listProps: { type: "list", checked: false } });
+        nextBlockId = block.id;
+        return;
+      }
       const isTextTarget = target.item.type === "text";
       const splitAt = isTextTarget
         ? Math.min(target.offset ?? 0, block.content.length)
@@ -58,6 +63,12 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
       if (isTextTarget) editor.blocks.updateBlock(block.id, { content: block.content.slice(0, splitAt) });
       nextBlockId = editor.blocks.insertBlock({
         type: DEFAULT_BLOCK_TYPE,
+        listProps: {
+          type: block.listProps.type === "checkbox"
+            ? "checkbox"
+            : isNumberedListType(block.listProps.type) ? "numbered_list" : "list",
+          checked: false,
+        },
         content: isTextTarget ? block.content.slice(splitAt) : "",
       }, block.id);
 

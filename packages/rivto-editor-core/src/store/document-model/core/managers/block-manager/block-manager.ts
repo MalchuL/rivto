@@ -13,15 +13,17 @@ import type {
     BlockUpdate,
     DocumentModel,
 } from "../../types";
+import { DEFAULT_BLOCK_LIST_PROPS, type BlockListProps } from "../../../../../blocks";
 import type {
     BlockLayoutStorage,
+    BlockListPropsStorage,
     BlockStorage,
     IDBlock,
     IDPlugin,
     IDProp,
 } from "../../types/storage";
 import { assignMap, assignText, clone, isCRDTArray, isCRDTMap, isCRDTText } from "../../utils";
-import { collapsedFrom, contentFrom, strings } from "./utils";
+import { collapsedFrom, contentFrom, listPropsFrom, strings } from "./utils";
 
 const ROOTS_KEY = "rivto.editor.roots";
 const BLOCKS_KEY = "rivto.editor.blocks";
@@ -229,10 +231,18 @@ export class DocumentBlockManager {
      */
     updateBlocks(updates: readonly BlockUpdate[]): void {
         const simulatedProps = new Map<string, Record<string, unknown>>();
+        const simulatedListProps = new Map<string, BlockListProps>();
         const prepared = updates.map(({ id, patch }) => {
             const block = this.requiredBlock(id);
             const type = this.requiredType(block, id);
             if (patch.collapsed !== undefined) collapsedFrom(patch.collapsed);
+            let validatedListProps: BlockListProps | undefined;
+            if (patch.listProps) {
+                const current = simulatedListProps.get(id)
+                    ?? listPropsFrom(this.requiredMap(block, "listProps").toObject());
+                validatedListProps = listPropsFrom({ ...current, ...patch.listProps });
+                simulatedListProps.set(id, validatedListProps);
+            }
             let validatedProps: Record<string, unknown> | undefined;
             if (patch.props) {
                 const current = simulatedProps.get(id)
@@ -240,12 +250,15 @@ export class DocumentBlockManager {
                 validatedProps = this.validateProps(type, { ...current, ...patch.props });
                 simulatedProps.set(id, validatedProps);
             }
-            return { block, patch, validatedProps };
+            return { block, patch, validatedListProps, validatedProps };
         });
 
         this.transact(() => {
-            prepared.forEach(({ block, patch, validatedProps }) => {
+            prepared.forEach(({ block, patch, validatedListProps, validatedProps }) => {
                 if (patch.collapsed !== undefined) block.set("collapsed", patch.collapsed);
+                if (validatedListProps && patch.listProps) {
+                    assignMap(this.requiredMap(block, "listProps"), { ...patch.listProps }, false);
+                }
                 if (patch.props && validatedProps) {
                     const props = this.requiredMap(block, "props");
                     for (const key of Object.keys(patch.props)) {
@@ -685,6 +698,7 @@ export class DocumentBlockManager {
     validateBlocks(blocks: readonly Block[]): void {
         const validate = (block: Block): void => {
             collapsedFrom(block.collapsed);
+            listPropsFrom(block.listProps);
             if (!Array.isArray(block.children)) throw new Error("Snapshot block children must be an array");
             block.children.forEach(validate);
         };
@@ -729,6 +743,7 @@ export class DocumentBlockManager {
     private insertInto(block: BlockInput, container: CRDTArray<string>, afterId?: string | null): string {
         if (!block.type) throw new Error("Block type is required");
         const collapsed = collapsedFrom(block.collapsed, false);
+        const listProps = listPropsFrom({ ...DEFAULT_BLOCK_LIST_PROPS, ...block.listProps });
         const id = block.id ?? crypto.randomUUID();
         if (this.storage.has(id)) throw new Error(`Block ${id} already exists`);
         const model = this.document.crdt.instantiator.createMap<BlockStorage>();
@@ -736,16 +751,19 @@ export class DocumentBlockManager {
         const content = this.document.crdt.instantiator.createText();
         const children = this.document.crdt.instantiator.createArray<string>();
         const layout = this.document.crdt.instantiator.createMap<BlockLayoutStorage>();
+        const listPropsStorage = this.document.crdt.instantiator.createMap<BlockListPropsStorage>();
         const pluginData = this.document.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
         model.set("id", id);
         model.set("type", block.type);
         model.set("collapsed", collapsed);
+        model.set("listProps", listPropsStorage);
         model.set("props", props);
         model.set("content", content);
         model.set("children", children);
         model.set("layout", layout);
         model.set("pluginData", pluginData);
         this.storage.set(id, model);
+        assignMap(listPropsStorage, { ...listProps }, true);
         assignMap(props, this.validateProps(block.type, block.props ?? {}));
         assignText(content, contentFrom(block.content));
         const flowIndex = container.length;
@@ -787,6 +805,7 @@ export class DocumentBlockManager {
             id,
             type: this.requiredType(value, id),
             collapsed: collapsedFrom(value.get("collapsed")),
+            listProps: listPropsFrom(this.requiredMap(value, "listProps").toObject()),
             props,
             pluginData,
             content,

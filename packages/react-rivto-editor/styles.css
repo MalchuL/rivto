@@ -137,6 +137,39 @@
   user-select: none;
 }
 
+.page-list-marker,
+.page-list-checkbox {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  color: #777;
+  line-height: 18px;
+  text-align: right;
+}
+
+.page-block-row:has(> .page-list-marker, > .page-list-checkbox) {
+  box-sizing: border-box;
+  padding-left: 24px;
+}
+
+.page-list-checkbox {
+  cursor: pointer;
+}
+
+.page-list-checkbox:focus-visible {
+  outline: 2px solid var(--rivto-accent, #6c5ce7);
+  outline-offset: 1px;
+}
+
+.page-block[data-block-list-type="checkbox"][data-block-checked="true"] > .page-block-row .page-block-content {
+  color: #888;
+  text-decoration: line-through;
+}
+
 .page-collapse-toggle:focus-visible {
   border-radius: 4px;
   outline: 2px solid var(--rivto-accent, #6c5ce7);

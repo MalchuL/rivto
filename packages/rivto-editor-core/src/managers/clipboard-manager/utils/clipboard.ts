@@ -1,6 +1,7 @@
 import type { NormalizedSelection } from "../../selection-manager";
 import type { Block, BlockInput, Link } from "../../../store/document-model";
 import type { ClipboardBundle } from "../types";
+import { BLOCK_LIST_TYPES, resolveBlockListNumbers, type BlockListType } from "../../../blocks";
 
 /**
  * Detached clipboard data after every persisted identity has been remapped.
@@ -149,8 +150,9 @@ export interface PortableClipboardFormats {
  * Serializes one detached block forest without discarding its hierarchy.
  *
  * The callback is evaluated once per block so custom block definitions produce
- * identical text in every portable flavor. Top-level Markdown stays unchanged;
- * only descendants receive list markers.
+ * identical text in every portable flavor. Ordinary `list` blocks use the
+ * paragraph/outline representation, while checkbox and numbered modes
+ * emit their explicit portable markers and semantic controls.
  *
  * @param blocks - Selected roots carrying their copied descendants.
  * @param toRawText - Resolves the portable text for one detached block.
@@ -160,39 +162,76 @@ export function serializeClipboardBlocks(
   blocks: Block[],
   toRawText: (block: Block) => string,
 ): PortableClipboardFormats {
-  const serialize = (block: Block, depth: number): PortableClipboardFormats => {
-    const raw = toRawText(block);
-    const lines = raw.split(/\r\n?|\n/);
-    const children = block.children.map((child) => serialize(child, depth + 1));
-    const childHtml = children.length
-      ? `<ul>${children.map((child) => child.html).join("")}</ul>`
-      : "";
-    const escaped = escapeHtml(raw).replace(/\r\n?|\n/g, "<br>");
-    const plainIndent = "  ".repeat(depth);
-    const markdownIndent = "  ".repeat(Math.max(0, depth - 1));
-    const markdownContinuation = "  ".repeat(depth);
-    const ownText = lines.map((line) => plainIndent + line).join("\n");
-    const ownMarkdown = depth === 0
-      ? lines.join("\n")
-      : lines.map((line, index) => (
-        index === 0 ? `${markdownIndent}- ${line}` : markdownContinuation + line
-      )).join("\n");
-
+  const serializeSiblings = (siblings: Block[], depth: number): PortableClipboardFormats => {
+    const numbers = resolveBlockListNumbers(siblings);
+    const serialized = siblings.map((block) => {
+      const raw = toRawText(block);
+      const lines = raw.split(/\r\n?|\n/);
+      const number = numbers.get(block.id);
+      const children = serializeSiblings(block.children, depth + 1);
+      const escaped = escapeHtml(raw).replace(/\r\n?|\n/g, "<br>");
+      if (block.listProps.type === "list") {
+        const plainIndent = "  ".repeat(depth);
+        const markdownIndent = "  ".repeat(Math.max(0, depth - 1));
+        const markdownContinuation = "  ".repeat(depth);
+        const ownText = lines.map((line) => plainIndent + line).join("\n");
+        const ownMarkdown = depth === 0
+          ? lines.join("\n")
+          : lines.map((line, index) => (
+            index === 0 ? `${markdownIndent}- ${line}` : markdownContinuation + line
+          )).join("\n");
+        return {
+          text: children.text ? `${ownText}\n${children.text}` : ownText,
+          html: depth === 0
+            ? `<p>${escaped}</p>${children.html}`
+            : `<li>${escaped}${children.html}</li>`,
+          markdown: children.markdown ? `${ownMarkdown}\n${children.markdown}` : ownMarkdown,
+          ordinaryHtmlItem: depth > 0,
+        };
+      }
+      const marker = block.listProps.type === "checkbox"
+        ? `- [${block.listProps.checked ? "x" : " "}] `
+        : `${number}. `;
+      const indent = "  ".repeat(depth);
+      const continuation = indent + " ".repeat(marker.length);
+      const own = lines.map((line, index) => `${index ? continuation : indent + marker}${line}`).join("\n");
+      const checkbox = block.listProps.type === "checkbox"
+        ? `<input type="checkbox" disabled${block.listProps.checked ? " checked" : ""}>`
+        : "";
+      const childHtml = children.html;
+      const html = number === undefined
+        ? `<ul><li>${checkbox}${escaped}${childHtml}</li></ul>`
+        : `<ol start="${number}"><li value="${number}">${escaped}${childHtml}</li></ol>`;
+      return {
+        text: childHtml ? `${own}\n${children.text}` : own,
+        html,
+        markdown: childHtml ? `${own}\n${children.markdown}` : own,
+        ordinaryHtmlItem: false,
+      };
+    });
+    let html = "";
+    let ordinaryItems = "";
+    const flushOrdinaryItems = () => {
+      if (!ordinaryItems) return;
+      html += `<ul>${ordinaryItems}</ul>`;
+      ordinaryItems = "";
+    };
+    serialized.forEach((item) => {
+      if (item.ordinaryHtmlItem) ordinaryItems += item.html;
+      else {
+        flushOrdinaryItems();
+        html += item.html;
+      }
+    });
+    flushOrdinaryItems();
     return {
-      text: [ownText, ...children.map((child) => child.text)].join("\n"),
-      html: depth === 0
-        ? `<p>${escaped}</p>${childHtml}`
-        : `<li>${escaped}${childHtml}</li>`,
-      markdown: [ownMarkdown, ...children.map((child) => child.markdown)].join("\n"),
+      text: serialized.map((item) => item.text).join("\n"),
+      html,
+      markdown: serialized.map((item) => item.markdown).join("\n"),
     };
   };
 
-  const roots = blocks.map((block) => serialize(block, 0));
-  return {
-    text: roots.map((root) => root.text).join("\n"),
-    html: roots.map((root) => root.html).join(""),
-    markdown: roots.map((root) => root.markdown).join("\n"),
-  };
+  return serializeSiblings(blocks, 0);
 }
 
 /**
@@ -219,6 +258,13 @@ export function remapClipboardBundle(
   const validateBlock = (block: Block): void => {
     if (typeof block.collapsed !== "boolean" || !Array.isArray(block.children)) {
       throw new Error("Invalid Rivto clipboard block");
+    }
+    if (
+      !block.listProps ||
+      !BLOCK_LIST_TYPES.includes(block.listProps.type as BlockListType) ||
+      typeof block.listProps.checked !== "boolean"
+    ) {
+      throw new Error("Invalid Rivto clipboard block list state");
     }
     block.children.forEach(validateBlock);
   };

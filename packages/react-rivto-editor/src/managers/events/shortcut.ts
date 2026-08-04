@@ -13,6 +13,10 @@ const normalizeKey = (key: string): string => {
   return key.length === 1 ? key.toLowerCase() : `${key[0]?.toUpperCase()}${key.slice(1)}`;
 };
 
+/** Resolves a layout-independent letter from a physical keyboard code. */
+const letterFromCode = (code: string): string | undefined =>
+  /^Key([A-Z])$/.exec(code)?.[1]?.toLowerCase();
+
 /** Parses and validates one exact, single-stroke shortcut. */
 export function parseShortcut(shortcut: string): ParsedShortcut {
   const parts = shortcut.split("+").filter(Boolean);
@@ -60,7 +64,9 @@ export function matchesShortcut(
   event: globalThis.KeyboardEvent,
 ): boolean {
   const modifiers = eventModifiers(event);
-  if (shortcut.key !== normalizeKey(event.key)) return false;
+  const logicalKey = normalizeKey(event.key);
+  const physicalKey = shortcut.modifier === "none" ? undefined : letterFromCode(event.code);
+  if (shortcut.key !== logicalKey && shortcut.key !== physicalKey) return false;
   if (shortcut.alt !== modifiers.alt || shortcut.shift !== modifiers.shift) return false;
   if (shortcut.modifier === "primary") return modifiers.ctrl !== modifiers.meta;
   if (shortcut.modifier === "ctrl") return modifiers.ctrl && !modifiers.meta;
@@ -71,10 +77,13 @@ export function matchesShortcut(
 /** Returns the canonical portable description of a native keyboard event. */
 export function shortcutFromKeyboardEvent(event: globalThis.KeyboardEvent): string {
   const modifiers = eventModifiers(event);
+  const key = modifiers.ctrl !== modifiers.meta
+    ? letterFromCode(event.code) ?? normalizeKey(event.key)
+    : normalizeKey(event.key);
   return [
     modifiers.ctrl !== modifiers.meta ? "Primary" : modifiers.ctrl ? "Ctrl+Meta" : "",
     modifiers.alt ? "Alt" : "",
     modifiers.shift ? "Shift" : "",
-    normalizeKey(event.key),
+    key,
   ].filter(Boolean).join("+");
 }

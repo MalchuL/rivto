@@ -252,6 +252,45 @@ describe("EditorRuntime block commands", () => {
     editor.destroy();
   });
 
+  it("defaults, validates, and undoes first-class list state atomically", () => {
+    const editor = createRivtoEditor();
+    const first = editor.blocks.insertBlock({ type: "paragraph" });
+    const second = editor.blocks.insertBlock({
+      type: "paragraph",
+      listProps: { type: "checkbox", checked: true },
+    }, first);
+
+    expect(editor.blocks.getBlock(first)?.listProps).toEqual({ type: "list", checked: false });
+    expect(editor.blocks.getBlock(second)?.listProps).toEqual({ type: "checkbox", checked: true });
+
+    editor.blocks.updateBlocks([
+      { id: first, patch: { listProps: { type: "start_numbered_list" } } },
+      { id: second, patch: { listProps: { checked: false } } },
+    ]);
+    expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
+    expect(editor.blocks.getBlock(second)?.listProps.checked).toBe(false);
+
+    expect(() => editor.execute("block.update-many", { updates: [
+      { id: first, patch: { listProps: { type: "list" } } },
+      { id: second, patch: { listProps: { checked: "yes" } } },
+    ] })).toThrow("block.listProps.checked must be a boolean");
+    expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
+
+    expect(() => editor.execute("block.update", {
+      id: first,
+      patch: { listProps: { type: "ordered" } },
+    })).toThrow("block.listProps.type must be a supported list type");
+    expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
+
+    editor.undo();
+    expect(editor.blocks.getBlock(first)?.listProps.type).toBe("list");
+    expect(editor.blocks.getBlock(second)?.listProps.checked).toBe(true);
+    editor.redo();
+    expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
+    expect(editor.blocks.getBlock(second)?.listProps.checked).toBe(false);
+    editor.destroy();
+  });
+
   it("updates several blocks atomically in supplied order and undoes once", () => {
     const editor = createRivtoEditor();
     const first = editor.blocks.insertBlock({
@@ -683,6 +722,7 @@ describe("EditorRuntime block commands", () => {
         id: "loaded",
         type: "paragraph",
         collapsed: false,
+        listProps: { type: "list", checked: false },
         props: {},
         pluginData: {},
         content: "Loaded",

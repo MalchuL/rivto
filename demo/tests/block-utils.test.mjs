@@ -7,6 +7,7 @@ test("duplicate input removes every subtree ID and preserves supported data", ()
     id: "parent",
     type: "demo.slider",
     collapsed: true,
+    listProps: { type: "checkbox", checked: true },
     content: "Text",
     props: { value: 42 },
     pluginData: { plugin: { enabled: true } },
@@ -15,6 +16,7 @@ test("duplicate input removes every subtree ID and preserves supported data", ()
       id: "child",
       type: "paragraph",
       collapsed: false,
+      listProps: { type: "numbered_list", checked: false },
       content: "Child",
       props: {},
       pluginData: {},
@@ -28,6 +30,7 @@ test("duplicate input removes every subtree ID and preserves supported data", ()
   assert.deepEqual(duplicate, {
     type: block.type,
     collapsed: true,
+    listProps: { type: "checkbox", checked: true },
     content: block.content,
     props: block.props,
     pluginData: block.pluginData,
@@ -35,6 +38,7 @@ test("duplicate input removes every subtree ID and preserves supported data", ()
     children: [{
       type: "paragraph",
       collapsed: false,
+      listProps: { type: "numbered_list", checked: false },
       content: "Child",
       props: {},
       pluginData: {},

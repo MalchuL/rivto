@@ -101,6 +101,33 @@ test("history shortcuts replace native contenteditable history", async ({ page }
   await expect(content).toHaveText(`${initial}!`);
 });
 
+test("history shortcuts work when the active layout reports Cyrillic keys", async ({ page }) => {
+  const content = page.locator("[data-block-content]").first();
+  const initial = await content.textContent();
+  await content.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("!");
+
+  const press = (key: string, code: string, shiftKey = false) => content.evaluate(
+    (element, init) => element.dispatchEvent(new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+      ...init,
+    })),
+    { key, code, shiftKey },
+  );
+
+  expect(await press("я", "KeyZ")).toBe(false);
+  await expect(content).toHaveText(initial ?? "");
+  expect(await press("Я", "KeyZ", true)).toBe(false);
+  await expect(content).toHaveText(`${initial}!`);
+  expect(await press("я", "KeyZ")).toBe(false);
+  await expect(content).toHaveText(initial ?? "");
+  expect(await press("н", "KeyY")).toBe(false);
+  await expect(content).toHaveText(`${initial}!`);
+});
+
 test("beforeinput history commands are canceled and routed through CRDT history", async ({ page }) => {
   const content = page.locator("[data-block-content]").first();
   const initial = await content.textContent();

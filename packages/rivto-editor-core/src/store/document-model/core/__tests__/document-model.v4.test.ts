@@ -37,6 +37,33 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
     doc.destroy();
   });
 
+  it("round-trips explicit list state in schema v4", () => {
+    const sourceDoc = new YjsDoc("list-snapshot-source");
+    const source = new DocumentModelImpl(sourceDoc);
+    source.loadSnapshot({
+      version: 4,
+      blocks: [{
+        id: "listed",
+        type: "paragraph",
+        collapsed: false,
+        listProps: { type: "checkbox", checked: true },
+        props: {},
+        pluginData: {},
+        content: "Task",
+        children: [],
+      }],
+      links: [],
+    });
+    expect(source.blocks.getBlock("listed")?.listProps).toEqual({ type: "checkbox", checked: true });
+
+    const targetDoc = new YjsDoc("list-snapshot-target");
+    const target = new DocumentModelImpl(targetDoc);
+    target.loadSnapshot(source.getSnapshot());
+    expect(target.blocks.getBlock("listed")?.listProps).toEqual({ type: "checkbox", checked: true });
+    sourceDoc.destroy();
+    targetDoc.destroy();
+  });
+
   it("converges when a remote client removes the final block", () => {
     const docA = new YjsDoc("empty-remote-a");
     const docB = new YjsDoc("empty-remote-b");

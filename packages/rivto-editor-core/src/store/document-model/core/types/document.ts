@@ -1,4 +1,5 @@
 import type { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../../crdt-doc";
+import type { BlockListProps } from "../../../../blocks";
 import type {
   DocumentBlockManager,
   DocumentLinkManager,
@@ -20,6 +21,8 @@ export interface Block {
   type: string;
   /** Persisted outline visibility; renderers decide whether to honor it. */
   collapsed: boolean;
+  /** Presentation used when this block renders among sibling blocks. */
+  listProps: BlockListProps;
   props: Record<string, unknown>;
   pluginData: Record<string, unknown>;
   /** Plain Markdown source stored collaboratively as CRDTText. */
@@ -42,6 +45,8 @@ export interface BlockInput {
   id?: string;
   /** Initial outline visibility; omitted creation values default to false. */
   collapsed?: boolean;
+  /** Initial multi-block presentation; omitted members receive their defaults. */
+  listProps?: Partial<BlockListProps>;
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
   content?: string;
@@ -53,6 +58,8 @@ export interface BlockInput {
 export interface BlockPatch {
   /** Replaces the persisted outline visibility when supplied. */
   collapsed?: boolean;
+  /** Merges supplied multi-block presentation fields. */
+  listProps?: Partial<BlockListProps>;
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
   content?: string;

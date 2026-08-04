@@ -53,7 +53,7 @@ export function EdgelessRootBlock({ blockId }: { readonly blockId: string }) {
         </button>
       </header>
       <div className="edgeless-card-body">
-        <PageBlock blockId={block.id} ignoreCollapse />
+        <PageBlock blockId={block.id} ignoreCollapse showListMarker={false} />
       </div>
       <button
         type="button"

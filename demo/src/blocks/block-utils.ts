@@ -8,6 +8,7 @@ export function duplicateBlockInput(block: Block): BlockInput {
   return {
     type: block.type,
     collapsed: block.collapsed,
+    listProps: structuredClone(block.listProps),
     content: block.content,
     props: structuredClone(block.props),
     pluginData: structuredClone(block.pluginData),

@@ -80,9 +80,21 @@ Core storage uses ordered root and child ID arrays:
 rivto.editor.roots:  Y.Array<blockId>
 rivto.editor.blocks: Y.Map<blockId, {
   type, content, props, pluginData, collapsed, layout,
+  listProps: Y.Map<{ type, checked }>,
   children: Y.Array<blockId>
 }>
 ```
+
+Every block has a first-class `listProps` group. It describes how the block is
+presented when several sibling blocks are rendered as one sequence, without
+changing the block's own type or content. `listProps.type` defaults to `list`
+and accepts `checkbox`, `numbered_list`, `start_numbered_list`, or
+`continue_numbered_list`; `listProps.checked` defaults to `false` and is
+displayed only for checkbox blocks. Numbering is computed from sibling order:
+start resets to one, numbered follows an adjacent numbered sibling, and
+continue resumes the latest numbered sibling through a gap. The standard
+preset adds matching slash commands plus `- `, `[ ] `, `[x] `, and `1. ` input
+shortcuts.
 
 The root array is top-level order. A block's collaborative `children` array is
 its direct child order. For example:

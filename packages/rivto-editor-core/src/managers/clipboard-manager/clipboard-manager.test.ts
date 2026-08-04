@@ -82,6 +82,46 @@ describe("core ClipboardManager", () => {
     editor.destroy();
   });
 
+  it("exports checkbox and computed numbered-list semantics", () => {
+    const editor = createRivtoEditor();
+    const start = editor.blocks.insertBlock({ type: "paragraph", content: "One", listProps: { type: "start_numbered_list" } });
+    const next = editor.blocks.insertBlock({ type: "paragraph", content: "Two", listProps: { type: "numbered_list" } }, start);
+    const gap = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, next);
+    const task = editor.blocks.insertBlock({ type: "paragraph", content: "Done", listProps: { type: "checkbox", checked: true } }, gap);
+    const resume = editor.blocks.insertBlock({ type: "paragraph", content: "Three", listProps: { type: "continue_numbered_list" } }, task);
+    editor.selection.set([{
+      type: "block",
+      blockIds: [start, next, gap, task, resume],
+      anchorBlockId: start,
+      focusBlockId: resume,
+    }]);
+
+    const payload = editor.clipboard.copy()!;
+    expect(payload.text).toBe("1. One\n2. Two\nGap\n- [x] Done\n3. Three");
+    expect(payload.markdown).toBe(payload.text);
+    expect(payload.html).toContain("<p>Gap</p>");
+    expect(payload.html).toContain('<input type="checkbox" disabled checked>Done');
+    expect(payload.html).toContain('<ol start="3"><li value="3">Three</li></ol>');
+    expect(payload.bundle.blocks).toMatchObject([
+      { listProps: { type: "start_numbered_list", checked: false } },
+      { listProps: { type: "numbered_list", checked: false } },
+      { listProps: { type: "list", checked: false } },
+      { listProps: { type: "checkbox", checked: true } },
+      { listProps: { type: "continue_numbered_list", checked: false } },
+    ]);
+    const target = createRivtoEditor();
+    target.clipboard.paste({ bundle: payload.bundle, mergeText: false });
+    expect(target.blocks.getBlocks()).toMatchObject([
+      { listProps: { type: "start_numbered_list", checked: false } },
+      { listProps: { type: "numbered_list", checked: false } },
+      { listProps: { type: "list", checked: false } },
+      { listProps: { type: "checkbox", checked: true } },
+      { listProps: { type: "continue_numbered_list", checked: false } },
+    ]);
+    target.destroy();
+    editor.destroy();
+  });
+
   it("prefers structured data over plain text", () => {
     const source = createRivtoEditor();
     const copiedId = source.blocks.insertBlock({ type: "paragraph", content: "Structured" });

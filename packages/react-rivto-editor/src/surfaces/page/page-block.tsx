@@ -8,8 +8,10 @@
  */
 import {
   useCallback,
+  Fragment,
   useSyncExternalStore,
 } from "react";
+import { resolveBlockListNumbers } from "@chulane/rivto";
 import {
   useBlock,
   useBlockSelection,
@@ -58,6 +60,8 @@ export interface PageBlockProps {
   readonly blockId: string;
   /** Render every child and omit page-only collapse controls. */
   readonly ignoreCollapse?: boolean;
+  /** Hide only this block's marker while descendants retain normal markers. */
+  readonly showListMarker?: boolean;
 }
 
 /**
@@ -80,7 +84,7 @@ export interface PageBlockProps {
  * @returns The complete rendered block subtree, or null if the block was
  * concurrently removed.
  */
-export function PageBlock({ blockId, ignoreCollapse = false }: PageBlockProps) {
+export function PageBlock({ blockId, ignoreCollapse = false, showListMarker = true }: PageBlockProps) {
   // The block and renderer registries publish independent snapshots.
   const { block, operations } = useBlock(blockId);
   const reactEditor = useReactEditor();
@@ -102,14 +106,41 @@ export function PageBlock({ blockId, ignoreCollapse = false }: PageBlockProps) {
   // The stable relationship lets assistive technology associate the toggle
   // with the descendant container it shows or hides.
   const childrenId = `block-children-${block.id}`;
+  const parentId = reactEditor.editor.blocks.getParentId(block.id);
+  const siblingIds = parentId === null
+    ? reactEditor.editor.blocks.getRootIds()
+    : parentId === undefined ? [] : reactEditor.editor.blocks.getChildIds(parentId);
+  const siblings = siblingIds.flatMap((id) => {
+    const sibling = reactEditor.editor.blocks.getBlock(id);
+    return sibling ? [sibling] : [];
+  });
+  const listNumber = resolveBlockListNumbers(siblings).get(block.id);
+  const marker = showListMarker && (
+    block.listProps.type === "checkbox" ? (
+      <input
+        type="checkbox"
+        className="page-list-checkbox"
+        aria-label={`Mark block as ${block.listProps.checked ? "incomplete" : "complete"}: ${block.content || block.type}`}
+        checked={block.listProps.checked}
+        onPointerDown={(event) => event.stopPropagation()}
+        onChange={(event) => operations.update({ listProps: { checked: event.currentTarget.checked } })}
+      />
+    ) : listNumber !== undefined ? (
+      <span className="page-list-marker" aria-hidden="true">
+        {listNumber}.
+      </span>
+    ) : null
+  );
 
   return (
     <BlockWrapper
       fallback={PageBlockWrapper}
       block={block}
       isSelected={Boolean(selection)}
-      controls={!ignoreCollapse && block.children.length > 0 && (
-        <button
+      controls={(marker || (!ignoreCollapse && block.children.length > 0)) && (
+        <Fragment>
+          {marker}
+          {!ignoreCollapse && block.children.length > 0 && <button
           type="button"
           className="page-collapse-toggle"
           data-collapse-toggle="true"
@@ -124,7 +155,8 @@ export function PageBlock({ blockId, ignoreCollapse = false }: PageBlockProps) {
           onClick={() => operations.update({ collapsed: !block.collapsed })}
         >
           {collapsed ? "▸" : "▾"}
-        </button>
+          </button>}
+        </Fragment>
       )}
       content={<Content blockId={block.id} />}
     >

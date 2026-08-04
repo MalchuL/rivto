@@ -17,6 +17,7 @@ An open document uses the original Yjs root/children schema:
 rivto.editor.roots       Y.Array<blockId>
 rivto.editor.blocks      Y.Map<blockId, {
   type, content, props, pluginData, collapsed, layout,
+  listProps: Y.Map<{ type, checked }>,
   children: Y.Array<blockId>
 }>
 ```
@@ -24,6 +25,10 @@ rivto.editor.blocks      Y.Map<blockId, {
 The root array stores top-level order. Every block's `children` array stores
 its direct child order. Moving a block transfers its ID between these arrays;
 the canonical block record stays in `rivto.editor.blocks`.
+
+`listProps` describes how a block is presented when several sibling blocks
+are rendered as one sequence. It keeps marker, sibling-derived numbering, and
+checkbox state together without changing the block's own type or content.
 
 `DocumentModel` keeps a lazy `blockId -> sibling-index path` cache. A read first
 walks and validates the cached path. A missing or stale path triggers one

@@ -20,6 +20,7 @@ describe("cross-document block transfer", () => {
       type: DEFAULT_BLOCK_TYPE,
       content: "First",
       collapsed: true,
+      listProps: { type: "checkbox", checked: true },
       pluginData: { test: { retained: true } },
       layout: { x: 11, y: 22, width: 333, height: 144, zIndex: 7 },
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],
@@ -40,6 +41,7 @@ describe("cross-document block transfer", () => {
     expect(destination.blocks.getBlock(first)).toMatchObject({
       id: first,
       collapsed: true,
+      listProps: { type: "checkbox", checked: true },
       pluginData: { test: { retained: true } },
       layout: { x: 11, y: 22, width: 333, height: 144, zIndex: 7 },
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],

@@ -7,6 +7,7 @@
  * @module
  */
 import type {
+  BlockListType,
   EditorBlock as Block,
   EditorBlockInput as BlockInput,
 } from "@chulane/rivto";
@@ -42,6 +43,7 @@ import { SlashMenu } from "./slash-menu";
 import { registerSelectionDeletion } from "./selection-deletion";
 import { TrailingBlock } from "./trailing-block";
 import { applyIndentShortcut } from "./indent";
+import { registerListShortcuts } from "./list-shortcuts";
 import { EdgelessSurface } from "../surfaces/edgeless";
 import { PageSurface } from "../surfaces/page";
 import {
@@ -177,6 +179,10 @@ export const blockOutdentExtension = (): ReactEditorExtension =>
 export const emptyBlockResetExtension = (): ReactEditorExtension =>
   ({ id: "block.reset-empty", setup: registerEmptyBlockReset });
 
+/** @returns Markdown-style whole-content shortcuts for built-in list modes. */
+export const listShortcutsExtension = (): ReactEditorExtension =>
+  ({ id: "list.shortcuts", setup: registerListShortcuts });
+
 /** Shortcut configuration for structural indentation. */
 export interface IndentExtensionOptions {
   /** Bindings that indent the active block or eligible sibling selection. */
@@ -296,7 +302,21 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
   setup: (reactEditor) => {
     const { editor } = reactEditor;
     reactEditor.extensions.mount(SlashMenu);
+    const listCommands: readonly { type: BlockListType; title: string }[] = [
+      { type: "list", title: "List" },
+      { type: "checkbox", title: "Checkbox" },
+      { type: "numbered_list", title: "Numbered list" },
+      { type: "start_numbered_list", title: "Start numbered list" },
+      { type: "continue_numbered_list", title: "Continue numbered list" },
+    ];
     const disposers = [
+      ...listCommands.map(({ type, title }) => reactEditor.slashCommands.register({
+        id: `list.${type}`,
+        title,
+        group: "Lists",
+        isAvailable: ({ blockId }) => editor.blocks.getBlock(blockId)?.listProps.type !== type,
+        execute: ({ blockId }) => editor.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
+      })),
       // Clone the complete subtree while leaving persisted IDs for the store to generate.
       reactEditor.slashCommands.register({
         id: "block.duplicate",
@@ -375,11 +395,13 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
  * prevent the new subtree from sharing application-owned object references.
  *
  * @param block - Root snapshot of the subtree to duplicate.
- * @returns Recursive, ID-free input preserving type, content, props, layout,
- * extension data, and descendants.
+ * @returns Recursive, ID-free input preserving type, list state, content,
+ * props, layout, extension data, and descendants.
  */
 const duplicateBlockInput = (block: Block): BlockInput => ({
   type: block.type,
+  collapsed: block.collapsed,
+  listProps: structuredClone(block.listProps),
   content: block.content,
   props: structuredClone(block.props),
   pluginData: structuredClone(block.pluginData),
@@ -410,6 +432,7 @@ export const standardPreset = (trailingBlockCount = 3): ReactEditorExtension => 
     historyExtension(),
     textSelectionExtension(),
     slashCommandExtension(),
+    listShortcutsExtension(),
     clipboardExtension(),
     blockSelectionExtension(),
     collapseExtension(),

@@ -167,11 +167,11 @@ test("Escape preserves slash text and custom controls update or select their blo
   await expect(page.locator("[data-slash-menu]")).toHaveCount(0);
   await expect(editor).toContainText("/count");
 
-  await page.keyboard.type(" /xx");
+  await page.keyboard.type(" /qq");
   await expect(page.locator("[data-slash-menu]")).toContainText("No matching commands");
   await page.keyboard.type("x");
   await expect(page.locator("[data-slash-menu]")).toHaveCount(0);
-  await expect(editor).toContainText("/xxx");
+  await expect(editor).toContainText("/qqx");
 
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
   const button = counter.locator(".custom-counter-block");

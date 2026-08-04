@@ -36,6 +36,7 @@ const structuredBundle = JSON.stringify({
     id: "copied",
     type: "paragraph",
     collapsed: false,
+    listProps: { type: "list", checked: false },
     content: "Copied",
     props: {},
     pluginData: {},
@@ -133,6 +134,7 @@ test("copies a mouse text selection and pastes it inline", async ({ page }) => {
 test("copies Counter display text to every portable clipboard flavor", async ({ page }) => {
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
   const button = counter.locator(".custom-counter-block");
+  await button.scrollIntoViewIfNeeded();
   const box = await button.boundingBox();
   if (!box) throw new Error("Expected Counter geometry");
   await page.mouse.move(box.x + box.width / 2 - 6, box.y + box.height / 2);

@@ -6,6 +6,7 @@ import type {
   CRDTText,
 } from "../../../crdt-doc";
 import type { Link } from "./document";
+import type { BlockListProps } from "../../../../blocks";
 
 /** Typed geometry stored inside each collaborative block record. */
 export interface BlockLayoutStorage {
@@ -15,6 +16,9 @@ export interface BlockLayoutStorage {
   height: number;
   zIndex: number;
 }
+
+/** Collaborative presentation used when a block renders among siblings. */
+export type BlockListPropsStorage = BlockListProps;
 
 export type IDBlock = string;
 export type IDLink = string;
@@ -32,6 +36,8 @@ export interface BlockStorage {
   type: string;
   /** First-class collaborative outline visibility. */
   collapsed: boolean;
+  /** First-class collaborative multi-block presentation properties. */
+  listProps: CRDTMap<BlockListPropsStorage>;
   props: CRDTMap<Record<IDProp, BasicCRDTType>>;
   content: CRDTText;
   children: CRDTArray<IDBlock>;
