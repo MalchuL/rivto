@@ -1,6 +1,6 @@
 import type { EditorBlockLayout as BlockLayout } from "@chulane/rivto";
-import type { ReactEditor } from "../types";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
+import type { ReactEditor } from "../../types";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { canvasDelta, owningRootIds } from "./edgeless-geometry";
 import { getEdgelessRuntime } from "./edgeless-runtime";
 

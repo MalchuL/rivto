@@ -3,9 +3,9 @@ import type {
   EditorSelection,
   TextSelection,
 } from "@chulane/rivto";
-import type { ReactEditor } from "../types";
+import type { ReactEditor } from "../../types";
 import { reconcileCollapsedSelection } from "./page-selection-utils";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 
 /** Resolves the edited block or all blocks in the active whole-block selection. */
 function collapseTargets(

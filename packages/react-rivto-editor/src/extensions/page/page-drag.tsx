@@ -24,8 +24,8 @@ import type { EditorBlock as Block } from "@chulane/rivto";
 import {
   BlockElementRefProvider,
   type BlockWrapperProps,
-} from "../blocks";
-import { useEditor, useEditorRoot } from "../hooks";
+} from "../../blocks";
+import { useEditor, useEditorRoot } from "../../hooks";
 import {
   createContext,
   useContext,
@@ -40,7 +40,7 @@ import { selectedMoveRoots, type SelectedMoveRoots } from "./page-selection-util
 import {
   crossDocumentBlockTransfer,
   type CrossDocumentBlockTransferPlacement,
-} from "./cross-document-block-transfer";
+} from "../clipboard/cross-document-block-transfer";
 
 /** Maximum number of block rows rendered inside the floating preview. */
 const MAX_PREVIEW_BLOCKS = 4;

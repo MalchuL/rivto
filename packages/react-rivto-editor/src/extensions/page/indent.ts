@@ -1,9 +1,9 @@
 import type { RivtoEditorApi as Editor } from "@chulane/rivto";
-import type { SelectionCapability } from "../capabilities";
+import type { SelectionCapability } from "../../capabilities";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
-} from "../managers";
+} from "../../managers";
 
 /**
  * Applies one semantic indent or outdent binding.

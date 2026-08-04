@@ -1,8 +1,8 @@
-import type { ReactEditor } from "../types";
+import type { ReactEditor } from "../../types";
 import {
   BUILTIN_KEYMAP,
   KEYBOARD_BINDING_IDS,
-} from "../managers";
+} from "../../managers";
 
 /** One document-history action recognized from a browser editing event. */
 type HistoryAction = "undo" | "redo";

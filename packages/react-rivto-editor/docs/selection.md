@@ -144,7 +144,7 @@ Changing page/edgeless mode does not translate or clear selection. Both
 surfaces render the same `BlockSelection`, including nested block IDs.
 
 Collapse of page outline is handled separately in React by
-`reconcileCollapsedSelection()` (`extensions/page-selection-utils.ts`): hidden
+`reconcileCollapsedSelection()` (`extensions/page/page-selection-utils.ts`): hidden
 endpoints become their collapsed ancestor (often converting text → block).
 
 ---
@@ -189,7 +189,7 @@ Markdown preview HTML. That matches persisted `block.content`.
 
 ## 5. Text selection (page and inside cards)
 
-Implementation: `extensions/text-selection.ts` +
+Implementation: `extensions/selection/text-selection.ts` +
 `managers/selection/editor-dom-selection.ts`.
 
 ### Same-block (browser owns the gesture)
@@ -293,8 +293,8 @@ Do not confuse the two restore paths:
 
 ## 6. Page whole-block selection
 
-Implementation: `extensions/block-selection.ts` and
-`extensions/page-selection-utils.ts`.
+Implementation: `extensions/selection/block-selection.ts` and
+`extensions/page/page-selection-utils.ts`.
 
 ### How users get a block selection
 
@@ -333,7 +333,7 @@ subtrees.
 
 ## 7. Edgeless (canvas) selection
 
-Implementation: `extensions/edgeless-selection.tsx`.
+Implementation: `extensions/edgeless/edgeless-selection.tsx`.
 
 Intent split:
 
@@ -513,15 +513,15 @@ restores with `restoreDOMSelection`.
 | `src/editor/rivto-editor.ts` | Selection reconciliation and typed editor methods |
 | `src/managers/clipboard-manager/clipboard-manager.ts` | Clipboard workflows and history boundary |
 | `src/managers/clipboard-manager/utils/clipboard.ts` | Stateless clipboard transformations |
-| `packages/react-rivto-editor/src/extensions/text-selection.ts` | DOM ↔ portable sync, cross-host gestures |
+| `packages/react-rivto-editor/src/extensions/selection/text-selection.ts` | DOM ↔ portable sync, cross-host gestures |
 | `packages/react-rivto-editor/src/managers/selection/selection-manager.ts` | Core delegate + active-root DOM API |
 | `packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts` | Conversion, restore, highlight |
 | `packages/react-rivto-editor/src/managers/selection/dom-text-selection.ts` | Save/restore inside one editable |
-| `packages/react-rivto-editor/src/extensions/block-selection.ts` | Ctrl/Cmd block toggle on both surfaces |
-| `packages/react-rivto-editor/src/extensions/page-navigation.ts` | Caret + block keyboard navigation |
-| `packages/react-rivto-editor/src/extensions/selection-deletion.ts` | Delete expanded selection |
-| `packages/react-rivto-editor/src/extensions/edgeless-selection.tsx` | Canvas object / marquee |
-| `packages/react-rivto-editor/src/extensions/page-selection-utils.ts` | Visible order, toggle/extend/collapse reconcile |
+| `packages/react-rivto-editor/src/extensions/selection/block-selection.ts` | Ctrl/Cmd block toggle on both surfaces |
+| `packages/react-rivto-editor/src/extensions/page/page-navigation.ts` | Caret + block keyboard navigation |
+| `packages/react-rivto-editor/src/extensions/selection/selection-deletion.ts` | Delete expanded selection |
+| `packages/react-rivto-editor/src/extensions/edgeless/edgeless-selection.tsx` | Canvas object / marquee |
+| `packages/react-rivto-editor/src/extensions/page/page-selection-utils.ts` | Visible order, toggle/extend/collapse reconcile |
 | `packages/react-rivto-editor/.../use-block-selection.ts` | Whole-block selected? for UI |
 | `e2e/selection.spec.ts` | Browser-level selection regressions |
 

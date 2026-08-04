@@ -1,4 +1,4 @@
-import type { ReactEditorExtension } from "../../managers";
+import type { ReactEditorExtension } from "../../../managers";
 import { createElement } from "react";
 import { EdgelessVisualController } from "./controller";
 import { EdgelessVisualLayer } from "./visual-layer";

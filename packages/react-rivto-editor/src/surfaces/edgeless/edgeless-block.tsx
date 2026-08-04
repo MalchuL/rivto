@@ -1,6 +1,6 @@
 import type { EditorBlockLayout as BlockLayout } from "@chulane/rivto";
 import { useBlock } from "../../hooks";
-import { useEdgelessSelection } from "../../extensions/edgeless-runtime";
+import { useEdgelessSelection } from "../../extensions/edgeless/edgeless-runtime";
 import type { CSSProperties } from "react";
 import { PageBlock } from "../page/page-block";
 

@@ -8,7 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import { useEditorMode, useEditorRoot } from "../../hooks";
+import { useEditorMode, useEditorRoot } from "../../../hooks";
 import { useEdgelessSelection } from "../edgeless-runtime";
 import type { EdgelessVisualController } from "./controller";
 import type { EdgelessVisual, EdgelessVisualsOptions, VisualFrame } from "./types";

@@ -1,15 +1,15 @@
-import type { ReactEditor } from "../types";
+import type { ReactEditor } from "../../types";
 import {
   BUILTIN_KEYMAP,
   findNextEditableBlock,
   focusBlock,
   KEYBOARD_BINDING_IDS,
-} from "../managers";
+} from "../../managers";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "../managers";
+} from "../../managers";
 
 /** Merges the next visible editable block at a collapsed block-end caret. */
 export function registerForwardBlockMerge(reactEditor: ReactEditor): void {

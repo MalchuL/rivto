@@ -261,7 +261,7 @@ Recommended reading order:
 
 1. `demo/src/App.tsx`
 2. `src/react-editor.tsx`
-3. `src/extensions/built-ins.tsx`
+3. `src/extensions/built-ins/built-ins.tsx`
 4. `src/editor-view.tsx`
 5. `src/hooks/blocks/use-block.ts`
 6. `src/surfaces/page/page-block.tsx`

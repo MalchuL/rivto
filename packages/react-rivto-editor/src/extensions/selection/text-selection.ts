@@ -2,9 +2,9 @@ import type {
   EditorPosition,
   EditorSelection,
 } from "@chulane/rivto";
-import { BLOCK_SELECTION_ANCHOR_SELECTOR } from "../constants";
-import type { ReactEditor } from "../types";
-import { findEdgelessRuntime } from "./edgeless-runtime";
+import { BLOCK_SELECTION_ANCHOR_SELECTOR } from "../../constants";
+import type { ReactEditor } from "../../types";
+import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
 import {
   createBlockSelection,
   createDOMSelectionItems,
@@ -15,7 +15,7 @@ import {
   resolveDOMSelectionPoint,
   setNativeSelection,
   type DOMSelectionPoint,
-} from "../managers";
+} from "../../managers";
 
 /** Live state retained only for the duration of one pointer selection gesture. */
 interface PointerSelection {

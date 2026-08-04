@@ -1,14 +1,14 @@
-import { BLOCK_CONTENT_SELECTOR } from "../constants";
+import { BLOCK_CONTENT_SELECTOR } from "../../constants";
 import {
   useDOMEvent,
   useEditorMode,
   useEditorRoot,
   useReactEditor,
   useKeyboardEvent,
-} from "../hooks";
+} from "../../hooks";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import {
   rootsInRect,
   type EdgelessRect,

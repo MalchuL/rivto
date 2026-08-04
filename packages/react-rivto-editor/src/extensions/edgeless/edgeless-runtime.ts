@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
-import { useEditorContext } from "../editor-context";
-import type { ReactEditor } from "../types";
+import { useEditorContext } from "../../editor-context";
+import type { ReactEditor } from "../../types";
 
 /** One object address stored in the local edgeless selection. */
 export interface EdgelessSelectionRef {

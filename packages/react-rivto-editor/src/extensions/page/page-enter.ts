@@ -1,14 +1,14 @@
 import { DEFAULT_BLOCK_TYPE, isNumberedListType } from "@chulane/rivto";
-import type { ReactEditor } from "../types";
+import type { ReactEditor } from "../../types";
 import {
   focusBlock,
-} from "../managers";
+} from "../../managers";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "../managers";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
+} from "../../managers";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 
 /**
  * Installs outline block splitting for Page and Edgeless surfaces.

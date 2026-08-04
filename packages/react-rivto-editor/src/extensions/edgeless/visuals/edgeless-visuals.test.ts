@@ -1,6 +1,6 @@
 import { createRivtoEditor } from "@chulane/rivto";
-import { createReactEditor } from "../../react-editor";
-import { edgelessSelectionExtension } from "../built-ins";
+import { createReactEditor } from "../../../react-editor";
+import { edgelessSelectionExtension } from "../../built-ins/built-ins";
 import { edgelessVisualsExtension } from ".";
 import { EDGELESS_VISUALS_PLUGIN_ID, type EdgelessVisual } from "./types";
 

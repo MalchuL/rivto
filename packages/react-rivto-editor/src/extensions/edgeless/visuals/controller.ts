@@ -6,7 +6,7 @@ import {
   type EditorBlock,
   type EditorBlockInput,
 } from "@chulane/rivto";
-import type { ReactEditor } from "../../types";
+import type { ReactEditor } from "../../../types";
 import { getEdgelessRuntime, type EdgelessSelectionRef } from "../edgeless-runtime";
 import {
   EDGELESS_VISUALS_PLUGIN_ID,

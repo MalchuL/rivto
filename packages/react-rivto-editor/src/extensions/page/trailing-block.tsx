@@ -1,7 +1,7 @@
 import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
 import { createPortal } from "react-dom";
-import { useEditor, useEditorRoot } from "../hooks";
-import { focusBlock } from "../managers";
+import { useEditor, useEditorRoot } from "../../hooks";
+import { focusBlock } from "../../managers";
 
 /** Properties for the page-end insertion targets. */
 export interface TrailingBlockProps {

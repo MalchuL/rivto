@@ -5,12 +5,12 @@ import {
   type ClipboardPayload,
   type BlockSelection,
 } from "@chulane/rivto";
-import type { ReactEditor } from "../types";
+import type { ReactEditor } from "../../types";
 import {
   BUILTIN_KEYMAP,
   KEYBOARD_BINDING_IDS,
-} from "../managers";
-import { findEdgelessRuntime } from "./edgeless-runtime";
+} from "../../managers";
+import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
 
 /** Configuration for browser clipboard integration. */
 export interface ClipboardExtensionOptions {

@@ -1,6 +1,6 @@
 import type { BlockListType } from "@chulane/rivto";
-import type { ReactEditor } from "../types";
-import { focusBlock } from "../managers";
+import type { ReactEditor } from "../../types";
+import { focusBlock } from "../../managers";
 
 const SHORTCUTS: Readonly<Record<string, { type: BlockListType; checked: boolean }>> = {
   "- ": { type: "list", checked: false },

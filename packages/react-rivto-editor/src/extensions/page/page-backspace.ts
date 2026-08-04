@@ -1,17 +1,17 @@
 import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
-import type { ReactEditor } from "../types";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
+import type { ReactEditor } from "../../types";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import {
   findParentBlock,
   findPreviousEditableBlock,
   findRenderedBlock,
   focusBlock,
-} from "../managers";
+} from "../../managers";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "../managers";
+} from "../../managers";
 
 /**
  * Outdents a nested block when Backspace is pressed at offset zero.

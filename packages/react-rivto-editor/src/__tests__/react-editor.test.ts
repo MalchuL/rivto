@@ -25,7 +25,7 @@ import {
 import {
   standardPreset,
   trailingBlockExtension,
-} from "../extensions/built-ins";
+} from "../extensions/built-ins/built-ins";
 
 const Empty: ComponentType<{ blockId: string }> = () => null;
 const EmptyComponent: ComponentType = () => null;

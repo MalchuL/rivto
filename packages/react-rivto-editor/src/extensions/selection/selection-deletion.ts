@@ -1,10 +1,10 @@
-import type { ReactEditor } from "../types";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
+import type { ReactEditor } from "../../types";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import {
   focusSelectionCaret,
   isEditableKeyboardEvent,
   shouldDeleteSelection,
-} from "../managers";
+} from "../../managers";
 
 /**
  * Deletes expanded text and whole-block page selections atomically.

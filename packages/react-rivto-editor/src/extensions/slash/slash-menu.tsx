@@ -3,14 +3,14 @@ import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-} from "../constants";
+} from "../../constants";
 import {
   useDOMEvent,
   useEditor,
   useEditorRoot,
   useKeyboardEvent,
   useReactEditor,
-} from "../hooks";
+} from "../../hooks";
 import {
   useCallback,
   useEffect,
@@ -24,7 +24,7 @@ import {
   BUILTIN_KEYMAP,
   findRenderedBlock,
   KEYBOARD_BINDING_IDS,
-} from "../managers";
+} from "../../managers";
 import { keepNoResultMenuOpen, rankSlashCommands } from "./slash-search";
 
 interface SlashSession {

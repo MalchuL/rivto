@@ -36,7 +36,7 @@ Start at the feature's public entry point, not at a helper in the middle:
 2. Read the relevant export in `packages/react-rivto-editor/src/index.ts` or
    `packages/react-rivto-editor/src/extensions.ts`.
 3. Find the extension that installs the behavior in
-   `packages/react-rivto-editor/src/extensions/built-ins.tsx`.
+   `packages/react-rivto-editor/src/extensions/built-ins/built-ins.tsx`.
 4. Read an existing test for the feature before reading its implementation.
 
 At the end of this pass, be able to state what callers provide, what users see,
@@ -74,7 +74,7 @@ Useful files, in order, are:
 
 1. `packages/react-rivto-editor/src/react-editor.tsx`
 2. `packages/react-rivto-editor/src/editor-view.tsx`
-3. `packages/react-rivto-editor/src/extensions/built-ins.tsx`
+3. `packages/react-rivto-editor/src/extensions/built-ins/built-ins.tsx`
 4. the relevant file in `packages/react-rivto-editor/src/extensions/`
 5. the relevant hook in `packages/react-rivto-editor/src/hooks/`
 6. the active surface in `packages/react-rivto-editor/src/surfaces/`

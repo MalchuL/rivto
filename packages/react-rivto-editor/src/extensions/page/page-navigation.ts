@@ -5,19 +5,19 @@ import type {
   EditorSelection,
   TextSelection,
 } from "@chulane/rivto";
-import { BLOCK_ID_ATTRIBUTE } from "../constants";
-import type { ReactEditor } from "../types";
+import { BLOCK_ID_ATTRIBUTE } from "../../constants";
+import type { ReactEditor } from "../../types";
 import {
   BUILTIN_KEYMAP,
   KEYBOARD_BINDING_IDS,
-} from "../managers";
-import type { SelectionCapability } from "../capabilities";
+} from "../../managers";
+import type { SelectionCapability } from "../../capabilities";
 import {
   findNextEditableBlock,
   findPreviousEditableBlock,
   focusBlock,
   verticalCaretPosition,
-} from "../managers";
+} from "../../managers";
 import {
   adjacentBlockSelection,
   blockSelection,

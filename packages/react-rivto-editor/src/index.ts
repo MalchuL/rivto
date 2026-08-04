@@ -6,7 +6,7 @@ export * from "./hooks";
 export {
   blockExtension,
   standardPreset,
-} from "./extensions/built-ins";
+} from "./extensions/built-ins/built-ins";
 export {
   createReactEditor,
 } from "./react-editor";
@@ -17,7 +17,7 @@ export type {
   ReactEditor,
 } from "./types";
 export { MarkdownContent } from "./blocks/markdown";
-export { edgelessVisualsExtension } from "./extensions/edgeless-visuals";
+export { edgelessVisualsExtension } from "./extensions/edgeless/visuals";
 export type {
   CreateVisualPayload,
   EdgelessAlignment,
@@ -30,7 +30,7 @@ export type {
   UpdateVisualPayload,
   VisualFrame,
   VisualGroup,
-} from "./extensions/edgeless-visuals";
+} from "./extensions/edgeless/visuals";
 export {
   readEditorDOMSelection,
   restoreEditorDOMSelection,

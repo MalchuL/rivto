@@ -12,46 +12,46 @@ import type {
   EditorBlockInput as BlockInput,
 } from "@chulane/rivto";
 import type { ComponentType, ReactNode } from "react";
-import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard";
-import { registerHistory, type HistoryExtensionOptions } from "./history";
-import { registerTextSelection } from "./text-selection";
-import { EdgelessInteractionOverlay } from "./edgeless-selection";
-import { installEdgelessRuntime } from "./edgeless-runtime";
-import { registerEdgelessDeletion } from "./edgeless-deletion";
-import { registerEdgelessMovement } from "./edgeless-movement";
-import { registerEdgelessTransform } from "./edgeless-transform";
+import { registerClipboard, type ClipboardExtensionOptions } from "../clipboard/clipboard";
+import { registerHistory, type HistoryExtensionOptions } from "../history/history";
+import { registerTextSelection } from "../selection/text-selection";
+import { EdgelessInteractionOverlay } from "../edgeless/edgeless-selection";
+import { installEdgelessRuntime } from "../edgeless/edgeless-runtime";
+import { registerEdgelessDeletion } from "../edgeless/edgeless-deletion";
+import { registerEdgelessMovement } from "../edgeless/edgeless-movement";
+import { registerEdgelessTransform } from "../edgeless/edgeless-transform";
 import {
   registerBlockSelectionNavigation,
   registerCaretNavigation,
   registerKeyboardBlockMove,
-} from "./page-navigation";
+} from "../page/page-navigation";
 import {
   registerBackwardBlockMerge,
   registerBlockOutdent,
   registerEmptyBlockReset,
-} from "./page-backspace";
-import { registerBlockSelection } from "./block-selection";
-import { registerCollapse } from "./page-collapse";
-import { registerForwardBlockMerge } from "./page-delete";
+} from "../page/page-backspace";
+import { registerBlockSelection } from "../selection/block-selection";
+import { registerCollapse } from "../page/page-collapse";
+import { registerForwardBlockMerge } from "../page/page-delete";
 import {
   PageDragBlockWrapper,
   PageDragProvider,
   type PageDragExtensionOptions,
-} from "./page-drag";
-import { registerBlockCreation } from "./page-enter";
-import { SlashMenu } from "./slash-menu";
-import { registerSelectionDeletion } from "./selection-deletion";
-import { TrailingBlock } from "./trailing-block";
-import { applyIndentShortcut } from "./indent";
-import { registerListShortcuts } from "./list-shortcuts";
-import { EdgelessSurface } from "../surfaces/edgeless";
-import { PageSurface } from "../surfaces/page";
+} from "../page/page-drag";
+import { registerBlockCreation } from "../page/page-enter";
+import { SlashMenu } from "../slash/slash-menu";
+import { registerSelectionDeletion } from "../selection/selection-deletion";
+import { TrailingBlock } from "../page/trailing-block";
+import { applyIndentShortcut } from "../page/indent";
+import { registerListShortcuts } from "../page/list-shortcuts";
+import { EdgelessSurface } from "../../surfaces/edgeless";
+import { PageSurface } from "../../surfaces/page";
 import {
   BUILTIN_KEYMAP,
   KEYBOARD_BINDING_IDS,
   type ReactBlockRegistration,
   type ReactEditorExtension,
-} from "../managers";
+} from "../../managers";
 
 /**
  * Adapts a React component to the functional extension lifecycle.

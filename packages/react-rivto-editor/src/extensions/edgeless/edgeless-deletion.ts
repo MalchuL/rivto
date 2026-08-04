@@ -1,6 +1,6 @@
 import type { BlockSelection } from "@chulane/rivto";
-import type { ReactEditor } from "../types";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
+import type { ReactEditor } from "../../types";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { getEdgelessRuntime } from "./edgeless-runtime";
 
 /** Removes selected descendants whose selected ancestor already owns them. */

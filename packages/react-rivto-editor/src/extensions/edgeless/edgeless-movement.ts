@@ -1,5 +1,5 @@
-import type { ReactEditor } from "../types";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
+import type { ReactEditor } from "../../types";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { owningRootIds, translatedLayouts } from "./edgeless-geometry";
 import { getEdgelessRuntime } from "./edgeless-runtime";
 

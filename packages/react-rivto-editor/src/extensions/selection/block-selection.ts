@@ -2,11 +2,11 @@ import type { BlockSelection } from "@chulane/rivto";
 import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-} from "../constants";
-import type { ReactEditor } from "../types";
-import { toggleBlockSelection } from "./page-selection-utils";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../managers";
-import { findEdgelessRuntime } from "./edgeless-runtime";
+} from "../../constants";
+import type { ReactEditor } from "../../types";
+import { toggleBlockSelection } from "../page/page-selection-utils";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
+import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
 
 /**
  * Adds explicit whole-block selection to every editor surface.
