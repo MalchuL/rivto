@@ -1,14 +1,14 @@
 import { useEdgelessSelection } from "../../extensions/edgeless/edgeless-runtime";
 import type { EditorElement } from "@chulane/rivto";
 import type { CSSProperties } from "react";
-import { PageBlock } from "../page/page-block";
+import { BlockTree } from "../../blocks";
 
 /**
  * Renders one block element as a positioned canvas card.
  *
- * The shell owns only canvas geometry and object controls. PageBlock supplies
+ * The shell owns only canvas geometry and object controls. BlockTree supplies
  * the existing recursive BlockView/content/dnd tree inside it, so both surfaces
- * share block behavior while collapse remains a page-only presentation state.
+ * share the complete block rendering and interaction policy.
  */
 export function EdgelessBlockElement({
   element,
@@ -38,7 +38,7 @@ export function EdgelessBlockElement({
       tabIndex={0}
     >
       <div className="edgeless-card-content" data-edgeless-card-content="true">
-        {blockIds.map((blockId) => <PageBlock key={blockId} blockId={blockId} ignoreCollapse />)}
+        <BlockTree blockIds={blockIds} />
       </div>
       <button
         type="button"

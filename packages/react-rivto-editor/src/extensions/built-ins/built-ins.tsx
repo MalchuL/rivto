@@ -232,7 +232,7 @@ export const indentExtension = (options: IndentExtensionOptions = {}): ReactEdit
   };
 };
 
-/** @returns Page-only persisted collapse controls and keyboard actions. */
+/** @returns Shared persisted collapse controls and keyboard actions. */
 export const collapseExtension = (): ReactEditorExtension => ({
   id: "block.collapse",
   setup: registerCollapse,
@@ -375,7 +375,6 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
           editor.deleteSelection();
         },
       }),
-      // Collapse is page-only because edgeless deliberately renders all descendants.
       reactEditor.slashCommands.register({
         id: "block.collapse",
         title: "Collapse block",
@@ -383,11 +382,10 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         keywords: ["fold", "hide"],
         isAvailable: ({ blockId }) => {
           const block = editor.blocks.getBlock(blockId);
-          return editor.mode.get() === "block" && Boolean(block?.children.length && !block.collapsed);
+          return Boolean(block?.children.length && !block.collapsed);
         },
         execute: ({ blockId }) => editor.blocks.updateBlock(blockId, { collapsed: true }),
       }),
-      // Expansion is offered only when it has a visible effect in page mode.
       reactEditor.slashCommands.register({
         id: "block.expand",
         title: "Expand block",
@@ -395,7 +393,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         keywords: ["unfold", "show"],
         isAvailable: ({ blockId }) => {
           const block = editor.blocks.getBlock(blockId);
-          return editor.mode.get() === "block" && Boolean(block?.children.length && block.collapsed);
+          return Boolean(block?.children.length && block.collapsed);
         },
         execute: ({ blockId }) => editor.blocks.updateBlock(blockId, { collapsed: false }),
       }),

@@ -29,9 +29,9 @@ export interface BlockViewProps extends Omit<HTMLAttributes<HTMLDivElement>, "ch
  * locate a block without coupling them to CSS classes or renderer components.
  *
  * The component deliberately receives a detached block snapshot instead of
- * reading editor context. The active surface remains responsible for resolving
- * blocks, selecting a content renderer, arranging children, and deciding what
- * selection means in its mode. BlockView does not recurse, edit text, install
+ * reading editor context. BlockTree resolves blocks, selects content renderers,
+ * arranges children, and applies selection consistently across surfaces.
+ * BlockView does not recurse, edit text, install
  * events, render handles, apply layout, or choose visual styles.
  *
  * `data-block-id`, `data-block-type`, and `data-block-selected` are controlled by

@@ -28,7 +28,6 @@ function collapseTargets(
 export function registerCollapse(reactEditor: ReactEditor): () => void {
   const { editor } = reactEditor;
   const reconcile = () => {
-    if (editor.mode.get() !== "block") return;
     const root = reactEditor.events.getRoot();
     const current = editor.selection.get();
     const next = reconcileCollapsedSelection(editor.blocks.getBlocks(), current);
@@ -43,7 +42,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
   const unsubscribeDocument = editor.document.subscribe(reconcile);
   const unsubscribeSelection = editor.selection.subscribe(reconcile);
 
-  const setCollapsed = (root: HTMLElement, value: boolean | "toggle"): boolean => {
+  const setCollapsed = (value: boolean | "toggle"): boolean => {
     const current = editor.selection.get();
     // Chromium may deliver the shortcut before its selectionchange event after
     // a click. Reading the native caret keeps the keybinding deterministic.
@@ -67,18 +66,18 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockCollapse,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCollapse]!,
-    mode: "block",
-  }, ({ root }) => setCollapsed(root, true));
+    when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
+  }, () => setCollapsed(true));
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockExpand,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockExpand]!,
-    mode: "block",
-  }, ({ root }) => setCollapsed(root, false));
+    when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
+  }, () => setCollapsed(false));
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockToggleCollapse,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockToggleCollapse]!,
-    mode: "block",
-  }, ({ root }) => setCollapsed(root, "toggle"));
+    when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
+  }, () => setCollapsed("toggle"));
 
   return () => {
     unsubscribeSelection();

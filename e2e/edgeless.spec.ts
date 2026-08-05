@@ -76,7 +76,43 @@ test("uses one continuous card surface with symmetric padding and no Move contro
   await expect.poll(() => cardChrome(card).evaluate((element) => {
     const style = getComputedStyle(element);
     return [style.paddingLeft, style.paddingRight];
-  })).toEqual(["16px", "16px"]);
+  })).toEqual(["64px", "64px"]);
+});
+
+test("uses identical block typography and spacing in page and edgeless surfaces", async ({ page }) => {
+  const pageBlock = page.locator(".page-surface > .page-block:has(> .page-block-children)").first();
+  const blockId = await pageBlock.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!blockId) throw new Error("Expected a shared block ID");
+  const metrics = (block: Locator) => block.evaluate((element) => {
+    const blockStyle = getComputedStyle(element);
+    const row = element.querySelector<HTMLElement>(":scope > .page-block-row");
+    const content = row?.querySelector<HTMLElement>("[data-block-content]");
+    if (!row || !content) throw new Error("Expected shared block DOM");
+    const rowStyle = getComputedStyle(row);
+    const contentStyle = getComputedStyle(content);
+    return {
+      fontFamily: blockStyle.fontFamily,
+      fontSize: blockStyle.fontSize,
+      lineHeight: contentStyle.lineHeight,
+      marginTop: blockStyle.marginTop,
+      marginBottom: blockStyle.marginBottom,
+      rowPaddingLeft: rowStyle.paddingLeft,
+    };
+  });
+  const pageMetrics = await metrics(pageBlock);
+  await expect.poll(() => page.locator(".page-surface").first().evaluate((element) => {
+    const style = getComputedStyle(element);
+    return [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft];
+  })).toEqual(["12px", "64px", "56px", "64px"]);
+
+  await switchMode(page, "edgeless");
+  const card = page.locator(`[data-edgeless-root="${blockId}"]`);
+  const canvasBlock = card.locator(`:scope > .edgeless-card-content > ${blockIdSelector(blockId)}`);
+  await expect.poll(() => metrics(canvasBlock)).toEqual(pageMetrics);
+  await expect.poll(() => cardChrome(card).evaluate((element) => {
+    const style = getComputedStyle(element);
+    return [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft];
+  })).toEqual(["12px", "64px", "56px", "64px"]);
 });
 
 test("double-clicks empty canvas to append and focus a block at that canvas point", async ({ page }) => {
@@ -288,12 +324,49 @@ test("renders two root ranges as cards with their complete nested outlines", asy
   await switchMode(page, "edgeless");
   await expect(page.locator("[data-edgeless-root]")).toHaveCount(2);
   const card = page.locator(`[data-edgeless-root="${parentId}"]`);
+  const toggle = card.locator(`${blockIdSelector(parentId)} > .page-block-row [data-collapse-toggle]`);
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(card.locator(blockIdSelector(childId))).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(card.locator(blockIdSelector(childId))).toHaveCount(1);
-  await expect(card.locator("[data-collapse-toggle]")).toHaveCount(0);
   await expect.poll(() => cardChrome(card).evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 
   await switchMode(page, "block");
-  await expect(page.locator(`${blockIdSelector(parentId)} > .page-block-children`)).toHaveCount(0);
+  await expect(page.locator(`${blockIdSelector(parentId)} > .page-block-children`)).toHaveCount(1);
+});
+
+test("collapses edgeless blocks by keyboard and slash without claiming canvas focus", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const candidate = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
+  const cardId = await candidate.getAttribute("data-edgeless-root");
+  const rootId = await cardRoot(candidate).getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!cardId || !rootId) throw new Error("Expected a collapsible canvas block");
+  const card = page.locator(`[data-edgeless-root="${cardId}"]`);
+  const root = card.locator(blockIdSelector(rootId));
+  const toggle = root.locator(":scope > .page-block-row [data-collapse-toggle]");
+  const content = root.locator(":scope > .page-block-row [data-block-content]");
+
+  await content.click();
+  await page.keyboard.press("Control+ArrowUp");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Control+ArrowDown");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+  await content.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("/coll");
+  await page.locator('[data-slash-command="block.collapse"]').click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await content.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("/exp");
+  await page.locator('[data-slash-command="block.expand"]').click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+  await clickCardChrome(page, card);
+  await page.keyboard.press("Control+ArrowUp");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
 });
 
 test("selects nested blocks and preserves block selection across surfaces", async ({ page }) => {

@@ -1,13 +1,12 @@
 import { useEditorRoot, useRootBlockIds } from "../../hooks";
-import { PageBlock } from "./page-block";
+import { BlockTree } from "../../blocks";
 
 /**
  * Renders the collaborative document as a nested writing page.
  *
- * The surface owns root traversal, page layout, block renderer selection through
- * PageBlock, and child placement. It intentionally lives in the demo because
- * those are product presentation decisions rather than responsibilities of the
- * UI-style-agnostic React library.
+ * The surface owns only page geometry and supplies document roots to BlockTree.
+ * BlockTree keeps renderer selection, controls, and traversal identical to
+ * every other surface that displays blocks.
  */
 export function PageSurface() {
   const rootIds = useRootBlockIds();
@@ -21,9 +20,7 @@ export function PageSurface() {
       aria-label="Document editor"
       tabIndex={-1}
     >
-      {rootIds.map((blockId) => (
-        <PageBlock key={blockId} blockId={blockId} />
-      ))}
+      <BlockTree blockIds={rootIds} />
       <div data-page-end-slot="true" />
     </main>
   );

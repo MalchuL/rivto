@@ -29,7 +29,7 @@ register C
 A(
   B(
     C(
-      surface block shell
+      shared block shell
     )
   )
 )
@@ -39,11 +39,11 @@ The first registered wrapper is outermost. A wrapper must render `children`
 exactly once. Extension cleanup removes its exact registration and preserves the
 relative order of remaining wrappers.
 
-The surface still owns the single `BlockView`, content renderer, controls, and
-recursive descendants. Wrappers must not create another `BlockView` with the
-same block ID.
+`BlockTree` owns the single `BlockView`, content renderer, controls, and recursive
+descendants for every surface. Wrappers must not create another `BlockView` with
+the same block ID.
 
-Selection presentation belongs to the surface shell, so decorators do not
+Selection presentation belongs to the shared shell, so decorators do not
 receive an `isSelected` prop. A decorator that truly needs current selection
 behavior can resolve it explicitly with `useBlockSelection(block.id)`.
 
@@ -68,7 +68,7 @@ function MeasurementWrapper({ children }: BlockWrapperProps) {
 }
 ```
 
-Multiple ref providers compose. Surface recursion resets the ref scope, so a
+Multiple ref providers compose. BlockTree recursion resets the ref scope, so a
 parent wrapper observes only its own `BlockView`, never nested child elements.
 The page drag extension uses this contract to attach dnd-kit to the existing row
-and portal its handle without replacing the surface shell.
+and portal its handle without replacing the shared shell.

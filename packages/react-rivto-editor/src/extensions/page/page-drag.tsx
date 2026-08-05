@@ -403,7 +403,7 @@ function subtreeSize(block: Block): number {
 /**
  * Renders a non-interactive snapshot of one dragged block subtree.
  *
- * The preview uses detached block data instead of PageBlock. Reusing PageBlock
+ * The preview uses detached block data instead of BlockTree. Reusing BlockTree
  * here would mount duplicate contenteditable elements and register a second set
  * of draggable and droppable nodes with the same IDs.
  *
@@ -652,7 +652,7 @@ export function PageDragProvider({
 }
 
 /**
- * Decorates one surface-owned BlockView with page drag behavior.
+ * Decorates one BlockTree-owned BlockView with structural drag behavior.
  *
  * The decorator contributes a BlockView ref through context, then attaches the
  * dnd-kit droppable directly to the existing row. Its handle and indicator are
@@ -663,7 +663,7 @@ export function PageDragProvider({
  * edgeless surfaces never import it. The button alone activates the draggable
  * sensor, so editable content retains ordinary caret and selection behavior.
  *
- * @param props - Block snapshot and the next ordered decorator or surface shell.
+ * @param props - Block snapshot and the next ordered decorator or shared shell.
  * @returns A DOM-free ref provider plus row-portalled drag controls.
  */
 export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {

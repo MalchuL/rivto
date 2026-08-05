@@ -18,21 +18,21 @@ import {
 import { useEditorMode, useReactEditor } from "../hooks";
 
 /**
- * Stable slots used by a surface to render one block shell.
+ * Stable slots used by BlockTree to render one block shell.
  *
  * The shell owns renderer placement and recursive child traversal. It is
  * created exactly once, beneath every registered decorator.
  */
 export interface BlockShellProps {
-  /** Latest detached block snapshot resolved by the active surface. */
+  /** Latest detached block snapshot resolved by BlockTree. */
   readonly block: Block;
-  /** Presentation state forwarded only to the surface-owned BlockView shell. */
+  /** Presentation state forwarded only to the shared BlockView shell. */
   readonly isSelected: boolean;
   /** Renderer output for the block's own content, excluding descendants. */
   readonly content: ReactNode;
-  /** Surface-owned controls, such as the page collapse toggle. */
+  /** Shared structural controls, such as list and collapse controls. */
   readonly controls?: ReactNode;
-  /** Already-rendered descendants positioned according to surface policy. */
+  /** Already-rendered descendants positioned by BlockTree. */
   readonly children?: ReactNode;
 }
 
@@ -44,9 +44,9 @@ export interface BlockShellProps {
  * traverse descendants.
  */
 export interface BlockWrapperProps {
-  /** Latest detached block snapshot resolved by the active surface. */
+  /** Latest detached block snapshot resolved by BlockTree. */
   readonly block: Block;
-  /** Next decorator, or the surface shell at the end of the chain. */
+  /** Next decorator, or the shared block shell at the end of the chain. */
   readonly children: ReactNode;
 }
 
@@ -55,7 +55,7 @@ export type BlockWrapperComponent = ComponentType<BlockWrapperProps>;
 
 /** Props used by the runtime-resolving BlockWrapper component. */
 export interface BlockWrapperSlotProps extends BlockShellProps {
-  /** Surface-owned rendering used when no extension contributes a wrapper. */
+  /** Shared rendering used when no extension contributes a wrapper. */
   readonly fallback: ComponentType<BlockShellProps>;
 }
 
@@ -66,14 +66,14 @@ const BlockElementRefContext = createContext<RefCallback<HTMLDivElement> | undef
 export interface BlockElementRefProviderProps {
   /** Callback notified with the stable BlockView DOM node and later null. */
   readonly elementRef: RefCallback<HTMLDivElement>;
-  /** Remaining decorator chain and surface shell. */
+  /** Remaining decorator chain and shared block shell. */
   readonly children: ReactNode;
 }
 
 /**
  * Composes one decorator's DOM ref with refs from every outer decorator.
  *
- * Context keeps decorator composition DOM-free. The surface shell attaches the
+ * Context keeps decorator composition DOM-free. The shared shell attaches the
  * final callback to its single BlockView, allowing multiple extensions to observe
  * the same stable element without cloning children or adding layout wrappers.
  *
@@ -100,7 +100,7 @@ export function BlockElementRefProvider({
 }
 
 /**
- * Resolves the composed decorator ref for the surface-owned BlockView.
+ * Resolves the composed decorator ref for BlockTree's BlockView.
  *
  * @returns Callback to forward to BlockView, or undefined without ref-using
  * decorators.
@@ -112,7 +112,7 @@ export function useBlockElementRef(): RefCallback<HTMLDivElement> | undefined {
 /**
  * Prevents one block's decorator refs from leaking into recursive child blocks.
  *
- * Surfaces place this boundary around their rendered descendants. Each child
+ * BlockTree places this boundary around rendered descendants. Each child
  * then establishes an independent decorator chain and ref composition scope.
  *
  * @param props - Recursively rendered surface children.
@@ -131,13 +131,13 @@ export function BlockElementRefBoundary({
 }
 
 /**
- * Composes the active mode's decorators around one surface-owned block shell.
+ * Composes the active mode's decorators around one shared block shell.
  *
  * Registration order defines nesting: the first registered decorator is
  * outermost, and the last is closest to the shell. Changing editor mode
  * immediately selects that mode's ordered wrapper list.
  *
- * @param props - Prepared block slots and the surface-owned fallback component.
+ * @param props - Prepared block slots and the shared fallback component.
  * @returns The shell wrapped by every registered decorator in stable order.
  */
 export function BlockWrapper({

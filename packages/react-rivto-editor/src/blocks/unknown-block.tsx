@@ -1,7 +1,7 @@
-import { useBlock } from "../../hooks";
-import type { BlockRendererProps } from "../../managers";
+import { useBlock } from "../hooks";
+import type { BlockRendererProps } from "../managers";
 
-/** Keeps documents readable when the demo lacks a renderer for a stored type. */
+/** Renders readable fallback content when no renderer owns a stored block type. */
 export function UnknownBlock({ blockId }: BlockRendererProps) {
   const { block } = useBlock(blockId);
   if (!block) return null;

@@ -154,22 +154,23 @@ Global document rendering is intentional in this restored architecture.
 Renderer, surface, and extension registries still keep independent ownership
 and lifecycle state.
 
-The page render stack is:
+The shared block render stack is:
 
 ```text
-PageSurface
-  → useRootBlockIds()
-  → PageBlock(blockId)
+PageSurface or EdgelessBlockElement
+  → ordered root block IDs
+  → BlockTree(blockIds)
     → useBlock(blockId)
     → renderer for block.type
     → ordered BlockWrapper decorators
     → one BlockView DOM boundary
-    → child PageBlock components
+    → recursive child blocks
 ```
 
 `BlockView` owns stable `data-block-*` DOM markers. A block renderer owns only
-its content. A surface owns traversal and layout. A wrapper decorates the
-surface shell and must render its children exactly once.
+its content. `BlockTree` owns traversal and block layout while each surface owns
+only its outer page or canvas geometry. A wrapper decorates the shared shell and
+must render its children exactly once.
 
 ## Extensions and capabilities
 
