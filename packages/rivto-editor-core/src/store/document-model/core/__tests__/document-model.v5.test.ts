@@ -11,7 +11,7 @@ const exchangeUpdates = (left: YjsDoc, right: YjsDoc): void => {
   Y.applyUpdate(right.doc, leftState);
 };
 
-describe("DocumentModelImpl schema v4 Markdown storage", () => {
+describe("DocumentModelImpl schema v5 Markdown storage", () => {
   it("loads, removes, and recreates blocks around a valid empty document", () => {
     const doc = new YjsDoc("empty-document");
     const model = new DocumentModelImpl(doc);
@@ -23,7 +23,7 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
     expect(model.blocks.getVisibleBlockIds()).toEqual([]);
     expect(model.links.getLinks()).toEqual([]);
 
-    model.loadSnapshot({ version: 4, blocks: [], links: [] });
+    model.loadSnapshot({ version: 5, blocks: [], links: [] });
     const id = model.blocks.insertBlock({ id: "only", type: "paragraph", content: "Only" });
     model.links.createLink({ id: "self", from: { blockId: id }, to: { blockId: id } });
     model.blocks.removeBlock(id);
@@ -32,16 +32,16 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
     expect(model.blocks.getRootIds()).toEqual([]);
     expect(model.blocks.getVisibleBlockIds()).toEqual([]);
     expect(model.links.getLinks()).toEqual([]);
-    expect(model.getSnapshot()).toMatchObject({ version: 4, blocks: [], links: [] });
+    expect(model.getSnapshot()).toMatchObject({ version: 5, blocks: [], links: [] });
     expect(model.blocks.insertBlock({ id: "later", type: "paragraph" })).toBe("later");
     doc.destroy();
   });
 
-  it("round-trips explicit list state in schema v4", () => {
+  it("round-trips explicit list state in schema v5", () => {
     const sourceDoc = new YjsDoc("list-snapshot-source");
     const source = new DocumentModelImpl(sourceDoc);
     source.loadSnapshot({
-      version: 4,
+      version: 5,
       blocks: [{
         id: "listed",
         type: "paragraph",
@@ -62,6 +62,42 @@ describe("DocumentModelImpl schema v4 Markdown storage", () => {
     expect(target.blocks.getBlock("listed")?.listProps).toEqual({ type: "checkbox", checked: true });
     sourceDoc.destroy();
     targetDoc.destroy();
+  });
+
+  it("round-trips and collaboratively merges first-class elements without block layout", () => {
+    const sourceDoc = new YjsDoc("element-snapshot-source");
+    const source = new DocumentModelImpl(sourceDoc);
+    source.blocks.insertBlock({ id: "content", type: "paragraph", content: "Card" });
+    source.elements.insertElement({
+      id: "card",
+      type: "block",
+      frame: { x: -20, y: 30, width: 320, height: 140 },
+      zIndex: 2,
+      props: { startBlockId: "content", endBlockId: "content" },
+    });
+    const snapshot = source.getSnapshot();
+    expect(snapshot.version).toBe(5);
+    expect(snapshot.elements).toEqual([expect.objectContaining({ id: "card", type: "block" })]);
+    expect(snapshot.blocks[0]).not.toHaveProperty("layout");
+
+    const targetDoc = new YjsDoc("element-snapshot-target");
+    const target = new DocumentModelImpl(targetDoc);
+    target.loadSnapshot(snapshot);
+    expect(target.getSnapshot()).toEqual(snapshot);
+    targetDoc.destroy();
+
+    const peerDoc = new YjsDoc("element-collaboration-peer");
+    const peer = new DocumentModelImpl(peerDoc);
+    Y.applyUpdate(peerDoc.doc, Y.encodeStateAsUpdate(sourceDoc.doc));
+    peer.elements.updateElement("card", { frame: { x: 80 }, props: { title: "Shared" } });
+    Y.applyUpdate(sourceDoc.doc, Y.encodeStateAsUpdate(peerDoc.doc));
+    expect(source.elements.getElement("card")).toEqual(peer.elements.getElement("card"));
+    expect(source.elements.getElement("card")).toMatchObject({
+      frame: { x: 80 },
+      props: { startBlockId: "content", endBlockId: "content", title: "Shared" },
+    });
+    sourceDoc.destroy();
+    peerDoc.destroy();
   });
 
   it("converges when a remote client removes the final block", () => {

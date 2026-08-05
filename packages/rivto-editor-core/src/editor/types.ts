@@ -1,4 +1,4 @@
-import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, RegisteredCommand, LinkManager, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
+import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, ElementManager, RegisteredCommand, LinkManager, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import type { CRDTDoc } from "../store/crdt-doc";
 import type { DocumentModel } from "../store/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
@@ -79,8 +79,8 @@ export interface CreateRivtoEditorOptions {
 /**
  * Public editor coordinator exposed to UI and integrations.
  *
- * Block and link behavior is intentionally available only through `.blocks`
- * and `.links`. The editor itself owns cross-cutting runtime lifecycle,
+ * Block, link, and element behavior is intentionally available only through
+ * `.blocks`, `.links`, and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
  * commands, batching, selection, history, mode, snapshots, and subscriptions.
  */
 export interface RivtoEditorApi {
@@ -92,6 +92,8 @@ export interface RivtoEditorApi {
   readonly blocksRegistry: BlockRegistryManager;
   /** First-class link commands and typed link operations. */
   readonly links: LinkManager;
+  /** Generic first-class canvas element operations. */
+  readonly elements: ElementManager;
   /** Named command registry shared by managers and integrations. */
   readonly commands: CommandRegistry;
   /** Local block/edgeless presentation mode. */
@@ -159,7 +161,7 @@ export interface RivtoEditorApi {
   /**
    * Replaces supplied document sections and clears previous local history.
    *
-   * @param snapshot - Snapshot-v4 sections to validate and load.
+   * @param snapshot - Snapshot-v5 sections to validate and load.
    * @returns No value.
    */
   load(snapshot: EditorSnapshotUpdate): void;
@@ -167,7 +169,7 @@ export interface RivtoEditorApi {
   /**
    * Materializes the complete portable document state.
    *
-   * @returns Detached snapshot-v4 value.
+   * @returns Detached snapshot-v5 value.
    */
   dump(): EditorSnapshot;
 

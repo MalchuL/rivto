@@ -7,7 +7,6 @@ import {
 import type {
     Block,
     BlockInput,
-    BlockLayout,
     BlockPatch,
     BlockPropsValidator,
     BlockUpdate,
@@ -15,7 +14,6 @@ import type {
 } from "../../types";
 import { DEFAULT_BLOCK_LIST_PROPS, type BlockListProps } from "../../../../../blocks";
 import type {
-    BlockLayoutStorage,
     BlockListPropsStorage,
     BlockStorage,
     IDBlock,
@@ -27,7 +25,6 @@ import { collapsedFrom, contentFrom, listPropsFrom, strings } from "./utils";
 
 const ROOTS_KEY = "rivto.editor.roots";
 const BLOCKS_KEY = "rivto.editor.blocks";
-const DEFAULT_LAYOUT: BlockLayout = { x: 40, y: 40, width: 320, height: 120, zIndex: 0 };
 
 interface LocatedBlock {
     array: CRDTArray<string>;
@@ -37,7 +34,7 @@ interface LocatedBlock {
 }
 
 /**
- * Owns block records, collaborative text, layout, and ordered tree placement.
+ * Owns block records, collaborative text, and ordered tree placement.
  *
  * The manager is exposed as `document.blocks`. It preserves stable CRDT
  * container identities, lazily repairs cached tree paths, and coordinates link
@@ -269,7 +266,6 @@ export class DocumentBlockManager {
                 }
                 if (patch.pluginData) assignMap(this.requiredMap(block, "pluginData"), patch.pluginData, false);
                 if (patch.content !== undefined) assignText(this.requiredText(block, "content"), patch.content);
-                if (patch.layout) assignMap(this.requiredMap(block, "layout"), patch.layout, false);
             });
         });
     }
@@ -419,7 +415,7 @@ export class DocumentBlockManager {
      * target's existing children, preserving their relative order. Links that
      * point directly to the removed source are deleted because their endpoint
      * would otherwise be invalid. The source's other fields are intentionally
-     * discarded: the target keeps its type, props, layout, and plugin data.
+     * discarded: the target keeps its type, props, and plugin data.
      *
      * Every mutation runs inside one CRDT transaction. Remote collaborators see
      * one coherent change, and Undo restores the entire source block—including
@@ -656,19 +652,6 @@ export class DocumentBlockManager {
     }
 
     /**
-     * Patches supplied geometry keys so independent concurrent edits can merge.
-     *
-     * @param id - ID of the block to reposition or resize.
-     * @param layout - Geometry fields to update.
-     * @throws If the block or its layout field does not exist.
-     * @returns No value.
-     */
-    setBlockLayout(id: string, layout: Partial<BlockLayout>): void {
-        this.transact(() => assignMap(this.requiredMap(this.requiredBlock(id), "layout"), layout, false));
-    }
-
-
-    /**
      * Replaces the complete block tree inside the caller's snapshot transaction.
      *
      * Every supplied block is validated before existing collaborative state is
@@ -750,7 +733,6 @@ export class DocumentBlockManager {
         const props = this.document.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
         const content = this.document.crdt.instantiator.createText();
         const children = this.document.crdt.instantiator.createArray<string>();
-        const layout = this.document.crdt.instantiator.createMap<BlockLayoutStorage>();
         const listPropsStorage = this.document.crdt.instantiator.createMap<BlockListPropsStorage>();
         const pluginData = this.document.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
         model.set("id", id);
@@ -760,19 +742,11 @@ export class DocumentBlockManager {
         model.set("props", props);
         model.set("content", content);
         model.set("children", children);
-        model.set("layout", layout);
         model.set("pluginData", pluginData);
         this.storage.set(id, model);
         assignMap(listPropsStorage, { ...listProps }, true);
         assignMap(props, this.validateProps(block.type, block.props ?? {}));
         assignText(content, contentFrom(block.content));
-        const flowIndex = container.length;
-        assignMap(layout, {
-            ...DEFAULT_LAYOUT,
-            x: 60 + (flowIndex % 4) * 350,
-            y: 60 + Math.floor(flowIndex / 4) * 180,
-            ...block.layout,
-        }, false);
         assignMap(pluginData, block.pluginData ?? {});
         block.children?.forEach((child) => this.insertInto(child, children));
         const index = afterId === undefined ? container.length : afterId === null ? 0 : strings(container).indexOf(afterId) + 1;
@@ -800,7 +774,6 @@ export class DocumentBlockManager {
             const child = this.readBlock(childId, visited);
             return child ? [child] : [];
         });
-        const layout = this.requiredMap(value, "layout").toObject() as unknown as Partial<BlockLayout>;
         return {
             id,
             type: this.requiredType(value, id),
@@ -810,7 +783,6 @@ export class DocumentBlockManager {
             pluginData,
             content,
             children,
-            layout: { ...DEFAULT_LAYOUT, ...layout },
         };
     }
 

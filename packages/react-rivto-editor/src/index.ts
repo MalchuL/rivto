@@ -17,6 +17,7 @@ export type {
   ReactEditor,
 } from "./types";
 export { MarkdownContent } from "./blocks/markdown";
+export { isDefaultBlockElementSeparator, type BlockElementProps } from "./surfaces/edgeless";
 export { edgelessVisualsExtension } from "./extensions/edgeless/visuals";
 export type {
   CreateVisualPayload,

@@ -7,7 +7,10 @@
 export function clone<T>(value: T): T {
     if (value === null || typeof value !== "object") return value;
     if (Array.isArray(value)) {
-        return value.map(clone) as unknown as T;
+        // `Array.prototype.map` preserves a foreign realm's constructor. Build
+        // a local array so otherwise-portable iframe/vm values are accepted by
+        // CRDT adapters that require arrays from their own JavaScript realm.
+        return Array.from(value, (item) => clone(item)) as unknown as T;
     }
     const result: Record<string, unknown> = {};
     for (const key in value) {

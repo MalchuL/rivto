@@ -18,8 +18,10 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
  * so a multi-item selection never creates several blocks. Expanded text is
  * deleted first, a collapsed caret splits its block, and a whole-block item adds
  * one empty default writing block.
- * The new block becomes the first child when the source has children, or the
- * next sibling otherwise. Shift+Enter remains native plaintext input.
+ * The new block becomes the first child when the source has visible children,
+ * or the next sibling otherwise. Edgeless uses the same placement rule and
+ * expands the owning block-element range for a new root. Shift+Enter remains
+ * native plaintext input.
  */
 export function registerBlockCreation(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
@@ -72,14 +74,19 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
         content: isTextTarget ? block.content.slice(splitAt) : "",
       }, block.id);
 
-      const edgelessRoot = editor.mode.get() === "edgeless" && editor.blocks.getParentId(block.id) === null;
-      const childrenAreVisible = editor.mode.get() === "edgeless" || !block.collapsed;
-      if (edgelessRoot || (block.children.length > 0 && childrenAreVisible)) {
+      if (block.children.length > 0 && !block.collapsed) {
         // Insertion initially creates a sibling directly after `block`.
         // Indenting makes it the last child; moving it to position zero then
         // gives Enter the requested first-child placement.
         editor.blocks.indentBlock(nextBlockId);
         editor.blocks.moveBlock(nextBlockId, null);
+      } else if (editor.mode.get() === "edgeless" && editor.blocks.getParentId(block.id) === null) {
+        // A root inserted after the stored end boundary would otherwise be an
+        // unowned empty separator and disappear from this canvas card.
+        const element = editor.elements.getElements().find((candidate) =>
+          candidate.type === "block" && candidate.props.endBlockId === block.id,
+        );
+        if (element) editor.elements.updateElement(element.id, { props: { endBlockId: nextBlockId } });
       }
 
       editor.selection.set([{

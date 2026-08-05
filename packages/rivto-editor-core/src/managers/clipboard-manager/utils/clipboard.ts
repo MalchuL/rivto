@@ -37,7 +37,7 @@ export function flattenBlocks(blocks: Block[]): Block[] {
  *
  * Copy preparation trims text at selection boundaries. Cloning prevents those
  * changes from mutating document snapshots or sharing mutable props, plugin
- * data, layout, and child arrays with the source.
+ * data and child arrays with the source.
  *
  * @param block - Detached source block to clone.
  * @returns An identity-preserving deep clone safe for clipboard modification.
@@ -47,7 +47,6 @@ function cloneBlock(block: Block): Block {
     ...block,
     props: { ...block.props },
     pluginData: { ...block.pluginData },
-    layout: block.layout ? { ...block.layout } : undefined,
     children: block.children.map(cloneBlock),
   };
 }
@@ -238,8 +237,7 @@ export function serializeClipboardBlocks(
  * Re-identifies every block and link in an incoming clipboard bundle.
  *
  * Clipboard IDs belong to the source document and cannot be inserted directly.
- * Root layout coordinates are offset by 24px so pasted edgeless objects do not
- * exactly cover their originals. When `firstTargetId` is supplied, the first
+ * When `firstTargetId` is supplied, the first
  * copied root maps to the existing text target and is therefore omitted from
  * `blocks`; its children are returned separately for attachment to that target.
  *
@@ -277,9 +275,6 @@ export function remapClipboardBundle(
     return {
       ...block,
       id,
-      layout: block.layout
-        ? { ...block.layout, x: block.layout.x + 24, y: block.layout.y + 24 }
-        : undefined,
       children: block.children.map(remap),
     };
   };

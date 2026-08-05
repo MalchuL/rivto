@@ -139,7 +139,7 @@ export class ClipboardManager {
     });
     return {
       // startsWithText means that clipboard bundle starts with text. It used to paste text into existing text block.
-      bundle: { version: 2, startsWithText: current[0]?.type === "text", blocks, links },
+      bundle: { version: 3, startsWithText: current[0]?.type === "text", blocks, links },
       ...portable,
     };
   }

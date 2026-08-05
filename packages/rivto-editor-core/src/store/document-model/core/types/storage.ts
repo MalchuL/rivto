@@ -5,23 +5,18 @@ import type {
   CRDTMap,
   CRDTText,
 } from "../../../crdt-doc";
-import type { Link } from "./document";
+import type { ElementFrame, Link } from "./document";
 import type { BlockListProps } from "../../../../blocks";
 
-/** Typed geometry stored inside each collaborative block record. */
-export interface BlockLayoutStorage {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  zIndex: number;
-}
+/** Collaborative geometry stored inside each first-class element record. */
+export type ElementFrameStorage = Record<keyof ElementFrame, number>;
 
 /** Collaborative presentation used when a block renders among siblings. */
 export type BlockListPropsStorage = BlockListProps;
 
 export type IDBlock = string;
 export type IDLink = string;
+export type IDElement = string;
 export type IDPlugin = string;
 export type IDProp = string;
 
@@ -41,8 +36,16 @@ export interface BlockStorage {
   props: CRDTMap<Record<IDProp, BasicCRDTType>>;
   content: CRDTText;
   children: CRDTArray<IDBlock>;
-  layout: CRDTMap<BlockLayoutStorage>;  // CRDTMap with keys of type IDBlockLayout (them are strings)
   pluginData: CRDTMap<Record<IDPlugin, BasicCRDTType>>;
+}
+
+/** Exact shared fields stored for one generic canvas element. */
+export interface ElementStorage {
+  id: IDElement;
+  type: string;
+  frame: CRDTMap<ElementFrameStorage>;
+  zIndex: number;
+  props: CRDTMap<Record<IDProp, BasicCRDTType>>;
 }
 
 /** Exact shared fields stored for a first-class link. */

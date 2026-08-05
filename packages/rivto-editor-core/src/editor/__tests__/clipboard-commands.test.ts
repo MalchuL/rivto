@@ -34,7 +34,6 @@ describe("clipboard commands", () => {
       content: "Parent",
       props: { level: 1 },
       pluginData: { local: { pinned: true } },
-      layout: { x: 10, y: 20, width: 300, height: 90, zIndex: 2 },
     });
     const child = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, parent);
     editor.blocks.indentBlock(child);
@@ -48,16 +47,15 @@ describe("clipboard commands", () => {
 
     const bundle = JSON.parse(data.get(RIVTO_CLIPBOARD_MIME)!) as {
       version: number;
-      blocks: Array<{ id: string; props: Record<string, unknown>; pluginData: Record<string, unknown>; children: unknown[]; layout?: unknown }>;
+      blocks: Array<{ id: string; props: Record<string, unknown>; pluginData: Record<string, unknown>; children: unknown[] }>;
       links: unknown[];
     };
-    expect(bundle.version).toBe(2);
+    expect(bundle.version).toBe(3);
     expect(bundle.blocks).toHaveLength(1);
     expect(bundle.blocks[0]?.id).toBe(parent);
     expect(bundle.blocks[0]?.props).toEqual({ level: 1 });
     expect(bundle.blocks[0]?.pluginData).toEqual({ local: { pinned: true } });
     expect(bundle.blocks[0]?.children).toHaveLength(1);
-    expect(bundle.blocks[0]?.layout).toEqual({ x: 10, y: 20, width: 300, height: 90, zIndex: 2 });
     expect(bundle.links).toHaveLength(1);
     expect(data.get("text/plain")).toBe("Parent\n  Child");
     expect(data.get("text/html")).toBe("<p>Parent</p><ul><li>Child</li></ul>");

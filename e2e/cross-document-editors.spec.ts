@@ -7,10 +7,10 @@ type Snapshot = {
     collapsed: boolean;
     props: Record<string, unknown>;
     pluginData: Record<string, unknown>;
-    layout?: Record<string, unknown>;
     children: Snapshot["blocks"];
   }>;
   links: Array<{ id: string }>;
+  elements: Array<{ id: string; type: string }>;
 };
 
 const fixture = (page: Page, side: "left" | "right"): Locator =>
@@ -109,7 +109,6 @@ test("moves selected subtrees into the exact cross-document row and keeps histor
     id: "left-parent",
     collapsed: true,
     pluginData: { fixture: { retained: true } },
-    layout: { x: 41, y: 52, width: 310, height: 170, zIndex: 3 },
     children: [{ id: "left-child" }],
   });
   expect(destination.links).toEqual([expect.objectContaining({ id: "left-internal-link" })]);

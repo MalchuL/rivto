@@ -1,9 +1,6 @@
 import type { EdgelessSelectionRef } from "../edgeless-runtime";
 export type { EdgelessSelectionRef } from "../edgeless-runtime";
 
-/** Stable document plugin namespace used by the visual extension. */
-export const EDGELESS_VISUALS_PLUGIN_ID = "rivto.edgeless.visuals";
-
 /** Axis-aligned canvas geometry shared by every visual leaf. */
 export interface VisualFrame {
   x: number;
@@ -50,10 +47,10 @@ export interface TextVisual extends VisualBase {
   align: "left" | "center" | "right";
 }
 
-/** Persisted visual leaf union owned solely by this extension. */
+/** React visual view materialized from a first-class document element. */
 export type EdgelessVisual = StickerVisual | DrawingVisual | ShapeVisual | TextVisual;
 
-/** Persisted logical group; children may include nested groups and root blocks. */
+/** Persisted logical group element; children are first-class element IDs. */
 export interface VisualGroup {
   readonly id: string;
   title: string;

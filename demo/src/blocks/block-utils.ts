@@ -12,7 +12,6 @@ export function duplicateBlockInput(block: Block): BlockInput {
     content: block.content,
     props: structuredClone(block.props),
     pluginData: structuredClone(block.pluginData),
-    layout: block.layout ? { ...block.layout } : undefined,
     children: block.children.map(duplicateBlockInput),
   };
 }

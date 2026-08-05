@@ -16,7 +16,7 @@ transact(operation: () => void): void {
 insertText(...)
 removeBlock(...)
 moveBlock(...)
-setBlockLayout(...)
+updateElement(...)
 createLink(...)
 ```
 

@@ -11,12 +11,12 @@ const switchMode = async (page: Page, mode: "block" | "edgeless") => {
 };
 
 const cardChrome = (card: Locator) => card.locator(":scope > .edgeless-card-content");
-const cardRoot = (card: Locator) => card.locator(":scope > .edgeless-card-content > .page-block");
+const cardRoots = (card: Locator) => card.locator(":scope > .edgeless-card-content > .page-block");
+const cardRoot = (card: Locator) => card.locator(":scope > .edgeless-card-content > .page-block:has(.page-block-children)").first();
 const cardChildren = (card: Locator) => cardRoot(card).locator(":scope > .page-block-children > .page-block");
 const cardChild = (card: Locator, id: string) => cardRoot(card).locator(`:scope > .page-block-children > ${blockIdSelector(id)}`);
 
-const clickCardChrome = async (page: Page, card: Locator, modifiers: Array<"Control" | "Meta"> = []) => {
-  const position = await card.evaluate((element) => {
+const cardChromePoint = (card: Locator) => card.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     const viewport = element.closest(".edgeless-viewport")?.getBoundingClientRect();
     if (!viewport) throw new Error("Expected canvas viewport");
@@ -34,6 +34,9 @@ const clickCardChrome = async (page: Page, card: Locator, modifiers: Array<"Cont
     }
     throw new Error("Expected visible empty card chrome");
   });
+
+const clickCardChrome = async (page: Page, card: Locator, modifiers: Array<"Control" | "Meta"> = []) => {
+  const position = await cardChromePoint(card);
   for (const modifier of modifiers) await page.keyboard.down(modifier);
   await page.mouse.click(position.x, position.y);
   for (const modifier of [...modifiers].reverse()) await page.keyboard.up(modifier);
@@ -234,9 +237,48 @@ test("uses one Ctrl selection across block and visual canvas objects", async ({ 
   await expect(card).toHaveAttribute("data-block-selected", "true");
 });
 
-test("renders every root as one card with its complete nested outline", async ({ page }) => {
-  const pageRoots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
-  const rootCount = await pageRoots.count();
+test("drags a mixed block and visual selection synchronously from either element", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  await page.getByRole("toolbar", { name: "Visual objects" }).getByRole("button", { name: "Rectangle" }).click();
+  const visual = page.locator('[data-edgeless-visual-kind="rectangle"]');
+  const card = page.locator("[data-edgeless-root]").first();
+  await clickCardChrome(page, card, ["Control"]);
+
+  const positions = () => Promise.all([card, visual].map((element) => element.evaluate((node) => ({
+    left: Number.parseFloat((node as HTMLElement).style.left),
+    top: Number.parseFloat((node as HTMLElement).style.top),
+  }))));
+  const before = await positions();
+  const beforeBoxes = await Promise.all([card, visual].map((element) => element.boundingBox()));
+  if (beforeBoxes.some((box) => !box)) throw new Error("Expected mixed selection geometry");
+  const cardPoint = await cardChromePoint(card);
+  await page.mouse.move(cardPoint.x, cardPoint.y);
+  await page.mouse.down();
+  await page.mouse.move(cardPoint.x + 40, cardPoint.y + 25, { steps: 5 });
+  await expect.poll(async () => Promise.all([card, visual].map(async (element) => {
+    const box = await element.boundingBox();
+    return box && { x: Math.round(box.x), y: Math.round(box.y) };
+  }))).toEqual(beforeBoxes.map((box) => ({ x: Math.round(box!.x + 40), y: Math.round(box!.y + 25) })));
+  await page.mouse.up();
+  await expect.poll(positions).toEqual(before.map(({ left, top }) => ({ left: left + 40, top: top + 25 })));
+
+  await page.keyboard.press("Control+z");
+  await expect.poll(positions).toEqual(before);
+  const restoredBoxes = await Promise.all([card, visual].map((element) => element.boundingBox()));
+  const visualBox = await visual.locator(":scope > svg").boundingBox();
+  if (!visualBox || restoredBoxes.some((box) => !box)) throw new Error("Expected visual drag geometry");
+  await page.mouse.move(visualBox.x + visualBox.width / 2, visualBox.y + visualBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(visualBox.x + visualBox.width / 2 + 30, visualBox.y + visualBox.height / 2 + 15, { steps: 5 });
+  await expect.poll(async () => Promise.all([card, visual].map(async (element) => {
+    const box = await element.boundingBox();
+    return box && { x: Math.round(box.x), y: Math.round(box.y) };
+  }))).toEqual(restoredBoxes.map((box) => ({ x: Math.round(box!.x + 30), y: Math.round(box!.y + 15) })));
+  await page.mouse.up();
+  await expect.poll(positions).toEqual(before.map(({ left, top }) => ({ left: left + 30, top: top + 15 })));
+});
+
+test("renders two root ranges as cards with their complete nested outlines", async ({ page }) => {
   const parent = page.locator(".page-block:has(> .page-block-children)").first();
   const parentId = await parent.getAttribute(BLOCK_ID_ATTRIBUTE);
   const childId = await parent.locator(`:scope > .page-block-children ${BLOCK_ID_SELECTOR}`).first().getAttribute(BLOCK_ID_ATTRIBUTE);
@@ -244,7 +286,7 @@ test("renders every root as one card with its complete nested outline", async ({
   await parent.locator(":scope > .page-block-row [data-collapse-toggle]").click();
 
   await switchMode(page, "edgeless");
-  await expect(page.locator("[data-edgeless-root]")).toHaveCount(rootCount);
+  await expect(page.locator("[data-edgeless-root]")).toHaveCount(2);
   const card = page.locator(`[data-edgeless-root="${parentId}"]`);
   await expect(card.locator(blockIdSelector(childId))).toHaveCount(1);
   await expect(card.locator("[data-collapse-toggle]")).toHaveCount(0);
@@ -471,26 +513,30 @@ test("does not choose a structural drop target over blank canvas", async ({ page
   await expect(cardChild(card, sourceId)).toHaveCount(1);
 });
 
-test("Enter on an edgeless leaf root creates its first child", async ({ page }) => {
+test("Enter on an edgeless leaf root creates the next root in the same card", async ({ page }) => {
   await switchMode(page, "edgeless");
   const cards = page.locator("[data-edgeless-root]");
   const beforeRoots = await cards.count();
-  const card = page.locator("[data-edgeless-root]:not(:has(.page-block-children))").first();
-  const root = cardRoot(card);
+  const root = page.locator("[data-edgeless-root] > .edgeless-card-content > .page-block:not(:has(> .page-block-children))").first();
+  const card = root.locator("xpath=ancestor::*[@data-edgeless-root]");
   const rootId = await root.getAttribute(BLOCK_ID_ATTRIBUTE);
   if (!rootId) throw new Error("Expected an editable leaf root");
-  const stableCard = page.locator(`[data-edgeless-root="${rootId}"]`);
+  const stableCard = card;
+  const rootsBefore = await cardRoots(stableCard).count();
 
   await root.locator(":scope > .page-block-row [data-block-content]").click();
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
 
   await expect(cards).toHaveCount(beforeRoots);
-  const children = cardChildren(stableCard);
-  await expect(children).toHaveCount(1);
-  await expect(children.locator("[data-block-content]")).toBeFocused();
+  const originalRoot = stableCard.locator(`:scope > .edgeless-card-content > ${blockIdSelector(rootId)}`);
+  await expect(originalRoot.locator(":scope > .page-block-children > .page-block")).toHaveCount(0);
+  const roots = cardRoots(stableCard);
+  const originalIndex = await roots.evaluateAll((elements, id) => elements.findIndex((element) => element.getAttribute("data-block-id") === id), rootId);
+  await expect(roots).toHaveCount(rootsBefore + 1);
+  await expect(roots.nth(originalIndex + 1).locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
   await page.keyboard.press("Control+z");
-  await expect(cardChildren(stableCard)).toHaveCount(0);
+  await expect(roots).toHaveCount(rootsBefore);
 });
 
 test("deletes a selected edgeless root structurally", async ({ page }) => {
@@ -511,7 +557,7 @@ test("deletes a selected edgeless root structurally", async ({ page }) => {
   await expect(page.locator(`[data-edgeless-root="${rootId}"]`)).toHaveCount(0);
   await page.keyboard.press("Control+z");
   const restored = page.locator(`[data-edgeless-root="${rootId}"]`);
-  await expect(restored.locator("[data-block-content]").first()).toHaveText(originalContent);
+  await expect(restored.locator(blockIdSelector(rootId)).locator(":scope > .page-block-row [data-block-content]")).toHaveText(originalContent);
   await expect(cardChildren(restored)).toHaveCount(originalChildren);
 });
 
@@ -532,7 +578,7 @@ test("edits Markdown and custom controls without selecting their root cards", as
   await switchMode(page, "edgeless");
   const first = page.locator("[data-edgeless-root]").first();
   const content = first.locator("[data-block-content]").first();
-  await expect(first.locator(".markdown-preview strong")).toHaveText("Rivto editor");
+  await expect(first.locator(".markdown-preview strong").first()).toHaveText("Rivto editor");
   await content.click();
   await page.keyboard.press("End");
   await page.keyboard.type("!/sloder");
@@ -554,6 +600,25 @@ test("edits Markdown and custom controls without selecting their root cards", as
 
   await switchMode(page, "block");
   await expect(page.locator("[data-block-content]").first()).toHaveText("**Rivto editor**!/sloder");
+});
+
+test("moves through the shared slash menu with arrow keys", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const content = page.locator("[data-edgeless-root] [data-block-content]").first();
+  await content.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("/");
+
+  const menu = page.locator("[data-slash-menu]");
+  const active = menu.locator("[data-active]");
+  await expect(menu).toBeVisible();
+  const firstCommand = await active.getAttribute("data-slash-command");
+  if (!firstCommand) throw new Error("Expected an active slash command");
+
+  await page.keyboard.press("ArrowDown");
+  await expect(active).not.toHaveAttribute("data-slash-command", firstCommand);
+  await page.keyboard.press("ArrowUp");
+  await expect(active).toHaveAttribute("data-slash-command", firstCommand);
 });
 
 test("toggles root selection and moves or resizes layouts atomically", async ({ page }) => {
@@ -684,7 +749,8 @@ test("zooms, pans, and pastes selected root subtrees with offset layouts", async
   await page.keyboard.press("Control+v");
   await expect(cards).toHaveCount(before + 2);
   await expect(page.locator("[data-edgeless-root][data-block-selected]")).toHaveCount(2);
-  const pastedPositions = await Promise.all([cards.nth(2), cards.nth(3)].map((card) => card.evaluate((element) => ({
+  const pasted = page.locator("[data-edgeless-root][data-block-selected]");
+  const pastedPositions = await Promise.all([pasted.nth(0), pasted.nth(1)].map((card) => card.evaluate((element) => ({
     left: Number.parseFloat((element as HTMLElement).style.left),
     top: Number.parseFloat((element as HTMLElement).style.top),
   }))));
@@ -749,10 +815,11 @@ test("duplicates a complete root subtree from slash with offset geometry", async
     left: Number.parseFloat((element as HTMLElement).style.left),
     top: Number.parseFloat((element as HTMLElement).style.top),
   }));
-  const originalDescendants = await original.locator(BLOCK_ID_SELECTOR).count();
   const before = await cards.count();
 
-  const content = original.locator("[data-block-content]").first();
+  const originalRoot = cardRoot(original);
+  const subtreeSize = 1 + await originalRoot.locator(BLOCK_ID_SELECTOR).count();
+  const content = originalRoot.locator(":scope > .page-block-row [data-block-content]");
   await content.click();
   await page.keyboard.press("End");
   await page.keyboard.type("/dupl");
@@ -764,7 +831,7 @@ test("duplicates a complete root subtree from slash with offset geometry", async
   const duplicate = cards.filter({ has: page.locator(".page-block[data-block-selected]") });
   await expect(duplicate).toHaveCount(1);
   await expect(duplicate).not.toHaveAttribute("data-edgeless-root", originalId ?? "");
-  await expect(duplicate.locator(BLOCK_ID_SELECTOR)).toHaveCount(originalDescendants);
+  await expect(duplicate.locator(BLOCK_ID_SELECTOR)).toHaveCount(subtreeSize);
   await expect.poll(() => duplicate.evaluate((element) => ({
     left: Number.parseFloat((element as HTMLElement).style.left),
     top: Number.parseFloat((element as HTMLElement).style.top),

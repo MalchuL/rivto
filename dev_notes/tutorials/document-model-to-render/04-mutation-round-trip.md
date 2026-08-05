@@ -72,26 +72,27 @@ editing.
 После update React render видит то же content. Focused DOM уже совпадает, поэтому
 layout effect не переписывает его и caret остаётся.
 
-## 4. Полный пример: drag canvas block
+## 4. Полный пример: drag canvas element
 
 Pointermove вычисляет geometry delta и выполняет:
 
 ```ts
-block.layout.set
+editor.elements.updateElement(elementId, { frame: { x, y } })
 ```
 
-Model patchит только supplied layout keys. После каждого update renderer
-получает новый layout и меняет absolute style.
+Element manager patchит только supplied frame keys. После каждого update
+renderer получает новый element frame и меняет absolute style.
 
 ```text
 pointer coordinate
-  → command layout partial
-  → CRDT layout map
+  → element frame partial
+  → CRDT element frame map
   → revision
   → style left/top
 ```
 
-Layout collaborative, поэтому remote client проходит read path и видит движение.
+Element geometry collaborative, поэтому remote client проходит read path и
+видит движение.
 
 ## 5. Полный пример: Enter
 

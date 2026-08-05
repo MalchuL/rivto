@@ -6,10 +6,11 @@
  *
  * @module
  */
-import type {
-  BlockListType,
-  EditorBlock as Block,
-  EditorBlockInput as BlockInput,
+import {
+  DEFAULT_BLOCK_TYPE,
+  type BlockListType,
+  type EditorBlock as Block,
+  type EditorBlockInput as BlockInput,
 } from "@chulane/rivto";
 import type { ComponentType, ReactNode } from "react";
 import { registerClipboard, type ClipboardExtensionOptions } from "../clipboard/clipboard";
@@ -45,6 +46,7 @@ import { TrailingBlock } from "../page/trailing-block";
 import { applyIndentShortcut } from "../page/indent";
 import { registerListShortcuts } from "../page/list-shortcuts";
 import { EdgelessSurface } from "../../surfaces/edgeless";
+import { blockIdsOf } from "../../surfaces/edgeless/block-elements";
 import { PageSurface } from "../../surfaces/page";
 import {
   BUILTIN_KEYMAP,
@@ -328,10 +330,26 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
           const block = editor.blocks.getBlock(blockId);
           if (!block) return;
           const input = duplicateBlockInput(block);
-          if (editor.mode.get() === "edgeless" && editor.blocks.getBlocks().some((root) => root.id === blockId) && input.layout) {
-            input.layout = { ...input.layout, x: (input.layout.x ?? 0) + 24, y: (input.layout.y ?? 0) + 24 };
-          }
-          const duplicateId = editor.blocks.insertBlock(input, block.id);
+          const isEdgelessRoot = editor.mode.get() === "edgeless" && editor.blocks.getParentId(blockId) === null;
+          const sourceElement = isEdgelessRoot
+            ? editor.elements.getElements().find((element) => element.type === "block" && blockIdsOf(element, editor.blocks.getRootIds()).includes(blockId))
+            : undefined;
+          let duplicateId = "";
+          editor.batchUpdates(() => {
+            const afterId = isEdgelessRoot
+              ? editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, editor.blocks.getRootIds().at(-1))
+              : block.id;
+            duplicateId = editor.blocks.insertBlock(input, afterId);
+            if (isEdgelessRoot) editor.elements.insertElement({
+              id: duplicateId,
+              type: "block",
+              frame: sourceElement
+                ? { ...sourceElement.frame, x: sourceElement.frame.x + 24, y: sourceElement.frame.y + 24 }
+                : { x: 84, y: 84, width: 320, height: 120 },
+              zIndex: Math.max(0, ...editor.elements.getElements().map((element) => element.zIndex)) + 1,
+              props: { startBlockId: duplicateId, endBlockId: duplicateId },
+            });
+          });
           editor.selection.set([{
             type: "block",
             blockIds: [duplicateId],
@@ -396,7 +414,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
  *
  * @param block - Root snapshot of the subtree to duplicate.
  * @returns Recursive, ID-free input preserving type, list state, content,
- * props, layout, extension data, and descendants.
+ * props, extension data, and descendants.
  */
 const duplicateBlockInput = (block: Block): BlockInput => ({
   type: block.type,
@@ -405,7 +423,6 @@ const duplicateBlockInput = (block: Block): BlockInput => ({
   content: block.content,
   props: structuredClone(block.props),
   pluginData: structuredClone(block.pluginData),
-  layout: structuredClone(block.layout),
   children: block.children.map(duplicateBlockInput),
 });
 

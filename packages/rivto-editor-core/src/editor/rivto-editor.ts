@@ -2,7 +2,7 @@ import {
   DEFAULT_BLOCK_TYPE,
   defaultBlockDefinitions,
 } from "../blocks";
-import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, type CommandHandler, type RegisteredCommand, LinkManager, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
+import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, LinkManager, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
 import { DocumentModelImpl, type Block, type DocumentModel, type Snapshot, type SnapshotUpdate } from "../store/document-model";
 import {
@@ -61,6 +61,8 @@ export class EditorRuntime implements RivtoEditorApi {
   readonly blocksRegistry: BlockRegistryManager;
   /** Public owner of link commands and typed link operations. */
   readonly links: LinkManager;
+  /** Public owner of first-class canvas element commands. */
+  readonly elements: ElementManager;
   /** Named command handlers exposed to integrations and typed runtime methods. */
   readonly commands = new CommandRegistry();
   /** Local presentation mode shared by views of this runtime. */
@@ -97,6 +99,7 @@ export class EditorRuntime implements RivtoEditorApi {
     this.unsubscribeFns.push(unsubscribeFromBlockRegistryChanges);
     this.blocks = new BlockManager(this);
     this.links = new LinkManager(this);
+    this.elements = new ElementManager(this);
     this.clipboard = new ClipboardManager(this);
     this.document.blocks.setPropsValidator((type, props) => this.blocksRegistry.validate(type, props));
     this.registerRuntimeCommands();
@@ -216,7 +219,7 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Replaces supplied document sections from a snapshot v4 update.
+   * Replaces supplied document sections from a snapshot v5 update.
    *
    * Loading establishes a new history baseline, so earlier local changes
    * cannot be restored with undo.
@@ -232,7 +235,7 @@ export class EditorRuntime implements RivtoEditorApi {
   /**
    * Materializes the complete portable document state.
    *
-   * @returns Detached snapshot v4 suitable for persistence or transfer.
+   * @returns Detached snapshot v5 suitable for persistence or transfer.
    */
   dump(): EditorSnapshot {
     const snapshot = this.document.getSnapshot() satisfies Snapshot;
@@ -452,6 +455,7 @@ export class EditorRuntime implements RivtoEditorApi {
   destroy(): void {
     this.unsubscribeFns.splice(0).forEach((unsubscribe) => unsubscribe());
     this.links.destroy();
+    this.elements.destroy();
     this.blocks.destroy();
     this.blocksRegistry.destroy();
     this.history.destroy();

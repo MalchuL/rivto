@@ -248,7 +248,6 @@ export function SlashMenu() {
     id: KEYBOARD_BINDING_IDS.slashClose,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashClose],
     priority: 100,
-    mode: "block",
     when: () => Boolean(sessionRef.current),
   }, () => {
     close(true);
@@ -259,7 +258,6 @@ export function SlashMenu() {
     id: KEYBOARD_BINDING_IDS.slashPrevious,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashPrevious],
     priority: 100,
-    mode: "block",
     when: () => Boolean(sessionRef.current),
   }, () => moveActive(-1));
 
@@ -267,7 +265,6 @@ export function SlashMenu() {
     id: KEYBOARD_BINDING_IDS.slashNext,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashNext],
     priority: 100,
-    mode: "block",
     when: () => Boolean(sessionRef.current),
   }, () => moveActive(1));
 
@@ -275,7 +272,6 @@ export function SlashMenu() {
     id: KEYBOARD_BINDING_IDS.slashExecute,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashExecute],
     priority: 100,
-    mode: "block",
     when: () => Boolean(sessionRef.current),
   }, () => {
     const current = sessionRef.current;

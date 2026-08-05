@@ -24,14 +24,12 @@ describe("EditorRuntime block commands", () => {
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
 
     editor.blocks.setBlockProp(firstId, "tone", "info");
-    editor.blocks.setBlockLayout(firstId, { x: 120, y: 80 });
     editor.blocks.indentBlock(secondId);
 
     expect(editor.blocks.getBlocks()).toMatchObject([
       {
         id: firstId,
         props: { tone: "info" },
-        layout: { x: 120, y: 80 },
         children: [{ id: secondId, content: "Second" }],
       },
     ]);
@@ -64,7 +62,6 @@ describe("EditorRuntime block commands", () => {
       pluginData: { demo: { pinned: true } },
       content: "Title",
       children: [{ type: "paragraph", content: "Child" }],
-      layout: { x: 90 },
     });
 
     editor.blocks.setBlockType(id, "heading2");
@@ -76,7 +73,6 @@ describe("EditorRuntime block commands", () => {
       pluginData: { demo: { pinned: true } },
       content: "Title",
       children: [{ content: "Child" }],
-      layout: { x: 90 },
     });
     editor.undo();
     expect(editor.blocks.getBlock(id)).toMatchObject({ type: "paragraph", props: { old: true } });
@@ -142,7 +138,6 @@ describe("EditorRuntime block commands", () => {
       props: { tone: "info" },
       pluginData: { test: { pinned: true } },
       content: "Parent",
-      layout: { x: 90, y: 70 },
       children: [{
         type: "paragraph",
         content: "Child",
@@ -163,7 +158,6 @@ describe("EditorRuntime block commands", () => {
       props: { tone: "info" },
       pluginData: { test: { pinned: true } },
       content: "",
-      layout: { x: 90, y: 70 },
       children: [],
     });
     expect(editor.blocks.getBlock(childId)).toBeUndefined();
@@ -372,9 +366,6 @@ describe("EditorRuntime block commands", () => {
     });
     expectOneUpdate(editor, () => {
       editor.blocks.setBlockPluginData(firstId, "test", { seen: true });
-    });
-    expectOneUpdate(editor, () => {
-      editor.blocks.setBlockLayout(firstId, { x: 20 });
     });
     expectOneUpdate(editor, () => {
       editor.blocks.indentBlock(secondId);
@@ -708,7 +699,7 @@ describe("EditorRuntime block commands", () => {
     editor.links.createLink({ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } });
 
     expect(editor.dump()).toMatchObject({
-      version: 4,
+      version: 5,
       blocks: [{ id: sourceId }, { id: targetId }],
       links: [{ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } }],
     });
@@ -717,7 +708,7 @@ describe("EditorRuntime block commands", () => {
     expect(editor.dump().links).toEqual([]);
 
     editor.load({
-      version: 4,
+      version: 5,
       blocks: [{
         id: "loaded",
         type: "paragraph",
@@ -734,10 +725,11 @@ describe("EditorRuntime block commands", () => {
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     expect(() => editor.execute("document.load", {
       snapshot: { version: 3, blocks: [], links: [] },
-    })).toThrow("Unsupported Rivto document snapshot");
+    })).not.toThrow();
+    expect(editor.blocks.getBlocks()).toEqual([]);
     expect(() => editor.execute("document.load", {
       snapshot: {
-        version: 4,
+        version: 5,
         blocks: [{
           id: "invalid",
           type: "paragraph",

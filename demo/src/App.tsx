@@ -130,25 +130,56 @@ function createDemoEditor() {
     type: DEFAULT_BLOCK_TYPE,
     content: "Finish the selection in the middle of this sentence, then try copy or cut.",
   }, selectionEndId);
-  editor.blocks.insertBlock({
+  const slashId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
     content: "Type `/` anywhere here to open searchable slash commands.",
   }, finalId);
+  const uncheckedId = editor.blocks.insertBlock({
+    type: DEFAULT_BLOCK_TYPE,
+    content: "Try the interactive checkbox",
+    listProps: { type: "checkbox", checked: false },
+  }, slashId);
+  const checkedId = editor.blocks.insertBlock({
+    type: DEFAULT_BLOCK_TYPE,
+    content: "Completed checkbox item",
+    listProps: { type: "checkbox", checked: true },
+  }, uncheckedId);
+  const numberedStartId = editor.blocks.insertBlock({
+    type: DEFAULT_BLOCK_TYPE,
+    content: "Start a numbered sequence",
+    listProps: { type: "start_numbered_list" },
+  }, checkedId);
+  const numberedNextId = editor.blocks.insertBlock({
+    type: DEFAULT_BLOCK_TYPE,
+    content: "Continue the adjacent sequence",
+    listProps: { type: "numbered_list" },
+  }, numberedStartId);
+  const numberedGapId = editor.blocks.insertBlock({
+    type: DEFAULT_BLOCK_TYPE,
+    content: "Ordinary content between numbered items",
+  }, numberedNextId);
+  const numberedContinueId = editor.blocks.insertBlock({
+    type: DEFAULT_BLOCK_TYPE,
+    content: "Continue numbering across the ordinary block",
+    listProps: { type: "continue_numbered_list" },
+  }, numberedGapId);
 
-  // The core gives every new block the same safe geometry. Spread demo roots
-  // into a small persisted grid so the first edgeless view is immediately
-  // usable while still exercising the normal layout API.
-  editor.blocks.updateBlocks(editor.blocks.getBlocks().map((block, index) => ({
-    id: block.id,
-    patch: {
-      layout: {
-        x: 60 + (index % 4) * 380,
-        y: 60 + Math.floor(index / 4) * 270,
-        width: 340,
-        height: 220,
-      },
-    },
-  })));
+  // One unowned empty root is the boundary between the two canvas cards.
+  editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, reverseSelectionId);
+  editor.elements.insertElement({
+    id: listId,
+    type: "block",
+    frame: { x: 60, y: 60, width: 500, height: 360 },
+    zIndex: 0,
+    props: { startBlockId: introId, endBlockId: reverseSelectionId },
+  });
+  editor.elements.insertElement({
+    id: secondBranchId,
+    type: "block",
+    frame: { x: 600, y: 60, width: 500, height: 360 },
+    zIndex: 1,
+    props: { startBlockId: secondBranchId, endBlockId: numberedContinueId },
+  });
   editor.history.clear();
 
   return { editor, reactEditor };
@@ -275,18 +306,24 @@ function createFixtureEditor(
     extensions: [standardPreset(), edgelessVisualsExtension(), blockIdExtension(), ...customBlockExtensions],
   });
   if (side === "left") {
-    editor.blocks.insertBlock({
+    const parentId = editor.blocks.insertBlock({
       id: "left-parent",
       type: DEFAULT_BLOCK_TYPE,
       content: "Movable parent",
       collapsed: true,
       pluginData: { fixture: { retained: true } },
-      layout: { x: 41, y: 52, width: 310, height: 170, zIndex: 3 },
       children: [{
         id: "left-child",
         type: DEFAULT_BLOCK_TYPE,
         content: "Nested child",
       }],
+    });
+    editor.elements.insertElement({
+      id: parentId,
+      type: "block",
+      frame: { x: 41, y: 52, width: 310, height: 170 },
+      zIndex: 3,
+      props: { startBlockId: parentId, endBlockId: parentId },
     });
     editor.blocks.insertBlock({
       id: "left-counter",

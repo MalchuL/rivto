@@ -49,22 +49,31 @@ export function EdgelessVisualLayer({
   const visuals = controller.getVisuals();
   const groups = controller.getGroups();
 
+  const expandedMoveIds = (items: readonly string[]): string[] => {
+    const result = new Set<string>();
+    const visit = (id: string) => {
+      if (result.has(id)) return;
+      result.add(id);
+      groups.find((group) => group.id === id)?.children.forEach(visit);
+    };
+    items.forEach(visit);
+    return [...result];
+  };
+
   /** Returns every rendered leaf and nested group marker moved by one group. */
   const groupPreviewElements = (id: string): HTMLElement[] => {
     if (!plane) return [];
     const keys = new Set<string>();
-    const visit = (kind: "block" | "visual" | "group", itemId: string) => {
-      const key = `${kind}:${itemId}`;
-      if (keys.has(key)) return;
-      keys.add(key);
-      if (kind === "group") groups.find((group) => group.id === itemId)?.children.forEach((child) => visit(child.kind, child.id));
+    const visit = (itemId: string) => {
+      if (keys.has(itemId)) return;
+      keys.add(itemId);
+      groups.find((group) => group.id === itemId)?.children.forEach(visit);
     };
-    visit("group", id);
+    visit(id);
     return [...plane.querySelectorAll<HTMLElement>("[data-edgeless-object-kind][data-edgeless-object-id], [data-edgeless-group-bound-id]")]
       .filter((element) => {
-        const kind = element.dataset.edgelessObjectKind ?? "group";
         const itemId = element.dataset.edgelessObjectId ?? element.dataset.edgelessGroupBoundId;
-        return !!itemId && keys.has(`${kind}:${itemId}`);
+        return !!itemId && keys.has(itemId);
       });
   };
 
@@ -127,8 +136,8 @@ export function EdgelessVisualLayer({
     source: { type: "image"; src: string } | { type: "emoji"; value: string };
     alt: string;
   }) => controller.create({ ...payload, frame: centeredFrame() });
-  const oneSelectedVisual = selection.active && selection.items.length === 1 && selection.items[0]?.kind === "visual"
-    ? selection.items[0].id
+  const oneSelectedVisual = selection.active && selection.items.length === 1 && visuals.some((visual) => visual.id === selection.items[0])
+    ? selection.items[0]
     : undefined;
 
   return <>
@@ -140,7 +149,8 @@ export function EdgelessVisualLayer({
             key={visual.id}
             visual={visual}
             zoom={zoom}
-            selected={selection.active && selection.items.some((item) => item.kind === "visual" && item.id === visual.id)}
+            selected={selection.active && selection.items.includes(visual.id)}
+            moveIds={expandedMoveIds(selection.active && selection.items.includes(visual.id) ? selection.items : [visual.id])}
             showProperties={options.toolbar !== false && oneSelectedVisual === visual.id}
             onText={(text) => controller.update({ id: visual.id, patch: { text } as never })}
             onUpdate={(patch) => controller.update({ id: visual.id, patch: patch as never })}
@@ -149,8 +159,8 @@ export function EdgelessVisualLayer({
           />
         ))}
         {groups.map((group) => {
-          const bounds = controller.getBounds({ kind: "group", id: group.id });
-          const selected = selection.active && selection.items.some((item) => item.kind === "group" && item.id === group.id);
+          const bounds = controller.getBounds(group.id);
+          const selected = selection.active && selection.items.includes(group.id);
           return bounds && (
             <Fragment key={group.id}>
               {selected && <div className="edgeless-group-bound" data-edgeless-group-bound-id={group.id} style={{ left: bounds.x, top: bounds.y, width: bounds.width, height: bounds.height }} />}
@@ -246,6 +256,7 @@ function VisualElement({
   visual,
   zoom,
   selected,
+  moveIds,
   showProperties,
   onText,
   onUpdate,
@@ -255,6 +266,8 @@ function VisualElement({
   readonly visual: EdgelessVisual;
   readonly zoom: number;
   readonly selected: boolean;
+  /** Element IDs previewed together when this selected visual is dragged. */
+  readonly moveIds: readonly string[];
   readonly showProperties: boolean;
   readonly onText: (text: string) => void;
   readonly onUpdate: (patch: Record<string, unknown>) => void;
@@ -288,7 +301,12 @@ function VisualElement({
   const pointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const start = gesture.current;
     if (!start || start.pointerId !== event.pointerId) return;
-    setPreview({ dx: (event.clientX - start.x) / zoom, dy: (event.clientY - start.y) / zoom, resize: start.resize });
+    const dx = (event.clientX - start.x) / zoom;
+    const dy = (event.clientY - start.y) / zoom;
+    if (start.resize) setPreview({ dx, dy, resize: true });
+    else [...event.currentTarget.closest("[data-edgeless-plane]")?.querySelectorAll<HTMLElement>("[data-edgeless-object-id]") ?? []]
+      .filter((element) => moveIds.includes(element.dataset.edgelessObjectId ?? ""))
+      .forEach((element) => { element.style.transform = `translate(${dx}px, ${dy}px)`; });
   };
   const pointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
     const start = gesture.current;
@@ -297,6 +315,9 @@ function VisualElement({
     const dy = (event.clientY - start.y) / zoom;
     gesture.current = null;
     setPreview(null);
+    if (!start.resize) [...event.currentTarget.closest("[data-edgeless-plane]")?.querySelectorAll<HTMLElement>("[data-edgeless-object-id]") ?? []]
+      .filter((element) => moveIds.includes(element.dataset.edgelessObjectId ?? ""))
+      .forEach((element) => { element.style.removeProperty("transform"); });
     if (start.resize) onResize(Math.max(1, visual.frame.width + dx), Math.max(1, visual.frame.height + dy));
     else if (dx || dy) onMove(dx, dy);
   };
@@ -374,13 +395,13 @@ function SelectionToolbar({
   items,
 }: {
   readonly controller: EdgelessVisualController;
-  readonly items: readonly { kind: "block" | "visual" | "group"; id: string }[];
+  readonly items: readonly string[];
 }) {
   const execute = (name: string, payload?: unknown) => controller.reactEditor.editor.execute(name, payload);
   return (
     <div className="edgeless-selection-toolbar" data-edgeless-ui="true" role="toolbar" aria-label="Selected objects">
       {items.length > 1 && <EdgelessToolButton label="Group" icon="group" onClick={() => execute("edgeless.selection.group")} />}
-      {items.some((item) => item.kind === "group") && <EdgelessToolButton label="Ungroup" icon="ungroup" onClick={() => execute("edgeless.selection.ungroup")} />}
+      {items.some((id) => controller.reactEditor.editor.elements.getElement(id)?.type === "group") && <EdgelessToolButton label="Ungroup" icon="ungroup" onClick={() => execute("edgeless.selection.ungroup")} />}
       {items.length > 1 && alignments.map(([alignment, label, icon]) => (
         <EdgelessToolButton key={alignment} label={label} icon={icon} onClick={() => execute("edgeless.selection.align", alignment)} />
       ))}

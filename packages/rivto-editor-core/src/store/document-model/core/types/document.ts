@@ -2,17 +2,57 @@ import type { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../../crdt-doc";
 import type { BlockListProps } from "../../../../blocks";
 import type {
   DocumentBlockManager,
+  DocumentElementManager,
   DocumentLinkManager,
   DocumentPluginDataManager,
 } from "../managers";
 
-/** Collaborative block geometry shared by all renderers. */
-export interface BlockLayout {
+/** Axis-aligned geometry shared by every first-class canvas element. */
+export interface ElementFrame {
+  /** Horizontal canvas coordinate; any finite value is accepted. */
   x: number;
+  /** Vertical canvas coordinate; any finite value is accepted. */
   y: number;
+  /** Positive rendered width. */
   width: number;
+  /** Positive rendered height. */
   height: number;
+}
+
+/** Generic first-class canvas record; element-specific props are interpreted by renderers. */
+export interface DocumentElement<Props extends Record<string, unknown> = Record<string, unknown>> {
+  /** Stable collaborative identity. */
+  id: string;
+  /** Renderer-defined discriminator; core does not register or interpret it. */
+  type: string;
+  /** Common persisted geometry shared by all element types. */
+  frame: ElementFrame;
+  /** Finite stacking order interpreted by the presentation layer. */
   zIndex: number;
+  /** Opaque type-specific data owned and validated by its extension. */
+  props: Props;
+}
+
+/** Complete data accepted when creating a first-class canvas element. */
+export interface ElementInput<Props extends Record<string, unknown> = Record<string, unknown>> {
+  id?: string;
+  type: string;
+  frame: ElementFrame;
+  zIndex: number;
+  props?: Props;
+}
+
+/** Mutable fields of a first-class canvas element. */
+export interface ElementPatch {
+  frame?: Partial<ElementFrame>;
+  zIndex?: number;
+  props?: Record<string, unknown>;
+}
+
+/** One identified element patch applied atomically with its peers. */
+export interface ElementUpdate {
+  id: string;
+  patch: ElementPatch;
 }
 
 /** Serializable block value read from collaborative storage. */
@@ -28,7 +68,6 @@ export interface Block {
   /** Plain Markdown source stored collaboratively as CRDTText. */
   content: string;
   children: Block[];
-  layout?: BlockLayout;
 }
 
 /** First-class connection between two collaborative blocks. */
@@ -51,7 +90,6 @@ export interface BlockInput {
   pluginData?: Record<string, unknown>;
   content?: string;
   children?: BlockInput[];
-  layout?: Partial<BlockLayout>;
 }
 
 /** Mutable block fields; a block's type and identity are intentionally immutable. */
@@ -63,7 +101,6 @@ export interface BlockPatch {
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
   content?: string;
-  layout?: Partial<BlockLayout>;
 }
 
 /** One identified block patch used by atomic multi-block updates. */
@@ -74,17 +111,19 @@ export interface BlockUpdate {
 
 /** Lossless, versioned document value used for persistence. */
 export interface Snapshot {
-  version: 4;
+  version: 5;
   blocks: Block[];
   links: Link[];
+  elements: DocumentElement[];
   pluginData?: Record<string, unknown>;
 }
 
 /** Sections received from persistence that should replace only supplied state. */
 export interface SnapshotUpdate {
-  version: 4;
+  version: 5;
   blocks?: Block[];
   links?: Link[];
+  elements?: DocumentElement[];
   pluginData?: Record<string, unknown>;
 }
 
@@ -97,8 +136,8 @@ export type BlockPropsValidator = (
 /**
  * Public collaborative document coordinator used by editors and persistence.
  *
- * Block and link behavior is intentionally available only through `.blocks`
- * and `.links`. The document itself owns lifecycle, transactions, undo scopes,
+ * Block, link, and element behavior is intentionally available only through
+ * `.blocks`, `.links`, and `.elements`. The document itself owns lifecycle, transactions, undo scopes,
  * and complete snapshot orchestration.
  */
 export interface DocumentModel {
@@ -110,8 +149,10 @@ export interface DocumentModel {
   readonly origin: symbol;
   /** Collaborative containers included in local undo tracking. */
   readonly undoScopes: CRDTUndoScope[];
-  /** Block records, text, layout, hierarchy, and block snapshot operations. */
+  /** Block records, text, hierarchy, and block snapshot operations. */
   readonly blocks: DocumentBlockManager;
+  /** First-class generic canvas elements and geometry. */
+  readonly elements: DocumentElementManager;
   /** First-class link records and link snapshot operations. */
   readonly links: DocumentLinkManager;
   /** Generic namespaced collaborative storage for optional document plugins. */
@@ -134,14 +175,14 @@ export interface DocumentModel {
   transact(operation: () => void): void;
 
   /**
-   * Produces a lossless schema-v4 snapshot.
+   * Produces a lossless schema-v5 snapshot.
    *
-   * @returns Detached blocks, links, and document plugin data.
+   * @returns Detached blocks, links, elements, and document plugin data.
    */
   getSnapshot(): Snapshot;
 
   /**
-   * Replaces only supplied schema-v4 snapshot sections.
+   * Replaces only supplied schema-v5 snapshot sections.
    *
    * @param snapshot - Complete snapshot or partial persistence update.
    * @returns No value.

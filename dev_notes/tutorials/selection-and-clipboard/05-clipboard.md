@@ -66,9 +66,11 @@ Descendants получают отступ в два пробела на кажд
 
 ```ts
 interface ClipboardBundle {
-  version: 2;
+  version: 3;
   blocks: Block[];
   links: Link[];
+  elements?: DocumentElement[];
+  selectedElementIds?: string[];
 }
 ```
 
@@ -214,7 +216,8 @@ Clipboard copy A.content = "pha"
 Document A.content остаётся "Alpha"
 ```
 
-Поэтому `cloneBlock()` копирует block, props, pluginData, layout и children.
+Поэтому `cloneBlock()` копирует block, props, pluginData и children. Геометрия
+не является частью блока и переносится только через `elements` edgeless bundle.
 
 ## 12. Обрезка boundary blocks
 
@@ -354,7 +357,7 @@ Block A остаётся, block B удаляется, caret становится
 8. Transaction завершается.
 9. Selection collapses после inserted value.
 
-Type, ID, props, pluginData и layout target не меняются.
+Type, ID, props и pluginData target не меняются.
 
 ## 21. Почему mutation одна transaction
 
@@ -414,8 +417,10 @@ old ID → new ID
 
 Links затем переписываются через эту map.
 
-Canvas layout сдвигается на 24px по x/y, чтобы pasted object не оказался точно
-под original.
+В edgeless paste remap также охватывает element IDs, group children и
+`blockIds`. Frames вставленных top-level elements сдвигаются, чтобы pasted
+objects не оказались точно под original. Page/block paste игнорирует элементы
+и не переносит canvas geometry.
 
 ## 25. Structured Paste без destination selection
 
@@ -503,7 +508,8 @@ caret в новом DOM.
 
 ## 30. Error boundaries и доверие
 
-Structured JSON version и arrays проверяются в `remapClipboardBundle()`.
+Structured JSON version 3 и arrays проверяются в `remapClipboardBundle()`.
+Старые edgeless payloads намеренно отклоняются без миграции plugin data.
 
 Однако custom clipboard data всё равно рассматривается как внешние данные.
 При расширении schema нельзя доверять TypeScript cast: runtime browser может

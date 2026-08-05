@@ -3,13 +3,18 @@ import {
   useEditor,
   useEditorRoot,
   useKeyboardEvent,
-  useRootBlockIds,
+  useReactEditor,
 } from "../../hooks";
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
 import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
 import { useCallback, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { EdgelessToolButton } from "../../extensions/edgeless/edgeless-tool-button";
-import { EDGELESS_CARD_DEFAULT_LAYOUT, EdgelessRootBlock } from "./edgeless-block";
+import { EdgelessBlockElement } from "./edgeless-block";
+import {
+  blockIdsOf,
+  EDGELESS_BLOCK_ELEMENT_TYPE,
+  EDGELESS_CARD_DEFAULT_FRAME,
+} from "./block-elements";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
@@ -33,7 +38,9 @@ const clampZoom = (value: number): number => Math.max(MIN_ZOOM, Math.min(MAX_ZOO
  */
 export function EdgelessSurface() {
   const editor = useEditor();
-  const rootIds = useRootBlockIds();
+  const reactEditor = useReactEditor();
+  const rootIds = editor.blocks.getRootIds();
+  const blockElements = editor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
   const { ref: registerRoot } = useEditorRoot();
   const viewport = useRef<HTMLElement | null>(null);
   const spaceHeld = useRef(false);
@@ -117,12 +124,22 @@ export function EdgelessSurface() {
     const x = (event.clientX - rect.left - pan.x) / zoom;
     const y = (event.clientY - rect.top - pan.y) / zoom;
     const roots = editor.blocks.getBlocks();
-    const zIndex = Math.max(0, ...roots.map((block) => block.layout?.zIndex ?? 0)) + 1;
-    const id = editor.blocks.insertBlock({
-      type: DEFAULT_BLOCK_TYPE,
-      content: "",
-      layout: { ...EDGELESS_CARD_DEFAULT_LAYOUT, x, y, zIndex },
-    }, roots.at(-1)?.id);
+    const zIndex = Math.max(0, ...editor.elements.getElements().map((element) => element.zIndex)) + 1;
+    let id = "";
+    editor.batchUpdates(() => {
+      let afterId = roots.at(-1)?.id;
+      const last = roots.at(-1);
+      if (last && !reactEditor.isBlockElementSeparator(last)) {
+        afterId = editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, afterId);
+      }
+      id = editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, afterId);
+      editor.elements.insertElement({
+        type: EDGELESS_BLOCK_ELEMENT_TYPE,
+        frame: { ...EDGELESS_CARD_DEFAULT_FRAME, x, y },
+        zIndex,
+        props: { startBlockId: id, endBlockId: id },
+      });
+    });
     editor.selection.set([{
       type: "text",
       anchor: { blockId: id, offset: 0 },
@@ -219,9 +236,13 @@ export function EdgelessSurface() {
         data-edgeless-plane="true"
         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
       >
-        {rootIds.map((blockId) => (
-          <EdgelessRootBlock key={blockId} blockId={blockId} />
-        ))}
+        {/* Element boundary IDs resolve against current root order; inserted
+            roots between them render without rewriting element props. */}
+        {blockElements.map((element) => <EdgelessBlockElement
+          key={element.id}
+          element={element}
+          blockIds={blockIdsOf(element, rootIds)}
+        />)}
       </div>
     </main>
   );

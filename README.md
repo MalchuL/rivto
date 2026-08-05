@@ -3,22 +3,26 @@
 Rivto is a collaborative block-document runtime backed by Yjs. The core and
 React view are separate packages:
 
-- `@chulane/rivto` owns documents, CRDT storage, blocks, commands, validated
-  selection and structured clipboard managers, history, modes, and
+- `@chulane/rivto` owns documents, CRDT storage, blocks, links, generic canvas
+  elements, commands, validated selection and structured clipboard managers, history, modes, and
   slash-command state.
 - `@chulane/rivto-react` owns React rendering, page and edgeless surfaces,
   Markdown, browser events, key bindings, and interaction extensions.
 
 ## Document architecture
 
-An open document uses the original Yjs root/children schema:
+An open document stores block content separately from canvas elements:
 
 ```text
 rivto.editor.roots       Y.Array<blockId>
 rivto.editor.blocks      Y.Map<blockId, {
-  type, content, props, pluginData, collapsed, layout,
+  type, content, props, pluginData, collapsed,
   listProps: Y.Map<{ type, checked }>,
   children: Y.Array<blockId>
+}>
+rivto.editor.links       Y.Map<linkId, link>
+rivto.editor.elements    Y.Map<elementId, {
+  type, frame: { x, y, width, height }, zIndex, props
 }>
 ```
 
@@ -34,7 +38,26 @@ checkbox state together without changing the block's own type or content.
 walks and validates the cached path. A missing or stale path triggers one
 depth-first search and caches only that requested ID. Mutations, undo/redo, and
 remote updates never rebuild or eagerly invalidate the cache. Nested snapshot
-v4 remains the portable import/export format.
+v5 is the strict portable import/export format. It always contains `blocks`,
+`links`, and `elements`; older snapshots are intentionally rejected.
+
+Elements are generic core records exposed through `document.elements` and
+`editor.elements`. Core validates their common geometry but leaves `type` and
+`props` to presentation extensions. React stores shapes, text, drawings,
+stickers, groups, and block cards in this collection. A block card has type
+`block` and inclusive `props.startBlockId` / `props.endBlockId` boundaries;
+roots in that current document-order range remain ordinary document content
+and contain no coordinates.
+
+In edgeless mode React partitions root blocks into cards. An unowned empty
+paragraph separates adjacent cards by default; pass
+`edgeless.isBlockElementSeparator` to `createReactEditor` to replace that rule.
+Owned empty roots remain editable card content, and nested empty blocks never
+split a card. The projection is reconciled collaboratively with an untracked
+transaction origin, so derived repairs do not add undo steps.
+
+See [First-class edgeless elements](packages/react-rivto-editor/docs/edgeless-elements.md)
+for ownership, separator, reconciliation, and clipboard details.
 
 Zero roots is a valid collaborative and snapshot state. Core deletion never
 invents a replacement block. The React `standardPreset()` adds three accessible
@@ -49,9 +72,9 @@ only `TextSelection` and `BlockSelection`; page and edgeless mode consume the
 same state. A block selection may contain roots or nested blocks and survives
 mode switches unchanged.
 
-On the canvas, Ctrl/Cmd-click selects any rendered block while card-background
-and rectangle gestures select roots. Canvas layout commands derive the unique
-owning roots from selected IDs without replacing the selection. See
+On the canvas, Ctrl/Cmd-click and rectangle gestures select element IDs. Text
+and structural selection inside block elements continues to use the block
+selection managers. See
 [Selection in Rivto](packages/react-rivto-editor/docs/selection.md) for the DOM bridge,
 gesture ownership, and collapse behavior.
 

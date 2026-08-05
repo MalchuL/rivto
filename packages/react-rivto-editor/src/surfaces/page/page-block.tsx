@@ -60,8 +60,6 @@ export interface PageBlockProps {
   readonly blockId: string;
   /** Render every child and omit page-only collapse controls. */
   readonly ignoreCollapse?: boolean;
-  /** Hide only this block's marker while descendants retain normal markers. */
-  readonly showListMarker?: boolean;
 }
 
 /**
@@ -87,7 +85,6 @@ export interface PageBlockProps {
 export function PageBlock({
   blockId,
   ignoreCollapse = false,
-  showListMarker = true,
 }: PageBlockProps) {
   // The block and renderer registries publish independent snapshots.
   const { block, operations } = useBlock(blockId);
@@ -119,7 +116,7 @@ export function PageBlock({
     return sibling ? [sibling] : [];
   });
   const listNumber = resolveBlockListNumbers(siblings).get(block.id);
-  const marker = showListMarker && (
+  const marker = (
     block.listProps.type === "checkbox" ? (
       <input
         type="checkbox"

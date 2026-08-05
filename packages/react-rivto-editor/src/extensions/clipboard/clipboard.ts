@@ -11,6 +11,7 @@ import {
   KEYBOARD_BINDING_IDS,
 } from "../../managers";
 import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
+import { blockIdsOf, blockRangeProps } from "../../surfaces/edgeless/block-elements";
 
 /** Configuration for browser clipboard integration. */
 export interface ClipboardExtensionOptions {
@@ -56,11 +57,19 @@ export function registerClipboard(
   // as a fallback, but only use it when the browser's plain text still matches.
   let copiedClipboard: { structured: string; text: string } | null = null;
 
+  const selectedCanvasElementIds = (): readonly string[] => {
+    const snapshot = findEdgelessRuntime(reactEditor)?.get();
+    return snapshot?.active ? snapshot.items : [];
+  };
+
   /** Returns a core-compatible block selection for active canvas root objects. */
   const canvasSelection = (): BlockSelection | undefined => {
     if (editor.mode.get() !== "edgeless") return undefined;
     const snapshot = findEdgelessRuntime(reactEditor)?.get();
-    const blockIds = snapshot?.active ? snapshot.items.filter((item) => item.kind === "block").map((item) => item.id) : [];
+    const blockIds = snapshot?.active ? snapshot.items.flatMap((id) => {
+      const element = editor.elements.getElement(id);
+      return element?.type === "block" ? blockIdsOf(element, editor.blocks.getRootIds()) : [];
+    }) : [];
     return blockIds.length ? {
       type: "block",
       blockIds,
@@ -71,6 +80,11 @@ export function registerClipboard(
 
   /** Writes the core-produced flavors into a native clipboard event. */
   const writeClipboard = (event: ClipboardEvent, payload: ClipboardPayload): void => {
+    const elementIds = selectedCanvasElementIds();
+    if (elementIds.length) {
+      payload.bundle.elements = elementIds.flatMap((id) => editor.elements.getElement(id) ?? []);
+      payload.bundle.selectedElementIds = [...elementIds];
+    }
     const structured = JSON.stringify(payload.bundle);
     event.clipboardData?.setData(RIVTO_CLIPBOARD_MIME, structured);
     event.clipboardData?.setData("text/html", payload.html);
@@ -107,6 +121,7 @@ export function registerClipboard(
         || fallbackStructuredClipboard(event);
     }
     const canvas = canvasSelection();
+    const sourceBundle = structured ? JSON.parse(structured) as ClipboardPayload["bundle"] : undefined;
     const saved = canvas ? editor.selection.get() : undefined;
     // Temporarily project canvas block references into the core clipboard
     // placement API. The preserved page selection is restored below, so the
@@ -122,7 +137,33 @@ export function registerClipboard(
     if (canvas && saved) {
       const pasted = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
       editor.selection.set(saved);
-      if (pasted) findEdgelessRuntime(reactEditor)?.set(pasted.blockIds.map((id) => ({ kind: "block", id })));
+      if (pasted) {
+        const rootMap = new Map((sourceBundle?.blocks ?? []).map((block, index) => [block.id, pasted.blockIds[index]]).filter((entry): entry is [string, string] => Boolean(entry[1])));
+        const sources = sourceBundle?.elements?.filter((element) => element.type === "block") ?? [];
+        const created: string[] = [];
+        editor.batchUpdates(() => {
+          const sourceRootIds = (sourceBundle?.blocks ?? []).map((block) => block.id);
+          const groups = sources.length ? sources.map((element) => ({ source: element, blockIds: blockIdsOf(element, sourceRootIds).flatMap((id) => rootMap.get(id) ?? []) })) : [{ source: undefined, blockIds: pasted.blockIds }];
+          const rootOrder = editor.blocks.getRootIds();
+          const first = groups[0]?.blockIds[0];
+          const before = first ? rootOrder[rootOrder.indexOf(first) - 1] : undefined;
+          if (before) editor.blocks.insertBlock({ type: defaultBlockType, content: "" }, before);
+          groups.slice(0, -1).forEach(({ blockIds }) => {
+            const last = blockIds.at(-1);
+            if (last) editor.blocks.insertBlock({ type: defaultBlockType, content: "" }, last);
+          });
+          groups.forEach(({ source, blockIds }, index) => {
+            if (!blockIds.length) return;
+            created.push(editor.elements.insertElement({
+              type: "block",
+              frame: source ? { ...source.frame, x: source.frame.x + 24, y: source.frame.y + 24 } : { x: 60 + index * 24, y: 60 + index * 24, width: 320, height: 120 },
+              zIndex: Math.max(0, ...editor.elements.getElements().map((element) => element.zIndex)) + 1,
+              props: blockRangeProps(blockIds),
+            }));
+          });
+        });
+        findEdgelessRuntime(reactEditor)?.set(created);
+      }
     }
     requestAnimationFrame(() => reactEditor.selection.restoreDOM());
   };
@@ -150,7 +191,10 @@ export function registerClipboard(
     if (!payload) return false;
     writeClipboard(event, payload);
     if (canvas) {
-      editor.batchUpdates(() => canvas.blockIds.forEach((id) => editor.blocks.removeBlock(id)));
+      editor.batchUpdates(() => {
+        canvas.blockIds.forEach((id) => editor.blocks.removeBlock(id));
+        editor.elements.removeElements(selectedCanvasElementIds());
+      });
       findEdgelessRuntime(reactEditor)?.clear();
     }
     return true;
@@ -175,7 +219,10 @@ export function registerClipboard(
     if (!payload) return false;
     writeClipboard(event, payload);
     if (canvas && event.type === "cut") {
-      editor.batchUpdates(() => canvas.blockIds.forEach((id) => editor.blocks.removeBlock(id)));
+      editor.batchUpdates(() => {
+        canvas.blockIds.forEach((id) => editor.blocks.removeBlock(id));
+        editor.elements.removeElements(selectedCanvasElementIds());
+      });
       findEdgelessRuntime(reactEditor)?.clear();
     }
     return true;

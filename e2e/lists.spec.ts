@@ -10,6 +10,17 @@ const replaceContent = async (page: Page, content: string): Promise<void> => {
   await page.keyboard.type(content);
 };
 
+test("shows checkbox and numbered-list examples in the demo", async ({ page }) => {
+  const root = (text: string) => page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).filter({
+    has: page.getByText(text, { exact: true }),
+  });
+  await expect(root("Try the interactive checkbox").locator(":scope > .page-block-row > input[type=checkbox]")).not.toBeChecked();
+  await expect(root("Completed checkbox item").locator(":scope > .page-block-row > input[type=checkbox]")).toBeChecked();
+  await expect(root("Start a numbered sequence").locator(":scope > .page-block-row > .page-list-marker")).toHaveText("1.");
+  await expect(root("Continue the adjacent sequence").locator(":scope > .page-block-row > .page-list-marker")).toHaveText("2.");
+  await expect(root("Continue numbering across the ordinary block").locator(":scope > .page-block-row > .page-list-marker")).toHaveText("3.");
+});
+
 test("creates interactive checkboxes from a shortcut and inherits them with Enter", async ({ page }) => {
   const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
   const block = roots.first();
@@ -66,10 +77,15 @@ test("numbers adjacent blocks and resumes through a list gap from slash commands
   await expect(roots.nth(3).locator(":scope > .page-block-row > .page-list-marker")).toHaveText("3.");
 });
 
-test("does not add markers to ordinary lists in edgeless cards", async ({ page }) => {
+test("uses the shared list and checkbox rendering in edgeless cards", async ({ page }) => {
   await page.locator('[data-editor-mode="edgeless"]').click();
-  const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
-  const root = card.locator(":scope > .edgeless-card-content > .page-block");
-  await expect(root.locator(":scope > .page-block-row > .page-list-marker")).toHaveCount(0);
-  await expect(root.locator(".page-list-marker")).toHaveCount(0);
+  const block = (text: string) => page.locator("[data-edgeless-root] [data-block-content]")
+    .filter({ hasText: new RegExp(`^${text}$`) })
+    .locator("xpath=ancestor::*[@data-block-id][1]");
+
+  await expect(block("Try the interactive checkbox").locator(":scope > .page-block-row > input[type=checkbox]")).not.toBeChecked();
+  await expect(block("Completed checkbox item").locator(":scope > .page-block-row > input[type=checkbox]")).toBeChecked();
+  await expect(block("Start a numbered sequence").locator(":scope > .page-block-row > .page-list-marker")).toHaveText("1.");
+  await expect(block("Continue the adjacent sequence").locator(":scope > .page-block-row > .page-list-marker")).toHaveText("2.");
+  await expect(block("Continue numbering across the ordinary block").locator(":scope > .page-block-row > .page-list-marker")).toHaveText("3.");
 });

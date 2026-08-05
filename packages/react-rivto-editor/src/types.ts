@@ -1,4 +1,4 @@
-import type { RivtoEditorApi as Editor } from "@chulane/rivto";
+import type { EditorBlock, RivtoEditorApi as Editor } from "@chulane/rivto";
 import type {
   BlockRenderer,
   KeymapOverrides,
@@ -52,6 +52,11 @@ export interface CreateReactEditorOptions {
   readonly defaultBlock?: DefaultBlockOptions;
   /** Observes Markdown links and may prevent browser navigation for local routing. */
   readonly onMarkdownLinkClick?: (context: MarkdownLinkClick) => void;
+  /** Edgeless block-to-element projection behavior. */
+  readonly edgeless?: {
+    /** Returns whether an unowned root block separates adjacent block elements. */
+    readonly isBlockElementSeparator?: (block: EditorBlock) => boolean;
+  };
 }
 
 /**
@@ -76,6 +81,8 @@ export interface ReactEditor {
   readonly keyboard: KeyboardCapability;
   readonly selection: SelectionCapability;
   readonly slashCommands: SlashCommandsCapability;
+  /** Predicate used only by React's root-block element reconciler. */
+  readonly isBlockElementSeparator: (block: EditorBlock) => boolean;
   /** Subscribes to document, mode, and selection changes from the core editor. */
   subscribe(listener: () => void): () => void;
   destroy(): void;

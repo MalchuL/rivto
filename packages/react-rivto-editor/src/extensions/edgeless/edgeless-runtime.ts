@@ -2,13 +2,8 @@ import { useSyncExternalStore } from "react";
 import { useEditorContext } from "../../editor-context";
 import type { ReactEditor } from "../../types";
 
-/** One object address stored in the local edgeless selection. */
-export interface EdgelessSelectionRef {
-  /** Owning object family; visual and group records remain plugin-defined. */
-  readonly kind: "block" | "visual" | "group";
-  /** Stable document or plugin record identity. */
-  readonly id: string;
-}
+/** Stable first-class element ID stored in local edgeless selection. */
+export type EdgelessSelectionRef = string;
 
 /** Detached local state for canvas-only selection. */
 export interface EdgelessSelectionSnapshot {
@@ -23,7 +18,7 @@ export class EdgelessSelectionRuntime {
 
   /** @returns Detached current canvas selection. */
   get(): EdgelessSelectionSnapshot {
-    return { active: this.value.active, items: this.value.items.map((item) => ({ ...item })) };
+    return { active: this.value.active, items: [...this.value.items] };
   }
 
   /** @returns Stable immutable snapshot for React external-store subscriptions. */
@@ -40,11 +35,10 @@ export class EdgelessSelectionRuntime {
   set(items: readonly EdgelessSelectionRef[]): void {
     const seen = new Set<string>();
     const unique = items.filter((item) => {
-      const key = `${item.kind}:${item.id}`;
-      if (!item.id || seen.has(key)) return false;
-      seen.add(key);
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
       return true;
-    }).map((item) => ({ ...item }));
+    });
     this.value = { active: true, items: unique };
     this.notify();
   }

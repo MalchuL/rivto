@@ -11,7 +11,6 @@ test("duplicate input removes every subtree ID and preserves supported data", ()
     content: "Text",
     props: { value: 42 },
     pluginData: { plugin: { enabled: true } },
-    layout: { x: 1, y: 2, width: 3, height: 4 },
     children: [{
       id: "child",
       type: "paragraph",
@@ -34,7 +33,6 @@ test("duplicate input removes every subtree ID and preserves supported data", ()
     content: block.content,
     props: block.props,
     pluginData: block.pluginData,
-    layout: block.layout,
     children: [{
       type: "paragraph",
       collapsed: false,
@@ -42,7 +40,6 @@ test("duplicate input removes every subtree ID and preserves supported data", ()
       content: "Child",
       props: {},
       pluginData: {},
-      layout: undefined,
       children: [],
     }],
   });

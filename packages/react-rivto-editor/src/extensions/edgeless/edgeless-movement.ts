@@ -1,6 +1,5 @@
 import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
-import { owningRootIds, translatedLayouts } from "./edgeless-geometry";
 import { getEdgelessRuntime } from "./edgeless-runtime";
 
 /** Moves selected canvas roots through eight exact arrow-key bindings. */
@@ -15,12 +14,11 @@ export function registerEdgelessMovement(reactEditor: ReactEditor): void {
       editor.execute("edgeless.selection.move", { dx, dy });
       return true;
     }
-    const blocks = editor.blocks.getBlocks();
-    const blockIds = items.filter((item) => item.kind === "block").map((item) => item.id);
-    const patches = translatedLayouts(blocks, owningRootIds(blocks, blockIds), dx, dy);
-    editor.batchUpdates(() => {
-      patches.forEach(({ id, layout }) => editor.blocks.setBlockLayout(id, layout));
+    const updates = items.flatMap((id) => {
+      const element = editor.elements.getElement(id);
+      return element ? [{ id, patch: { frame: { x: element.frame.x + dx, y: element.frame.y + dy } } }] : [];
     });
+    if (updates.length) editor.elements.updateElements(updates);
     return true;
   };
 

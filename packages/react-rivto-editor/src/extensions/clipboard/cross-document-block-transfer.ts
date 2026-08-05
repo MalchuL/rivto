@@ -33,7 +33,6 @@ function prepareBlock(editor: RivtoEditorApi, block: EditorBlock): EditorBlockIn
     content: block.content,
     props: structuredClone(block.props),
     pluginData: structuredClone(block.pluginData),
-    layout: block.layout ? structuredClone(block.layout) : undefined,
     children: block.children.map((child) => prepareBlock(editor, child)),
   });
 }

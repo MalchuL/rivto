@@ -2,6 +2,7 @@ import type { BlockSelection } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { getEdgelessRuntime } from "./edgeless-runtime";
+import { blockIdsOf } from "../../surfaces/edgeless/block-elements";
 
 /** Removes selected descendants whose selected ancestor already owns them. */
 function topLevelSelection(editor: ReactEditor["editor"], blockIds: readonly string[]): string[] {
@@ -41,12 +42,18 @@ export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
     }
     const core = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
     const blockIds = canvas.active && canvas.items.length
-      ? canvas.items.filter((item) => item.kind === "block").map((item) => item.id)
+      ? canvas.items.flatMap((id) => {
+        const element = editor.elements.getElement(id);
+        return element?.type === "block" ? blockIdsOf(element, editor.blocks.getRootIds()) : [];
+      })
       : core?.blockIds ?? [];
     const targets = topLevelSelection(editor, blockIds);
     if (!targets.length) return false;
     if (canvas.active && canvas.items.length) {
-      editor.batchUpdates(() => targets.forEach((id) => editor.blocks.removeBlock(id)));
+      editor.batchUpdates(() => {
+        targets.forEach((id) => editor.blocks.removeBlock(id));
+        editor.elements.removeElements(canvas.items);
+      });
       selection.clear();
     } else {
       editor.deleteSelection();

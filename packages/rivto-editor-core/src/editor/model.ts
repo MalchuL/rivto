@@ -1,13 +1,49 @@
 import type { BlockListProps } from "../blocks";
 
-/** Collaborative block geometry as seen by editor features. */
-export interface EditorBlockLayout {
+/** Collaborative canvas geometry as seen by editor features. */
+export interface EditorElementFrame {
+  /** Horizontal canvas coordinate; may be negative. */
   x: number;
+  /** Vertical canvas coordinate; may be negative. */
   y: number;
+  /** Positive rendered width. */
   width: number;
+  /** Positive rendered height. */
   height: number;
-  zIndex: number;
 }
+
+/** Detached first-class canvas element exposed to editor integrations. */
+export interface EditorElement<Props extends Record<string, unknown> = Record<string, unknown>> {
+  /** Stable element identity used by selection and commands. */
+  id: string;
+  /** Extension-owned renderer discriminator. */
+  type: string;
+  /** Persisted geometry independent from any referenced blocks. */
+  frame: EditorElementFrame;
+  /** Finite layer order. */
+  zIndex: number;
+  /** Opaque extension-owned properties. */
+  props: Props;
+}
+
+/** Complete input accepted when creating a canvas element. */
+export interface EditorElementInput<Props extends Record<string, unknown> = Record<string, unknown>> {
+  id?: string;
+  type: string;
+  frame: EditorElementFrame;
+  zIndex: number;
+  props?: Props;
+}
+
+/** Mutable canvas element fields. */
+export interface EditorElementPatch {
+  frame?: Partial<EditorElementFrame>;
+  zIndex?: number;
+  props?: Record<string, unknown>;
+}
+
+/** One identified canvas element patch used by atomic updates. */
+export interface EditorElementUpdate { id: string; patch: EditorElementPatch }
 
 /** Detached block value rendered by the editor. */
 export interface EditorBlock {
@@ -21,7 +57,6 @@ export interface EditorBlock {
   pluginData: Record<string, unknown>;
   content: string;
   children: EditorBlock[];
-  layout?: EditorBlockLayout;
 }
 
 /** Block creation data accepted by editor block helpers. */
@@ -36,7 +71,6 @@ export interface EditorBlockInput {
   pluginData?: Record<string, unknown>;
   content?: string;
   children?: EditorBlockInput[];
-  layout?: Partial<EditorBlockLayout>;
 }
 
 /** Mutable editor block fields; type and identity are immutable. */
@@ -48,7 +82,6 @@ export interface EditorBlockPatch {
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
   content?: string;
-  layout?: Partial<EditorBlockLayout>;
 }
 
 /** One identified editor block patch applied within a batch update. */
@@ -67,16 +100,18 @@ export interface EditorLink {
 
 /** Lossless editor document value used for persistence. */
 export interface EditorSnapshot {
-  version: 4;
+  version: 5;
   blocks: EditorBlock[];
   links: EditorLink[];
+  elements: EditorElement[];
   pluginData?: Record<string, unknown>;
 }
 
 /** Persisted document sections that replace only supplied state. */
 export interface EditorSnapshotUpdate {
-  version: 4;
+  version: 5;
   blocks?: EditorBlock[];
   links?: EditorLink[];
+  elements?: EditorElement[];
   pluginData?: Record<string, unknown>;
 }

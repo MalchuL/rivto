@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import type {
   EditorBlock as Block,
-  EditorBlockLayout as BlockLayout,
   EditorBlockPatch as BlockPatch,
 } from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
@@ -18,8 +17,6 @@ export interface BlockOperations {
   setProp(key: string, value: unknown): void;
   /** Sets or removes data owned by one plugin namespace. */
   setPluginData(pluginId: string, value: unknown): void;
-  /** Patches collaborative canvas geometry without replacing omitted fields. */
-  setLayout(layout: Partial<BlockLayout>): void;
   /** Removes the block subtree and links touching removed descendants. */
   remove(): void;
   /** Appends this block's content and children into a target, then removes it. */
@@ -68,7 +65,6 @@ export function useBlock(blockId: string): UseBlockResult {
     setType: (type) => editor.blocks.setBlockType(blockId, type),
     setProp: (key, value) => editor.blocks.setBlockProp(blockId, key, value),
     setPluginData: (pluginId, value) => editor.blocks.setBlockPluginData(blockId, pluginId, value),
-    setLayout: (layout) => editor.blocks.setBlockLayout(blockId, layout),
     remove: () => editor.blocks.removeBlock(blockId),
     mergeInto: (targetId) => editor.blocks.mergeBlocks(targetId, blockId),
     moveAfter: (afterId) => editor.blocks.moveBlock(blockId, afterId),

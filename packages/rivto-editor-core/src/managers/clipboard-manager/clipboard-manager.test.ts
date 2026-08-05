@@ -132,7 +132,7 @@ describe("core ClipboardManager", () => {
       focusBlockId: copiedId,
     }]);
     const payload = source.clipboard.copy()!;
-    expect(payload.bundle.version).toBe(2);
+    expect(payload.bundle.version).toBe(3);
 
     const target = createRivtoEditor();
     const targetId = target.blocks.insertBlock({ type: "paragraph", content: "" });

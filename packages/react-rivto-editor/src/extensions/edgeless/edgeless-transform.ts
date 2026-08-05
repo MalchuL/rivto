@@ -1,8 +1,9 @@
-import type { EditorBlockLayout as BlockLayout } from "@chulane/rivto";
+import type { EditorElementFrame } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
-import { canvasDelta, owningRootIds } from "./edgeless-geometry";
+import { canvasDelta } from "./edgeless-geometry";
 import { getEdgelessRuntime } from "./edgeless-runtime";
+import { blockIdsOf } from "../../surfaces/edgeless/block-elements";
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
 const BLOCK_SELECTOR = "[data-block-id]";
@@ -23,7 +24,7 @@ interface TransformStart {
   readonly x: number;
   readonly y: number;
   readonly ids: string[];
-  readonly layouts: Map<string, BlockLayout>;
+  readonly layouts: Map<string, EditorElementFrame>;
   lastX: number;
   lastY: number;
   moved: boolean;
@@ -46,18 +47,37 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
   const selection = getEdgelessRuntime(reactEditor);
   let start: TransformStart | null = null;
 
+  const previewIds = (ids: readonly string[]): Set<string> => {
+    const result = new Set<string>();
+    const visit = (id: string) => {
+      if (result.has(id)) return;
+      result.add(id);
+      const element = editor.elements.getElement(id);
+      if (element?.type === "group" && Array.isArray(element.props.children)) {
+        element.props.children.forEach((child) => { if (typeof child === "string") visit(child); });
+      }
+    };
+    ids.forEach(visit);
+    return result;
+  };
+
+  const previewObjects = (root: HTMLElement, ids: readonly string[]): HTMLElement[] => {
+    const included = previewIds(ids);
+    return [...root.querySelectorAll<HTMLElement>("[data-edgeless-object-id], [data-edgeless-group-bound-id]")]
+      .filter((object) => included.has(object.dataset.edgelessObjectId ?? object.dataset.edgelessGroupBoundId ?? ""));
+  };
+
   const clearPreview = (restoreSize = true) => {
     const root = reactEditor.events.getRoot();
     const current = start;
     if (!root || !current) return;
-    current.ids.forEach((id) => {
-      const card = cardFor(root, id);
-      if (!card) return;
-      card.style.removeProperty("transform");
+    previewObjects(root, current.ids).forEach((object) => {
+      object.style.removeProperty("transform");
+      const id = object.dataset.edgelessObjectId ?? object.dataset.edgelessGroupBoundId ?? "";
       const layout = current.layouts.get(id);
       if (current.kind === "resize" && restoreSize && layout) {
-        card.style.width = `${layout.width}px`;
-        card.style.height = `${layout.height}px`;
+        object.style.width = `${layout.width}px`;
+        object.style.height = `${layout.height}px`;
       }
     });
     delete root.dataset.transforming;
@@ -72,45 +92,43 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     if (event.button !== 0 || !(event.target instanceof Element)) return false;
     const resizeHandle = event.target.closest("[data-edgeless-resize-handle]");
     const card = event.target.closest<HTMLElement>(ROOT_SELECTOR);
-    const blockId = card?.dataset.edgelessRoot;
-    if (!card || !blockId) return false;
+    const elementId = card?.dataset.edgelessRoot;
+    if (!card || !elementId) return false;
     const hitBlock = event.target.closest<HTMLElement>(BLOCK_SELECTOR);
+    const element = editor.elements.getElement(elementId);
     const movableChrome = !event.target.closest(CARD_CONTROL_SELECTOR) &&
-      (!hitBlock || hitBlock.dataset.blockId === blockId);
+      (!hitBlock || element?.type === "block" &&
+        blockIdsOf(element, editor.blocks.getRootIds()).includes(hitBlock.dataset.blockId ?? ""));
     if (!resizeHandle && !movableChrome) return false;
     event.stopPropagation();
 
-    const selectedRoots = owningRootIds(
-      editor.blocks.getBlocks(),
-      selection.get().items.filter((item) => item.kind === "block").map((item) => item.id),
-    );
     const current = selection.get().items;
-    const selected = current.some((item) => item.kind === "block" && item.id === blockId);
+    const selected = current.includes(elementId);
     if (event.ctrlKey || event.metaKey) {
       selection.set(selected
-        ? current.filter((item) => !(item.kind === "block" && item.id === blockId))
-        : [...current, { kind: "block", id: blockId }]);
+        ? current.filter((item) => item !== elementId)
+        : [...current, elementId]);
       if (selected) return true;
-    } else if (!selectedRoots.includes(blockId)) {
-      selection.set([{ kind: "block", id: blockId }]);
+    } else if (!selected) {
+      selection.set([elementId]);
     }
-    const ids = !resizeHandle && selectedRoots.includes(blockId) ? selectedRoots : [blockId];
-    const roots = new Map(editor.blocks.getBlocks().map((block) => [block.id, block]));
+    const ids = !resizeHandle && selected ? [...current] : [elementId];
+    const kind = resizeHandle ? "resize" : "move";
     const layouts = new Map(ids.flatMap((id) => {
-      const layout = roots.get(id)?.layout;
-      return layout ? [[id, { ...layout }] as const] : [];
+      const frame = editor.elements.getElement(id)?.frame;
+      return frame ? [[id, { ...frame }] as const] : [];
     }));
     start = {
-      kind: resizeHandle ? "resize" : "move",
+      kind,
       x: event.clientX,
       y: event.clientY,
-      ids: resizeHandle ? [blockId] : ids,
+      ids: resizeHandle ? [elementId] : ids,
       layouts,
       lastX: event.clientX,
       lastY: event.clientY,
       moved: false,
     };
-    root.dataset.transforming = start.kind;
+    root.dataset.transforming = kind;
     card.focus({ preventScroll: true });
     return true;
   });
@@ -132,9 +150,8 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       if (!active.moved && Math.hypot(dx, dy) < 2) return false;
       active.moved = true;
       if (active.kind === "move") {
-        active.ids.forEach((id) => {
-          const target = cardFor(root, id);
-          if (target) target.style.transform = `translate(${dx}px, ${dy}px)`;
+        previewObjects(root, active.ids).forEach((target) => {
+          target.style.transform = `translate(${dx}px, ${dy}px)`;
         });
       } else {
         const id = active.ids[0]!;
@@ -161,20 +178,19 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       clearPreview(!commit);
       start = null;
       if (!commit || !active.moved) return false;
-      const hasPluginObject = selection.get().items.some((item) => item.kind !== "block");
-      if (hasPluginObject && editor.commands.has(active.kind === "move" ? "edgeless.selection.move" : "edgeless.selection.resize")) {
+      if (active.kind === "move" && editor.commands.has("edgeless.selection.move")) {
         editor.execute(
-          active.kind === "move" ? "edgeless.selection.move" : "edgeless.selection.resize",
-          active.kind === "move" ? { dx, dy } : { width: Math.max(180, (active.layouts.get(active.ids[0]!)?.width ?? 180) + dx), height: Math.max(100, (active.layouts.get(active.ids[0]!)?.height ?? 100) + dy) },
+          "edgeless.selection.move",
+          { dx, dy },
         );
         return true;
       }
       editor.batchUpdates(() => active.ids.forEach((id) => {
         const layout = active.layouts.get(id);
         if (!layout) return;
-        editor.blocks.setBlockLayout(id, active.kind === "move"
+        editor.elements.updateElement(id, { frame: active.kind === "move"
           ? { x: layout.x + dx, y: layout.y + dy }
-          : { width: Math.max(180, layout.width + dx), height: Math.max(100, layout.height + dy) });
+          : { width: Math.max(180, layout.width + dx), height: Math.max(100, layout.height + dy) } });
       }));
       return true;
   };

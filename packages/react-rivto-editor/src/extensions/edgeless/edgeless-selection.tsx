@@ -67,29 +67,28 @@ export function EdgelessInteractionOverlay() {
     if (root.dataset.panningReady === "true") return false;
     if (event.target.closest(HANDLE_SELECTOR)) return false;
     const card = event.target.closest<HTMLElement>(ROOT_SELECTOR);
-    const blockId = card?.dataset.edgelessRoot;
+    const elementId = card?.dataset.edgelessRoot;
     const object = event.target.closest<HTMLElement>(OBJECT_SELECTOR);
     const objectId = object?.dataset.edgelessObjectId;
-    const objectKind = object?.dataset.edgelessObjectKind as EdgelessSelectionRef["kind"] | undefined;
     const primary = event.ctrlKey || event.metaKey;
 
-    if (object && objectId && objectKind && objectKind !== "block") {
+    if (object && objectId && !card) {
       const current = selection.get().items;
-      const exists = current.some((item) => item.kind === objectKind && item.id === objectId);
+      const exists = current.includes(objectId);
       selection.set(primary
-        ? exists ? current.filter((item) => !(item.kind === objectKind && item.id === objectId)) : [...current, { kind: objectKind, id: objectId }]
-        : [{ kind: objectKind, id: objectId }]);
+        ? exists ? current.filter((item) => item !== objectId) : [...current, objectId]
+        : exists ? current : [objectId]);
       root.ownerDocument.getSelection()?.removeAllRanges();
       if (primary) event.stopPropagation();
       return primary;
     }
 
-    if (card && blockId && primary && !isInteractive(event.target)) {
+    if (card && elementId && primary && !isInteractive(event.target)) {
       const current = selection.get().items;
-      const exists = current.some((item) => item.kind === "block" && item.id === blockId);
+      const exists = current.includes(elementId);
       selection.set(exists
-        ? current.filter((item) => !(item.kind === "block" && item.id === blockId))
-        : [...current, { kind: "block", id: blockId }]);
+        ? current.filter((item) => item !== elementId)
+        : [...current, elementId]);
       root.ownerDocument.getSelection()?.removeAllRanges();
       card.focus({ preventScroll: true });
       return true;
@@ -97,7 +96,8 @@ export function EdgelessInteractionOverlay() {
 
     if (card) {
       if (isInteractive(event.target)) return false;
-      selection.set(blockId ? [{ kind: "block", id: blockId }] : []);
+      const current = selection.get().items;
+      selection.set(elementId ? current.includes(elementId) ? current : [elementId] : []);
       card.focus({ preventScroll: true });
       return true;
     }
@@ -134,13 +134,9 @@ export function EdgelessInteractionOverlay() {
     setRectangle(next);
     const objects = [...root.querySelectorAll<HTMLElement>(OBJECT_SELECTOR)].flatMap((element) => {
       const id = element.dataset.edgelessObjectId;
-      const kind = element.dataset.edgelessObjectKind as EdgelessSelectionRef["kind"] | undefined;
-      return id && kind && kind !== "group" ? [{ id: `${kind}:${id}`, rect: element.getBoundingClientRect() }] : [];
+      return id && element.dataset.edgelessObjectKind !== "group" ? [{ id, rect: element.getBoundingClientRect() }] : [];
     });
-    const intersecting = rootsInRect(objects, next).map((value) => {
-      const separator = value.indexOf(":");
-      return { kind: value.slice(0, separator) as EdgelessSelectionRef["kind"], id: value.slice(separator + 1) };
-    });
+    const intersecting = rootsInRect(objects, next);
     selection.set([...start.base, ...intersecting]);
     return true;
   });

@@ -152,17 +152,17 @@ Pointermove может приходить очень часто. Gesture object 
 Visual rectangle хранится в state, потому что его действительно нужно
 перерисовывать.
 
-## 10. Canvas layout
+## 10. Canvas element frame
 
-В edgeless mode block style берётся из collaborative `block.layout`:
+В edgeless mode card style берётся из collaborative block element:
 
 ```ts
 {
-  left: layout.x,
-  top: layout.y,
-  width: layout.width,
-  minHeight: layout.height,
-  zIndex: layout.zIndex,
+  left: element.frame.x,
+  top: element.frame.y,
+  width: element.frame.width,
+  minHeight: element.frame.height,
+  zIndex: element.zIndex,
 }
 ```
 
@@ -179,9 +179,8 @@ zoom.
 На window pointermove вычисляет delta и выполняет:
 
 ```ts
-editor.commands.execute("block.layout.set", {
-  id: block.id,
-  layout: {
+editor.elements.updateElement(element.id, {
+  frame: {
     x: start.left + next.clientX - start.x,
     y: start.top + next.clientY - start.y,
   },

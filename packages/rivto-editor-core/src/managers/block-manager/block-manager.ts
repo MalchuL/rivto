@@ -4,14 +4,12 @@ import type {
 } from "../command-registry";
 import type {
   BlockInput,
-  BlockLayout,
   BlockPatch,
   BlockUpdate,
 } from "../../store/document-model";
 import type {
   EditorBlock,
   EditorBlockInput,
-  EditorBlockLayout,
   EditorBlockPatch,
   EditorBlockUpdate,
 } from "../../editor/model";
@@ -250,18 +248,6 @@ export class BlockManager {
   }
 
   /**
-   * Patches collaborative geometry fields on one block.
-   *
-   * @param id - Block identifier whose layout should change.
-   * @param layout - Geometry fields to update.
-   * @returns No value.
-   */
-  setBlockLayout(id: string, layout: Partial<EditorBlockLayout>): void {
-    const command = { id, layout } satisfies { id: string; layout: Partial<BlockLayout> };
-    this.editor.commands.execute("block.layout.set", command);
-  }
-
-  /**
    * Releases the built-in block command registrations.
    *
    * @returns No value.
@@ -381,10 +367,6 @@ export class BlockManager {
         commandString(data.pluginId, "pluginId"),
         data.value,
       );
-    }));
-    register("block.layout.set", documentCommand((value) => {
-      const data = commandPayload(value);
-      this.editor.document.blocks.setBlockLayout(commandString(data.id, "id"), commandPayload(data.layout) as Partial<BlockLayout>);
     }));
   }
 

@@ -67,7 +67,7 @@
 4. В `EditorRuntime` зарегистрировать команды:
    `block.insert`, `block.update`, `block.remove`, `block.move`,
    `text.set`, `text.insert`, `text.delete`, `block.prop.set`,
-   `block.layout.set`, `document.load`.
+   `element.insert`, `element.update`, `document.load`.
 5. Внутри команд валидировать payload на runtime-границе, потому что команды
    могут прийти не только из TypeScript.
 6. Все команды должны делегировать реальные CRDT-операции в `DocumentModelImpl`.
@@ -204,10 +204,10 @@ clipboard и будущего AI.
 
 1. Добавить `ModeManager` и команду `mode.set`.
 2. В React выбрать renderer по mode: block tree или edgeless canvas.
-3. В edgeless показать блоки с layout `{ x, y, width, height, zIndex }`.
+3. В edgeless показать block elements с frame `{ x, y, width, height }` и `zIndex`.
 4. Реализовать pan/zoom как локальное состояние renderer.
-5. Перемещение объекта вызывает `block.layout.set`.
-6. Selection в edgeless хранит IDs выбранных блоков, не DOM state.
+5. Перемещение объекта вызывает `element.update`.
+6. Selection в edgeless хранит element IDs, не DOM state.
 
 Готово, когда один и тот же документ можно переключать между block и edgeless,
 а перемещение блока сохраняется в `DocumentModel`.

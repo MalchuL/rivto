@@ -30,7 +30,7 @@ async function caretOffset(content: import("@playwright/test").Locator): Promise
 }
 
 const structuredBundle = JSON.stringify({
-  version: 2,
+  version: 3,
   startsWithText: true,
   blocks: [{
     id: "copied",

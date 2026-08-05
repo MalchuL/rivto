@@ -22,7 +22,6 @@ describe("cross-document block transfer", () => {
       collapsed: true,
       listProps: { type: "checkbox", checked: true },
       pluginData: { test: { retained: true } },
-      layout: { x: 11, y: 22, width: 333, height: 144, zIndex: 7 },
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],
     });
     const second = source.blocks.insertBlock({ id: "second", type: DEFAULT_BLOCK_TYPE, content: "Second" });
@@ -43,7 +42,6 @@ describe("cross-document block transfer", () => {
       collapsed: true,
       listProps: { type: "checkbox", checked: true },
       pluginData: { test: { retained: true } },
-      layout: { x: 11, y: 22, width: 333, height: 144, zIndex: 7 },
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],
     });
     expect(destination.links.getLinks()).toEqual([{

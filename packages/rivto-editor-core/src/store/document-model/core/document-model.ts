@@ -1,6 +1,7 @@
 import { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../crdt-doc";
 import {
   DocumentBlockManager,
+  DocumentElementManager,
   DocumentLinkManager,
   DocumentPluginDataManager,
 } from "./managers";
@@ -14,8 +15,8 @@ import { clone } from "./utils";
 /**
  * Coordinates collaborative document lifecycle through block and link managers.
  *
- * Block, tree, text, layout, and link APIs live exclusively on `.blocks` and
- * `.links`. This class retains CRDT transactions, undo scope aggregation,
+ * Block, element, and link APIs live exclusively on their focused managers.
+ * This class retains CRDT transactions, undo scope aggregation,
  * document-level plugin data, subscriptions, and complete snapshot orchestration.
  */
 export class DocumentModelImpl implements DocumentModel {
@@ -25,8 +26,10 @@ export class DocumentModelImpl implements DocumentModel {
   readonly crdt: CRDTDoc;
   /** Stable local transaction origin used to scope undo history. */
   readonly origin = Symbol("rivto-document");
-  /** Block records, text, layout, hierarchy, and block snapshot behavior. */
+  /** Block records, text, hierarchy, and block snapshot behavior. */
   readonly blocks: DocumentBlockManager;
+  /** Generic first-class canvas elements and their geometry. */
+  readonly elements: DocumentElementManager;
   /** First-class link records and link snapshot behavior. */
   readonly links: DocumentLinkManager;
   /** Generic namespaced collaborative document plugin data. */
@@ -64,10 +67,12 @@ export class DocumentModelImpl implements DocumentModel {
     this.crdt = crdt;
     this.id = typeof idOrCrdt === "string" ? idOrCrdt : crdt.id;
     this.blocks = new DocumentBlockManager(this);
+    this.elements = new DocumentElementManager(this);
     this.links = new DocumentLinkManager(this);
     this.pluginData = new DocumentPluginDataManager(this);
     this.undoScopes = [
       ...this.blocks.undoScopes,
+      ...this.elements.undoScopes,
       ...this.links.undoScopes,
       ...this.pluginData.undoScopes,
     ];
@@ -95,38 +100,42 @@ export class DocumentModelImpl implements DocumentModel {
   }
 
   /**
-   * Produces a lossless portable schema-v4 snapshot.
+   * Produces a lossless portable schema-v5 snapshot.
    *
-   * @returns Detached blocks, links, and document-level plugin data.
+   * @returns Detached blocks, links, elements, and document-level plugin data.
    */
   getSnapshot(): Snapshot {
     return {
-      version: 4,
+      version: 5,
       blocks: clone(this.blocks.getBlocks()),
       links: clone(this.links.getLinks()),
+      elements: clone(this.elements.getElements()),
       pluginData: this.pluginData.getAll(),
     };
   }
 
   /**
-   * Applies supplied schema-v4 snapshot sections atomically.
+   * Applies supplied schema-v5 snapshot sections atomically.
    *
    * Complete snapshots replace the complete document; partial updates replace
    * only present sections and leave omitted collaborative state unchanged.
    *
    * @param snapshot - Complete snapshot or partial persistence update.
    * @returns No value.
-   * @throws {Error} When the snapshot version or block collection is unsupported.
+   * @throws {Error} When a supplied block or element collection is unsupported.
    */
   loadSnapshot(snapshot: SnapshotUpdate): void {
-    if (snapshot.version !== 4 || (snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks))) {
+    if ((snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks)) ||
+      (snapshot.elements !== undefined && !Array.isArray(snapshot.elements))) {
       throw new Error("Unsupported Rivto document snapshot");
     }
     if (snapshot.blocks) this.blocks.validateBlocks(snapshot.blocks);
+    if (snapshot.elements) this.elements.validateElements(snapshot.elements);
 
     this.transact(() => {
       if (snapshot.blocks) this.blocks.loadBlocks(snapshot.blocks);
       if (snapshot.links) this.links.loadLinks(snapshot.links);
+      if (snapshot.elements) this.elements.loadElements(snapshot.elements);
       if (snapshot.pluginData) {
         this.pluginData.load(snapshot.pluginData);
       }

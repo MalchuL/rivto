@@ -9,7 +9,7 @@ describe("EditorRuntime methods", () => {
     expect(editor.blocks.getVisibleBlockIds()).toEqual([]);
     expect(editor.links.getLinks()).toEqual([]);
     expect(editor.selection.get()).toEqual([]);
-    expect(editor.dump()).toMatchObject({ version: 4, blocks: [], links: [] });
+    expect(editor.dump()).toMatchObject({ version: 5, blocks: [], links: [] });
 
     editor.deleteSelection();
     editor.undo();
@@ -35,7 +35,6 @@ describe("EditorRuntime methods", () => {
     editor.blocks.updateBlock(firstId, { content: "First updated" });
     editor.blocks.setBlockProp(firstId, "tone", "info");
     editor.blocks.setBlockPluginData(firstId, "test", { seen: true });
-    editor.blocks.setBlockLayout(firstId, { x: 120, y: 80 });
     editor.blocks.indentBlock(secondId);
 
     expect(editor.blocks.getBlocks()).toMatchObject([
@@ -44,7 +43,6 @@ describe("EditorRuntime methods", () => {
         content: "First updated",
         props: { tone: "info" },
         pluginData: { test: { seen: true } },
-        layout: { x: 120, y: 80 },
         children: [{ id: secondId, content: "Second" }],
       },
     ]);
@@ -91,7 +89,7 @@ describe("EditorRuntime methods", () => {
     const editor = createRivtoEditor();
 
     editor.load({
-      version: 4,
+      version: 5,
       blocks: [{
         id: "loaded",
         type: "paragraph",
@@ -107,7 +105,7 @@ describe("EditorRuntime methods", () => {
     });
 
     expect(editor.dump()).toMatchObject({
-      version: 4,
+      version: 5,
       blocks: [{
         id: "loaded",
         content: "Loaded",
@@ -118,9 +116,9 @@ describe("EditorRuntime methods", () => {
       pluginData: { app: { theme: "dark" } },
     });
 
-    editor.load({ version: 4, blocks: [], links: [] });
+    editor.load({ version: 5, blocks: [], links: [] });
     expect(editor.blocks.getBlocks()).toEqual([]);
-    expect(editor.dump()).toMatchObject({ version: 4, blocks: [], links: [] });
+    expect(editor.dump()).toMatchObject({ version: 5, blocks: [], links: [] });
     editor.destroy();
   });
 });
