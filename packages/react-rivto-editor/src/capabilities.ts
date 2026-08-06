@@ -25,6 +25,10 @@ import type {
 export interface BlocksCapability {
   register(registration: ReactBlockRegistration): () => void;
   delete(type: string): boolean;
+  /** Reports whether a registered type partitions root block elements. */
+  separatesBlockElements(type: string): boolean;
+  /** Returns the first separator type registered for automatic card creation. */
+  getDefaultBlockElementSeparatorType(): string | undefined;
 }
 
 export interface RenderersCapability {

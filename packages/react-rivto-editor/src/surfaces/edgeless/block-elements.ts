@@ -1,10 +1,89 @@
-import { DEFAULT_BLOCK_TYPE, type EditorBlock, type EditorElement } from "@chulane/rivto";
+import type { EditorBlock, EditorElement } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 
 export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
 export const EDGELESS_BLOCK_ELEMENT_ID_PREFIX = "rivto:block-element:";
 export const EDGELESS_CARD_DEFAULT_FRAME = { x: 60, y: 60, width: 320, height: 120 } as const;
 const RECONCILE_ORIGIN = Symbol("rivto-react-block-elements");
+
+interface ReconciliationState {
+  readonly memberships: ReadonlyMap<string, readonly string[]>;
+}
+
+// Range endpoints are canonical persisted data, but moving an endpoint makes
+// them temporarily ambiguous. The last reconciled membership is an in-memory
+// matching hint only; explicit separator block types determine every segment.
+const reconciliationStates = new WeakMap<ReactEditor, ReconciliationState>();
+
+/**
+ * Finds the maximum-weight one-to-one assignment between segments and elements.
+ *
+ * A greedy match can give the best element to one segment while forcing a much
+ * worse recreation elsewhere. The Hungarian assignment maximizes continuity
+ * across the complete canvas and remains deterministic because rows and columns
+ * follow document and previous-element order.
+ *
+ * @param weights - Segment rows containing non-negative element continuity scores.
+ * @returns Element-column index for each segment, or -1 when no positive match exists.
+ */
+function maximumWeightMatching(weights: readonly (readonly number[])[]): number[] {
+  const rows = weights.length;
+  const columns = weights[0]?.length ?? 0;
+  if (!rows || !columns) return Array(rows).fill(-1);
+  const size = Math.max(rows, columns);
+  const maximum = Math.max(0, ...weights.flat());
+  const potentialsByRow = Array(size + 1).fill(0) as number[];
+  const potentialsByColumn = Array(size + 1).fill(0) as number[];
+  const columnRows = Array(size + 1).fill(0) as number[];
+  const previousColumns = Array(size + 1).fill(0) as number[];
+
+  for (let row = 1; row <= size; row += 1) {
+    columnRows[0] = row;
+    let column = 0;
+    const minimums = Array(size + 1).fill(Number.POSITIVE_INFINITY) as number[];
+    const used = Array(size + 1).fill(false) as boolean[];
+    do {
+      used[column] = true;
+      const currentRow = columnRows[column]!;
+      let delta = Number.POSITIVE_INFINITY;
+      let nextColumn = 0;
+      for (let candidate = 1; candidate <= size; candidate += 1) {
+        if (used[candidate]) continue;
+        const weight = currentRow <= rows && candidate <= columns
+          ? weights[currentRow - 1]![candidate - 1]!
+          : 0;
+        const cost = maximum - weight - potentialsByRow[currentRow]! - potentialsByColumn[candidate]!;
+        if (cost < minimums[candidate]!) {
+          minimums[candidate] = cost;
+          previousColumns[candidate] = column;
+        }
+        if (minimums[candidate]! < delta) {
+          delta = minimums[candidate]!;
+          nextColumn = candidate;
+        }
+      }
+      for (let candidate = 0; candidate <= size; candidate += 1) {
+        if (used[candidate]) {
+          potentialsByRow[columnRows[candidate]!] += delta;
+          potentialsByColumn[candidate] -= delta;
+        } else minimums[candidate] -= delta;
+      }
+      column = nextColumn;
+    } while (columnRows[column] !== 0);
+    do {
+      const previous = previousColumns[column]!;
+      columnRows[column] = columnRows[previous]!;
+      column = previous;
+    } while (column !== 0);
+  }
+
+  const result = Array(rows).fill(-1) as number[];
+  for (let column = 1; column <= columns; column += 1) {
+    const row = columnRows[column]! - 1;
+    if (row >= 0 && row < rows && weights[row]![column - 1]! > 0) result[row] = column - 1;
+  }
+  return result;
+}
 
 /**
  * Inclusive document-order boundaries rendered by one edgeless block element.
@@ -19,18 +98,6 @@ export interface BlockElementProps {
   readonly startBlockId: string;
   /** Last root rendered by the card. */
   readonly endBlockId: string;
-}
-
-/**
- * Identifies the default boundary between adjacent edgeless block elements.
- * Ownership and root-level checks are handled by reconciliation, so this
- * predicate only describes separator content.
- *
- * @param block - Root candidate read from the current document.
- * @returns True only for an empty paragraph.
- */
-export function isDefaultBlockElementSeparator(block: EditorBlock): boolean {
-  return block.type === DEFAULT_BLOCK_TYPE && block.content.length === 0;
 }
 
 /**
@@ -55,10 +122,27 @@ export function blockRangeProps(blockIds: readonly string[]): BlockElementProps 
 }
 
 /**
+ * Inserts the default plugin-registered boundary after one root block.
+ * Automatic edgeless workflows use this instead of knowing a persisted type.
+ *
+ * @param reactEditor - Runtime whose first separator registration is preferred.
+ * @param afterId - Root block after which the separator is inserted.
+ * @returns ID of the inserted separator block.
+ * @throws When the active preset provides no separator block plugin.
+ */
+export function insertBlockElementSeparator(reactEditor: ReactEditor, afterId: string): string {
+  const type = reactEditor.blocks.getDefaultBlockElementSeparatorType();
+  if (!type) throw new Error("No block element separator type is registered");
+  return reactEditor.editor.blocks.insertBlock({ type, content: "" }, afterId);
+}
+
+/**
  * Reconciles persisted block elements with current root runs.
- * Existing owned empty roots remain editable while unowned separators split runs.
- * Identity and geometry are retained when ranges merge or need repair;
- * derived writes use a dedicated non-history transaction origin.
+ * Registered root separator types define unambiguous runs; empty paragraphs
+ * are ordinary card content. Membership matching remains necessary because
+ * moving a stored start/end block can make its range cross a separator before
+ * derived props are repaired. Global assignment preserves the most existing
+ * elements instead of letting a greedy local match recreate another card.
  *
  * @param reactEditor - React runtime that owns separator policy and the projection.
  * @returns No value; required element changes are committed synchronously.
@@ -67,31 +151,47 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
   const roots = editor.blocks.getBlocks();
   const rootOrder = roots.map((block) => block.id);
+  const rootSet = new Set(rootOrder);
   const existing = editor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
-  const ranges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
-  // A separator inside persisted boundaries is card content. Only an empty
-  // root outside every range separates cards.
-  const owned = new Set(existing.flatMap((element) => ranges.get(element.id) ?? []));
+  const currentRanges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
+  const previousState = reconciliationStates.get(reactEditor);
+  const previousRanges = new Map(existing.map((element) => {
+    const cached = previousState?.memberships.get(element.id);
+    return [element.id, cached ? cached.filter((id) => rootSet.has(id)) : currentRanges.get(element.id) ?? []] as const;
+  }));
   const segments: EditorBlock[][] = [];
   let segment: EditorBlock[] = [];
   roots.forEach((block) => {
-    if (!owned.has(block.id) && reactEditor.isBlockElementSeparator(block)) {
+    if (reactEditor.blocks.separatesBlockElements(block.type)) {
       if (segment.length) segments.push(segment);
       segment = [];
     } else segment.push(block);
   });
   if (segment.length) segments.push(segment);
 
-  const byBlock = new Map<string, EditorElement[]>();
-  existing.forEach((element) => ranges.get(element.id)?.forEach((id) => {
-    const values = byBlock.get(id) ?? [];
-    values.push(element);
-    byBlock.set(id, values);
-  }));
+  const continuityBase = rootOrder.length + 1;
+  const anchorBonus = continuityBase ** 3;
+  const retentionBonus = continuityBase ** 4;
+  const weights = segments.map((blocks) => {
+    const ids = new Set(blocks.map((block) => block.id));
+    return existing.map((element) => {
+      const previous = previousRanges.get(element.id) ?? [];
+      const previousOverlap = previous.filter((id) => ids.has(id)).length;
+      const currentOverlap = (currentRanges.get(element.id) ?? []).filter((id) => ids.has(id)).length;
+      // Keeping the element that owned the segment's first block makes splits
+      // retain their first card and merges retain the earlier card. Retention
+      // has higher priority so this preference never recreates another reusable
+      // element elsewhere on the canvas.
+      const ownsFirst = previous[0] === blocks[0]!.id || element.props.startBlockId === blocks[0]!.id
+        ? anchorBonus
+        : 0;
+      const canReuse = previousOverlap > 0 || currentOverlap > 0 ? retentionBonus : 0;
+      return canReuse + ownsFirst + previousOverlap * continuityBase + currentOverlap;
+    });
+  });
+  const matches = maximumWeightMatching(weights);
   const desired = segments.map((blocks, index): EditorElement => {
-    // Ranges cannot cross an unowned separator, so one existing element can
-    // overlap only one segment. The earliest overlap owns merged geometry.
-    const existingElement = blocks.flatMap((block) => byBlock.get(block.id) ?? [])[0];
+    const existingElement = existing[matches[index] ?? -1];
     return {
       id: existingElement?.id ?? `${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${blocks[0]!.id}`,
       type: EDGELESS_BLOCK_ELEMENT_TYPE,
@@ -110,6 +210,13 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
     return current && (current.props.startBlockId !== element.props.startBlockId || current.props.endBlockId !== element.props.endBlockId)
       ? [{ id: element.id, patch: { props: element.props } }]
       : [];
+  });
+  const desiredMemberships = new Map(desired.map((element, index) => [
+    element.id,
+    segments[index]!.map((block) => block.id),
+  ]));
+  reconciliationStates.set(reactEditor, {
+    memberships: desiredMemberships,
   });
   if (!remove.length && !insert.length && !update.length) return;
   editor.document.crdt.transact(() => {

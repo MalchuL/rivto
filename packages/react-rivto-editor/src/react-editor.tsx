@@ -9,7 +9,6 @@
  */
 import {
   defaultBlockDefinitions,
-  type EditorBlock,
   type RivtoEditorApi as Editor,
 } from "@chulane/rivto";
 import { MarkdownContent } from "./blocks/markdown";
@@ -24,10 +23,7 @@ import {
   SurfaceManager,
 } from "./managers";
 import type { CreateReactEditorOptions, ReactEditor } from "./types";
-import {
-  isDefaultBlockElementSeparator,
-  reconcileBlockElements,
-} from "./surfaces/edgeless/block-elements";
+import { reconcileBlockElements } from "./surfaces/edgeless/block-elements";
 
 export type { CreateReactEditorOptions, DefaultBlockOptions, ReactEditor } from "./types";
 
@@ -51,9 +47,6 @@ export class ReactEditorImpl implements ReactEditor {
   readonly selection: ReactSelectionManager;
   /** React-owned access to the shared core slash-command registry. */
   readonly slashCommands: ReactSlashCommandManager;
-  /** Root separator predicate configured for the edgeless block projection. */
-  readonly isBlockElementSeparator: (block: EditorBlock) => boolean;
-
   private destroyed = false;
   private reconciliationQueued = false;
   private unsubscribeReconciliation?: () => void;
@@ -72,7 +65,6 @@ export class ReactEditorImpl implements ReactEditor {
    */
   constructor(options: CreateReactEditorOptions) {
     this.editor = options.editor;
-    this.isBlockElementSeparator = options.edgeless?.isBlockElementSeparator ?? isDefaultBlockElementSeparator;
     // Constructors retain this owner but must not resolve sibling managers
     // until an operation runs. This keeps the dependency graph cyclic in
     // capability while initialization itself remains strictly ordered.

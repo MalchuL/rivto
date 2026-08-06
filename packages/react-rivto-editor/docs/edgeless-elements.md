@@ -28,20 +28,19 @@ the regular block selection managers.
 
 ## Block projection and separators
 
-React reconciles root-block runs after document updates. By default, an unowned
-empty paragraph separates adjacent block elements. Only roots participate:
-nested empty paragraphs never split a card, and an empty root already referenced
-by a block element remains intentional editable content.
+React reconciles root-block runs after document updates. A root partitions
+adjacent block elements when its React block registration declares
+`separatesBlockElements: true`. Empty paragraphs always remain editable card
+content. Nested separator blocks render as dividers without splitting the
+current root projection.
 
-Configure a different rule when creating the React runtime:
+Custom block plugins can provide their own separator type:
 
 ```ts
-const view = createReactEditor({
-  editor,
-  edgeless: {
-    isBlockElementSeparator: (block) =>
-      block.type === "paragraph" && block.content === "---",
-  },
+blockExtension({
+  definition: { type: "custom.separator" },
+  render: CustomSeparator,
+  separatesBlockElements: true,
 });
 ```
 

@@ -9,6 +9,7 @@ import {
   edgelessVisualsExtension,
   EditorView,
   KEYBOARD_BINDING_IDS,
+  SEPARATOR_BLOCK_TYPE,
   standardPreset,
   useEditor,
   useEditorMode,
@@ -164,8 +165,9 @@ function createDemoEditor() {
     listProps: { type: "continue_numbered_list" },
   }, numberedGapId);
 
-  // One unowned empty root is the boundary between the two canvas cards.
-  editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, reverseSelectionId);
+  // The explicit separator is visible in block mode and partitions cards only
+  // because its React block plugin declares `separatesBlockElements`.
+  editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, reverseSelectionId);
   editor.elements.insertElement({
     id: listId,
     type: "block",

@@ -52,8 +52,11 @@ their defaults.
 
 `standardPreset()` installs the complete page and edgeless editing experience:
 surfaces, selection bridges, history, clipboard, slash commands, navigation,
-indent/outdent, creation/merge/delete, collapse, drag, canvas interactions, and
-the page's trailing paragraph-creation affordance.
+indent/outdent, creation/merge/delete, collapse, drag, canvas interactions, the
+explicit separator block, and the page's trailing paragraph-creation affordance.
+`/Separator` or `Primary+Shift+Enter` inserts a real separator plus a focused
+paragraph below it. Root separators partition edgeless cards; nested separators
+remain ordinary rendered blocks.
 Individual built-ins are exported from `@chulane/rivto-react/extensions`.
 
 Empty documents remain empty in core. `trailingBlockExtension(N)` owns the

@@ -2,6 +2,7 @@ import { createRivtoEditor } from "@chulane/rivto";
 import { createReactEditor } from "../../../react-editor";
 import { edgelessSelectionExtension } from "../../built-ins/built-ins";
 import { edgelessVisualsExtension } from ".";
+import { separatorBlockExtension } from "../../separator/separator-block";
 
 describe("edgelessVisualsExtension", () => {
   test("keeps canvas selection separate and persists visuals as first-class elements", () => {
@@ -44,7 +45,7 @@ describe("edgelessVisualsExtension", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
     const blockId = editor.blocks.insertBlock({ type: "paragraph" });
     const blockElementId = editor.elements.insertElement({ type: "block", frame: { x: 100, y: 30, width: 100, height: 80 }, zIndex: 0, props: { startBlockId: blockId, endBlockId: blockId } });
-    const reactEditor = createReactEditor({ editor, extensions: [edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })] });
+    const reactEditor = createReactEditor({ editor, extensions: [separatorBlockExtension(), edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })] });
     const visualId = editor.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 10, y: 80, width: 20, height: 20 } }) as string;
     editor.execute("edgeless.selection.set", [blockElementId, visualId]);
     editor.execute("edgeless.selection.align", { alignment: "left" });
@@ -69,7 +70,7 @@ describe("edgelessVisualsExtension", () => {
       zIndex: 0,
       props: { startBlockId: blockId, endBlockId: blockId },
     });
-    const reactEditor = createReactEditor({ editor, extensions: [edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })] });
+    const reactEditor = createReactEditor({ editor, extensions: [separatorBlockExtension(), edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })] });
     const one = editor.execute("edgeless.visual.create", { kind: "text", text: "One" }) as string;
     const two = editor.execute("edgeless.visual.create", { kind: "sticker", source: { type: "emoji", value: "⭐" } }) as string;
     editor.execute("edgeless.selection.set", [one, two]);

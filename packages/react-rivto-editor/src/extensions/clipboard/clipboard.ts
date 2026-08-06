@@ -11,7 +11,7 @@ import {
   KEYBOARD_BINDING_IDS,
 } from "../../managers";
 import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
-import { blockIdsOf, blockRangeProps } from "../../surfaces/edgeless/block-elements";
+import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../surfaces/edgeless/block-elements";
 
 /** Configuration for browser clipboard integration. */
 export interface ClipboardExtensionOptions {
@@ -147,10 +147,10 @@ export function registerClipboard(
           const rootOrder = editor.blocks.getRootIds();
           const first = groups[0]?.blockIds[0];
           const before = first ? rootOrder[rootOrder.indexOf(first) - 1] : undefined;
-          if (before) editor.blocks.insertBlock({ type: defaultBlockType, content: "" }, before);
+          if (before) insertBlockElementSeparator(reactEditor, before);
           groups.slice(0, -1).forEach(({ blockIds }) => {
             const last = blockIds.at(-1);
-            if (last) editor.blocks.insertBlock({ type: defaultBlockType, content: "" }, last);
+            if (last) insertBlockElementSeparator(reactEditor, last);
           });
           groups.forEach(({ source, blockIds }, index) => {
             if (!blockIds.length) return;

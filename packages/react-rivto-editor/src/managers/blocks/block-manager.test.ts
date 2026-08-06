@@ -13,17 +13,21 @@ describe("BlockManager", () => {
       definition: { type: "test.manager-block" },
       render: Renderer,
       slashCommand: { title: "Manager block" },
+      separatesBlockElements: true,
     });
 
     reactEditor.slashCommands.execute("type.test.manager-block", { blockId: id });
     expect(editor.blocks.getBlock(id)?.type).toBe("test.manager-block");
     expect(reactEditor.renderers.get("test.manager-block")).toBe(Renderer);
+    expect(reactEditor.blocks.separatesBlockElements("test.manager-block")).toBe(true);
+    expect(reactEditor.blocks.getDefaultBlockElementSeparatorType()).toBe("test.manager-block");
 
     expect(reactEditor.blocks.delete("test.manager-block")).toBe(true);
     expect(reactEditor.blocks.delete("test.manager-block")).toBe(false);
     dispose();
     expect(editor.blocksRegistry.has("test.manager-block")).toBe(false);
     expect(reactEditor.renderers.has("test.manager-block")).toBe(false);
+    expect(reactEditor.blocks.separatesBlockElements("test.manager-block")).toBe(false);
     reactEditor.destroy();
     editor.destroy();
   });

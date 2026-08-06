@@ -1,13 +1,12 @@
 import {
   RIVTO_CLIPBOARD_MIME,
-  DEFAULT_BLOCK_TYPE,
   type ClipboardBundle,
   type EditorBlock,
   type EditorBlockInput,
   type EditorElement,
 } from "@chulane/rivto";
 import type { ReactEditor } from "../../../types";
-import { blockIdsOf, blockRangeProps } from "../../../surfaces/edgeless/block-elements";
+import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../surfaces/edgeless/block-elements";
 import { getEdgelessRuntime, type EdgelessSelectionRef } from "../edgeless-runtime";
 import type {
   CreateVisualPayload,
@@ -335,10 +334,10 @@ export class EdgelessVisualController {
       const order = this.reactEditor.editor.blocks.getRootIds();
       const first = blockElements.flatMap((element) => blockIdsOf(element, order))[0];
       const before = first ? order[order.indexOf(first) - 1] : undefined;
-      if (before) this.reactEditor.editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, before);
+      if (before) insertBlockElementSeparator(this.reactEditor, before);
       blockElements.slice(0, -1).forEach((element) => {
         const last = blockIdsOf(element, order).at(-1);
-        if (last) this.reactEditor.editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, last);
+        if (last) insertBlockElementSeparator(this.reactEditor, last);
       });
       bundle.links.forEach((link) => { const from = blockMap.get(link.from.blockId); const to = blockMap.get(link.to.blockId); if (from && to) this.reactEditor.editor.links.createLink({ ...copy(link), id: crypto.randomUUID(), from: { ...link.from, blockId: from }, to: { ...link.to, blockId: to } }); });
       elements.forEach((element) => {

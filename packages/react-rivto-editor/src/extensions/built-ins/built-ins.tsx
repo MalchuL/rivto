@@ -7,7 +7,6 @@
  * @module
  */
 import {
-  DEFAULT_BLOCK_TYPE,
   type BlockListType,
   type EditorBlock as Block,
   type EditorBlockInput as BlockInput,
@@ -46,7 +45,8 @@ import { TrailingBlock } from "../page/trailing-block";
 import { applyIndentShortcut } from "../page/indent";
 import { registerListShortcuts } from "../page/list-shortcuts";
 import { EdgelessSurface } from "../../surfaces/edgeless";
-import { blockIdsOf } from "../../surfaces/edgeless/block-elements";
+import { separatorBlockExtension } from "../separator/separator-block";
+import { blockIdsOf, insertBlockElementSeparator } from "../../surfaces/edgeless/block-elements";
 import { PageSurface } from "../../surfaces/page";
 import {
   BUILTIN_KEYMAP,
@@ -337,7 +337,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
           let duplicateId = "";
           editor.batchUpdates(() => {
             const afterId = isEdgelessRoot
-              ? editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, editor.blocks.getRootIds().at(-1))
+              ? insertBlockElementSeparator(reactEditor, editor.blocks.getRootIds().at(-1)!)
               : block.id;
             duplicateId = editor.blocks.insertBlock(input, afterId);
             if (isEdgelessRoot) editor.elements.insertElement({
@@ -442,6 +442,7 @@ export const blockExtension = (
  */
 export const standardPreset = (trailingBlockCount = 3): ReactEditorExtension => {
   const extensions = [
+    separatorBlockExtension(),
     pageSurfaceExtension(),
     edgelessSurfaceExtension(),
     historyExtension(),

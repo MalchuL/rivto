@@ -694,6 +694,51 @@ test("moves through the shared slash menu with arrow keys", async ({ page }) => 
   await expect(active).toHaveAttribute("data-slash-command", firstCommand);
 });
 
+test("renders explicit separators and creates a new card with the separator shortcut", async ({ page }) => {
+  const separators = page.locator('[data-separator-block="true"]');
+  await expect(separators).toHaveCount(1);
+  await expect(separators.first()).toHaveAttribute("role", "separator");
+  await expect(separators.first().locator(".rivto-separator-arrow")).toHaveText(["↑", "↓"]);
+
+  const firstContent = page.locator(".page-surface > .page-block [data-block-content]").first();
+  await firstContent.click();
+  await page.keyboard.press("Control+Shift+Enter");
+  await expect(separators).toHaveCount(2);
+  await expect.poll(() => page.evaluate(() => document.activeElement?.hasAttribute("data-block-content"))).toBe(true);
+
+  await switchMode(page, "edgeless");
+  await expect(page.locator("[data-edgeless-root]")).toHaveCount(3);
+  await expect(page.locator("[data-edgeless-root] [data-separator-block]")).toHaveCount(0);
+
+  await page.locator(".edgeless-viewport").focus();
+  await page.keyboard.press("Control+Shift+Enter");
+  await expect(page.locator("[data-edgeless-root]")).toHaveCount(3);
+});
+
+test("creates and focuses a separator continuation from slash", async ({ page }) => {
+  const content = page.locator("[data-block-content]").first();
+  await content.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("/separator");
+  const command = page.locator('[data-slash-command="block.separator.insert"]');
+  await expect(command).toBeVisible();
+  await command.click();
+
+  await expect(page.locator('[data-separator-block="true"]')).toHaveCount(2);
+  await expect.poll(() => page.evaluate(() => document.activeElement?.hasAttribute("data-block-content"))).toBe(true);
+});
+
+test("renders nested separators without splitting document cards", async ({ page }) => {
+  const nested = page.locator(".page-surface > .page-block .page-block-children [data-block-content]").first();
+  await nested.click();
+  await page.keyboard.press("Control+Shift+Enter");
+  await expect(page.locator('[data-separator-block="true"]')).toHaveCount(2);
+
+  await switchMode(page, "edgeless");
+  await expect(page.locator("[data-edgeless-root]")).toHaveCount(2);
+  await expect(page.locator("[data-edgeless-root] [data-separator-block]")).toHaveCount(1);
+});
+
 test("toggles root selection and moves or resizes layouts atomically", async ({ page }) => {
   await switchMode(page, "edgeless");
   const cards = page.locator("[data-edgeless-root]");

@@ -14,6 +14,7 @@ import {
   blockIdsOf,
   EDGELESS_BLOCK_ELEMENT_TYPE,
   EDGELESS_CARD_DEFAULT_FRAME,
+  insertBlockElementSeparator,
 } from "./block-elements";
 
 const MIN_ZOOM = 0.5;
@@ -129,8 +130,8 @@ export function EdgelessSurface() {
     editor.batchUpdates(() => {
       let afterId = roots.at(-1)?.id;
       const last = roots.at(-1);
-      if (last && !reactEditor.isBlockElementSeparator(last)) {
-        afterId = editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, afterId);
+      if (last && !reactEditor.blocks.separatesBlockElements(last.type)) {
+        afterId = insertBlockElementSeparator(reactEditor, last.id);
       }
       id = editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, afterId);
       editor.elements.insertElement({

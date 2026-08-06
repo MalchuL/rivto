@@ -8,6 +8,11 @@ export {
   standardPreset,
 } from "./extensions/built-ins/built-ins";
 export {
+  SEPARATOR_BLOCK_TYPE,
+  SeparatorBlock,
+  separatorBlockExtension,
+} from "./extensions/separator/separator-block";
+export {
   createReactEditor,
 } from "./react-editor";
 export type {
@@ -17,7 +22,7 @@ export type {
   ReactEditor,
 } from "./types";
 export { MarkdownContent } from "./blocks/markdown";
-export { isDefaultBlockElementSeparator, type BlockElementProps } from "./surfaces/edgeless";
+export { type BlockElementProps } from "./surfaces/edgeless";
 export { edgelessVisualsExtension } from "./extensions/edgeless/visuals";
 export type {
   CreateVisualPayload,

@@ -26,4 +26,6 @@ export interface ReactBlockRegistration {
   readonly render: BlockRenderer;
   /** Optional in-place conversion entry added to the shared slash manager. */
   readonly slashCommand?: ReactBlockSlashCommand;
+  /** Whether root blocks of this type partition React's edgeless block elements. */
+  readonly separatesBlockElements?: boolean;
 }

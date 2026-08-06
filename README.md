@@ -49,12 +49,12 @@ stickers, groups, and block cards in this collection. A block card has type
 roots in that current document-order range remain ordinary document content
 and contain no coordinates.
 
-In edgeless mode React partitions root blocks into cards. An unowned empty
-paragraph separates adjacent cards by default; pass
-`edgeless.isBlockElementSeparator` to `createReactEditor` to replace that rule.
-Owned empty roots remain editable card content, and nested empty blocks never
-split a card. The projection is reconciled collaboratively with an untracked
-transaction origin, so derived repairs do not add undo steps.
+In edgeless mode React partitions root blocks into cards at explicit separator
+blocks. `standardPreset()` installs the built-in separator; custom block plugins
+can opt into the same behavior with `separatesBlockElements: true`. Empty
+paragraphs always remain card content, while nested separators render without
+splitting the current root projection. Derived repairs still use an untracked
+transaction origin, so they do not add undo steps.
 
 See [First-class edgeless elements](packages/react-rivto-editor/docs/edgeless-elements.md)
 for ownership, separator, reconciliation, and clipboard details.

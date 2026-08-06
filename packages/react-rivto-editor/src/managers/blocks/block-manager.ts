@@ -9,6 +9,7 @@ import type { ReactBlockRegistration } from "./block-types";
  */
 export class BlockManager {
   private readonly registrations = new Map<string, () => void>();
+  private readonly blockElementSeparatorTypes = new Set<string>();
 
   /**
    * Creates the atomic block-extension facade.
@@ -43,6 +44,10 @@ export class BlockManager {
       }
 
       disposers.push(renderers.register(definition.type, render));
+      if (registration.separatesBlockElements) {
+        this.blockElementSeparatorTypes.add(definition.type);
+        disposers.push(() => this.blockElementSeparatorTypes.delete(definition.type));
+      }
       if (slashCommand) {
         disposers.push(slashCommands.register({
           ...slashCommand,
@@ -89,5 +94,15 @@ export class BlockManager {
     if (!dispose) return false;
     dispose();
     return true;
+  }
+
+  /** @returns Whether this registered block type partitions root block elements. */
+  separatesBlockElements(type: string): boolean {
+    return this.blockElementSeparatorTypes.has(type);
+  }
+
+  /** @returns The first registered separator type used by automatic card creation. */
+  getDefaultBlockElementSeparatorType(): string | undefined {
+    return this.blockElementSeparatorTypes.values().next().value;
   }
 }

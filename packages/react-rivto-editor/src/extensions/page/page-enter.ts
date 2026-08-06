@@ -81,8 +81,8 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
         editor.blocks.indentBlock(nextBlockId);
         editor.blocks.moveBlock(nextBlockId, null);
       } else if (editor.mode.get() === "edgeless" && editor.blocks.getParentId(block.id) === null) {
-        // A root inserted after the stored end boundary would otherwise be an
-        // unowned empty separator and disappear from this canvas card.
+        // Include the new root immediately; the derived reconciler would repair
+        // this endpoint next microtask, but doing it here avoids one stale render.
         const element = editor.elements.getElements().find((candidate) =>
           candidate.type === "block" && candidate.props.endBlockId === block.id,
         );
