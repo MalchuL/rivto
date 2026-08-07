@@ -17,7 +17,7 @@ export function edgelessVisualsExtension(options: EdgelessVisualsOptions = {}): 
   return {
     id: "edgeless.visuals",
     setup: (reactEditor) => {
-      const controller = new EdgelessVisualController(reactEditor);
+      const controller = new EdgelessVisualController(reactEditor, options);
       reactEditor.extensions.mount(() => createElement(EdgelessVisualLayer, { controller, options }));
       return () => controller.destroy();
     },

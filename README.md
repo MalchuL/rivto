@@ -43,8 +43,8 @@ v5 is the strict portable import/export format. It always contains `blocks`,
 
 Elements are generic core records exposed through `document.elements` and
 `editor.elements`. Core validates their common geometry but leaves `type` and
-`props` to presentation extensions. React stores shapes, text, drawings,
-stickers, groups, and block cards in this collection. A block card has type
+`props` to presentation extensions. React stores shapes, text, brush drawings,
+styled sticky notes, attached connectors, groups, and block cards in this collection. A block card has type
 `block` and inclusive `props.startBlockId` / `props.endBlockId` boundaries;
 roots in that current document-order range remain ordinary document content
 and contain no coordinates.

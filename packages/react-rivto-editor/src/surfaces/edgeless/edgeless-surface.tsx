@@ -8,7 +8,8 @@ import {
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
 import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
 import { useCallback, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { EdgelessToolButton } from "../../extensions/edgeless/edgeless-tool-button";
+import { EdgelessToolButton } from "../../extensions/edgeless/visuals/components/tool-button";
+import { EDGELESS_GRID_SIZE } from "../../extensions/edgeless/visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
 import {
   blockIdsOf,
@@ -19,7 +20,6 @@ import {
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
-const GRID_SIZE = 20;
 
 interface PanGesture {
   readonly x: number;
@@ -48,6 +48,8 @@ export function EdgelessSurface() {
   const panGesture = useRef<PanGesture | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [alignEnabled, setAlignEnabled] = useState(true);
 
   const rootRef = useCallback((element: HTMLElement | null) => {
     viewport.current = element;
@@ -58,6 +60,8 @@ export function EdgelessSurface() {
     spaceHeld.current = false;
     viewport.current?.removeAttribute("data-panning-ready");
   };
+
+  const panReady = () => spaceHeld.current || viewport.current?.dataset.edgelessTool === "pan";
 
   useKeyboardEvent({
     id: KEYBOARD_BINDING_IDS.edgelessPanStart,
@@ -102,8 +106,12 @@ export function EdgelessSurface() {
     capture: true,
   }, ({ raw: event }) => {
     const root = viewport.current;
-    const allowed = event.button === 1 || (event.button === 0 && spaceHeld.current);
+    const allowed = event.button === 1 || (event.button === 0 && panReady());
     if (!root || !allowed) return false;
+    // Pan tool: ignore chrome controls so zoom/snap toggles still work.
+    if (event.button === 0 && root.dataset.edgelessTool === "pan" && event.target instanceof Element && event.target.closest("[data-edgeless-ui]")) {
+      return false;
+    }
     panGesture.current = {
       x: event.clientX,
       y: event.clientY,
@@ -119,6 +127,7 @@ export function EdgelessSurface() {
     const root = viewport.current;
     const target = event.target;
     if (!root || !(target instanceof Element) || event.button !== 0) return;
+    if (root.dataset.edgelessTool === "pan" || root.dataset.edgelessTool === "place") return;
     if (target.closest("[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], button, input, textarea, select, a") ||
       target.closest(".edgeless-drawing-capture[data-active]")) return;
     const rect = root.getBoundingClientRect();
@@ -219,18 +228,34 @@ export function EdgelessSurface() {
       data-edgeless-zoom={zoom}
       data-edgeless-pan-x={pan.x}
       data-edgeless-pan-y={pan.y}
+      data-edgeless-grid={EDGELESS_GRID_SIZE}
+      data-edgeless-snap={snapEnabled ? "true" : "false"}
+      data-edgeless-align={alignEnabled ? "true" : "false"}
       aria-label="Edgeless document canvas"
       tabIndex={-1}
       onDoubleClick={createBlockAt}
       style={{
         backgroundPosition: `${pan.x}px ${pan.y}px`,
-        backgroundSize: `${GRID_SIZE * zoom}px ${GRID_SIZE * zoom}px`,
+        backgroundSize: `${EDGELESS_GRID_SIZE * zoom}px ${EDGELESS_GRID_SIZE * zoom}px`,
       }}
     >
       <div className="edgeless-zoom-controls" data-edgeless-ui="true" role="toolbar" aria-label="Canvas zoom">
         <EdgelessToolButton label="Zoom out" icon="zoom-out" onClick={() => zoomAt(zoom - 0.1)} />
         <EdgelessToolButton label="Reset zoom" className="edgeless-zoom-value" onClick={() => zoomAt(1)}>{Math.round(zoom * 100)}%</EdgelessToolButton>
         <EdgelessToolButton label="Zoom in" icon="zoom-in" onClick={() => zoomAt(zoom + 0.1)} />
+        <span className="edgeless-tool-bar-divider" aria-hidden="true" />
+        <EdgelessToolButton
+          label={snapEnabled ? "Disable snap to grid" : "Enable snap to grid"}
+          icon="snap"
+          aria-pressed={snapEnabled}
+          onClick={() => setSnapEnabled((value) => !value)}
+        />
+        <EdgelessToolButton
+          label={alignEnabled ? "Disable object alignment" : "Enable object alignment"}
+          icon="align-objects"
+          aria-pressed={alignEnabled}
+          onClick={() => setAlignEnabled((value) => !value)}
+        />
       </div>
       <div
         className="edgeless-plane"

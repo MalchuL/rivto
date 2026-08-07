@@ -59,6 +59,13 @@ paragraph below it. Root separators partition edgeless cards; nested separators
 remain ordinary rendered blocks.
 Individual built-ins are exported from `@chulane/rivto-react/extensions`.
 
+Canvas visuals are opt-in through `edgelessVisualsExtension()`. Its categorized
+picker creates shapes, text, styled stickies, brush drawings, and attached
+connectors. Exact-type multi-selections share one property panel, groups use
+progressive child entry, and canvas transforms expose snapping guides. See
+[First-class edgeless elements](edgeless-elements.md) for element props and
+configuration.
+
 Empty documents remain empty in core. `trailingBlockExtension(N)` owns the
 page-end targets whose labels and highlights appear on hover or keyboard focus.
 `trailingBlockExtension(N)` renders N targets; activating target K creates K

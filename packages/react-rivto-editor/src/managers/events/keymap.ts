@@ -49,6 +49,7 @@ export const KEYBOARD_BINDING_IDS = {
   edgelessMoveFastUp: "edgeless.move-fast-up",
   edgelessMoveFastDown: "edgeless.move-fast-down",
   edgelessTransformCancel: "edgeless.transform-cancel",
+  edgelessToolSelect: "edgeless.tool-select",
   edgelessPanStart: "edgeless.pan-start",
   edgelessPanStop: "edgeless.pan-stop",
 } as const;
@@ -109,6 +110,7 @@ export const BUILTIN_KEYMAP: Readonly<Record<string, readonly string[]>> = {
   [KEYBOARD_BINDING_IDS.edgelessMoveFastUp]: ["Shift+ArrowUp"],
   [KEYBOARD_BINDING_IDS.edgelessMoveFastDown]: ["Shift+ArrowDown"],
   [KEYBOARD_BINDING_IDS.edgelessTransformCancel]: ["Escape"],
+  [KEYBOARD_BINDING_IDS.edgelessToolSelect]: ["Escape"],
   [KEYBOARD_BINDING_IDS.edgelessPanStart]: ["Space"],
   [KEYBOARD_BINDING_IDS.edgelessPanStop]: ["Space"],
 };

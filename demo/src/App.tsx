@@ -32,6 +32,139 @@ const handleMarkdownLink = ({ href, event }: MarkdownLinkClick): void => {
   window.dispatchEvent(new CustomEvent("rivto:markdown-link", { detail: href }));
 };
 
+/** Demo-specific presets proving the public edgeless picker configuration. */
+const edgelessOptions = {
+  fonts: [{ label: "Editorial serif", fontFamily: "Georgia, Cambria, serif" }],
+  stickers: [
+    { id: "lavender", label: "Lavender sticky", fill: "#eeeaff", color: "#362b67" },
+    { id: "mint", label: "Mint sticky", fill: "#d3f9d8", color: "#2b8a3e" },
+  ],
+} as const;
+
+/**
+ * Seeds canvas visuals that exercise edgeless features in the journal demo.
+ *
+ * Includes shapes, text, sticky, drawing, connector, nested groups, and spare
+ * shapes for align / distribute / layer-order practice.
+ */
+function seedEdgelessShowcase(editor: ReturnType<typeof createRivtoEditor>): void {
+  editor.execute("edgeless.visual.create", {
+    kind: "text",
+    text: "Edgeless showcase",
+    frame: { x: 60, y: 450, width: 280, height: 32 },
+    fontSize: 22,
+    fontFamily: "Georgia, Cambria, serif",
+    color: "#212529",
+  });
+  editor.execute("edgeless.visual.create", {
+    kind: "text",
+    text: "Shapes · sticky · pencil · connector · nested group · align/distribute extras",
+    frame: { x: 60, y: 482, width: 560, height: 28 },
+    fontSize: 13,
+    color: "#495057",
+  });
+
+  const rect = editor.execute("edgeless.visual.create", {
+    kind: "rectangle",
+    frame: { x: 60, y: 530, width: 130, height: 90 },
+    fill: "#d0ebff",
+    stroke: "#1c7ed6",
+    strokeWidth: 2,
+    text: "Rect",
+  }) as string;
+  const ellipse = editor.execute("edgeless.visual.create", {
+    kind: "ellipse",
+    frame: { x: 240, y: 545, width: 110, height: 80 },
+    fill: "#fff3bf",
+    stroke: "#e67700",
+    strokeWidth: 2,
+    text: "Ellipse",
+  }) as string;
+  editor.execute("edgeless.visual.create", {
+    kind: "connector",
+    route: "orthogonal",
+    source: { elementId: rect, anchor: { x: 1, y: 0.5 }, position: { x: 190, y: 575 } },
+    target: { elementId: ellipse, anchor: { x: 0, y: 0.5 }, position: { x: 240, y: 585 } },
+    stroke: "#495057",
+    endStyle: "arrow",
+    text: "link",
+  });
+
+  editor.execute("edgeless.selection.set", [rect, ellipse]);
+  const shapeGroup = editor.execute("edgeless.selection.group") as string;
+
+  const sticky = editor.execute("edgeless.visual.create", {
+    kind: "sticker",
+    text: "Sticky note\n(double-click to edit)",
+    fill: "#eeeaff",
+    color: "#362b67",
+    frame: { x: 420, y: 530, width: 170, height: 130 },
+  }) as string;
+
+  // Second connector without label text (default is "").
+  editor.execute("edgeless.visual.create", {
+    kind: "connector",
+    route: "curve",
+    source: { elementId: ellipse, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
+    target: { elementId: sticky, anchor: { x: 0, y: 0.5 }, position: { x: 420, y: 595 } },
+    stroke: "#868e96",
+    endStyle: "arrow",
+    text: "",
+  });
+
+  // Nested group: existing group + sticky (Primary-click / Group again in the UI).
+  editor.execute("edgeless.selection.set", [shapeGroup, sticky]);
+  editor.execute("edgeless.selection.group");
+
+  editor.execute("edgeless.visual.create", {
+    kind: "drawing",
+    brush: "pencil",
+    frame: { x: 640, y: 530, width: 150, height: 100 },
+    points: [
+      { x: 8, y: 72 }, { x: 28, y: 18 }, { x: 52, y: 58 },
+      { x: 78, y: 12 }, { x: 108, y: 64 }, { x: 138, y: 28 },
+    ],
+    stroke: "#212529",
+    strokeWidth: 2,
+  });
+  editor.execute("edgeless.visual.create", {
+    kind: "text",
+    text: "Free text — resize corners, drag handle, layer arrows",
+    frame: { x: 640, y: 650, width: 260, height: 48 },
+    fontSize: 14,
+    color: "#343a40",
+  });
+
+  // Unrelated siblings for align / distribute / multi-select practice.
+  editor.execute("edgeless.visual.create", {
+    kind: "rectangle",
+    frame: { x: 920, y: 530, width: 56, height: 56 },
+    fill: "#d3f9d8",
+    stroke: "#2b8a3e",
+  });
+  editor.execute("edgeless.visual.create", {
+    kind: "rectangle",
+    frame: { x: 1020, y: 560, width: 56, height: 56 },
+    fill: "#d3f9d8",
+    stroke: "#2b8a3e",
+  });
+  editor.execute("edgeless.visual.create", {
+    kind: "rectangle",
+    frame: { x: 1120, y: 510, width: 56, height: 56 },
+    fill: "#d3f9d8",
+    stroke: "#2b8a3e",
+  });
+  editor.execute("edgeless.visual.create", {
+    kind: "ellipse",
+    frame: { x: 920, y: 640, width: 70, height: 48 },
+    fill: "#ffd8a8",
+    stroke: "#d9480f",
+  });
+
+  editor.execute("edgeless.selection.clear");
+  editor.execute("edgeless.tool.set", "select");
+}
+
 /**
  * Creates demo content for manual editing and selection checks.
  *
@@ -52,7 +185,7 @@ function createDemoEditor() {
     editor,
     keymap: alternateKeymap,
     onMarkdownLinkClick: handleMarkdownLink,
-    extensions: [standardPreset(), edgelessVisualsExtension(), blockIdExtension(), ...customBlockExtensions],
+    extensions: [standardPreset(), edgelessVisualsExtension(edgelessOptions), blockIdExtension(), ...customBlockExtensions],
   });
   const introId = editor.blocks.insertBlock({
     type: DEFAULT_BLOCK_TYPE,
@@ -182,6 +315,7 @@ function createDemoEditor() {
     zIndex: 1,
     props: { startBlockId: secondBranchId, endBlockId: numberedContinueId },
   });
+  seedEdgelessShowcase(editor);
   editor.history.clear();
 
   return { editor, reactEditor };
@@ -193,7 +327,7 @@ function createEmptyDemoEditor() {
   const reactEditor = createReactEditor({
     editor,
     onMarkdownLinkClick: handleMarkdownLink,
-    extensions: [standardPreset(), edgelessVisualsExtension(), blockIdExtension(), ...customBlockExtensions],
+    extensions: [standardPreset(), edgelessVisualsExtension(edgelessOptions), blockIdExtension(), ...customBlockExtensions],
   });
   return { editor, reactEditor };
 }
@@ -305,7 +439,7 @@ function createFixtureEditor(
   const reactEditor = createReactEditor({
     editor,
     onMarkdownLinkClick: handleMarkdownLink,
-    extensions: [standardPreset(), edgelessVisualsExtension(), blockIdExtension(), ...customBlockExtensions],
+    extensions: [standardPreset(), edgelessVisualsExtension(edgelessOptions), blockIdExtension(), ...customBlockExtensions],
   });
   if (side === "left") {
     const parentId = editor.blocks.insertBlock({

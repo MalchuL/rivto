@@ -1,6 +1,7 @@
-import { useEdgelessSelection } from "../../extensions/edgeless/edgeless-runtime";
 import type { EditorElement } from "@chulane/rivto";
-import type { CSSProperties } from "react";
+import { useRef, type CSSProperties } from "react";
+import { EdgelessDragHandle } from "../../extensions/edgeless/edgeless-drag-handle";
+import { useEdgelessSelection } from "../../extensions/edgeless/edgeless-runtime";
 import { BlockTree } from "../../blocks";
 
 /**
@@ -18,34 +19,49 @@ export function EdgelessBlockElement({
   readonly blockIds: readonly string[];
 }) {
   const selection = useEdgelessSelection();
+  const hostRef = useRef<HTMLElement | null>(null);
   if (!blockIds.length) return null;
+  const selected = selection.active && selection.items.includes(element.id);
+  /**
+   * During resize, transform writes preview geometry as inline styles and sets
+   * data-edgeless-geometry-lock. Re-renders must echo those inline values back
+   * through the style prop — omitting them lets React clear left/top/width/height
+   * and the card jumps.
+   */
+  const host = hostRef.current;
+  const geometryLocked = host?.dataset.edgelessGeometryLock === "true";
   const style: CSSProperties = {
-    left: element.frame.x,
-    top: element.frame.y,
-    width: element.frame.width,
-    height: element.frame.height,
+    left: geometryLocked && host.style.left ? host.style.left : element.frame.x,
+    top: geometryLocked && host.style.top ? host.style.top : element.frame.y,
+    width: geometryLocked && host.style.width ? host.style.width : element.frame.width,
+    height: geometryLocked && host.style.height ? host.style.height : element.frame.height,
     zIndex: element.zIndex,
   };
 
   return (
     <section
+      ref={hostRef}
       className="edgeless-card"
       data-edgeless-root={element.id}
       data-edgeless-object-kind="block"
       data-edgeless-object-id={element.id}
-      data-block-selected={selection.active && selection.items.includes(element.id) || undefined}
+      data-block-selected={selected || undefined}
       style={style}
       tabIndex={0}
     >
       <div className="edgeless-card-content" data-edgeless-card-content="true">
         <BlockTree blockIds={blockIds} />
       </div>
-      <button
-        type="button"
-        className="edgeless-resize-handle"
-        data-edgeless-resize-handle="true"
-        aria-label="Resize canvas block element"
-      />
+      {selected && <EdgelessDragHandle label="Drag canvas block" />}
+      {(["nw", "ne", "sw", "se"] as const).map((corner) => (
+        <button
+          key={corner}
+          type="button"
+          className="edgeless-resize-handle"
+          data-edgeless-resize-handle={corner}
+          aria-label={`Resize canvas block ${corner}`}
+        />
+      ))}
     </section>
   );
 }

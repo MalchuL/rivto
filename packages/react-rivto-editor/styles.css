@@ -489,7 +489,8 @@
 }
 
 .edgeless-viewport[data-panning-ready],
-.edgeless-viewport[data-panning] {
+.edgeless-viewport[data-panning],
+.edgeless-viewport[data-edgeless-tool="pan"] {
   cursor: grab;
 }
 
@@ -526,7 +527,8 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  overflow: hidden;
+  /* Visible so corner resize handles can sit outside the card chrome. */
+  overflow: visible;
   border: 1px solid #d8d4e2;
   border-radius: 12px;
   background: white;
@@ -537,6 +539,35 @@
 .edgeless-card[data-block-selected] {
   border-color: var(--rivto-accent, #6c5ce7);
   box-shadow: 0 0 0 2px var(--rivto-accent, #6c5ce7), 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+/* Shared left-edge grab for selected blocks, visuals, and groups.
+   Caps at 3/4 of the parent height so short frames are not taller than the handle. */
+.edgeless-drag-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: min(56px, 75%);
+  max-height: 75%;
+  /* Sit fully outside the frame, clear of the selection/shape border. */
+  translate: calc(-100% - 6px) 0;
+  padding: 0;
+  border: 1px solid var(--rivto-accent, #6c5ce7);
+  border-radius: 9px;
+  color: var(--rivto-accent, #6c5ce7);
+  background: #eeeaff;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  overflow: hidden;
+}
+
+.edgeless-drag-handle:active {
+  cursor: grabbing;
 }
 
 .edgeless-card-content {
@@ -562,15 +593,39 @@
 
 .edgeless-resize-handle {
   position: absolute;
-  right: 2px;
-  bottom: 2px;
-  width: 16px;
-  height: 16px;
+  z-index: 2;
+  width: 10px;
+  height: 10px;
   padding: 0;
-  border: 0;
-  background: linear-gradient(135deg, transparent 50%, #888 50%);
-  cursor: nwse-resize;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: var(--rivto-accent, #6c5ce7);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 18%);
   touch-action: none;
+}
+
+.edgeless-resize-handle[data-edgeless-resize-handle="nw"] {
+  top: -10px;
+  left: -10px;
+  cursor: nwse-resize;
+}
+
+.edgeless-resize-handle[data-edgeless-resize-handle="ne"] {
+  top: -10px;
+  right: -10px;
+  cursor: nesw-resize;
+}
+
+.edgeless-resize-handle[data-edgeless-resize-handle="sw"] {
+  bottom: -10px;
+  left: -10px;
+  cursor: nesw-resize;
+}
+
+.edgeless-resize-handle[data-edgeless-resize-handle="se"] {
+  right: -10px;
+  bottom: -10px;
+  cursor: nwse-resize;
 }
 
 .edgeless-selection-rectangle {
@@ -603,9 +658,22 @@
   display: grid;
   place-items: stretch;
   box-sizing: border-box;
+  overflow: visible;
   cursor: move;
   pointer-events: auto;
   user-select: none;
+}
+
+.edgeless-visual[data-edgeless-visual-kind="connector"],
+.edgeless-visual[data-edgeless-visual-kind="drawing"] {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.edgeless-visual[data-edgeless-visual-kind="connector"] > .edgeless-connector,
+.edgeless-visual[data-edgeless-visual-kind="drawing"] > .edgeless-drawing {
+  pointer-events: none;
+  overflow: visible;
 }
 
 .edgeless-visual[data-selected] {
@@ -613,20 +681,30 @@
   outline-offset: 3px;
 }
 
-.edgeless-visual > img,
-.edgeless-visual > svg {
+.edgeless-visual[data-edgeless-visual-kind="connector"][data-selected] {
+  outline: none;
+}
+
+.edgeless-visual[data-edgeless-visual-kind="connector"][data-selected] .edgeless-connector-stroke {
+  filter: drop-shadow(0 0 0.5px var(--rivto-accent, #6c5ce7)) drop-shadow(0 0 0.5px var(--rivto-accent, #6c5ce7));
+}
+
+.edgeless-visual > img {
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
-.edgeless-visual[data-edgeless-visual-kind="sticker"] > span {
-  display: grid;
-  place-items: center;
-  font-size: 72px;
+/* Fill the frame so non-square ellipses/rects can stretch (viewBox + preserveAspectRatio). */
+.edgeless-visual > svg {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
 }
 
 .edgeless-visual-text {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 100%;
   overflow: hidden;
@@ -635,37 +713,323 @@
   user-select: none;
 }
 
+.edgeless-sticker-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 18px;
+  border-radius: 4px 4px 18px 4px;
+  box-shadow: 0 6px 14px rgb(35 30 20 / 14%);
+  outline: none;
+  white-space: pre-wrap;
+  user-select: none;
+}
+
+.edgeless-visual-text[data-vertical-align="top"],
+.edgeless-sticker-text[data-vertical-align="top"],
+.edgeless-shape-label[data-vertical-align="top"] {
+  justify-content: flex-start;
+}
+
+.edgeless-visual-text[data-vertical-align="middle"],
+.edgeless-sticker-text[data-vertical-align="middle"],
+.edgeless-shape-label[data-vertical-align="middle"] {
+  justify-content: center;
+}
+
+.edgeless-visual-text[data-vertical-align="bottom"],
+.edgeless-sticker-text[data-vertical-align="bottom"],
+.edgeless-shape-label[data-vertical-align="bottom"] {
+  justify-content: flex-end;
+}
+
+/* Flex item that always owns one line box so empty carets honor vertical align. */
+.edgeless-label-editor {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 1.2em;
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.edgeless-visual-text[data-editing] .edgeless-label-editor,
+.edgeless-sticker-text[data-editing] .edgeless-label-editor,
+.edgeless-shape-label[data-editing] .edgeless-label-editor,
+.edgeless-connector-label[data-editing] .edgeless-label-editor {
+  cursor: text;
+  user-select: text;
+  pointer-events: auto;
+}
+
+.edgeless-sticker-text[data-editing] {
+  cursor: text;
+}
+
+.edgeless-connector,
+.edgeless-drawing,
+.edgeless-shape {
+  overflow: visible;
+}
+
+/*
+ * Square viewBox would otherwise keep a 1:1 used size (height < width looked
+ * "stuck" as a circle). Pin the SVG to the frame so preserveAspectRatio=none can stretch.
+ */
+.edgeless-visual > svg.edgeless-shape,
+.edgeless-visual > svg.edgeless-drawing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}
+
+.edgeless-shape-label {
+  position: absolute;
+  inset: 12%;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  outline: none;
+  white-space: pre-wrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.edgeless-shape-label[data-editing] {
+  pointer-events: none;
+}
+
+.edgeless-shape-label[data-editing] .edgeless-label-editor {
+  pointer-events: auto;
+}
+
+.edgeless-connector-label {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 24px;
+  max-width: none;
+  padding: 2px 6px;
+  border: 1px solid #dedbe7;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 94%);
+  outline: none;
+  /* Manual newlines only — do not auto-wrap long labels. */
+  white-space: pre;
+  translate: -50% -50%;
+  pointer-events: none;
+  user-select: none;
+}
+
+.edgeless-connector-label[data-editing] {
+  pointer-events: none;
+}
+
+.edgeless-connector-label[data-editing] .edgeless-label-editor {
+  pointer-events: auto;
+}
+
+.edgeless-connector-label .edgeless-label-editor {
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.edgeless-size-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  font: 600 0.7rem/1 system-ui, sans-serif;
+}
+
+.edgeless-size-control-preview {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: #514a61;
+}
+
+.edgeless-size-control-dot {
+  display: block;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
+}
+
+.edgeless-size-control-letter {
+  display: block;
+  font: 700 1em/1 Georgia, "Times New Roman", serif;
+  letter-spacing: -0.02em;
+  user-select: none;
+}
+
+.edgeless-size-control input[type="range"] {
+  width: 88px;
+  accent-color: var(--rivto-accent, #6c5ce7);
+}
+
+.edgeless-size-control-value {
+  min-width: 1.4rem;
+  color: #6b6478;
+  font-variant-numeric: tabular-nums;
+}
+
+.edgeless-color-swatch {
+  position: relative;
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.edgeless-color-swatch-face {
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 18%);
+  pointer-events: none;
+}
+
+.edgeless-color-swatch[data-mixed] .edgeless-color-swatch-face {
+  background:
+    linear-gradient(135deg, #d0ccd8 25%, transparent 25%) -4px 0 / 8px 8px,
+    linear-gradient(225deg, #d0ccd8 25%, transparent 25%) -4px 0 / 8px 8px,
+    linear-gradient(315deg, #d0ccd8 25%, transparent 25%) 0 0 / 8px 8px,
+    linear-gradient(45deg, #d0ccd8 25%, #f4f2f7 25%) 0 0 / 8px 8px;
+}
+
+.edgeless-color-swatch[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.edgeless-color-swatch[data-disabled]:hover {
+  background: transparent;
+}
+
+.edgeless-paint-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 28px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  cursor: pointer;
+}
+
+.edgeless-paint-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--rivto-accent, #6c5ce7);
+  cursor: pointer;
+}
+
+.edgeless-color-swatch:focus-within {
+  outline: 2px solid var(--rivto-accent, #6c5ce7);
+  outline-offset: 1px;
+}
+
+.edgeless-color-swatch input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  opacity: 0;
+  cursor: pointer;
+  background: transparent;
+}
+
+.edgeless-connector-target-outline {
+  fill: none;
+  stroke: var(--rivto-accent, #6c5ce7);
+  stroke-dasharray: 5 4;
+  stroke-width: 1.5px;
+  pointer-events: none;
+}
+
+.edgeless-connector-anchor {
+  fill: white;
+  stroke: var(--rivto-accent, #6c5ce7);
+  stroke-width: 1.5px;
+  pointer-events: none;
+}
+
+.edgeless-connector-anchor[data-active] {
+  fill: var(--rivto-accent, #6c5ce7);
+}
+
+.edgeless-connector-hit,
+.edgeless-drawing-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 20px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: stroke;
+}
+
+.edgeless-connector-stroke,
+.edgeless-drawing-stroke {
+  pointer-events: none;
+}
+
+.edgeless-connector-endpoint {
+  position: absolute;
+  z-index: 2;
+  width: 12px;
+  height: 12px;
+  translate: -50% -50%;
+  padding: 0;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: var(--rivto-accent, #6c5ce7);
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+[data-edgeless-erase-target="true"] {
+  opacity: 0.28;
+}
+
 .edgeless-visual-text[data-editing] {
   cursor: text;
   user-select: text;
 }
 
-.edgeless-group-label {
+/* Behind children so gaps receive clicks without blocking drill-in. */
+.edgeless-group-hit {
   position: absolute;
-  z-index: 2147483640;
-  width: 38px;
-  height: 22px;
-  translate: 0 -26px;
-  padding: 0;
-  border: 1px solid var(--rivto-accent, #6c5ce7);
-  border-radius: 7px;
-  color: var(--rivto-accent, #6c5ce7);
-  background: #eeeaff;
-  cursor: grab;
+  z-index: 0;
+  box-sizing: border-box;
   pointer-events: auto;
+  cursor: move;
   touch-action: none;
 }
 
-.edgeless-group-label:active {
-  cursor: grabbing;
-}
-
-.edgeless-group-label svg {
-  width: 18px;
-  height: 18px;
-  fill: currentcolor;
-}
-
+/* Outline + drag handle above children; only the handle is interactive. */
 .edgeless-group-bound {
   position: absolute;
   z-index: 2147483638;
@@ -676,16 +1040,40 @@
 
 .edgeless-visual-resize {
   position: absolute;
-  right: -7px;
-  bottom: -7px;
-  width: 12px;
-  height: 12px;
+  z-index: 2;
+  width: 10px;
+  height: 10px;
   padding: 0;
   border: 2px solid white;
   border-radius: 50%;
   background: var(--rivto-accent, #6c5ce7);
-  cursor: nwse-resize;
+  /* Host drawings/connectors use pointer-events: none; handles must stay clickable. */
+  pointer-events: auto;
   touch-action: none;
+}
+
+.edgeless-visual-resize[data-edgeless-resize-handle="nw"] {
+  top: -10px;
+  left: -10px;
+  cursor: nwse-resize;
+}
+
+.edgeless-visual-resize[data-edgeless-resize-handle="ne"] {
+  top: -10px;
+  right: -10px;
+  cursor: nesw-resize;
+}
+
+.edgeless-visual-resize[data-edgeless-resize-handle="sw"] {
+  bottom: -10px;
+  left: -10px;
+  cursor: nesw-resize;
+}
+
+.edgeless-visual-resize[data-edgeless-resize-handle="se"] {
+  right: -10px;
+  bottom: -10px;
+  cursor: nwse-resize;
 }
 
 .edgeless-drawing-capture[data-active] {
@@ -693,14 +1081,25 @@
   cursor: crosshair;
   pointer-events: auto;
   touch-action: none;
+  overflow: visible;
 }
 
-.edgeless-create-toolbar,
+.edgeless-place-preview-group {
+  pointer-events: none;
+}
+
+.edgeless-place-preview-bbox {
+  fill: none;
+  stroke: var(--rivto-accent, #6c5ce7);
+  stroke-dasharray: 6 4;
+  stroke-width: 1.5px;
+  opacity: 0.85;
+}
+
+.edgeless-tool-bar,
 .edgeless-selection-toolbar {
   position: absolute;
   z-index: 21;
-  top: 12px;
-  left: 12px;
   display: flex;
   gap: 3px;
   padding: 5px;
@@ -710,16 +1109,107 @@
   box-shadow: 0 8px 24px rgb(42 34 72 / 12%);
 }
 
-.edgeless-create-toolbar {
+.edgeless-tool-bar {
+  bottom: 14px;
+  left: 50%;
+  flex-direction: row;
+  align-items: center;
+  width: max-content;
+  max-width: calc(100% - 160px);
+  transform: translateX(-50%);
+}
+
+.edgeless-tool-bar[data-menu-open] {
+  z-index: 24;
+}
+
+.edgeless-tool-bar-divider {
+  width: 1px;
+  height: 22px;
+  margin: 0 2px;
+  background: #e4e0eb;
+}
+
+.edgeless-tool-popover {
+  position: absolute;
+  z-index: 22;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  display: flex;
+  width: min(320px, calc(100vw - 48px));
   flex-direction: column;
-  max-height: calc(100% - 86px);
-  overflow-y: auto;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #dedbe7;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 98%);
+  box-shadow: 0 10px 28px rgb(42 34 72 / 16%);
+  transform: translateX(-50%);
+}
+
+.edgeless-tool-popover-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edgeless-tool-popover-heading {
+  margin: 0;
+  color: #6b6478;
+  font: 650 0.68rem/1 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.edgeless-tool-popover-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.edgeless-tool-popover-defaults {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.edgeless-tool-popover .edgeless-tool-button {
+  width: auto;
+  min-width: 40px;
+  grid-auto-flow: column;
+  gap: 6px;
+  touch-action: none;
+}
+
+.edgeless-tool-popover select,
+.edgeless-visual-properties select {
+  min-height: 32px;
+  border: 1px solid #d8d4e2;
+  border-radius: 7px;
+  background: white;
+}
+
+.edgeless-sticker-preset {
+  width: 40px;
+  padding: 6px;
+}
+
+.edgeless-sticker-swatch {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgb(0 0 0 / 12%);
+  border-radius: 4px 4px 10px 4px;
+  box-shadow: 0 2px 6px rgb(35 30 20 / 12%);
 }
 
 .edgeless-selection-toolbar {
-  left: 66px;
-  max-width: calc(100% - 80px);
+  bottom: 62px;
+  left: 50%;
+  max-width: calc(100% - 48px);
   overflow-x: auto;
+  transform: translateX(-50%);
 }
 
 .edgeless-tool-button {
@@ -760,12 +1250,17 @@
   height: 22px;
 }
 
+.edgeless-tool-button svg {
+  display: block;
+  flex: 0 0 auto;
+  color: inherit;
+}
+
 .edgeless-tool-button svg path {
   fill: none;
   stroke: currentcolor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.8;
 }
 
 .edgeless-tool-button img {
@@ -783,14 +1278,15 @@
   bottom: calc(100% + 10px);
   left: 0;
   display: flex;
-  width: max-content;
-  align-items: center;
-  gap: 7px;
-  padding: 7px;
+  width: min(280px, calc(100vw - 28px));
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
   border: 1px solid #dedbe7;
-  border-radius: 11px;
+  border-radius: 14px;
   background: rgb(255 255 255 / 97%);
-  box-shadow: 0 8px 24px rgb(42 34 72 / 14%);
+  box-shadow: 0 12px 32px rgb(42 34 72 / 14%);
   color: #514a61;
   cursor: default;
   transform: scale(var(--edgeless-properties-scale));
@@ -798,20 +1294,177 @@
   user-select: none;
 }
 
-.edgeless-visual-properties label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font: 600 0.7rem/1 system-ui, sans-serif;
+.edgeless-shared-properties {
+  position: absolute;
+  top: 58px;
+  right: 14px;
+  bottom: auto;
+  left: auto;
+  transform: none;
 }
 
-.edgeless-visual-properties input[type="color"] {
+.edgeless-properties-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 10px 10px 14px;
+  border-bottom: 1px solid #ece8f2;
+  background: linear-gradient(180deg, #faf8ff 0%, #ffffff 100%);
+}
+
+.edgeless-visual-properties[data-collapsed] .edgeless-properties-header {
+  border-bottom: none;
+}
+
+.edgeless-properties-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.edgeless-properties-kind {
+  font: 650 0.8rem/1.2 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  color: #2f2940;
+}
+
+.edgeless-properties-count {
+  font: 500 0.68rem/1 system-ui, sans-serif;
+  color: #8a829a;
+}
+
+.edgeless-properties-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.edgeless-properties-action {
   width: 28px;
   height: 28px;
+  min-width: 28px;
+  padding: 0;
+  border-radius: 8px;
+  color: #6d657d;
+}
+
+.edgeless-properties-action svg {
+  width: 16px;
+  height: 16px;
+}
+
+.edgeless-property-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.edgeless-property-group + .edgeless-property-group {
+  border-top: 1px solid #ece8f2;
+}
+
+.edgeless-property-group-title {
+  font: 650 0.65rem/1 system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a829a;
+}
+
+.edgeless-property-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.edgeless-property-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.edgeless-property-row-label {
+  font: 500 0.72rem/1 system-ui, sans-serif;
+  color: #6d657d;
+}
+
+.edgeless-property-row-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.edgeless-property-row-controls select {
+  flex: 1 1 96px;
+  min-width: 0;
+}
+
+.edgeless-align-toggles {
+  display: inline-flex;
+  gap: 2px;
   padding: 2px;
-  border: 1px solid #d8d4e2;
-  border-radius: 7px;
-  background: white;
+  border: 1px solid #dedbe7;
+  border-radius: 8px;
+  background: #f7f5fb;
+}
+
+.edgeless-align-toggles .edgeless-tool-button {
+  width: 28px;
+  height: 28px;
+}
+
+.edgeless-align-toggles .edgeless-tool-button[aria-pressed="true"] {
+  color: var(--rivto-accent, #6c5ce7);
+  background: #eeeaff;
+}
+
+.edgeless-preset-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2147483646;
+  box-sizing: border-box;
+  width: 160px;
+  height: 120px;
+  border: 2px dashed var(--rivto-accent, #6c5ce7);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 72%);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.edgeless-preset-ghost[data-kind="sticker"] {
+  border-style: solid;
+  border-color: transparent;
+  border-radius: 4px 4px 18px 4px;
+  box-shadow: 0 6px 14px rgb(35 30 20 / 14%);
+}
+
+.edgeless-preset-ghost[data-kind="ellipse"] {
+  border-radius: 50%;
+}
+
+.edgeless-snap-guide {
+  position: absolute;
+  z-index: 2147483637;
+  pointer-events: none;
+  background: #ef3f87;
+}
+
+.edgeless-snap-guide-x { width: 1px; }
+.edgeless-snap-guide-y { height: 1px; }
+
+.edgeless-visual-properties .edgeless-size-control,
+.edgeless-tool-popover-defaults .edgeless-size-control {
+  padding: 0 2px;
 }
 
 .edgeless-visual-properties input[type="number"] {

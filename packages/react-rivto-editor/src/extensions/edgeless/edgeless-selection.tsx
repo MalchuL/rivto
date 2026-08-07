@@ -64,7 +64,7 @@ export function EdgelessInteractionOverlay() {
     mode: "edgeless",
   }, ({ raw: event }) => {
     if (event.button !== 0 || !(event.target instanceof Element) || !root) return false;
-    if (root.dataset.panningReady === "true") return false;
+    if (root.dataset.panningReady === "true" || root.dataset.edgelessTool === "pan") return false;
     if (event.target.closest(HANDLE_SELECTOR)) return false;
     const card = event.target.closest<HTMLElement>(ROOT_SELECTOR);
     const elementId = card?.dataset.edgelessRoot;
@@ -132,11 +132,28 @@ export function EdgelessInteractionOverlay() {
       bottom: Math.max(start.y, event.clientY),
     };
     setRectangle(next);
+    const editor = reactEditor.editor;
+    const parentOf = (id: string): string | undefined =>
+      editor.elements.getElements().find((element) =>
+        element.type === "group"
+        && Array.isArray(element.props.children)
+        && element.props.children.includes(id),
+      )?.id;
+    const topLevel = (id: string): string => {
+      let current = id;
+      for (let parent = parentOf(current); parent; parent = parentOf(current)) current = parent;
+      return current;
+    };
+    // Dedupe DOM hits (group hit + outline share an id) and lift children to their
+    // outermost group so marquee can select an existing group + siblings to re-group.
+    const seen = new Set<string>();
     const objects = [...root.querySelectorAll<HTMLElement>(OBJECT_SELECTOR)].flatMap((element) => {
       const id = element.dataset.edgelessObjectId;
-      return id && element.dataset.edgelessObjectKind !== "group" ? [{ id, rect: element.getBoundingClientRect() }] : [];
+      if (!id || seen.has(id)) return [];
+      seen.add(id);
+      return [{ id, rect: element.getBoundingClientRect() }];
     });
-    const intersecting = rootsInRect(objects, next);
+    const intersecting = [...new Set(rootsInRect(objects, next).map(topLevel))];
     selection.set([...start.base, ...intersecting]);
     return true;
   });

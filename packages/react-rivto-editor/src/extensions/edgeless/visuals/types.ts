@@ -2,40 +2,67 @@ import type { EdgelessSelectionRef } from "../edgeless-runtime";
 export type { EdgelessSelectionRef } from "../edgeless-runtime";
 
 /** Axis-aligned canvas geometry shared by every visual leaf. */
-export interface VisualFrame {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+export interface VisualFrame { x: number; y: number; width: number; height: number }
+
+interface VisualBase { readonly id: string; frame: VisualFrame; zIndex: number }
+
+/** Freehand brush preset stored with each drawing. */
+export type EdgelessBrush = "pencil" | "pen" | "marker";
+/** Connector routing algorithm. */
+export type ConnectorRoute = "straight" | "orthogonal" | "curve";
+/** Decoration rendered at either end of a connector. */
+export type ConnectorEndpointStyle = "none" | "arrow";
+
+/** Stable attachment plus the last absolute point used if its object disappears. */
+export interface ConnectorEndpoint {
+  elementId?: string;
+  anchor: { x: number; y: number };
+  position: { x: number; y: number };
 }
 
-interface VisualBase {
-  readonly id: string;
-  frame: VisualFrame;
-  zIndex: number;
-}
+/** Horizontal placement of text inside a frame or label. */
+export type TextHorizontalAlign = "left" | "center" | "right";
+/** Vertical placement of text inside a frame or label. */
+export type TextVerticalAlign = "top" | "middle" | "bottom";
 
-/** Image- or emoji-backed sticker. */
+/** Styled editable sticky note. */
 export interface StickerVisual extends VisualBase {
   readonly kind: "sticker";
-  source: { type: "image"; src: string } | { type: "emoji"; value: string };
-  alt: string;
+  text: string;
+  fill: string;
+  color: string;
+  fontFamily: string;
+  fontSize: number;
+  align: TextHorizontalAlign;
+  verticalAlign: TextVerticalAlign;
 }
 
 /** Freehand stroke whose points are stored relative to its frame. */
 export interface DrawingVisual extends VisualBase {
   readonly kind: "drawing";
   points: Array<{ x: number; y: number; pressure?: number }>;
+  brush: EdgelessBrush;
   stroke: string;
   strokeWidth: number;
+  opacity: number;
 }
 
-/** Rectangle or ellipse with simple fill and stroke styling. */
+/** Rectangle or ellipse with fill, stroke, and optional centered label. */
 export interface ShapeVisual extends VisualBase {
   readonly kind: "rectangle" | "ellipse";
   fill: string;
   stroke: string;
   strokeWidth: number;
+  /** When false, the shape fill is not painted (color is kept for re-enable). */
+  filled: boolean;
+  /** When false, the shape stroke is not painted (color/width kept for re-enable). */
+  stroked: boolean;
+  text: string;
+  color: string;
+  fontFamily: string;
+  fontSize: number;
+  align: TextHorizontalAlign;
+  verticalAlign: TextVerticalAlign;
 }
 
 /** Canvas text independent from document blocks. */
@@ -43,57 +70,92 @@ export interface TextVisual extends VisualBase {
   readonly kind: "text";
   text: string;
   color: string;
+  fontFamily: string;
   fontSize: number;
-  align: "left" | "center" | "right";
+  align: TextHorizontalAlign;
+  verticalAlign: TextVerticalAlign;
+}
+
+/** Arrow whose endpoints can remain attached to first-class canvas elements. */
+export interface ConnectorVisual extends VisualBase {
+  readonly kind: "connector";
+  source: ConnectorEndpoint;
+  target: ConnectorEndpoint;
+  route: ConnectorRoute;
+  stroke: string;
+  strokeWidth: number;
+  opacity: number;
+  startStyle: ConnectorEndpointStyle;
+  endStyle: ConnectorEndpointStyle;
+  text: string;
+  color: string;
+  fontFamily: string;
+  fontSize: number;
+  align: TextHorizontalAlign;
+  verticalAlign: TextVerticalAlign;
 }
 
 /** React visual view materialized from a first-class document element. */
-export type EdgelessVisual = StickerVisual | DrawingVisual | ShapeVisual | TextVisual;
+export type EdgelessVisual = StickerVisual | DrawingVisual | ShapeVisual | TextVisual | ConnectorVisual;
 
 /** Persisted logical group element; children are first-class element IDs. */
-export interface VisualGroup {
-  readonly id: string;
-  title: string;
-  children: EdgelessSelectionRef[];
-}
+export interface VisualGroup { readonly id: string; title: string; children: EdgelessSelectionRef[] }
 
-/** Sticker catalog entry offered by the optional visual toolbar. */
+/** Font offered by text and sticky-note property menus. */
+export interface EdgelessFontOption { readonly label: string; readonly fontFamily: string }
+
+/** Styled sticky-note preset offered by the creation picker. */
 export interface EdgelessStickerOption {
   readonly id: string;
   readonly label: string;
-  readonly source: StickerVisual["source"];
-  readonly alt?: string;
+  readonly fill: string;
+  readonly color?: string;
+  readonly fontFamily?: string;
 }
+
+/** Behavior used when an attached connector endpoint loses its object. */
+export type OrphanConnectorBehavior = "detach" | "delete";
 
 /** Configuration accepted by {@link edgelessVisualsExtension}. */
 export interface EdgelessVisualsOptions {
+  readonly fonts?: readonly EdgelessFontOption[];
   readonly stickers?: readonly EdgelessStickerOption[];
+  readonly orphanConnectors?: OrphanConnectorBehavior;
   readonly toolbar?: boolean;
 }
 
 /** Payload accepted by `edgeless.visual.create`. */
 export type CreateVisualPayload =
-  | { kind: "sticker"; frame?: Partial<VisualFrame>; source: StickerVisual["source"]; alt?: string }
-  | { kind: "drawing"; frame: VisualFrame; points: DrawingVisual["points"]; stroke?: string; strokeWidth?: number }
-  | { kind: "rectangle" | "ellipse"; frame?: Partial<VisualFrame>; fill?: string; stroke?: string; strokeWidth?: number }
-  | { kind: "text"; frame?: Partial<VisualFrame>; text?: string; color?: string; fontSize?: number; align?: TextVisual["align"] };
+  | { kind: "sticker"; frame?: Partial<VisualFrame>; text?: string; fill?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
+  | { kind: "drawing"; frame: VisualFrame; points: DrawingVisual["points"]; brush?: EdgelessBrush; stroke?: string; strokeWidth?: number; opacity?: number }
+  | { kind: "connector"; frame?: Partial<VisualFrame>; source: ConnectorEndpoint; target: ConnectorEndpoint; route?: ConnectorRoute; stroke?: string; strokeWidth?: number; opacity?: number; startStyle?: ConnectorEndpointStyle; endStyle?: ConnectorEndpointStyle; text?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
+  | { kind: "rectangle" | "ellipse"; frame?: Partial<VisualFrame>; fill?: string; stroke?: string; strokeWidth?: number; filled?: boolean; stroked?: boolean; text?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
+  | { kind: "text"; frame?: Partial<VisualFrame>; text?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign };
+
+/** Click/drag presets from the create toolbar (not drawing or connector tools). */
+export type PresetPayload = Exclude<CreateVisualPayload, { kind: "drawing" | "connector" }>;
+
+/** Openable create-toolbar category. */
+export type ToolCategory = "shapes" | "drawing" | "text" | "stickers" | "connectors";
 
 /** Payload accepted by `edgeless.visual.update`. */
-export interface UpdateVisualPayload {
-  readonly id: string;
-  readonly patch: Partial<Omit<EdgelessVisual, "id" | "kind">>;
-}
+export interface UpdateVisualPayload { readonly id: string; readonly patch: Partial<Omit<EdgelessVisual, "id" | "kind">> }
 
-/** Alignment modes accepted by `edgeless.selection.align`. */
 export type EdgelessAlignment = "left" | "center" | "right" | "top" | "middle" | "bottom";
-
-/** Layer movement accepted by `edgeless.selection.reorder`. */
 export type EdgelessReorder = "front" | "forward" | "backward" | "back";
 
-/** Tool IDs accepted by `edgeless.tool.set`. */
-export type EdgelessVisualTool = "select" | "drawing";
+/** Placeable kinds activated from the create toolbar (canvas rubber-band / click). */
+export type EdgelessPlaceKind = "rectangle" | "ellipse" | "text" | "sticker";
 
-/** Typed documentation map for the string commands installed by the extension. */
+/** Local tool state; place tools create shapes/text/stickies on the canvas. */
+export type EdgelessVisualTool =
+  | { tool: "select" }
+  | { tool: "pan" }
+  | { tool: "place"; kind: EdgelessPlaceKind; fill?: string; color?: string; fontFamily?: string }
+  | { tool: "drawing"; brush: EdgelessBrush }
+  | { tool: "eraser" }
+  | { tool: "connector"; route: ConnectorRoute };
+
 export interface EdgelessVisualCommandMap {
   "edgeless.visual.create": { payload: CreateVisualPayload; result: string };
   "edgeless.visual.update": { payload: UpdateVisualPayload; result: void };
@@ -109,5 +171,5 @@ export interface EdgelessVisualCommandMap {
   "edgeless.selection.align": { payload: EdgelessAlignment | { alignment: EdgelessAlignment }; result: void };
   "edgeless.selection.distribute": { payload: "horizontal" | "vertical" | { axis: "horizontal" | "vertical" }; result: void };
   "edgeless.selection.reorder": { payload: EdgelessReorder | { direction: EdgelessReorder }; result: void };
-  "edgeless.tool.set": { payload: EdgelessVisualTool | { tool: EdgelessVisualTool }; result: void };
+  "edgeless.tool.set": { payload: EdgelessVisualTool | "select"; result: void };
 }
