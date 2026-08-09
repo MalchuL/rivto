@@ -12,6 +12,7 @@ import {
   isEditableKeyboardEvent,
   shouldDeleteSelection,
 } from "../../managers";
+import { navigationDomRoot } from "./outline-scope";
 
 /**
  * Outdents a nested block when Backspace is pressed at offset zero.
@@ -25,7 +26,6 @@ export function registerBlockOutdent(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockOutdentAtStart,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockOutdentAtStart],
-    mode: "block",
     when: ({ selection, raw: event }) =>
       !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
   }, ({ root }) => {
@@ -44,14 +44,13 @@ export function registerBlockOutdent(reactEditor: ReactEditor): void {
  *
  * Nested blocks are claimed by `BlockOutdentPlugin` first. If no previous
  * editable block exists this binding falls through to `EmptyBlockResetPlugin`
- * or to native contenteditable deletion.
+ * or to native contenteditable deletion. Edgeless merges stay inside one card.
  */
 export function registerBackwardBlockMerge(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMergeBackward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeBackward],
-    mode: "block",
     when: ({ selection, raw: event }) =>
       !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
   }, ({ root }) => {
@@ -59,7 +58,8 @@ export function registerBackwardBlockMerge(reactEditor: ReactEditor): void {
     if (!target?.collapsed || target.offset !== 0) return false;
     const rendered = findRenderedBlock(root, target.blockId);
     if (rendered && findParentBlock(rendered)) return false;
-    const previous = findPreviousEditableBlock(root, target.blockId);
+    const scope = navigationDomRoot(root, target.blockId);
+    const previous = findPreviousEditableBlock(scope, target.blockId);
     if (!previous) return false;
     const joinOffset = editor.blocks.mergeBlocks(previous.blockId, target.blockId);
     editor.selection.set([{
@@ -78,7 +78,6 @@ export function registerEmptyBlockReset(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.emptyBlockReset,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.emptyBlockReset],
-    mode: "block",
     when: ({ selection, raw: event }) =>
       !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
   }, ({ root }) => {
@@ -86,7 +85,8 @@ export function registerEmptyBlockReset(reactEditor: ReactEditor): void {
     if (!target?.collapsed || target.offset !== 0) return false;
     const block = editor.blocks.getBlock(target.blockId);
     if (!block || block.content !== "" || block.type === DEFAULT_BLOCK_TYPE) return false;
-    if (findPreviousEditableBlock(root, block.id)) return false;
+    const scope = navigationDomRoot(root, block.id);
+    if (findPreviousEditableBlock(scope, block.id)) return false;
     editor.blocks.setBlockType(block.id, DEFAULT_BLOCK_TYPE);
     requestAnimationFrame(() => focusBlock(root, block.id, 0));
     return true;

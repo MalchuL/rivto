@@ -10,6 +10,7 @@ import {
   isEditableKeyboardEvent,
   shouldDeleteSelection,
 } from "../../managers";
+import { navigationDomRoot } from "./outline-scope";
 
 /** Merges the next visible editable block at a collapsed block-end caret. */
 export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
@@ -17,7 +18,6 @@ export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMergeForward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
-    mode: "block",
     when: ({ selection, raw: event }) =>
       !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
   }, ({ root }) => {
@@ -27,7 +27,8 @@ export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
     // A collapsed parent behaves as a visible leaf: Delete must not merge one
     // of its deliberately hidden descendants.
     if (block.collapsed) return false;
-    const next = findNextEditableBlock(root, block.id);
+    const scope = navigationDomRoot(root, block.id);
+    const next = findNextEditableBlock(scope, block.id);
     if (!next) return false;
     const joinOffset = editor.blocks.mergeBlocks(block.id, next.blockId);
     editor.selection.set([{

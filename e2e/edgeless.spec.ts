@@ -1062,6 +1062,7 @@ test("keeps an indented block drag handle visible while moving onto it", async (
   const box = await handle.boundingBox();
   const bodyBox = await cardChrome(card).boundingBox();
   if (!box || !bodyBox) throw new Error("Expected an indented drag handle");
+  // Whole-line hover: left card padding at the nested row's y still reveals the handle.
   await page.mouse.move(bodyBox.x + 2, box.y + box.height / 2);
 
   await expect(handle).toHaveCSS("opacity", "1");
@@ -1073,6 +1074,62 @@ test("keeps an indented block drag handle visible while moving onto it", async (
       element.getBoundingClientRect().top + element.getBoundingClientRect().height / 2,
     ) === element
   ))).toBe(true);
+});
+
+test("moves a card by dragging from the left of an indented nested block", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
+  await clickCardChrome(page, card);
+  await expect(card).toHaveAttribute("data-block-selected", "true");
+
+  const nested = cardChildren(card).first();
+  const nestedId = await nested.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!nestedId) throw new Error("Expected nested block id");
+  // Use the whole-line hover strip left of the indented row. That lands on the
+  // nested block (via .page-block-row::before), which previously failed card move
+  // because only root IDs were accepted — while still keeping ⋮⋮ handle reveal.
+  const dragFrom = await card.evaluate((cardElement, id) => {
+    const block = cardElement.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`);
+    const row = block?.querySelector<HTMLElement>(":scope > .page-block-row");
+    const chrome = cardElement.querySelector<HTMLElement>(":scope > .edgeless-card-content");
+    if (!block || !row || !chrome) throw new Error("Expected nested row chrome");
+    const chromeRect = chrome.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const x = chromeRect.left + 2;
+    const y = rowRect.top + rowRect.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    if (!hit) throw new Error("Expected a hit target");
+    const hitBlock = hit.closest<HTMLElement>("[data-block-id]");
+    if (hitBlock?.getAttribute("data-block-id") !== id) {
+      throw new Error(`Expected nested block hit, got ${hitBlock?.getAttribute("data-block-id") ?? "none"}`);
+    }
+    if (hit.closest("[data-block-content], .page-drag-handle, button, [contenteditable=true]")) {
+      throw new Error("Expected non-control nested chrome");
+    }
+    return { x, y };
+  }, nestedId);
+
+  const before = await card.evaluate((element) => ({
+    left: Number.parseFloat((element as HTMLElement).style.left),
+    top: Number.parseFloat((element as HTMLElement).style.top),
+  }));
+  await page.mouse.move(dragFrom.x, dragFrom.y);
+  await page.mouse.down();
+  await page.mouse.move(dragFrom.x + 40, dragFrom.y + 20, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => card.evaluate((element) => ({
+    left: Number.parseFloat((element as HTMLElement).style.left),
+    top: Number.parseFloat((element as HTMLElement).style.top),
+  }))).toEqual({ left: before.left + 40, top: before.top + 20 });
+
+  // Structural handles must still light up across the whole indented line.
+  const handle = nested.locator(":scope > .page-block-row > .page-drag-handle");
+  const bodyBox = await cardChrome(card).boundingBox();
+  const handleBox = await handle.boundingBox();
+  if (!bodyBox || !handleBox) throw new Error("Expected handle geometry after move");
+  await page.mouse.move(bodyBox.x + 2, handleBox.y + handleBox.height / 2);
+  await expect(handle).toHaveCSS("opacity", "1");
+  await expect(handle).toHaveCSS("pointer-events", "auto");
 });
 
 test("maps a zoomed cross-card drop to the block under the pointer", async ({ page }) => {

@@ -19,7 +19,6 @@ export function registerSelectionDeletion(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.selectionDelete,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
-    mode: "block",
     when: ({ selection, raw: event }) => {
       const root = reactEditor.events.getRoot();
       if (!root || !shouldDeleteSelection(selection)) return false;

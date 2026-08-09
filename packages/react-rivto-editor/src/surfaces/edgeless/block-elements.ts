@@ -115,6 +115,27 @@ export function blockIdsOf(element: EditorElement, rootIds: readonly string[]): 
     : [];
 }
 
+/**
+ * True when `blockId` is a root rendered by the element, or a descendant of one.
+ *
+ * Card move hit-testing must accept nested/indented blocks; {@link blockIdsOf}
+ * alone only lists roots and would reject every child hit.
+ */
+export function elementContainsBlock(
+  editor: Pick<ReactEditor["editor"], "blocks">,
+  element: EditorElement,
+  rootIds: readonly string[],
+  blockId: string,
+): boolean {
+  const roots = new Set(blockIdsOf(element, rootIds));
+  let id: string | null | undefined = blockId;
+  while (id) {
+    if (roots.has(id)) return true;
+    id = editor.blocks.getParentId(id);
+  }
+  return false;
+}
+
 /** @returns Inclusive persisted boundaries for one non-empty ordered root range. */
 export function blockRangeProps(blockIds: readonly string[]): BlockElementProps {
   if (!blockIds.length) throw new Error("Block element range cannot be empty");

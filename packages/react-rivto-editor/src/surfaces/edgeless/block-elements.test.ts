@@ -4,6 +4,7 @@ import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../../extensions/
 import {
   blockIdsOf,
   EDGELESS_BLOCK_ELEMENT_ID_PREFIX,
+  elementContainsBlock,
   reconcileBlockElements,
 } from "./block-elements";
 
@@ -68,6 +69,29 @@ describe("edgeless block element reconciliation", () => {
     expect(editor.elements.getElements()).toHaveLength(1);
     expect(blockIdsOf(editor.elements.getElement("card")!, editor.blocks.getRootIds())).toEqual([root]);
     reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("elementContainsBlock accepts nested descendants of card roots", () => {
+    const editor = createRivtoEditor();
+    const root = editor.blocks.insertBlock({ type: "paragraph", content: "Root" });
+    const child = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, root);
+    editor.blocks.indentBlock(child);
+    const outsider = editor.blocks.insertBlock({ type: "paragraph", content: "Other" }, root);
+    const card = {
+      id: "card",
+      type: "block" as const,
+      frame: { x: 0, y: 0, width: 300, height: 120 },
+      zIndex: 0,
+      props: { startBlockId: root, endBlockId: root },
+    };
+    editor.elements.insertElement(card);
+    const roots = editor.blocks.getRootIds();
+    expect(elementContainsBlock(editor, card, roots, root)).toBe(true);
+    expect(elementContainsBlock(editor, card, roots, child)).toBe(true);
+    expect(elementContainsBlock(editor, card, roots, outsider)).toBe(false);
+    // Roots-only membership (legacy) would reject the indented child.
+    expect(blockIdsOf(card, roots).includes(child)).toBe(false);
     editor.destroy();
   });
 

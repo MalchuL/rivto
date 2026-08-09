@@ -3,7 +3,7 @@ import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { canvasDelta } from "./edgeless-geometry";
 import { getEdgelessRuntime } from "./edgeless-runtime";
-import { blockIdsOf } from "../../surfaces/edgeless/block-elements";
+import { elementContainsBlock } from "../../surfaces/edgeless/block-elements";
 import {
   applyCornerResize,
   connectorLabelCssDegrees,
@@ -422,7 +422,14 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     }
     const hitBlock = event.target.closest<HTMLElement>(BLOCK_SELECTOR);
     const element = editor.elements.getElement(id);
-    const movable = !event.target.closest(CONTROL_SELECTOR) && (!card || !hitBlock || element?.type === "block" && blockIdsOf(element, editor.blocks.getRootIds()).includes(hitBlock.dataset.blockId ?? ""));
+    const hitBlockId = hitBlock?.dataset.blockId ?? "";
+    // Nested/indented hits must count: card ranges store roots only, and the
+    // row hover strip (::before) often lands on a child block, not the root.
+    const movable = !event.target.closest(CONTROL_SELECTOR) && (
+      !card ||
+      !hitBlock ||
+      (element?.type === "block" && elementContainsBlock(editor, element, editor.blocks.getRootIds(), hitBlockId))
+    );
     if (!resize && !movable) return false;
     event.stopPropagation();
     const selected = current.includes(id);

@@ -26,6 +26,7 @@ import {
   pageEntries,
   selectedMoveRoots,
 } from "./page-selection-utils";
+import { navigationDomRoot, navigationOutlineBlocks } from "./outline-scope";
 
 type VerticalDirection = "up" | "down";
 
@@ -39,7 +40,8 @@ function textSelectionEdge(
   selection: TextSelection,
   edge: "start" | "end",
 ): EditorPosition {
-  const ids = pageEntries(editor.blocks.getBlocks()).map(({ block }) => block.id);
+  const ids = pageEntries(navigationOutlineBlocks(editor, selection.head.blockId))
+    .map(({ block }) => block.id);
   const anchorIndex = ids.indexOf(selection.anchor.blockId);
   const headIndex = ids.indexOf(selection.head.blockId);
   const forward = anchorIndex < headIndex || (
@@ -75,12 +77,18 @@ function focusBlockSelection(root: HTMLElement, blockId: string): void {
     ?.scrollIntoView({ block: "nearest" });
 }
 
+function activeBlockId(selection: EditorSelection): string | undefined {
+  const text = selection.find((item): item is TextSelection => item.type === "text");
+  const blocks = selection.find((item): item is BlockSelection => item.type === "block");
+  return text?.head.blockId ?? blocks?.focusBlockId;
+}
+
 /**
  * Owns native-looking caret movement, including wrapped-line geometry.
  *
  * Each shortcut is a separate declarative binding. Structural block selection
  * is intentionally absent, allowing an unclaimed key to fall through to
- * `BlockSelectionNavigationPlugin`.
+ * `BlockSelectionNavigationPlugin`. Edgeless keeps walks inside the active card.
  */
 export function registerCaretNavigation(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
@@ -88,6 +96,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     const selection = currentSelection(reactEditor.selection, editor);
     const text = selection.find((item): item is TextSelection => item.type === "text");
     if (!text) return false;
+    const scope = navigationDomRoot(root, text.head.blockId);
     if (!collapsed(text)) {
       const towardStart = direction === "left" || direction === "up";
       setCaret(root, editor, textSelectionEdge(editor, text, towardStart ? "start" : "end"));
@@ -96,9 +105,9 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     if (direction === "left" || direction === "right") {
       const block = editor.blocks.getBlock(text.head.blockId);
       const adjacent = direction === "left" && text.head.offset === 0
-        ? findPreviousEditableBlock(root, text.head.blockId)
+        ? findPreviousEditableBlock(scope, text.head.blockId)
         : direction === "right" && text.head.offset === (block?.content.length ?? -1)
-          ? findNextEditableBlock(root, text.head.blockId)
+          ? findNextEditableBlock(scope, text.head.blockId)
           : null;
       if (!adjacent) return false;
       setCaret(root, editor, {
@@ -107,7 +116,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
       });
       return true;
     }
-    const moved = verticalCaretPosition(root, text.head, direction);
+    const moved = verticalCaretPosition(scope, text.head, direction);
     if (!moved) return false;
     setCaret(root, editor, moved);
     return true;
@@ -117,10 +126,12 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     const selection = currentSelection(reactEditor.selection, editor);
     const text = selection.find((item): item is TextSelection => item.type === "text");
     if (!text) return false;
-    const moved = verticalCaretPosition(root, text.head, direction);
+    const scope = navigationDomRoot(root, text.head.blockId);
+    const outline = navigationOutlineBlocks(editor, text.head.blockId);
+    const moved = verticalCaretPosition(scope, text.head, direction);
     if (!moved) return false;
     if (moved.blockId !== text.anchor.blockId) {
-      const next = blockSelection(editor.blocks.getBlocks(), text.anchor.blockId, moved.blockId);
+      const next = blockSelection(outline, text.anchor.blockId, moved.blockId);
       editor.selection.set([next]);
       focusBlockSelection(root, next.focusBlockId);
       return true;
@@ -137,7 +148,6 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
   ) => reactEditor.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
-    mode: "block",
   }, ({ root }) => movePlain(root, direction));
   bindPlain(KEYBOARD_BINDING_IDS.caretLeft, "left");
   bindPlain(KEYBOARD_BINDING_IDS.caretRight, "right");
@@ -147,12 +157,10 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.caretExtendUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendUp],
-    mode: "block",
   }, ({ root }) => extendText(root, "up"));
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.caretExtendDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendDown],
-    mode: "block",
   }, ({ root }) => extendText(root, "down"));
 }
 
@@ -163,9 +171,10 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void
     const blocks = currentSelection(reactEditor.selection, editor)
       .find((item): item is BlockSelection => item.type === "block");
     if (!blocks) return false;
+    const outline = navigationOutlineBlocks(editor, blocks.focusBlockId);
     const next = extend
-      ? extendBlockSelection(editor.blocks.getBlocks(), blocks, direction)
-      : adjacentBlockSelection(editor.blocks.getBlocks(), blocks, direction);
+      ? extendBlockSelection(outline, blocks, direction)
+      : adjacentBlockSelection(outline, blocks, direction);
     editor.selection.set([next]);
     focusBlockSelection(root, next.focusBlockId);
     return true;
@@ -175,9 +184,12 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void
     const selection = currentSelection(reactEditor.selection, editor);
     const blocks = selection.find((item): item is BlockSelection => item.type === "block");
     const text = selection.find((item): item is TextSelection => item.type === "text");
+    const anchorId = blocks?.focusBlockId ?? text?.head.blockId;
+    if (!anchorId) return false;
+    const outline = navigationOutlineBlocks(editor, anchorId);
     const next = blocks
-      ? extendBlockSelection(editor.blocks.getBlocks(), blocks, direction)
-      : text ? blockSelection(editor.blocks.getBlocks(), text.head.blockId) : undefined;
+      ? extendBlockSelection(outline, blocks, direction)
+      : text ? blockSelection(outline, text.head.blockId) : undefined;
     if (!next) return false;
     editor.selection.set([next]);
     focusBlockSelection(root, next.focusBlockId);
@@ -199,7 +211,6 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void
   ) => reactEditor.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
-    mode: "block",
   }, ({ root }) => action(root));
   binding(KEYBOARD_BINDING_IDS.blockSelectionUp, (root) => move(root, "up", false));
   binding(KEYBOARD_BINDING_IDS.blockSelectionDown, (root) => move(root, "down", false));
@@ -218,16 +229,17 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
     const selection = currentSelection(reactEditor.selection, editor);
     const text = selection.find((item): item is TextSelection => item.type === "text");
     const blocks = selection.find((item): item is BlockSelection => item.type === "block");
-    const activeId = text?.head.blockId ?? blocks?.focusBlockId;
+    const activeId = activeBlockId(selection);
     if (!activeId) return false;
-    const roots = selectedMoveRoots(editor.blocks.getBlocks(), selection, activeId);
-    const placement = keyboardMovePlacement(editor.blocks.getBlocks(), roots.ids, direction);
+    const outline = navigationOutlineBlocks(editor, activeId);
+    const roots = selectedMoveRoots(outline, selection, activeId);
+    const placement = keyboardMovePlacement(outline, roots.ids, direction);
     if (!placement) return false;
     editor.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
     if (roots.grouped && roots.selection) {
       editor.selection.set([roots.selection]);
     } else if (blocks) {
-      editor.selection.set([blockSelection(editor.blocks.getBlocks(), activeId)]);
+      editor.selection.set([blockSelection(outline, activeId)]);
     }
     requestAnimationFrame(() => {
       if (text && !blocks) reactEditor.selection.restoreDOM(selection);
@@ -239,11 +251,9 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMoveUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveUp],
-    mode: "block",
   }, ({ root }) => move(root, "up"));
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMoveDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveDown],
-    mode: "block",
   }, ({ root }) => move(root, "down"));
 }

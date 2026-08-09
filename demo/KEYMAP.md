@@ -112,22 +112,23 @@ or delete its complete subtree; and collapse or expand it when applicable.
 | Click text or a control | Edits text or activates the control without selecting the canvas object. |
 | `Enter` in editable content | Uses the shared block splitter. A root always receives the split result as its first child; nested blocks retain page-mode insertion behavior. |
 | `Tab` / `Shift+Tab` in editable content | Uses the shared structural indent/outdent behavior inside the card outline. |
+| Caret / block-selection arrows, Alt+Shift reorder, merge/outdent Backspace/Delete | Same as page mode, scoped to the active card — navigation never crosses into another canvas element. |
 | `Primary+click` inside a card | Toggles its owning root object; controls do not activate. |
 | Drag empty canvas | Rectangle-selects intersecting root cards. |
 | Drag `Move` | Moves one root, or every selected root when the handle belongs to the selection. |
 | Drag a block `⋮⋮` handle | Uses the shared structural drag/drop behavior within the exact card under the pointer, including cross-card reorder and nesting. Blank canvas is not a drop target. |
 | Drag resize corner | Resizes one root card, with a minimum size of 180×100. |
-| Arrow keys | Moves selected roots by one canvas pixel. |
-| `Shift+Arrow` | Moves selected roots by ten canvas pixels. |
-| `Backspace` / `Delete` | For a structural block selection, the first press clears content and descendants while preserving each selected block; a second press deletes the empty blocks. Text selections keep native character deletion. |
+| Arrow keys (canvas selection active) | Moves selected roots by one canvas pixel. |
+| `Shift+Arrow` (canvas selection active) | Moves selected roots by ten canvas pixels. |
+| `Backspace` / `Delete` | For a structural block selection, the first press clears content and descendants while preserving each selected block; a second press deletes the empty blocks. Canvas object selection deletes selected elements. Text selections keep character / range deletion. |
 | `Escape` | Cancels an active transform or clears object selection. |
 | Native scroll / wheel | Scrolls the 2400×1600 canvas viewport. |
 | Space+drag / middle-button drag | Pans by changing native viewport scroll offsets. |
 | `Primary+wheel` | Zooms around the pointer between 50% and 200%. |
 
 Page/Edgeless mode buttons clear local selection but retain the same document,
-hierarchy, layouts, custom properties, and undo history. Collapse is page-only;
-all nested descendants remain rendered inside an edgeless root card.
+hierarchy, layouts, custom properties, and undo history. Collapse shortcuts work
+inside a card the same way as on the page.
 
 ## Not currently bound
 

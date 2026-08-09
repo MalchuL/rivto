@@ -123,15 +123,15 @@ export const blockSelectionExtension = (): ReactEditorExtension => ({
   setup: registerBlockSelection,
 });
 
-/** @returns Visual-line and cross-block caret navigation for page mode. */
+/** @returns Visual-line and cross-block caret navigation (card-scoped in edgeless). */
 export const caretNavigationExtension = (): ReactEditorExtension =>
   ({ id: "navigation.caret", setup: registerCaretNavigation });
 
-/** @returns Keyboard growth, shrink, and movement of page block selections. */
+/** @returns Keyboard growth, shrink, and movement of block selections (card-scoped in edgeless). */
 export const blockSelectionNavigationExtension = (): ReactEditorExtension =>
   ({ id: "navigation.block-selection", setup: registerBlockSelectionNavigation });
 
-/** @returns Alt+Shift structural movement for eligible page blocks. */
+/** @returns Alt+Shift structural movement for eligible blocks (card-scoped in edgeless). */
 export const keyboardBlockMoveExtension = (): ReactEditorExtension =>
   ({ id: "block.keyboard-move", setup: registerKeyboardBlockMove });
 
@@ -144,7 +144,7 @@ export const blockCreationExtension = (): ReactEditorExtension => ({
 /**
  * Installs backward and forward boundary merges as one semantic extension.
  *
- * @returns Page-only behavior for Backspace at start and Delete at end.
+ * @returns Backspace-at-start and Delete-at-end merges (card-scoped in edgeless).
  */
 export const blockMergeExtension = (): ReactEditorExtension => {
   return {
@@ -164,7 +164,7 @@ export const selectionDeletionExtension = (): ReactEditorExtension =>
  * Adds accessible page-end controls that append one or more paragraphs.
  *
  * @param count - Number of trailing insertion targets to render.
- * @returns A page-only visual extension mounted through the normal lifecycle.
+ * @returns A page-surface visual extension mounted through the normal lifecycle.
  */
 export const trailingBlockExtension = (count: number): ReactEditorExtension => {
   if (!Number.isInteger(count) || count < 1) {
@@ -173,7 +173,7 @@ export const trailingBlockExtension = (count: number): ReactEditorExtension => {
   return componentExtension("block.trailing-create", () => <TrailingBlock count={count} />);
 };
 
-/** @returns Backspace-at-start outdent behavior for nested page blocks. */
+/** @returns Backspace-at-start outdent behavior for nested blocks. */
 export const blockOutdentExtension = (): ReactEditorExtension =>
   ({ id: "block.outdent-at-start", setup: registerBlockOutdent });
 
