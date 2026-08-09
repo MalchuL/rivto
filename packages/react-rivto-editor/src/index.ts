@@ -1,5 +1,6 @@
 export * from "./blocks";
 export * from "./capabilities";
+export * from "./components";
 export * from "./constants";
 export * from "./editor-view";
 export * from "./hooks";

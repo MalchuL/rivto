@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  EditableLabel,
+  type EditableLabelFocusPoint,
+} from "../../../../components";
 import { EdgelessDragHandle } from "../../edgeless-drag-handle";
 import type { EdgelessVisualController } from "../controller";
 import type { ConnectorEndpoint, EdgelessVisual } from "../types";
@@ -27,8 +31,7 @@ export function VisualElement({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<{ key: "source" | "target"; endpoint: ConnectorEndpoint } | null>(null);
-  const editable = useRef<HTMLDivElement | null>(null);
-  useEffect(() => { if (editing) editable.current?.focus({ preventScroll: true }); }, [editing]);
+  const focusPointRef = useRef<EditableLabelFocusPoint | null>(null);
   useEffect(() => () => onReconnectHover(null), [onReconnectHover]);
 
   const source = visual.kind === "connector" && draft?.key === "source" ? draft.endpoint : visual.kind === "connector" ? visual.source : undefined;
@@ -47,6 +50,17 @@ export function VisualElement({
   };
   const canEditLabel = LABEL_KINDS.has(visual.kind);
   const content = useMemo(() => {
+    const labelFor = (text: string) => (
+      <EditableLabel
+        className="edgeless-label-editor"
+        editing={editing}
+        onEditingChange={setEditing}
+        text={text}
+        onCommit={(next) => controller.update({ id: visual.id, patch: { text: next } as never })}
+        focusPointRef={focusPointRef}
+        stopPointerWhileEditing
+      />
+    );
     if (visual.kind === "drawing") {
       const d = visual.points.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ");
       return (
@@ -124,19 +138,7 @@ export function VisualElement({
                 textAlign: visual.align,
               }}
             >
-              <div
-                ref={editable}
-                className="edgeless-label-editor"
-                contentEditable={editing}
-                suppressContentEditableWarning
-                onBlur={(event) => {
-                  controller.update({ id: visual.id, patch: { text: event.currentTarget.textContent ?? "" } as never });
-                  setEditing(false);
-                }}
-                onPointerDown={(event) => editing && event.stopPropagation()}
-              >
-                {visual.text}
-              </div>
+              {labelFor(visual.text)}
             </div>
           )}
         </>
@@ -156,18 +158,7 @@ export function VisualElement({
             textAlign: visual.align,
           }}
         >
-          <div
-            ref={editable}
-            className="edgeless-label-editor"
-            contentEditable={editing}
-            suppressContentEditableWarning
-            onBlur={(event) => {
-              controller.update({ id: visual.id, patch: { text: event.currentTarget.textContent ?? "" } as never });
-              setEditing(false);
-            }}
-          >
-            {visual.text}
-          </div>
+          {labelFor(visual.text)}
         </div>
       );
     }
@@ -220,19 +211,7 @@ export function VisualElement({
               textAlign: visual.align,
             }}
           >
-            <div
-              ref={editable}
-              className="edgeless-label-editor"
-              contentEditable={editing}
-              suppressContentEditableWarning
-              onBlur={(event) => {
-                controller.update({ id: visual.id, patch: { text: event.currentTarget.textContent ?? "" } as never });
-                setEditing(false);
-              }}
-              onPointerDown={(event) => editing && event.stopPropagation()}
-            >
-              {visual.text}
-            </div>
+            {labelFor(visual.text)}
           </div>
         )}
       </>
@@ -267,6 +246,7 @@ export function VisualElement({
       onDoubleClick={(event) => {
         if (!canEditLabel) return;
         event.stopPropagation();
+        focusPointRef.current = { x: event.clientX, y: event.clientY };
         setEditing(true);
       }}
     >
