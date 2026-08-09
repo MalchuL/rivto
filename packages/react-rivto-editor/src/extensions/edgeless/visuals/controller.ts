@@ -33,6 +33,14 @@ const copy = <Value>(value: Value): Value => structuredClone(value);
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const isHorizontalAlign = (value: unknown): value is "left" | "center" | "right" => value === "left" || value === "center" || value === "right";
 const isVerticalAlign = (value: unknown): value is "top" | "middle" | "bottom" => value === "top" || value === "middle" || value === "bottom";
+const isConnectorLineStyle = (value: unknown): value is "solid" | "dashed" | "dashed-animated" => (
+  value === "solid" || value === "dashed" || value === "dashed-animated"
+);
+const isConnectorTextRotation = (
+  value: unknown,
+): value is "horizontal" | "90" | "180" | "270" | "along" => (
+  value === "horizontal" || value === "90" || value === "180" || value === "270" || value === "along"
+);
 
 const DEFAULT_FONT = "Inter, ui-sans-serif, system-ui, sans-serif";
 const drawingDefaults = {
@@ -56,7 +64,7 @@ export class EdgelessVisualController {
     text: { color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 24, align: "left" as const, verticalAlign: "top" as const },
     sticker: { fill: "#fff2a8", color: "#3f3515", fontFamily: DEFAULT_FONT, fontSize: 22, align: "left" as const, verticalAlign: "top" as const },
     drawing: { brush: "pen" as const, ...drawingDefaults.pen },
-    connector: { route: "straight" as const, stroke: "#52525b", strokeWidth: 2, opacity: 1, startStyle: "none" as const, endStyle: "arrow" as const, text: "", color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 14, align: "center" as const, verticalAlign: "middle" as const },
+    connector: { route: "straight" as const, stroke: "#52525b", strokeWidth: 2, opacity: 1, lineStyle: "solid" as const, startStyle: "none" as const, endStyle: "arrow" as const, text: "", textRotation: "horizontal" as const, color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 14, align: "center" as const, verticalAlign: "middle" as const },
   };
   private readonly lastByCategory: Record<ToolCategory, EdgelessVisualTool> = {
     shapes: { tool: "place", kind: "rectangle" },
@@ -122,6 +130,10 @@ export class EdgelessVisualController {
           fontSize: typeof props.fontSize === "number" ? props.fontSize : this.defaults.connector.fontSize,
           align: isHorizontalAlign(props.align) ? props.align : this.defaults.connector.align,
           verticalAlign: isVerticalAlign(props.verticalAlign) ? props.verticalAlign : this.defaults.connector.verticalAlign,
+          lineStyle: isConnectorLineStyle(props.lineStyle) ? props.lineStyle : this.defaults.connector.lineStyle,
+          textRotation: isConnectorTextRotation(props.textRotation)
+            ? props.textRotation
+            : this.defaults.connector.textRotation,
         });
       } else if (element.type === "text") {
         Object.assign(props, {
@@ -258,7 +270,25 @@ export class EdgelessVisualController {
         source.elementId ? this.bounds(source.elementId) : undefined,
         target.elementId ? this.bounds(target.elementId) : undefined,
       );
-      props = { ...this.defaults.connector, source, target, route, stroke: payload.stroke ?? this.defaults.connector.stroke, strokeWidth: payload.strokeWidth ?? this.defaults.connector.strokeWidth, opacity: payload.opacity ?? this.defaults.connector.opacity, startStyle: payload.startStyle ?? this.defaults.connector.startStyle, endStyle: payload.endStyle ?? this.defaults.connector.endStyle, text: payload.text ?? this.defaults.connector.text, color: payload.color ?? this.defaults.connector.color, fontFamily: payload.fontFamily ?? this.defaults.connector.fontFamily, fontSize: payload.fontSize ?? this.defaults.connector.fontSize, align: payload.align ?? this.defaults.connector.align, verticalAlign: payload.verticalAlign ?? this.defaults.connector.verticalAlign };
+      props = {
+        ...this.defaults.connector,
+        source,
+        target,
+        route,
+        stroke: payload.stroke ?? this.defaults.connector.stroke,
+        strokeWidth: payload.strokeWidth ?? this.defaults.connector.strokeWidth,
+        opacity: payload.opacity ?? this.defaults.connector.opacity,
+        lineStyle: payload.lineStyle ?? this.defaults.connector.lineStyle,
+        startStyle: payload.startStyle ?? this.defaults.connector.startStyle,
+        endStyle: payload.endStyle ?? this.defaults.connector.endStyle,
+        text: payload.text ?? this.defaults.connector.text,
+        textRotation: payload.textRotation ?? this.defaults.connector.textRotation,
+        color: payload.color ?? this.defaults.connector.color,
+        fontFamily: payload.fontFamily ?? this.defaults.connector.fontFamily,
+        fontSize: payload.fontSize ?? this.defaults.connector.fontSize,
+        align: payload.align ?? this.defaults.connector.align,
+        verticalAlign: payload.verticalAlign ?? this.defaults.connector.verticalAlign,
+      };
     } else if (payload.kind === "text") {
       props = { ...this.defaults.text, text: payload.text ?? "Text", color: payload.color ?? this.defaults.text.color, fontFamily: payload.fontFamily ?? this.defaults.text.fontFamily, fontSize: payload.fontSize ?? this.defaults.text.fontSize, align: payload.align ?? this.defaults.text.align, verticalAlign: payload.verticalAlign ?? this.defaults.text.verticalAlign };
     } else {

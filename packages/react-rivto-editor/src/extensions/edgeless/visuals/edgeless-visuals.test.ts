@@ -147,11 +147,17 @@ describe("edgelessVisualsExtension", () => {
       source: { elementId: rectangle, anchor: { x: 1, y: .5 }, position: { x: 90, y: 50 } },
       target: { elementId: sticky, anchor: { x: 0, y: .5 }, position: { x: 200, y: 85 } },
       route: "curve",
+      lineStyle: "dashed-animated",
     }) as string;
 
     expect(editor.elements.getElement(sticky)?.props).toMatchObject({ text: "Plan", fill: "#ffd9e8" });
     expect(editor.elements.getElement(drawing)?.props).toMatchObject({ brush: "marker", opacity: .34, strokeWidth: 16 });
-    expect(editor.elements.getElement(connector)?.props).toMatchObject({ route: "curve", source: { elementId: rectangle }, target: { elementId: sticky } });
+    expect(editor.elements.getElement(connector)?.props).toMatchObject({
+      route: "curve",
+      lineStyle: "dashed-animated",
+      source: { elementId: rectangle },
+      target: { elementId: sticky },
+    });
     editor.execute("edgeless.selection.set", [rectangle]);
     editor.execute("edgeless.selection.move", { dx: 20, dy: 5 });
     expect((editor.elements.getElement(connector)?.props.source as { position: { x: number; y: number } }).position).toEqual({ x: 110, y: 55 });

@@ -6,7 +6,7 @@ import {
 import { EdgelessDragHandle } from "../../edgeless-drag-handle";
 import type { EdgelessVisualController } from "../controller";
 import type { ConnectorEndpoint, EdgelessVisual } from "../types";
-import { connectorLabelPoint, connectorPoints } from "../utils/geometry";
+import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from "../utils/geometry";
 import { shapeStrokePad } from "../utils/shape-stroke";
 
 const LABEL_KINDS = new Set(["text", "sticker", "rectangle", "ellipse", "connector"]);
@@ -99,6 +99,7 @@ export function VisualElement({
       const markerEnd = `connector-arrow-end-${visual.id}`;
       const markerStart = `connector-arrow-start-${visual.id}`;
       const labelAt = connectorLabelPoint(points, visual.route);
+      const labelDegrees = connectorLabelCssDegrees(points, visual.route, visual.textRotation);
       return (
         <>
           <svg className="edgeless-connector" viewBox={`0 0 ${visual.frame.width} ${visual.frame.height}`} preserveAspectRatio="none">
@@ -113,6 +114,7 @@ export function VisualElement({
             <path className="edgeless-connector-hit" d={path} />
             <path
               className="edgeless-connector-stroke"
+              data-line-style={visual.lineStyle}
               d={path}
               fill="none"
               stroke={visual.stroke}
@@ -129,6 +131,7 @@ export function VisualElement({
               data-editing={editing || undefined}
               data-empty={!visual.text && !editing ? "true" : undefined}
               data-vertical-align={visual.verticalAlign}
+              data-text-rotation={visual.textRotation}
               style={{
                 left: labelAt.x,
                 top: labelAt.y,
@@ -136,6 +139,7 @@ export function VisualElement({
                 fontFamily: visual.fontFamily,
                 fontSize: visual.fontSize,
                 textAlign: visual.align,
+                transform: labelDegrees ? `rotate(${labelDegrees}deg)` : undefined,
               }}
             >
               {labelFor(visual.text)}

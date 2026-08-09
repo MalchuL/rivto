@@ -6,7 +6,10 @@ import { getEdgelessRuntime } from "./edgeless-runtime";
 import { blockIdsOf } from "../../surfaces/edgeless/block-elements";
 import {
   applyCornerResize,
+  connectorLabelCssDegrees,
+  connectorLabelPoint,
   connectorPath,
+  connectorPoints,
   EDGELESS_GRID_SIZE,
   endpointPoint,
   snapFrame,
@@ -17,7 +20,7 @@ import {
   type ResizeCorner,
   type SnapGuide,
 } from "./visuals/utils/geometry";
-import type { ConnectorEndpoint, ConnectorRoute } from "./visuals/types";
+import type { ConnectorEndpoint, ConnectorRoute, ConnectorTextRotation } from "./visuals/types";
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
 const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
@@ -54,6 +57,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
   let start: TransformStart | null = null;
   let previewTargets: HTMLElement[] | null = null;
   let hiddenConnectors: HTMLElement[] = [];
+  let overlayLabels: HTMLElement[] = [];
   let overlaySvg: SVGSVGElement | null = null;
 
   const groupChildren = (id: string): string[] => {
@@ -93,6 +97,8 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
   const clearConnectorPreview = () => {
     hiddenConnectors.forEach((host) => host.style.removeProperty("visibility"));
     hiddenConnectors = [];
+    overlayLabels.forEach((label) => label.remove());
+    overlayLabels = [];
     overlaySvg?.replaceChildren();
   };
   const ensureOverlay = (root: HTMLElement) => {
@@ -117,10 +123,18 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
   };
   const previewAttachedConnectors = (root: HTMLElement, active: TransformStart, dx: number, dy: number) => {
     const overlay = ensureOverlay(root);
-    if (!overlay) return;
+    const plane = overlay?.parentElement;
+    if (!overlay || !plane) return;
     const moving = new Set(leaves(active.ids));
     const selected = new Set(active.ids);
     const nextHidden: HTMLElement[] = [];
+    const nextLabels: HTMLElement[] = [];
+    const labelsById = new Map(
+      overlayLabels.flatMap((label) => {
+        const id = label.dataset.edgelessConnectorPreviewLabel;
+        return id ? [[id, label] as const] : [];
+      }),
+    );
     const ns = "http://www.w3.org/2000/svg";
     const defs = root.ownerDocument.createElementNS(ns, "defs");
     const paths: SVGPathElement[] = [];
@@ -135,6 +149,8 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       if (!sourceMoves && !targetMoves && !connectorMoves) return;
       if (!sourceMoves && !targetMoves && source.elementId && target.elementId) return;
 
+      const sourceBound = source.elementId ? bounds(source.elementId) : undefined;
+      const targetBound = target.elementId ? bounds(target.elementId) : undefined;
       const sourceFrame = source.elementId ? previewFrame(source.elementId, active, sourceMoves ? dx : 0, sourceMoves ? dy : 0) : undefined;
       const targetFrame = target.elementId ? previewFrame(target.elementId, active, targetMoves ? dx : 0, targetMoves ? dy : 0) : undefined;
       let nextSource = endpointPoint(source, sourceFrame);
@@ -143,14 +159,25 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       if (connectorMoves && !target.elementId) nextTarget = { x: target.position.x + dx, y: target.position.y + dy };
 
       const route = (typeof element.props.route === "string" ? element.props.route : "straight") as ConnectorRoute;
+      const routeSourceFrame = sourceFrame ?? sourceBound;
+      const routeTargetFrame = targetFrame ?? targetBound;
+      const absPoints = connectorPoints(
+        nextSource,
+        nextTarget,
+        route,
+        source.anchor,
+        target.anchor,
+        routeSourceFrame,
+        routeTargetFrame,
+      );
       const d = connectorPath(
         nextSource,
         nextTarget,
         route,
         source.anchor,
         target.anchor,
-        sourceFrame ?? (source.elementId ? bounds(source.elementId) : undefined),
-        targetFrame ?? (target.elementId ? bounds(target.elementId) : undefined),
+        routeSourceFrame,
+        routeTargetFrame,
       );
       const host = root.querySelector<HTMLElement>(`[data-edgeless-object-id="${element.id}"]`);
       if (host) {
@@ -158,6 +185,9 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
         nextHidden.push(host);
       }
       const stroke = typeof element.props.stroke === "string" ? element.props.stroke : "#52525b";
+      const lineStyle = element.props.lineStyle === "dashed" || element.props.lineStyle === "dashed-animated"
+        ? element.props.lineStyle
+        : "solid";
       const startStyle = element.props.startStyle === "arrow" ? "arrow" : "none";
       const endStyle = element.props.endStyle === "arrow" ? "arrow" : "none";
       const markerEndId = `connector-preview-end-${element.id}`;
@@ -192,6 +222,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       }
       const path = root.ownerDocument.createElementNS(ns, "path");
       path.setAttribute("data-edgeless-connector-preview-stroke", "true");
+      path.setAttribute("data-line-style", lineStyle);
       path.setAttribute("d", d);
       path.setAttribute("fill", "none");
       path.setAttribute("stroke", stroke);
@@ -201,9 +232,47 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       if (startStyle === "arrow") path.setAttribute("marker-start", `url(#${markerStartId})`);
       if (endStyle === "arrow") path.setAttribute("marker-end", `url(#${markerEndId})`);
       paths.push(path);
+
+      const text = typeof element.props.text === "string" ? element.props.text : "";
+      if (text) {
+        const textRotation = (
+          element.props.textRotation === "90"
+          || element.props.textRotation === "180"
+          || element.props.textRotation === "270"
+          || element.props.textRotation === "along"
+          || element.props.textRotation === "horizontal"
+            ? element.props.textRotation
+            : "horizontal"
+        ) as ConnectorTextRotation;
+        const labelAt = connectorLabelPoint(absPoints, route);
+        const degrees = connectorLabelCssDegrees(absPoints, route, textRotation);
+        let label = labelsById.get(element.id);
+        if (label) labelsById.delete(element.id);
+        else {
+          label = root.ownerDocument.createElement("div");
+          label.className = "edgeless-connector-label edgeless-connector-label-preview";
+          label.dataset.edgelessConnectorPreviewLabel = element.id;
+          plane.append(label);
+        }
+        label.dataset.textRotation = textRotation;
+        label.textContent = text;
+        Object.assign(label.style, {
+          left: `${labelAt.x}px`,
+          top: `${labelAt.y}px`,
+          color: typeof element.props.color === "string" ? element.props.color : "#222222",
+          fontFamily: typeof element.props.fontFamily === "string" ? element.props.fontFamily : "inherit",
+          fontSize: typeof element.props.fontSize === "number" ? `${element.props.fontSize}px` : "14px",
+          textAlign: typeof element.props.align === "string" ? element.props.align : "center",
+          transform: degrees ? `rotate(${degrees}deg)` : "",
+          zIndex: "2147483639",
+        });
+        nextLabels.push(label);
+      }
     });
     hiddenConnectors.filter((host) => !nextHidden.includes(host)).forEach((host) => host.style.removeProperty("visibility"));
     hiddenConnectors = nextHidden;
+    labelsById.forEach((label) => label.remove());
+    overlayLabels = nextLabels;
     overlay.replaceChildren(defs, ...paths);
   };
   const guidesEqual = (left: readonly SnapGuide[], right: readonly SnapGuide[]) =>

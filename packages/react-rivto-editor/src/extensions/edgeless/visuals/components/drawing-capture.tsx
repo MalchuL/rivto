@@ -1,5 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
-import type { EdgelessVisualTool, VisualFrame } from "../types";
+import type { ConnectorLineStyle, EdgelessVisualTool, VisualFrame } from "../types";
 import type { ConnectorHover, ConnectorPreview } from "../hooks/use-drawing-gesture";
 import { connectorPath } from "../utils/geometry";
 import { shapeStrokePad } from "../utils/shape-stroke";
@@ -41,6 +41,7 @@ export function DrawingCapture({
   drawingOpacity,
   connectorStroke,
   connectorStrokeWidth,
+  connectorLineStyle = "solid",
   connectorStartStyle = "none",
   connectorEndStyle = "arrow",
   onPointerDown,
@@ -59,6 +60,7 @@ export function DrawingCapture({
   drawingOpacity: number;
   connectorStroke: string;
   connectorStrokeWidth: number;
+  connectorLineStyle?: ConnectorLineStyle;
   connectorStartStyle?: "none" | "arrow";
   connectorEndStyle?: "none" | "arrow";
   onPointerDown(event: ReactPointerEvent<SVGSVGElement>): void;
@@ -101,6 +103,7 @@ export function DrawingCapture({
           </defs>
           <path
             data-edgeless-connector-preview-stroke="true"
+            data-line-style={connectorLineStyle}
             d={connectorPath(
               connectorPreview.source,
               connectorPreview.target,

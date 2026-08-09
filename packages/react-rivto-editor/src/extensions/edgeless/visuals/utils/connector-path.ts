@@ -1,4 +1,4 @@
-import type { ConnectorRoute, VisualFrame } from "../types";
+import type { ConnectorRoute, ConnectorTextRotation, VisualFrame } from "../types";
 import { anchorNormal, inflateFrame, pointInFrame, segmentIntersectsFrame } from "./geometry-core";
 
 export type Point = { x: number; y: number };
@@ -49,6 +49,59 @@ export function connectorLabelPoint(points: readonly Point[], route: ConnectorRo
     return cubicBezierMidpoint(points[0]!, points[1]!, points[2]!, points[3]!);
   }
   return pointAlongPolyline(points, 0.5);
+}
+
+/**
+ * Keeps path-aligned label angles upright.
+ *
+ * Angles in the leftward half-plane (≈90°…270°) are flipped by 180°, so a
+ * direction near 180° becomes 0° instead of upside-down text.
+ */
+export function normalizeUprightLabelAngle(degrees: number): number {
+  let angle = ((degrees % 360) + 360) % 360;
+  if (angle > 90 && angle < 270) angle -= 180;
+  if (Math.abs(angle) < 1e-6 || Math.abs(Math.abs(angle) - 180) < 1e-6) return 0;
+  return angle;
+}
+
+/** Tangent vector at the label anchor, pointing roughly source → target. */
+export function connectorLabelTangent(points: readonly Point[], route: ConnectorRoute): Point {
+  if (route === "curve" && points.length >= 4) {
+    const [p0, p1, p2, p3] = points;
+    // B'(0.5) for a cubic Bezier.
+    return {
+      x: 0.75 * (p1!.x - p0!.x) + 1.5 * (p2!.x - p1!.x) + 0.75 * (p3!.x - p2!.x),
+      y: 0.75 * (p1!.y - p0!.y) + 1.5 * (p2!.y - p1!.y) + 0.75 * (p3!.y - p2!.y),
+    };
+  }
+  if (points.length < 2) return { x: 1, y: 0 };
+  const total = pathLength(points);
+  let remaining = total * 0.5;
+  for (let index = 1; index < points.length; index += 1) {
+    const a = points[index - 1]!;
+    const b = points[index]!;
+    const segment = Math.hypot(b.x - a.x, b.y - a.y);
+    if (remaining <= segment || index === points.length - 1) {
+      return segment ? { x: b.x - a.x, y: b.y - a.y } : { x: 1, y: 0 };
+    }
+    remaining -= segment;
+  }
+  return { x: 1, y: 0 };
+}
+
+/** CSS `rotate()` degrees for a connector label under the chosen rotation mode. */
+export function connectorLabelCssDegrees(
+  points: readonly Point[],
+  route: ConnectorRoute,
+  rotation: ConnectorTextRotation = "horizontal",
+): number {
+  if (rotation === "horizontal") return 0;
+  if (rotation === "90") return 90;
+  if (rotation === "180") return 180;
+  if (rotation === "270") return 270;
+  const tangent = connectorLabelTangent(points, route);
+  if (!tangent.x && !tangent.y) return 0;
+  return normalizeUprightLabelAngle((Math.atan2(tangent.y, tangent.x) * 180) / Math.PI);
 }
 
 /** Drops colinear intermediate vertices. */

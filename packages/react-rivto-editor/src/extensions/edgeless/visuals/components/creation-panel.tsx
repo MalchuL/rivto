@@ -1,6 +1,7 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { EdgelessVisualController } from "../controller";
 import type {
+  ConnectorLineStyle,
   ConnectorRoute,
   EdgelessBrush,
   EdgelessFontOption,
@@ -165,6 +166,15 @@ export function CreationPanel({
         <>
           <ColorControl label="Default connector color" value={defaults.connector.stroke} onChange={(stroke) => controller.setCreationDefaults("connector", { stroke })} />
           <SizeControl label="Default connector width" preview="dot" value={defaults.connector.strokeWidth} max={24} onChange={(strokeWidth) => controller.setCreationDefaults("connector", { strokeWidth })} />
+          <select
+            aria-label="Default connector line style"
+            value={defaults.connector.lineStyle}
+            onChange={(event) => controller.setCreationDefaults("connector", { lineStyle: event.currentTarget.value as ConnectorLineStyle })}
+          >
+            <option value="solid">Solid</option>
+            <option value="dashed">Dashed</option>
+            <option value="dashed-animated">Dashed animated</option>
+          </select>
         </>
       }
     />

@@ -10,11 +10,14 @@ export {
 } from "./geometry-core";
 export {
   connectorFrame,
+  connectorLabelCssDegrees,
   connectorLabelPoint,
+  connectorLabelTangent,
   connectorPath,
   connectorPoints,
   cubicBezierMidpoint,
   mergeColinear,
+  normalizeUprightLabelAngle,
   pathLength,
   pointAlongPolyline,
   polylineCutsNodes,

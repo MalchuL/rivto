@@ -195,6 +195,7 @@ export function EdgelessVisualLayer({
         drawingOpacity={defaults.drawing.opacity}
         connectorStroke={defaults.connector.stroke}
         connectorStrokeWidth={defaults.connector.strokeWidth}
+        connectorLineStyle={defaults.connector.lineStyle}
         connectorStartStyle={defaults.connector.startStyle}
         connectorEndStyle={defaults.connector.endStyle}
         onPointerDown={drawing.pointerDown}

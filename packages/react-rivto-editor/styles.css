@@ -829,8 +829,14 @@
   /* Manual newlines only — do not auto-wrap long labels. */
   white-space: pre;
   translate: -50% -50%;
+  transform-origin: center center;
   pointer-events: none;
   user-select: none;
+}
+
+.edgeless-connector-label-preview {
+  z-index: 2147483639;
+  pointer-events: none;
 }
 
 .edgeless-connector-label[data-editing] {
@@ -994,6 +1000,32 @@
 .edgeless-connector-stroke,
 .edgeless-drawing-stroke {
   pointer-events: none;
+}
+
+.edgeless-connector-stroke[data-line-style="dashed"],
+.edgeless-connector-stroke[data-line-style="dashed-animated"],
+[data-edgeless-connector-preview-stroke][data-line-style="dashed"],
+[data-edgeless-connector-preview-stroke][data-line-style="dashed-animated"] {
+  stroke-dasharray: 10 8;
+}
+
+/* Negative dashoffset advances the pattern along the path (source → target). */
+.edgeless-connector-stroke[data-line-style="dashed-animated"],
+[data-edgeless-connector-preview-stroke][data-line-style="dashed-animated"] {
+  animation: rivto-connector-dash-flow 0.75s linear infinite;
+}
+
+@keyframes rivto-connector-dash-flow {
+  to {
+    stroke-dashoffset: -36;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edgeless-connector-stroke[data-line-style="dashed-animated"],
+  [data-edgeless-connector-preview-stroke][data-line-style="dashed-animated"] {
+    animation: none;
+  }
 }
 
 .edgeless-connector-endpoint {

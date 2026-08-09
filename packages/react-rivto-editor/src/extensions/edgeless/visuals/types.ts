@@ -12,6 +12,19 @@ export type EdgelessBrush = "pencil" | "pen" | "marker";
 export type ConnectorRoute = "straight" | "orthogonal" | "curve";
 /** Decoration rendered at either end of a connector. */
 export type ConnectorEndpointStyle = "none" | "arrow";
+/**
+ * Stroke pattern for connectors.
+ *
+ * `dashed-animated` uses a moving dash pattern that flows source → target.
+ */
+export type ConnectorLineStyle = "solid" | "dashed" | "dashed-animated";
+/**
+ * Connector label orientation.
+ *
+ * `along` follows the path tangent and is normalized so the text stays upright
+ * (angles near 180° become 0°).
+ */
+export type ConnectorTextRotation = "horizontal" | "90" | "180" | "270" | "along";
 
 /** Stable attachment plus the last absolute point used if its object disappears. */
 export interface ConnectorEndpoint {
@@ -85,9 +98,11 @@ export interface ConnectorVisual extends VisualBase {
   stroke: string;
   strokeWidth: number;
   opacity: number;
+  lineStyle: ConnectorLineStyle;
   startStyle: ConnectorEndpointStyle;
   endStyle: ConnectorEndpointStyle;
   text: string;
+  textRotation: ConnectorTextRotation;
   color: string;
   fontFamily: string;
   fontSize: number;
@@ -128,7 +143,7 @@ export interface EdgelessVisualsOptions {
 export type CreateVisualPayload =
   | { kind: "sticker"; frame?: Partial<VisualFrame>; text?: string; fill?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
   | { kind: "drawing"; frame: VisualFrame; points: DrawingVisual["points"]; brush?: EdgelessBrush; stroke?: string; strokeWidth?: number; opacity?: number }
-  | { kind: "connector"; frame?: Partial<VisualFrame>; source: ConnectorEndpoint; target: ConnectorEndpoint; route?: ConnectorRoute; stroke?: string; strokeWidth?: number; opacity?: number; startStyle?: ConnectorEndpointStyle; endStyle?: ConnectorEndpointStyle; text?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
+  | { kind: "connector"; frame?: Partial<VisualFrame>; source: ConnectorEndpoint; target: ConnectorEndpoint; route?: ConnectorRoute; stroke?: string; strokeWidth?: number; opacity?: number; lineStyle?: ConnectorLineStyle; startStyle?: ConnectorEndpointStyle; endStyle?: ConnectorEndpointStyle; text?: string; textRotation?: ConnectorTextRotation; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
   | { kind: "rectangle" | "ellipse"; frame?: Partial<VisualFrame>; fill?: string; stroke?: string; strokeWidth?: number; filled?: boolean; stroked?: boolean; text?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
   | { kind: "text"; frame?: Partial<VisualFrame>; text?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign };
 

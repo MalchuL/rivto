@@ -137,6 +137,22 @@ export function VisualProperties({
           ))}
         </span>
       </PropertyRow>
+      {visual.kind === "connector" && (
+        <PropertyRow label="Rotation">
+          <select
+            aria-label="Connector text rotation"
+            value={String(common("textRotation") ?? "")}
+            onChange={(event) => preview({ textRotation: event.currentTarget.value })}
+          >
+            <option value="" disabled>Mixed</option>
+            <option value="horizontal">Horizontal</option>
+            <option value="90">90°</option>
+            <option value="180">180°</option>
+            <option value="270">270°</option>
+            <option value="along">Along path</option>
+          </select>
+        </PropertyRow>
+      )}
     </PropertyGroup>
   );
 
@@ -207,6 +223,14 @@ export function VisualProperties({
                 <option value="straight">Straight</option>
                 <option value="orthogonal">Orthogonal</option>
                 <option value="curve">Curve</option>
+              </select>
+            </PropertyRow>
+            <PropertyRow label="Style">
+              <select aria-label="Connector line style" value={String(common("lineStyle") ?? "")} onChange={(event) => preview({ lineStyle: event.currentTarget.value })}>
+                <option value="" disabled>Mixed</option>
+                <option value="solid">Solid</option>
+                <option value="dashed">Dashed</option>
+                <option value="dashed-animated">Dashed animated</option>
               </select>
             </PropertyRow>
             <PropertyRow label="Ends">

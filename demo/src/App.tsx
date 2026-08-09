@@ -88,8 +88,10 @@ function seedEdgelessShowcase(editor: ReturnType<typeof createRivtoEditor>): voi
     source: { elementId: rect, anchor: { x: 1, y: 0.5 }, position: { x: 190, y: 575 } },
     target: { elementId: ellipse, anchor: { x: 0, y: 0.5 }, position: { x: 240, y: 585 } },
     stroke: "#495057",
+    lineStyle: "dashed",
     endStyle: "arrow",
     text: "link",
+    textRotation: "along",
   });
 
   editor.execute("edgeless.selection.set", [rect, ellipse]);
@@ -103,13 +105,14 @@ function seedEdgelessShowcase(editor: ReturnType<typeof createRivtoEditor>): voi
     frame: { x: 420, y: 530, width: 170, height: 130 },
   }) as string;
 
-  // Second connector without label text (default is "").
+  // Second connector: animated dashes flow toward the sticky.
   editor.execute("edgeless.visual.create", {
     kind: "connector",
     route: "curve",
     source: { elementId: ellipse, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
     target: { elementId: sticky, anchor: { x: 0, y: 0.5 }, position: { x: 420, y: 595 } },
     stroke: "#868e96",
+    lineStyle: "dashed-animated",
     endStyle: "arrow",
     text: "",
   });

@@ -1,4 +1,20 @@
-import { applyCornerResize, connectorFrame, connectorLabelPoint, connectorPath, connectorPoints, nearestAnchor, polylineCutsNodes, segmentIntersectsFrame, snapFrame, snapMoveToGrid, snapResize, snapResizeToGrid, snapScalarToGrid } from "./geometry";
+import {
+  applyCornerResize,
+  connectorFrame,
+  connectorLabelCssDegrees,
+  connectorLabelPoint,
+  connectorPath,
+  connectorPoints,
+  nearestAnchor,
+  normalizeUprightLabelAngle,
+  polylineCutsNodes,
+  segmentIntersectsFrame,
+  snapFrame,
+  snapMoveToGrid,
+  snapResize,
+  snapResizeToGrid,
+  snapScalarToGrid,
+} from "./geometry";
 import { shapeStrokePad } from "./shape-stroke";
 
 describe("edgeless visual geometry", () => {
@@ -20,6 +36,13 @@ describe("edgeless visual geometry", () => {
     const frame = connectorFrame(source, target, sourceAnchor, targetAnchor, "orthogonal", sourceFrame, targetFrame);
     expect(frame.width).toBeGreaterThanOrEqual(80);
     expect(connectorLabelPoint([{ x: 0, y: 0 }, { x: 100, y: 0 }], "straight")).toEqual({ x: 50, y: 0 });
+    expect(normalizeUprightLabelAngle(180)).toBe(0);
+    expect(normalizeUprightLabelAngle(0)).toBe(0);
+    expect(normalizeUprightLabelAngle(45)).toBe(45);
+    expect(normalizeUprightLabelAngle(225)).toBe(45);
+    expect(connectorLabelCssDegrees([{ x: 0, y: 0 }, { x: 100, y: 0 }], "straight", "along")).toBe(0);
+    expect(connectorLabelCssDegrees([{ x: 100, y: 0 }, { x: 0, y: 0 }], "straight", "along")).toBe(0);
+    expect(connectorLabelCssDegrees([{ x: 0, y: 0 }, { x: 100, y: 0 }], "straight", "90")).toBe(90);
   });
 
   test("prefers orthogonal elbows that break near the path center", () => {
