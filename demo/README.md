@@ -13,6 +13,15 @@ pnpm demo
 
 Open <http://localhost:5173>.
 
+### Synced editors (same PC)
+
+Open <http://localhost:5173/?sync=1> to show two editors that share one Yjs
+document through a local `BroadcastChannel` provider (no signaling server).
+
+Edit either pane — the other should converge. Optional `room=` selects the
+channel name so another tab can join the same room, for example
+`/?sync=1&room=my-room`.
+
 `pnpm demo` starts only Vite. Development aliases resolve
 `@chulane/rivto` and `@chulane/rivto-react` directly to workspace sources, so
 core and React edits are hot-reloaded without building or watching package

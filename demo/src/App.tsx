@@ -1,7 +1,9 @@
 import {
+  BroadcastChannelProvider,
   createRivtoEditor,
   DEFAULT_BLOCK_TYPE,
   RIVTO_VERSION,
+  YjsDoc,
 } from "@chulane/rivto";
 import {
   createReactEditor,
@@ -557,8 +559,90 @@ function MultiEditorApp() {
   );
 }
 
-/** Chooses the normal demo or the isolated dual-editor regression fixture. */
+/**
+ * Creates one peer for the local BroadcastChannel sync demo.
+ *
+ * Only the left peer is seeded. The right peer starts empty and receives the
+ * document through the provider so concurrent edits stay easy to observe.
+ */
+function createSyncedPeer(side: "left" | "right", roomId: string) {
+  const yjsDoc = new YjsDoc(`${roomId}:${side}`);
+  const editor = createRivtoEditor({ document: yjsDoc });
+  const reactEditor = createReactEditor({
+    editor,
+    onMarkdownLinkClick: handleMarkdownLink,
+    extensions: [standardPreset(), edgelessVisualsExtension(edgelessOptions), blockIdExtension(), ...customBlockExtensions],
+  });
+  if (side === "left") {
+    const introId = editor.blocks.insertBlock({
+      type: DEFAULT_BLOCK_TYPE,
+      content: "**Synced demo** — edit here or in the other pane.",
+    });
+    editor.blocks.insertBlock({
+      type: DEFAULT_BLOCK_TYPE,
+      content: "Both editors share one Yjs room over `BroadcastChannel` (same PC, no server).",
+    }, introId);
+    editor.history.clear();
+  }
+  return { yjsDoc, editor, reactEditor, provider: new BroadcastChannelProvider(roomId) };
+}
+
+/** Side-by-side peers used to verify same-origin collaborative convergence. */
+function SyncEditorsApp() {
+  const roomId = new URLSearchParams(window.location.search).get("room") ?? "rivto-demo-sync";
+  const [peers] = useState(() => ({
+    left: createSyncedPeer("left", roomId),
+    right: createSyncedPeer("right", roomId),
+  }));
+  const [showBlockIds, setShowBlockIds] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      await peers.left.yjsDoc.attachProvider(peers.left.provider);
+      await peers.right.yjsDoc.attachProvider(peers.right.provider);
+      if (cancelled) {
+        await peers.left.yjsDoc.detachProvider().catch(() => undefined);
+        await peers.right.yjsDoc.detachProvider().catch(() => undefined);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      void peers.left.yjsDoc.detachProvider().catch(() => undefined);
+      void peers.right.yjsDoc.detachProvider().catch(() => undefined);
+      peers.left.reactEditor.destroy();
+      peers.left.editor.destroy();
+      peers.right.reactEditor.destroy();
+      peers.right.editor.destroy();
+    };
+  }, [peers]);
+
+  return (
+    <div className="sync-editor-page">
+      <header className="sync-editor-banner">
+        <span>Yjs sync via BroadcastChannel</span>
+        <code>room={roomId}</code>
+        <span>Open another tab with the same URL to add more peers.</span>
+      </header>
+      <div className="multi-editor-page">
+        {(["left", "right"] as const).map((side) => (
+          <section key={side} className="multi-editor-fixture" data-editor-sync={side}>
+            <BlockIdsVisibleProvider visible={showBlockIds}>
+              <EditorView editor={peers[side].reactEditor}>
+                <DemoToolbar showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
+              </EditorView>
+            </BlockIdsVisibleProvider>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Chooses the journal demo, sync peers, or the dual-editor regression fixture. */
 export function App() {
-  const multiple = new URLSearchParams(window.location.search).get("editors") === "2";
-  return multiple ? <MultiEditorApp /> : <JournalDemoApp />;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("editors") === "2") return <MultiEditorApp />;
+  if (params.get("sync") === "1") return <SyncEditorsApp />;
+  return <JournalDemoApp />;
 }
