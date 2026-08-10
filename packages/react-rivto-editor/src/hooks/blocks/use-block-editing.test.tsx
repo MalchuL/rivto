@@ -1,4 +1,4 @@
-import { createRivtoEditor as createEditor } from "@chulane/rivto";
+import { createTestCoreEditor as createEditor } from "../../test-utils";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {

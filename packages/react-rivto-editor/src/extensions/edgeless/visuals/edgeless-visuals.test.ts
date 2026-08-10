@@ -1,4 +1,4 @@
-import { createRivtoEditor } from "@chulane/rivto";
+import { createTestCoreEditor as createRivtoEditor } from "../../../test-utils";
 import { createReactEditor } from "../../../react-editor";
 import { edgelessSelectionExtension } from "../../built-ins/built-ins";
 import { edgelessVisualsExtension } from ".";

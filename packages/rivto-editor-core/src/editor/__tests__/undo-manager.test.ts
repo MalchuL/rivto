@@ -1,4 +1,4 @@
-import { createRivtoEditor } from "../rivto-editor";
+import { createTestEditor as createRivtoEditor } from "../test-utils";
 
 describe("EditorRuntime undo manager", () => {
   it("undoes and redoes one document command at a time", () => {

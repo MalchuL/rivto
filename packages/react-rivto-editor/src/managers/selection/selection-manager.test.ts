@@ -1,4 +1,4 @@
-import { createRivtoEditor as createEditor } from "@chulane/rivto";
+import { createTestCoreEditor as createEditor } from "../../test-utils";
 import { createReactEditor } from "../../react-editor";
 
 describe("ReactSelectionManager", () => {

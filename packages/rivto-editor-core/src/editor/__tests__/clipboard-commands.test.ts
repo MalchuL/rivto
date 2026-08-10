@@ -1,4 +1,5 @@
-import { createRivtoEditor, RIVTO_CLIPBOARD_MIME } from "../index";
+import { RIVTO_CLIPBOARD_MIME } from "../index";
+import { createTestEditor as createRivtoEditor } from "../test-utils";
 
 describe("clipboard commands", () => {
   it("copies only selected text when its block has nested children", () => {
@@ -449,7 +450,7 @@ describe("clipboard commands", () => {
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.selection.get()).toEqual([]);
 
-    editor.execute("clipboard.paste", { text: "First\nSecond" });
+    editor.execute("clipboard.paste", { text: "First\nSecond", defaultBlockType: "paragraph" });
     expect(editor.blocks.getBlocks().map((block) => block.content)).toEqual(["First", "Second"]);
     editor.destroy();
   });

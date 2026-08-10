@@ -1,4 +1,4 @@
-import { createRivtoEditor } from "../../../../editor";
+import { createTestEditor as createRivtoEditor } from "../../../../editor/test-utils";
 import { BroadcastChannelProvider } from "../providers/broadcast";
 import { YjsDoc } from "../yjs-doc";
 

@@ -1,4 +1,4 @@
-import { DEFAULT_BLOCK_TYPE, isNumberedListType } from "@chulane/rivto";
+import { isNumberedListType } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import {
   focusBlock,
@@ -25,7 +25,7 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
  * native plaintext input.
  */
 export function registerBlockCreation(reactEditor: ReactEditor): void {
-  const { editor, isEmptyBlock } = reactEditor;
+  const { editor, isEmptyBlock, createDefaultBlock } = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockCreate,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,
@@ -81,7 +81,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
         : block.content.length;
       if (isTextTarget) editor.blocks.updateBlock(block.id, { content: block.content.slice(0, splitAt) });
       nextBlockId = editor.blocks.insertBlock({
-        type: DEFAULT_BLOCK_TYPE,
+        ...createDefaultBlock(),
         listProps: {
           type: block.listProps.type === "checkbox"
             ? "checkbox"

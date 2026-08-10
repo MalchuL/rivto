@@ -1,4 +1,3 @@
-import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -7,6 +6,7 @@ import {
   KEYBOARD_BINDING_IDS,
   type ReactEditorExtension,
 } from "../../managers";
+import type { CreateDefaultBlock } from "../page/empty-block";
 import type { ReactEditor } from "../../types";
 
 /** Persisted native type installed by the built-in separator extension. */
@@ -29,25 +29,27 @@ export function SeparatorBlock() {
 }
 
 /**
- * Inserts a real separator and a writable paragraph at the active block level.
+ * Inserts a real separator and a writable default block at the active block level.
  * Empty leaf blocks are converted in place so slash insertion does not leave a
  * meaningless blank block. Content or descendants are never discarded.
  *
  * @param reactEditor - Runtime providing the registered separator type.
  * @param blockId - Active block before which editing should continue.
  * @param separatorType - Plugin-owned persisted separator type.
- * @returns ID of the new paragraph focused after the separator.
+ * @param createDefaultBlock - Factory for the follow-up writing block.
+ * @returns ID of the new writing block focused after the separator.
  */
 function insertSeparator(
   reactEditor: ReactEditor,
   blockId: string,
   separatorType: string,
+  createDefaultBlock: CreateDefaultBlock,
 ): string | undefined {
   const { editor } = reactEditor;
   const block = editor.blocks.getBlock(blockId);
   if (!block) return undefined;
   let separatorId = "";
-  let paragraphId = "";
+  let writingId = "";
   editor.batchUpdates(() => {
     if (!block.content && !block.children.length) {
       separatorId = block.id;
@@ -63,14 +65,14 @@ function insertSeparator(
         listProps: { type: "list", checked: false },
       }, block.id);
     }
-    paragraphId = editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, separatorId);
+    writingId = editor.blocks.insertBlock(createDefaultBlock(), separatorId);
     editor.selection.set([{
       type: "text",
-      anchor: { blockId: paragraphId, offset: 0 },
-      head: { blockId: paragraphId, offset: 0 },
+      anchor: { blockId: writingId, offset: 0 },
+      head: { blockId: writingId, offset: 0 },
     }]);
   });
-  return paragraphId;
+  return writingId;
 }
 
 /**
@@ -82,10 +84,16 @@ function insertSeparator(
 export const separatorBlockExtension = (): ReactEditorExtension => ({
   id: "block.separator",
   setup: (reactEditor) => {
+    const createDefaultBlock = () => reactEditor.createDefaultBlock();
     const focusInserted = (blockId: string): void => {
-      const paragraphId = insertSeparator(reactEditor, blockId, SEPARATOR_BLOCK_TYPE);
+      const writingId = insertSeparator(
+        reactEditor,
+        blockId,
+        SEPARATOR_BLOCK_TYPE,
+        createDefaultBlock,
+      );
       const root = reactEditor.events.getRoot();
-      if (paragraphId && root) requestAnimationFrame(() => focusBlock(root, paragraphId, 0));
+      if (writingId && root) requestAnimationFrame(() => focusBlock(root, writingId, 0));
     };
     const disposers = [
       reactEditor.blocks.register({
@@ -113,9 +121,14 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         if (nativeSelection) reactEditor.editor.selection.set(nativeSelection);
         const target = firstKeyboardTarget(nativeSelection ?? reactEditor.editor.selection.get());
         if (!target) return false;
-        const paragraphId = insertSeparator(reactEditor, target.blockId, SEPARATOR_BLOCK_TYPE);
-        if (!paragraphId) return false;
-        requestAnimationFrame(() => focusBlock(root, paragraphId, 0));
+        const writingId = insertSeparator(
+          reactEditor,
+          target.blockId,
+          SEPARATOR_BLOCK_TYPE,
+          createDefaultBlock,
+        );
+        if (!writingId) return false;
+        requestAnimationFrame(() => focusBlock(root, writingId, 0));
         return true;
       }),
     ];

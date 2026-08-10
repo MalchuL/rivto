@@ -1,6 +1,5 @@
-import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
 import { createPortal } from "react-dom";
-import { useEditor, useEditorRoot } from "../../hooks";
+import { useEditor, useEditorRoot, useReactEditor } from "../../hooks";
 import { focusBlock } from "../../managers";
 
 /** Properties for the page-end insertion targets. */
@@ -9,9 +8,10 @@ export interface TrailingBlockProps {
   readonly count: number;
 }
 
-/** Page-end controls that create every paragraph up to the activated row. */
+/** Page-end controls that create every writing block up to the activated row. */
 export function TrailingBlock({ count }: TrailingBlockProps) {
   const editor = useEditor();
+  const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
   const slot = root?.querySelector<HTMLElement>("[data-page-end-slot]");
   if (!root || !slot) return null;
@@ -30,7 +30,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
             editor.batchUpdates(() => {
               for (let current = 0; current < amount; current += 1) {
                 id = editor.blocks.insertBlock(
-                  { type: DEFAULT_BLOCK_TYPE, content: "" },
+                  reactEditor.createDefaultBlock(),
                   id || undefined,
                 );
               }

@@ -6,7 +6,6 @@ import {
   useReactEditor,
 } from "../../hooks";
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
-import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
 import { useCallback, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { EdgelessToolButton } from "../../extensions/edgeless/visuals/components/tool-button";
 import { EDGELESS_GRID_SIZE } from "../../extensions/edgeless/visuals/utils/geometry";
@@ -142,7 +141,7 @@ export function EdgelessSurface() {
       if (last && !reactEditor.blocks.separatesBlockElements(last.type)) {
         afterId = insertBlockElementSeparator(reactEditor, last.id);
       }
-      id = editor.blocks.insertBlock({ type: DEFAULT_BLOCK_TYPE, content: "" }, afterId);
+      id = editor.blocks.insertBlock(reactEditor.createDefaultBlock(), afterId);
       editor.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame: { ...EDGELESS_CARD_DEFAULT_FRAME, x, y },

@@ -1,7 +1,3 @@
-import {
-  DEFAULT_BLOCK_TYPE,
-  defaultBlockDefinitions,
-} from "../blocks";
 import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, LinkManager, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
 import { DocumentModelImpl, type Block, type DocumentModel, type Snapshot, type SnapshotUpdate } from "../store/document-model";
@@ -104,7 +100,6 @@ export class EditorRuntime implements RivtoEditorApi {
     this.document.blocks.setPropsValidator((type, props) => this.blocksRegistry.validate(type, props));
     this.registerRuntimeCommands();
     this.registerClipboardCommands();
-    defaultBlockDefinitions.forEach((definition) => this.blocksRegistry.defineBlock(definition));
 
     // Document changes cover block commands and direct/remote document edits.
     // !!!We subscribe to document changes to get updates and reconcile the selection with the latest document.
@@ -360,7 +355,7 @@ export class EditorRuntime implements RivtoEditorApi {
     this.commands.register("clipboard.paste", (value) => {
       const event = clipboardEvent(value);
       const data = payload(value);
-      const defaultBlockType = text(data.defaultBlockType) ?? DEFAULT_BLOCK_TYPE;
+      const defaultBlockType = text(data.defaultBlockType);
       const structured = text(data.structured)
         ?? (event?.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) || undefined);
       const bundle = data.bundle as ClipboardBundle | undefined;

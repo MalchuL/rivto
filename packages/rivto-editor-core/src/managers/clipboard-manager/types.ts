@@ -58,6 +58,6 @@ export interface ClipboardPasteInput {
   readonly mergeText?: boolean;
   /** Keep plain-text newline characters inside one block instead of creating siblings. */
   readonly preserveNewlines?: boolean;
-  /** Block type used for additional lines in a plain-text paste. */
+  /** Block type used for additional lines in a plain-text paste. Required when pasting plain text. */
   readonly defaultBlockType?: string;
 }

@@ -26,11 +26,12 @@ import {
 const editor = createRivtoEditor();
 const reactEditor = createReactEditor({
   editor,
-  defaultBlock: {
-    slashCommand: { group: "Formatting" },
-  },
   extensions: [
-    standardPreset(),
+    standardPreset({
+      writing: {
+        slashCommand: { group: "Formatting" },
+      },
+    }),
     blockExtension({
       definition: cardDefinition,
       render: CardContent,
@@ -46,9 +47,12 @@ reactEditor.destroy();
 editor.destroy();
 ```
 
-`defaultBlock.slashCommand` can override the built-in paragraph command's
-`id`, `title`, `group`, keywords, or availability while omitted fields retain
-their defaults.
+`standardPreset({ writing })` installs the default writing block (paragraph +
+Markdown renderer + slash conversion) and can override that command's `id`,
+`title`, `group`, keywords, or availability while omitted fields retain their
+defaults. Hosts that skip `standardPreset` must install
+`defaultWritingBlockExtension` (or call `installDefaultWriting`) before
+keyboard/clipboard paths that create writing blocks.
 
 `standardPreset()` installs the complete page and edgeless editing experience:
 surfaces, selection bridges, history, clipboard, slash commands, navigation,

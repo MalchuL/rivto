@@ -1,4 +1,3 @@
-import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import {
@@ -72,9 +71,9 @@ export function registerBackwardBlockMerge(reactEditor: ReactEditor): void {
   });
 }
 
-/** Resets the first empty custom block to the default paragraph type. */
+/** Resets the first empty custom block to the default writing type. */
 export function registerEmptyBlockReset(reactEditor: ReactEditor): void {
-  const { editor, isEmptyBlock } = reactEditor;
+  const { editor, isEmptyBlock, createDefaultBlock } = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.emptyBlockReset,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.emptyBlockReset],
@@ -88,7 +87,7 @@ export function registerEmptyBlockReset(reactEditor: ReactEditor): void {
     if (!block || block.content !== "" || isEmptyBlock(block)) return false;
     const scope = navigationDomRoot(root, block.id);
     if (findPreviousEditableBlock(scope, block.id)) return false;
-    editor.blocks.setBlockType(block.id, DEFAULT_BLOCK_TYPE);
+    editor.blocks.setBlockType(block.id, createDefaultBlock().type);
     requestAnimationFrame(() => focusBlock(root, block.id, 0));
     return true;
   });

@@ -1,4 +1,4 @@
-import { createRivtoEditor as createEditor } from "@chulane/rivto";
+import { createTestCoreEditor as createEditor } from "../test-utils";
 import {
   createElement,
   type ComponentType,
@@ -131,7 +131,7 @@ describe("ReactEditor", () => {
     const blockId = editor.blocks.insertBlock({ type: "test.source" });
     const reactEditor = createReactEditor({
       editor,
-      defaultBlock: { slashCommand: { group: "Writing" } },
+      extensions: [standardPreset({ writing: { slashCommand: { group: "Writing" } } })],
     });
 
     expect(reactEditor.slashCommands.getAll({ blockId })).toEqual(

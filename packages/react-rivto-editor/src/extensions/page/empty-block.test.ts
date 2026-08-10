@@ -1,31 +1,17 @@
-import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
-import {
-  isEmptyDefaultBlock,
-  resolveIsEmptyBlock,
-} from "./empty-block";
+import { createIsEmptyDefaultBlock, resolveIsEmptyBlock } from "./empty-block";
 
-describe("isEmptyDefaultBlock", () => {
-  test("accepts an empty paragraph", () => {
-    expect(isEmptyDefaultBlock({ type: DEFAULT_BLOCK_TYPE, content: "" })).toBe(true);
+describe("empty-block helpers", () => {
+  test("createIsEmptyDefaultBlock matches type and empty content", () => {
+    const isEmpty = createIsEmptyDefaultBlock("paragraph");
+    expect(isEmpty({ type: "paragraph", content: "" })).toBe(true);
+    expect(isEmpty({ type: "paragraph", content: "text" })).toBe(false);
+    expect(isEmpty({ type: "heading", content: "" })).toBe(false);
   });
 
-  test("rejects non-empty or non-default blocks", () => {
-    expect(isEmptyDefaultBlock({ type: DEFAULT_BLOCK_TYPE, content: "text" })).toBe(false);
-    expect(isEmptyDefaultBlock({ type: "markdown", content: "" })).toBe(false);
-    expect(isEmptyDefaultBlock({ type: "separator", content: "" })).toBe(false);
-  });
-});
-
-describe("resolveIsEmptyBlock", () => {
-  test("falls back to isEmptyDefaultBlock when omitted or null", () => {
-    expect(resolveIsEmptyBlock()).toBe(isEmptyDefaultBlock);
-    expect(resolveIsEmptyBlock(undefined)).toBe(isEmptyDefaultBlock);
-    expect(resolveIsEmptyBlock(null)).toBe(isEmptyDefaultBlock);
-  });
-
-  test("keeps a host-provided predicate", () => {
-    const custom = (block: { type: string; content: string }) => block.content === "";
-    expect(resolveIsEmptyBlock(custom)).toBe(custom);
-    expect(resolveIsEmptyBlock(custom)({ type: "markdown", content: "" })).toBe(true);
+  test("resolveIsEmptyBlock keeps the host predicate or builds the default", () => {
+    const host = () => true;
+    expect(resolveIsEmptyBlock(host, "paragraph")).toBe(host);
+    expect(resolveIsEmptyBlock(null, "note")({ type: "note", content: "" })).toBe(true);
+    expect(resolveIsEmptyBlock(undefined, "note")({ type: "note", content: "x" })).toBe(false);
   });
 });

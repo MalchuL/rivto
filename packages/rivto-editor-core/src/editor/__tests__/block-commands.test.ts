@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 import { z } from "zod";
 import { YjsDoc } from "../../store/crdt-doc";
-import { createRivtoEditor } from "../rivto-editor";
+import { createTestEditor as createRivtoEditor } from "../test-utils";
 
 describe("EditorRuntime block commands", () => {
   const expectOneUpdate = (editor: ReturnType<typeof createRivtoEditor>, action: () => void): void => {

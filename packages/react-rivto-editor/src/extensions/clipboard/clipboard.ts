@@ -1,5 +1,4 @@
 import {
-  DEFAULT_BLOCK_TYPE,
   isStructuralSelection,
   RIVTO_CLIPBOARD_MIME,
   type ClipboardPayload,
@@ -15,7 +14,11 @@ import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../
 
 /** Configuration for browser clipboard integration. */
 export interface ClipboardExtensionOptions {
-  /** Block type used when plain text creates additional blocks. */
+  /**
+   * Block type used when plain text creates additional blocks.
+   *
+   * When omitted, uses `reactEditor.createDefaultBlock().type` at paste time.
+   */
   readonly defaultBlockType?: string;
 }
 
@@ -34,21 +37,14 @@ export interface ClipboardExtensionOptions {
  * browser's `selectionchange` event may arrive after a keyboard clipboard event.
  * Event listeners are delegated to the active surface root and are removed by
  * the keyboard and DOM event runtimes when this component unmounts.
- *
- * @example
- * ```tsx
- * <EditorView editor={editor}>
- *   <TextSelectionPlugin />
- *   <ClipboardPlugin defaultBlockType={DEFAULT_BLOCK_TYPE} />
- *   <PageSurface />
- * </EditorView>
- * ```
  */
 export function registerClipboard(
   reactEditor: ReactEditor,
-  { defaultBlockType = DEFAULT_BLOCK_TYPE }: ClipboardExtensionOptions = {},
+  options: ClipboardExtensionOptions = {},
 ): void {
   const { editor } = reactEditor;
+  const resolveDefaultBlockType = (): string =>
+    options.defaultBlockType ?? reactEditor.createDefaultBlock().type;
   // ClipboardEvent does not expose keyboard modifiers. Remember only the
   // immediately preceding paste shortcut, then consume it in `paste` below.
   let pasteAsPlainText = false;
@@ -128,7 +124,7 @@ export function registerClipboard(
     // bridge affects insertion order without merging the two selection stores.
     if (canvas) editor.selection.set([canvas]);
     editor.clipboard.paste({
-      defaultBlockType,
+      defaultBlockType: resolveDefaultBlockType(),
       preserveNewlines: plainText,
       structured,
       mergeText: canvas ? false : undefined,

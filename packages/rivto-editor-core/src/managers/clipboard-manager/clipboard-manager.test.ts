@@ -1,4 +1,4 @@
-import { createRivtoEditor } from "../../editor";
+import { createTestEditor as createRivtoEditor } from "../../editor/test-utils";
 
 describe("core ClipboardManager", () => {
   it("copies and atomically cuts the current structured selection", () => {
@@ -152,7 +152,7 @@ describe("core ClipboardManager", () => {
       anchor: { blockId: targetId, offset: 0 },
       head: { blockId: targetId, offset: 0 },
     }]);
-    target.clipboard.paste({ text: "plain" });
+    target.clipboard.paste({ text: "plain", defaultBlockType: "paragraph" });
     expect(target.blocks.getBlock(targetId)?.content).toBe("plain");
     expect(() => target.clipboard.paste({
       structured: JSON.stringify({ ...payload.bundle, version: 1 }),
@@ -178,6 +178,7 @@ describe("core ClipboardManager", () => {
     editor.clipboard.paste({
       text: "first\n    second",
       preserveNewlines: true,
+      defaultBlockType: "paragraph",
     });
 
     expect(editor.blocks.getRootIds()).toEqual([id]);

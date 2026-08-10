@@ -39,9 +39,10 @@ export class BlockManager {
       const existing = editor.blocksRegistry.get(definition.type);
       if (!existing) {
         disposers.push(extensions.own(editor.blocksRegistry.defineBlock(definition)));
-      } else if (existing !== definition) {
-        throw new Error(`Block type ${definition.type} is already registered`);
       }
+      // When the type is already defined (host or test helper), reuse it and only
+      // attach React presentation. Object identity is no longer required because
+      // core no longer ships a shared default-writing definition reference.
 
       disposers.push(renderers.register(definition.type, render));
       if (registration.separatesBlockElements) {

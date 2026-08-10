@@ -1,4 +1,3 @@
-import { DEFAULT_BLOCK_TYPE } from "../../blocks";
 import type { EditorRuntime } from "../../editor/rivto-editor";
 import { isStructuralSelection, type NormalizedSelection } from "../selection-manager";
 import type { EditorSelection } from "../../editor/types";
@@ -88,8 +87,12 @@ export class ClipboardManager {
         this.pasteClipboardBundle(bundle, input.mergeText !== false);
         return;
       }
+      const defaultBlockType = input.defaultBlockType;
+      if (!defaultBlockType) {
+        throw new Error("clipboard.paste requires defaultBlockType for plain-text paste");
+      }
       this.pastePlainText(
-        input.defaultBlockType ?? DEFAULT_BLOCK_TYPE,
+        defaultBlockType,
         input.text ?? "",
         input.preserveNewlines === true,
       );

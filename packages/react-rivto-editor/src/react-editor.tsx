@@ -2,16 +2,12 @@
  * React runtime coordinator.
  *
  * Concrete registration state belongs to focused managers. ReactEditor only
- * wires those managers around one core editor, installs defaults/extensions,
- * and owns final destruction ordering.
+ * wires those managers around one core editor, installs extensions, and owns
+ * final destruction ordering.
  *
  * @module
  */
-import {
-  defaultBlockDefinitions,
-  type RivtoEditorApi as Editor,
-} from "@chulane/rivto";
-import { MarkdownContent } from "./blocks/markdown";
+import type { RivtoEditorApi as Editor } from "@chulane/rivto";
 import {
   BlockManager,
   EventManager,
@@ -24,16 +20,25 @@ import {
 } from "./managers";
 import type { CreateReactEditorOptions, ReactEditor } from "./types";
 import { reconcileBlockElements } from "./surfaces/edgeless/block-elements";
-import { resolveIsEmptyBlock, type IsEmptyBlock } from "./extensions/page/empty-block";
+import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/page/empty-block";
 
-export type { CreateReactEditorOptions, DefaultBlockOptions, ReactEditor } from "./types";
+export type { CreateReactEditorOptions, ReactEditor } from "./types";
+
+const WRITING_NOT_INSTALLED =
+  "Install defaultWritingBlockExtension (or call installDefaultWriting) before using writing factories";
 
 /** Internal implementation; applications receive the capability-only interface. */
 export class ReactEditorImpl implements ReactEditor {
   /** Framework-neutral document, command, mode, and history runtime. */
   readonly editor: Editor;
-  /** Resolved empty-block predicate for Enter / empty-block keyboard paths. */
-  readonly isEmptyBlock: IsEmptyBlock;
+  /** Factory for empty writing blocks; set by {@link installDefaultWriting}. */
+  createDefaultBlock: CreateDefaultBlock = () => {
+    throw new Error(WRITING_NOT_INSTALLED);
+  };
+  /** Empty-block predicate; set by {@link installDefaultWriting}. */
+  isEmptyBlock: IsEmptyBlock = () => {
+    throw new Error(WRITING_NOT_INSTALLED);
+  };
   /** Content renderers indexed by persisted block type. */
   readonly renderers: RendererManager;
   /** Atomic definition, renderer, and type-conversion registration. */
@@ -60,15 +65,17 @@ export class ReactEditorImpl implements ReactEditor {
   }
 
   /**
-   * Creates every manager, registers Markdown, then installs host extensions.
+   * Creates every manager, then installs host extensions.
    *
    * Manager construction precedes extension setup so an extension receives the fully
    * usable runtime instance. Any registration conflict destroys all completed
    * setup before the constructor rethrows.
+   *
+   * Writing-block registration is not done here — hosts install
+   * `defaultWritingBlockExtension` (included by `standardPreset`).
    */
   constructor(options: CreateReactEditorOptions) {
     this.editor = options.editor;
-    this.isEmptyBlock = resolveIsEmptyBlock(options.isEmptyBlock);
     // Constructors retain this owner but must not resolve sibling managers
     // until an operation runs. This keeps the dependency graph cyclic in
     // capability while initialization itself remains strictly ordered.
@@ -81,19 +88,6 @@ export class ReactEditorImpl implements ReactEditor {
     this.blocks = new BlockManager(this);
     this.surfaces = new SurfaceManager(this);
     try {
-      const slashCommand = {
-        title: "Markdown",
-        group: "Turn into",
-        keywords: ["paragraph", "text"],
-        ...options.defaultBlock?.slashCommand,
-      };
-      this.blocks.register({
-        definition: defaultBlockDefinitions[0]!,
-        render: options.onMarkdownLinkClick
-          ? (props) => <MarkdownContent {...props} onLinkClick={options.onMarkdownLinkClick} />
-          : MarkdownContent,
-        slashCommand,
-      });
       this.extensions.initialize(options.extensions ?? []);
       this.unsubscribeReconciliation = this.editor.subscribe(() => this.queueBlockElementReconciliation());
       this.queueBlockElementReconciliation();
@@ -101,6 +95,15 @@ export class ReactEditorImpl implements ReactEditor {
       this.destroy();
       throw error;
     }
+  }
+
+  /** Installs writing factories used by keyboard, trailing, separator, and clipboard paths. */
+  installDefaultWriting(options: {
+    createDefaultBlock: CreateDefaultBlock;
+    isEmptyBlock: IsEmptyBlock;
+  }): void {
+    this.createDefaultBlock = options.createDefaultBlock;
+    this.isEmptyBlock = options.isEmptyBlock;
   }
 
   /**

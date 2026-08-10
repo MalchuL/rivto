@@ -46,6 +46,7 @@ import { applyIndentShortcut } from "../page/indent";
 import { registerListShortcuts } from "../page/list-shortcuts";
 import { EdgelessSurface } from "../../surfaces/edgeless";
 import { separatorBlockExtension } from "../separator/separator-block";
+import { defaultWritingBlockExtension, type DefaultWritingBlockOptions } from "../page/default-writing-block";
 import { blockIdsOf, insertBlockElementSeparator } from "../../surfaces/edgeless/block-elements";
 import { PageSurface } from "../../surfaces/page";
 import {
@@ -434,14 +435,32 @@ export const blockExtension = (
   },
 });
 
+/** Options for {@link standardPreset}. */
+export interface StandardPresetOptions {
+  /** Number of page-end insertion targets. */
+  readonly trailingBlockCount?: number;
+  /** Host overrides for the default writing block extension. */
+  readonly writing?: DefaultWritingBlockOptions;
+}
+
 /**
  * Complete built-in editing behavior used by normal Rivto applications.
  *
- * @param trailingBlockCount - Number of page-end insertion targets.
+ * Installs `defaultWritingBlockExtension` first so writing factories exist
+ * before separator, clipboard, Enter, and related paths run.
+ *
+ * @param options - Trailing-block count and optional writing overrides.
  * @returns The complete built-in extension preset.
  */
-export const standardPreset = (trailingBlockCount = 3): ReactEditorExtension => {
+export const standardPreset = (
+  options: number | StandardPresetOptions = {},
+): ReactEditorExtension => {
+  const resolved: StandardPresetOptions = typeof options === "number"
+    ? { trailingBlockCount: options }
+    : options;
+  const trailingBlockCount = resolved.trailingBlockCount ?? 3;
   const extensions = [
+    defaultWritingBlockExtension(resolved.writing),
     separatorBlockExtension(),
     pageSurfaceExtension(),
     edgelessSurfaceExtension(),

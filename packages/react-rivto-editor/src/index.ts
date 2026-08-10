@@ -8,6 +8,14 @@ export {
   blockExtension,
   standardPreset,
 } from "./extensions/built-ins/built-ins";
+export type { StandardPresetOptions } from "./extensions/built-ins/built-ins";
+export {
+  DEFAULT_WRITING_BLOCK_TYPE,
+  defaultWritingBlockExtension,
+} from "./extensions/page/default-writing-block";
+export type {
+  DefaultWritingBlockOptions,
+} from "./extensions/page/default-writing-block";
 export {
   SEPARATOR_BLOCK_TYPE,
   SeparatorBlock,
@@ -18,15 +26,15 @@ export {
 } from "./react-editor";
 export type {
   CreateReactEditorOptions,
-  DefaultBlockOptions,
   MarkdownLinkClick,
   ReactEditor,
 } from "./types";
 export {
-  isEmptyDefaultBlock,
+  createIsEmptyDefaultBlock,
   resolveIsEmptyBlock,
 } from "./extensions/page/empty-block";
 export type {
+  CreateDefaultBlock,
   EmptyBlockCandidate,
   IsEmptyBlock,
 } from "./extensions/page/empty-block";

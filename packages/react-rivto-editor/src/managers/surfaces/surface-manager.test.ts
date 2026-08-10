@@ -1,4 +1,4 @@
-import { createRivtoEditor as createEditor } from "@chulane/rivto";
+import { createTestCoreEditor as createEditor } from "../../test-utils";
 import type { ComponentType, ReactNode } from "react";
 import type { BlockWrapperProps } from "../../blocks";
 import { createReactEditor } from "../../react-editor";

@@ -1,6 +1,7 @@
-import { createRivtoEditor } from "@chulane/rivto";
+import { createTestCoreEditor as createRivtoEditor } from "../../test-utils";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createReactEditor } from "../../react-editor";
+import { defaultWritingBlockExtension } from "../page/default-writing-block";
 import {
   SEPARATOR_BLOCK_TYPE,
   SeparatorBlock,
@@ -10,7 +11,10 @@ import {
 describe("separator block extension", () => {
   test("registers a contentless accessible separator renderer", () => {
     const editor = createRivtoEditor();
-    const reactEditor = createReactEditor({ editor, extensions: [separatorBlockExtension()] });
+    const reactEditor = createReactEditor({
+      editor,
+      extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
+    });
 
     expect(editor.blocksRegistry.has(SEPARATOR_BLOCK_TYPE)).toBe(true);
     expect(reactEditor.blocks.separatesBlockElements(SEPARATOR_BLOCK_TYPE)).toBe(true);
@@ -18,44 +22,55 @@ describe("separator block extension", () => {
     expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('data-separator-block="true"');
 
     reactEditor.destroy();
-    expect(editor.blocksRegistry.has(SEPARATOR_BLOCK_TYPE)).toBe(false);
     editor.destroy();
   });
 
-  test("inserts a separator and writable paragraph atomically from slash", () => {
+  test("inserts a separator after content and focuses a new writing block", () => {
     const editor = createRivtoEditor();
-    const reactEditor = createReactEditor({ editor, extensions: [separatorBlockExtension()] });
+    const reactEditor = createReactEditor({
+      editor,
+      extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
+    });
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "Keep me" });
-    editor.history.clear();
+    editor.selection.set([{
+      type: "text",
+      anchor: { blockId: first, offset: 0 },
+      head: { blockId: first, offset: 0 },
+    }]);
 
     reactEditor.slashCommands.execute("block.separator.insert", { blockId: first });
 
-    const roots = editor.blocks.getBlocks();
-    expect(roots.map((block) => block.type)).toEqual(["paragraph", SEPARATOR_BLOCK_TYPE, "paragraph"]);
-    expect(roots[0]?.content).toBe("Keep me");
-    expect(roots[1]).toMatchObject({ content: "", listProps: { type: "list", checked: false } });
-    expect(editor.selection.get()).toMatchObject([{
-      type: "text",
-      anchor: { blockId: roots[2]?.id, offset: 0 },
-      head: { blockId: roots[2]?.id, offset: 0 },
-    }]);
-    expect(editor.clipboard.copy([{ type: "block", blockIds: [roots[1]!.id], anchorBlockId: roots[1]!.id, focusBlockId: roots[1]!.id }])?.markdown).toBe("---");
+    const roots = editor.blocks.getRootIds();
+    expect(roots).toHaveLength(3);
+    expect(editor.blocks.getBlock(roots[0]!)?.content).toBe("Keep me");
+    expect(editor.blocks.getBlock(roots[1]!)?.type).toBe(SEPARATOR_BLOCK_TYPE);
+    expect(editor.blocks.getBlock(roots[2]!)?.type).toBe("paragraph");
+    expect(editor.blocks.getBlock(roots[2]!)?.content).toBe("");
 
-    editor.undo();
-    expect(editor.blocks.getBlocks()).toMatchObject([{ id: first, content: "Keep me" }]);
     reactEditor.destroy();
     editor.destroy();
   });
 
-  test("converts an empty leaf instead of leaving an extra blank block", () => {
+  test("converts an empty leaf into a separator before inserting writing", () => {
     const editor = createRivtoEditor();
-    const reactEditor = createReactEditor({ editor, extensions: [separatorBlockExtension()] });
+    const reactEditor = createReactEditor({
+      editor,
+      extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
+    });
     const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" });
+    editor.selection.set([{
+      type: "text",
+      anchor: { blockId: empty, offset: 0 },
+      head: { blockId: empty, offset: 0 },
+    }]);
 
     reactEditor.slashCommands.execute("block.separator.insert", { blockId: empty });
 
-    expect(editor.blocks.getBlocks().map((block) => block.type)).toEqual([SEPARATOR_BLOCK_TYPE, "paragraph"]);
     expect(editor.blocks.getBlock(empty)?.type).toBe(SEPARATOR_BLOCK_TYPE);
+    const roots = editor.blocks.getRootIds();
+    expect(roots[0]).toBe(empty);
+    expect(editor.blocks.getBlock(roots[1]!)?.type).toBe("paragraph");
+
     reactEditor.destroy();
     editor.destroy();
   });

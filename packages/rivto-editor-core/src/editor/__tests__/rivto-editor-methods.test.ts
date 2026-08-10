@@ -1,4 +1,4 @@
-import { createRivtoEditor } from "../rivto-editor";
+import { createTestEditor as createRivtoEditor } from "../test-utils";
 
 describe("EditorRuntime methods", () => {
   it("supports a complete lifecycle without blocks", () => {

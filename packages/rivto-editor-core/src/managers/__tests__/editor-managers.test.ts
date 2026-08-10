@@ -1,4 +1,4 @@
-import { createRivtoEditor } from "../../editor/rivto-editor";
+import { createTestEditor as createRivtoEditor } from "../../editor/test-utils";
 
 describe("editor block and link managers", () => {
   it("exposes separate registry, block, and link managers", () => {

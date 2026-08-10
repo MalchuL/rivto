@@ -1,4 +1,4 @@
-import { DEFAULT_BLOCK_TYPE } from "@chulane/rivto";
+import type { EditorBlockInput } from "@chulane/rivto";
 
 /** Minimal block shape used by empty-block keyboard predicates. */
 export interface EmptyBlockCandidate {
@@ -9,22 +9,28 @@ export interface EmptyBlockCandidate {
 /** Host or built-in predicate for “empty writing block” keyboard behavior. */
 export type IsEmptyBlock = (block: EmptyBlockCandidate) => boolean;
 
+/** Creates a detachable writing-block insert payload. */
+export type CreateDefaultBlock = () => EditorBlockInput;
+
 /**
- * True for a default empty writing block (`paragraph` with no text).
+ * Builds an empty-block predicate for a host-supplied writing type.
  *
- * Shared by Enter outdent and other empty-block keyboard paths so callers do
- * not re-encode the default type / empty-content pair.
+ * Callers pass `type` explicitly so this helper never closes over a module
+ * constant.
  */
-export function isEmptyDefaultBlock(block: EmptyBlockCandidate): boolean {
-  return block.type === DEFAULT_BLOCK_TYPE && block.content === "";
+export function createIsEmptyDefaultBlock(type: string): IsEmptyBlock {
+  return (block) => block.type === type && block.content === "";
 }
 
 /**
  * Resolves the active empty-block predicate.
  *
- * `null` / `undefined` keep {@link isEmptyDefaultBlock}; any other function is
- * used as-is (including wrappers that call the default).
+ * `null` / `undefined` keep {@link createIsEmptyDefaultBlock} for `type`; any
+ * other function is used as-is (including wrappers that call the default).
  */
-export function resolveIsEmptyBlock(isEmptyBlock?: IsEmptyBlock | null): IsEmptyBlock {
-  return isEmptyBlock ?? isEmptyDefaultBlock;
+export function resolveIsEmptyBlock(
+  isEmptyBlock: IsEmptyBlock | null | undefined,
+  type: string,
+): IsEmptyBlock {
+  return isEmptyBlock ?? createIsEmptyDefaultBlock(type);
 }

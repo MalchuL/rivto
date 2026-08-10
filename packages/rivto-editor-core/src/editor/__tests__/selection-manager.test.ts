@@ -1,4 +1,4 @@
-import { createRivtoEditor } from "../rivto-editor";
+import { createTestEditor as createRivtoEditor } from "../test-utils";
 
 const textSelection = (blockId: string, anchor = 0, head = anchor) => ({
   type: "text" as const,
