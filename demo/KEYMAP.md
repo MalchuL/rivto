@@ -11,7 +11,7 @@ or remap supported bindings.
 | Input | Context | Result |
 | --- | --- | --- |
 | Typing | Text caret or text selection | Uses the native `contenteditable` input path and synchronizes the block text. |
-| `Enter` | Editable block | Splits at the caret and creates a paragraph. If the expanded block has children, the new block becomes its first child; a collapsed block creates a next sibling. |
+| `Enter` | Editable block | Splits at the caret and creates a paragraph. If the expanded block has children, the new block becomes its first child; a collapsed block creates a next sibling. An empty nested paragraph outdents until it becomes a root instead of inserting another blank block. |
 | `Enter` | Expanded editor selection | Deletes the selection atomically, then applies the normal Enter behavior at the surviving caret. |
 | `Shift+Enter` | Editable block | Inserts a native line break inside the same block. |
 | `Backspace` | Expanded text or block selection originating in editable content | Deletes the complete selection in one transaction. |

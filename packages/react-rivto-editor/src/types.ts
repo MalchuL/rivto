@@ -16,6 +16,7 @@ import type {
   SurfacesCapability,
 } from "./capabilities";
 import type { MouseEvent } from "react";
+import type { IsEmptyBlock } from "./extensions/page/empty-block";
 
 /** Context supplied when a rendered Markdown link is activated. */
 export interface MarkdownLinkClick {
@@ -50,6 +51,12 @@ export interface CreateReactEditorOptions {
   readonly unknownBlockRenderer?: BlockRenderer;
   /** Options for the built-in paragraph renderer and slash conversion. */
   readonly defaultBlock?: DefaultBlockOptions;
+  /**
+   * Predicate for empty-block keyboard behavior (Enter outdent, list reset, …).
+   *
+   * When `null` or omitted, the runtime uses the built-in empty paragraph check.
+   */
+  readonly isEmptyBlock?: IsEmptyBlock | null;
   /** Observes Markdown links and may prevent browser navigation for local routing. */
   readonly onMarkdownLinkClick?: (context: MarkdownLinkClick) => void;
 }
@@ -66,6 +73,11 @@ export interface ReactEditor {
   readonly editor: Editor;
   /** Core editor revision forwarded for React's global invalidation boundary. */
   readonly revision: number;
+  /**
+   * Resolved empty-block predicate (`createReactEditor({ isEmptyBlock })` or the
+   * built-in empty paragraph check when that option is null/undefined).
+   */
+  readonly isEmptyBlock: IsEmptyBlock;
   readonly renderers: RenderersCapability;
   readonly blocks: BlocksCapability;
   readonly surfaces: SurfacesCapability;

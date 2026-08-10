@@ -27,14 +27,24 @@ import {
   BlockIdsVisibleProvider,
 } from "./extensions/block-id";
 
-/** Routes demo-local Markdown protocols while leaving ordinary links native. */
+/**
+ * Intercepts custom Markdown link protocols (`rivto:` / `chulane:`).
+ *
+ * Host apps own non-http links; ordinary URLs stay native. Dispatches
+ * `rivto:markdown-link` for e2e / host listeners.
+ */
 const handleMarkdownLink = ({ href, event }: MarkdownLinkClick): void => {
   if (!/^(?:rivto|chulane):/i.test(href)) return;
   event.preventDefault();
   window.dispatchEvent(new CustomEvent("rivto:markdown-link", { detail: href }));
 };
 
-/** Demo-specific presets proving the public edgeless picker configuration. */
+/**
+ * Host-supplied edgeless picker options (extra fonts and sticky presets).
+ *
+ * Needed to show that `edgelessVisualsExtension(...)` accepts real product
+ * configuration, not only the library defaults.
+ */
 const edgelessOptions = {
   fonts: [{ label: "Editorial serif", fontFamily: "Georgia, Cambria, serif" }],
   stickers: [
@@ -46,8 +56,9 @@ const edgelessOptions = {
 /**
  * Seeds canvas visuals that exercise edgeless features in the journal demo.
  *
- * Includes shapes, text, sticky, drawing, connector, nested groups, and spare
- * shapes for align / distribute / layer-order practice.
+ * Needed so a fresh demo load already has shapes, text, sticky, drawing,
+ * connectors, nested groups, and spare siblings for align / distribute /
+ * layer-order practice — without the visitor having to create them first.
  */
 function seedEdgelessShowcase(editor: ReturnType<typeof createRivtoEditor>): void {
   editor.execute("edgeless.visual.create", {
@@ -171,15 +182,16 @@ function seedEdgelessShowcase(editor: ReturnType<typeof createRivtoEditor>): voi
 }
 
 /**
- * Creates demo content for manual editing and selection checks.
+ * Builds today's journal editor with rich seed content.
  *
- * Adjacent Markdown blocks, nested branches, and two custom block types make
- * selection and extension behavior directly testable from the demo page.
+ * Needed as the main playground document: Markdown, nested lists, checkboxes,
+ * numbered lists, custom blocks, separators, block elements, and edgeless
+ * showcase — so selection, slash commands, and extensions are immediately
+ * testable. Optional `?keymap=alternate` remaps indent for keymap demos.
  */
 function createDemoEditor() {
   const editor = createRivtoEditor();
-  // This named demo preset gives browser tests and documentation examples a
-  // real host-level keymap without adding test-only editor APIs.
+  // Used by e2e / KEYMAP demos: `?keymap=alternate` remaps indent without test-only APIs.
   const alternateKeymap = new URLSearchParams(window.location.search).get("keymap") === "alternate"
     ? {
         [KEYBOARD_BINDING_IDS.blockIndent]: ["Primary+ArrowRight"],
@@ -326,7 +338,12 @@ function createDemoEditor() {
   return { editor, reactEditor };
 }
 
-/** Creates the initially empty previous-day document in the journal demo. */
+/**
+ * Builds yesterday's journal editor with no seed blocks.
+ *
+ * Needed to show two independent editor instances on one page (journal stack)
+ * and to contrast a populated document with an empty one.
+ */
 function createEmptyDemoEditor() {
   const editor = createRivtoEditor();
   const reactEditor = createReactEditor({
@@ -337,13 +354,24 @@ function createEmptyDemoEditor() {
   return { editor, reactEditor };
 }
 
+/**
+ * Formats a Date as a local `YYYY-MM-DD` key for `<time dateTime>`.
+ *
+ * Needed so journal headings expose a machine-readable date without putting
+ * presentation metadata into the document CRDT.
+ */
 function localDateKey(date: Date): string {
   return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
     .map((part) => String(part).padStart(2, "0"))
     .join("-");
 }
 
-/** Visible journal date without storing presentation metadata in the document. */
+/**
+ * Renders the journal day heading above an editor.
+ *
+ * Needed to make the stacked “today / yesterday” demo readable as a journal
+ * while keeping date UI outside the document model.
+ */
 function JournalDate({ date }: { readonly date: Date }) {
   return (
     <h1 className="journal-date">
@@ -354,7 +382,13 @@ function JournalDate({ date }: { readonly date: Date }) {
   );
 }
 
-/** Demo toolbar for switching the local presentation of one shared document. */
+/**
+ * Shared chrome above each demo editor (mode, block IDs, delete, undo).
+ *
+ * Needed so visitors can flip Page ↔ Edgeless, toggle debug block IDs, and
+ * exercise delete/undo without digging into keyboard shortcuts. Reused by
+ * journal, multi-editor, and sync surfaces.
+ */
 function DemoToolbar({
   showBlockIds,
   onShowBlockIdsChange,
@@ -364,6 +398,7 @@ function DemoToolbar({
 }) {
   const editor = useEditor();
   const { mode, setMode } = useEditorMode();
+  /** No-ops when already in `next` so repeated clicks do not thrash mode. */
   const switchMode = (next: "block" | "edgeless") => {
     if (next === mode) return;
     setMode(next);
@@ -382,6 +417,7 @@ function DemoToolbar({
           Block IDs
         </label>
         <div className="demo-mode-switch" role="group" aria-label="Editor mode">
+          {/* `data-editor-mode` / `data-editor-action` are used by e2e. */}
           <button type="button" data-editor-mode="block" aria-pressed={mode === "block"} onClick={() => switchMode("block")}>Page</button>
           <button type="button" data-editor-mode="edgeless" aria-pressed={mode === "edgeless"} onClick={() => switchMode("edgeless")}>Edgeless</button>
         </div>
@@ -392,7 +428,12 @@ function DemoToolbar({
   );
 }
 
-/** Hosts the editor runtime and explicitly selects the active demo surface. */
+/**
+ * Default demo: stacked today (seeded) + yesterday (empty) journals.
+ *
+ * Needed as the primary product walkthrough — two editors, shared toolbar
+ * patterns, and lifecycle cleanup when the page unmounts.
+ */
 function JournalDemoApp() {
   const [todayEditor] = useState(createDemoEditor);
   const [yesterdayEditor] = useState(createEmptyDemoEditor);
@@ -417,6 +458,7 @@ function JournalDemoApp() {
   return (
     <BlockIdsVisibleProvider visible={showBlockIds}>
       <div className="journal-stack">
+        {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
         <section className="journal-document" data-journal-document="today">
           <EditorView editor={todayEditor.reactEditor}>
             <DemoToolbar
@@ -436,7 +478,15 @@ function JournalDemoApp() {
   );
 }
 
-function createFixtureEditor(
+/**
+ * Builds one side of the dual-editor demo opened via `?editors=2`.
+ *
+ * Manual playground for cross-document drag/selection/history. Stable block
+ * ids (`left-parent`, …) keep panes readable with Block IDs on and let e2e
+ * target rows. Optional `empty` / `conflict` flags cover edge cases (also used
+ * by Playwright via query params).
+ */
+function createMultiEditor(
   side: "left" | "right",
   options: { readonly empty?: boolean; readonly conflict?: "block" | "link" } = {},
 ) {
@@ -452,7 +502,6 @@ function createFixtureEditor(
       type: DEFAULT_BLOCK_TYPE,
       content: "Movable parent",
       collapsed: true,
-      pluginData: { fixture: { retained: true } },
       children: [{
         id: "left-child",
         type: DEFAULT_BLOCK_TYPE,
@@ -470,14 +519,14 @@ function createFixtureEditor(
       id: "left-counter",
       type: COUNTER_BLOCK_TYPE,
       props: { count: 7 },
-      pluginData: { fixture: { counter: true } },
     });
     editor.blocks.insertBlock({ id: "left-stay", type: DEFAULT_BLOCK_TYPE, content: "Stays in the source" });
+    // Internal link moves with the subtree; external link should drop when its
+    // endpoint leaves the source document.
     editor.links.createLink({
       id: "left-internal-link",
       from: { blockId: "left-parent" },
       to: { blockId: "left-child" },
-      meta: { fixture: "internal" },
     });
     editor.links.createLink({
       id: "left-external-link",
@@ -491,6 +540,7 @@ function createFixtureEditor(
       content: "Destination parent",
       children: [
         { id: "right-nested", type: DEFAULT_BLOCK_TYPE, content: "Destination child" },
+        // Used by e2e + manual `?conflict=block`: duplicate id must reject the drop.
         ...(options.conflict === "block"
           ? [{ id: "left-child", type: DEFAULT_BLOCK_TYPE, content: "Conflicting ID" }]
           : []),
@@ -498,6 +548,7 @@ function createFixtureEditor(
     });
     editor.blocks.insertBlock({ id: "right-counter", type: COUNTER_BLOCK_TYPE, props: { count: 20 } });
     if (options.conflict === "link") {
+      // Used by e2e + manual `?conflict=link`: duplicate link id must reject the drop.
       editor.links.createLink({
         id: "left-internal-link",
         from: { blockId: "right-target" },
@@ -509,8 +560,8 @@ function createFixtureEditor(
   return { editor, reactEditor };
 }
 
-/** Test-only serialized state for assertions about data not represented in DOM. */
-function FixtureDocumentState() {
+/** Used by e2e: hidden `editor.dump()` for asserting links / structure not shown in the UI. */
+function DocumentStateDump() {
   const editor = useEditor();
   const snapshot = useSyncExternalStore(
     (listener) => editor.subscribe(listener),
@@ -520,34 +571,40 @@ function FixtureDocumentState() {
   return <output data-document-state hidden>{snapshot}</output>;
 }
 
-function FixtureEditor({
+/** One pane of `?editors=2` (toolbar + document dump for e2e). */
+function MultiEditorPane({
   side,
   runtime,
 }: {
   readonly side: "left" | "right";
-  readonly runtime: ReturnType<typeof createFixtureEditor>;
+  readonly runtime: ReturnType<typeof createMultiEditor>;
 }) {
   const [showBlockIds, setShowBlockIds] = useState(true);
   return (
-    <section className="multi-editor-fixture" data-editor-fixture={side}>
+    // `data-multi-editor` is used by e2e to scope left/right locators.
+    <section className="multi-editor-pane" data-multi-editor={side}>
       <BlockIdsVisibleProvider visible={showBlockIds}>
         <EditorView editor={runtime.reactEditor}>
           <DemoToolbar showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
-          <FixtureDocumentState />
+          <DocumentStateDump />
         </EditorView>
       </BlockIdsVisibleProvider>
     </section>
   );
 }
 
+/**
+ * Side-by-side editors for manual cross-document practice (`?editors=2`).
+ *
+ * Query extras (also used by e2e): `emptyDestination=1`, `conflict=block|link`.
+ */
 function MultiEditorApp() {
-  const emptyDestination = new URLSearchParams(window.location.search).get("emptyDestination") === "1";
-  const conflict = new URLSearchParams(window.location.search).get("conflict");
-  const [left] = useState(() => createFixtureEditor("left"));
-  const [right] = useState(() => createFixtureEditor("right", {
-    empty: emptyDestination,
-    conflict: conflict === "block" || conflict === "link" ? conflict : undefined,
-  }));
+  const params = new URLSearchParams(window.location.search);
+  const emptyDestination = params.get("emptyDestination") === "1";
+  const conflictParam = params.get("conflict");
+  const conflict = conflictParam === "block" || conflictParam === "link" ? conflictParam : undefined;
+  const [left] = useState(() => createMultiEditor("left"));
+  const [right] = useState(() => createMultiEditor("right", { empty: emptyDestination, conflict }));
   useEffect(() => () => {
     left.reactEditor.destroy();
     left.editor.destroy();
@@ -556,8 +613,8 @@ function MultiEditorApp() {
   }, [left, right]);
   return (
     <div className="multi-editor-page">
-      <FixtureEditor side="left" runtime={left} />
-      <FixtureEditor side="right" runtime={right} />
+      <MultiEditorPane side="left" runtime={left} />
+      <MultiEditorPane side="right" runtime={right} />
     </div>
   );
 }
@@ -565,8 +622,9 @@ function MultiEditorApp() {
 /**
  * Creates one peer for the local BroadcastChannel sync demo.
  *
- * Only the left peer is seeded. The right peer starts empty and receives the
- * document through the provider so concurrent edits stay easy to observe.
+ * Needed to wire a Yjs-backed editor + `BroadcastChannelProvider` without a
+ * server. Only the left peer is seeded; the right starts empty and receives
+ * the document so convergence is obvious.
  */
 function createSyncedPeer(side: "left" | "right", roomId: string) {
   const yjsDoc = new YjsDoc(`${roomId}:${side}`);
@@ -590,7 +648,12 @@ function createSyncedPeer(side: "left" | "right", roomId: string) {
   return { yjsDoc, editor, reactEditor, provider: new BroadcastChannelProvider(roomId) };
 }
 
-/** Side-by-side peers used to verify same-origin collaborative convergence. */
+/**
+ * Collaborative demo opened with `?sync=1` (optional `?room=`).
+ *
+ * Needed to verify same-origin Yjs sync over BroadcastChannel: two panes on
+ * this page, plus more peers if another tab opens the same URL.
+ */
 function SyncEditorsApp() {
   const roomId = new URLSearchParams(window.location.search).get("room") ?? "rivto-demo-sync";
   const [peers] = useState(() => ({
@@ -629,7 +692,8 @@ function SyncEditorsApp() {
       </header>
       <div className="multi-editor-page">
         {(["left", "right"] as const).map((side) => (
-          <section key={side} className="multi-editor-fixture" data-editor-sync={side}>
+          // `data-editor-sync` is used by e2e to scope sync panes.
+          <section key={side} className="multi-editor-pane" data-editor-sync={side}>
             <BlockIdsVisibleProvider visible={showBlockIds}>
               <EditorView editor={peers[side].reactEditor}>
                 <DemoToolbar showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
@@ -642,7 +706,16 @@ function SyncEditorsApp() {
   );
 }
 
-/** Chooses the journal demo, sync peers, or the dual-editor regression fixture. */
+/**
+ * Demo entry: picks which surface to mount from the URL.
+ *
+ * - default → journal stack (`JournalDemoApp`)
+ * - `?editors=2` → dual editors (`MultiEditorApp`)
+ * - `?sync=1` → BroadcastChannel peers (`SyncEditorsApp`)
+ *
+ * Needed so one Vite demo app can cover walkthrough, regression, and sync
+ * without separate entrypoints.
+ */
 export function App() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("editors") === "2") return <MultiEditorApp />;

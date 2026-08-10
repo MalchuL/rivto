@@ -18,13 +18,14 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
  * so a multi-item selection never creates several blocks. Expanded text is
  * deleted first, a collapsed caret splits its block, and a whole-block item adds
  * one empty default writing block.
+ * An empty default nested block outdents to a document root on Enter.
  * The new block becomes the first child when the source has visible children,
  * or the next sibling otherwise. Edgeless uses the same placement rule and
  * expands the owning block-element range for a new root. Shift+Enter remains
  * native plaintext input.
  */
 export function registerBlockCreation(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
+  const { editor, isEmptyBlock } = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockCreate,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,
@@ -53,7 +54,23 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
 
       const block = editor.blocks.getBlock(target.blockId);
       if (!block) return;
-      if (block.content === "" && block.listProps.type !== "list") {
+
+      // Empty nested writing blocks outdent instead of inserting another blank row.
+      // Keep outdenting in this keypress until the block is a document root.
+      if (isEmptyBlock(block) && editor.blocks.getParentId(block.id)) {
+        while (editor.blocks.getParentId(block.id)) {
+          editor.blocks.outdentBlock(block.id);
+        }
+        nextBlockId = block.id;
+        editor.selection.set([{
+          type: "text",
+          anchor: { blockId: nextBlockId, offset: 0 },
+          head: { blockId: nextBlockId, offset: 0 },
+        }]);
+        return;
+      }
+
+      if (isEmptyBlock(block) && block.listProps.type !== "list") {
         editor.blocks.updateBlock(block.id, { listProps: { type: "list", checked: false } });
         nextBlockId = block.id;
         return;

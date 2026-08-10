@@ -13,8 +13,8 @@ type Snapshot = {
   elements: Array<{ id: string; type: string }>;
 };
 
-const fixture = (page: Page, side: "left" | "right"): Locator =>
-  page.locator(`[data-editor-fixture="${side}"]`);
+const multiEditor = (page: Page, side: "left" | "right"): Locator =>
+  page.locator(`[data-multi-editor="${side}"]`);
 
 async function snapshot(editor: Locator): Promise<Snapshot> {
   return JSON.parse(await editor.locator("[data-document-state]").textContent() ?? "") as Snapshot;
@@ -39,8 +39,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("keeps selection, controls, mode, history, and modifier UI editor-local", async ({ page }) => {
-  const left = fixture(page, "left");
-  const right = fixture(page, "right");
+  const left = multiEditor(page, "left");
+  const right = multiEditor(page, "right");
   const leftParent = left.locator(blockIdSelector("left-parent"));
   const rightTarget = right.locator(blockIdSelector("right-target"));
 
@@ -82,8 +82,8 @@ test("keeps selection, controls, mode, history, and modifier UI editor-local", a
 });
 
 test("moves selected subtrees into the exact cross-document row and keeps histories independent", async ({ page }) => {
-  const left = fixture(page, "left");
-  const right = fixture(page, "right");
+  const left = multiEditor(page, "left");
+  const right = multiEditor(page, "right");
   await left.locator(blockIdSelector("left-parent")).locator("[data-block-content]").click({ modifiers: ["Control"] });
   await left.locator(blockIdSelector("left-counter")).locator(".custom-counter-block").click({ modifiers: ["Control"] });
 
@@ -108,7 +108,6 @@ test("moves selected subtrees into the exact cross-document row and keeps histor
   expect(destination.blocks[0]?.children[1]).toMatchObject({
     id: "left-parent",
     collapsed: true,
-    pluginData: { fixture: { retained: true } },
     children: [{ id: "left-child" }],
   });
   expect(destination.links).toEqual([expect.objectContaining({ id: "left-internal-link" })]);
@@ -123,8 +122,8 @@ test("moves selected subtrees into the exact cross-document row and keeps histor
 });
 
 test("supports a cross-document gap and an empty destination", async ({ page }) => {
-  const left = fixture(page, "left");
-  const right = fixture(page, "right");
+  const left = multiEditor(page, "left");
+  const right = multiEditor(page, "right");
   await drag(
     left.locator(blockIdSelector("left-counter")),
     right.locator(blockIdSelector("right-counter")),
@@ -137,8 +136,8 @@ test("supports a cross-document gap and an empty destination", async ({ page }) 
   ]);
 
   await page.goto("/?editors=2&emptyDestination=1");
-  const emptyLeft = fixture(page, "left");
-  const emptyRight = fixture(page, "right");
+  const emptyLeft = multiEditor(page, "left");
+  const emptyRight = multiEditor(page, "right");
   const source = emptyLeft.locator(blockIdSelector("left-counter"));
   const sourceBox = await source.locator(".page-drag-handle").boundingBox();
   const targetBox = await emptyRight.locator(".page-surface").boundingBox();
@@ -153,8 +152,8 @@ test("supports a cross-document gap and an empty destination", async ({ page }) 
 });
 
 test("targets nested cross-document rows and keeps ordinary local dragging local", async ({ page }) => {
-  const left = fixture(page, "left");
-  const right = fixture(page, "right");
+  const left = multiEditor(page, "left");
+  const right = multiEditor(page, "right");
   const rightBefore = await snapshot(right);
   await drag(
     left.locator(blockIdSelector("left-counter")),
@@ -165,8 +164,8 @@ test("targets nested cross-document rows and keeps ordinary local dragging local
     .toEqual([expect.objectContaining({ id: "left-counter" })]);
 
   await page.goto("/?editors=2");
-  const nestedLeft = fixture(page, "left");
-  const nestedRight = fixture(page, "right");
+  const nestedLeft = multiEditor(page, "left");
+  const nestedRight = multiEditor(page, "right");
   await drag(
     nestedLeft.locator(blockIdSelector("left-counter")),
     nestedRight.locator(blockIdSelector("right-nested")),
@@ -181,8 +180,8 @@ test("targets nested cross-document rows and keeps ordinary local dragging local
 test("rejects destination block and link ID conflicts without mutating either editor", async ({ page }) => {
   for (const conflict of ["block", "link"] as const) {
     await page.goto(`/?editors=2&conflict=${conflict}`);
-    const left = fixture(page, "left");
-    const right = fixture(page, "right");
+    const left = multiEditor(page, "left");
+    const right = multiEditor(page, "right");
     const sourceBefore = await snapshot(left);
     const destinationBefore = await snapshot(right);
     await drag(

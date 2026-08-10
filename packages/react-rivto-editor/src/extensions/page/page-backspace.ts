@@ -74,7 +74,7 @@ export function registerBackwardBlockMerge(reactEditor: ReactEditor): void {
 
 /** Resets the first empty custom block to the default paragraph type. */
 export function registerEmptyBlockReset(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
+  const { editor, isEmptyBlock } = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.emptyBlockReset,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.emptyBlockReset],
@@ -84,7 +84,8 @@ export function registerEmptyBlockReset(reactEditor: ReactEditor): void {
     const target = firstKeyboardTarget(editor.selection.get());
     if (!target?.collapsed || target.offset !== 0) return false;
     const block = editor.blocks.getBlock(target.blockId);
-    if (!block || block.content !== "" || block.type === DEFAULT_BLOCK_TYPE) return false;
+    // Blocks already considered empty by the host policy skip type reset.
+    if (!block || block.content !== "" || isEmptyBlock(block)) return false;
     const scope = navigationDomRoot(root, block.id);
     if (findPreviousEditableBlock(scope, block.id)) return false;
     editor.blocks.setBlockType(block.id, DEFAULT_BLOCK_TYPE);

@@ -22,6 +22,14 @@ export type {
   MarkdownLinkClick,
   ReactEditor,
 } from "./types";
+export {
+  isEmptyDefaultBlock,
+  resolveIsEmptyBlock,
+} from "./extensions/page/empty-block";
+export type {
+  EmptyBlockCandidate,
+  IsEmptyBlock,
+} from "./extensions/page/empty-block";
 export { MarkdownContent } from "./blocks/markdown";
 export { type BlockElementProps } from "./surfaces/edgeless";
 export { edgelessVisualsExtension } from "./extensions/edgeless/visuals";

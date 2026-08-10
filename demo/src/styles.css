@@ -126,7 +126,7 @@ body { margin: 0; }
   padding: 16px;
 }
 
-.multi-editor-fixture {
+.multi-editor-pane {
   min-width: 0;
   overflow: hidden;
   border: 1px solid #ddd;
@@ -134,14 +134,14 @@ body { margin: 0; }
   background: white;
 }
 
-.multi-editor-fixture .demo-header {
+.multi-editor-pane .demo-header {
   gap: 12px;
   padding: 10px 12px;
 }
 
-.multi-editor-fixture .demo-toolbar-controls { gap: 6px; }
-.multi-editor-fixture .demo-block-id-toggle { display: none; }
-.multi-editor-fixture .page-surface { min-height: 360px; }
+.multi-editor-pane .demo-toolbar-controls { gap: 6px; }
+.multi-editor-pane .demo-block-id-toggle { display: none; }
+.multi-editor-pane .page-surface { min-height: 360px; }
 
 @media (max-width: 900px) {
   .multi-editor-page { grid-template-columns: 1fr; }

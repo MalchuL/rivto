@@ -24,6 +24,7 @@ import {
 } from "./managers";
 import type { CreateReactEditorOptions, ReactEditor } from "./types";
 import { reconcileBlockElements } from "./surfaces/edgeless/block-elements";
+import { resolveIsEmptyBlock, type IsEmptyBlock } from "./extensions/page/empty-block";
 
 export type { CreateReactEditorOptions, DefaultBlockOptions, ReactEditor } from "./types";
 
@@ -31,6 +32,8 @@ export type { CreateReactEditorOptions, DefaultBlockOptions, ReactEditor } from 
 export class ReactEditorImpl implements ReactEditor {
   /** Framework-neutral document, command, mode, and history runtime. */
   readonly editor: Editor;
+  /** Resolved empty-block predicate for Enter / empty-block keyboard paths. */
+  readonly isEmptyBlock: IsEmptyBlock;
   /** Content renderers indexed by persisted block type. */
   readonly renderers: RendererManager;
   /** Atomic definition, renderer, and type-conversion registration. */
@@ -65,6 +68,7 @@ export class ReactEditorImpl implements ReactEditor {
    */
   constructor(options: CreateReactEditorOptions) {
     this.editor = options.editor;
+    this.isEmptyBlock = resolveIsEmptyBlock(options.isEmptyBlock);
     // Constructors retain this owner but must not resolve sibling managers
     // until an operation runs. This keeps the dependency graph cyclic in
     // capability while initialization itself remains strictly ordered.
