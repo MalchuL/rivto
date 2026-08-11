@@ -8,6 +8,7 @@ import {
   remapClipboardBundle,
   cloneSelectedTopLevelSubtrees,
   serializeClipboardBlocks,
+  type ClipboardIdReusePolicy,
 } from "./utils";
 
 /**
@@ -198,7 +199,7 @@ export class ClipboardManager {
     const first = bundle.blocks[0]!;
     const prefix = target.content.slice(0, range.start.offset);
     const suffix = range.blocks.at(-1)?.content.slice(range.end.offset) ?? "";
-    const remapped = remapClipboardBundle(bundle, target.id);
+    const remapped = remapClipboardBundle(bundle, target.id, this.idReusePolicy());
     let previous = target.id;
     let caretOffset = prefix.length + first.content.length;
 
@@ -307,7 +308,7 @@ export class ClipboardManager {
     bundle: ClipboardBundle,
     placement: BlockPastePlacement = {},
   ): void {
-    const remapped = remapClipboardBundle(bundle);
+    const remapped = remapClipboardBundle(bundle, undefined, this.idReusePolicy());
     const insertedIds: string[] = [];
     this.editor.document.transact(() => {
       let previous = placement.afterId;
@@ -328,6 +329,22 @@ export class ClipboardManager {
         focusBlockId: insertedIds.at(-1)!,
       }]);
     }
+  }
+
+  /**
+   * Builds the destination ID-reuse policy for one paste.
+   *
+   * An original clipboard ID survives paste only while no live block or link
+   * holds it. Cut releases the source IDs, so cut+paste restores the exact
+   * same identities; copy+paste sees the originals still in use and remints.
+   *
+   * @returns Predicates resolving ID availability against the live document.
+   */
+  private idReusePolicy(): ClipboardIdReusePolicy {
+    return {
+      canReuseBlockId: (id) => !this.editor.document.blocks.hasBlock(id),
+      canReuseLinkId: (id) => !this.editor.document.links.getLink(id),
+    };
   }
 
   /**

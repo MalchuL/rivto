@@ -142,7 +142,7 @@ describe("clipboard commands", () => {
 
     expect(target.blocks.getBlock(destination)?.content).toBe("Destination");
     expect(target.blocks.getBlocks().map((block) => block.content)).toEqual(["Destination", "Copied"]);
-    expect(target.blocks.getBlocks()[1]?.id).not.toBe(copied);
+    expect(target.blocks.getBlocks()[1]?.id).toBe(copied);
     source.destroy();
     target.destroy();
   });

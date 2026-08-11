@@ -234,21 +234,38 @@ export function serializeClipboardBlocks(
 }
 
 /**
+ * Destination policy deciding whether original clipboard IDs may be kept.
+ *
+ * Clipboard bundles always carry the source document's IDs. By default paste
+ * re-identifies everything, but a host may allow reuse when an ID is free in
+ * the destination.
+ */
+export interface ClipboardIdReusePolicy {
+  /** Returns true when the original block ID is free in the destination. */
+  canReuseBlockId?: (id: string) => boolean;
+  /** Returns true when the original link ID is free in the destination. */
+  canReuseLinkId?: (id: string) => boolean;
+}
+
+/**
  * Re-identifies every block and link in an incoming clipboard bundle.
  *
- * Clipboard IDs belong to the source document and cannot be inserted directly.
+ * Clipboard IDs belong to the source document and cannot be inserted directly,
+ * unless the supplied reuse policy confirms an ID is free in the destination.
  * When `firstTargetId` is supplied, the first
  * copied root maps to the existing text target and is therefore omitted from
  * `blocks`; its children are returned separately for attachment to that target.
  *
  * @param bundle - Structured clipboard hierarchy to validate and remap.
  * @param firstTargetId - Existing destination ID reused for the first root.
+ * @param reusePolicy - Optional policy allowing original IDs to survive paste.
  * @returns Fresh block inputs, detached first-root children, and remapped links.
  * @throws When required clipboard arrays are missing.
  */
 export function remapClipboardBundle(
   bundle: ClipboardBundle,
   firstTargetId?: string,
+  reusePolicy?: ClipboardIdReusePolicy,
 ): RemappedClipboardBundle {
   if (!Array.isArray(bundle.blocks) || !Array.isArray(bundle.links)) {
     throw new Error("Unsupported Rivto clipboard payload");
@@ -269,8 +286,11 @@ export function remapClipboardBundle(
   bundle.blocks.forEach(validateBlock);
 
   const idMap = new Map<string, string>();
+  const reusedBlockIds = new Set<string>();
   const remap = (block: Block): BlockInput => {
-    const id = crypto.randomUUID();
+    const reuse = reusePolicy?.canReuseBlockId?.(block.id) === true && !reusedBlockIds.has(block.id);
+    const id = reuse ? block.id : crypto.randomUUID();
+    if (reuse) reusedBlockIds.add(id);
     idMap.set(block.id, id);
     return {
       ...block,
@@ -282,15 +302,20 @@ export function remapClipboardBundle(
   if (first && firstTargetId) idMap.set(first.id, firstTargetId);
   const firstChildren = first && firstTargetId ? first.children.map(remap) : [];
   const blocks = firstTargetId ? rest.map(remap) : bundle.blocks.map(remap);
+  const reusedLinkIds = new Set<string>();
   const links = bundle.links.flatMap((link) => {
     const from = idMap.get(link.from.blockId);
     const to = idMap.get(link.to.blockId);
-    return from && to ? [{
+    if (!from || !to) return [];
+    const reuse = reusePolicy?.canReuseLinkId?.(link.id) === true && !reusedLinkIds.has(link.id);
+    const id = reuse ? link.id : crypto.randomUUID();
+    if (reuse) reusedLinkIds.add(id);
+    return [{
       ...link,
-      id: crypto.randomUUID(),
+      id,
       from: { ...link.from, blockId: from },
       to: { ...link.to, blockId: to },
-    }] : [];
+    }];
   });
   return { blocks, firstChildren, links };
 }

@@ -166,6 +166,83 @@ describe("core ClipboardManager", () => {
     target.destroy();
   });
 
+  it("restores original block and link IDs when pasting a cut bundle", () => {
+    const editor = createRivtoEditor();
+    const first = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "First",
+      children: [{ type: "paragraph", content: "Nested" }],
+    });
+    const child = editor.blocks.getBlock(first)!.children[0]!.id;
+    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first);
+    editor.links.createLink({ id: "cut-link", from: { blockId: first }, to: { blockId: second } });
+    editor.selection.set([{
+      type: "block",
+      blockIds: [first, second],
+      anchorBlockId: first,
+      focusBlockId: second,
+    }]);
+
+    const payload = editor.clipboard.cut()!;
+    editor.clipboard.paste({ bundle: payload.bundle, mergeText: false });
+
+    expect(editor.blocks.getBlocks()).toMatchObject([
+      { id: first, content: "First", children: [{ id: child, content: "Nested" }] },
+      { id: second, content: "Second" },
+    ]);
+    expect(editor.links.getLinks()).toMatchObject([
+      { id: "cut-link", from: { blockId: first }, to: { blockId: second } },
+    ]);
+    editor.destroy();
+  });
+
+  it("remints IDs when originals still exist in the destination", () => {
+    const editor = createRivtoEditor();
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
+    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first);
+    editor.links.createLink({ id: "copy-link", from: { blockId: first }, to: { blockId: second } });
+    editor.selection.set([{
+      type: "block",
+      blockIds: [first, second],
+      anchorBlockId: first,
+      focusBlockId: second,
+    }]);
+
+    const payload = editor.clipboard.copy()!;
+    editor.clipboard.paste({ bundle: payload.bundle, mergeText: false });
+
+    const ids = editor.blocks.getBlocks().map((block) => block.id);
+    expect(ids).toHaveLength(4);
+    expect(new Set(ids).size).toBe(4);
+    expect(ids.slice(0, 2)).toEqual([first, second]);
+    const linkIds = editor.links.getLinks().map((link) => link.id);
+    expect(linkIds).toHaveLength(2);
+    expect(linkIds).toContain("copy-link");
+    expect(new Set(linkIds).size).toBe(2);
+    editor.destroy();
+  });
+
+  it("remints IDs when pasting the same cut bundle a second time", () => {
+    const editor = createRivtoEditor();
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Twice" });
+    editor.selection.set([{
+      type: "block",
+      blockIds: [id],
+      anchorBlockId: id,
+      focusBlockId: id,
+    }]);
+
+    const payload = editor.clipboard.cut()!;
+    editor.clipboard.paste({ bundle: payload.bundle, mergeText: false });
+    editor.clipboard.paste({ bundle: payload.bundle, mergeText: false });
+
+    const ids = editor.blocks.getBlocks().map((block) => block.id);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).toBe(id);
+    expect(ids[1]).not.toBe(id);
+    editor.destroy();
+  });
+
   it("preserves multiline plain text inside one block when requested", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Before " });

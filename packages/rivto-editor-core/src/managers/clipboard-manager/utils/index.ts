@@ -5,6 +5,7 @@ export {
   remapClipboardBundle,
   serializeClipboardBlocks,
   cloneSelectedTopLevelSubtrees,
+  type ClipboardIdReusePolicy,
   type PortableClipboardFormats,
   type RemappedClipboardBundle,
 } from "./clipboard";
