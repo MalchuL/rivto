@@ -7,9 +7,9 @@ Keep the Yjs-backed `DocumentModel` as the runtime model for one open document.
 The runtime Yjs schema stores ordered roots in `rivto.editor.roots`. Each
 canonical record in `rivto.editor.blocks` owns its ordered collaborative
 `children` ID array alongside type, content, props, plugin data, collapse, and
-layout. Moving a block transfers its ID between collaborative arrays without
+list presentation. Moving a block transfers its ID between collaborative arrays without
 rewriting its canonical record. Lookup paths are cached lazily and validated
-on access, so content edits do not scan or rebuild the tree. Snapshot v4 remains
+on access, so content edits do not scan or rebuild the tree. Snapshot v5 remains
 nested and portable.
 
 Store documents in normalized database tables and convert those rows to and
@@ -47,8 +47,12 @@ embeds without changing Rivto's current block schema.
 A minimal relational representation is:
 
 ```text
+entities
+  id                   // globally unique primary key
+  kind                 // document, block, link, element, ...
+
 documents
-  id
+  id                   // references entities.id
   kind                 // document, journal, whiteboard
   journal_date         // nullable
   metadata_json
@@ -57,10 +61,12 @@ documents
   updated_at
 
 blocks
-  id
+  id                   // references entities.id
   document_id
   type
   content
+  collapsed
+  list_props_json
   props_json
   plugin_data_json
   revision
@@ -72,17 +78,24 @@ document_tree
   block_id
   parent_block_id      // null for a root
   position
-  layout_json
 
 links
-  id
+  id                   // references entities.id
   document_id
   from_block_id
   to_block_id
   meta_json
 
+elements
+  id                   // references entities.id
+  document_id
+  type
+  frame_json
+  z_index
+  props_json
+
 document_changes       // optional
-  id
+  id                   // references entities.id when changes are addressable
   document_id
   revision
   operation
@@ -90,12 +103,19 @@ document_changes       // optional
   created_at
 ```
 
+The `entities` table enforces the product invariant that one ID identifies one
+thing across every entity type. Generating UUIDs independently in several
+tables is not by itself a database constraint. Resolution starts at
+`entities.id`, uses `kind` to select the typed row, and discovers document
+ownership from that row when relevant.
+
 `blocks.document_id` gives every native block one owning document. A reference
 to another document is stored as an `embed` block; the foreign block is not
 inserted into the host tree.
 
-Collapse and layout belong to tree placement data while every block has one
-native placement. If canonical blocks later become direct members of multiple
+Collapse and list presentation belong to the block record. Edgeless geometry
+belongs to first-class element records. Every block still has one native tree
+placement. If canonical blocks later become direct members of multiple
 documents, tree records must gain occurrence IDs.
 
 ## Snapshot conversion
@@ -103,11 +123,11 @@ documents, tree records must gain occurrence IDs.
 Opening a document:
 
 ```text
-documents + blocks + document_tree + links
+documents + blocks + document_tree + links + elements
   -> validate rows
   -> order siblings by position
   -> recursively assemble Block.children
-  -> create Snapshot version 4
+  -> create Snapshot version 5
   -> editor.load(snapshot)
 ```
 
@@ -118,7 +138,7 @@ editor.dump()
   -> flatten Block.children
   -> upsert block values
   -> upsert parent and position rows
-  -> upsert links and document metadata
+  -> upsert links, elements, and document metadata
   -> remove rows absent from the saved revision
   -> commit one database transaction
 ```
@@ -130,10 +150,13 @@ The conversion is expected to be one-to-one:
 | `blocks.id` | `Block.id` |
 | `blocks.type` | `Block.type` |
 | `blocks.content` | `Block.content` |
+| `blocks.collapsed` | `Block.collapsed` |
+| `blocks.list_props_json` | `Block.listProps` |
 | `blocks.props_json` | `Block.props` |
 | `blocks.plugin_data_json` | `Block.pluginData` |
-| `document_tree` | `Block.children` and `Block.layout` |
+| `document_tree` | `Block.children` ordering |
 | `links` | `Snapshot.links` |
+| `elements` | `Snapshot.elements` |
 | `documents.metadata_json` | `Snapshot.pluginData` |
 
 Conversion code belongs in the application persistence layer, not in
@@ -211,26 +234,16 @@ not need to persist another combined document.
 The host document stores an ordinary block:
 
 ```ts
-type EmbedTarget = {
-  source: "rivto";
-  documentId: string;
-  blockId: string;
-};
-
 const embed: BlockInput = {
   type: "embed",
   props: {
-    target: {
-      source: "rivto",
-      documentId: "journal:2026-07-23",
-      blockId: "block-42",
-    },
+    targetId: "block-42",
     view: "subtree",
   },
 };
 ```
 
-The embed block has its own local ID, parent, order, layout, selection, and
+The embed block has its own local ID, parent, order, presentation, selection, and
 deletion behavior. Its target remains owned by the target document.
 
 Deleting the embed deletes only the reference. Deleting the target leaves a
@@ -243,8 +256,9 @@ Implement read-only embedding first:
 ```text
 Embed renderer
   -> read target descriptor
-  -> repository.open(target.documentId)
-  -> resolve target.blockId
+  -> repository.resolve(targetId)
+  -> verify the resolved entity kind
+  -> resolve targetId in its owning document session
   -> subscribe to target document changes
   -> render the block or subtree
 ```
@@ -253,8 +267,8 @@ Required application pieces:
 
 1. An `embed` `BlockDefinition` with a Zod schema for its props.
 2. An embed React renderer.
-3. A document repository that deduplicates open document sessions and releases
-   them when no editor or embed uses them.
+3. An entity repository that resolves global IDs, deduplicates owning document
+   sessions, and releases them when no editor or embed uses them.
 4. Loading, missing, denied, and error states.
 5. A subscription from the embed renderer to its target document.
 6. Cycle and maximum-depth checks.
@@ -263,20 +277,28 @@ For the first version, the host editor selects and copies the embed block as
 one block. Embedded descendants do not participate in host text selection,
 dragging, or host undo.
 
-## Document repository
+## Entity repository
 
 Start with the concrete operation needed by Rivto embeds:
 
 ```ts
-interface DocumentHandle {
-  readonly document: DocumentModel;
+interface DocumentSession {
+  readonly editor: RivtoEditorApi;
   release(): void;
 }
 
-interface DocumentRepository {
-  open(documentId: string): Promise<DocumentHandle>;
+type ResolvedEntity =
+  | { kind: "block"; id: string; session: DocumentSession }
+  | { kind: "document"; id: string; session: DocumentSession }
+  | { kind: "missing"; id: string };
+
+interface EntityRepository {
+  resolve(id: string): Promise<ResolvedEntity>;
 }
 ```
+
+This union is the editor-facing subset. The application extends it with all
+other entity kinds registered in the global ID index.
 
 The repository owns database hydration, provider attachment, caching, and
 reference counting. Ten embeds of the same document should share one loaded
@@ -284,6 +306,15 @@ document session.
 
 Add a general source registry only when a second source, such as SQL query
 results or an external API, is implemented.
+
+An absent result from `document.blocks.getBlock(id)` must not implicitly call
+this repository. Core getters are synchronous and describe only the currently
+open collaborative document. A database-backed reference stores one globally
+unique target ID; the repository discovers its entity kind and owning document.
+See
+[`packages/rivto-editor-core/docs/database-backed-resolution.md`](../packages/rivto-editor-core/docs/database-backed-resolution.md)
+and
+[`packages/react-rivto-editor/docs/database-backed-references.md`](../packages/react-rivto-editor/docs/database-backed-references.md).
 
 ## Editable embedding
 
@@ -297,8 +328,8 @@ User edits an embedded target
   -> every target editor and embed rerenders
 ```
 
-Do not update the host embed block's copied content. It stores only the target
-address and local display options.
+Do not update the host embed block's copied content. It stores only the global
+target ID and local display options.
 
 Before enabling editing, define:
 
@@ -314,23 +345,13 @@ database/API projections.
 
 ## Other database and API sources
 
-When a second source is needed, generalize the target:
+The reference continues to store only a global ID when another source is
+added. The entity repository can route the resolved database row to a
+source-specific adapter without changing persisted references:
 
 ```ts
-type BlockAddress = {
-  sourceId: string;
-  documentId?: string;
-  blockId: string;
-};
-```
-
-Then register source-specific resolvers:
-
-```ts
-interface BlockSource {
-  getBlock(address: BlockAddress): Promise<ResolvedBlock | undefined>;
-  getChildren(address: BlockAddress): Promise<ResolvedBlock[]>;
-  subscribe?(address: BlockAddress, listener: () => void): () => void;
+interface EntitySource {
+  resolve(entity: StoredEntity): Promise<ResolvedEntity>;
 }
 ```
 
@@ -388,7 +409,6 @@ AI should return validated incremental operations:
 ```ts
 type AIChange = {
   action: "block.update";
-  documentId: string;
   blockId: string;
   expectedRevision: number;
   patch: BlockPatch;
@@ -407,7 +427,7 @@ through the persistence service with revision checking.
 3. Connect open editors through one Yjs document/provider.
 4. Add optional incremental change persistence and compaction.
 5. Add journal lookup and navigation.
-6. Add the read-only Rivto `embed` block and document repository.
+6. Add the read-only Rivto `embed` block and entity repository.
 7. Add missing-target, permission, recursion, and lifecycle tests.
 8. Add editable Rivto embeds only when the product requires them.
 9. Generalize to a source registry when implementing a second source.
