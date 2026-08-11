@@ -23,3 +23,21 @@ test("renders today and yesterday as one seamless two-document journal", async (
   await expect(documents.nth(1).locator(".page-surface > [data-block-id]")).toHaveCount(1);
   await expect(documents.nth(0).locator(".page-surface > [data-block-id]")).not.toHaveCount(0);
 });
+
+test("moves the caret across journal editors at page boundaries", async ({ page }) => {
+  await page.goto("/");
+  const today = page.locator('[data-journal-document="today"]');
+  const yesterday = page.locator('[data-journal-document="yesterday"]');
+  await yesterday.getByRole("button", { name: "Add block", exact: true }).click();
+
+  const lastToday = today.locator("[data-block-content]").last();
+  const firstYesterday = yesterday.locator("[data-block-content]").first();
+  await lastToday.click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowDown");
+  await expect(firstYesterday).toBeFocused();
+
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowUp");
+  await expect(lastToday).toBeFocused();
+});

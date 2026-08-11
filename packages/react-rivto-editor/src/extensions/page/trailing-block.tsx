@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
 import { useEditor, useEditorRoot, useReactEditor } from "../../hooks";
+import { PAGE_END_SLOT_SELECTOR } from "../../constants";
 import { focusBlock } from "../../managers";
 
 /** Properties for the page-end insertion targets. */
@@ -13,7 +14,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
   const editor = useEditor();
   const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
-  const slot = root?.querySelector<HTMLElement>("[data-page-end-slot]");
+  const slot = root?.querySelector<HTMLElement>(PAGE_END_SLOT_SELECTOR);
   if (!root || !slot) return null;
 
   return createPortal(

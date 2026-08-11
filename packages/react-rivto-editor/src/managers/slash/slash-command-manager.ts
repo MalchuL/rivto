@@ -2,6 +2,7 @@ import type {
   SlashCommand,
   SlashCommandContext,
 } from "@chulane/rivto";
+import type { SlashCommandsCapability } from "../../capabilities";
 import type { ReactEditorImpl } from "../../react-editor";
 import type { SlashCommandRevisionListener } from "./types";
 
@@ -11,7 +12,7 @@ import type { SlashCommandRevisionListener } from "./types";
  * Commands remain stored exclusively by the core manager. Popup state, search,
  * caret geometry, and keyboard navigation remain presentation-extension concerns.
  */
-export class ReactSlashCommandManager {
+export class ReactSlashCommandManager implements SlashCommandsCapability {
   private readonly registrations = new Map<string, () => void>();
 
   /**

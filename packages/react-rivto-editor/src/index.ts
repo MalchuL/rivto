@@ -6,6 +6,7 @@ export * from "./editor-view";
 export * from "./hooks";
 export {
   blockExtension,
+  edgelessSurfaceExtension,
   standardPreset,
 } from "./extensions/built-ins/built-ins";
 export type { StandardPresetOptions } from "./extensions/built-ins/built-ins";
@@ -40,7 +41,17 @@ export type {
 } from "./extensions/page/empty-block";
 export { MarkdownContent } from "./blocks/markdown";
 export { type BlockElementProps } from "./surfaces/edgeless";
-export { edgelessVisualsExtension } from "./extensions/edgeless/visuals";
+export {
+  EdgelessSnappingStore,
+} from "./surfaces/edgeless";
+export type {
+  EdgelessSnappingSnapshot,
+  EdgelessSurfaceOptions,
+} from "./surfaces/edgeless";
+export {
+  EdgelessVisualsExtension,
+  edgelessVisualsExtension,
+} from "./extensions/edgeless/visuals";
 export type {
   CreateVisualPayload,
   ConnectorEndpoint,

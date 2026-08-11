@@ -1,4 +1,5 @@
 import type { ReactEditorImpl } from "../../react-editor";
+import type { ExtensionsCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
 import type {
   ExtensionComponent,
@@ -13,7 +14,7 @@ import type {
  * event conditions, while surface renderers and wrappers belong exclusively to
  * SurfaceManager.
  */
-export class ExtensionManager {
+export class ExtensionManager implements ExtensionsCapability {
   private readonly store = new RevisionStore();
   private readonly extensionIds = new Set<string>();
   private readonly extensionDisposers: RegistrationDisposer[] = [];

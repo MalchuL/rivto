@@ -20,6 +20,7 @@ import {
   type ResizeCorner,
   type SnapGuide,
 } from "./visuals/utils/geometry";
+import { showSnapGuides } from "./visuals/utils/snap-guides";
 import type { ConnectorEndpoint, ConnectorRoute, ConnectorTextRotation } from "./visuals/types";
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
@@ -280,20 +281,6 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       const other = right[index]!;
       return guide.kind === other.kind && guide.axis === other.axis && guide.position === other.position && guide.from === other.from && guide.to === other.to;
     });
-  const showGuides = (root: HTMLElement, values: readonly SnapGuide[]) => {
-    const plane = root.querySelector("[data-edgeless-plane]");
-    if (!plane) return;
-    const existing = [...root.querySelectorAll<HTMLElement>("[data-edgeless-snap-guide]")];
-    values.forEach((guide, index) => {
-      const element = existing[index] ?? root.ownerDocument.createElement("div");
-      element.dataset.edgelessSnapGuide = guide.kind;
-      element.className = `edgeless-snap-guide edgeless-snap-guide-${guide.axis}`;
-      if (guide.axis === "x") Object.assign(element.style, { left: `${guide.position}px`, top: `${guide.from}px`, height: `${guide.to - guide.from}px`, width: "" });
-      else Object.assign(element.style, { top: `${guide.position}px`, left: `${guide.from}px`, width: `${guide.to - guide.from}px`, height: "" });
-      if (!existing[index]) plane.append(element);
-    });
-    existing.slice(values.length).forEach((guide) => guide.remove());
-  };
   const clearPreview = (restoreSize = true) => {
     const root = reactEditor.events.getRoot();
     if (!root) return;
@@ -309,7 +296,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     });
     clearConnectorPreview();
     previewTargets = null;
-    showGuides(root, []);
+    showSnapGuides(root, []);
     delete root.dataset.transforming;
   };
   const lockGeometry = (root: HTMLElement, ids: readonly string[]) => {
@@ -486,7 +473,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     active.moved = true;
     if (!guidesEqual(active.guides, result.guides)) {
       active.guides = result.guides;
-      showGuides(root, result.guides);
+      showSnapGuides(root, result.guides);
     }
     previewTargets ??= rendered(root, active.ids);
     previewTargets.forEach((target) => {

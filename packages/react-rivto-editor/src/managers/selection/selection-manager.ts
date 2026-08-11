@@ -1,6 +1,7 @@
 import type {
   EditorSelection,
 } from "@chulane/rivto";
+import type { SelectionCapability } from "../../capabilities";
 import type { ReactEditorImpl } from "../../react-editor";
 import {
   clearTextSelectionHighlight,
@@ -16,7 +17,7 @@ import {
  * to the core editor. This manager owns only browser-DOM conversion, restoration,
  * and supplemental cross-block highlighting for the active React surface.
  */
-export class ReactSelectionManager {
+export class ReactSelectionManager implements SelectionCapability {
   /**
    * Creates a DOM-aware facade over the core selection manager.
    *

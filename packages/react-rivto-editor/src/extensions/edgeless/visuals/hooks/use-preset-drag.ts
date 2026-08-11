@@ -1,7 +1,9 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import type { EdgelessVisualController } from "../controller";
-import type { PresetPayload } from "../types";
+import type { PresetPayload, VisualFrame } from "../types";
 import { canvasPoint } from "../utils/canvas-point";
+import { centeredPlaceFrame, snapPlacedFrame } from "../utils/creation-geometry";
+import { showSnapGuides } from "../utils/snap-guides";
 
 interface PresetDrag {
   pointerId: number;
@@ -11,8 +13,7 @@ interface PresetDrag {
   moved: boolean;
   ghost: HTMLDivElement | null;
   raf: number;
-  clientX: number;
-  clientY: number;
+  frame?: VisualFrame;
 }
 
 /** Pointer-capture place/drag for create-toolbar presets (no HTML5 DnD). */
@@ -38,16 +39,38 @@ export function usePresetDrag({
 
   const placePresetGhost = (active: PresetDrag) => {
     active.raf = 0;
-    if (!active.ghost) return;
-    active.ghost.style.transform = `translate(${active.clientX - 80}px, ${active.clientY - 60}px)`;
+    if (!active.ghost || !active.frame || !plane) return;
+    const rect = plane.getBoundingClientRect();
+    active.ghost.style.width = `${active.frame.width * zoom}px`;
+    active.ghost.style.height = `${active.frame.height * zoom}px`;
+    active.ghost.style.transform = `translate(${rect.left + active.frame.x * zoom}px, ${rect.top + active.frame.y * zoom}px)`;
+  };
+
+  const snappedFrame = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const point = canvasPoint(event.nativeEvent, plane, zoom);
+    const candidates = controller.reactEditor.editor.elements.getElements()
+      .filter((element) => element.type !== "connector" && element.type !== "group")
+      .map((element) => element.frame);
+    return snapPlacedFrame(
+      centeredPlaceFrame(point, controller.getPlaceSize()),
+      candidates,
+      {
+        snapToGrid: root?.dataset.edgelessSnap !== "false",
+        alignObjects: root?.dataset.edgelessAlign !== "false",
+        grid: Number(root?.dataset.edgelessGrid) || undefined,
+        threshold: 8 / Math.max(zoom, 0.01),
+        disabled: event.altKey,
+      },
+    );
   };
 
   useEffect(() => () => {
     const active = presetDrag.current;
     if (!active) return;
     clearPresetGhost(active);
+    if (root) showSnapGuides(root, []);
     presetDrag.current = null;
-  }, []);
+  }, [root]);
 
   return {
     startPresetDrag(event: ReactPointerEvent<HTMLButtonElement>, payload: PresetPayload) {
@@ -61,18 +84,15 @@ export function usePresetDrag({
         moved: false,
         ghost: null,
         raf: 0,
-        clientX: event.clientX,
-        clientY: event.clientY,
       };
     },
     movePresetDrag(event: ReactPointerEvent<HTMLButtonElement>) {
       const active = presetDrag.current;
       if (!active || active.pointerId !== event.pointerId) return;
-      active.clientX = event.clientX;
-      active.clientY = event.clientY;
       if (!active.moved && Math.hypot(event.clientX - active.startX, event.clientY - active.startY) < 4) return;
       if (!active.moved) {
         active.moved = true;
+        controller.setPlaceTool(active.payload);
         const ghost = event.currentTarget.ownerDocument.createElement("div");
         ghost.className = "edgeless-preset-ghost";
         ghost.dataset.edgelessUi = "true";
@@ -81,6 +101,9 @@ export function usePresetDrag({
         event.currentTarget.ownerDocument.body.append(ghost);
         active.ghost = ghost;
       }
+      const snapped = snappedFrame(event);
+      active.frame = snapped.frame;
+      if (root) showSnapGuides(root, snapped.guides);
       if (!active.raf) active.raf = requestAnimationFrame(() => placePresetGhost(active));
     },
     endPresetDrag(event: ReactPointerEvent<HTMLButtonElement>, commit = true) {
@@ -88,12 +111,13 @@ export function usePresetDrag({
       if (!active || active.pointerId !== event.pointerId) return;
       clearPresetGhost(active);
       presetDrag.current = null;
+      if (root) showSnapGuides(root, []);
       if (!commit) return;
       if (active.moved) {
         const hit = event.currentTarget.ownerDocument.elementFromPoint(event.clientX, event.clientY);
         if (root && hit instanceof Node && root.contains(hit) && !(hit instanceof Element && hit.closest("[data-edgeless-ui]"))) {
-          const point = canvasPoint(event.nativeEvent, plane, zoom);
-          controller.create({ ...active.payload, frame: { x: point.x - 80, y: point.y - 60, width: 160, height: 120 } });
+          const frame = snappedFrame(event).frame;
+          controller.create({ ...active.payload, frame });
         }
         controller.setPlaceTool(active.payload);
         return;

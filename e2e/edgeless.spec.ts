@@ -22,6 +22,16 @@ const openCreateMenu = async (page: Page, category: "Shapes" | "Drawing" | "Text
 const visualKind = (name: "Rectangle" | "Ellipse" | "Text") =>
   (name === "Rectangle" ? "rectangle" : name === "Ellipse" ? "ellipse" : "text") as const;
 
+const visualFrame = (visual: Locator) => visual.evaluate((element) => {
+  const style = (element as HTMLElement).style;
+  return {
+    x: Number.parseFloat(style.left),
+    y: Number.parseFloat(style.top),
+    width: Number.parseFloat(style.width),
+    height: Number.parseFloat(style.height),
+  };
+});
+
 /** Clicks the active place/draw capture layer (above canvas objects). */
 const clickPlaceCapture = async (page: Page, position?: { x: number; y: number }) => {
   const capture = page.locator(".edgeless-drawing-capture[data-active]");
@@ -268,13 +278,10 @@ test("shows compact creation and contextual toolbars and places at the click poi
   const visual = page.locator('[data-edgeless-visual-kind="rectangle"][data-selected="true"]');
   await expect(visual).toHaveCount(1);
   await createToolbar.getByRole("button", { name: "Select" }).click();
-  await expect.poll(async () => {
-    const visualBox = await visual.boundingBox();
-    return visualBox && {
-      x: Math.round(visualBox.x + visualBox.width / 2),
-      y: Math.round(visualBox.y + visualBox.height / 2),
-    };
-  }).toEqual({ x: Math.round(click.x), y: Math.round(click.y) });
+  const snappedBox = await visual.boundingBox();
+  if (!snappedBox) throw new Error("Expected placed visual geometry");
+  expect(Math.abs(snappedBox.x + snappedBox.width / 2 - click.x)).toBeLessThanOrEqual(10);
+  expect(Math.abs(snappedBox.y + snappedBox.height / 2 - click.y)).toBeLessThanOrEqual(10);
 
   const cards = page.locator("[data-edgeless-root]");
   await clickCardChrome(page, cards.nth(0), ["Control"]);
@@ -284,6 +291,83 @@ test("shows compact creation and contextual toolbars and places at the click poi
   await expect(actions.getByRole("button", { name: "Align left" })).toBeVisible();
   await expect(actions.getByRole("button", { name: "Distribute horizontally" })).toBeVisible();
   await expect(page.getByRole("toolbar", { name: "Canvas zoom" })).toHaveCSS("bottom", "14px");
+});
+
+test("snaps creation, reuses the active preset size, and constrains Shift drags", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const zoom = page.getByRole("toolbar", { name: "Canvas zoom" });
+  await zoom.getByRole("button", { name: "Disable object alignment" }).click();
+  const shapes = await openCreateMenu(page, "Shapes");
+  await shapes.getByRole("button", { name: "Rectangle" }).click();
+
+  const start = await emptyCanvasPoint(page);
+  await page.mouse.move(start.x + 3, start.y + 7);
+  await page.mouse.down();
+  await page.mouse.move(start.x - 94, start.y - 67, { steps: 6 });
+  await page.mouse.up();
+  const first = page.locator('[data-edgeless-visual-kind="rectangle"][data-selected="true"]');
+  const firstFrame = await visualFrame(first);
+  expect(firstFrame.x % 20).toBe(0);
+  expect(firstFrame.y % 20).toBe(0);
+  expect(firstFrame.width % 20).toBe(0);
+  expect(firstFrame.height % 20).toBe(0);
+
+  const click = await emptyCanvasPoint(page);
+  await clickPlaceCapture(page, { x: click.x + 7, y: click.y + 9 });
+  const repeated = page.locator('[data-edgeless-visual-kind="rectangle"][data-selected="true"]');
+  await expect.poll(() => visualFrame(repeated)).toMatchObject({
+    width: firstFrame.width,
+    height: firstFrame.height,
+  });
+
+  const shapeMenu = await openCreateMenu(page, "Shapes");
+  await shapeMenu.getByRole("button", { name: "Ellipse" }).click();
+  await shapeMenu.getByRole("button", { name: "Rectangle" }).click();
+  const resetPoint = await emptyCanvasPoint(page);
+  await clickPlaceCapture(page, resetPoint);
+  await expect.poll(() => visualFrame(
+    page.locator('[data-edgeless-visual-kind="rectangle"][data-selected="true"]'),
+  )).toMatchObject({ width: 160, height: 120 });
+
+  const textMenu = await openCreateMenu(page, "Text");
+  await textMenu.getByRole("button", { name: "Text" }).click();
+  const squareStart = await emptyCanvasPoint(page, "left");
+  await page.keyboard.down("Shift");
+  await page.mouse.move(squareStart.x, squareStart.y);
+  await page.mouse.down();
+  await page.mouse.move(squareStart.x + 93, squareStart.y - 47, { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.up("Shift");
+  const textFrame = await visualFrame(
+    page.locator('[data-edgeless-visual-kind="text"][data-selected="true"]'),
+  );
+  expect(textFrame.width).toBe(textFrame.height);
+});
+
+test("shows object-alignment guides while creating a visual", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const target = await createVisual(page, "Rectangle");
+  const targetBox = await target.boundingBox();
+  const viewportBox = await page.locator(".edgeless-viewport").boundingBox();
+  if (!targetBox || !viewportBox) throw new Error("Expected creation alignment geometry");
+  const menu = await openCreateMenu(page, "Shapes");
+  await menu.getByRole("button", { name: "Rectangle" }).click();
+  const y = targetBox.y - viewportBox.y > 180
+    ? targetBox.y - 120
+    : targetBox.y + targetBox.height + 40;
+  const start = { x: targetBox.x - 210, y };
+  const end = { x: targetBox.x - 3, y: y + 60 };
+
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 8 });
+  await expect(page.locator('[data-edgeless-snap-guide="align"]')).toBeVisible();
+  await page.mouse.up();
+  await expect(page.locator("[data-edgeless-snap-guide]")).toHaveCount(0);
+  const created = page.locator('[data-edgeless-visual-kind="rectangle"][data-selected="true"]');
+  const createdBox = await created.boundingBox();
+  if (!createdBox) throw new Error("Expected aligned created visual");
+  expect(Math.abs(createdBox.x + createdBox.width - targetBox.x)).toBeLessThanOrEqual(1);
 });
 
 test("toggles snap-to-grid, object alignment, and pans from the toolbar", async ({ page }) => {
@@ -450,13 +534,32 @@ test("previews a group with its drag handle before committing the move", async (
 test("drags categorized presets to canvas and edits a styled sticky", async ({ page }) => {
   await switchMode(page, "edgeless");
   const viewport = page.locator(".edgeless-viewport");
+  await page.getByRole("toolbar", { name: "Canvas zoom" })
+    .getByRole("button", { name: "Disable object alignment" }).click();
   await page.getByRole("toolbar", { name: "Visual objects" }).getByRole("button", { name: "Shapes" }).click();
   const rectanglePreset = page.getByRole("menu", { name: "shapes tools" }).getByRole("button", { name: "Rectangle" });
   const rectanglesBefore = await page.locator('[data-edgeless-visual-kind="rectangle"]').count();
-  await rectanglePreset.dragTo(viewport, { targetPosition: { x: 760, y: 420 } });
+  const presetBox = await rectanglePreset.boundingBox();
+  const viewportBox = await viewport.boundingBox();
+  if (!presetBox || !viewportBox) throw new Error("Expected preset drag geometry");
+  const drop = { x: viewportBox.x + 760, y: viewportBox.y + 420 };
+  await page.mouse.move(presetBox.x + presetBox.width / 2, presetBox.y + presetBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(drop.x, drop.y, { steps: 8 });
+  const ghost = page.locator(".edgeless-preset-ghost");
+  await expect(ghost).toBeVisible();
+  const ghostBox = await ghost.boundingBox();
+  await page.mouse.up();
   const rectangle = page.locator('[data-edgeless-visual-kind="rectangle"]').last();
   await expect(page.locator('[data-edgeless-visual-kind="rectangle"]')).toHaveCount(rectanglesBefore + 1);
   await expect.poll(async () => (await rectangle.boundingBox())?.x).toBeGreaterThan(650);
+  const rectangleBox = await rectangle.boundingBox();
+  if (!ghostBox || !rectangleBox) throw new Error("Expected snapped preset geometry");
+  expect(Math.abs(rectangleBox.x - ghostBox.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(rectangleBox.y - ghostBox.y)).toBeLessThanOrEqual(1);
+  const rectangleFrame = await visualFrame(rectangle);
+  expect(rectangleFrame.x % 20).toBe(0);
+  expect(rectangleFrame.y % 20).toBe(0);
 
   await page.getByRole("toolbar", { name: "Visual objects" }).getByRole("button", { name: "Stickies" }).click();
   await page.getByRole("menu", { name: "stickers tools" }).getByRole("button", { name: "Pink sticky" }).click();
@@ -551,7 +654,7 @@ test("groups an existing group with another shape via Primary-click (nested grou
   await toolbar.getByRole("button", { name: "Ungroup", exact: true }).click();
   // Outer ungroup leaves the inner group + text co-selected so Group is available again.
   await expect(toolbar.getByRole("button", { name: "Group", exact: true })).toBeVisible();
-  await expect(page.locator('[data-edgeless-object-kind="group"] [data-edgeless-drag-handle]')).toBeVisible();
+  await expect(page.locator('[data-edgeless-object-kind="group"] [data-edgeless-drag-handle]').first()).toBeVisible();
 });
 
 test("Primary-marquees a sibling onto a selected group then groups them", async ({ page }) => {
@@ -574,7 +677,7 @@ test("Primary-marquees a sibling onto a selected group then groups them", async 
   await toolbar.getByRole("button", { name: "Group", exact: true }).click();
   await expect(page.locator("[data-edgeless-group-hit]")).toHaveCount(1);
   await toolbar.getByRole("button", { name: "Ungroup", exact: true }).click();
-  await expect(page.locator('[data-edgeless-object-kind="group"] [data-edgeless-drag-handle]')).toBeVisible();
+  await expect(page.locator('[data-edgeless-object-kind="group"] [data-edgeless-drag-handle]').first()).toBeVisible();
 });
 
 test("clicking the group bbox gap keeps the group selected without blocking child drill-in", async ({ page }) => {
@@ -841,14 +944,20 @@ test("drags a mixed block and visual selection synchronously from either element
   const beforeBoxes = await Promise.all([card, visual].map((element) => element.boundingBox()));
   if (beforeBoxes.some((box) => !box)) throw new Error("Expected mixed selection geometry");
   const cardPoint = await cardChromePoint(card);
+  await page.keyboard.down("Alt");
   await page.mouse.move(cardPoint.x, cardPoint.y);
   await page.mouse.down();
   await page.mouse.move(cardPoint.x + 40, cardPoint.y + 25, { steps: 5 });
-  await expect.poll(async () => Promise.all([card, visual].map(async (element) => {
-    const box = await element.boundingBox();
-    return box && { x: Math.round(box.x), y: Math.round(box.y) };
-  }))).toEqual(beforeBoxes.map((box) => ({ x: Math.round(box!.x + 40), y: Math.round(box!.y + 25) })));
+  await expect.poll(async () => {
+    const boxes = await Promise.all([card, visual].map((element) => element.boundingBox()));
+    return boxes.every((box, index) => {
+      const beforeBox = beforeBoxes[index]!;
+      return box && Math.abs(box.x - beforeBox!.x - 40) <= 1 &&
+        Math.abs(box.y - beforeBox!.y - 25) <= 1;
+    });
+  }).toBe(true);
   await page.mouse.up();
+  await page.keyboard.up("Alt");
   await expect.poll(positions).toEqual(before.map(({ left, top }) => ({ left: left + 40, top: top + 25 })));
 
   await page.keyboard.press("Control+z");

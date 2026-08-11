@@ -26,6 +26,7 @@ import type {
 } from "./types";
 import { DEFAULT_STICKERS } from "./presets";
 import { connectorFrame, endpointPoint, unionFrames } from "./utils/geometry";
+import { DEFAULT_PLACE_SIZE } from "./utils/creation-geometry";
 
 const DEFAULT_FRAME: VisualFrame = { x: 120, y: 120, width: 160, height: 120 };
 const VISUAL_TYPES = new Set(["sticker", "drawing", "rectangle", "ellipse", "text", "connector"]);
@@ -59,6 +60,7 @@ export class EdgelessVisualController {
   private revision = 0;
   private readonly propertyPreview = new Map<string, Record<string, unknown>>();
   private currentTool: EdgelessVisualTool = { tool: "select" };
+  private placeSize: Pick<VisualFrame, "width" | "height"> = { ...DEFAULT_PLACE_SIZE };
   private readonly defaults = {
     shape: { fill: "#eeeaff", stroke: "#6c5ce7", strokeWidth: 2, filled: true, stroked: true, text: "", color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 16, align: "center" as const, verticalAlign: "middle" as const },
     text: { color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 24, align: "left" as const, verticalAlign: "top" as const },
@@ -197,6 +199,12 @@ export class EdgelessVisualController {
   getBounds(item: EdgelessSelectionRef): VisualFrame | undefined { return this.bounds(item); }
   /** @returns Current local creation tool. */
   getTool(): EdgelessVisualTool { return this.currentTool; }
+  /** @returns Default size for the currently active place preset. */
+  getPlaceSize(): Pick<VisualFrame, "width" | "height"> { return { ...this.placeSize }; }
+  /** Remembers the final interactive drag size for the active place preset. */
+  rememberPlaceSize(frame: VisualFrame): void {
+    this.placeSize = { width: frame.width, height: frame.height };
+  }
   /** @returns Detached session defaults used by creation menus. */
   getDefaults() { return copy(this.defaults); }
   /** Last activated tool for a create-toolbar category (session memory). */
@@ -475,15 +483,18 @@ export class EdgelessVisualController {
   /** @returns Direct logical group containing an element, if any. */
   getParentId(id: string): string | undefined { return this.parentId(id); }
 
+  /** @returns Detached active canvas selection. */
+  getSelection() { return this.selection.get(); }
+
   private registerCommands(): void {
     const register = (name: string, handler: (payload: any) => unknown) => this.registrations.push(this.reactEditor.editor.register(name, handler));
     register("edgeless.visual.create", (value) => this.create(value as CreateVisualPayload));
     register("edgeless.visual.update", (value) => this.update(value as UpdateVisualPayload));
     register("edgeless.visual.duplicate", () => this.duplicateSelection());
     register("edgeless.visual.delete", () => this.deleteSelection());
-    register("edgeless.selection.get", () => this.selection.get());
-    register("edgeless.selection.set", (value) => this.setSelection(value?.items ?? value));
-    register("edgeless.selection.clear", () => this.selection.clear());
+    register("edgeless.selection.get", () => this.getSelection());
+    register("edgeless.selection.set", (value) => this.select(value?.items ?? value));
+    register("edgeless.selection.clear", () => this.clearSelection());
     register("edgeless.selection.move", (value) => this.move(Number(value?.dx), Number(value?.dy)));
     register("edgeless.selection.resize", (value) => this.resize(Number(value?.width), Number(value?.height)));
     register("edgeless.selection.group", () => this.group());
@@ -636,7 +647,8 @@ export class EdgelessVisualController {
     if (tool.tool === "connector") this.lastByCategory.connectors = copy(tool);
   }
 
-  private setTool(value: EdgelessVisualTool | "select"): void {
+  /** Activates one canvas interaction tool. */
+  setTool(value: EdgelessVisualTool | "select"): void {
     const tool = value === "select" ? { tool: "select" } as const : value;
     if (!tool || !["select", "pan", "place", "drawing", "eraser", "connector"].includes(tool.tool)) throw new Error("Unsupported edgeless visual tool");
     if (tool.tool === "place" && !(["rectangle", "ellipse", "text", "sticker"] as EdgelessPlaceKind[]).includes(tool.kind)) {
@@ -644,17 +656,25 @@ export class EdgelessVisualController {
     }
     if (tool.tool === "drawing" && !["pencil", "pen", "marker"].includes(tool.brush)) throw new Error("Unsupported drawing brush");
     if (tool.tool === "connector" && !["straight", "orthogonal", "curve"].includes(tool.route)) throw new Error("Unsupported connector route");
+    if (JSON.stringify(tool) !== JSON.stringify(this.currentTool)) {
+      this.placeSize = { ...DEFAULT_PLACE_SIZE };
+    }
     this.currentTool = copy(tool);
     this.rememberTool(tool);
     this.emit();
   }
 
-  private setSelection(value: unknown): void {
+  /** Replaces the active canvas selection with validated element references. */
+  select(value: unknown): void {
     if (!Array.isArray(value) || value.some((id) => typeof id !== "string" || !this.element(id))) throw new Error("Edgeless selection must contain existing element IDs");
     this.selection.set(value as string[]);
   }
 
-  private duplicateSelection(): EdgelessSelectionRef[] { const items = this.selection.get().items; if (!items.length) return []; this.pasteClipboardBundle(this.createClipboardBundle(items)); return [...this.selection.get().items]; }
+  /** Clears the active canvas selection. */
+  clearSelection(): void { this.selection.clear(); }
+
+  /** Duplicates the active selection and returns the new top-level references. */
+  duplicateSelection(): EdgelessSelectionRef[] { const items = this.selection.get().items; if (!items.length) return []; this.pasteClipboardBundle(this.createClipboardBundle(items)); return [...this.selection.get().items]; }
 
   private translate(items: readonly string[], dx: number, dy: number): void {
     this.reactEditor.editor.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.bounds(id); if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));

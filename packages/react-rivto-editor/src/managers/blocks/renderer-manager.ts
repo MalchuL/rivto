@@ -1,4 +1,5 @@
 import type { ReactEditorImpl } from "../../react-editor";
+import type { RenderersCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
 import type { BlockRenderer } from "./renderer-types";
 
@@ -10,7 +11,7 @@ import type { BlockRenderer } from "./renderer-types";
  * use BlockManager to install definition, renderer, and slash conversion
  * atomically.
  */
-export class RendererManager {
+export class RendererManager implements RenderersCapability {
   private readonly store = new RevisionStore();
   private readonly renderers = new Map<string, {
     readonly renderer: BlockRenderer;

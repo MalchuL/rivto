@@ -1,4 +1,5 @@
 import type { ReactEditorImpl } from "../../react-editor";
+import type { BlocksCapability } from "../../capabilities";
 import type { ReactBlockRegistration } from "./block-types";
 
 /**
@@ -7,7 +8,7 @@ import type { ReactBlockRegistration } from "./block-types";
  * The manager coordinates existing core definitions, RendererManager, and the
  * shared slash registry without becoming another block-data store.
  */
-export class BlockManager {
+export class BlockManager implements BlocksCapability {
   private readonly registrations = new Map<string, () => void>();
   private readonly blockElementSeparatorTypes = new Set<string>();
 

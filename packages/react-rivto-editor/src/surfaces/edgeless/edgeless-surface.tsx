@@ -6,7 +6,7 @@ import {
   useReactEditor,
 } from "../../hooks";
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
-import { useCallback, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from "react";
 import { EdgelessToolButton } from "../../extensions/edgeless/visuals/components/tool-button";
 import { EDGELESS_GRID_SIZE } from "../../extensions/edgeless/visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
@@ -16,6 +16,7 @@ import {
   EDGELESS_CARD_DEFAULT_FRAME,
   insertBlockElementSeparator,
 } from "./block-elements";
+import { EdgelessSnappingStore } from "./snapping-store";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
@@ -36,7 +37,7 @@ const clampZoom = (value: number): number => Math.max(MIN_ZOOM, Math.min(MAX_ZOO
  * important when a surface is replaced: its root, document, and window
  * listeners move together instead of leaving global listeners behind.
  */
-export function EdgelessSurface() {
+export function EdgelessSurface({ snapping }: { readonly snapping: EdgelessSnappingStore }) {
   const editor = useEditor();
   const reactEditor = useReactEditor();
   const rootIds = editor.blocks.getRootIds();
@@ -47,8 +48,11 @@ export function EdgelessSurface() {
   const panGesture = useRef<PanGesture | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [snapEnabled, setSnapEnabled] = useState(true);
-  const [alignEnabled, setAlignEnabled] = useState(true);
+  const snap = useSyncExternalStore(
+    (listener) => snapping.subscribe(listener),
+    () => snapping.getSnapshot(),
+    () => snapping.getSnapshot(),
+  );
 
   const rootRef = useCallback((element: HTMLElement | null) => {
     viewport.current = element;
@@ -228,8 +232,8 @@ export function EdgelessSurface() {
       data-edgeless-pan-x={pan.x}
       data-edgeless-pan-y={pan.y}
       data-edgeless-grid={EDGELESS_GRID_SIZE}
-      data-edgeless-snap={snapEnabled ? "true" : "false"}
-      data-edgeless-align={alignEnabled ? "true" : "false"}
+      data-edgeless-snap={snap.snapToGrid ? "true" : "false"}
+      data-edgeless-align={snap.alignObjects ? "true" : "false"}
       aria-label="Edgeless document canvas"
       tabIndex={-1}
       onDoubleClick={createBlockAt}
@@ -244,16 +248,16 @@ export function EdgelessSurface() {
         <EdgelessToolButton label="Zoom in" icon="zoom-in" onClick={() => zoomAt(zoom + 0.1)} />
         <span className="edgeless-tool-bar-divider" aria-hidden="true" />
         <EdgelessToolButton
-          label={snapEnabled ? "Disable snap to grid" : "Enable snap to grid"}
+          label={snap.snapToGrid ? "Disable snap to grid" : "Enable snap to grid"}
           icon="snap"
-          aria-pressed={snapEnabled}
-          onClick={() => setSnapEnabled((value) => !value)}
+          aria-pressed={snap.snapToGrid}
+          onClick={() => snapping.set({ snapToGrid: !snap.snapToGrid })}
         />
         <EdgelessToolButton
-          label={alignEnabled ? "Disable object alignment" : "Enable object alignment"}
+          label={snap.alignObjects ? "Disable object alignment" : "Enable object alignment"}
           icon="align-objects"
-          aria-pressed={alignEnabled}
-          onClick={() => setAlignEnabled((value) => !value)}
+          aria-pressed={snap.alignObjects}
+          onClick={() => snapping.set({ alignObjects: !snap.alignObjects })}
         />
       </div>
       <div

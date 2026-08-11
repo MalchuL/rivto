@@ -5,7 +5,12 @@ import type {
   EditorSelection,
   TextSelection,
 } from "@chulane/rivto";
-import { BLOCK_ID_ATTRIBUTE } from "../../constants";
+import {
+  BLOCK_CONTENT_SELECTOR,
+  BLOCK_ID_ATTRIBUTE,
+  BLOCK_ID_SELECTOR,
+  PAGE_EDITOR_ROOT_SELECTOR,
+} from "../../constants";
 import type { ReactEditor } from "../../types";
 import {
   BUILTIN_KEYMAP,
@@ -29,6 +34,11 @@ import {
 import { navigationDomRoot, navigationOutlineBlocks } from "./outline-scope";
 
 type VerticalDirection = "up" | "down";
+
+/** Native controls own arrow keys even when the editor retains a text selection. */
+function isNativeControl(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName);
+}
 
 function collapsed(selection: TextSelection): boolean {
   return selection.anchor.blockId === selection.head.blockId &&
@@ -68,6 +78,25 @@ function setCaret(
 ): void {
   editor.selection.set([{ type: "text", anchor: position, head: position }]);
   focusBlock(root, position.blockId, position.offset);
+}
+
+/** Moves a boundary caret to the adjacent page editor in DOM order. */
+function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirection): boolean {
+  const roots = Array.from(root.ownerDocument.querySelectorAll<HTMLElement>(PAGE_EDITOR_ROOT_SELECTOR));
+  const index = roots.indexOf(root);
+  const adjacent = roots[index + (direction === "up" ? -1 : 1)];
+  if (!adjacent) return false;
+  const blocks = Array.from(adjacent.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+  if (direction === "up") blocks.reverse();
+  for (const block of blocks) {
+    const content = Array.from(block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR))
+      .find((candidate) => candidate.closest(BLOCK_ID_SELECTOR) === block);
+    const blockId = block.getAttribute(BLOCK_ID_ATTRIBUTE);
+    if (blockId && content) {
+      return focusBlock(adjacent, blockId, direction === "up" ? content.textContent?.length ?? 0 : 0);
+    }
+  }
+  return false;
 }
 
 function focusBlockSelection(root: HTMLElement, blockId: string): void {
@@ -117,7 +146,9 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
       return true;
     }
     const moved = verticalCaretPosition(scope, text.head, direction);
-    if (!moved) return false;
+    if (!moved) {
+      return editor.mode.get() === "block" && focusAdjacentEditor(root, direction);
+    }
     setCaret(root, editor, moved);
     return true;
   };
@@ -148,7 +179,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
   ) => reactEditor.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
-  }, ({ root }) => movePlain(root, direction));
+  }, ({ root, raw }) => !isNativeControl(raw.target) && movePlain(root, direction));
   bindPlain(KEYBOARD_BINDING_IDS.caretLeft, "left");
   bindPlain(KEYBOARD_BINDING_IDS.caretRight, "right");
   bindPlain(KEYBOARD_BINDING_IDS.caretUp, "up");
@@ -157,11 +188,11 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.caretExtendUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendUp],
-  }, ({ root }) => extendText(root, "up"));
+  }, ({ root, raw }) => !isNativeControl(raw.target) && extendText(root, "up"));
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.caretExtendDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendDown],
-  }, ({ root }) => extendText(root, "down"));
+  }, ({ root, raw }) => !isNativeControl(raw.target) && extendText(root, "down"));
 }
 
 /** Owns movement and directional growth of whole-block selections. */

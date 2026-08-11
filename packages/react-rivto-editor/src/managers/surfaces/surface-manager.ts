@@ -1,5 +1,6 @@
 import type { EditorMode } from "@chulane/rivto";
 import type { BlockWrapperComponent } from "../../blocks/block-wrapper";
+import type { SurfacesCapability } from "../../capabilities";
 import type { ReactEditorImpl } from "../../react-editor";
 import { RevisionStore } from "../../internal-store";
 import type {
@@ -17,7 +18,7 @@ import type {
  * remain independent: they call this public manager but ExtensionManager never
  * imports or queries it.
  */
-export class SurfaceManager {
+export class SurfaceManager implements SurfacesCapability {
   private readonly store = new RevisionStore();
   private readonly surfaces = new Map<EditorMode, {
     readonly surface: SurfaceComponent;

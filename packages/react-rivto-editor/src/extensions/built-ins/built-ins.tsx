@@ -44,7 +44,11 @@ import { registerSelectionDeletion } from "../selection/selection-deletion";
 import { TrailingBlock } from "../page/trailing-block";
 import { applyIndentShortcut } from "../page/indent";
 import { registerListShortcuts } from "../page/list-shortcuts";
-import { EdgelessSurface } from "../../surfaces/edgeless";
+import {
+  EdgelessSnappingStore,
+  EdgelessSurface,
+  type EdgelessSurfaceOptions,
+} from "../../surfaces/edgeless";
 import { separatorBlockExtension } from "../separator/separator-block";
 import { defaultWritingBlockExtension, type DefaultWritingBlockOptions } from "../page/default-writing-block";
 import { blockIdsOf, insertBlockElementSeparator } from "../../surfaces/edgeless/block-elements";
@@ -85,12 +89,15 @@ export const pageSurfaceExtension = (): ReactEditorExtension => ({
 });
 
 /** @returns The built-in positioned-card surface for edgeless mode. */
-export const edgelessSurfaceExtension = (): ReactEditorExtension => ({
-  id: "surface.edgeless",
-  setup: (reactEditor) => {
-    reactEditor.surfaces.register("edgeless", EdgelessSurface);
-  },
-});
+export const edgelessSurfaceExtension = (options: EdgelessSurfaceOptions = {}): ReactEditorExtension => {
+  const snapping = options.snapping ?? new EdgelessSnappingStore();
+  return {
+    id: "surface.edgeless",
+    setup: (reactEditor) => {
+      reactEditor.surfaces.register("edgeless", () => <EdgelessSurface snapping={snapping} />);
+    },
+  };
+};
 
 /**
  * Installs CRDT-backed undo/redo and native contenteditable history suppression.
@@ -441,6 +448,8 @@ export interface StandardPresetOptions {
   readonly trailingBlockCount?: number;
   /** Host overrides for the default writing block extension. */
   readonly writing?: DefaultWritingBlockOptions;
+  /** Host-owned edgeless viewport settings. */
+  readonly edgeless?: EdgelessSurfaceOptions;
 }
 
 /**
@@ -463,7 +472,7 @@ export const standardPreset = (
     defaultWritingBlockExtension(resolved.writing),
     separatorBlockExtension(),
     pageSurfaceExtension(),
-    edgelessSurfaceExtension(),
+    edgelessSurfaceExtension(resolved.edgeless),
     historyExtension(),
     textSelectionExtension(),
     slashCommandExtension(),

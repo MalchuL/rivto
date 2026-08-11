@@ -2,14 +2,18 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import type { EdgelessVisualController } from "../controller";
 import type { ConnectorEndpoint, ConnectorRoute, CreateVisualPayload, EdgelessVisualTool, VisualFrame } from "../types";
 import { canvasPoint, type CanvasPoint } from "../utils/canvas-point";
+import {
+  centeredPlaceFrame,
+  snapDraggedFrame,
+  snapPlacedFrame,
+  type CreationSnapOptions,
+} from "../utils/creation-geometry";
 import { padDrawingFrame } from "../utils/drawing-frame";
 import { edgeAnchors, inflateFrame, nearestAnchor, pointInFrame, segmentIntersectsFrame } from "../utils/geometry";
+import { showSnapGuides } from "../utils/snap-guides";
 
 /** Outside attach halo in canvas units (screen-constant via zoom). */
 const ATTACH_PAD_PX = 22;
-const DEFAULT_PLACE = { width: 160, height: 120 } as const;
-const MIN_PLACE = 16;
-
 interface Gesture {
   pointerId: number;
   points: CanvasPoint[];
@@ -39,26 +43,6 @@ export interface ConnectorPreview {
   targetAnchor?: { x: number; y: number };
   sourceFrame?: VisualFrame;
   targetFrame?: VisualFrame;
-}
-
-function frameFromDrag(start: CanvasPoint, end: CanvasPoint): VisualFrame {
-  const x = Math.min(start.x, end.x);
-  const y = Math.min(start.y, end.y);
-  return {
-    x,
-    y,
-    width: Math.max(MIN_PLACE, Math.abs(end.x - start.x)),
-    height: Math.max(MIN_PLACE, Math.abs(end.y - start.y)),
-  };
-}
-
-function defaultPlaceFrame(point: CanvasPoint): VisualFrame {
-  return {
-    x: point.x - DEFAULT_PLACE.width / 2,
-    y: point.y - DEFAULT_PLACE.height / 2,
-    width: DEFAULT_PLACE.width,
-    height: DEFAULT_PLACE.height,
-  };
 }
 
 function placePayload(tool: Extract<EdgelessVisualTool, { tool: "place" }>, frame: VisualFrame): CreateVisualPayload {
@@ -92,6 +76,24 @@ export function useDrawingGesture({
   const [connectorPreview, setConnectorPreview] = useState<ConnectorPreview | null>(null);
   const [connectorHover, setConnectorHover] = useState<ConnectorHover | null>(null);
   const attachPad = ATTACH_PAD_PX / Math.max(zoom, 0.01);
+
+  const creationCandidates = (): VisualFrame[] => controller.reactEditor.editor.elements.getElements()
+    .filter((element) => element.type !== "connector" && element.type !== "group")
+    .map((element) => element.frame);
+
+  const snapOptions = (altKey = false): CreationSnapOptions => ({
+    snapToGrid: root?.dataset.edgelessSnap !== "false",
+    alignObjects: root?.dataset.edgelessAlign !== "false",
+    grid: Number(root?.dataset.edgelessGrid) || undefined,
+    threshold: 8 / Math.max(zoom, 0.01),
+    disabled: altKey,
+  });
+
+  const placedFrame = (point: CanvasPoint, altKey = false) => snapPlacedFrame(
+    centeredPlaceFrame(point, controller.getPlaceSize()),
+    creationCandidates(),
+    snapOptions(altKey),
+  );
 
   const objectAt = (point: CanvasPoint): string | undefined => {
     const candidates = controller.reactEditor.editor.elements.getElements()
@@ -146,7 +148,8 @@ export function useDrawingGesture({
     clearErased();
     const host = captureEl.current;
     if (host?.hasPointerCapture(pointerId)) host.releasePointerCapture(pointerId);
-    if (toolRef.current.tool === "place" && last) setPlacePreview(defaultPlaceFrame(last));
+    if (root) showSnapGuides(root, []);
+    if (toolRef.current.tool === "place" && last) setPlacePreview(placedFrame(last).frame);
     else setPlacePreview(null);
     return true;
   };
@@ -159,7 +162,8 @@ export function useDrawingGesture({
   useEffect(() => {
     if (tool.tool === "place") return;
     setPlacePreview(null);
-  }, [tool]);
+    if (root) showSnapGuides(root, []);
+  }, [root, tool]);
 
   useEffect(() => {
     const dispose = controller.reactEditor.keyboard.register({
@@ -185,7 +189,11 @@ export function useDrawingGesture({
     gesture.current = start;
     captureEl.current = event.currentTarget;
     event.currentTarget.setPointerCapture(event.pointerId);
-    if (tool.tool === "place") setPlacePreview(defaultPlaceFrame(point));
+    if (tool.tool === "place") {
+      const snapped = placedFrame(point, event.altKey);
+      setPlacePreview(snapped.frame);
+      if (root) showSnapGuides(root, snapped.guides);
+    }
     else setPreview([point]);
     event.preventDefault();
   };
@@ -217,13 +225,19 @@ export function useDrawingGesture({
     if (tool.tool === "place") {
       const active = gesture.current;
       if (!active || active.pointerId !== event.pointerId) {
-        setPlacePreview(defaultPlaceFrame(point));
+        const snapped = placedFrame(point, event.altKey);
+        setPlacePreview(snapped.frame);
+        if (root) showSnapGuides(root, snapped.guides);
         return;
       }
       const start = active.points[0]!;
       active.points.push(point);
       const moved = Math.hypot(point.x - start.x, point.y - start.y) >= 4;
-      setPlacePreview(moved ? frameFromDrag(start, point) : defaultPlaceFrame(start));
+      const snapped = moved
+        ? snapDraggedFrame(start, point, creationCandidates(), snapOptions(event.altKey), event.shiftKey)
+        : placedFrame(start, event.altKey);
+      setPlacePreview(snapped.frame);
+      if (root) showSnapGuides(root, snapped.guides);
       return;
     }
 
@@ -248,11 +262,16 @@ export function useDrawingGesture({
   const pointerEnd = (event: ReactPointerEvent<SVGSVGElement>) => {
     const active = gesture.current;
     if (!active || active.pointerId !== event.pointerId) return;
+    if (event.type === "pointercancel") {
+      cancelGesture();
+      return;
+    }
     gesture.current = null;
     setPreview([]);
     setPlacePreview(null);
     setConnectorPreview(null);
     clearErased();
+    if (root) showSnapGuides(root, []);
     if (tool.tool === "eraser") controller.deleteItems([...active.erased]);
     else if (tool.tool === "connector" && active.source && active.target) {
       controller.create({ kind: "connector", source: active.source, target: active.target, route: tool.route });
@@ -269,9 +288,12 @@ export function useDrawingGesture({
       const start = active.points[0]!;
       const end = active.points.at(-1) ?? start;
       const moved = Math.hypot(end.x - start.x, end.y - start.y) >= 4;
-      const frame = moved ? frameFromDrag(start, end) : defaultPlaceFrame(start);
+      const frame = moved
+        ? snapDraggedFrame(start, end, creationCandidates(), snapOptions(event.altKey), event.shiftKey).frame
+        : placedFrame(start, event.altKey).frame;
       controller.create(placePayload(tool, frame));
-      setPlacePreview(defaultPlaceFrame(end));
+      if (moved) controller.rememberPlaceSize(frame);
+      setPlacePreview(placedFrame(end, event.altKey).frame);
     }
     if (tool.tool === "connector") {
       const point = canvasPoint(event.nativeEvent, plane, zoom);

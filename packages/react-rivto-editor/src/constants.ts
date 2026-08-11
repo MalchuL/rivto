@@ -10,6 +10,18 @@ export const BLOCK_CONTENT_ATTRIBUTE = "data-block-content";
 /** CSS selector matching every plain-text editable block element. */
 export const BLOCK_CONTENT_SELECTOR = `[${BLOCK_CONTENT_ATTRIBUTE}]`;
 
+/** Stable DOM attribute placed on each page editor surface root. */
+export const PAGE_EDITOR_ROOT_ATTRIBUTE = "data-rivto-page-editor-root";
+
+/** CSS selector matching page editor surface roots in document order. */
+export const PAGE_EDITOR_ROOT_SELECTOR = `[${PAGE_EDITOR_ROOT_ATTRIBUTE}]`;
+
+/** Stable DOM attribute placed on the trailing-block mount point. */
+export const PAGE_END_SLOT_ATTRIBUTE = "data-page-end-slot";
+
+/** CSS selector matching the trailing-block mount point. */
+export const PAGE_END_SLOT_SELECTOR = `[${PAGE_END_SLOT_ATTRIBUTE}]`;
+
 /**
  * Opt-in marker for a renderer region from which selection may begin.
  *

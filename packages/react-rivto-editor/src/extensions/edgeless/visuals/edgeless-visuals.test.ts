@@ -10,13 +10,14 @@ describe("edgelessVisualsExtension", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Page" });
     editor.selection.set([{ type: "text", anchor: { blockId, offset: 2 }, head: { blockId, offset: 2 } }]);
+    const extension = edgelessVisualsExtension({ toolbar: false });
     const reactEditor = createReactEditor({ editor, extensions: [
       edgelessSelectionExtension(),
-      edgelessVisualsExtension({ toolbar: false }),
+      extension,
     ] });
 
-    const first = editor.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 10, y: 20, width: 40, height: 30 } }) as string;
-    const second = editor.execute("edgeless.visual.create", { kind: "ellipse", frame: { x: 90, y: 50, width: 20, height: 20 } }) as string;
+    const first = extension.createRectangle({ frame: { x: 10, y: 20, width: 40, height: 30 } });
+    const second = extension.createEllipse({ frame: { x: 90, y: 50, width: 20, height: 20 } });
     expect(editor.selection.get()).toEqual([{ type: "text", anchor: { blockId, offset: 2 }, head: { blockId, offset: 2 } }]);
     expect(editor.blocks.getBlocks()).toHaveLength(1);
     expect(editor.dump().elements.map((element) => element.type)).toEqual(["rectangle", "ellipse"]);
@@ -25,11 +26,11 @@ describe("edgelessVisualsExtension", () => {
     expect(editor.execute("edgeless.selection.get")).toMatchObject({ active: true, items: [second] });
     expect(editor.selection.get()[0]).toMatchObject({ type: "text", anchor: { blockId, offset: 2 } });
 
-    editor.execute("edgeless.selection.set", [first, second]);
-    const groupId = editor.execute("edgeless.selection.group") as string;
-    const third = editor.execute("edgeless.visual.create", { kind: "text", text: "Canvas" }) as string;
-    editor.execute("edgeless.selection.set", [groupId, third]);
-    editor.execute("edgeless.selection.group");
+    extension.select([first, second]);
+    const groupId = extension.group();
+    const third = extension.createText({ text: "Canvas" });
+    extension.select([groupId, third]);
+    extension.group();
     editor.execute("edgeless.selection.move", { dx: 5, dy: 7 });
 
     const visuals = editor.elements.getElements().filter((element) => element.type !== "group");
@@ -39,6 +40,7 @@ describe("edgelessVisualsExtension", () => {
 
     reactEditor.destroy();
     expect(editor.commands.has("edgeless.visual.create")).toBe(false);
+    expect(() => extension.createSticker()).toThrow(/not installed/);
     editor.destroy();
   });
 
@@ -208,13 +210,19 @@ describe("edgelessVisualsExtension", () => {
     const controller = new EdgelessVisualController(reactEditor, { toolbar: false });
     controller.setPlaceTool({ kind: "ellipse" });
     expect(controller.getTool()).toEqual({ tool: "place", kind: "ellipse" });
-    expect(controller.getLastTool("shapes")).toEqual({ tool: "place", kind: "ellipse" });
+    controller.rememberPlaceSize({ x: 0, y: 0, width: 90, height: 70 });
+    expect(controller.getPlaceSize()).toEqual({ width: 90, height: 70 });
+    controller.setPlaceTool({ kind: "ellipse" });
+    expect(controller.getPlaceSize()).toEqual({ width: 90, height: 70 });
+    controller.setPlaceTool({ kind: "rectangle" });
+    expect(controller.getPlaceSize()).toEqual({ width: 160, height: 120 });
+    expect(controller.getLastTool("shapes")).toEqual({ tool: "place", kind: "rectangle" });
     controller.setDrawingBrush("marker");
     expect(controller.getLastTool("drawing")).toEqual({ tool: "drawing", brush: "marker" });
     editor.execute("edgeless.tool.set", "select");
     expect(controller.getTool()).toEqual({ tool: "select" });
     controller.activateCategory("shapes");
-    expect(controller.getTool()).toEqual({ tool: "place", kind: "ellipse" });
+    expect(controller.getTool()).toEqual({ tool: "place", kind: "rectangle" });
     controller.activateCategory("drawing");
     expect(controller.getTool()).toEqual({ tool: "drawing", brush: "marker" });
     controller.destroy();

@@ -1,4 +1,5 @@
 import type { ReactEditorImpl } from "../../react-editor";
+import type { KeyboardCapability } from "../../capabilities";
 import type { EditorEvent } from "./editor-event";
 import { modeMatches, scopeMatches } from "./event-manager";
 import { KeyboardEditorEvent } from "./keyboard-editor-event";
@@ -29,7 +30,7 @@ type KeyboardDOMEvent =
   | EditorEvent<"window", "keyup">;
 
 /** Owns semantic keyboard bindings while EventManager owns native transport. */
-export class KeyboardManager {
+export class KeyboardManager implements KeyboardCapability {
   private readonly registrations: KeyboardRegistration[] = [];
   private readonly registrationIds = new Set<string>();
   private readonly registrationDisposers = new Map<string, () => void>();

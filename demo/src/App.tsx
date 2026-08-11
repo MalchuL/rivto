@@ -60,41 +60,36 @@ const edgelessOptions = {
  * connectors, nested groups, and spare siblings for align / distribute /
  * layer-order practice — without the visitor having to create them first.
  */
-function seedEdgelessShowcase(editor: ReturnType<typeof createRivtoEditor>): void {
-  editor.execute("edgeless.visual.create", {
-    kind: "text",
+function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtension>): void {
+  visuals.createText({
     text: "Edgeless showcase",
     frame: { x: 60, y: 450, width: 280, height: 32 },
     fontSize: 22,
     fontFamily: "Georgia, Cambria, serif",
     color: "#212529",
   });
-  editor.execute("edgeless.visual.create", {
-    kind: "text",
+  visuals.createText({
     text: "Shapes · sticky · pencil · connector · nested group · align/distribute extras",
     frame: { x: 60, y: 482, width: 560, height: 28 },
     fontSize: 13,
     color: "#495057",
   });
 
-  const rect = editor.execute("edgeless.visual.create", {
-    kind: "rectangle",
+  const rect = visuals.createRectangle({
     frame: { x: 60, y: 530, width: 130, height: 90 },
     fill: "#d0ebff",
     stroke: "#1c7ed6",
     strokeWidth: 2,
     text: "Rect",
-  }) as string;
-  const ellipse = editor.execute("edgeless.visual.create", {
-    kind: "ellipse",
+  });
+  const ellipse = visuals.createEllipse({
     frame: { x: 240, y: 545, width: 110, height: 80 },
     fill: "#fff3bf",
     stroke: "#e67700",
     strokeWidth: 2,
     text: "Ellipse",
-  }) as string;
-  editor.execute("edgeless.visual.create", {
-    kind: "connector",
+  });
+  visuals.createConnector({
     route: "orthogonal",
     source: { elementId: rect, anchor: { x: 1, y: 0.5 }, position: { x: 190, y: 575 } },
     target: { elementId: ellipse, anchor: { x: 0, y: 0.5 }, position: { x: 240, y: 585 } },
@@ -105,20 +100,18 @@ function seedEdgelessShowcase(editor: ReturnType<typeof createRivtoEditor>): voi
     textRotation: "along",
   });
 
-  editor.execute("edgeless.selection.set", [rect, ellipse]);
-  const shapeGroup = editor.execute("edgeless.selection.group") as string;
+  visuals.select([rect, ellipse]);
+  const shapeGroup = visuals.group();
 
-  const sticky = editor.execute("edgeless.visual.create", {
-    kind: "sticker",
+  const sticky = visuals.createSticker({
     text: "Sticky note\n(double-click to edit)",
     fill: "#eeeaff",
     color: "#362b67",
     frame: { x: 420, y: 530, width: 170, height: 130 },
-  }) as string;
+  });
 
   // Second connector: animated dashes flow toward the sticky.
-  editor.execute("edgeless.visual.create", {
-    kind: "connector",
+  visuals.createConnector({
     route: "curve",
     source: { elementId: ellipse, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
     target: { elementId: sticky, anchor: { x: 0, y: 0.5 }, position: { x: 420, y: 595 } },
@@ -129,11 +122,10 @@ function seedEdgelessShowcase(editor: ReturnType<typeof createRivtoEditor>): voi
   });
 
   // Nested group: existing group + sticky (Primary-click / Group again in the UI).
-  editor.execute("edgeless.selection.set", [shapeGroup, sticky]);
-  editor.execute("edgeless.selection.group");
+  visuals.select([shapeGroup, sticky]);
+  visuals.group();
 
-  editor.execute("edgeless.visual.create", {
-    kind: "drawing",
+  visuals.createDrawing({
     brush: "pencil",
     frame: { x: 640, y: 530, width: 150, height: 100 },
     points: [
@@ -143,8 +135,7 @@ function seedEdgelessShowcase(editor: ReturnType<typeof createRivtoEditor>): voi
     stroke: "#212529",
     strokeWidth: 2,
   });
-  editor.execute("edgeless.visual.create", {
-    kind: "text",
+  visuals.createText({
     text: "Free text — resize corners, drag handle, layer arrows",
     frame: { x: 640, y: 650, width: 260, height: 48 },
     fontSize: 14,
@@ -152,33 +143,29 @@ function seedEdgelessShowcase(editor: ReturnType<typeof createRivtoEditor>): voi
   });
 
   // Unrelated siblings for align / distribute / multi-select practice.
-  editor.execute("edgeless.visual.create", {
-    kind: "rectangle",
+  visuals.createRectangle({
     frame: { x: 920, y: 530, width: 56, height: 56 },
     fill: "#d3f9d8",
     stroke: "#2b8a3e",
   });
-  editor.execute("edgeless.visual.create", {
-    kind: "rectangle",
+  visuals.createRectangle({
     frame: { x: 1020, y: 560, width: 56, height: 56 },
     fill: "#d3f9d8",
     stroke: "#2b8a3e",
   });
-  editor.execute("edgeless.visual.create", {
-    kind: "rectangle",
+  visuals.createRectangle({
     frame: { x: 1120, y: 510, width: 56, height: 56 },
     fill: "#d3f9d8",
     stroke: "#2b8a3e",
   });
-  editor.execute("edgeless.visual.create", {
-    kind: "ellipse",
+  visuals.createEllipse({
     frame: { x: 920, y: 640, width: 70, height: 48 },
     fill: "#ffd8a8",
     stroke: "#d9480f",
   });
 
-  editor.execute("edgeless.selection.clear");
-  editor.execute("edgeless.tool.set", "select");
+  visuals.clearSelection();
+  visuals.setTool("select");
 }
 
 /**
@@ -191,6 +178,7 @@ function seedEdgelessShowcase(editor: ReturnType<typeof createRivtoEditor>): voi
  */
 function createDemoEditor() {
   const editor = createRivtoEditor();
+  const edgelessVisuals = edgelessVisualsExtension(edgelessOptions);
   // Used by e2e / KEYMAP demos: `?keymap=alternate` remaps indent without test-only APIs.
   const alternateKeymap = new URLSearchParams(window.location.search).get("keymap") === "alternate"
     ? {
@@ -203,7 +191,7 @@ function createDemoEditor() {
     keymap: alternateKeymap,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
-      edgelessVisualsExtension(edgelessOptions),
+      edgelessVisuals,
       blockIdExtension(),
       ...customBlockExtensions,
     ],
@@ -336,7 +324,7 @@ function createDemoEditor() {
     zIndex: 1,
     props: { startBlockId: secondBranchId, endBlockId: numberedContinueId },
   });
-  seedEdgelessShowcase(editor);
+  seedEdgelessShowcase(edgelessVisuals);
   editor.history.clear();
 
   return { editor, reactEditor };

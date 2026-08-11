@@ -36,6 +36,10 @@ tool used in that category (or the first default) and opens its popover. Shape,
 text, and sticky presets enter a place tool: click-drag on the canvas rubber-bands
 the size, a click without drag places a default `160×120` frame at the point, and
 dragging a preset from the toolbar onto the canvas still drops it at the pointer.
+Place previews and committed frames use the same grid and object-alignment
+snapping as move/resize. Hold Alt to bypass snapping. A completed drag becomes
+the active preset's click size until another preset or tool is selected; hold
+Shift while dragging any place tool to constrain its frame to a square.
 Pencil, pen, and marker store their brush preset with each drawing; the eraser
 removes intersected whole canvas objects in one transaction. Escape or right-click
 on the canvas returns to Select while a place, pan, drawing, eraser, or connector
@@ -46,12 +50,46 @@ tool is active (Escape also cancels an in-progress transform).
 not supported. Applications may append font and sticky presets:
 
 ```ts
-edgelessVisualsExtension({
+const visuals = edgelessVisualsExtension({
   fonts: [{ label: "Brand", fontFamily: "Brand Sans, sans-serif" }],
   stickers: [{ id: "brand", label: "Brand sticky", fill: "#e8f0ff" }],
   orphanConnectors: "detach",
 });
+
+const reactEditor = createReactEditor({
+  editor,
+  extensions: [standardPreset(), visuals],
+});
+
+const rectangle = visuals.createRectangle({
+  frame: { x: 40, y: 40, width: 160, height: 100 },
+});
+const sticky = visuals.createSticker({ text: "Reusable API" });
+visuals.select([rectangle, sticky]);
+visuals.group();
 ```
+
+The returned `EdgelessVisualsExtension` is both the installable extension and
+the typed host API. Its methods are available after `createReactEditor()` installs
+it and stop being available after that React editor is destroyed. String-based
+`edgeless.*` commands remain available for command palettes and integrations.
+
+Snapping preferences can be shared and persisted by the host without entering
+the collaborative document:
+
+```ts
+const saved = JSON.parse(localStorage.getItem("canvas-snapping") ?? "{}");
+const snapping = new EdgelessSnappingStore(saved);
+snapping.subscribe(() => {
+  localStorage.setItem("canvas-snapping", JSON.stringify(snapping.getSnapshot()));
+});
+
+standardPreset({ edgeless: { snapping } });
+```
+
+The same store can be updated programmatically with
+`snapping.set({ snapToGrid, alignObjects })`; mounted toolbar toggles publish
+through that store.
 
 Shapes (`rectangle` / `ellipse`) and connectors also accept optional label props
 (`text`, `color`, `fontFamily`, `fontSize`, `align`, `verticalAlign`). Shapes also

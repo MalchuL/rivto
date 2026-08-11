@@ -1,4 +1,5 @@
 import type { EditorMode } from "@chulane/rivto";
+import type { EventsCapability } from "../../capabilities";
 import type { ReactEditorImpl } from "../../react-editor";
 import {
   BLOCK_CONTENT_SELECTOR,
@@ -46,7 +47,7 @@ interface ConnectedListener extends NativeListenerGroup {
  * Semantic keyboard actions belong to KeyboardManager, which uses this manager
  * for surface/window keydown and keyup transport.
  */
-export class EventManager {
+export class EventManager implements EventsCapability {
   private readonly registrations: DOMRegistration[] = [];
   private readonly registrationIds = new Set<string>();
   private readonly registrationDisposers = new Map<string, () => void>();
