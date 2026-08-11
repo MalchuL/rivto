@@ -1,36 +1,53 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Structure and Ownership
 
-This TypeScript monorepo uses pnpm 11. `packages/rivto-editor-core/src` implements `@chulane/rivto`; `packages/react-rivto-editor/src` implements `@chulane/rivto-react`.
+The pnpm workspace has two editor packages:
 
-`demo/src` is the Vite integration playground; browser scenarios live in `e2e/`. Tests are colocated as `*.test.ts(x)` or under `__tests__/`. Put architecture notes in `docs/`, `dev_notes/`, or package `docs/`. Never edit generated `dist/`, `test-results/`, or `node_modules/` content.
+- `packages/rivto-editor-core/` owns canonical document state and framework-neutral behavior: CRDT storage, blocks, links, elements, commands, selection, clipboard, snapshots, mode, and undo.
+- `packages/react-rivto-editor/` owns presentation and browser behavior: renderers, hooks, DOM events/selection, page and edgeless surfaces, keyboard handling, slash commands, and extensions.
 
-## Package Boundaries
+Use `demo/` for integration, `e2e/` for Playwright, and `docs/` or `dev_notes/` for guidance. Keep native `yjs` imports inside core `src/store/crdt-doc/yjs-doc/`.
 
-Core owns the Yjs-backed `DocumentModel`, CRDT adapters, blocks, links, elements, commands, snapshots, selection, clipboard, mode, and undo. Keep it framework-neutral: no React, JSX, DOM APIs, or presentation-specific features. Native Yjs imports belong only under `store/crdt-doc/yjs-doc`; other core code uses adapter interfaces. Persisted format changes require snapshot validation and round-trip tests.
+## Choosing Where to Change Code
 
-React owns renderers, hooks, page/edgeless surfaces, DOM selection, browser events, keyboard mappings, slash commands, and extensions. It presents a core editor and must not duplicate canonical document state. Add optional behavior through `ReactEditorExtension`; register resources during `setup` and release them during cleanup. Destroy React runtime before core runtime.
+Recent development follows this stable pipeline:
 
-## Build, Test, and Development Commands
+```text
+document invariant → core store → core public manager/editor
+browser interaction → React extension → React manager/surface
+cross-layer behavior → demo → E2E
+```
 
-- `pnpm demo` starts the Vite demo from package source.
-- `pnpm build` builds core, then React.
-- `pnpm check-types` checks core, React, and demo TypeScript.
-- `pnpm lint` runs ESLint with zero warnings allowed.
-- `pnpm test` runs core Jest tests.
-- `pnpm --filter @chulane/rivto-react test` runs React Jest tests.
-- `pnpm test:e2e` builds the demo and runs Playwright in Chromium and Firefox.
-- `pnpm --dir app dev` starts the product app; `pnpm --dir app check-types` checks it.
+- Change persisted shapes, validation, hierarchy, or transactions in core `src/store/document-model/core/`.
+- Expose user operations through the focused core manager in `src/managers/`; avoid editor forwarding methods.
+- Put optional interaction behavior in React `src/extensions/`.
+- Put registries and lifecycle ownership in React `src/managers/`, block presentation in `src/blocks/` and `src/hooks/`, and layout containers in `src/surfaces/`.
 
-## Coding Style & Naming Conventions
+Slash commands belong to React. IDs remain stable except when creating entities or resolving collisions.
 
-Use TypeScript/TSX, ES modules, two-space indentation, double quotes, semicolons, and trailing commas. Use `PascalCase` for classes/components/types, `camelCase` for functions/values, and kebab-case directories such as `clipboard-manager`. Public editor and document APIs require concise JSDoc. Prefer narrow types to `any`.
+## Solving Changes Safely
 
-## Testing Guidelines
+1. Reproduce with the narrowest existing test.
+2. Find the symbol and every caller with `rg`.
+3. Trace the complete path before editing: storage → public operation → React consumer → integration test.
+4. Fix the shared owner rather than individual callers.
+5. Add a colocated regression test; use Playwright only for browser or cross-layer behavior.
 
-Use Jest for packages and Playwright for browser behavior. Add the smallest regression test beside the affected module. Name tests `feature.test.ts(x)` and E2E files `feature.spec.ts`. There is no numeric coverage gate; exercise new branches and interactions. Run focused tests first, then type checks, lint, and relevant full suites.
+For persisted fields, verify snapshots, clipboard, undo, and rendering. For selection, navigation, clipboard, or hierarchy changes, verify page and edgeless modes. Mutations remain transactional and go through managers. React extensions register in `setup` and clean up on destruction.
 
-## Commit & Pull Request Guidelines
+## Commands and Tests
 
-Recent commits use short, imperative summaries such as `Update docs` and `Fix clipboard to keep same ids`. Keep commits focused and explain behavior, not implementation trivia. Pull requests should include a concise problem/solution summary, validation commands, linked issues when applicable, and screenshots or recordings for UI changes. Call out schema, clipboard, selection, or compatibility changes explicitly.
+- `pnpm demo` — run the demo.
+- `pnpm build`, `pnpm check-types`, `pnpm lint` — build and statically validate the workspace.
+- `pnpm test` — run core Jest tests.
+- `pnpm --filter @chulane/rivto-react test` — run React Jest tests.
+- `pnpm test:e2e` — run Playwright.
+
+Use `*.test.ts(x)` for Jest and `*.spec.ts` for Playwright. Run focused tests first, then type checks, lint, affected suites, and build for export changes.
+
+## Style and Reviews
+
+Use ES modules and nearby formatting. Use `PascalCase` for types/components, `camelCase` for functions/values, and kebab-case directories. Public editor/document APIs need JSDoc. Prefer existing managers and narrow types.
+
+Keep commits focused and imperative. Pull requests state the problem, solution, validation, and API/UI impact.
