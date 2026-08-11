@@ -94,5 +94,7 @@ export type {
   ReactBlockRegistration,
   ReactBlockSlashCommand,
   ReactEditorExtension,
+  SlashCommand,
+  SlashCommandContext,
   SurfaceComponent,
 } from "./managers";

@@ -2,7 +2,6 @@ export * from "./command-registry";
 export * from "./clipboard-manager";
 export * from "./mode-manager";
 export * from "./selection-manager";
-export * from "./slash-command-manager";
 export * from "./undo-manager";
 export * from "./block-manager";
 export * from "./block-registry-manager";

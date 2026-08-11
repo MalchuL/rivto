@@ -1,49 +1,46 @@
-import type {
-  SlashCommand,
-  SlashCommandContext,
-} from "@chulane/rivto";
 import type { SlashCommandsCapability } from "../../capabilities";
+import { RevisionStore } from "../../internal-store";
 import type { ReactEditorImpl } from "../../react-editor";
-import type { SlashCommandRevisionListener } from "./types";
+import type { SlashCommand, SlashCommandContext, SlashCommandRevisionListener } from "./types";
 
-/**
- * Adds React-runtime ownership to the core slash-command registry.
- *
- * Commands remain stored exclusively by the core manager. Popup state, search,
- * caret geometry, and keyboard navigation remain presentation-extension concerns.
- */
+/** Owns ordered slash commands for the React runtime. */
 export class ReactSlashCommandManager implements SlashCommandsCapability {
+  private readonly commands = new Map<string, SlashCommand>();
   private readonly registrations = new Map<string, () => void>();
+  private readonly store = new RevisionStore();
 
   /**
-   * Creates a lifecycle-aware facade over the core slash manager.
-   *
-   * @param reactEditor - Complete owning runtime. Core slash storage and
-   * registration ownership are resolved lazily from it.
+   * @param reactEditor - Complete owning runtime used for registration ownership.
    */
   constructor(private readonly reactEditor: ReactEditorImpl) {}
 
-  /** Monotonic core command-registry revision. */
+  /** Monotonic command-registry revision. */
   get revision(): number {
-    return this.reactEditor.editor.slashCommands.revision;
+    return this.store.revision;
   }
 
   /**
-   * Registers a core command owned by the React runtime and active extension.
+   * Registers a command owned by the React runtime and active extension.
    *
-   * @param command - Complete command stored by the core slash manager.
+   * @param command - Complete slash command.
    * @returns Idempotent lifecycle-owned command disposer.
    */
   register(command: SlashCommand): () => void {
-    const { editor, extensions } = this.reactEditor;
+    const { extensions } = this.reactEditor;
     extensions.assertActive();
-    const releaseCore = editor.slashCommands.register(command);
+    if (!command.id.trim()) throw new Error("Slash command ID is required");
+    if (!command.title.trim()) throw new Error("Slash command title is required");
+    if (this.commands.has(command.id)) throw new Error(`Slash command ${command.id} is already registered`);
+    this.commands.set(command.id, command);
+    this.store.changed();
     let dispose: () => void = () => undefined;
     dispose = extensions.own(() => {
       if (this.registrations.get(command.id) === dispose) {
         this.registrations.delete(command.id);
       }
-      releaseCore();
+      if (this.commands.get(command.id) !== command) return;
+      this.commands.delete(command.id);
+      this.store.changed();
     });
     this.registrations.set(command.id, dispose);
     return dispose;
@@ -51,9 +48,6 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
 
   /**
    * Deletes a command registered through this React manager.
-   *
-   * Commands registered directly on the core editor are intentionally outside
-   * this manager's ownership and cannot be deleted here.
    *
    * @param id - Stable slash-command identity.
    * @returns True when a React-owned command existed and was disposed.
@@ -67,31 +61,39 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
   }
 
   /**
-   * Returns contextually available commands in core declaration order.
+   * Returns contextually available commands in declaration order.
    *
    * @param context - Active block context evaluated by availability predicates.
    */
   getAll(context: SlashCommandContext): SlashCommand[] {
-    return this.reactEditor.editor.slashCommands.getAll(context);
+    return [...this.commands.values()].filter((command) => command.isAvailable?.(context) !== false);
   }
 
   /**
-   * Executes one available command through the shared core registry.
+   * Executes one available command.
    *
    * @param id - Stable command identity.
    * @param context - Active block context revalidated before execution.
    */
   execute(id: string, context: SlashCommandContext): void {
-    this.reactEditor.editor.slashCommands.execute(id, context);
+    const command = this.commands.get(id);
+    if (!command) throw new Error(`Unknown slash command ${id}`);
+    if (command.isAvailable?.(context) === false) throw new Error(`Slash command ${id} is unavailable`);
+    command.execute(context);
   }
 
   /**
-   * Subscribes directly to shared core slash-command changes.
-   *
-   * @param listener - Callback invoked when the core registry revision changes.
-   * @returns Core subscription disposer.
+   * @param listener - Callback invoked when the registry revision changes.
+   * @returns Subscription disposer.
    */
   subscribe(listener: SlashCommandRevisionListener): () => void {
-    return this.reactEditor.editor.slashCommands.subscribe(listener);
+    return this.store.subscribe(listener);
+  }
+
+  /** Releases registry listeners after extension-owned commands are disposed. */
+  destroy(): void {
+    this.commands.clear();
+    this.registrations.clear();
+    this.store.clear();
   }
 }

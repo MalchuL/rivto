@@ -1,4 +1,4 @@
-import type { SlashCommand } from "@chulane/rivto";
+import type { SlashCommand } from "../../managers/slash";
 
 /** One command paired with its stable declaration index and search score. */
 export interface RankedSlashCommand {

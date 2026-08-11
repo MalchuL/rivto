@@ -93,7 +93,7 @@ describe("ReactEditor", () => {
     expect(editor.blocksRegistry.has("test.card")).toBe(true);
     expect(reactEditor.renderers.get("test.card")).toBe(Empty);
     const paragraphId = editor.blocks.insertBlock({ type: "paragraph" });
-    expect(editor.slashCommands.getAll({ blockId: paragraphId }).some(({ id }) => id === "type.test.card")).toBe(true);
+    expect(reactEditor.slashCommands.getAll({ blockId: paragraphId }).some(({ id }) => id === "type.test.card")).toBe(true);
     dispose();
     expect(editor.blocksRegistry.has("test.card")).toBe(false);
     expect(reactEditor.renderers.get("test.card")).toBeUndefined();
@@ -151,7 +151,7 @@ describe("ReactEditor", () => {
   test("rolls block registration back when its slash command conflicts", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
-    const releaseConflict = editor.slashCommands.register({ id: "type.test.conflict", title: "Conflict", execute() {} });
+    const releaseConflict = reactEditor.slashCommands.register({ id: "type.test.conflict", title: "Conflict", execute() {} });
     expect(() => reactEditor.blocks.register({
       definition: { type: "test.conflict" },
       render: Empty,

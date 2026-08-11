@@ -1,4 +1,4 @@
-import type { SlashCommand } from "@chulane/rivto";
+import type { SlashCommand } from "../../managers/slash";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,

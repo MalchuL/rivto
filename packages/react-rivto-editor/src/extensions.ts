@@ -12,4 +12,6 @@ export type {
   ReactEditorExtension,
   ReactBlockRegistration,
   ReactBlockSlashCommand,
+  SlashCommand,
+  SlashCommandContext,
 } from "./managers";

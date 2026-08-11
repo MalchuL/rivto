@@ -4,10 +4,10 @@ Rivto is a collaborative block-document runtime backed by Yjs. The core and
 React view are separate packages:
 
 - `@chulane/rivto` owns documents, CRDT storage, blocks, links, generic canvas
-  elements, commands, validated selection and structured clipboard managers, history, modes, and
-  slash-command state.
+  elements, commands, validated selection and structured clipboard managers,
+  history, and modes.
 - `@chulane/rivto-react` owns React rendering, page and edgeless surfaces,
-  Markdown, browser events, key bindings, and interaction extensions.
+  Markdown, browser events, key bindings, slash commands, and interaction extensions.
 
 ## Document architecture
 

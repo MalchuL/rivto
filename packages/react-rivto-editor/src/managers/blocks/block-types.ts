@@ -1,7 +1,7 @@
 import type {
   BlockDefinition,
-  SlashCommandContext,
 } from "@chulane/rivto";
+import type { SlashCommandContext } from "../slash";
 import type { BlockRenderer } from "./renderer-types";
 
 /** Optional slash conversion installed with a React block registration. */

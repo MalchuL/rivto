@@ -262,7 +262,7 @@ src/
     events/               delegated browser event runtime
     extensions/           setup ownership and mounted UI
     selection/            DOM selection bridge
-    slash/                core slash capability adapter
+    slash/                React-owned slash-command registry
     surfaces/             surface/wrapper registry
   surfaces/
     page/

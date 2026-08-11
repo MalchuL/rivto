@@ -1,4 +1,4 @@
-import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, LinkManager, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
+import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, LinkManager, ModeManager, SelectionManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
 import { DocumentModelImpl, type Block, type DocumentModel, type Snapshot, type SnapshotUpdate } from "../store/document-model";
 import {
@@ -69,8 +69,6 @@ export class EditorRuntime implements RivtoEditorApi {
   readonly history: UndoManager;
   /** Framework-neutral structured and plain-text clipboard operations. */
   readonly clipboard: ClipboardManager;
-  /** Ordered slash-command registrations available to presentation layers. */
-  readonly slashCommands = new SlashCommandManager();
   /** Named subscribers notified whenever public runtime state changes. */
   private readonly listeners = new Listeners<{ editorChanged: void }>();
   /** Owned subscription cleanup callbacks called during `destroy()`. */
@@ -454,7 +452,6 @@ export class EditorRuntime implements RivtoEditorApi {
     this.blocks.destroy();
     this.blocksRegistry.destroy();
     this.history.destroy();
-    this.slashCommands.clear();
     this.commands.clear();
     this.listeners.clear();
   }

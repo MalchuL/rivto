@@ -1,8 +1,6 @@
 import type {
   EditorMode,
   EditorSelection,
-  SlashCommand,
-  SlashCommandContext,
 } from "@chulane/rivto";
 import type { ComponentType, ReactNode } from "react";
 import type { BlockWrapperComponent } from "./blocks";
@@ -19,6 +17,8 @@ import type {
   KeyboardShortcut,
   KeymapOverrides,
   ReactBlockRegistration,
+  SlashCommand,
+  SlashCommandContext,
   SurfaceComponent,
 } from "./managers";
 

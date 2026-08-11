@@ -53,7 +53,7 @@ component registrations are valid.
 | `events` | Active-surface ownership and delegated native DOM events |
 | `keyboard` | Semantic bindings, shortcut matching, and dynamic keymaps |
 | `selection` | Core selection delegation and active-root DOM synchronization |
-| `slashCommands` | Lifecycle-aware delegation to the core slash registry |
+| `slashCommands` | React-owned slash-command registry and lifecycle |
 
 `extensions.mount` has no mode argument. A mounted component is present beside
 every surface. Its DOM/keyboard registrations declare `mode`, and any React
@@ -63,8 +63,8 @@ effect with surface-specific behavior checks `useEditorMode()`.
 not extension lifecycle. The first registered block or editor wrapper is
 outermost. Defensive read methods return new arrays.
 
-`selection` and `slashCommands` never copy core state. They add React ownership
-or DOM behavior to the existing core managers.
+`selection` adds DOM behavior to core selection state. `slashCommands` is owned
+entirely by the React runtime.
 
 Presentation registries publish focused revisions. Document, tree, mode,
 selection, slash, renderer, surface, and extension consumers subscribe to their

@@ -53,7 +53,7 @@ export class ReactEditorImpl implements ReactEditor {
   readonly keyboard: KeyboardManager;
   /** Current-surface DOM selection conversion and highlighting. */
   readonly selection: ReactSelectionManager;
-  /** React-owned access to the shared core slash-command registry. */
+  /** React-owned slash-command registry. */
   readonly slashCommands: ReactSlashCommandManager;
   private destroyed = false;
   private reconciliationQueued = false;
@@ -137,6 +137,7 @@ export class ReactEditorImpl implements ReactEditor {
     this.unsubscribeReconciliation?.();
     this.unsubscribeReconciliation = undefined;
     this.extensions.destroy();
+    this.slashCommands.destroy();
     this.keyboard.destroy();
     this.events.destroy();
   }

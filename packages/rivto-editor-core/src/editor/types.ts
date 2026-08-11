@@ -1,4 +1,4 @@
-import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, ElementManager, RegisteredCommand, LinkManager, ModeManager, SelectionManager, SlashCommandManager, UndoManager } from "../managers";
+import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, ElementManager, RegisteredCommand, LinkManager, ModeManager, SelectionManager, UndoManager } from "../managers";
 import type { CRDTDoc } from "../store/crdt-doc";
 import type { DocumentModel } from "../store/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
@@ -104,8 +104,6 @@ export interface RivtoEditorApi {
   readonly clipboard: ClipboardManager;
   /** Local undo/redo history for document mutations. */
   readonly history: UndoManager;
-  /** Ordered slash-command registrations for presentation layers. */
-  readonly slashCommands: SlashCommandManager;
   /** Monotonic view invalidation snapshot. */
   readonly revision: number;
 
