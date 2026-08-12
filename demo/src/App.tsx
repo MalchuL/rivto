@@ -501,7 +501,7 @@ function createMultiEditor(
       id: "left-parent",
       type: DEFAULT_WRITING_BLOCK_TYPE,
       content: "Movable parent",
-      collapsed: true,
+      listProps: { collapsed: true },
       children: [{
         id: "left-child",
         type: DEFAULT_WRITING_BLOCK_TYPE,

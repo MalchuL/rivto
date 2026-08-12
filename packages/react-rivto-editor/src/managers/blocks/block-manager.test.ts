@@ -31,4 +31,41 @@ describe("BlockManager", () => {
     reactEditor.destroy();
     editor.destroy();
   });
+
+  test("applies recursive defaults and filters invalid React mutations", () => {
+    const editor = createEditor();
+    const reactEditor = createReactEditor({ editor });
+    reactEditor.blocks.registerListProps({
+      id: "collapse",
+      defaults: { collapsed: false },
+      validate: (candidate) => typeof candidate.collapsed === "boolean",
+    });
+
+    const parent = reactEditor.blocks.insertBlock({
+      type: "paragraph",
+      children: [{ type: "paragraph", listProps: { custom: "kept" } }],
+    });
+    const child = editor.blocks.getChildIds(parent)[0]!;
+    expect(editor.blocks.getBlock(parent)?.listProps).toEqual({ collapsed: false });
+    expect(editor.blocks.getBlock(child)?.listProps).toEqual({ collapsed: false, custom: "kept" });
+
+    const result = reactEditor.blocks.updateBlocks([
+      { id: parent, patch: { listProps: { collapsed: true } } },
+      { id: child, patch: { listProps: { collapsed: "invalid" } } },
+      { id: "missing", patch: { listProps: { collapsed: true } } },
+      { id: child, patch: { listProps: { custom: Number.POSITIVE_INFINITY } } },
+    ]);
+    expect(result.results).toEqual([
+      { index: 0, id: parent, status: "applied" },
+      { index: 1, id: child, status: "skipped", reason: "invalid" },
+      { index: 2, id: "missing", status: "skipped", reason: "missing" },
+      { index: 3, id: child, status: "skipped", reason: "invalid" },
+    ]);
+    expect(editor.blocks.getBlock(parent)?.listProps.collapsed).toBe(true);
+    expect(reactEditor.blocks.deleteListProps(parent, ["collapsed"])).toBe(true);
+    expect(editor.blocks.getBlock(parent)?.listProps).toEqual({});
+
+    reactEditor.destroy();
+    editor.destroy();
+  });
 });

@@ -6,10 +6,9 @@ describe("EditorRuntime methods", () => {
 
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.blocks.getRootIds()).toEqual([]);
-    expect(editor.blocks.getVisibleBlockIds()).toEqual([]);
     expect(editor.links.getLinks()).toEqual([]);
     expect(editor.selection.get()).toEqual([]);
-    expect(editor.dump()).toMatchObject({ version: 5, blocks: [], links: [] });
+    expect(editor.dump()).toMatchObject({ version: 6, blocks: [], links: [] });
 
     editor.deleteSelection();
     editor.undo();
@@ -89,12 +88,11 @@ describe("EditorRuntime methods", () => {
     const editor = createRivtoEditor();
 
     editor.load({
-      version: 5,
+      version: 6,
       blocks: [{
         id: "loaded",
         type: "paragraph",
-        collapsed: false,
-        listProps: { type: "list", checked: false },
+        listProps: { collapsed: false, type: "list", checked: false },
         props: { tone: "success" },
         pluginData: {},
         content: "Loaded",
@@ -105,7 +103,7 @@ describe("EditorRuntime methods", () => {
     });
 
     expect(editor.dump()).toMatchObject({
-      version: 5,
+      version: 6,
       blocks: [{
         id: "loaded",
         content: "Loaded",
@@ -116,9 +114,9 @@ describe("EditorRuntime methods", () => {
       pluginData: { app: { theme: "dark" } },
     });
 
-    editor.load({ version: 5, blocks: [], links: [] });
+    editor.load({ version: 6, blocks: [], links: [] });
     expect(editor.blocks.getBlocks()).toEqual([]);
-    expect(editor.dump()).toMatchObject({ version: 5, blocks: [], links: [] });
+    expect(editor.dump()).toMatchObject({ version: 6, blocks: [], links: [] });
     editor.destroy();
   });
 });

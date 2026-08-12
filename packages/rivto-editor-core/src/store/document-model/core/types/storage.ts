@@ -6,7 +6,7 @@ import type {
   CRDTText,
 } from "../../../crdt-doc";
 import type { ElementFrame, Link } from "./document";
-import type { BlockListProps } from "../../../../blocks";
+import type { BlockListProps } from "../managers/block-manager/utils";
 
 /** Collaborative geometry stored inside each first-class element record. */
 export type ElementFrameStorage = Record<keyof ElementFrame, number>;
@@ -29,9 +29,7 @@ export type IDProp = string;
 export interface BlockStorage {
   id: IDBlock;
   type: string;
-  /** First-class collaborative outline visibility. */
-  collapsed: boolean;
-  /** First-class collaborative multi-block presentation properties. */
+  /** Opaque collaborative page/outline properties. */
   listProps: CRDTMap<BlockListPropsStorage>;
   props: CRDTMap<Record<IDProp, BasicCRDTType>>;
   content: CRDTText;

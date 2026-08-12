@@ -538,7 +538,7 @@ export class EdgelessVisualController {
       const structured = raw.clipboardData?.getData(RIVTO_CLIPBOARD_MIME);
       if (!structured) return false;
       const bundle = JSON.parse(structured) as ClipboardBundle;
-      if (bundle.version !== 3 || !bundle.elements?.length) return false;
+      if (bundle.version !== 4 || !bundle.elements?.length) return false;
       this.pasteClipboardBundle(bundle);
       return true;
     });
@@ -556,7 +556,7 @@ export class EdgelessVisualController {
     const visit = (block: EditorBlock): void => { allBlockIds.add(block.id); block.children.forEach(visit); };
     blocks.forEach(visit);
     return {
-      version: 3,
+      version: 4,
       blocks,
       links: this.reactEditor.editor.links.getLinks().filter((link) => allBlockIds.has(link.from.blockId) && allBlockIds.has(link.to.blockId)),
       elements: this.reactEditor.editor.elements.getElements().filter((element) => included.has(element.id)).map(copy),
@@ -565,7 +565,7 @@ export class EdgelessVisualController {
   }
 
   private pasteClipboardBundle(bundle: ClipboardBundle): void {
-    if (bundle.version !== 3 || !Array.isArray(bundle.blocks) || !Array.isArray(bundle.links) || !Array.isArray(bundle.elements)) throw new Error("Invalid edgeless clipboard payload");
+    if (bundle.version !== 4 || !Array.isArray(bundle.blocks) || !Array.isArray(bundle.links) || !Array.isArray(bundle.elements)) throw new Error("Invalid edgeless clipboard payload");
     const blockMap = new Map<string, string>();
     const remapBlock = (block: EditorBlock): EditorBlockInput => { const id = crypto.randomUUID(); blockMap.set(block.id, id); return { ...copy(block), id, children: block.children.map(remapBlock) }; };
     const blocks = bundle.blocks.map(remapBlock);
@@ -589,7 +589,7 @@ export class EdgelessVisualController {
     const selected = (bundle.selectedElementIds ?? []).flatMap((id) => elementMap.get(id) ?? []);
     this.reactEditor.editor.batchUpdates(() => {
       let afterId = this.reactEditor.editor.blocks.getBlocks().at(-1)?.id;
-      blocks.forEach((block) => { afterId = this.reactEditor.editor.blocks.insertBlock(block, afterId); });
+      blocks.forEach((block) => { afterId = this.reactEditor.blocks.insertBlock(block, afterId); });
       const blockElements = elements.filter((element) => element.type === "block");
       const order = this.reactEditor.editor.blocks.getRootIds();
       const first = blockElements.flatMap((element) => blockIdsOf(element, order))[0];

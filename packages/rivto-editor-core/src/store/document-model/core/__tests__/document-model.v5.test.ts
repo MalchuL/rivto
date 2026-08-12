@@ -11,7 +11,7 @@ const exchangeUpdates = (left: YjsDoc, right: YjsDoc): void => {
   Y.applyUpdate(right.doc, leftState);
 };
 
-describe("DocumentModelImpl schema v5 Markdown storage", () => {
+describe("DocumentModelImpl schema v6 Markdown storage", () => {
   it("loads, removes, and recreates blocks around a valid empty document", () => {
     const doc = new YjsDoc("empty-document");
     const model = new DocumentModelImpl(doc);
@@ -20,33 +20,30 @@ describe("DocumentModelImpl schema v5 Markdown storage", () => {
     expect("createLink" in model).toBe(false);
     expect(model.blocks.getBlocks()).toEqual([]);
     expect(model.blocks.getRootIds()).toEqual([]);
-    expect(model.blocks.getVisibleBlockIds()).toEqual([]);
     expect(model.links.getLinks()).toEqual([]);
 
-    model.loadSnapshot({ version: 5, blocks: [], links: [] });
+    model.loadSnapshot({ version: 6, blocks: [], links: [] });
     const id = model.blocks.insertBlock({ id: "only", type: "paragraph", content: "Only" });
     model.links.createLink({ id: "self", from: { blockId: id }, to: { blockId: id } });
     model.blocks.removeBlock(id);
 
     expect(model.blocks.getBlocks()).toEqual([]);
     expect(model.blocks.getRootIds()).toEqual([]);
-    expect(model.blocks.getVisibleBlockIds()).toEqual([]);
     expect(model.links.getLinks()).toEqual([]);
-    expect(model.getSnapshot()).toMatchObject({ version: 5, blocks: [], links: [] });
+    expect(model.getSnapshot()).toMatchObject({ version: 6, blocks: [], links: [] });
     expect(model.blocks.insertBlock({ id: "later", type: "paragraph" })).toBe("later");
     doc.destroy();
   });
 
-  it("round-trips explicit list state in schema v5", () => {
+  it("round-trips opaque list state in schema v6", () => {
     const sourceDoc = new YjsDoc("list-snapshot-source");
     const source = new DocumentModelImpl(sourceDoc);
     source.loadSnapshot({
-      version: 5,
+      version: 6,
       blocks: [{
         id: "listed",
         type: "paragraph",
-        collapsed: false,
-        listProps: { type: "checkbox", checked: true },
+        listProps: { collapsed: false, type: "checkbox", checked: true },
         props: {},
         pluginData: {},
         content: "Task",
@@ -54,12 +51,12 @@ describe("DocumentModelImpl schema v5 Markdown storage", () => {
       }],
       links: [],
     });
-    expect(source.blocks.getBlock("listed")?.listProps).toEqual({ type: "checkbox", checked: true });
+    expect(source.blocks.getBlock("listed")?.listProps).toEqual({ collapsed: false, type: "checkbox", checked: true });
 
     const targetDoc = new YjsDoc("list-snapshot-target");
     const target = new DocumentModelImpl(targetDoc);
     target.loadSnapshot(source.getSnapshot());
-    expect(target.blocks.getBlock("listed")?.listProps).toEqual({ type: "checkbox", checked: true });
+    expect(target.blocks.getBlock("listed")?.listProps).toEqual({ collapsed: false, type: "checkbox", checked: true });
     sourceDoc.destroy();
     targetDoc.destroy();
   });
@@ -76,7 +73,7 @@ describe("DocumentModelImpl schema v5 Markdown storage", () => {
       props: { startBlockId: "content", endBlockId: "content" },
     });
     const snapshot = source.getSnapshot();
-    expect(snapshot.version).toBe(5);
+    expect(snapshot.version).toBe(6);
     expect(snapshot.elements).toEqual([expect.objectContaining({ id: "card", type: "block" })]);
     expect(snapshot.blocks[0]).not.toHaveProperty("layout");
 
@@ -142,10 +139,9 @@ describe("DocumentModelImpl schema v5 Markdown storage", () => {
     expect(findPath).toHaveBeenCalledTimes(searchesBeforeRepair + 1);
     expect(model.blocks.getRootIds()).toEqual(["parent", "target"]);
     expect(model.blocks.getChildIds("target")).toEqual(["child"]);
-    expect(model.blocks.getVisibleBlockIds()).toEqual(["parent", "target", "child"]);
-    model.blocks.updateBlock("target", { collapsed: true });
-    expect(model.blocks.getVisibleBlockIds()).toEqual(["parent", "target"]);
-    model.blocks.updateBlock("target", { collapsed: false });
+    model.blocks.updateBlock("target", { listProps: { collapsed: true } });
+    expect(model.blocks.getBlock("target")?.listProps.collapsed).toBe(true);
+    model.blocks.updateBlock("target", { listProps: { collapsed: false } });
 
     model.blocks.removeBlock("child");
     expect(model.blocks.getBlock("child")).toBeUndefined();

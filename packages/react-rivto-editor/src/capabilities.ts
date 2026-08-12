@@ -1,4 +1,7 @@
 import type {
+  EditorBlockInput,
+  EditorBlockPatch,
+  EditorBlockUpdate,
   EditorMode,
   EditorSelection,
 } from "@chulane/rivto";
@@ -17,6 +20,10 @@ import type {
   KeyboardShortcut,
   KeymapOverrides,
   ReactBlockRegistration,
+  ListPropsRegistration,
+  BlockMutationResult,
+  ClipboardFormatter,
+  ClipboardParser,
   SlashCommand,
   SlashCommandContext,
   SurfaceComponent,
@@ -24,11 +31,41 @@ import type {
 
 export interface BlocksCapability {
   register(registration: ReactBlockRegistration): () => void;
+  /** Registers ordered list-property defaults and validation; returns a disposer. */
+  registerListProps(registration: ListPropsRegistration): () => void;
+  /** Returns whether the given list-property registration is active. */
+  hasListProps(id: string): boolean;
+  /** Returns whether core portability and every active validator accept the record. */
+  validateListProps(candidate: import("@chulane/rivto").BlockListProps): boolean;
+  /** Returns a detached recursive input with active defaults shallowly merged. */
+  prepareBlock(input: EditorBlockInput): EditorBlockInput;
+  /** Inserts a prepared block and returns its stable root identifier. */
+  insertBlock(input: EditorBlockInput, afterId?: string | null): string;
+  /** Applies a valid patch and returns whether the target was updated. */
+  updateBlock(id: string, patch: EditorBlockPatch): boolean;
+  /** Applies valid entries best-effort and returns every positional outcome. */
+  updateBlocks(updates: readonly EditorBlockUpdate[]): BlockMutationResult;
+  /** Deletes list-property keys and returns whether the mutation was applied. */
+  deleteListProps(id: string, keys: readonly string[]): boolean;
+  /** Deletes valid key batches best-effort and returns every positional outcome. */
+  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): BlockMutationResult;
   delete(type: string): boolean;
   /** Reports whether a registered type partitions root block elements. */
   separatesBlockElements(type: string): boolean;
   /** Returns the first separator type registered for automatic card creation. */
   getDefaultBlockElementSeparatorType(): string | undefined;
+}
+
+/** React-owned registry for portable clipboard formatting and parsing. */
+export interface ClipboardCapability {
+  /** Registers an ordered formatter and returns its lifecycle-owned disposer. */
+  registerFormatter(formatter: ClipboardFormatter): () => void;
+  /** Registers a first-match parser and returns its lifecycle-owned disposer. */
+  registerParser(parser: ClipboardParser): () => void;
+  /** Returns composed plain-text, Markdown, and HTML formats for a block forest. */
+  format(blocks: readonly import("@chulane/rivto").EditorBlock[]): import("./managers").PortableBlockFormats;
+  /** Returns the first parsed block-input forest, or undefined when no parser matches. */
+  parse(data: { readonly html: string; readonly text: string }): EditorBlockInput[] | undefined;
 }
 
 export interface RenderersCapability {

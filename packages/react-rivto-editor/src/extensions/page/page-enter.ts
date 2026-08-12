@@ -1,4 +1,4 @@
-import { isNumberedListType } from "@chulane/rivto";
+import { isNumberedListType } from "./list-properties";
 import type { ReactEditor } from "../../types";
 import {
   focusBlock,
@@ -71,7 +71,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
       }
 
       if (isEmptyBlock(block) && block.listProps.type !== "list") {
-        editor.blocks.updateBlock(block.id, { listProps: { type: "list", checked: false } });
+        reactEditor.blocks.updateBlock(block.id, { listProps: { type: "list", checked: false } });
         nextBlockId = block.id;
         return;
       }
@@ -80,7 +80,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
         ? Math.min(target.offset ?? 0, block.content.length)
         : block.content.length;
       if (isTextTarget) editor.blocks.updateBlock(block.id, { content: block.content.slice(0, splitAt) });
-      nextBlockId = editor.blocks.insertBlock({
+      nextBlockId = reactEditor.blocks.insertBlock({
         ...createDefaultBlock(),
         listProps: {
           type: block.listProps.type === "checkbox"
@@ -91,7 +91,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
         content: isTextTarget ? block.content.slice(splitAt) : "",
       }, block.id);
 
-      if (block.children.length > 0 && !block.collapsed) {
+      if (block.children.length > 0 && block.listProps.collapsed !== true) {
         // Insertion initially creates a sibling directly after `block`.
         // Indenting makes it the last child; moving it to position zero then
         // gives Enter the requested first-child placement.

@@ -1,7 +1,6 @@
 import type { NormalizedSelection } from "../../selection-manager";
 import type { Block, BlockInput, Link } from "../../../store/document-model";
 import type { ClipboardBundle } from "../types";
-import { BLOCK_LIST_TYPES, resolveBlockListNumbers, type BlockListType } from "../../../blocks";
 
 /**
  * Detached clipboard data after every persisted identity has been remapped.
@@ -43,12 +42,7 @@ export function flattenBlocks(blocks: Block[]): Block[] {
  * @returns An identity-preserving deep clone safe for clipboard modification.
  */
 function cloneBlock(block: Block): Block {
-  return {
-    ...block,
-    props: { ...block.props },
-    pluginData: { ...block.pluginData },
-    children: block.children.map(cloneBlock),
-  };
+  return structuredClone(block);
 }
 
 /**
@@ -148,10 +142,8 @@ export interface PortableClipboardFormats {
 /**
  * Serializes one detached block forest without discarding its hierarchy.
  *
- * The callback is evaluated once per block so custom block definitions produce
- * identical text in every portable flavor. Ordinary `list` blocks use the
- * paragraph/outline representation, while checkbox and numbered modes
- * emit their explicit portable markers and semantic controls.
+ * Core intentionally applies no list-property semantics. React clipboard
+ * formatters may transform these neutral formats before writing them.
  *
  * @param blocks - Selected roots carrying their copied descendants.
  * @param toRawText - Resolves the portable text for one detached block.
@@ -162,70 +154,22 @@ export function serializeClipboardBlocks(
   toRawText: (block: Block) => string,
 ): PortableClipboardFormats {
   const serializeSiblings = (siblings: Block[], depth: number): PortableClipboardFormats => {
-    const numbers = resolveBlockListNumbers(siblings);
     const serialized = siblings.map((block) => {
       const raw = toRawText(block);
       const lines = raw.split(/\r\n?|\n/);
-      const number = numbers.get(block.id);
       const children = serializeSiblings(block.children, depth + 1);
       const escaped = escapeHtml(raw).replace(/\r\n?|\n/g, "<br>");
-      if (block.listProps.type === "list") {
-        const plainIndent = "  ".repeat(depth);
-        const markdownIndent = "  ".repeat(Math.max(0, depth - 1));
-        const markdownContinuation = "  ".repeat(depth);
-        const ownText = lines.map((line) => plainIndent + line).join("\n");
-        const ownMarkdown = depth === 0
-          ? lines.join("\n")
-          : lines.map((line, index) => (
-            index === 0 ? `${markdownIndent}- ${line}` : markdownContinuation + line
-          )).join("\n");
-        return {
-          text: children.text ? `${ownText}\n${children.text}` : ownText,
-          html: depth === 0
-            ? `<p>${escaped}</p>${children.html}`
-            : `<li>${escaped}${children.html}</li>`,
-          markdown: children.markdown ? `${ownMarkdown}\n${children.markdown}` : ownMarkdown,
-          ordinaryHtmlItem: depth > 0,
-        };
-      }
-      const marker = block.listProps.type === "checkbox"
-        ? `- [${block.listProps.checked ? "x" : " "}] `
-        : `${number}. `;
       const indent = "  ".repeat(depth);
-      const continuation = indent + " ".repeat(marker.length);
-      const own = lines.map((line, index) => `${index ? continuation : indent + marker}${line}`).join("\n");
-      const checkbox = block.listProps.type === "checkbox"
-        ? `<input type="checkbox" disabled${block.listProps.checked ? " checked" : ""}>`
-        : "";
-      const childHtml = children.html;
-      const html = number === undefined
-        ? `<ul><li>${checkbox}${escaped}${childHtml}</li></ul>`
-        : `<ol start="${number}"><li value="${number}">${escaped}${childHtml}</li></ol>`;
+      const own = lines.map((line) => indent + line).join("\n");
       return {
-        text: childHtml ? `${own}\n${children.text}` : own,
-        html,
-        markdown: childHtml ? `${own}\n${children.markdown}` : own,
-        ordinaryHtmlItem: false,
+        text: children.text ? `${own}\n${children.text}` : own,
+        html: `<p>${escaped}</p>${children.html}`,
+        markdown: children.markdown ? `${own}\n${children.markdown}` : own,
       };
     });
-    let html = "";
-    let ordinaryItems = "";
-    const flushOrdinaryItems = () => {
-      if (!ordinaryItems) return;
-      html += `<ul>${ordinaryItems}</ul>`;
-      ordinaryItems = "";
-    };
-    serialized.forEach((item) => {
-      if (item.ordinaryHtmlItem) ordinaryItems += item.html;
-      else {
-        flushOrdinaryItems();
-        html += item.html;
-      }
-    });
-    flushOrdinaryItems();
     return {
       text: serialized.map((item) => item.text).join("\n"),
-      html,
+      html: serialized.map((item) => item.html).join(""),
       markdown: serialized.map((item) => item.markdown).join("\n"),
     };
   };
@@ -271,14 +215,10 @@ export function remapClipboardBundle(
     throw new Error("Unsupported Rivto clipboard payload");
   }
   const validateBlock = (block: Block): void => {
-    if (typeof block.collapsed !== "boolean" || !Array.isArray(block.children)) {
+    if (!Array.isArray(block.children)) {
       throw new Error("Invalid Rivto clipboard block");
     }
-    if (
-      !block.listProps ||
-      !BLOCK_LIST_TYPES.includes(block.listProps.type as BlockListType) ||
-      typeof block.listProps.checked !== "boolean"
-    ) {
+    if (!block.listProps || typeof block.listProps !== "object" || Array.isArray(block.listProps)) {
       throw new Error("Invalid Rivto clipboard block list state");
     }
     block.children.forEach(validateBlock);

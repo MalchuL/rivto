@@ -14,7 +14,7 @@ import {
 const block = (id, children = [], collapsed = false) => ({
   id,
   type: "paragraph",
-  collapsed,
+  listProps: { collapsed },
   content: id,
   props: {},
   pluginData: {},

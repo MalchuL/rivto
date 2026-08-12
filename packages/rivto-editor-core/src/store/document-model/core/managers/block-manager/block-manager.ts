@@ -12,7 +12,6 @@ import type {
     BlockUpdate,
     DocumentModel,
 } from "../../types";
-import { DEFAULT_BLOCK_LIST_PROPS, type BlockListProps } from "../../../../../blocks";
 import type {
     BlockListPropsStorage,
     BlockStorage,
@@ -21,7 +20,7 @@ import type {
     IDProp,
 } from "../../types/storage";
 import { assignMap, assignText, clone, isCRDTArray, isCRDTMap, isCRDTText } from "../../utils";
-import { collapsedFrom, contentFrom, listPropsFrom, strings } from "./utils";
+import { contentFrom, strings, validateBlockListProps, type BlockListProps } from "./utils";
 
 const ROOTS_KEY = "rivto.editor.roots";
 const BLOCKS_KEY = "rivto.editor.blocks";
@@ -163,28 +162,6 @@ export class DocumentBlockManager {
     }
 
     /**
-     * Reads identifiers currently visible in the outline.
-     *
-     * @returns Collapse-aware identifiers in depth-first document order.
-     */
-    getVisibleBlockIds(): string[] {
-        const visited = new Set<string>();
-        const visit = (id: string): string[] => {
-            if (visited.has(id)) return [];
-            const value = this.storage.get(id);
-            if (!isCRDTMap(value)) return [];
-            visited.add(id);
-            return [
-                id,
-                ...(collapsedFrom(value.get("collapsed"))
-                    ? []
-                    : strings(this.requiredArray(value, "children")).flatMap(visit)),
-            ];
-        };
-        return this.getRootIds().flatMap(visit);
-    }
-
-    /**
      * Inserts a block into an ordered root or sibling list.
      *
      * @param block - Initial portable block data including its required native type.
@@ -232,12 +209,11 @@ export class DocumentBlockManager {
         const prepared = updates.map(({ id, patch }) => {
             const block = this.requiredBlock(id);
             const type = this.requiredType(block, id);
-            if (patch.collapsed !== undefined) collapsedFrom(patch.collapsed);
             let validatedListProps: BlockListProps | undefined;
             if (patch.listProps) {
                 const current = simulatedListProps.get(id)
-                    ?? listPropsFrom(this.requiredMap(block, "listProps").toObject());
-                validatedListProps = listPropsFrom({ ...current, ...patch.listProps });
+                    ?? validateBlockListProps(this.requiredMap(block, "listProps").toObject());
+                validatedListProps = validateBlockListProps({ ...current, ...patch.listProps });
                 simulatedListProps.set(id, validatedListProps);
             }
             let validatedProps: Record<string, unknown> | undefined;
@@ -252,7 +228,6 @@ export class DocumentBlockManager {
 
         this.transact(() => {
             prepared.forEach(({ block, patch, validatedListProps, validatedProps }) => {
-                if (patch.collapsed !== undefined) block.set("collapsed", patch.collapsed);
                 if (validatedListProps && patch.listProps) {
                     assignMap(this.requiredMap(block, "listProps"), { ...patch.listProps }, false);
                 }
@@ -304,6 +279,40 @@ export class DocumentBlockManager {
             const block = this.requiredBlock(id);
             this.patchProps(String(block.get("type")), this.requiredMap(block, "props"), { [key]: value });
         });
+    }
+
+    /**
+     * Deletes selected opaque list-property keys from one block transactionally.
+     *
+     * Missing keys are harmless and duplicate keys are deleted once.
+     *
+     * @param id - Identifier of the block whose list properties are changed.
+     * @param keys - Property names to remove from the block's list-property map.
+     * @returns `true` when the target block exists and the deletion transaction
+     * runs; otherwise `false`.
+     */
+    deleteListProps(id: string, keys: readonly string[]): boolean {
+        if (!this.hasBlock(id)) return false;
+        this.deleteListPropsBatch([{ id, keys }]);
+        return true;
+    }
+
+    /**
+     * Deletes list-property keys from several blocks in one strict transaction.
+     *
+     * Every target is resolved before the first write, so a missing block rejects
+     * the complete batch rather than applying a prefix.
+     *
+     * @param updates - Block identifiers paired with property names to delete.
+     * @returns No value.
+     * @throws {Error} When any target block is missing or malformed.
+     */
+    deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void {
+        const prepared = updates.map(({ id, keys }) => ({
+            map: this.requiredMap(this.requiredBlock(id), "listProps"),
+            keys: [...new Set(keys)],
+        }));
+        this.transact(() => prepared.forEach(({ map, keys }) => keys.forEach((key) => map.delete(key))));
     }
 
     /**
@@ -480,7 +489,7 @@ export class DocumentBlockManager {
      *
      * @param id - ID of the block to move.
      * @param targetId - Sibling to move beside, or `null` to move to the start.
-     * @param position - Whether to insert before, after, or inside the target.
+     * @param position - Whether to insert before, after, or inside the target. "inside" is append to the target childrent at the end.
      * @throws If the block or target sibling does not exist.
      * @returns No value.
      */
@@ -659,7 +668,7 @@ export class DocumentBlockManager {
      *
      * @param blocks - Portable root block trees that become the stored document.
      * @returns No value.
-     * @throws {Error} When collapse state or child collections are malformed.
+     * @throws {Error} When list properties or child collections are malformed.
      */
     loadBlocks(blocks: readonly Block[]): void {
         this.validateBlocks(blocks);
@@ -676,12 +685,11 @@ export class DocumentBlockManager {
      *
      * @param blocks - Portable root block trees to validate recursively.
      * @returns No value.
-     * @throws {Error} When collapse state or child collections are malformed.
+     * @throws {Error} When list properties or child collections are malformed.
      */
     validateBlocks(blocks: readonly Block[]): void {
         const validate = (block: Block): void => {
-            collapsedFrom(block.collapsed);
-            listPropsFrom(block.listProps);
+            validateBlockListProps(block.listProps);
             if (!Array.isArray(block.children)) throw new Error("Snapshot block children must be an array");
             block.children.forEach(validate);
         };
@@ -725,8 +733,7 @@ export class DocumentBlockManager {
      */
     private insertInto(block: BlockInput, container: CRDTArray<string>, afterId?: string | null): string {
         if (!block.type) throw new Error("Block type is required");
-        const collapsed = collapsedFrom(block.collapsed, false);
-        const listProps = listPropsFrom({ ...DEFAULT_BLOCK_LIST_PROPS, ...block.listProps });
+        const listProps = validateBlockListProps(block.listProps ?? {});
         const id = block.id ?? crypto.randomUUID();
         if (this.storage.has(id)) throw new Error(`Block ${id} already exists`);
         const model = this.document.crdt.instantiator.createMap<BlockStorage>();
@@ -737,7 +744,6 @@ export class DocumentBlockManager {
         const pluginData = this.document.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
         model.set("id", id);
         model.set("type", block.type);
-        model.set("collapsed", collapsed);
         model.set("listProps", listPropsStorage);
         model.set("props", props);
         model.set("content", content);
@@ -777,8 +783,7 @@ export class DocumentBlockManager {
         return {
             id,
             type: this.requiredType(value, id),
-            collapsed: collapsedFrom(value.get("collapsed")),
-            listProps: listPropsFrom(this.requiredMap(value, "listProps").toObject()),
+            listProps: validateBlockListProps(this.requiredMap(value, "listProps").toObject()),
             props,
             pluginData,
             content,

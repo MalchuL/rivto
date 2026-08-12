@@ -1,4 +1,4 @@
-import type { BlockDefinition } from "../../blocks/types";
+import type { BlockDefinition } from "./types";
 import type { EditorBlockInput } from "../../editor/model";
 import { Listeners } from "../../utils";
 import type { ZodType } from "zod";

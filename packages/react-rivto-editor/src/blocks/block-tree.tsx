@@ -8,7 +8,7 @@
  * @module
  */
 import { Fragment, useCallback, useSyncExternalStore } from "react";
-import { resolveBlockListNumbers } from "@chulane/rivto";
+import { resolveBlockListNumbers } from "../extensions/page/list-properties";
 import { useBlock, useBlockSelection, useReactEditor } from "../hooks";
 import {
   BlockElementRefBoundary,
@@ -70,13 +70,15 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
     const sibling = reactEditor.editor.blocks.getBlock(id);
     return sibling ? [sibling] : [];
   });
-  const listNumber = resolveBlockListNumbers(siblings).get(block.id);
-  const marker = block.listProps.type === "checkbox" ? (
+  const listActive = reactEditor.blocks.hasListProps("list");
+  const collapseActive = reactEditor.blocks.hasListProps("collapse");
+  const listNumber = listActive ? resolveBlockListNumbers(siblings).get(block.id) : undefined;
+  const marker = listActive && block.listProps.type === "checkbox" ? (
     <input
       type="checkbox"
       className="page-list-checkbox"
       aria-label={`Mark block as ${block.listProps.checked ? "incomplete" : "complete"}: ${block.content || block.type}`}
-      checked={block.listProps.checked}
+      checked={block.listProps.checked === true}
       onPointerDown={(event) => event.stopPropagation()}
       onChange={(event) => operations.update({ listProps: { checked: event.currentTarget.checked } })}
     />
@@ -91,29 +93,29 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
       fallback={BlockTreeShell}
       block={block}
       isSelected={Boolean(selection)}
-      controls={(marker || block.children.length > 0) && (
+      controls={(marker || (collapseActive && block.children.length > 0)) && (
         <Fragment>
           {marker}
-          {block.children.length > 0 && <button
+          {collapseActive && block.children.length > 0 && <button
             type="button"
             className="page-collapse-toggle"
             data-collapse-toggle="true"
-            aria-label={`${block.collapsed ? "Expand" : "Collapse"} block: ${block.content || block.type}`}
-            aria-expanded={!block.collapsed}
+            aria-label={`${block.listProps.collapsed === true ? "Expand" : "Collapse"} block: ${block.content || block.type}`}
+            aria-expanded={block.listProps.collapsed !== true}
             aria-controls={childrenId}
             onPointerDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
             }}
-            onClick={() => operations.update({ collapsed: !block.collapsed })}
+            onClick={() => operations.update({ listProps: { collapsed: block.listProps.collapsed !== true } })}
           >
-            {block.collapsed ? "▸" : "▾"}
+            {block.listProps.collapsed === true ? "▸" : "▾"}
           </button>}
         </Fragment>
       )}
       content={<Content blockId={block.id} />}
     >
-      {block.children.length > 0 && !block.collapsed && (
+      {block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true) && (
         <div id={childrenId} className="page-block-children">
           {block.children.map((child) => (
             <BlockTreeNode key={child.id} blockId={child.id} />

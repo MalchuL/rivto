@@ -30,7 +30,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
             let id = "";
             editor.batchUpdates(() => {
               for (let current = 0; current < amount; current += 1) {
-                id = editor.blocks.insertBlock(
+                id = reactEditor.blocks.insertBlock(
                   reactEditor.createDefaultBlock(),
                   id || undefined,
                 );

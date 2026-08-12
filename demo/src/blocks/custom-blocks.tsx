@@ -88,4 +88,17 @@ export const customBlockExtensions: readonly ReactEditorExtension[] = [
       render: CounterBlock,
       slashCommand: { title: "Counter", group: "Turn into", keywords: ["count", "button"] },
     }),
+    {
+      id: "clipboard.demo-counter",
+      setup: (reactEditor) => {
+        reactEditor.clipboard.registerFormatter({
+          id: "demo.counter",
+          matches: ({ block }) => block.type === COUNTER_BLOCK_TYPE,
+          format: ({ block }) => {
+            const text = `Count: ${block.props.count}`;
+            return { plain: text, markdown: text, html: `<p>${text}</p>` };
+          },
+        });
+      },
+    },
 ];

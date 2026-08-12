@@ -359,6 +359,9 @@ export class EditorRuntime implements RivtoEditorApi {
       const bundle = data.bundle as ClipboardBundle | undefined;
       const mergeText = data.mergeText !== false;
       const preserveNewlines = data.preserveNewlines === true;
+      const placement = data.placement && typeof data.placement === "object"
+        ? data.placement as { parentId: string | null; afterId: string | null }
+        : undefined;
       const explicitText = text(data.text);
       if (event?.clipboardData) event.preventDefault();
       this.clipboard.paste({
@@ -368,6 +371,7 @@ export class EditorRuntime implements RivtoEditorApi {
         preserveNewlines,
         defaultBlockType,
         text: explicitText ?? event?.clipboardData?.getData("text/plain"),
+        placement,
       });
     });
   }

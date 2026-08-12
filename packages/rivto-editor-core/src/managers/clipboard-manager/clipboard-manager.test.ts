@@ -36,7 +36,7 @@ describe("core ClipboardManager", () => {
         children: [{ type: "paragraph", content: "Grandchild" }],
       }],
     });
-    editor.blocks.updateBlock(first, { collapsed: true });
+    editor.blocks.updateBlock(first, { listProps: { collapsed: true } });
     const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first);
     editor.selection.set([{
       type: "block",
@@ -49,23 +49,20 @@ describe("core ClipboardManager", () => {
 
     expect(payload.text).toBe("Root <one>\nline\n  Child\n  continuation\n    Grandchild\nSecond");
     expect(payload.html).toBe(
-      "<p>Root &lt;one&gt;<br>line</p><ul><li>Child<br>continuation<ul><li>Grandchild</li></ul></li></ul><p>Second</p>",
+      "<p>Root &lt;one&gt;<br>line</p><p>Child<br>continuation</p><p>Grandchild</p><p>Second</p>",
     );
-    expect(payload.markdown).toBe("Root <one>\nline\n- Child\n  continuation\n  - Grandchild\nSecond");
+    expect(payload.markdown).toBe("Root <one>\nline\n  Child\n  continuation\n    Grandchild\nSecond");
     expect(payload.bundle.blocks).toMatchObject([{
       id: first,
-      collapsed: true,
+      listProps: { collapsed: true },
       children: [{ content: "Child\ncontinuation", children: [{ content: "Grandchild" }] }],
     }, { id: second }]);
     editor.destroy();
   });
 
-  it("uses block raw-text converters after trimming copied text", () => {
+  it("uses neutral block content after trimming copied text", () => {
     const editor = createRivtoEditor();
-    editor.blocksRegistry.defineBlock({
-      type: "test.raw",
-      toRawText: (block) => `Raw: ${block.content}`,
-    });
+    editor.blocksRegistry.defineBlock({ type: "test.raw" });
     const id = editor.blocks.insertBlock({ type: "test.raw", content: "Selected text" });
     editor.selection.set([{
       type: "text",
@@ -75,14 +72,14 @@ describe("core ClipboardManager", () => {
 
     const payload = editor.clipboard.copy()!;
 
-    expect(payload.text).toBe("Raw: Selected");
-    expect(payload.html).toBe("<p>Raw: Selected</p>");
-    expect(payload.markdown).toBe("Raw: Selected");
+    expect(payload.text).toBe("Selected");
+    expect(payload.html).toBe("<p>Selected</p>");
+    expect(payload.markdown).toBe("Selected");
     expect(payload.bundle.blocks[0]?.content).toBe("Selected");
     editor.destroy();
   });
 
-  it("exports checkbox and computed numbered-list semantics", () => {
+  it("does not interpret extension-owned list properties", () => {
     const editor = createRivtoEditor();
     const start = editor.blocks.insertBlock({ type: "paragraph", content: "One", listProps: { type: "start_numbered_list" } });
     const next = editor.blocks.insertBlock({ type: "paragraph", content: "Two", listProps: { type: "numbered_list" } }, start);
@@ -97,26 +94,25 @@ describe("core ClipboardManager", () => {
     }]);
 
     const payload = editor.clipboard.copy()!;
-    expect(payload.text).toBe("1. One\n2. Two\nGap\n- [x] Done\n3. Three");
+    expect(payload.text).toBe("One\nTwo\nGap\nDone\nThree");
     expect(payload.markdown).toBe(payload.text);
     expect(payload.html).toContain("<p>Gap</p>");
-    expect(payload.html).toContain('<input type="checkbox" disabled checked>Done');
-    expect(payload.html).toContain('<ol start="3"><li value="3">Three</li></ol>');
+    expect(payload.html).not.toContain("checkbox");
     expect(payload.bundle.blocks).toMatchObject([
-      { listProps: { type: "start_numbered_list", checked: false } },
-      { listProps: { type: "numbered_list", checked: false } },
-      { listProps: { type: "list", checked: false } },
+      { listProps: { type: "start_numbered_list" } },
+      { listProps: { type: "numbered_list" } },
+      { listProps: {} },
       { listProps: { type: "checkbox", checked: true } },
-      { listProps: { type: "continue_numbered_list", checked: false } },
+      { listProps: { type: "continue_numbered_list" } },
     ]);
     const target = createRivtoEditor();
     target.clipboard.paste({ bundle: payload.bundle, mergeText: false });
     expect(target.blocks.getBlocks()).toMatchObject([
-      { listProps: { type: "start_numbered_list", checked: false } },
-      { listProps: { type: "numbered_list", checked: false } },
-      { listProps: { type: "list", checked: false } },
+      { listProps: { type: "start_numbered_list" } },
+      { listProps: { type: "numbered_list" } },
+      { listProps: {} },
       { listProps: { type: "checkbox", checked: true } },
-      { listProps: { type: "continue_numbered_list", checked: false } },
+      { listProps: { type: "continue_numbered_list" } },
     ]);
     target.destroy();
     editor.destroy();
@@ -132,7 +128,7 @@ describe("core ClipboardManager", () => {
       focusBlockId: copiedId,
     }]);
     const payload = source.clipboard.copy()!;
-    expect(payload.bundle.version).toBe(3);
+    expect(payload.bundle.version).toBe(4);
 
     const target = createRivtoEditor();
     const targetId = target.blocks.insertBlock({ type: "paragraph", content: "" });
@@ -164,6 +160,47 @@ describe("core ClipboardManager", () => {
     ]);
     source.destroy();
     target.destroy();
+  });
+
+  it("places paste after a selected parent when focus ends on its nested child", () => {
+    const editor = createRivtoEditor();
+    const parent = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Parent",
+      children: [{ type: "paragraph", content: "Child" }],
+    });
+    const child = editor.blocks.getChildIds(parent)[0]!;
+    const tail = editor.blocks.insertBlock({ type: "paragraph", content: "Tail" }, parent);
+    editor.selection.set([{
+      type: "block",
+      blockIds: [parent, child],
+      anchorBlockId: parent,
+      focusBlockId: child,
+    }]);
+
+    editor.clipboard.paste({
+      bundle: {
+        version: 4,
+        blocks: [{
+          id: "clipboard-block",
+          type: "paragraph",
+          listProps: {},
+          props: {},
+          pluginData: {},
+          content: "Pasted",
+          children: [],
+        }],
+        links: [],
+      },
+      mergeText: false,
+      placement: { parentId: parent, afterId: child },
+    });
+
+    const roots = editor.blocks.getBlocks();
+    expect(roots.map(({ content }) => content)).toEqual(["Parent", "Pasted", "Tail"]);
+    expect(roots.map(({ id }) => id)).toEqual([parent, expect.any(String), tail]);
+    expect(editor.blocks.getBlock(parent)?.children.map(({ id }) => id)).toEqual([child]);
+    editor.destroy();
   });
 
   it("restores original block and link IDs when pasting a cut bundle", () => {

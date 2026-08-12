@@ -154,7 +154,7 @@ export function blockRangeProps(blockIds: readonly string[]): BlockElementProps 
 export function insertBlockElementSeparator(reactEditor: ReactEditor, afterId: string): string {
   const type = reactEditor.blocks.getDefaultBlockElementSeparatorType();
   if (!type) throw new Error("No block element separator type is registered");
-  return reactEditor.editor.blocks.insertBlock({ type, content: "" }, afterId);
+  return reactEditor.blocks.insertBlock({ type, content: "" }, afterId);
 }
 
 /**

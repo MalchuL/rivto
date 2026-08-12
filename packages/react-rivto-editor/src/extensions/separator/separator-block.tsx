@@ -54,18 +54,17 @@ function insertSeparator(
     if (!block.content && !block.children.length) {
       separatorId = block.id;
       editor.blocks.setBlockType(separatorId, separatorType);
-      editor.blocks.updateBlock(separatorId, {
-        collapsed: false,
-        listProps: { type: "list", checked: false },
+      reactEditor.blocks.updateBlock(separatorId, {
+        listProps: { collapsed: false, type: "list", checked: false },
       });
     } else {
-      separatorId = editor.blocks.insertBlock({
+      separatorId = reactEditor.blocks.insertBlock({
         type: separatorType,
         content: "",
         listProps: { type: "list", checked: false },
       }, block.id);
     }
-    writingId = editor.blocks.insertBlock(createDefaultBlock(), separatorId);
+    writingId = reactEditor.blocks.insertBlock(createDefaultBlock(), separatorId);
     editor.selection.set([{
       type: "text",
       anchor: { blockId: writingId, offset: 0 },
@@ -100,10 +99,14 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         definition: {
           type: SEPARATOR_BLOCK_TYPE,
           title: "Separator",
-          toRawText: () => "---",
         },
         render: SeparatorBlock,
         separatesBlockElements: true,
+      }),
+      reactEditor.clipboard.registerFormatter({
+        id: "separator",
+        matches: ({ block }) => block.type === SEPARATOR_BLOCK_TYPE,
+        format: () => ({ plain: "---", markdown: "---", html: "<hr>" }),
       }),
       reactEditor.slashCommands.register({
         id: "block.separator.insert",

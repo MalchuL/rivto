@@ -4,7 +4,7 @@ import { blockIdSelector } from "./dom-markers";
 type Snapshot = {
   blocks: Array<{
     id: string;
-    collapsed: boolean;
+    listProps: Record<string, unknown>;
     props: Record<string, unknown>;
     pluginData: Record<string, unknown>;
     children: Snapshot["blocks"];
@@ -107,7 +107,7 @@ test("moves selected subtrees into the exact cross-document row and keeps histor
   ]);
   expect(destination.blocks[0]?.children[1]).toMatchObject({
     id: "left-parent",
-    collapsed: true,
+    listProps: expect.objectContaining({ collapsed: true }),
     children: [{ id: "left-child" }],
   });
   expect(destination.links).toEqual([expect.objectContaining({ id: "left-internal-link" })]);

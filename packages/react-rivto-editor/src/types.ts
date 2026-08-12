@@ -6,6 +6,7 @@ import type {
 } from "./managers";
 import type {
   BlocksCapability,
+  ClipboardCapability,
   EventsCapability,
   ExtensionsCapability,
   KeyboardCapability,
@@ -75,6 +76,8 @@ export interface ReactEditor {
   }): void;
   readonly renderers: RenderersCapability;
   readonly blocks: BlocksCapability;
+  /** React-owned portable clipboard formatter and parser registry. */
+  readonly clipboard: ClipboardCapability;
   readonly surfaces: SurfacesCapability;
   readonly extensions: ExtensionsCapability;
   /** Delegated native DOM event registration. */

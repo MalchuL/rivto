@@ -16,8 +16,7 @@ describe("cross-document block transfer", () => {
       id: "first",
       type: "paragraph",
       content: "First",
-      collapsed: true,
-      listProps: { type: "checkbox", checked: true },
+      listProps: { collapsed: true, type: "checkbox", checked: true },
       pluginData: { test: { retained: true } },
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],
     });
@@ -36,8 +35,7 @@ describe("cross-document block transfer", () => {
     expect(destination.blocks.getChildIds(target)).toEqual([first, second]);
     expect(destination.blocks.getBlock(first)).toMatchObject({
       id: first,
-      collapsed: true,
-      listProps: { type: "checkbox", checked: true },
+      listProps: { collapsed: true, type: "checkbox", checked: true },
       pluginData: { test: { retained: true } },
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],
     });

@@ -108,12 +108,11 @@ describe("EditorRuntime undo manager", () => {
 
     editor.blocks.insertBlock({ type: "paragraph", content: "Before load" });
     editor.load({
-      version: 5,
+      version: 6,
       blocks: [{
         id: "loaded",
         type: "paragraph",
-        collapsed: false,
-        listProps: { type: "list", checked: false },
+        listProps: { collapsed: false, type: "list", checked: false },
         props: {},
         pluginData: {},
         content: "Loaded",

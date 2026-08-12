@@ -134,7 +134,7 @@ describe("EditorRuntime block commands", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({
       type: "paragraph",
-      collapsed: true,
+      listProps: { collapsed: true },
       props: { tone: "info" },
       pluginData: { test: { pinned: true } },
       content: "Parent",
@@ -154,7 +154,7 @@ describe("EditorRuntime block commands", () => {
     expect(editor.blocks.getBlock(id)).toMatchObject({
       id,
       type: "paragraph",
-      collapsed: true,
+      listProps: { collapsed: true },
       props: { tone: "info" },
       pluginData: { test: { pinned: true } },
       content: "",
@@ -209,7 +209,7 @@ describe("EditorRuntime block commands", () => {
     editor.destroy();
   });
 
-  it("validates and preserves top-level collapse state across block types", () => {
+  it("preserves opaque list properties across block types", () => {
     const editor = createRivtoEditor();
     editor.blocksRegistry.defineBlock({ type: "heading2" });
     editor.blocksRegistry.defineBlock({
@@ -223,30 +223,29 @@ describe("EditorRuntime block commands", () => {
     });
     const initiallyCollapsed = editor.blocks.insertBlock({
       type: "paragraph",
-      collapsed: true,
+      listProps: { collapsed: true },
       children: [{ type: "paragraph" }],
     }, id);
 
-    expect(editor.blocks.getBlock(id)?.collapsed).toBe(false);
-    expect(editor.blocks.getBlock(initiallyCollapsed)?.collapsed).toBe(true);
-    editor.blocks.updateBlock(id, { collapsed: true });
+    expect(editor.blocks.getBlock(id)?.listProps.collapsed).toBeUndefined();
+    expect(editor.blocks.getBlock(initiallyCollapsed)?.listProps.collapsed).toBe(true);
+    editor.blocks.updateBlock(id, { listProps: { collapsed: true } });
     expect(editor.blocks.getBlock(id)).toMatchObject({
-      collapsed: true,
+      listProps: { collapsed: true },
       props: { tone: "info" },
     });
-    expect(() => editor.execute("block.update", {
-      id,
-      patch: { collapsed: "yes" },
-    })).toThrow("block.collapsed must be a boolean");
-    expect(editor.blocks.getBlock(id)?.collapsed).toBe(true);
+    editor.blocks.updateBlock(id, { listProps: { collapsed: "yes" } });
+    expect(editor.blocks.getBlock(id)?.listProps.collapsed).toBe("yes");
+    editor.blocks.updateBlock(id, { listProps: { collapsed: true } });
+    expect(editor.blocks.getBlock(id)?.listProps.collapsed).toBe(true);
 
     editor.blocks.setBlockType(id, "heading2");
     expect(editor.blocks.getBlock(id)?.props).toEqual({ tone: "info" });
-    expect(editor.blocks.getBlock(id)?.collapsed).toBe(true);
+    expect(editor.blocks.getBlock(id)?.listProps.collapsed).toBe(true);
     editor.destroy();
   });
 
-  it("defaults, validates, and undoes first-class list state atomically", () => {
+  it("merges, portability-checks, and undoes opaque list state atomically", () => {
     const editor = createRivtoEditor();
     const first = editor.blocks.insertBlock({ type: "paragraph" });
     const second = editor.blocks.insertBlock({
@@ -254,7 +253,7 @@ describe("EditorRuntime block commands", () => {
       listProps: { type: "checkbox", checked: true },
     }, first);
 
-    expect(editor.blocks.getBlock(first)?.listProps).toEqual({ type: "list", checked: false });
+    expect(editor.blocks.getBlock(first)?.listProps).toEqual({});
     expect(editor.blocks.getBlock(second)?.listProps).toEqual({ type: "checkbox", checked: true });
 
     editor.blocks.updateBlocks([
@@ -266,18 +265,12 @@ describe("EditorRuntime block commands", () => {
 
     expect(() => editor.execute("block.update-many", { updates: [
       { id: first, patch: { listProps: { type: "list" } } },
-      { id: second, patch: { listProps: { checked: "yes" } } },
-    ] })).toThrow("block.listProps.checked must be a boolean");
-    expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
-
-    expect(() => editor.execute("block.update", {
-      id: first,
-      patch: { listProps: { type: "ordered" } },
-    })).toThrow("block.listProps.type must be a supported list type");
+      { id: second, patch: { listProps: { checked: Number.POSITIVE_INFINITY } } },
+    ] })).toThrow("block.listProps values must be portable");
     expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
 
     editor.undo();
-    expect(editor.blocks.getBlock(first)?.listProps.type).toBe("list");
+    expect(editor.blocks.getBlock(first)?.listProps.type).toBeUndefined();
     expect(editor.blocks.getBlock(second)?.listProps.checked).toBe(true);
     editor.redo();
     expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
@@ -302,27 +295,27 @@ describe("EditorRuntime block commands", () => {
     const unsubscribe = editor.document.subscribe(updates);
 
     editor.blocks.updateBlocks([
-      { id: first, patch: { collapsed: true, props: { order: "first" } } },
-      { id: leaf, patch: { collapsed: true } },
-      { id: second, patch: { collapsed: true } },
+      { id: first, patch: { listProps: { collapsed: true }, props: { order: "first" } } },
+      { id: leaf, patch: { listProps: { collapsed: true } } },
+      { id: second, patch: { listProps: { collapsed: true } } },
       { id: first, patch: { props: { order: "last" } } },
     ]);
 
     expect(updates).toHaveBeenCalledTimes(1);
-    expect(editor.blocks.getBlock(first)).toMatchObject({ collapsed: true, props: { order: "last" } });
-    expect(editor.blocks.getBlock(second)?.collapsed).toBe(true);
-    expect(editor.blocks.getBlock(leaf)?.collapsed).toBe(true);
+    expect(editor.blocks.getBlock(first)).toMatchObject({ listProps: { collapsed: true }, props: { order: "last" } });
+    expect(editor.blocks.getBlock(second)?.listProps.collapsed).toBe(true);
+    expect(editor.blocks.getBlock(leaf)?.listProps.collapsed).toBe(true);
     expect(() => editor.blocks.updateBlocks([
-      { id: first, patch: { collapsed: false } },
-      { id: "missing", patch: { collapsed: true } },
+      { id: first, patch: { listProps: { collapsed: false } } },
+      { id: "missing", patch: { listProps: { collapsed: true } } },
     ])).toThrow("Block missing not found");
-    expect(editor.blocks.getBlock(first)?.collapsed).toBe(true);
+    expect(editor.blocks.getBlock(first)?.listProps.collapsed).toBe(true);
     expect(updates).toHaveBeenCalledTimes(1);
 
     editor.undo();
-    expect(editor.blocks.getBlock(first)).toMatchObject({ collapsed: false, props: {} });
-    expect(editor.blocks.getBlock(second)?.collapsed).toBe(false);
-    expect(editor.blocks.getBlock(leaf)?.collapsed).toBe(false);
+    expect(editor.blocks.getBlock(first)).toMatchObject({ listProps: {}, props: {} });
+    expect(editor.blocks.getBlock(second)?.listProps.collapsed).toBeUndefined();
+    expect(editor.blocks.getBlock(leaf)?.listProps.collapsed).toBeUndefined();
     unsubscribe();
     editor.destroy();
   });
@@ -339,10 +332,10 @@ describe("EditorRuntime block commands", () => {
     });
     Y.applyUpdate(rightDocument.doc, Y.encodeStateAsUpdate(leftDocument.doc));
 
-    left.blocks.updateBlocks([{ id: parent, patch: { collapsed: true } }]);
+    left.blocks.updateBlocks([{ id: parent, patch: { listProps: { collapsed: true } } }]);
     Y.applyUpdate(rightDocument.doc, Y.encodeStateAsUpdate(leftDocument.doc));
 
-    expect(right.blocks.getBlock(parent)?.collapsed).toBe(true);
+    expect(right.blocks.getBlock(parent)?.listProps.collapsed).toBe(true);
     left.destroy();
     right.destroy();
   });
@@ -699,7 +692,7 @@ describe("EditorRuntime block commands", () => {
     editor.links.createLink({ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } });
 
     expect(editor.dump()).toMatchObject({
-      version: 5,
+      version: 6,
       blocks: [{ id: sourceId }, { id: targetId }],
       links: [{ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } }],
     });
@@ -708,12 +701,11 @@ describe("EditorRuntime block commands", () => {
     expect(editor.dump().links).toEqual([]);
 
     editor.load({
-      version: 5,
+      version: 6,
       blocks: [{
         id: "loaded",
         type: "paragraph",
-        collapsed: false,
-        listProps: { type: "list", checked: false },
+        listProps: { collapsed: false, type: "list", checked: false },
         props: {},
         pluginData: {},
         content: "Loaded",
@@ -729,7 +721,7 @@ describe("EditorRuntime block commands", () => {
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(() => editor.execute("document.load", {
       snapshot: {
-        version: 5,
+        version: 6,
         blocks: [{
           id: "invalid",
           type: "paragraph",
@@ -740,7 +732,7 @@ describe("EditorRuntime block commands", () => {
         }],
         links: [],
       },
-    })).toThrow("block.collapsed must be a boolean");
+    })).toThrow("block.listProps must be an object");
     editor.destroy();
   });
 });

@@ -145,7 +145,7 @@ export function EdgelessSurface({ snapping }: { readonly snapping: EdgelessSnapp
       if (last && !reactEditor.blocks.separatesBlockElements(last.type)) {
         afterId = insertBlockElementSeparator(reactEditor, last.id);
       }
-      id = editor.blocks.insertBlock(reactEditor.createDefaultBlock(), afterId);
+      id = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock(), afterId);
       editor.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame: { ...EDGELESS_CARD_DEFAULT_FRAME, x, y },

@@ -28,7 +28,6 @@ function prepareBlock(editor: RivtoEditorApi, block: EditorBlock): EditorBlockIn
   return editor.blocksRegistry.prepare({
     id: block.id,
     type: block.type,
-    collapsed: block.collapsed,
     listProps: structuredClone(block.listProps),
     content: block.content,
     props: structuredClone(block.props),

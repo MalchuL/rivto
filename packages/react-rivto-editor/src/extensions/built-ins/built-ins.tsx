@@ -7,10 +7,15 @@
  * @module
  */
 import {
-  type BlockListType,
   type EditorBlock as Block,
   type EditorBlockInput as BlockInput,
 } from "@chulane/rivto";
+import {
+  BLOCK_LIST_TYPES,
+  isNumberedListType,
+  resolveBlockListNumbers,
+  type BlockListType,
+} from "../page/list-properties";
 import type { ComponentType, ReactNode } from "react";
 import { registerClipboard, type ClipboardExtensionOptions } from "../clipboard/clipboard";
 import { registerHistory, type HistoryExtensionOptions } from "../history/history";
@@ -52,6 +57,7 @@ import {
 import { separatorBlockExtension } from "../separator/separator-block";
 import { defaultWritingBlockExtension, type DefaultWritingBlockOptions } from "../page/default-writing-block";
 import { blockIdsOf, insertBlockElementSeparator } from "../../surfaces/edgeless/block-elements";
+import { createErrorBlockInput, errorBlockExtension } from "../error/error-block";
 import { PageSurface } from "../../surfaces/page";
 import {
   BUILTIN_KEYMAP,
@@ -191,7 +197,37 @@ export const emptyBlockResetExtension = (): ReactEditorExtension =>
 
 /** @returns Markdown-style whole-content shortcuts for built-in list modes. */
 export const listShortcutsExtension = (): ReactEditorExtension =>
-  ({ id: "list.shortcuts", setup: registerListShortcuts });
+  ({
+    id: "list.shortcuts",
+    setup: (reactEditor) => {
+      reactEditor.blocks.registerListProps({
+        id: "list",
+        defaults: { type: "list", checked: false },
+        validate: (candidate) =>
+          BLOCK_LIST_TYPES.includes(candidate.type as BlockListType) &&
+          typeof candidate.checked === "boolean",
+      });
+      reactEditor.clipboard.registerFormatter({
+        id: "list",
+        matches: ({ block }) =>
+          block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type),
+        format: ({ block, siblings, depth }, current) => {
+          const type = block.listProps.type;
+          const number = resolveBlockListNumbers(siblings).get(block.id);
+          const marker = type === "checkbox"
+            ? `- [${block.listProps.checked === true ? "x" : " "}] `
+            : `${number ?? 1}. `;
+          const indent = "  ".repeat(depth);
+          const plain = `${indent}${marker}${current.plain}`;
+          const html = type === "checkbox"
+            ? `<ul><li><input type="checkbox" disabled${block.listProps.checked === true ? " checked" : ""}>${current.html}</li></ul>`
+            : `<ol start="${number ?? 1}"><li value="${number ?? 1}">${current.html}</li></ol>`;
+          return { plain, markdown: plain, html };
+        },
+      });
+      registerListShortcuts(reactEditor);
+    },
+  });
 
 /** Shortcut configuration for structural indentation. */
 export interface IndentExtensionOptions {
@@ -243,7 +279,14 @@ export const indentExtension = (options: IndentExtensionOptions = {}): ReactEdit
 /** @returns Shared persisted collapse controls and keyboard actions. */
 export const collapseExtension = (): ReactEditorExtension => ({
   id: "block.collapse",
-  setup: registerCollapse,
+  setup: (reactEditor) => {
+    reactEditor.blocks.registerListProps({
+      id: "collapse",
+      defaults: { collapsed: false },
+      validate: (candidate) => typeof candidate.collapsed === "boolean",
+    });
+    return registerCollapse(reactEditor);
+  },
 });
 
 /** @returns Root-card click, toggle, and rectangle selection in edgeless mode. */
@@ -325,7 +368,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         title,
         group: "Lists",
         isAvailable: ({ blockId }) => editor.blocks.getBlock(blockId)?.listProps.type !== type,
-        execute: ({ blockId }) => editor.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
+        execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
       })),
       // Clone the complete subtree while leaving persisted IDs for the store to generate.
       reactEditor.slashCommands.register({
@@ -347,7 +390,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
             const afterId = isEdgelessRoot
               ? insertBlockElementSeparator(reactEditor, editor.blocks.getRootIds().at(-1)!)
               : block.id;
-            duplicateId = editor.blocks.insertBlock(input, afterId);
+            duplicateId = reactEditor.blocks.insertBlock(input, afterId);
             if (isEdgelessRoot) editor.elements.insertElement({
               id: duplicateId,
               type: "block",
@@ -390,9 +433,9 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         keywords: ["fold", "hide"],
         isAvailable: ({ blockId }) => {
           const block = editor.blocks.getBlock(blockId);
-          return Boolean(block?.children.length && !block.collapsed);
+          return Boolean(block?.children.length && block.listProps.collapsed !== true);
         },
-        execute: ({ blockId }) => editor.blocks.updateBlock(blockId, { collapsed: true }),
+        execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
       }),
       reactEditor.slashCommands.register({
         id: "block.expand",
@@ -401,9 +444,9 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         keywords: ["unfold", "show"],
         isAvailable: ({ blockId }) => {
           const block = editor.blocks.getBlock(blockId);
-          return Boolean(block?.children.length && block.collapsed);
+          return Boolean(block?.children.length && block.listProps.collapsed === true);
         },
-        execute: ({ blockId }) => editor.blocks.updateBlock(blockId, { collapsed: false }),
+        execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
       }),
     ];
     // Core slash registrations are stack-like and therefore dispose in reverse.
@@ -424,7 +467,6 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
  */
 const duplicateBlockInput = (block: Block): BlockInput => ({
   type: block.type,
-  collapsed: block.collapsed,
   listProps: structuredClone(block.listProps),
   content: block.content,
   props: structuredClone(block.props),
@@ -470,6 +512,7 @@ export const standardPreset = (
   const trailingBlockCount = resolved.trailingBlockCount ?? 3;
   const extensions = [
     defaultWritingBlockExtension(resolved.writing),
+    errorBlockExtension(),
     separatorBlockExtension(),
     pageSurfaceExtension(),
     edgelessSurfaceExtension(resolved.edgeless),
@@ -477,7 +520,7 @@ export const standardPreset = (
     textSelectionExtension(),
     slashCommandExtension(),
     listShortcutsExtension(),
-    clipboardExtension(),
+    clipboardExtension({ onBlockError: createErrorBlockInput }),
     blockSelectionExtension(),
     collapseExtension(),
     caretNavigationExtension(),

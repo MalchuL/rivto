@@ -51,7 +51,7 @@ describe("clipboard commands", () => {
       blocks: Array<{ id: string; props: Record<string, unknown>; pluginData: Record<string, unknown>; children: unknown[] }>;
       links: unknown[];
     };
-    expect(bundle.version).toBe(3);
+    expect(bundle.version).toBe(4);
     expect(bundle.blocks).toHaveLength(1);
     expect(bundle.blocks[0]?.id).toBe(parent);
     expect(bundle.blocks[0]?.props).toEqual({ level: 1 });
@@ -59,8 +59,8 @@ describe("clipboard commands", () => {
     expect(bundle.blocks[0]?.children).toHaveLength(1);
     expect(bundle.links).toHaveLength(1);
     expect(data.get("text/plain")).toBe("Parent\n  Child");
-    expect(data.get("text/html")).toBe("<p>Parent</p><ul><li>Child</li></ul>");
-    expect(data.get("text/markdown")).toBe("Parent\n- Child");
+    expect(data.get("text/html")).toBe("<p>Parent</p><p>Child</p>");
+    expect(data.get("text/markdown")).toBe("Parent\n  Child");
     editor.destroy();
   });
 
@@ -71,7 +71,7 @@ describe("clipboard commands", () => {
       content: "Parent",
       children: [{ type: "paragraph", content: "Hidden child" }],
     });
-    source.blocks.updateBlock(parent, { collapsed: true });
+    source.blocks.updateBlock(parent, { listProps: { collapsed: true } });
     source.execute("selection.set", {
       selection: [{ type: "block", blockIds: [parent], anchorBlockId: parent, focusBlockId: parent }],
     });
@@ -88,7 +88,7 @@ describe("clipboard commands", () => {
     target.execute("clipboard.paste", { structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
 
     const pasted = target.blocks.getBlocks()[1]!;
-    expect(pasted.collapsed).toBe(true);
+    expect(pasted.listProps.collapsed).toBe(true);
     expect(pasted.children).toMatchObject([{ content: "Hidden child" }]);
     source.destroy();
     target.destroy();
@@ -111,12 +111,15 @@ describe("clipboard commands", () => {
       content: "Parent",
       children: [{ type: "paragraph", content: "Hidden child" }],
     });
-    target.blocks.updateBlock(parent, { collapsed: true });
+    target.blocks.updateBlock(parent, { listProps: { collapsed: true } });
     target.execute("selection.set", {
       selection: [{ type: "text", anchor: { blockId: parent, offset: 3 }, head: { blockId: parent, offset: 3 } }],
     });
 
-    target.execute("clipboard.paste", { structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
+    target.execute("clipboard.paste", {
+      structured: clipboard.get(RIVTO_CLIPBOARD_MIME),
+      placement: { parentId: null, afterId: parent },
+    });
 
     expect(target.blocks.getBlocks().map((block) => block.content)).toEqual(["Parent", "Pasted"]);
     expect(target.blocks.getBlock(parent)?.children).toMatchObject([{ content: "Hidden child" }]);
@@ -170,7 +173,10 @@ describe("clipboard commands", () => {
     });
     const documentUpdates = jest.fn();
     const unsubscribe = target.document.subscribe(documentUpdates);
-    target.execute("clipboard.paste", { structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
+    target.execute("clipboard.paste", {
+      structured: clipboard.get(RIVTO_CLIPBOARD_MIME),
+      placement: { parentId: null, afterId: destination },
+    });
 
     expect(documentUpdates).toHaveBeenCalledTimes(1);
     expect(target.blocks.getBlocks().map((block) => ({ type: block.type, content: block.content }))).toEqual([
@@ -207,7 +213,10 @@ describe("clipboard commands", () => {
       selection: [{ type: "text", anchor: { blockId: empty, offset: 0 }, head: { blockId: empty, offset: 0 } }],
     });
 
-    target.execute("clipboard.paste", { structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
+    target.execute("clipboard.paste", {
+      structured: clipboard.get(RIVTO_CLIPBOARD_MIME),
+      placement: { parentId: empty, afterId: null },
+    });
 
     expect(target.blocks.getBlocks().map((block) => block.content)).toEqual([""]);
     expect(target.blocks.getBlock(empty)?.children.map((block) => block.content)).toEqual(["Pasted", "Old child"]);
@@ -237,7 +246,10 @@ describe("clipboard commands", () => {
     const updates = jest.fn();
     const unsubscribe = target.document.subscribe(updates);
 
-    target.execute("clipboard.paste", { structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
+    target.execute("clipboard.paste", {
+      structured: clipboard.get(RIVTO_CLIPBOARD_MIME),
+      placement: { parentId: parent, afterId: null },
+    });
 
     expect(updates).toHaveBeenCalledTimes(1);
     expect(target.blocks.getBlocks()).toHaveLength(1);

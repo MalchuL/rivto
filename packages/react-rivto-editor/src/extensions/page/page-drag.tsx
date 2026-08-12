@@ -384,7 +384,7 @@ interface PreviewEntry {
 function flattenPreview(block: Block, depth = 0): PreviewEntry[] {
   return [
     { block, depth },
-    ...(block.collapsed
+    ...(block.listProps.collapsed === true
       ? []
       : block.children.flatMap((child) => flattenPreview(child, depth + 1))),
   ];

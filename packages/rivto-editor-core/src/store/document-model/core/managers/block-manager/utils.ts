@@ -1,10 +1,48 @@
 import type { CRDTArray } from "../../../../crdt-doc";
 import type { BlockInput } from "../../types";
-import {
-  BLOCK_LIST_TYPES,
-  type BlockListProps,
-  type BlockListType,
-} from "../../../../../blocks";
+
+/**
+ * Opaque properties interpreted by page/outline extensions.
+ * Core persists this record without assigning meaning to individual keys.
+ */
+export type BlockListProps = Record<string, unknown>;
+
+/**
+ * Validates an opaque list-property record before it reaches CRDT storage.
+ *
+ * Accepted values are finite numbers, strings, booleans, null, arrays, and
+ * recursively nested plain records. The function validates without transforming
+ * the supplied record.
+ *
+ * @param value - Candidate top-level list-property record.
+ * @returns The original value narrowed to `BlockListProps` after validation.
+ * @throws {TypeError} When the top level is not a record or a nested value is
+ * unsupported, non-finite, non-plain, or cyclic.
+ */
+export function validateBlockListProps(value: unknown): BlockListProps {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("block.listProps must be an object");
+  }
+  const seen = new Set<object>();
+  const validate = (candidate: unknown): void => {
+    if (candidate === null || typeof candidate === "string" || typeof candidate === "boolean") return;
+    if (typeof candidate === "number" && Number.isFinite(candidate)) return;
+    if (!candidate || typeof candidate !== "object") throw new TypeError("block.listProps values must be portable");
+    if (seen.has(candidate)) throw new TypeError("block.listProps values must not contain cycles");
+    seen.add(candidate);
+    if (Array.isArray(candidate)) candidate.forEach(validate);
+    else {
+      const prototype = Object.getPrototypeOf(candidate) as object | null;
+      if (prototype !== null && Object.getPrototypeOf(prototype) !== null) {
+        throw new TypeError("block.listProps values must be plain records");
+      }
+      Object.values(candidate as Record<string, unknown>).forEach(validate);
+    }
+    seen.delete(candidate);
+  };
+  validate(value);
+  return value as BlockListProps;
+}
 
 /**
  * Materializes string identifiers from a collaborative array.
@@ -26,37 +64,4 @@ export function strings(array: CRDTArray<string>): string[] {
  */
 export function contentFrom(content: BlockInput["content"]): string {
   return content ?? "";
-}
-
-/**
- * Validates and resolves a persisted block collapse value.
- *
- * @param value - Candidate persisted collapse state.
- * @param fallback - Value used only when the candidate is undefined.
- * @returns A validated boolean collapse state.
- * @throws {TypeError} When neither a boolean value nor a fallback is available.
- */
-export function collapsedFrom(value: unknown, fallback?: boolean): boolean {
-  if (value === undefined && fallback !== undefined) return fallback;
-  if (typeof value !== "boolean") throw new TypeError("block.collapsed must be a boolean");
-  return value;
-}
-
-/**
- * Validates the properties used to render a block within a sibling sequence.
- *
- * @param value - Candidate `listProps` value read from input or CRDT storage.
- * @returns A detached, fully validated set of multi-block rendering properties.
- * @throws {TypeError} When the group, list type, or checkbox state is invalid.
- */
-export function listPropsFrom(value: unknown): BlockListProps {
-  if (!value || typeof value !== "object") {
-    throw new TypeError("block.listProps must be an object");
-  }
-  const listProps = value as Partial<BlockListProps>;
-  if (typeof listProps.type !== "string" || !BLOCK_LIST_TYPES.includes(listProps.type as BlockListType)) {
-    throw new TypeError("block.listProps.type must be a supported list type");
-  }
-  if (typeof listProps.checked !== "boolean") throw new TypeError("block.listProps.checked must be a boolean");
-  return { type: listProps.type as BlockListType, checked: listProps.checked };
 }

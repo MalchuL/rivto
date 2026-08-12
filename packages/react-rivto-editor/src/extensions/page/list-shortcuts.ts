@@ -1,4 +1,4 @@
-import type { BlockListType } from "@chulane/rivto";
+import type { BlockListType } from "./list-properties";
 import type { ReactEditor } from "../../types";
 import { focusBlock } from "../../managers";
 
@@ -28,7 +28,7 @@ export function registerListShortcuts(reactEditor: ReactEditor): void {
     shortcut: { type: BlockListType; checked: boolean },
   ): void => {
     reactEditor.editor.batchUpdates(() => {
-      reactEditor.editor.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
+      reactEditor.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
       reactEditor.editor.selection.set([{
         type: "text",
         anchor: { blockId, offset: 0 },

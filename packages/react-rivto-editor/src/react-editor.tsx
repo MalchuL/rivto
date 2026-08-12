@@ -10,6 +10,7 @@
 import type { RivtoEditorApi as Editor } from "@chulane/rivto";
 import {
   BlockManager,
+  ClipboardManager,
   EventManager,
   ExtensionManager,
   KeyboardManager,
@@ -43,6 +44,8 @@ export class ReactEditorImpl implements ReactEditor {
   readonly renderers: RendererManager;
   /** Atomic definition, renderer, and type-conversion registration. */
   readonly blocks: BlockManager;
+  /** React-owned portable clipboard formatter and parser registry. */
+  readonly clipboard: ClipboardManager;
   /** Root surfaces and their ordered block/editor wrappers. */
   readonly surfaces: SurfaceManager;
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
@@ -86,6 +89,7 @@ export class ReactEditorImpl implements ReactEditor {
     this.slashCommands = new ReactSlashCommandManager(this);
     this.renderers = new RendererManager(this, options.unknownBlockRenderer);
     this.blocks = new BlockManager(this);
+    this.clipboard = new ClipboardManager(this);
     this.surfaces = new SurfaceManager(this);
     try {
       this.extensions.initialize(options.extensions ?? []);

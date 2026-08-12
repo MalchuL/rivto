@@ -100,13 +100,13 @@ export class DocumentModelImpl implements DocumentModel {
   }
 
   /**
-   * Produces a lossless portable schema-v5 snapshot.
+   * Produces a lossless portable schema-v6 snapshot.
    *
    * @returns Detached blocks, links, elements, and document-level plugin data.
    */
   getSnapshot(): Snapshot {
     return {
-      version: 5,
+      version: 6,
       blocks: clone(this.blocks.getBlocks()),
       links: clone(this.links.getLinks()),
       elements: clone(this.elements.getElements()),
@@ -115,7 +115,7 @@ export class DocumentModelImpl implements DocumentModel {
   }
 
   /**
-   * Applies supplied schema-v5 snapshot sections atomically.
+   * Applies supplied schema-v6 snapshot sections atomically.
    *
    * Complete snapshots replace the complete document; partial updates replace
    * only present sections and leave omitted collaborative state unchanged.

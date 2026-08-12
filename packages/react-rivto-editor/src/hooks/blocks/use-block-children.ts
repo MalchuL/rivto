@@ -50,7 +50,7 @@ export interface UseBlockChildrenResult {
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockChildren(blockId: string): UseBlockChildrenResult {
-  const { editor } = useEditorContext();
+  const { editor, reactEditor } = useEditorContext();
   const parent = editor.blocks.getBlock(blockId);
 
   const operations = useMemo<BlockChildrenOperations>(() => {
@@ -72,18 +72,18 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
         if (afterId !== undefined && afterId !== null) requireChild(afterId);
 
         if (children.length === 0) {
-          const childId = editor.blocks.insertBlock(block, blockId);
+          const childId = reactEditor.blocks.insertBlock(block, blockId);
           editor.blocks.indentBlock(childId);
           return childId;
         }
 
         if (afterId === null) {
-          const childId = editor.blocks.insertBlock(block, children[0].id);
+          const childId = reactEditor.blocks.insertBlock(block, children[0].id);
           editor.blocks.moveBlock(childId, null);
           return childId;
         }
 
-        return editor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
+        return reactEditor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
       },
       remove: (childId) => {
         requireChild(childId);
@@ -95,7 +95,7 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
         editor.blocks.moveBlock(childId, afterId);
       },
     };
-  }, [blockId, editor]);
+  }, [blockId, editor, reactEditor]);
 
   return {
     children: parent?.children ?? NO_CHILDREN,

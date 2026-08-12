@@ -13,5 +13,4 @@ test("custom block definitions expose defaults and reject invalid properties", (
   assert.throws(() => sliderBlockDefinition.propSchema.parse({ value: 101 }));
   assert.throws(() => counterBlockDefinition.propSchema.parse({ count: -1 }));
   assert.throws(() => counterBlockDefinition.propSchema.parse({ count: 1.5 }));
-  assert.equal(counterBlockDefinition.toRawText({ props: { count: 7 } }), "Count: 7");
 });

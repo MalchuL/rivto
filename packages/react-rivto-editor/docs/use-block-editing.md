@@ -134,7 +134,7 @@ const editing = useBlockEditing<MyProps>(blockId);
 ```
 
 - `editing.block` is the reactive snapshot for the current render.
-- `editing.block?.collapsed` reads the reactive top-level collapse state.
+- `editing.block?.listProps.collapsed` reads the extension-owned collapse state.
 - `editing.operations` contains commands such as `remove`, `setType`, `indent`,
   and `outdent`.
 - `editing.getProps()` reads the latest complete property object.

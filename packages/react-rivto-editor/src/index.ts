@@ -40,6 +40,19 @@ export type {
   IsEmptyBlock,
 } from "./extensions/page/empty-block";
 export { MarkdownContent } from "./blocks/markdown";
+export {
+  ERROR_BLOCK_TYPE,
+  ErrorBlock,
+  createErrorBlockInput,
+  errorBlockExtension,
+} from "./extensions/error/error-block";
+export {
+  BLOCK_LIST_TYPES,
+  DEFAULT_BLOCK_LIST_PROPS,
+  isNumberedListType,
+  resolveBlockListNumbers,
+  type BlockListType,
+} from "./extensions/page/list-properties";
 export { type BlockElementProps } from "./surfaces/edgeless";
 export {
   EdgelessSnappingStore,
@@ -83,6 +96,10 @@ export {
 } from "./managers";
 export type {
   BlockRenderer,
+  ClipboardFormatContext,
+  ClipboardFormatter,
+  ClipboardParser,
+  PortableBlockFormats,
   DOMEventDefinition,
   DOMEventName,
   DOMEventScope,

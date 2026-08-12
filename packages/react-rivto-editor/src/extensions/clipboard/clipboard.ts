@@ -1,6 +1,8 @@
 import {
   isStructuralSelection,
   RIVTO_CLIPBOARD_MIME,
+  type EditorBlock,
+  type EditorBlockInput,
   type ClipboardPayload,
   type BlockSelection,
 } from "@chulane/rivto";
@@ -20,6 +22,14 @@ export interface ClipboardExtensionOptions {
    * When omitted, uses `reactEditor.createDefaultBlock().type` at paste time.
    */
   readonly defaultBlockType?: string;
+  /**
+   * Replaces an invalid structured block, or skips its subtree when nullish.
+   *
+   * @param block - Complete rejected block and nested data from the clipboard.
+   * @param error - Validation error that caused rejection.
+   * @returns A replacement block input, or a nullish value to skip the subtree.
+   */
+  readonly onBlockError?: (block: EditorBlock, error: unknown) => EditorBlockInput | null | undefined;
 }
 
 /**
@@ -37,6 +47,10 @@ export interface ClipboardExtensionOptions {
  * browser's `selectionchange` event may arrive after a keyboard clipboard event.
  * Event listeners are delegated to the active surface root and are removed by
  * the keyboard and DOM event runtimes when this component unmounts.
+ *
+ * @param reactEditor - React editor whose DOM events and clipboard managers are connected.
+ * @param options - Plain-text fallback and invalid-block handling configuration.
+ * @returns No value.
  */
 export function registerClipboard(
   reactEditor: ReactEditor,
@@ -81,6 +95,10 @@ export function registerClipboard(
       payload.bundle.elements = elementIds.flatMap((id) => editor.elements.getElement(id) ?? []);
       payload.bundle.selectedElementIds = [...elementIds];
     }
+    const portable = reactEditor.clipboard.format(payload.bundle.blocks);
+    payload.text = portable.plain;
+    payload.markdown = portable.markdown;
+    payload.html = portable.html;
     const structured = JSON.stringify(payload.bundle);
     event.clipboardData?.setData(RIVTO_CLIPBOARD_MIME, structured);
     event.clipboardData?.setData("text/html", payload.html);
@@ -117,18 +135,73 @@ export function registerClipboard(
         || fallbackStructuredClipboard(event);
     }
     const canvas = canvasSelection();
-    const sourceBundle = structured ? JSON.parse(structured) as ClipboardPayload["bundle"] : undefined;
+    let sourceBundle = structured ? JSON.parse(structured) as ClipboardPayload["bundle"] : undefined;
+    if (!sourceBundle && !plainText) {
+      const parsed = reactEditor.clipboard.parse({
+        html: event.clipboardData?.getData("text/html") ?? "",
+        text: event.clipboardData?.getData("text/plain") ?? "",
+      });
+      if (parsed) {
+        const materialize = (input: EditorBlockInput): EditorBlock => {
+          const prepared = reactEditor.blocks.prepareBlock(input);
+          return {
+            id: prepared.id ?? crypto.randomUUID(),
+            type: prepared.type,
+            listProps: prepared.listProps ?? {},
+            props: prepared.props ?? {},
+            pluginData: prepared.pluginData ?? {},
+            content: prepared.content ?? "",
+            children: (prepared.children ?? []).map(materialize),
+          };
+        };
+        sourceBundle = { version: 4, blocks: parsed.map(materialize), links: [] };
+      }
+    }
+    if (sourceBundle) {
+      const prepare = (block: EditorBlock): EditorBlock | undefined => {
+        const children = block.children.flatMap((child) => prepare(child) ?? []);
+        const candidate = { ...block, listProps: { ...reactEditor.blocks.prepareBlock(block).listProps }, children };
+        if (reactEditor.blocks.validateListProps(candidate.listProps)) return candidate;
+        const replacement = options.onBlockError?.(block, new Error("Invalid block list properties"));
+        if (!replacement) return;
+        const prepared = reactEditor.blocks.prepareBlock(replacement);
+        const materialized = {
+          id: prepared.id ?? crypto.randomUUID(),
+          type: prepared.type,
+          listProps: prepared.listProps ?? {},
+          props: prepared.props ?? {},
+          pluginData: prepared.pluginData ?? {},
+          content: prepared.content ?? "",
+          children: [],
+        } satisfies EditorBlock;
+        return reactEditor.blocks.validateListProps(materialized.listProps) ? materialized : undefined;
+      };
+      sourceBundle = { ...sourceBundle, blocks: sourceBundle.blocks.flatMap((block) => prepare(block) ?? []) };
+      structured = JSON.stringify(sourceBundle);
+    }
     const saved = canvas ? editor.selection.get() : undefined;
     // Temporarily project canvas block references into the core clipboard
     // placement API. The preserved page selection is restored below, so the
     // bridge affects insertion order without merging the two selection stores.
     if (canvas) editor.selection.set([canvas]);
+    const active = editor.selection.get().at(-1);
+    const activeId = active?.type === "text" ? active.head.blockId
+      : active?.type === "block" ? active.focusBlockId : undefined;
+    const activeBlock = activeId ? editor.blocks.getBlock(activeId) : undefined;
+    const expanded = reactEditor.blocks.hasListProps("collapse") && activeBlock?.listProps.collapsed !== true;
+    const placement = activeBlock && sourceBundle && sourceBundle.startsWithText !== true
+      ? expanded && activeBlock.children.length
+        ? { parentId: activeBlock.id, afterId: null }
+        : { parentId: editor.blocks.getParentId(activeBlock.id) ?? null, afterId: activeBlock.id }
+      : undefined;
     editor.clipboard.paste({
       defaultBlockType: resolveDefaultBlockType(),
       preserveNewlines: plainText,
       structured,
       mergeText: canvas ? false : undefined,
       text: event.clipboardData?.getData("text/plain"),
+      bundle: sourceBundle,
+      placement,
     });
     if (canvas && saved) {
       const pasted = editor.selection.get().find((item): item is BlockSelection => item.type === "block");

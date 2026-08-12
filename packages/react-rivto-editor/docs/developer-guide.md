@@ -93,18 +93,17 @@ Core storage uses ordered root and child ID arrays:
 ```text
 rivto.editor.roots:  Y.Array<blockId>
 rivto.editor.blocks: Y.Map<blockId, {
-  type, content, props, pluginData, collapsed, layout,
-  listProps: Y.Map<{ type, checked }>,
+  type, content, props, pluginData,
+  listProps: Y.Map<Record<string, portableValue>>,
   children: Y.Array<blockId>
 }>
 ```
 
-Every block has a first-class `listProps` group. It describes how the block is
-presented when several sibling blocks are rendered as one sequence, without
-changing the block's own type or content. `listProps.type` defaults to `list`
-and accepts `checkbox`, `numbered_list`, `start_numbered_list`, or
-`continue_numbered_list`; `listProps.checked` defaults to `false` and is
-displayed only for checkbox blocks. Numbering is computed from sibling order:
+Every block has an opaque first-class `listProps` group. Core preserves its
+portable values without interpreting individual keys. React extensions define
+defaults, validation, rendering, selection, and clipboard behavior. The
+standard list extension defines `type` and `checked`; the collapse extension
+defines `collapsed`. Numbering is computed from sibling order:
 start resets to one, numbered follows an adjacent numbered sibling, and
 continue resumes the latest numbered sibling through a gap. The standard
 preset adds matching slash commands plus `- `, `[ ] `, `[x] `, and `1. ` input
@@ -137,7 +136,6 @@ editor.getBlock(id);
 editor.getRootIds();
 editor.getChildIds(id);
 editor.getParentId(id);
-editor.getVisibleBlockIds();
 ```
 
 Never walk `editor.getBlocks()` to find one ID and never mutate a snapshot.

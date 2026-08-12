@@ -1,5 +1,5 @@
 import type { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../../crdt-doc";
-import type { BlockListProps } from "../../../../blocks";
+import type { BlockListProps } from "../managers/block-manager/utils";
 import type {
   DocumentBlockManager,
   DocumentElementManager,
@@ -59,9 +59,7 @@ export interface ElementUpdate {
 export interface Block {
   id: string;
   type: string;
-  /** Persisted outline visibility; renderers decide whether to honor it. */
-  collapsed: boolean;
-  /** Presentation used when this block renders among sibling blocks. */
+  /** Opaque page/outline properties interpreted by installed extensions. */
   listProps: BlockListProps;
   props: Record<string, unknown>;
   pluginData: Record<string, unknown>;
@@ -82,10 +80,8 @@ export interface Link {
 export interface BlockInput {
   type: string;
   id?: string;
-  /** Initial outline visibility; omitted creation values default to false. */
-  collapsed?: boolean;
-  /** Initial multi-block presentation; omitted members receive their defaults. */
-  listProps?: Partial<BlockListProps>;
+  /** Initial opaque page/outline properties. */
+  listProps?: BlockListProps;
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
   content?: string;
@@ -94,10 +90,8 @@ export interface BlockInput {
 
 /** Mutable block fields; a block's type and identity are intentionally immutable. */
 export interface BlockPatch {
-  /** Replaces the persisted outline visibility when supplied. */
-  collapsed?: boolean;
-  /** Merges supplied multi-block presentation fields. */
-  listProps?: Partial<BlockListProps>;
+  /** Shallow-merges supplied page/outline properties. */
+  listProps?: BlockListProps;
   props?: Record<string, unknown>;
   pluginData?: Record<string, unknown>;
   content?: string;
@@ -111,7 +105,7 @@ export interface BlockUpdate {
 
 /** Lossless, versioned document value used for persistence. */
 export interface Snapshot {
-  version: 5;
+  version: 6;
   blocks: Block[];
   links: Link[];
   elements: DocumentElement[];
@@ -120,7 +114,7 @@ export interface Snapshot {
 
 /** Sections received from persistence that should replace only supplied state. */
 export interface SnapshotUpdate {
-  version: 5;
+  version: 6;
   blocks?: Block[];
   links?: Link[];
   elements?: DocumentElement[];

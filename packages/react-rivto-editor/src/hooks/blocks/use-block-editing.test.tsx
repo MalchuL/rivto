@@ -57,11 +57,11 @@ describe("useBlockEditing", () => {
     expect(text?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
     expect(text?.attributes[BLOCK_CONTENT_ATTRIBUTE]).toBe("");
     expect(text?.attributes.contentEditable).toBe("plaintext-only");
-    expect(structural?.block?.collapsed).toBe(false);
+    expect(structural?.block?.listProps.collapsed).toBeUndefined();
     expect(structural && "getters" in structural).toBe(false);
     expect(structural && "setCollapsed" in structural.operations).toBe(false);
-    structural?.operations.update({ collapsed: true });
-    expect(editor.blocks.getBlock(blockId)?.collapsed).toBe(true);
+    structural?.operations.update({ listProps: { collapsed: true } });
+    expect(editor.blocks.getBlock(blockId)?.listProps.collapsed).toBe(true);
     expect(structural?.getProps()).toEqual({ count: 1, label: "Initial" });
     expect(structural?.getProp("count")).toBe(1);
 

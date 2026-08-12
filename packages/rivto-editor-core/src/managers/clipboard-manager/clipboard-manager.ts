@@ -1,7 +1,12 @@
 import type { EditorRuntime } from "../../editor/rivto-editor";
 import { isStructuralSelection, type NormalizedSelection } from "../selection-manager";
 import type { EditorSelection } from "../../editor/types";
-import type { ClipboardBundle, ClipboardPasteInput, ClipboardPayload } from "./types";
+import type {
+  BlockPastePlacement,
+  ClipboardBundle,
+  ClipboardPasteInput,
+  ClipboardPayload,
+} from "./types";
 import {
   findBlock,
   flattenBlocks,
@@ -11,17 +16,15 @@ import {
   type ClipboardIdReusePolicy,
 } from "./utils";
 
-/**
- * Structural destination for a non-merging structured paste.
- *
- * `afterId` covers ordinary sibling insertion. `beforeChildId` additionally
- * moves inserted roots before an expanded target's existing first child.
- */
-interface BlockPastePlacement {
-  /** Initial sibling after which roots are inserted; null starts at root zero. */
-  afterId?: string | null;
-  /** Existing first child before which every inserted root is finally moved. */
-  beforeChildId?: string;
+/** Internal placement after resolving a parent's existing first child. */
+interface ResolvedBlockPastePlacement extends BlockPastePlacement {
+  /**
+   * Existing child before which inserted roots are moved.
+   *
+   * When present, this exact anchor takes precedence over the inherited
+   * `parentId` destination.
+   */
+  readonly beforeChildId?: string;
 }
 
 /**
@@ -85,7 +88,7 @@ export class ClipboardManager {
       const bundle = input.bundle
         ?? (input.structured ? JSON.parse(input.structured) as ClipboardBundle : undefined);
       if (bundle) {
-        this.pasteClipboardBundle(bundle, input.mergeText !== false);
+        this.pasteClipboardBundle(bundle, input.mergeText !== false, input.placement);
         return;
       }
       const defaultBlockType = input.defaultBlockType;
@@ -136,14 +139,10 @@ export class ClipboardManager {
       (link) => ids.has(link.from.blockId) && ids.has(link.to.blockId),
     );
     // Convert blocks to text, html and markdown bundles. Used for clipboard copy to paste to different apps.
-    const portable = serializeClipboardBlocks(blocks, (block) => {
-      const definition = this.editor.blocksRegistry.get(block.type);
-      // If definition has toRawText method, use it to convert block to text. Otherwise use block.content.
-      return definition?.toRawText ? definition.toRawText(block) : block.content;
-    });
+    const portable = serializeClipboardBlocks(blocks, (block) => block.content);
     return {
       // startsWithText means that clipboard bundle starts with text. It used to paste text into existing text block.
-      bundle: { version: 3, startsWithText: current[0]?.type === "text", blocks, links },
+      bundle: { version: 4, startsWithText: current[0]?.type === "text", blocks, links },
       ...portable,
     };
   }
@@ -158,32 +157,54 @@ export class ClipboardManager {
    *
    * @param bundle - Portable block hierarchy and links to validate and insert.
    * @param mergeText - Whether a partial first block may merge into a text target.
+   * @param placement - Optional structural destination resolved by the host.
+   * @returns No value.
    */
-  private pasteClipboardBundle(bundle: ClipboardBundle, mergeText: boolean): void {
+  private pasteClipboardBundle(
+    bundle: ClipboardBundle,
+    mergeText: boolean,
+    placement?: BlockPastePlacement,
+  ): void {
     if (!bundle.blocks.length) return;
     const current = this.editor.selection.get();
     const hasTextTarget = current.some((item) => item.type === "text");
     // Handle case when clipboard contains only blocks or if we have block selection.
     // We add them after selection.
     if (!mergeText || bundle.startsWithText !== true || !hasTextTarget) {
+      // For ranges of blocks we insert blocks after the last top-level selected block.
       const active = current.at(-1);
       const range = this.editor.selection.normalize(current);
-      let afterId = range?.blocks.at(-1)?.id;
-      if (active?.type === "block") {
-        afterId = active.focusBlockId;
-      } else if (active?.type === "text") {
-        afterId = active.head.blockId;
-      }
-      const caretBlock = active?.type === "text"
-        ? this.editor.blocks.getBlock(active.head.blockId)
+      // Multiple selection has higher priority than mouse focus.
+      // If parent and nested child are selected and mouse ends on the child,
+      // parent is still the top-level selected block. We paste after the parent,
+      // not after the nested mouse endpoint.
+      const multiSelectionAfterId = range && range.blocks.length > 1
+        ? cloneSelectedTopLevelSubtrees(this.editor.blocks.getBlocks(), range, false).at(-1)?.id
         : undefined;
-
-      // Expanded parents receive pasted roots before their current first child.
-      // Collapsed parents behave as visible leaves, so paste remains after them.
-      const beforeChildId = !caretBlock || caretBlock.collapsed
-        ? undefined
-        : caretBlock.children[0]?.id;
-      this.insertBundleAsBlocks(bundle, { afterId, beforeChildId });
+      let afterId = multiSelectionAfterId ?? range?.blocks.at(-1)?.id;
+      // For single selection use the active endpoint.
+      // Block selection uses focus block, text selection uses mouse/caret head.
+      if (!multiSelectionAfterId) {
+        if (active?.type === "block") {
+          afterId = active.focusBlockId;
+        } else if (active?.type === "text") {
+          afterId = active.head.blockId;
+        }
+      }
+      // If placement parent has children, we insert before the first child.
+      // If parent is empty, insertBundleAsBlocks moves pasted blocks inside it.
+      // We resolve first child only if placement and parent id exist.
+      const firstChildId = placement?.parentId
+        ? this.editor.blocks.getChildIds(placement.parentId)[0]
+        : undefined;
+      
+      // For single selection use placement and resolved first child.
+      // For multiple selection ignore placement resolved from mouse endpoint.
+      this.insertBundleAsBlocks(bundle, placement && !multiSelectionAfterId ? {
+        afterId: placement.afterId,
+        beforeChildId: placement.parentId && placement.afterId === null ? firstChildId : undefined,
+        parentId: placement.parentId ?? undefined,
+      } : { afterId });
       return;
     }
 
@@ -249,6 +270,7 @@ export class ClipboardManager {
     const range = this.editor.selection.normalize();
     const lines = preserveNewlines ? [value] : value.split(/\r\n?|\n/);
     // Handle case when we paste text into empty selection (without caret or text selection).
+    // Finds latest block in the document and pastes text into it.
     if (!range) {
       let lastId: string | undefined;
       this.editor.document.transact(() => {
@@ -263,8 +285,9 @@ export class ClipboardManager {
       return;
     }
 
-    // Handle case when we paste text into existing selection and there is not block selection.
-    // Paste text into first existing text block.
+    // Handle case when we paste text into existing selection and there is only text content with single line.
+    // Paste text into first existing text block. Remove trailing (others) blocks after selection.
+    // Merges blocks into one.
     const target = range.blocks[0]!;
     const end = range.blocks.at(-1) ?? target;
     const prefix = target.content.slice(0, range.start.offset);
@@ -277,7 +300,9 @@ export class ClipboardManager {
       this.collapse(target.id, prefix.length + value.length);
       return;
     }
-
+    
+    // Handle case when we paste text into existing selection and there is text content with multiple lines.
+    // Fills lines with default block type and appends suffix to the last line.
     let previous = target.id;
     let lastId = target.id;
     this.editor.document.transact(() => {
@@ -306,21 +331,27 @@ export class ClipboardManager {
    */
   private insertBundleAsBlocks(
     bundle: ClipboardBundle,
-    placement: BlockPastePlacement = {},
+    placement: ResolvedBlockPastePlacement = {},
   ): void {
     const remapped = remapClipboardBundle(bundle, undefined, this.idReusePolicy());
     const insertedIds: string[] = [];
     this.editor.document.transact(() => {
       let previous = placement.afterId;
+      // Insert blocks after the afterId.
       remapped.blocks.forEach((block) => {
         previous = this.editor.document.blocks.insertBlock(block, previous ?? undefined);
         insertedIds.push(previous);
       });
+      // Move blocks before the beforeChildId if it exists.
       if (placement.beforeChildId && insertedIds.length) {
         this.editor.document.blocks.moveBlocks(insertedIds, placement.beforeChildId, "before");
+      } else if (placement.parentId && placement.afterId === null && insertedIds.length) {
+        // Move blocks inside the parent (Appends to the parent)
+        this.editor.document.blocks.moveBlocks(insertedIds, placement.parentId, "inside");
       }
       remapped.links.forEach((link) => this.editor.document.links.createLink(link));
     });
+    // Set selection to the inserted blocks.
     if (insertedIds.length) {
       this.editor.selection.set([{
         type: "block",

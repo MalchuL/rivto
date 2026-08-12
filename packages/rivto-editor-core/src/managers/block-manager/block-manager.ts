@@ -86,15 +86,6 @@ export class BlockManager {
   }
 
   /**
-   * Reads collapse-aware block identifiers in document order.
-   *
-   * @returns Visible identifiers in depth-first order.
-   */
-  getVisibleBlockIds(): string[] {
-    return this.editor.document.blocks.getVisibleBlockIds();
-  }
-
-  /**
    * Inserts a validated block through the built-in command path.
    *
    * @param block - Native type and initial persisted values.

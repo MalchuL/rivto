@@ -1,4 +1,9 @@
-import type { BlockListProps } from "../blocks";
+import type {
+  Block,
+  BlockInput,
+  BlockPatch,
+  BlockUpdate,
+} from "../store/document-model";
 
 /** Collaborative canvas geometry as seen by editor features. */
 export interface EditorElementFrame {
@@ -45,50 +50,14 @@ export interface EditorElementPatch {
 /** One identified canvas element patch used by atomic updates. */
 export interface EditorElementUpdate { id: string; patch: EditorElementPatch }
 
-/** Detached block value rendered by the editor. */
-export interface EditorBlock {
-  id: string;
-  type: string;
-  /** Persisted outline visibility exposed directly to editor features. */
-  collapsed: boolean;
-  /** Presentation used when this block renders among sibling blocks. */
-  listProps: BlockListProps;
-  props: Record<string, unknown>;
-  pluginData: Record<string, unknown>;
-  content: string;
-  children: EditorBlock[];
-}
-
-/** Block creation data accepted by editor block helpers. */
-export interface EditorBlockInput {
-  type: string;
-  id?: string;
-  /** Initial outline visibility; defaults to false when omitted. */
-  collapsed?: boolean;
-  /** Initial multi-block presentation; omitted members receive their defaults. */
-  listProps?: Partial<BlockListProps>;
-  props?: Record<string, unknown>;
-  pluginData?: Record<string, unknown>;
-  content?: string;
-  children?: EditorBlockInput[];
-}
-
-/** Mutable editor block fields; type and identity are immutable. */
-export interface EditorBlockPatch {
-  /** Replaces the persisted outline visibility when supplied. */
-  collapsed?: boolean;
-  /** Merges supplied multi-block presentation fields. */
-  listProps?: Partial<BlockListProps>;
-  props?: Record<string, unknown>;
-  pluginData?: Record<string, unknown>;
-  content?: string;
-}
-
-/** One identified editor block patch applied within a batch update. */
-export interface EditorBlockUpdate {
-  id: string;
-  patch: EditorBlockPatch;
-}
+/** Canonical detached block value rendered by editor integrations. */
+export type EditorBlock = Block;
+/** Canonical block creation data accepted by editor helpers. */
+export type EditorBlockInput = BlockInput;
+/** Canonical mutable block fields. */
+export type EditorBlockPatch = BlockPatch;
+/** Canonical identified block patch. */
+export type EditorBlockUpdate = BlockUpdate;
 
 /** First-class connection between two editor blocks. */
 export interface EditorLink {
@@ -100,7 +69,7 @@ export interface EditorLink {
 
 /** Lossless editor document value used for persistence. */
 export interface EditorSnapshot {
-  version: 5;
+  version: 6;
   blocks: EditorBlock[];
   links: EditorLink[];
   elements: EditorElement[];
@@ -109,7 +78,7 @@ export interface EditorSnapshot {
 
 /** Persisted document sections that replace only supplied state. */
 export interface EditorSnapshotUpdate {
-  version: 5;
+  version: 6;
   blocks?: EditorBlock[];
   links?: EditorLink[];
   elements?: EditorElement[];

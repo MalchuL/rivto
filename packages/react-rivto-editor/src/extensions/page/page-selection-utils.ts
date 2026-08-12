@@ -19,7 +19,7 @@ export function pageEntries(
 ): PageBlockEntry[] {
   return blocks.flatMap((block) => [
     { block, parentId, siblings: blocks },
-    ...(block.collapsed && !includeCollapsedDescendants
+    ...(block.listProps.collapsed === true && !includeCollapsedDescendants
       ? []
       : pageEntries(block.children, block.id, includeCollapsedDescendants)),
   ]);
@@ -43,7 +43,7 @@ export function reconcileCollapsedSelection(
   const indexHidden = (items: Block[], collapsedAncestor?: string): void => {
     items.forEach((block) => {
       if (collapsedAncestor) hiddenBy.set(block.id, collapsedAncestor);
-      const ancestor = collapsedAncestor ?? (block.collapsed ? block.id : undefined);
+      const ancestor = collapsedAncestor ?? (block.listProps.collapsed === true ? block.id : undefined);
       indexHidden(block.children, ancestor);
     });
   };

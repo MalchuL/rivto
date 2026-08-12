@@ -18,7 +18,7 @@ describe("EditorRuntime element commands", () => {
       frame: { ...input.frame, x: 30 },
       props: { ...input.props, stroke: "blue" },
     });
-    expect(editor.dump()).toMatchObject({ version: 5, elements: [{ id: "shape", type: "rectangle" }] });
+    expect(editor.dump()).toMatchObject({ version: 6, elements: [{ id: "shape", type: "rectangle" }] });
     editor.elements.removeElement("shape");
     expect(editor.elements.getElements()).toEqual([]);
     editor.destroy();

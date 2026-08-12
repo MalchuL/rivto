@@ -53,13 +53,13 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     const blocks = [...new Set(ids)].map((id) => editor.blocks.getBlock(id));
     if (blocks.some((block) => !block)) return false;
     const first = blocks[0]!;
-    const collapsed = value === "toggle" ? !first.collapsed : value;
+    const collapsed = value === "toggle" ? first.listProps.collapsed !== true : value;
     const updates = blocks.flatMap((block) => (
-      block && (!collapsed || block.children.length > 0) && block.collapsed !== collapsed
-        ? [{ id: block.id, patch: { collapsed } }]
+      block && (!collapsed || block.children.length > 0) && block.listProps.collapsed !== collapsed
+        ? [{ id: block.id, patch: { listProps: { collapsed } } }]
         : []
     ));
-    if (updates.length) editor.blocks.updateBlocks(updates);
+    if (updates.length) reactEditor.blocks.updateBlocks(updates);
     return true;
   };
 
