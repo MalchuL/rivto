@@ -1,9 +1,10 @@
 import {
   isStructuralSelection,
   RIVTO_CLIPBOARD_MIME,
+  validateBlockListProps,
   type EditorBlock,
   type EditorBlockInput,
-  type ClipboardPayload,
+  type ClipboardBundle,
   type BlockSelection,
 } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
@@ -89,24 +90,21 @@ export function registerClipboard(
   };
 
   /** Writes the core-produced flavors into a native clipboard event. */
-  const writeClipboard = (event: ClipboardEvent, payload: ClipboardPayload): void => {
+  const writeClipboard = (event: ClipboardEvent, bundle: ClipboardBundle): void => {
     const elementIds = selectedCanvasElementIds();
     if (elementIds.length) {
-      payload.bundle.elements = elementIds.flatMap((id) => editor.elements.getElement(id) ?? []);
-      payload.bundle.selectedElementIds = [...elementIds];
+      bundle.elements = elementIds.flatMap((id) => editor.elements.getElement(id) ?? []);
+      bundle.selectedElementIds = [...elementIds];
     }
-    const portable = reactEditor.clipboard.format(payload.bundle.blocks);
-    payload.text = portable.plain;
-    payload.markdown = portable.markdown;
-    payload.html = portable.html;
-    const structured = JSON.stringify(payload.bundle);
+    const portable = reactEditor.clipboard.format(bundle.blocks);
+    const structured = JSON.stringify(bundle);
     event.clipboardData?.setData(RIVTO_CLIPBOARD_MIME, structured);
-    event.clipboardData?.setData("text/html", payload.html);
-    event.clipboardData?.setData("text/markdown", payload.markdown);
-    event.clipboardData?.setData("text/plain", payload.text);
+    event.clipboardData?.setData("text/html", portable.html);
+    event.clipboardData?.setData("text/markdown", portable.markdown);
+    event.clipboardData?.setData("text/plain", portable.plain);
     copiedClipboard = {
       structured,
-      text: payload.text,
+      text: portable.plain,
     };
   };
 
@@ -135,7 +133,7 @@ export function registerClipboard(
         || fallbackStructuredClipboard(event);
     }
     const canvas = canvasSelection();
-    let sourceBundle = structured ? JSON.parse(structured) as ClipboardPayload["bundle"] : undefined;
+    let sourceBundle = structured ? JSON.parse(structured) as ClipboardBundle : undefined;
     if (!sourceBundle && !plainText) {
       const parsed = reactEditor.clipboard.parse({
         html: event.clipboardData?.getData("text/html") ?? "",
@@ -158,14 +156,21 @@ export function registerClipboard(
       }
     }
     if (sourceBundle) {
-      const prepare = (block: EditorBlock): EditorBlock | undefined => {
-        const children = block.children.flatMap((child) => prepare(child) ?? []);
-        const candidate = { ...block, listProps: { ...reactEditor.blocks.prepareBlock(block).listProps }, children };
-        if (reactEditor.blocks.validateListProps(candidate.listProps)) return candidate;
-        const replacement = options.onBlockError?.(block, new Error("Invalid block list properties"));
-        if (!replacement) return;
-        const prepared = reactEditor.blocks.prepareBlock(replacement);
-        const materialized = {
+      const validateBlock = (block: EditorBlock): void => {
+        if (
+          typeof block.id !== "string" ||
+          typeof block.type !== "string" ||
+          typeof block.content !== "string" ||
+          !Array.isArray(block.children)
+        ) throw new TypeError("Invalid clipboard block");
+        validateBlockListProps(block.listProps);
+        validateBlockListProps(block.props);
+        validateBlockListProps(block.pluginData);
+        editor.blocksRegistry.validate(block.type, block.props);
+      };
+      const materializeReplacement = (input: EditorBlockInput): EditorBlock | undefined => {
+        const prepared = reactEditor.blocks.prepareBlock({ ...input, children: [] });
+        const replacement = {
           id: prepared.id ?? crypto.randomUUID(),
           type: prepared.type,
           listProps: prepared.listProps ?? {},
@@ -174,7 +179,28 @@ export function registerClipboard(
           content: prepared.content ?? "",
           children: [],
         } satisfies EditorBlock;
-        return reactEditor.blocks.validateListProps(materialized.listProps) ? materialized : undefined;
+        try {
+          validateBlock(replacement);
+          return reactEditor.blocks.validateListProps(replacement.listProps) ? replacement : undefined;
+        } catch {
+          return undefined;
+        }
+      };
+      const prepare = (block: EditorBlock): EditorBlock | undefined => {
+        try {
+          validateBlock(block);
+          const candidate = {
+            ...block,
+            listProps: reactEditor.blocks.prepareBlock({ ...block, children: [] }).listProps ?? {},
+          };
+          if (!reactEditor.blocks.validateListProps(candidate.listProps)) {
+            throw new TypeError("Invalid block list properties");
+          }
+          return { ...candidate, children: block.children.flatMap((child) => prepare(child) ?? []) };
+        } catch (error) {
+          const replacement = options.onBlockError?.(block, error);
+          return replacement ? materializeReplacement(replacement) : undefined;
+        }
       };
       sourceBundle = { ...sourceBundle, blocks: sourceBundle.blocks.flatMap((block) => prepare(block) ?? []) };
       structured = JSON.stringify(sourceBundle);

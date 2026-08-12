@@ -25,7 +25,7 @@ import {
   BlockElementRefProvider,
   type BlockWrapperProps,
 } from "../../blocks";
-import { useEditor, useEditorRoot } from "../../hooks";
+import { useEditor, useEditorRoot, useReactEditor } from "../../hooks";
 import {
   createContext,
   useContext,
@@ -381,12 +381,12 @@ interface PreviewEntry {
  * @param depth - Current relative nesting depth used by recursive calls.
  * @returns Pre-order entries suitable for direct preview rendering.
  */
-function flattenPreview(block: Block, depth = 0): PreviewEntry[] {
+function flattenPreview(block: Block, collapseActive: boolean, depth = 0): PreviewEntry[] {
   return [
     { block, depth },
-    ...(block.listProps.collapsed === true
+    ...(collapseActive && block.listProps.collapsed === true
       ? []
-      : block.children.flatMap((child) => flattenPreview(child, depth + 1))),
+      : block.children.flatMap((child) => flattenPreview(child, collapseActive, depth + 1))),
   ];
 }
 
@@ -410,8 +410,8 @@ function subtreeSize(block: Block): number {
  * @param props - Detached root snapshots participating in this gesture.
  * @returns A capped list of visible rows plus a compact omitted-block count.
  */
-function PageDragPreview({ blocks }: { readonly blocks: Block[] }) {
-  const entries = blocks.flatMap((block) => flattenPreview(block));
+function PageDragPreview({ blocks, collapseActive }: { readonly blocks: Block[]; readonly collapseActive: boolean }) {
+  const entries = blocks.flatMap((block) => flattenPreview(block, collapseActive));
   const hiddenCount = Math.max(
     0,
     blocks.reduce((total, block) => total + subtreeSize(block), 0) - Math.min(entries.length, MAX_PREVIEW_BLOCKS),
@@ -463,6 +463,7 @@ export function PageDragProvider({
   gapDropZone = 8,
 }: PageDragExtensionOptions) {
   const editor = useEditor();
+  const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
   const activeMove = useRef<SelectedMoveRoots | undefined>(undefined);
   const crossDocumentTarget = useRef<{
@@ -563,7 +564,12 @@ export function PageDragProvider({
    */
   const handleDragStart = ({ active }: DragStartEvent) => {
     clearCrossDocumentTarget();
-    const move = selectedMoveRoots(editor.blocks.getBlocks(), editor.selection.get(), String(active.id));
+    const move = selectedMoveRoots(
+      editor.blocks.getBlocks(),
+      editor.selection.get(),
+      String(active.id),
+      (block) => reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true,
+    );
     activeMove.current = move;
     setActiveIds(move.ids);
   };
@@ -642,7 +648,7 @@ export function PageDragProvider({
         <DragOverlay dropAnimation={null}>
           {activeBlocks.length > 0 && (
             <div className="page-drag-overlay" aria-hidden="true">
-              <PageDragPreview blocks={activeBlocks} />
+              <PageDragPreview blocks={activeBlocks} collapseActive={reactEditor.blocks.hasListProps("collapse")} />
             </div>
           )}
         </DragOverlay>

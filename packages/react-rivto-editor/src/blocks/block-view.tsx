@@ -55,8 +55,6 @@ export const BlockView = forwardRef<HTMLDivElement, BlockViewProps>(
         ref={ref}
         data-block-id={block.id}
         data-block-type={block.type}
-        data-block-list-type={block.listProps.type}
-        data-block-checked={block.listProps.checked ? "true" : undefined}
         data-block-selected={isSelected ? "true" : undefined}
       >
         {children}

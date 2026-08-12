@@ -11,17 +11,23 @@ export interface PageBlockEntry {
   readonly siblings: Block[];
 }
 
+/** Extension-owned decision that hides one block's descendants. */
+export type IsCollapsedBlock = (block: Block) => boolean;
+
+const neverCollapsed: IsCollapsedBlock = () => false;
+
 /** Flattens a page outline while retaining structural ownership. */
 export function pageEntries(
   blocks: Block[],
   parentId: string | null = null,
   includeCollapsedDescendants = false,
+  isCollapsed: IsCollapsedBlock = neverCollapsed,
 ): PageBlockEntry[] {
   return blocks.flatMap((block) => [
     { block, parentId, siblings: blocks },
-    ...(block.listProps.collapsed === true && !includeCollapsedDescendants
+    ...(isCollapsed(block) && !includeCollapsedDescendants
       ? []
-      : pageEntries(block.children, block.id, includeCollapsedDescendants)),
+      : pageEntries(block.children, block.id, includeCollapsedDescendants, isCollapsed)),
   ]);
 }
 
@@ -36,7 +42,8 @@ export function reconcileCollapsedSelection(
   blocks: Block[],
   selection: EditorSelection,
 ): EditorSelection {
-  const visible = pageEntries(blocks).map(({ block }) => block.id);
+  const isCollapsed = (block: Block) => block.listProps.collapsed === true;
+  const visible = pageEntries(blocks, null, false, isCollapsed).map(({ block }) => block.id);
   const visibleSet = new Set(visible);
   const hiddenBy = new Map<string, string>();
 
@@ -94,8 +101,9 @@ export function blockSelection(
   blocks: Block[],
   anchorBlockId: string,
   focusBlockId = anchorBlockId,
+  isCollapsed: IsCollapsedBlock = neverCollapsed,
 ): BlockSelection {
-  const ids = pageEntries(blocks).map(({ block }) => block.id);
+  const ids = pageEntries(blocks, null, false, isCollapsed).map(({ block }) => block.id);
   const anchor = ids.indexOf(anchorBlockId);
   const focus = ids.indexOf(focusBlockId);
   const first = Math.min(anchor, focus);
@@ -129,8 +137,9 @@ export function toggleBlockSelection(
   current: BlockSelection | undefined,
   blockId: string,
   includeCollapsedDescendants = false,
+  isCollapsed: IsCollapsedBlock = neverCollapsed,
 ): BlockSelection | undefined {
-  const visible = pageEntries(blocks, null, includeCollapsedDescendants).map(({ block }) => block.id);
+  const visible = pageEntries(blocks, null, includeCollapsedDescendants, isCollapsed).map(({ block }) => block.id);
   const selected = new Set(current?.blockIds ?? []);
   const removing = selected.has(blockId);
   if (removing) selected.delete(blockId);
@@ -154,14 +163,15 @@ export function extendBlockSelection(
   blocks: Block[],
   current: BlockSelection,
   direction: "up" | "down",
+  isCollapsed: IsCollapsedBlock = neverCollapsed,
 ): BlockSelection {
-  const ids = pageEntries(blocks).map(({ block }) => block.id);
+  const ids = pageEntries(blocks, null, false, isCollapsed).map(({ block }) => block.id);
   const anchor = ids.indexOf(current.anchorBlockId);
   const focus = ids.indexOf(current.focusBlockId);
   if (anchor < 0 || focus < 0) return current;
   const delta = direction === "up" ? -1 : 1;
   const next = Math.max(0, Math.min(ids.length - 1, focus + delta));
-  return blockSelection(blocks, current.anchorBlockId, ids[next]!);
+  return blockSelection(blocks, current.anchorBlockId, ids[next]!, isCollapsed);
 }
 
 /** Moves a whole-block selection to one adjacent visible block. */
@@ -169,12 +179,13 @@ export function adjacentBlockSelection(
   blocks: Block[],
   current: BlockSelection,
   direction: "up" | "down",
+  isCollapsed: IsCollapsedBlock = neverCollapsed,
 ): BlockSelection {
-  const ids = pageEntries(blocks).map(({ block }) => block.id);
+  const ids = pageEntries(blocks, null, false, isCollapsed).map(({ block }) => block.id);
   const edgeId = direction === "up" ? current.blockIds[0] : current.blockIds.at(-1);
   const index = edgeId ? ids.indexOf(edgeId) : -1;
   const next = index < 0 ? undefined : ids[index + (direction === "up" ? -1 : 1)];
-  return next ? blockSelection(blocks, next) : current;
+  return next ? blockSelection(blocks, next, next, isCollapsed) : current;
 }
 
 /** Roots moved by a drag or keyboard command. */
@@ -193,13 +204,14 @@ export function selectedMoveRoots(
   blocks: Block[],
   selection: readonly { type: string }[],
   activeId: string,
+  isCollapsed: IsCollapsedBlock = neverCollapsed,
 ): SelectedMoveRoots {
   const blockSelection = selection.find((item): item is BlockSelection => (
     item.type === "block" && "blockIds" in item && (item as BlockSelection).blockIds.includes(activeId)
   ));
   if (!blockSelection) return { ids: [activeId], grouped: false };
 
-  const entries = pageEntries(blocks);
+  const entries = pageEntries(blocks, null, false, isCollapsed);
   const byId = new Map(entries.map((entry) => [entry.block.id, entry]));
   const selected = new Set(blockSelection.blockIds);
   const roots = entries.flatMap(({ block }) => {
@@ -227,8 +239,9 @@ export function keyboardMovePlacement(
   blocks: Block[],
   movedIds: string[],
   direction: "up" | "down",
+  isCollapsed: IsCollapsedBlock = neverCollapsed,
 ): KeyboardMovePlacement | undefined {
-  const entries = pageEntries(blocks);
+  const entries = pageEntries(blocks, null, false, isCollapsed);
   const byId = new Map(entries.map((entry) => [entry.block.id, entry]));
   const moved = new Set(movedIds);
   const roots = entries.filter(({ block }) => moved.has(block.id));

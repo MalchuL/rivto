@@ -87,6 +87,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
       current,
       blockId,
       editor.mode.get() === "edgeless",
+      (candidate) => reactEditor.blocks.hasListProps("collapse") && candidate.listProps.collapsed === true,
     );
     if (editor.mode.get() === "edgeless") findEdgelessRuntime(reactEditor)?.deactivate();
     if (next) editor.selection.set([next]);

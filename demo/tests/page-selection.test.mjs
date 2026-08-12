@@ -20,16 +20,18 @@ const block = (id, children = [], collapsed = false) => ({
   pluginData: {},
   children,
 });
+const isCollapsed = (candidate) => candidate.listProps.collapsed === true;
 
 test("visible traversal stops at collapsed parents", () => {
   const blocks = [block("a", [block("hidden", [block("deep")])], true), block("b")];
-  assert.deepEqual(pageEntries(blocks).map(({ block: entry }) => entry.id), ["a", "b"]);
-  assert.deepEqual(blockSelection(blocks, "a", "b").blockIds, ["a", "b"]);
+  assert.deepEqual(pageEntries(blocks).map(({ block: entry }) => entry.id), ["a", "hidden", "deep", "b"]);
+  assert.deepEqual(pageEntries(blocks, null, false, isCollapsed).map(({ block: entry }) => entry.id), ["a", "b"]);
+  assert.deepEqual(blockSelection(blocks, "a", "b", isCollapsed).blockIds, ["a", "b"]);
   assert.deepEqual(
-    pageEntries(blocks, null, true).map(({ block: entry }) => entry.id),
+    pageEntries(blocks, null, true, isCollapsed).map(({ block: entry }) => entry.id),
     ["a", "hidden", "deep", "b"],
   );
-  assert.deepEqual(toggleBlockSelection(blocks, undefined, "deep", true)?.blockIds, ["deep"]);
+  assert.deepEqual(toggleBlockSelection(blocks, undefined, "deep", true, isCollapsed)?.blockIds, ["deep"]);
 });
 
 test("maps hidden text and block selections to the nearest collapsed parent", () => {

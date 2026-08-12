@@ -25,23 +25,6 @@ export interface ClipboardBundle {
 }
 
 /**
- * Host-independent clipboard flavors produced from one editor selection.
- *
- * Core never accesses `ClipboardEvent` or `DataTransfer`; React or another host
- * writes these values to the platform clipboard synchronously.
- */
-export interface ClipboardPayload {
-  /** Lossless Rivto representation. */
-  bundle: ClipboardBundle;
-  /** Interoperable HTML fallback. */
-  html: string;
-  /** Universal plain-text fallback. */
-  text: string;
-  /** Markdown source preserving descendants as nested lists. */
-  markdown: string;
-}
-
-/**
  * Structural destination for a non-merging structured paste.
  *
  * Supported host-facing combinations:
@@ -53,7 +36,7 @@ export interface ClipboardPayload {
  *   manager inserts before its existing first child, or inside an empty parent.
  *   Null is append to the start of the parent.
  * - `{ parentId: null, afterId: rootId }`: insert after an existing root block.
- * - `{ parentId: null, afterId: null }`: append at the document root. Null is 
+ * - `{ parentId: null, afterId: null }`: append at the document root. Null is
  *   append to the start of the document.
  */
 export interface BlockPastePlacement {

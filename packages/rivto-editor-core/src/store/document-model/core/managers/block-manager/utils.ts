@@ -1,11 +1,5 @@
 import type { CRDTArray } from "../../../../crdt-doc";
-import type { BlockInput } from "../../types";
-
-/**
- * Opaque properties interpreted by page/outline extensions.
- * Core persists this record without assigning meaning to individual keys.
- */
-export type BlockListProps = Record<string, unknown>;
+import type { BlockInput, BlockListProps } from "../../types";
 
 /**
  * Validates an opaque list-property record before it reaches CRDT storage.

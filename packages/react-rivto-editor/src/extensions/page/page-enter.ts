@@ -70,7 +70,9 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
         return;
       }
 
-      if (isEmptyBlock(block) && block.listProps.type !== "list") {
+      const listActive = reactEditor.blocks.hasListProps("list");
+      const collapseActive = reactEditor.blocks.hasListProps("collapse");
+      if (listActive && isEmptyBlock(block) && block.listProps.type !== "list") {
         reactEditor.blocks.updateBlock(block.id, { listProps: { type: "list", checked: false } });
         nextBlockId = block.id;
         return;
@@ -82,16 +84,16 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
       if (isTextTarget) editor.blocks.updateBlock(block.id, { content: block.content.slice(0, splitAt) });
       nextBlockId = reactEditor.blocks.insertBlock({
         ...createDefaultBlock(),
-        listProps: {
+        ...(listActive ? { listProps: {
           type: block.listProps.type === "checkbox"
             ? "checkbox"
             : isNumberedListType(block.listProps.type) ? "numbered_list" : "list",
           checked: false,
-        },
+        } } : {}),
         content: isTextTarget ? block.content.slice(splitAt) : "",
       }, block.id);
 
-      if (block.children.length > 0 && block.listProps.collapsed !== true) {
+      if (block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true)) {
         // Insertion initially creates a sibling directly after `block`.
         // Indenting makes it the last child; moving it to position zero then
         // gives Enter the requested first-child placement.

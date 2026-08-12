@@ -5,14 +5,12 @@ import type {
   BlockPastePlacement,
   ClipboardBundle,
   ClipboardPasteInput,
-  ClipboardPayload,
 } from "./types";
 import {
   findBlock,
   flattenBlocks,
   remapClipboardBundle,
   cloneSelectedTopLevelSubtrees,
-  serializeClipboardBlocks,
   type ClipboardIdReusePolicy,
 } from "./utils";
 
@@ -53,8 +51,8 @@ export class ClipboardManager {
    * @returns Structured, HTML, and plain-text flavors, or undefined when there
    * is no copyable selection.
    */
-  copy(selection?: EditorSelection): ClipboardPayload | undefined {
-    return this.createClipboardPayload(selection);
+  copy(selection?: EditorSelection): ClipboardBundle | undefined {
+    return this.createClipboardBundle(selection);
   }
 
   /**
@@ -66,11 +64,11 @@ export class ClipboardManager {
    *
    * @returns The copied flavors, or undefined when there is no selection.
    */
-  cut(): ClipboardPayload | undefined {
-    const payload = this.copy();
-    if (!payload) return;
+  cut(): ClipboardBundle | undefined {
+    const bundle = this.copy();
+    if (!bundle) return;
     this.editor.selection.delete();
-    return payload;
+    return bundle;
   }
 
   /**
@@ -113,7 +111,7 @@ export class ClipboardManager {
    * @param selection - Optional selection override for surface-local objects.
    * @returns Portable clipboard flavors, or undefined for an empty selection.
    */
-  private createClipboardPayload(selection?: EditorSelection): ClipboardPayload | undefined {
+  private createClipboardBundle(selection?: EditorSelection): ClipboardBundle | undefined {
     const current = selection ?? this.editor.selection.get();
     const range = this.editor.selection.normalize(current);
     if (!range?.blocks.length) return undefined;
@@ -138,13 +136,7 @@ export class ClipboardManager {
     const links = this.editor.links.getLinks().filter(
       (link) => ids.has(link.from.blockId) && ids.has(link.to.blockId),
     );
-    // Convert blocks to text, html and markdown bundles. Used for clipboard copy to paste to different apps.
-    const portable = serializeClipboardBlocks(blocks, (block) => block.content);
-    return {
-      // startsWithText means that clipboard bundle starts with text. It used to paste text into existing text block.
-      bundle: { version: 4, startsWithText: current[0]?.type === "text", blocks, links },
-      ...portable,
-    };
+    return { version: 4, startsWithText: current[0]?.type === "text", blocks, links };
   }
 
   /**
@@ -197,7 +189,7 @@ export class ClipboardManager {
       const firstChildId = placement?.parentId
         ? this.editor.blocks.getChildIds(placement.parentId)[0]
         : undefined;
-      
+
       // For single selection use placement and resolved first child.
       // For multiple selection ignore placement resolved from mouse endpoint.
       this.insertBundleAsBlocks(bundle, placement && !multiSelectionAfterId ? {
@@ -300,7 +292,7 @@ export class ClipboardManager {
       this.collapse(target.id, prefix.length + value.length);
       return;
     }
-    
+
     // Handle case when we paste text into existing selection and there is text content with multiple lines.
     // Fills lines with default block type and appends suffix to the last line.
     let previous = target.id;

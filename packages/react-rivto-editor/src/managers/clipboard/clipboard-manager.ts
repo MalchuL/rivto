@@ -21,6 +21,8 @@ export interface ClipboardFormatContext {
   readonly index: number;
   /** Zero-based nesting depth in the copied block forest. */
   readonly depth: number;
+  /** Already formatted descendant forest. */
+  readonly children: PortableBlockFormats;
 }
 
 /** Ordered contribution that may rewrite portable formats for matching blocks. */
@@ -105,21 +107,20 @@ export class ClipboardManager {
   format(blocks: readonly EditorBlock[]): PortableBlockFormats {
     const visit = (siblings: readonly EditorBlock[], depth: number): PortableBlockFormats => {
       const items = siblings.map((block, index) => {
-        const context = { block, siblings, index, depth };
+        const children = visit(block.children, depth + 1);
+        const indent = "  ".repeat(depth);
+        const ownPlain = block.content.split(/\r\n?|\n/).map((line) => indent + line).join("\n");
+        const ownHtml = `<p>${escapeHtml(block.content).replace(/\r\n?|\n/g, "<br>")}</p>`;
+        const context = { block, siblings, index, depth, children };
         let current: PortableBlockFormats = {
-          plain: block.content,
-          markdown: block.content,
-          html: `<p>${escapeHtml(block.content).replace(/\r\n?|\n/g, "<br>")}</p>`,
+          plain: children.plain ? `${ownPlain}\n${children.plain}` : ownPlain,
+          markdown: children.markdown ? `${ownPlain}\n${children.markdown}` : ownPlain,
+          html: ownHtml + children.html,
         };
         this.formatters.forEach((formatter) => {
           if (formatter.matches?.(context) !== false) current = formatter.format(context, current);
         });
-        const children = visit(block.children, depth + 1);
-        return {
-          plain: children.plain ? `${current.plain}\n${children.plain}` : current.plain,
-          markdown: children.markdown ? `${current.markdown}\n${children.markdown}` : current.markdown,
-          html: current.html + children.html,
-        };
+        return current;
       });
       return {
         plain: items.map(({ plain }) => plain).join("\n"),

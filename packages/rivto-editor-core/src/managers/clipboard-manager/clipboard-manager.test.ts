@@ -13,9 +13,9 @@ describe("core ClipboardManager", () => {
     const updates = jest.fn();
     editor.document.subscribe(updates);
 
-    expect(editor.clipboard.copy()?.text).toBe("Selected");
+    expect(editor.clipboard.copy()?.blocks[0]?.content).toBe("Selected");
     expect(updates).not.toHaveBeenCalled();
-    expect(editor.clipboard.cut()?.bundle.blocks).toMatchObject([{ id, content: "Selected" }]);
+    expect(editor.clipboard.cut()?.blocks).toMatchObject([{ id, content: "Selected" }]);
     expect(updates).toHaveBeenCalledTimes(1);
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.selection.get()).toEqual([]);
@@ -25,7 +25,7 @@ describe("core ClipboardManager", () => {
     editor.destroy();
   });
 
-  it("preserves copied hierarchy in plain text, HTML, and Markdown", () => {
+  it("preserves copied hierarchy in the structured bundle", () => {
     const editor = createRivtoEditor();
     const first = editor.blocks.insertBlock({
       type: "paragraph",
@@ -47,12 +47,7 @@ describe("core ClipboardManager", () => {
 
     const payload = editor.clipboard.copy()!;
 
-    expect(payload.text).toBe("Root <one>\nline\n  Child\n  continuation\n    Grandchild\nSecond");
-    expect(payload.html).toBe(
-      "<p>Root &lt;one&gt;<br>line</p><p>Child<br>continuation</p><p>Grandchild</p><p>Second</p>",
-    );
-    expect(payload.markdown).toBe("Root <one>\nline\n  Child\n  continuation\n    Grandchild\nSecond");
-    expect(payload.bundle.blocks).toMatchObject([{
+    expect(payload.blocks).toMatchObject([{
       id: first,
       listProps: { collapsed: true },
       children: [{ content: "Child\ncontinuation", children: [{ content: "Grandchild" }] }],
@@ -60,7 +55,7 @@ describe("core ClipboardManager", () => {
     editor.destroy();
   });
 
-  it("uses neutral block content after trimming copied text", () => {
+  it("trims copied text in the structured bundle", () => {
     const editor = createRivtoEditor();
     editor.blocksRegistry.defineBlock({ type: "test.raw" });
     const id = editor.blocks.insertBlock({ type: "test.raw", content: "Selected text" });
@@ -72,10 +67,7 @@ describe("core ClipboardManager", () => {
 
     const payload = editor.clipboard.copy()!;
 
-    expect(payload.text).toBe("Selected");
-    expect(payload.html).toBe("<p>Selected</p>");
-    expect(payload.markdown).toBe("Selected");
-    expect(payload.bundle.blocks[0]?.content).toBe("Selected");
+    expect(payload.blocks[0]?.content).toBe("Selected");
     editor.destroy();
   });
 
@@ -94,11 +86,7 @@ describe("core ClipboardManager", () => {
     }]);
 
     const payload = editor.clipboard.copy()!;
-    expect(payload.text).toBe("One\nTwo\nGap\nDone\nThree");
-    expect(payload.markdown).toBe(payload.text);
-    expect(payload.html).toContain("<p>Gap</p>");
-    expect(payload.html).not.toContain("checkbox");
-    expect(payload.bundle.blocks).toMatchObject([
+    expect(payload.blocks).toMatchObject([
       { listProps: { type: "start_numbered_list" } },
       { listProps: { type: "numbered_list" } },
       { listProps: {} },
@@ -106,7 +94,7 @@ describe("core ClipboardManager", () => {
       { listProps: { type: "continue_numbered_list" } },
     ]);
     const target = createRivtoEditor();
-    target.clipboard.paste({ bundle: payload.bundle, mergeText: false });
+    target.clipboard.paste({ bundle: payload, mergeText: false });
     expect(target.blocks.getBlocks()).toMatchObject([
       { listProps: { type: "start_numbered_list" } },
       { listProps: { type: "numbered_list" } },
@@ -128,7 +116,7 @@ describe("core ClipboardManager", () => {
       focusBlockId: copiedId,
     }]);
     const payload = source.clipboard.copy()!;
-    expect(payload.bundle.version).toBe(4);
+    expect(payload.version).toBe(4);
 
     const target = createRivtoEditor();
     const targetId = target.blocks.insertBlock({ type: "paragraph", content: "" });
@@ -138,7 +126,7 @@ describe("core ClipboardManager", () => {
       head: { blockId: targetId, offset: 0 },
     }]);
     target.clipboard.paste({
-      structured: JSON.stringify(payload.bundle),
+      structured: JSON.stringify(payload),
       text: "plain",
     });
     expect(target.blocks.getBlocks().map(({ content }) => content)).toEqual(["", "Structured"]);
@@ -151,7 +139,7 @@ describe("core ClipboardManager", () => {
     target.clipboard.paste({ text: "plain", defaultBlockType: "paragraph" });
     expect(target.blocks.getBlock(targetId)?.content).toBe("plain");
     expect(() => target.clipboard.paste({
-      structured: JSON.stringify({ ...payload.bundle, version: 1 }),
+      structured: JSON.stringify({ ...payload, version: 1 }),
     })).not.toThrow();
     expect(target.blocks.getBlocks().map(({ content }) => content)).toEqual([
       "plain",
@@ -221,7 +209,7 @@ describe("core ClipboardManager", () => {
     }]);
 
     const payload = editor.clipboard.cut()!;
-    editor.clipboard.paste({ bundle: payload.bundle, mergeText: false });
+    editor.clipboard.paste({ bundle: payload, mergeText: false });
 
     expect(editor.blocks.getBlocks()).toMatchObject([
       { id: first, content: "First", children: [{ id: child, content: "Nested" }] },
@@ -246,7 +234,7 @@ describe("core ClipboardManager", () => {
     }]);
 
     const payload = editor.clipboard.copy()!;
-    editor.clipboard.paste({ bundle: payload.bundle, mergeText: false });
+    editor.clipboard.paste({ bundle: payload, mergeText: false });
 
     const ids = editor.blocks.getBlocks().map((block) => block.id);
     expect(ids).toHaveLength(4);
@@ -270,8 +258,8 @@ describe("core ClipboardManager", () => {
     }]);
 
     const payload = editor.clipboard.cut()!;
-    editor.clipboard.paste({ bundle: payload.bundle, mergeText: false });
-    editor.clipboard.paste({ bundle: payload.bundle, mergeText: false });
+    editor.clipboard.paste({ bundle: payload, mergeText: false });
+    editor.clipboard.paste({ bundle: payload, mergeText: false });
 
     const ids = editor.blocks.getBlocks().map((block) => block.id);
     expect(ids).toHaveLength(2);

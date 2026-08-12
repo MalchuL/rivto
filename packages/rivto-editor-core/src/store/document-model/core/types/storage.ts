@@ -5,8 +5,7 @@ import type {
   CRDTMap,
   CRDTText,
 } from "../../../crdt-doc";
-import type { ElementFrame, Link } from "./document";
-import type { BlockListProps } from "../managers/block-manager/utils";
+import type { BlockListProps, ElementFrame, Link } from "./document";
 
 /** Collaborative geometry stored inside each first-class element record. */
 export type ElementFrameStorage = Record<keyof ElementFrame, number>;

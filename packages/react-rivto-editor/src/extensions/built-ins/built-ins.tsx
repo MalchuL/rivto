@@ -218,7 +218,7 @@ export const listShortcutsExtension = (): ReactEditorExtension =>
             ? `- [${block.listProps.checked === true ? "x" : " "}] `
             : `${number ?? 1}. `;
           const indent = "  ".repeat(depth);
-          const plain = `${indent}${marker}${current.plain}`;
+          const plain = `${indent}${marker}${current.plain.slice(indent.length)}`;
           const html = type === "checkbox"
             ? `<ul><li><input type="checkbox" disabled${block.listProps.checked === true ? " checked" : ""}>${current.html}</li></ul>`
             : `<ol start="${number ?? 1}"><li value="${number ?? 1}">${current.html}</li></ol>`;
@@ -367,7 +367,8 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         id: `list.${type}`,
         title,
         group: "Lists",
-        isAvailable: ({ blockId }) => editor.blocks.getBlock(blockId)?.listProps.type !== type,
+        isAvailable: ({ blockId }) => reactEditor.blocks.hasListProps("list") &&
+          editor.blocks.getBlock(blockId)?.listProps.type !== type,
         execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
       })),
       // Clone the complete subtree while leaving persisted IDs for the store to generate.
@@ -433,7 +434,8 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         keywords: ["fold", "hide"],
         isAvailable: ({ blockId }) => {
           const block = editor.blocks.getBlock(blockId);
-          return Boolean(block?.children.length && block.listProps.collapsed !== true);
+          return reactEditor.blocks.hasListProps("collapse") &&
+            Boolean(block?.children.length && block.listProps.collapsed !== true);
         },
         execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
       }),
@@ -444,7 +446,8 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         keywords: ["unfold", "show"],
         isAvailable: ({ blockId }) => {
           const block = editor.blocks.getBlock(blockId);
-          return Boolean(block?.children.length && block.listProps.collapsed === true);
+          return reactEditor.blocks.hasListProps("collapse") &&
+            Boolean(block?.children.length && block.listProps.collapsed === true);
         },
         execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
       }),

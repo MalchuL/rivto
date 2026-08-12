@@ -68,4 +68,36 @@ describe("BlockManager", () => {
     reactEditor.destroy();
     editor.destroy();
   });
+
+  test("rejects invalid descendants and simulates repeated list-property deletions", () => {
+    const editor = createEditor();
+    const reactEditor = createReactEditor({ editor });
+    reactEditor.blocks.registerListProps({
+      id: "pair",
+      validate: (candidate) => candidate.left === true || candidate.right === true,
+    });
+
+    expect(() => reactEditor.blocks.insertBlock({
+      type: "paragraph",
+      children: [{ type: "paragraph", listProps: { left: false, right: false } }],
+    })).toThrow("Invalid block list properties");
+    expect(editor.blocks.getBlocks()).toEqual([]);
+
+    const id = reactEditor.blocks.insertBlock({
+      type: "paragraph",
+      listProps: { left: true, right: true },
+    });
+    const result = reactEditor.blocks.deleteListPropsBatch([
+      { id, keys: ["left"] },
+      { id, keys: ["right"] },
+    ]);
+    expect(result.results).toEqual([
+      { index: 0, id, status: "applied" },
+      { index: 1, id, status: "skipped", reason: "invalid" },
+    ]);
+    expect(editor.blocks.getBlock(id)?.listProps).toEqual({ right: true });
+
+    reactEditor.destroy();
+    editor.destroy();
+  });
 });

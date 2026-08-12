@@ -159,7 +159,10 @@ export class BlockManager implements BlocksCapability {
    */
   insertBlock(input: EditorBlockInput, afterId?: string | null): string {
     const prepared = this.prepareBlock(input);
-    if (!this.isValid(prepared.listProps ?? {})) throw new Error("Invalid block list properties");
+    const validateTree = (block: EditorBlockInput): boolean => (
+      this.isValid(block.listProps ?? {}) && (block.children ?? []).every(validateTree)
+    );
+    if (!validateTree(prepared)) throw new Error("Invalid block list properties");
     return this.reactEditor.editor.blocks.insertBlock(prepared, afterId);
   }
 
@@ -234,14 +237,16 @@ export class BlockManager implements BlocksCapability {
    */
   deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): BlockMutationResult {
     const accepted: Array<{ id: string; keys: readonly string[] }> = [];
+    const simulated = new Map<string, BlockListProps>();
     const results = updates.map(({ id, keys }, index) => {
       const block = this.reactEditor.editor.blocks.getBlock(id);
       if (!block) return { index, id, status: "skipped" as const, reason: "missing" as const };
-      const next = { ...block.listProps };
+      const next = { ...(simulated.get(id) ?? block.listProps) };
       keys.forEach((key) => delete next[key]);
       if (!this.isValid({ ...this.defaults(), ...next })) {
         return { index, id, status: "skipped" as const, reason: "invalid" as const };
       }
+      simulated.set(id, next);
       accepted.push({ id, keys });
       return { index, id, status: "applied" as const };
     });

@@ -50,4 +50,6 @@ Use `*.test.ts(x)` for Jest and `*.spec.ts` for Playwright. Run focused tests fi
 
 Use ES modules and nearby formatting. Use `PascalCase` for types/components, `camelCase` for functions/values, and kebab-case directories. Public editor/document APIs need JSDoc. Prefer existing managers and narrow types.
 
+Prefer a single main exit point from functions and methods. Early guard returns at the start are fine for invalid, missing, or no-op conditions, but avoid multiple complex returns interleaved with the main logic.
+
 Keep commits focused and imperative. Pull requests state the problem, solution, validation, and API/UI impact.

@@ -23,7 +23,7 @@ describe("clipboard commands", () => {
     const bundle = JSON.parse(clipboard.get(RIVTO_CLIPBOARD_MIME)!) as {
       blocks: Array<{ content: string; children: unknown[] }>;
     };
-    expect(clipboard.get("text/plain")).toBe("Parent");
+    expect(clipboard.has("text/plain")).toBe(false);
     expect(bundle.blocks).toMatchObject([{ content: "Parent", children: [] }]);
     source.destroy();
   });
@@ -58,9 +58,7 @@ describe("clipboard commands", () => {
     expect(bundle.blocks[0]?.pluginData).toEqual({ local: { pinned: true } });
     expect(bundle.blocks[0]?.children).toHaveLength(1);
     expect(bundle.links).toHaveLength(1);
-    expect(data.get("text/plain")).toBe("Parent\n  Child");
-    expect(data.get("text/html")).toBe("<p>Parent</p><p>Child</p>");
-    expect(data.get("text/markdown")).toBe("Parent\n  Child");
+    expect([...data.keys()]).toEqual([RIVTO_CLIPBOARD_MIME]);
     editor.destroy();
   });
 
@@ -399,7 +397,8 @@ describe("clipboard commands", () => {
       ],
     });
 
-    expect(editor.execute("clipboard.cut")).toBe("llo\nWhole\nWor");
+    const cut = JSON.parse(editor.execute("clipboard.cut") as string) as { blocks: Array<{ content: string }> };
+    expect(cut.blocks.map(({ content }) => content)).toEqual(["llo", "Whole", "Wor"]);
 
     expect(editor.blocks.getBlocks().map((block) => block.content)).toEqual(["Held"]);
     expect(editor.selection.get()).toEqual([{
@@ -457,8 +456,8 @@ describe("clipboard commands", () => {
         setData: (type: string, value: string) => clipboard.set(type, value),
       },
       preventDefault: jest.fn(),
-    })).toBe("Only block");
-    expect(clipboard.get("text/markdown")).toBe("Only block");
+    })).toBe(clipboard.get(RIVTO_CLIPBOARD_MIME));
+    expect(clipboard.has("text/markdown")).toBe(false);
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.selection.get()).toEqual([]);
 

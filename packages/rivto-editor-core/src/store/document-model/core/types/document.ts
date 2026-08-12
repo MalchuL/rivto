@@ -1,11 +1,13 @@
 import type { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../../crdt-doc";
-import type { BlockListProps } from "../managers/block-manager/utils";
 import type {
   DocumentBlockManager,
   DocumentElementManager,
   DocumentLinkManager,
   DocumentPluginDataManager,
 } from "../managers";
+
+/** Opaque properties interpreted by page/outline extensions. */
+export type BlockListProps = Record<string, unknown>;
 
 /** Axis-aligned geometry shared by every first-class canvas element. */
 export interface ElementFrame {

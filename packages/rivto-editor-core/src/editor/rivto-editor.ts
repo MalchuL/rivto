@@ -317,37 +317,30 @@ export class EditorRuntime implements RivtoEditorApi {
     this.commands.register("clipboard.copy", (value) => {
       const event = clipboardEvent(value);
       const data = payload(value);
-      const payloadData = this.clipboard.copy();
-      if (!payloadData) return "";
+      const bundle = this.clipboard.copy();
+      if (!bundle) return "";
+      const structured = JSON.stringify(bundle);
       if (event?.clipboardData) {
         event.preventDefault();
-        event.clipboardData.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(payloadData.bundle));
-        event.clipboardData.setData("text/html", payloadData.html);
-        event.clipboardData.setData("text/markdown", payloadData.markdown);
-        event.clipboardData.setData("text/plain", payloadData.text);
+        event.clipboardData.setData(RIVTO_CLIPBOARD_MIME, structured);
       }
       if (data.clipboardData && typeof (data.clipboardData as { setData?: unknown }).setData === "function") {
         const transfer = data.clipboardData as Pick<ClipboardDataLike, "setData">;
-        transfer.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(payloadData.bundle));
-        transfer.setData("text/html", payloadData.html);
-        transfer.setData("text/markdown", payloadData.markdown);
-        transfer.setData("text/plain", payloadData.text);
+        transfer.setData(RIVTO_CLIPBOARD_MIME, structured);
       }
-      return payloadData.text;
+      return structured;
     });
 
     this.commands.register("clipboard.cut", (value) => {
       const event = clipboardEvent(value);
-      const payloadData = this.clipboard.cut();
-      if (!payloadData) return "";
+      const bundle = this.clipboard.cut();
+      if (!bundle) return "";
+      const structured = JSON.stringify(bundle);
       if (event?.clipboardData) {
         event.preventDefault();
-        event.clipboardData.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(payloadData.bundle));
-        event.clipboardData.setData("text/html", payloadData.html);
-        event.clipboardData.setData("text/markdown", payloadData.markdown);
-        event.clipboardData.setData("text/plain", payloadData.text);
+        event.clipboardData.setData(RIVTO_CLIPBOARD_MIME, structured);
       }
-      return payloadData.text;
+      return structured;
     });
 
     this.commands.register("clipboard.paste", (value) => {

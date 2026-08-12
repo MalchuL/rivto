@@ -7,6 +7,7 @@ import {
 import type {
     Block,
     BlockInput,
+    BlockListProps,
     BlockPatch,
     BlockPropsValidator,
     BlockUpdate,
@@ -20,7 +21,7 @@ import type {
     IDProp,
 } from "../../types/storage";
 import { assignMap, assignText, clone, isCRDTArray, isCRDTMap, isCRDTText } from "../../utils";
-import { contentFrom, strings, validateBlockListProps, type BlockListProps } from "./utils";
+import { contentFrom, strings, validateBlockListProps } from "./utils";
 
 const ROOTS_KEY = "rivto.editor.roots";
 const BLOCKS_KEY = "rivto.editor.blocks";

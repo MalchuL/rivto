@@ -169,6 +169,35 @@ test("copies Counter display text to every portable clipboard flavor", async ({ 
   });
 });
 
+test("replaces invalid structured block properties with an Error block", async ({ page }) => {
+  const target = page.locator("[data-block-content]").first();
+  await target.click();
+  await target.evaluate((element) => {
+    const data = new DataTransfer();
+    data.setData("application/x-rivto+json", JSON.stringify({
+      version: 4,
+      blocks: [{
+        id: "invalid-counter",
+        type: "demo.counter",
+        listProps: { collapsed: false, type: "list", checked: false },
+        content: "",
+        props: { count: -1 },
+        pluginData: {},
+        children: [],
+      }],
+      links: [],
+    }));
+    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: data });
+    element.dispatchEvent(event);
+  });
+
+  const error = page.locator("[data-error-block]");
+  await expect(error).toBeVisible();
+  await expect(error).toContainText("invalid-counter");
+  await expect(error).toContainText('"count": -1');
+});
+
 test("copies a multi-block selection from the focused page", async ({ page }) => {
   const contents = page.locator("[data-block-content]");
   const first = await contents.nth(0).textContent();
