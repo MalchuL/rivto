@@ -106,6 +106,7 @@ export function SlashMenu() {
   const { element: root } = useEditorRoot();
   const [session, setSession] = useState<SlashSession | null>(null);
   const sessionRef = useRef(session);
+  const activeItemRef = useRef<HTMLButtonElement | null>(null);
   const ignoredTrigger = useRef<string | undefined>(undefined);
   sessionRef.current = session;
 
@@ -117,6 +118,10 @@ export function SlashMenu() {
     : [], [slashCommands, slashCommands.revision, session?.blockId]);
   const ranked = useMemo(() => rankSlashCommands(available, session?.query ?? ""), [available, session?.query]);
   const groups = useMemo(() => groupCommands(ranked.map(({ command }) => command)), [ranked]);
+
+  useEffect(() => {
+    activeItemRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [ranked, session?.activeIndex]);
 
   const close = useCallback((ignore = false) => {
     const current = sessionRef.current;
@@ -314,6 +319,7 @@ export function SlashMenu() {
                 className="slash-menu-item"
                 data-slash-command={command.id}
                 data-active={index === session.activeIndex || undefined}
+                ref={index === session.activeIndex ? activeItemRef : undefined}
                 onClick={() => execute(command)}
               >
                 {command.title}

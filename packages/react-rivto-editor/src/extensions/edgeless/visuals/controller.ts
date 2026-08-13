@@ -16,6 +16,7 @@ import type {
   EdgelessPlaceKind,
   EdgelessReorder,
   EdgelessVisual,
+  EdgelessVisualCommandMap,
   EdgelessVisualsOptions,
   EdgelessVisualTool,
   PresetPayload,
@@ -29,6 +30,7 @@ import { connectorFrame, endpointPoint, unionFrames } from "./utils/geometry";
 import { DEFAULT_PLACE_SIZE } from "./utils/creation-geometry";
 
 const DEFAULT_FRAME: VisualFrame = { x: 120, y: 120, width: 160, height: 120 };
+type VisualCommandPayload<Name extends keyof EdgelessVisualCommandMap> = EdgelessVisualCommandMap[Name]["payload"];
 const VISUAL_TYPES = new Set(["sticker", "drawing", "rectangle", "ellipse", "text", "connector"]);
 const copy = <Value>(value: Value): Value => structuredClone(value);
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -487,22 +489,55 @@ export class EdgelessVisualController {
   getSelection() { return this.selection.get(); }
 
   private registerCommands(): void {
-    const register = (name: string, handler: (payload: any) => unknown) => this.registrations.push(this.reactEditor.editor.register(name, handler));
-    register("edgeless.visual.create", (value) => this.create(value as CreateVisualPayload));
-    register("edgeless.visual.update", (value) => this.update(value as UpdateVisualPayload));
+    const register = (name: string, handler: (payload?: unknown) => unknown) => this.registrations.push(this.reactEditor.editor.register(name, handler));
+    register("edgeless.visual.create", (value) => {
+      const data = value as VisualCommandPayload<"edgeless.visual.create">;
+      return this.create(data);
+    });
+    register("edgeless.visual.update", (value) => {
+      const data = value as VisualCommandPayload<"edgeless.visual.update">;
+      this.update(data);
+    });
     register("edgeless.visual.duplicate", () => this.duplicateSelection());
     register("edgeless.visual.delete", () => this.deleteSelection());
     register("edgeless.selection.get", () => this.getSelection());
-    register("edgeless.selection.set", (value) => this.select(value?.items ?? value));
+    register("edgeless.selection.set", (value) => {
+      const data = value as VisualCommandPayload<"edgeless.selection.set">;
+      this.select("items" in data ? data.items : data);
+    });
     register("edgeless.selection.clear", () => this.clearSelection());
-    register("edgeless.selection.move", (value) => this.move(Number(value?.dx), Number(value?.dy)));
-    register("edgeless.selection.resize", (value) => this.resize(Number(value?.width), Number(value?.height)));
+    register("edgeless.selection.move", (value) => {
+      const data = value as VisualCommandPayload<"edgeless.selection.move">;
+      this.move(Number(data.dx), Number(data.dy));
+    });
+    register("edgeless.selection.resize", (value) => {
+      const data = value as VisualCommandPayload<"edgeless.selection.resize">;
+      this.resize(Number(data.width), Number(data.height));
+    });
     register("edgeless.selection.group", () => this.group());
     register("edgeless.selection.ungroup", () => this.ungroup());
-    register("edgeless.selection.align", (value) => { const mode = (value?.alignment ?? value) as EdgelessAlignment; if (!["left", "center", "right", "top", "middle", "bottom"].includes(mode)) throw new Error("Unsupported alignment"); this.align(mode); });
-    register("edgeless.selection.distribute", (value) => { const axis = value?.axis ?? value; if (axis !== "horizontal" && axis !== "vertical") throw new Error("Unsupported distribution axis"); this.distribute(axis); });
-    register("edgeless.selection.reorder", (value) => { const direction = (value?.direction ?? value) as EdgelessReorder; if (!["front", "forward", "backward", "back"].includes(direction)) throw new Error("Unsupported reorder direction"); this.reorder(direction); });
-    register("edgeless.tool.set", (value) => this.setTool(value as EdgelessVisualTool | "select"));
+    register("edgeless.selection.align", (value) => {
+      const data = value as VisualCommandPayload<"edgeless.selection.align">;
+      const mode = typeof data === "string" ? data : data.alignment;
+      if (!["left", "center", "right", "top", "middle", "bottom"].includes(mode)) throw new Error("Unsupported alignment");
+      this.align(mode);
+    });
+    register("edgeless.selection.distribute", (value) => {
+      const data = value as VisualCommandPayload<"edgeless.selection.distribute">;
+      const axis = typeof data === "string" ? data : data.axis;
+      if (axis !== "horizontal" && axis !== "vertical") throw new Error("Unsupported distribution axis");
+      this.distribute(axis);
+    });
+    register("edgeless.selection.reorder", (value) => {
+      const data = value as VisualCommandPayload<"edgeless.selection.reorder">;
+      const direction = typeof data === "string" ? data : data.direction;
+      if (!["front", "forward", "backward", "back"].includes(direction)) throw new Error("Unsupported reorder direction");
+      this.reorder(direction);
+    });
+    register("edgeless.tool.set", (value) => {
+      const data = value as VisualCommandPayload<"edgeless.tool.set">;
+      this.setTool(data);
+    });
   }
 
   private registerToolSelectShortcut(): void {

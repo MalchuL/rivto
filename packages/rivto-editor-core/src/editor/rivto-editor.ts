@@ -283,13 +283,15 @@ export class EditorRuntime implements RivtoEditorApi {
    */
   private registerRuntimeCommands(): void {
     this.commands.register("document.load", this.documentCommand((value) => {
-      const data = commandPayload(value);
-      this.document.loadSnapshot(data.snapshot as SnapshotUpdate);
+      const data = commandPayload(value) as unknown as { snapshot: SnapshotUpdate };
+      this.document.loadSnapshot(data.snapshot);
       this.history.clear();
     }));
     this.commands.register("selection.set", (value) => {
-      const data = commandPayload(value);
-      this.selection.set(data.selection as Parameters<SelectionManager["set"]>[0]);
+      const data = commandPayload(value) as unknown as {
+        selection: Parameters<SelectionManager["set"]>[0];
+      };
+      this.selection.set(data.selection);
     });
     this.commands.register("selection.delete", () => this.selection.delete());
     this.commands.register("selection.clear", () => this.selection.clear());
@@ -305,18 +307,29 @@ export class EditorRuntime implements RivtoEditorApi {
    * @returns No value.
    */
   private registerClipboardCommands(): void {
-    type Payload = Record<string, unknown>;
-    const payload = (value: unknown): Payload => value && typeof value === "object" && !Array.isArray(value) ? value as Payload : {};
+    type CopyPayload = { clipboardData?: Pick<ClipboardDataLike, "setData"> };
+    type PastePayload = {
+      bundle?: ClipboardBundle;
+      structured?: string;
+      mergeText?: boolean;
+      preserveNewlines?: boolean;
+      defaultBlockType?: string;
+      text?: string;
+      placement?: { parentId: string | null; afterId: string | null };
+    };
+    const payload = <Payload>(value: unknown): Partial<Payload> => value && typeof value === "object" && !Array.isArray(value)
+      ? value as unknown as Partial<Payload>
+      : {};
     const text = (value: unknown): string | undefined => typeof value === "string" ? value : undefined;
     const clipboardEvent = (value: unknown): ClipboardEventLike | undefined => {
-      const candidate = payload(value).event ?? value;
+      const candidate = payload<{ event: ClipboardEventLike }>(value).event ?? value;
       return candidate && typeof candidate === "object" && "clipboardData" in candidate && "preventDefault" in candidate
         ? candidate as ClipboardEventLike
         : undefined;
     };
     this.commands.register("clipboard.copy", (value) => {
       const event = clipboardEvent(value);
-      const data = payload(value);
+      const data = payload<CopyPayload>(value);
       const bundle = this.clipboard.copy();
       if (!bundle) return "";
       const structured = JSON.stringify(bundle);
@@ -324,8 +337,8 @@ export class EditorRuntime implements RivtoEditorApi {
         event.preventDefault();
         event.clipboardData.setData(RIVTO_CLIPBOARD_MIME, structured);
       }
-      if (data.clipboardData && typeof (data.clipboardData as { setData?: unknown }).setData === "function") {
-        const transfer = data.clipboardData as Pick<ClipboardDataLike, "setData">;
+      if (data.clipboardData && typeof data.clipboardData.setData === "function") {
+        const transfer = data.clipboardData;
         transfer.setData(RIVTO_CLIPBOARD_MIME, structured);
       }
       return structured;
@@ -345,16 +358,14 @@ export class EditorRuntime implements RivtoEditorApi {
 
     this.commands.register("clipboard.paste", (value) => {
       const event = clipboardEvent(value);
-      const data = payload(value);
+      const data = payload<PastePayload>(value);
       const defaultBlockType = text(data.defaultBlockType);
       const structured = text(data.structured)
         ?? (event?.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) || undefined);
-      const bundle = data.bundle as ClipboardBundle | undefined;
+      const bundle = data.bundle;
       const mergeText = data.mergeText !== false;
       const preserveNewlines = data.preserveNewlines === true;
-      const placement = data.placement && typeof data.placement === "object"
-        ? data.placement as { parentId: string | null; afterId: string | null }
-        : undefined;
+      const placement = data.placement && typeof data.placement === "object" ? data.placement : undefined;
       const explicitText = text(data.text);
       if (event?.clipboardData) event.preventDefault();
       this.clipboard.paste({

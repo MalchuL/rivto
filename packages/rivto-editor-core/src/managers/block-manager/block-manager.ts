@@ -263,7 +263,7 @@ export class BlockManager {
     };
 
     register("block.insert", documentCommand((value) => {
-      const data = commandPayload(value);
+      const data = commandPayload(value) as unknown as { block: BlockInput; afterId?: string | null };
       const block = commandPayload(data.block) as unknown as BlockInput;
       if (typeof block.type !== "string") throw new Error("block.type must be a string");
       const definition = this.editor.blocksRegistry.get(block.type);
@@ -274,11 +274,11 @@ export class BlockManager {
       return this.editor.document.blocks.insertBlock(this.editor.blocksRegistry.prepare(block), afterId);
     }));
     register("block.update", (value) => {
-      const data = commandPayload(value);
+      const data = commandPayload(value) as unknown as { id: string; patch: BlockPatch };
       this.editor.document.blocks.updateBlock(commandString(data.id, "id"), commandPayload(data.patch) as BlockPatch);
     });
     register("block.update-many", documentCommand((value) => {
-      const data = commandPayload(value);
+      const data = commandPayload(value) as unknown as { updates: readonly BlockUpdate[] };
       if (!Array.isArray(data.updates)) throw new Error("updates must be an array");
       this.editor.document.blocks.updateBlocks(data.updates.map((item) => {
         const update = commandPayload(item);
@@ -289,14 +289,15 @@ export class BlockManager {
       }));
     }));
     register("block.clear", documentCommand((value) => {
-      const id = commandString(commandPayload(value).id, "id");
+      const data = commandPayload(value) as unknown as { id: string };
+      const id = commandString(data.id, "id");
       this.editor.document.transact(() => {
         this.editor.document.blocks.updateBlock(id, { content: "" });
         this.editor.document.blocks.getChildIds(id).forEach((childId) => this.editor.document.blocks.removeBlock(childId));
       });
     }));
     register("block.type.set", documentCommand((value) => {
-      const data = commandPayload(value);
+      const data = commandPayload(value) as unknown as { id: string; type: string };
       const id = commandString(data.id, "id");
       const type = commandString(data.type, "type");
       const current = this.getBlock(id);
@@ -305,20 +306,25 @@ export class BlockManager {
       this.editor.document.blocks.setBlockType(id, type, props);
     }));
     register("block.remove", documentCommand((value) => {
-      const data = commandPayload(value);
+      const data = commandPayload(value) as unknown as { id: string };
       this.editor.document.transact(() => {
         this.selectedBlockIds(commandString(data.id, "id")).forEach((id) => this.editor.document.blocks.removeBlock(id));
       });
     }));
     register("block.merge", documentCommand((value) => {
-      const data = commandPayload(value);
+      const data = commandPayload(value) as unknown as { targetId: string; sourceId: string };
       return this.editor.document.blocks.mergeBlocks(
         commandString(data.targetId, "targetId"),
         commandString(data.sourceId, "sourceId"),
       );
     }));
     register("block.move", documentCommand((value) => {
-      const data = commandPayload(value);
+      const data = commandPayload(value) as unknown as {
+        id: string;
+        targetId?: string | null;
+        afterId?: string | null;
+        position?: "before" | "after" | "inside";
+      };
       const rawTarget = "targetId" in data ? data.targetId : data.afterId;
       this.editor.document.blocks.moveBlock(
         commandString(data.id, "id"),
@@ -327,7 +333,11 @@ export class BlockManager {
       );
     }));
     register("block.move-many", documentCommand((value) => {
-      const data = commandPayload(value);
+      const data = commandPayload(value) as unknown as {
+        ids: string[];
+        targetId: string | null;
+        position?: "before" | "after" | "inside";
+      };
       if (!Array.isArray(data.ids) || data.ids.some((id) => typeof id !== "string")) {
         throw new Error("ids must be an array of strings");
       }
@@ -336,23 +346,25 @@ export class BlockManager {
       this.editor.document.blocks.moveBlocks(data.ids, targetId, position);
     }));
     register("block.indent", documentCommand((value) => {
+      const data = commandPayload(value) as unknown as { id: string };
       const before = this.editor.selection.get();
-      const ids = this.selectedStructuralBlockIds(commandString(commandPayload(value).id, "id"));
+      const ids = this.selectedStructuralBlockIds(commandString(data.id, "id"));
       this.editor.document.blocks.indentBlocks(ids);
       this.restoreBlockSelection(before, ids);
     }));
     register("block.outdent", documentCommand((value) => {
+      const data = commandPayload(value) as unknown as { id: string };
       const before = this.editor.selection.get();
-      const ids = this.selectedStructuralBlockIds(commandString(commandPayload(value).id, "id"));
+      const ids = this.selectedStructuralBlockIds(commandString(data.id, "id"));
       this.editor.document.blocks.outdentBlocks(ids);
       this.restoreBlockSelection(before, ids);
     }));
     register("block.prop.set", documentCommand((value) => {
-      const data = commandPayload(value);
+      const data = commandPayload(value) as unknown as { id: string; key: string; value: unknown };
       this.editor.document.blocks.setBlockProp(commandString(data.id, "id"), commandString(data.key, "key"), data.value);
     }));
     register("block.pluginData.set", documentCommand((value) => {
-      const data = commandPayload(value);
+      const data = commandPayload(value) as unknown as { id: string; pluginId: string; value: unknown };
       this.editor.document.blocks.setPluginData(
         commandString(data.id, "id"),
         commandString(data.pluginId, "pluginId"),

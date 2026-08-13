@@ -32,11 +32,12 @@ export class LinkManager {
       this.editor.batchUpdates(() => handler(value));
     this.registrations.push(
       this.editor.commands.register("link.create", documentCommand((value) => {
-        const data = commandPayload(value);
+        const data = commandPayload(value) as unknown as { link: Link };
         this.editor.document.links.createLink(commandPayload(data.link) as unknown as Link);
       })),
       this.editor.commands.register("link.remove", documentCommand((value) => {
-        this.editor.document.links.removeLink(commandString(commandPayload(value).id, "id"));
+        const data = commandPayload(value) as unknown as { id: string };
+        this.editor.document.links.removeLink(commandString(data.id, "id"));
       })),
     );
   }

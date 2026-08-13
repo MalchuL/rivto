@@ -1413,6 +1413,15 @@ test("moves through the shared slash menu with arrow keys", async ({ page }) => 
   await expect(active).not.toHaveAttribute("data-slash-command", firstCommand);
   await page.keyboard.press("ArrowUp");
   await expect(active).toHaveAttribute("data-slash-command", firstCommand);
+
+  const commandCount = await menu.locator("[data-slash-command]").count();
+  for (let index = 1; index < commandCount; index += 1) await page.keyboard.press("ArrowDown");
+  await expect.poll(() => menu.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect.poll(() => active.evaluate((item) => {
+    const itemRect = item.getBoundingClientRect();
+    const menuRect = item.closest("[data-slash-menu]")!.getBoundingClientRect();
+    return itemRect.top >= menuRect.top && itemRect.bottom <= menuRect.bottom;
+  })).toBe(true);
 });
 
 test("renders explicit separators and creates a new card with the separator shortcut", async ({ page }) => {

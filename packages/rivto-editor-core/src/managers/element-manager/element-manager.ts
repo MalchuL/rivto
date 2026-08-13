@@ -53,19 +53,27 @@ export class ElementManager {
   private registerCommands(): void {
     const documentCommand = (handler: CommandHandler): CommandHandler => (value) => this.editor.batchUpdates(() => handler(value));
     const register = (name: string, handler: CommandHandler) => this.registrations.push(this.editor.commands.register(name, documentCommand(handler)));
-    register("element.insert", (value) => this.editor.document.elements.insertElement(commandPayload(commandPayload(value).input) as unknown as ElementInput));
+    register("element.insert", (value) => {
+      const data = commandPayload(value) as unknown as { input: ElementInput };
+      return this.editor.document.elements.insertElement(commandPayload(data.input) as unknown as ElementInput);
+    });
     register("element.update", (value) => {
-      const data = commandPayload(value);
+      const data = commandPayload(value) as unknown as { id: string; patch: ElementPatch };
       this.editor.document.elements.updateElement(commandString(data.id, "id"), commandPayload(data.patch) as ElementPatch);
     });
     register("element.update-many", (value) => {
-      const updates = commandPayload(value).updates;
+      const data = commandPayload(value) as unknown as { updates: readonly ElementUpdate[] };
+      const updates = data.updates;
       if (!Array.isArray(updates)) throw new Error("Element updates must be an array");
-      this.editor.document.elements.updateElements(updates as ElementUpdate[]);
+      this.editor.document.elements.updateElements(updates);
     });
-    register("element.remove", (value) => this.editor.document.elements.removeElement(commandString(commandPayload(value).id, "id")));
+    register("element.remove", (value) => {
+      const data = commandPayload(value) as unknown as { id: string };
+      this.editor.document.elements.removeElement(commandString(data.id, "id"));
+    });
     register("element.remove-many", (value) => {
-      const ids = commandPayload(value).ids;
+      const data = commandPayload(value) as unknown as { ids: readonly string[] };
+      const ids = data.ids;
       if (!Array.isArray(ids)) throw new Error("Element IDs must be an array");
       this.editor.document.elements.removeElements(ids.map((id) => commandString(id, "id")));
     });
