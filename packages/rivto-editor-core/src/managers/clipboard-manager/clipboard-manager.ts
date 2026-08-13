@@ -197,49 +197,47 @@ export class ClipboardManager {
         beforeChildId: placement.parentId && placement.afterId === null ? firstChildId : undefined,
         parentId: placement.parentId ?? undefined,
       } : { afterId });
-      return;
+    } else {
+      // Handle case when we paste blocks into empty selection (wthout caret or text selection)
+      const range = this.editor.selection.normalize(current);
+      if (!range) {
+        this.insertBundleAsBlocks(bundle);
+      } else {
+        // Handle case when we paste text into existing selection and there is not block selection.
+        const target = range.blocks[0]!;
+        const first = bundle.blocks[0]!;
+        const prefix = target.content.slice(0, range.start.offset);
+        const suffix = range.blocks.at(-1)?.content.slice(range.end.offset) ?? "";
+        const remapped = remapClipboardBundle(bundle, target.id, this.idReusePolicy());
+        let previous = target.id;
+        let caretOffset = prefix.length + first.content.length;
+
+        // Replacement, root insertion, child restoration, and link restoration are
+        // observed as one atomic document change and one manager history action.
+        this.editor.document.transact(() => {
+          this.removeRangeTail(range);
+          this.editor.document.blocks.setBlockText(
+            target.id,
+            prefix + first.content + (remapped.blocks.length ? "" : suffix),
+          );
+          remapped.firstChildren.forEach((child) => {
+            const childId = this.editor.document.blocks.insertBlock(child, target.id);
+            this.editor.document.blocks.indentBlock(childId);
+          });
+          remapped.blocks.forEach((block, index) => {
+            const pastedLength = block.content?.length ?? 0;
+            const isLast = index === remapped.blocks.length - 1;
+            previous = this.editor.document.blocks.insertBlock(
+              { ...block, content: `${block.content ?? ""}${isLast ? suffix : ""}` },
+              previous,
+            );
+            if (isLast) caretOffset = pastedLength;
+          });
+          remapped.links.forEach((link) => this.editor.document.links.createLink(link));
+        });
+        this.collapse(previous, caretOffset);
+      }
     }
-
-    // Handle case when we paste blocks into empty selection (wthout caret or text selection)
-    const range = this.editor.selection.normalize(current);
-    if (!range) {
-      this.insertBundleAsBlocks(bundle);
-      return;
-    }
-
-    // Handle case when we paste text into existing selection and there is not block selection.
-    const target = range.blocks[0]!;
-    const first = bundle.blocks[0]!;
-    const prefix = target.content.slice(0, range.start.offset);
-    const suffix = range.blocks.at(-1)?.content.slice(range.end.offset) ?? "";
-    const remapped = remapClipboardBundle(bundle, target.id, this.idReusePolicy());
-    let previous = target.id;
-    let caretOffset = prefix.length + first.content.length;
-
-    // Replacement, root insertion, child restoration, and link restoration are
-    // observed as one atomic document change and one manager history action.
-    this.editor.document.transact(() => {
-      this.removeRangeTail(range);
-      this.editor.document.blocks.setBlockText(
-        target.id,
-        prefix + first.content + (remapped.blocks.length ? "" : suffix),
-      );
-      remapped.firstChildren.forEach((child) => {
-        const childId = this.editor.document.blocks.insertBlock(child, target.id);
-        this.editor.document.blocks.indentBlock(childId);
-      });
-      remapped.blocks.forEach((block, index) => {
-        const pastedLength = block.content?.length ?? 0;
-        const isLast = index === remapped.blocks.length - 1;
-        previous = this.editor.document.blocks.insertBlock(
-          { ...block, content: `${block.content ?? ""}${isLast ? suffix : ""}` },
-          previous,
-        );
-        if (isLast) caretOffset = pastedLength;
-      });
-      remapped.links.forEach((link) => this.editor.document.links.createLink(link));
-    });
-    this.collapse(previous, caretOffset);
   }
 
   /**
@@ -274,42 +272,40 @@ export class ClipboardManager {
         });
       });
       if (lastId) this.collapse(lastId, lines.at(-1)?.length ?? 0);
-      return;
+    } else {
+      // Handle case when we paste text into existing selection and there is only text content with single line.
+      // Paste text into first existing text block. Remove trailing (others) blocks after selection.
+      // Merges blocks into one.
+      const target = range.blocks[0]!;
+      const end = range.blocks.at(-1) ?? target;
+      const prefix = target.content.slice(0, range.start.offset);
+      const suffix = end.content.slice(range.end.offset);
+      if (lines.length === 1) {
+        this.editor.document.transact(() => {
+          this.removeRangeTail(range);
+          this.editor.document.blocks.setBlockText(target.id, prefix + value + suffix);
+        });
+        this.collapse(target.id, prefix.length + value.length);
+      } else {
+        // Handle case when we paste text into existing selection and there is text content with multiple lines.
+        // Fills lines with default block type and appends suffix to the last line.
+        let previous = target.id;
+        let lastId = target.id;
+        this.editor.document.transact(() => {
+          this.removeRangeTail(range);
+          this.editor.document.blocks.setBlockText(target.id, prefix + lines[0]!);
+          lines.slice(1).forEach((line, index, rest) => {
+            const isLast = index === rest.length - 1;
+            lastId = this.editor.document.blocks.insertBlock(
+              { type: defaultBlockType, content: `${line}${isLast ? suffix : ""}` },
+              previous,
+            );
+            previous = lastId;
+          });
+        });
+        this.collapse(lastId, lines.at(-1)?.length ?? 0);
+      }
     }
-
-    // Handle case when we paste text into existing selection and there is only text content with single line.
-    // Paste text into first existing text block. Remove trailing (others) blocks after selection.
-    // Merges blocks into one.
-    const target = range.blocks[0]!;
-    const end = range.blocks.at(-1) ?? target;
-    const prefix = target.content.slice(0, range.start.offset);
-    const suffix = end.content.slice(range.end.offset);
-    if (lines.length === 1) {
-      this.editor.document.transact(() => {
-        this.removeRangeTail(range);
-        this.editor.document.blocks.setBlockText(target.id, prefix + value + suffix);
-      });
-      this.collapse(target.id, prefix.length + value.length);
-      return;
-    }
-
-    // Handle case when we paste text into existing selection and there is text content with multiple lines.
-    // Fills lines with default block type and appends suffix to the last line.
-    let previous = target.id;
-    let lastId = target.id;
-    this.editor.document.transact(() => {
-      this.removeRangeTail(range);
-      this.editor.document.blocks.setBlockText(target.id, prefix + lines[0]!);
-      lines.slice(1).forEach((line, index, rest) => {
-        const isLast = index === rest.length - 1;
-        lastId = this.editor.document.blocks.insertBlock(
-          { type: defaultBlockType, content: `${line}${isLast ? suffix : ""}` },
-          previous,
-        );
-        previous = lastId;
-      });
-    });
-    this.collapse(lastId, lines.at(-1)?.length ?? 0);
   }
 
   /**

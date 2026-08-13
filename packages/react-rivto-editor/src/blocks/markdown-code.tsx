@@ -194,21 +194,21 @@ export function replaceMarkdownCode(
   const block = source.slice(start, end);
   const opening = block.match(/^([ \t]*)(`{3,}|~{3,})[^\r\n]*(\r?\n)/);
   const normalized = value.replace(/\r\n?/g, "\n").replace(/\n$/, "");
-  if (opening) {
-    const closingStart = block.lastIndexOf("\n");
-    if (closingStart >= opening[0].length) {
-      return source.slice(0, start)
-        + block.slice(0, opening[0].length)
-        + normalized
-        + block.slice(closingStart)
-        + source.slice(end);
-    }
+  const closingStart = opening ? block.lastIndexOf("\n") : -1;
+  let result: string;
+  if (opening && closingStart >= opening[0].length) {
+    result = source.slice(0, start)
+      + block.slice(0, opening[0].length)
+      + normalized
+      + block.slice(closingStart)
+      + source.slice(end);
+  } else {
+    const newline = block.includes("\r\n") ? "\r\n" : "\n";
+    const indent = block.match(/^(?: {4}|\t)/)?.[0] ?? "";
+    const replacement = normalized.split("\n").map((line) => indent + line).join(newline);
+    result = source.slice(0, start) + replacement + source.slice(end);
   }
-
-  const newline = block.includes("\r\n") ? "\r\n" : "\n";
-  const indent = block.match(/^(?: {4}|\t)/)?.[0] ?? "";
-  const replacement = normalized.split("\n").map((line) => indent + line).join(newline);
-  return source.slice(0, start) + replacement + source.slice(end);
+  return result;
 }
 
 /**
@@ -226,12 +226,13 @@ export interface MarkdownCodeBlockProps extends HTMLAttributes<HTMLPreElement> {
 
 function textContent(node: ReactNode): string {
   return Children.toArray(node).map((child) => {
+    let text = "";
     if (typeof child === "string" || typeof child === "number" || typeof child === "bigint") {
-      return String(child);
+      text = String(child);
+    } else if (isValidElement<{ readonly children?: ReactNode }>(child)) {
+      text = textContent(child.props.children);
     }
-    return isValidElement<{ readonly children?: ReactNode }>(child)
-      ? textContent(child.props.children)
-      : "";
+    return text;
   }).join("");
 }
 

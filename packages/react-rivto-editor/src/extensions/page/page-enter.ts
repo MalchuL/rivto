@@ -45,78 +45,77 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
     // transaction, so Enter is one collaborative update and one undo step.
     editor.batchUpdates(() => {
       let target = initialTarget;
+      let skip = false;
       if (target.item.type === "text" && shouldDeleteSelection(selection)) {
         editor.deleteSelection();
         const collapsed = firstKeyboardTarget(editor.selection.get());
-        if (!collapsed?.collapsed) return;
-        target = collapsed;
+        if (!collapsed?.collapsed) skip = true;
+        else target = collapsed;
       }
 
-      const block = editor.blocks.getBlock(target.blockId);
-      if (!block) return;
+      const block = skip ? undefined : editor.blocks.getBlock(target.blockId);
+      if (block) {
+        // Empty nested writing blocks outdent instead of inserting another blank row.
+        // Keep outdenting in this keypress until the block is a document root.
+        if (isEmptyBlock(block) && editor.blocks.getParentId(block.id)) {
+          while (editor.blocks.getParentId(block.id)) {
+            editor.blocks.outdentBlock(block.id);
+          }
+          nextBlockId = block.id;
+          editor.selection.set([{
+            type: "text",
+            anchor: { blockId: nextBlockId, offset: 0 },
+            head: { blockId: nextBlockId, offset: 0 },
+          }]);
+        } else {
+          const listActive = reactEditor.blocks.hasListProps("list");
+          const collapseActive = reactEditor.blocks.hasListProps("collapse");
+          if (listActive && isEmptyBlock(block) && block.listProps.type !== "list") {
+            reactEditor.blocks.updateBlock(block.id, { listProps: { type: "list", checked: false } });
+            nextBlockId = block.id;
+          } else {
+            const isTextTarget = target.item.type === "text";
+            const splitAt = isTextTarget
+              ? Math.min(target.offset ?? 0, block.content.length)
+              : block.content.length;
+            if (isTextTarget) editor.blocks.updateBlock(block.id, { content: block.content.slice(0, splitAt) });
+            nextBlockId = reactEditor.blocks.insertBlock({
+              ...createDefaultBlock(),
+              ...(listActive ? { listProps: {
+                type: block.listProps.type === "checkbox"
+                  ? "checkbox"
+                  : isNumberedListType(block.listProps.type) ? "numbered_list" : "list",
+                checked: false,
+              } } : {}),
+              content: isTextTarget ? block.content.slice(splitAt) : "",
+            }, block.id);
 
-      // Empty nested writing blocks outdent instead of inserting another blank row.
-      // Keep outdenting in this keypress until the block is a document root.
-      if (isEmptyBlock(block) && editor.blocks.getParentId(block.id)) {
-        while (editor.blocks.getParentId(block.id)) {
-          editor.blocks.outdentBlock(block.id);
+            if (block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true)) {
+              // Insertion initially creates a sibling directly after `block`.
+              // Indenting makes it the last child; moving it to position zero then
+              // gives Enter the requested first-child placement.
+              editor.blocks.indentBlock(nextBlockId);
+              editor.blocks.moveBlock(nextBlockId, null);
+            } else if (editor.mode.get() === "edgeless" && editor.blocks.getParentId(block.id) === null) {
+              // Include the new root immediately; the derived reconciler would repair
+              // this endpoint next microtask, but doing it here avoids one stale render.
+              const element = editor.elements.getElements().find((candidate) =>
+                candidate.type === "block" && candidate.props.endBlockId === block.id,
+              );
+              if (element) editor.elements.updateElement(element.id, { props: { endBlockId: nextBlockId } });
+            }
+
+            editor.selection.set([{
+              type: "text",
+              anchor: { blockId: nextBlockId, offset: 0 },
+              head: { blockId: nextBlockId, offset: 0 },
+            }]);
+          }
         }
-        nextBlockId = block.id;
-        editor.selection.set([{
-          type: "text",
-          anchor: { blockId: nextBlockId, offset: 0 },
-          head: { blockId: nextBlockId, offset: 0 },
-        }]);
-        return;
       }
-
-      const listActive = reactEditor.blocks.hasListProps("list");
-      const collapseActive = reactEditor.blocks.hasListProps("collapse");
-      if (listActive && isEmptyBlock(block) && block.listProps.type !== "list") {
-        reactEditor.blocks.updateBlock(block.id, { listProps: { type: "list", checked: false } });
-        nextBlockId = block.id;
-        return;
-      }
-      const isTextTarget = target.item.type === "text";
-      const splitAt = isTextTarget
-        ? Math.min(target.offset ?? 0, block.content.length)
-        : block.content.length;
-      if (isTextTarget) editor.blocks.updateBlock(block.id, { content: block.content.slice(0, splitAt) });
-      nextBlockId = reactEditor.blocks.insertBlock({
-        ...createDefaultBlock(),
-        ...(listActive ? { listProps: {
-          type: block.listProps.type === "checkbox"
-            ? "checkbox"
-            : isNumberedListType(block.listProps.type) ? "numbered_list" : "list",
-          checked: false,
-        } } : {}),
-        content: isTextTarget ? block.content.slice(splitAt) : "",
-      }, block.id);
-
-      if (block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true)) {
-        // Insertion initially creates a sibling directly after `block`.
-        // Indenting makes it the last child; moving it to position zero then
-        // gives Enter the requested first-child placement.
-        editor.blocks.indentBlock(nextBlockId);
-        editor.blocks.moveBlock(nextBlockId, null);
-      } else if (editor.mode.get() === "edgeless" && editor.blocks.getParentId(block.id) === null) {
-        // Include the new root immediately; the derived reconciler would repair
-        // this endpoint next microtask, but doing it here avoids one stale render.
-        const element = editor.elements.getElements().find((candidate) =>
-          candidate.type === "block" && candidate.props.endBlockId === block.id,
-        );
-        if (element) editor.elements.updateElement(element.id, { props: { endBlockId: nextBlockId } });
-      }
-
-      editor.selection.set([{
-        type: "text",
-        anchor: { blockId: nextBlockId, offset: 0 },
-        head: { blockId: nextBlockId, offset: 0 },
-      }]);
     });
 
-    if (!nextBlockId) return false;
-    requestAnimationFrame(() => focusBlock(root, nextBlockId, 0));
-    return true;
+    if (nextBlockId) requestAnimationFrame(() => focusBlock(root, nextBlockId, 0));
+    return Boolean(nextBlockId);
   });
 }

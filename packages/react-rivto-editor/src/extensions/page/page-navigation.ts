@@ -95,15 +95,17 @@ function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirection): b
   if (!adjacent) return false;
   const blocks = Array.from(adjacent.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
   if (direction === "up") blocks.reverse();
+  let focused = false;
   for (const block of blocks) {
     const content = Array.from(block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR))
       .find((candidate) => candidate.closest(BLOCK_ID_SELECTOR) === block);
     const blockId = block.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (blockId && content) {
-      return focusBlock(adjacent, blockId, direction === "up" ? content.textContent?.length ?? 0 : 0);
+      focused = focusBlock(adjacent, blockId, direction === "up" ? content.textContent?.length ?? 0 : 0);
+      break;
     }
   }
-  return false;
+  return focused;
 }
 
 function focusBlockSelection(root: HTMLElement, blockId: string): void {
@@ -136,31 +138,35 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     const text = selection.find((item): item is TextSelection => item.type === "text");
     if (!text) return false;
     const scope = navigationDomRoot(root, text.head.blockId);
+    let handled = false;
     if (!collapsed(text)) {
       const towardStart = direction === "left" || direction === "up";
       setCaret(root, editor, textSelectionEdge(reactEditor, editor, text, towardStart ? "start" : "end"));
-      return true;
-    }
-    if (direction === "left" || direction === "right") {
+      handled = true;
+    } else if (direction === "left" || direction === "right") {
       const block = editor.blocks.getBlock(text.head.blockId);
       const adjacent = direction === "left" && text.head.offset === 0
         ? findPreviousEditableBlock(scope, text.head.blockId)
         : direction === "right" && text.head.offset === (block?.content.length ?? -1)
           ? findNextEditableBlock(scope, text.head.blockId)
           : null;
-      if (!adjacent) return false;
-      setCaret(root, editor, {
-        blockId: adjacent.blockId,
-        offset: direction === "left" ? adjacent.content.textContent?.length ?? 0 : 0,
-      });
-      return true;
+      if (adjacent) {
+        setCaret(root, editor, {
+          blockId: adjacent.blockId,
+          offset: direction === "left" ? adjacent.content.textContent?.length ?? 0 : 0,
+        });
+        handled = true;
+      }
+    } else {
+      const moved = verticalCaretPosition(scope, text.head, direction);
+      if (moved) {
+        setCaret(root, editor, moved);
+        handled = true;
+      } else {
+        handled = editor.mode.get() === "block" && focusAdjacentEditor(root, direction);
+      }
     }
-    const moved = verticalCaretPosition(scope, text.head, direction);
-    if (!moved) {
-      return editor.mode.get() === "block" && focusAdjacentEditor(root, direction);
-    }
-    setCaret(root, editor, moved);
-    return true;
+    return handled;
   };
 
   const extendText = (root: HTMLElement, direction: VerticalDirection): boolean => {
@@ -175,11 +181,11 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
       const next = blockSelection(outline, text.anchor.blockId, moved.blockId, isCollapsed);
       editor.selection.set([next]);
       focusBlockSelection(root, next.focusBlockId);
-      return true;
+    } else {
+      const next: EditorSelection = [{ type: "text", anchor: text.anchor, head: moved }];
+      editor.selection.set(next);
+      reactEditor.selection.restoreDOM(next);
     }
-    const next: EditorSelection = [{ type: "text", anchor: text.anchor, head: moved }];
-    editor.selection.set(next);
-    reactEditor.selection.restoreDOM(next);
     return true;
   };
 

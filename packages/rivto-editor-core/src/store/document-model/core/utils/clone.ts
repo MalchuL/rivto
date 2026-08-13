@@ -6,17 +6,20 @@
  */
 export function clone<T>(value: T): T {
     if (value === null || typeof value !== "object") return value;
+    let result: T;
     if (Array.isArray(value)) {
         // `Array.prototype.map` preserves a foreign realm's constructor. Build
         // a local array so otherwise-portable iframe/vm values are accepted by
         // CRDT adapters that require arrays from their own JavaScript realm.
-        return Array.from(value, (item) => clone(item)) as unknown as T;
-    }
-    const result: Record<string, unknown> = {};
-    for (const key in value) {
-        if (Object.prototype.hasOwnProperty.call(value, key)) {
-            result[key] = clone((value as Record<string, unknown>)[key]);
+        result = Array.from(value, (item) => clone(item)) as unknown as T;
+    } else {
+        const record: Record<string, unknown> = {};
+        for (const key in value) {
+            if (Object.prototype.hasOwnProperty.call(value, key)) {
+                record[key] = clone((value as Record<string, unknown>)[key]);
+            }
         }
+        result = record as T;
     }
-    return result as T;
+    return result;
 }

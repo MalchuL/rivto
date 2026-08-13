@@ -402,20 +402,20 @@ export class BlockManager {
     const remaining = blockSelection.blockIds.filter((id) => this.getBlock(id));
     if (!remaining.length) {
       this.editor.selection.set(previous.filter((_, itemIndex) => itemIndex !== index));
-      return;
+    } else {
+      const anchorBlockId = remaining.includes(blockSelection.anchorBlockId)
+        ? blockSelection.anchorBlockId
+        : remaining[0]!;
+      const focusBlockId = remaining.includes(blockSelection.focusBlockId)
+        ? blockSelection.focusBlockId
+        : remaining.at(-1)!;
+      const restored = {
+        type: "block",
+        blockIds: remaining,
+        anchorBlockId,
+        focusBlockId,
+      } satisfies RuntimeBlockSelection;
+      this.editor.selection.set(previous.map((item, itemIndex) => itemIndex === index ? restored : item));
     }
-    const anchorBlockId = remaining.includes(blockSelection.anchorBlockId)
-      ? blockSelection.anchorBlockId
-      : remaining[0]!;
-    const focusBlockId = remaining.includes(blockSelection.focusBlockId)
-      ? blockSelection.focusBlockId
-      : remaining.at(-1)!;
-    const restored = {
-      type: "block",
-      blockIds: remaining,
-      anchorBlockId,
-      focusBlockId,
-    } satisfies RuntimeBlockSelection;
-    this.editor.selection.set(previous.map((item, itemIndex) => itemIndex === index ? restored : item));
   }
 }

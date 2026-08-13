@@ -35,32 +35,36 @@ export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
     },
   }, ({ root }) => {
     const canvas = selection.get();
+    let handled = false;
     if (canvas.active && canvas.items.length && editor.commands.has("edgeless.visual.delete")) {
       editor.execute("edgeless.visual.delete", { selection: true });
       root.focus({ preventScroll: true });
-      return true;
-    }
-    const core = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
-    const blockIds = canvas.active && canvas.items.length
-      ? canvas.items.flatMap((id) => {
-        const element = editor.elements.getElement(id);
-        return element?.type === "block" ? blockIdsOf(element, editor.blocks.getRootIds()) : [];
-      })
-      : core?.blockIds ?? [];
-    const targets = topLevelSelection(editor, blockIds);
-    if (!targets.length) return false;
-    if (canvas.active && canvas.items.length) {
-      editor.batchUpdates(() => {
-        targets.forEach((id) => editor.blocks.removeBlock(id));
-        editor.elements.removeElements(canvas.items);
-      });
-      selection.clear();
+      handled = true;
     } else {
-      editor.deleteSelection();
+      const core = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
+      const blockIds = canvas.active && canvas.items.length
+        ? canvas.items.flatMap((id) => {
+          const element = editor.elements.getElement(id);
+          return element?.type === "block" ? blockIdsOf(element, editor.blocks.getRootIds()) : [];
+        })
+        : core?.blockIds ?? [];
+      const targets = topLevelSelection(editor, blockIds);
+      if (targets.length) {
+        if (canvas.active && canvas.items.length) {
+          editor.batchUpdates(() => {
+            targets.forEach((id) => editor.blocks.removeBlock(id));
+            editor.elements.removeElements(canvas.items);
+          });
+          selection.clear();
+        } else {
+          editor.deleteSelection();
+        }
+        root.focus({ preventScroll: true });
+        requestAnimationFrame(() => root.focus({ preventScroll: true }));
+        handled = true;
+      }
     }
-    root.focus({ preventScroll: true });
-    requestAnimationFrame(() => root.focus({ preventScroll: true }));
-    return true;
+    return handled;
   });
 
 }

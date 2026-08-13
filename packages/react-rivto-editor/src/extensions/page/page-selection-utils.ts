@@ -68,24 +68,23 @@ export function reconcileCollapsedSelection(
         changed = true;
         mapped.push(blockSelection(blocks, anchorBlockId, focusBlockId));
       }
-      return;
+    } else {
+      const selected = new Set(item.blockIds.map((id) => hiddenBy.get(id) ?? id));
+      const blockIds = visible.filter((id) => selected.has(id));
+      const anchorBlockId = hiddenBy.get(item.anchorBlockId) ?? item.anchorBlockId;
+      const focusBlockId = hiddenBy.get(item.focusBlockId) ?? item.focusBlockId;
+      if (!blockIds.length || !visibleSet.has(anchorBlockId) || !visibleSet.has(focusBlockId)) {
+        changed = true;
+      } else {
+        if (
+          blockIds.length !== item.blockIds.length ||
+          blockIds.some((id, index) => id !== item.blockIds[index]) ||
+          anchorBlockId !== item.anchorBlockId ||
+          focusBlockId !== item.focusBlockId
+        ) changed = true;
+        mapped.push({ ...item, blockIds, anchorBlockId, focusBlockId });
+      }
     }
-
-    const selected = new Set(item.blockIds.map((id) => hiddenBy.get(id) ?? id));
-    const blockIds = visible.filter((id) => selected.has(id));
-    const anchorBlockId = hiddenBy.get(item.anchorBlockId) ?? item.anchorBlockId;
-    const focusBlockId = hiddenBy.get(item.focusBlockId) ?? item.focusBlockId;
-    if (!blockIds.length || !visibleSet.has(anchorBlockId) || !visibleSet.has(focusBlockId)) {
-      changed = true;
-      return;
-    }
-    if (
-      blockIds.length !== item.blockIds.length ||
-      blockIds.some((id, index) => id !== item.blockIds[index]) ||
-      anchorBlockId !== item.anchorBlockId ||
-      focusBlockId !== item.focusBlockId
-    ) changed = true;
-    mapped.push({ ...item, blockIds, anchorBlockId, focusBlockId });
   });
   return changed ? mapped : selection;
 }
@@ -209,23 +208,29 @@ export function selectedMoveRoots(
   const blockSelection = selection.find((item): item is BlockSelection => (
     item.type === "block" && "blockIds" in item && (item as BlockSelection).blockIds.includes(activeId)
   ));
-  if (!blockSelection) return { ids: [activeId], grouped: false };
-
-  const entries = pageEntries(blocks, null, false, isCollapsed);
-  const byId = new Map(entries.map((entry) => [entry.block.id, entry]));
-  const selected = new Set(blockSelection.blockIds);
-  const roots = entries.flatMap(({ block }) => {
-    let parentId = byId.get(block.id)?.parentId;
-    while (parentId) {
-      if (selected.has(parentId)) return [];
-      parentId = byId.get(parentId)?.parentId;
+  let result: SelectedMoveRoots = { ids: [activeId], grouped: false };
+  if (blockSelection) {
+    const entries = pageEntries(blocks, null, false, isCollapsed);
+    const byId = new Map(entries.map((entry) => [entry.block.id, entry]));
+    const selected = new Set(blockSelection.blockIds);
+    const roots = entries.flatMap(({ block }) => {
+      let parentId = byId.get(block.id)?.parentId;
+      let ancestorSelected = false;
+      while (parentId) {
+        if (selected.has(parentId)) {
+          ancestorSelected = true;
+          break;
+        }
+        parentId = byId.get(parentId)?.parentId;
+      }
+      return !ancestorSelected && selected.has(block.id) ? [block.id] : [];
+    });
+    const parentIds = new Set(roots.map((id) => byId.get(id)?.parentId));
+    if (roots.length > 1 && parentIds.size === 1) {
+      result = { ids: roots, grouped: true, selection: blockSelection };
     }
-    return selected.has(block.id) ? [block.id] : [];
-  });
-  const parentIds = new Set(roots.map((id) => byId.get(id)?.parentId));
-  return roots.length > 1 && parentIds.size === 1
-    ? { ids: roots, grouped: true, selection: blockSelection }
-    : { ids: [activeId], grouped: false };
+  }
+  return result;
 }
 
 /** Concrete placement used by Alt+Shift+Up/Down. */
@@ -252,18 +257,22 @@ export function keyboardMovePlacement(
   const firstIndex = siblings.findIndex((block) => block.id === first.block.id);
   const lastIndex = siblings.findIndex((block) => block.id === last.block.id);
 
+  let placement: KeyboardMovePlacement | undefined;
   if (direction === "up") {
     const previous = siblings.slice(0, firstIndex).reverse().find((block) => !moved.has(block.id));
-    if (previous) return { targetId: previous.id, position: "before" };
-    return first.parentId ? { targetId: first.parentId, position: "before" } : undefined;
+    if (previous) placement = { targetId: previous.id, position: "before" };
+    else if (first.parentId) placement = { targetId: first.parentId, position: "before" };
+  } else {
+    const next = siblings.slice(lastIndex + 1).find((block) => !moved.has(block.id));
+    if (next) {
+      placement = { targetId: next.id, position: "after" };
+    } else if (last.parentId) {
+      const parent = byId.get(last.parentId);
+      const parentIndex = parent?.siblings.findIndex((block) => block.id === last.parentId) ?? -1;
+      if (parent && parentIndex >= 0 && parentIndex < parent.siblings.length - 1) {
+        placement = { targetId: last.parentId, position: "after" };
+      }
+    }
   }
-
-  const next = siblings.slice(lastIndex + 1).find((block) => !moved.has(block.id));
-  if (next) return { targetId: next.id, position: "after" };
-  if (!last.parentId) return;
-  const parent = byId.get(last.parentId);
-  const parentIndex = parent?.siblings.findIndex((block) => block.id === last.parentId) ?? -1;
-  return parent && parentIndex >= 0 && parentIndex < parent.siblings.length - 1
-    ? { targetId: last.parentId, position: "after" }
-    : undefined;
+  return placement;
 }

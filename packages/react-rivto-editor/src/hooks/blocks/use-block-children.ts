@@ -71,19 +71,17 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
         const children = getChildren();
         if (afterId !== undefined && afterId !== null) requireChild(afterId);
 
+        let childId: string;
         if (children.length === 0) {
-          const childId = reactEditor.blocks.insertBlock(block, blockId);
+          childId = reactEditor.blocks.insertBlock(block, blockId);
           editor.blocks.indentBlock(childId);
-          return childId;
-        }
-
-        if (afterId === null) {
-          const childId = reactEditor.blocks.insertBlock(block, children[0].id);
+        } else if (afterId === null) {
+          childId = reactEditor.blocks.insertBlock(block, children[0].id);
           editor.blocks.moveBlock(childId, null);
-          return childId;
+        } else {
+          childId = reactEditor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
         }
-
-        return reactEditor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
+        return childId;
       },
       remove: (childId) => {
         requireChild(childId);

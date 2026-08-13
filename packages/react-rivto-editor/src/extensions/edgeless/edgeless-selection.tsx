@@ -71,6 +71,7 @@ export function EdgelessInteractionOverlay() {
     const object = event.target.closest<HTMLElement>(OBJECT_SELECTOR);
     const objectId = object?.dataset.edgelessObjectId;
     const primary = event.ctrlKey || event.metaKey;
+    let handled = true;
 
     if (object && objectId && !card) {
       const current = selection.get().items;
@@ -80,10 +81,8 @@ export function EdgelessInteractionOverlay() {
         : exists ? current : [objectId]);
       root.ownerDocument.getSelection()?.removeAllRanges();
       if (primary) event.stopPropagation();
-      return primary;
-    }
-
-    if (card && elementId && primary && !isInteractive(event.target)) {
+      handled = primary;
+    } else if (card && elementId && primary && !isInteractive(event.target)) {
       const current = selection.get().items;
       const exists = current.includes(elementId);
       selection.set(exists
@@ -91,27 +90,26 @@ export function EdgelessInteractionOverlay() {
         : [...current, elementId]);
       root.ownerDocument.getSelection()?.removeAllRanges();
       card.focus({ preventScroll: true });
-      return true;
+    } else if (card) {
+      if (isInteractive(event.target)) handled = false;
+      else {
+        const current = selection.get().items;
+        selection.set(elementId ? current.includes(elementId) ? current : [elementId] : []);
+        card.focus({ preventScroll: true });
+      }
+    } else if (event.target.closest("[data-edgeless-ui], .edgeless-drawing-capture[data-active]")) {
+      handled = false;
+    } else {
+      root.focus({ preventScroll: true });
+      if (!primary) selection.clear();
+      gesture.current = {
+        x: event.clientX,
+        y: event.clientY,
+        base: primary ? selection.get().items : [],
+        moved: false,
+      };
     }
-
-    if (card) {
-      if (isInteractive(event.target)) return false;
-      const current = selection.get().items;
-      selection.set(elementId ? current.includes(elementId) ? current : [elementId] : []);
-      card.focus({ preventScroll: true });
-      return true;
-    }
-
-    if (event.target.closest("[data-edgeless-ui], .edgeless-drawing-capture[data-active]")) return false;
-    root.focus({ preventScroll: true });
-    if (!primary) selection.clear();
-    gesture.current = {
-      x: event.clientX,
-      y: event.clientY,
-      base: primary ? selection.get().items : [],
-      moved: false,
-    };
-    return true;
+    return handled;
   });
 
   useDOMEvent({

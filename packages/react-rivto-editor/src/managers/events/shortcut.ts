@@ -9,8 +9,11 @@ export interface ParsedShortcut {
 
 /** Normalizes one browser key name for portable shortcut comparison. */
 const normalizeKey = (key: string): string => {
-  if (key === " ") return "Space";
-  return key.length === 1 ? key.toLowerCase() : `${key[0]?.toUpperCase()}${key.slice(1)}`;
+  let normalized: string;
+  if (key === " ") normalized = "Space";
+  else if (key.length === 1) normalized = key.toLowerCase();
+  else normalized = `${key[0]?.toUpperCase()}${key.slice(1)}`;
+  return normalized;
 };
 
 /** Resolves a layout-independent letter from a physical keyboard code. */

@@ -48,7 +48,13 @@ Use `*.test.ts(x)` for Jest and `*.spec.ts` for Playwright. Run focused tests fi
 
 ## Style and Reviews
 
-Use ES modules and nearby formatting. Use `PascalCase` for types/components, `camelCase` for functions/values, and kebab-case directories. Public editor/document APIs need JSDoc. Prefer existing managers and narrow types.
+Use ES modules and nearby formatting. Use `PascalCase` for types/components, `camelCase` for functions/values, and kebab-case directories. Prefer existing managers and narrow types.
+
+Every source file starts with a detailed module-level JSDoc describing its purpose, responsibilities, important invariants, and relationship to adjacent layers. Every function and method has JSDoc that explains its purpose, each parameter with `@param`, and its result with `@returns` (omit `@returns` only for constructors). Describe behavior and semantics rather than restating names or types.
+
+Add focused inline comments around tricky algorithms, changes between logical modes or branches, important edge cases, and other non-obvious decisions. Explain why the code takes that path and what invariant it preserves; do not narrate straightforward statements.
+
+When code assigns or references an HTML class name (including JSX `className`, selectors, and `classList` operations), define that class name once as a named constant and use the constant instead of repeating a raw string. Keep the constant in the narrowest owning scope: extension-specific classes stay in that extension, component-specific classes stay with that component, and only genuinely shared classes move to a shared module.
 
 Prefer a single main exit point from functions and methods. Early guard returns at the start are fine for invalid, missing, or no-op conditions, but avoid multiple complex returns interleaved with the main logic.
 

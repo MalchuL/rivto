@@ -215,6 +215,7 @@ export class KeyboardManager implements KeyboardCapability {
     });
     const registrations = [...this.registrations]
       .sort((left, right) => (right.definition.priority ?? 0) - (left.definition.priority ?? 0));
+    let handled = false;
     for (const registration of registrations) {
       const definition = registration.definition;
       if (
@@ -226,11 +227,17 @@ export class KeyboardManager implements KeyboardCapability {
       ) continue;
       const composition = definition.composing ?? "ignore";
       if (raw.isComposing && composition === "ignore") continue;
-      if (raw.isComposing && composition === "prevent") return true;
+      if (raw.isComposing && composition === "prevent") {
+        handled = true;
+        break;
+      }
       if (definition.when && !definition.when(event)) continue;
-      if (registration.listener(event)) return true;
+      if (registration.listener(event)) {
+        handled = true;
+        break;
+      }
     }
-    return false;
+    return handled;
   }
 
   private assertActive(): void {

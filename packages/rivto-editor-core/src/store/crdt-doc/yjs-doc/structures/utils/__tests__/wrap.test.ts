@@ -3,11 +3,19 @@ import { basicToCRDT, unwrapCRDTtoYJS, wrapYJStoCRDT } from '../wrap';
 import { YjsArray, YjsMap, YjsText } from '../../';
 
 function containsYjsTypes(value: unknown): boolean {
-  if (value instanceof YjsMap || value instanceof YjsArray || value instanceof YjsText) return true;
-  if (value instanceof Y.Map || value instanceof Y.Array || value instanceof Y.Text) return true;
-  if (Array.isArray(value)) return value.some(containsYjsTypes);
-  if (value && typeof value === 'object') return Object.values(value as Record<string, unknown>).some(containsYjsTypes);
-  return false;
+  let result: boolean;
+  if (value instanceof YjsMap || value instanceof YjsArray || value instanceof YjsText) {
+    result = true;
+  } else if (value instanceof Y.Map || value instanceof Y.Array || value instanceof Y.Text) {
+    result = true;
+  } else if (Array.isArray(value)) {
+    result = value.some(containsYjsTypes);
+  } else if (value && typeof value === 'object') {
+    result = Object.values(value as Record<string, unknown>).some(containsYjsTypes);
+  } else {
+    result = false;
+  }
+  return result;
 }
 
 describe('wrap/unwrap utils', () => {

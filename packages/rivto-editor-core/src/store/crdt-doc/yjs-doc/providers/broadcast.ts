@@ -50,10 +50,7 @@ export class BroadcastChannelProvider implements Provider {
           expectReply: false,
         } satisfies BroadcastMessage);
       }
-      return;
-    }
-
-    if (message.type === "sync-step2" || message.type === "update") {
+    } else if (message.type === "sync-step2" || message.type === "update") {
       Y.applyUpdate(this.ydoc, new Uint8Array(message.update), this);
     }
   };

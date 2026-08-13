@@ -479,16 +479,26 @@ describe("delegated events", () => {
     attributes = new Map<string, string>();
 
     contains(candidate: unknown): boolean {
+      let found = false;
       for (let current = candidate as FakeElement | null; current; current = current.parent) {
-        if (current === this) return true;
+        if (current === this) {
+          found = true;
+          break;
+        }
       }
-      return false;
+      return found;
     }
 
     closest(selector: string): FakeElement | null {
-      if (selector.includes("data-block-id") && this.attributes.has("data-block-id")) return this;
-      if (selector.includes("data-block-content") && this.attributes.has("data-block-content")) return this;
-      return this.parent?.closest(selector) ?? null;
+      let match: FakeElement | null = null;
+      if (selector.includes("data-block-id") && this.attributes.has("data-block-id")) {
+        match = this;
+      } else if (selector.includes("data-block-content") && this.attributes.has("data-block-content")) {
+        match = this;
+      } else {
+        match = this.parent?.closest(selector) ?? null;
+      }
+      return match;
     }
 
     getAttribute(name: string): string | null {

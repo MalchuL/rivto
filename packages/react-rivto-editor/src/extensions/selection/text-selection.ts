@@ -120,96 +120,98 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
     scope: "block",
   }, ({ raw: event, blockId, root }) => {
       const view = root.ownerDocument.defaultView;
+      let handled = false;
       if (event.ctrlKey || event.metaKey) {
         if (releaseTimer !== undefined) view?.clearTimeout(releaseTimer);
         pointer = null;
         ownsCrossBlockSelection = false;
-        return false;
-      }
-      if (event.button !== 0) return false;
-      const selectionAnchor = event.target instanceof Element
-        ? event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR)
-        : null;
-      if (!selectionAnchor || !root.contains(selectionAnchor)) return false;
-      if (releaseTimer !== undefined) view?.clearTimeout(releaseTimer);
-      ownsCrossBlockSelection = false;
+      } else if (event.button === 0) {
+        const selectionAnchor = event.target instanceof Element
+          ? event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR)
+          : null;
+        if (selectionAnchor && root.contains(selectionAnchor)) {
+          if (releaseTimer !== undefined) view?.clearTimeout(releaseTimer);
+          ownsCrossBlockSelection = false;
 
-      // The anchor marker is the only gesture-entry contract. Text mode puts
-      // it directly on a contenteditable; structural mode puts it on a normal
-      // renderer region. `data-block-content` remains an offset-mapping detail
-      // owned by the DOM-selection utilities rather than pointer routing.
-      const textTarget = selectionAnchor.isContentEditable;
-      const clicked = textTarget
-        ? readDOMSelectionPoint(root, event.clientX, event.clientY)
-        : undefined;
-      const clickedPosition = clicked
-        ? readDOMPointPosition(root, clicked)
-        : blockId ? { blockId, offset: 0 } : undefined;
+          // The anchor marker is the only gesture-entry contract. Text mode puts
+          // it directly on a contenteditable; structural mode puts it on a normal
+          // renderer region. `data-block-content` remains an offset-mapping detail
+          // owned by the DOM-selection utilities rather than pointer routing.
+          const textTarget = selectionAnchor.isContentEditable;
+          const clicked = textTarget
+            ? readDOMSelectionPoint(root, event.clientX, event.clientY)
+            : undefined;
+          const clickedPosition = clicked
+            ? readDOMPointPosition(root, clicked)
+            : blockId ? { blockId, offset: 0 } : undefined;
 
-      const current = editor.selection.get();
-      // Shift extends the existing selection instead of replacing its anchor.
-      // A block selection has no character endpoint, so it extends as blocks.
-      if (event.shiftKey && clickedPosition) {
-        const block = current.find((item) => item.type === "block");
-        if (block?.type === "block") {
-          ownsCrossBlockSelection = true;
-          pointer = null;
-          editor.selection.set(
-            createBlockSelection(orderedBlockIds(root), block.anchorBlockId, clickedPosition.blockId),
-          );
-          root.ownerDocument.getSelection()?.removeAllRanges();
-          root.focus({ preventScroll: true });
-          reactEditor.selection.clearDOMHighlight();
-          releaseTimer = view?.setTimeout(() => { ownsCrossBlockSelection = false; });
-          return true;
+          const current = editor.selection.get();
+          // Shift extends the existing selection instead of replacing its anchor.
+          // A block selection has no character endpoint, so it extends as blocks.
+          if (event.shiftKey && clickedPosition) {
+            const block = current.find((item) => item.type === "block");
+            if (block?.type === "block") {
+              ownsCrossBlockSelection = true;
+              pointer = null;
+              editor.selection.set(
+                createBlockSelection(orderedBlockIds(root), block.anchorBlockId, clickedPosition.blockId),
+              );
+              root.ownerDocument.getSelection()?.removeAllRanges();
+              root.focus({ preventScroll: true });
+              reactEditor.selection.clearDOMHighlight();
+              releaseTimer = view?.setTimeout(() => { ownsCrossBlockSelection = false; });
+              handled = true;
+            } else {
+              const text = current.find((item) => item.type === "text");
+              const anchor = text && resolveDOMSelectionPoint(root, text.anchor);
+              if (text && anchor) {
+                ownsCrossBlockSelection = true;
+                const active: PointerSelection = {
+                  startX: event.clientX,
+                  startY: event.clientY,
+                  anchor,
+                  anchorPosition: text.anchor,
+                  textAcrossBlocks: event.altKey,
+                  crossBlock: false,
+                  wholeBlocks: false,
+                };
+                pointer = active;
+                publish(active, clicked, clickedPosition);
+                handled = true;
+              }
+            }
+          }
+
+          if (!handled) {
+            if (!textTarget && blockId) {
+              // `readDOMSelectionPoint` intentionally falls back to the nearest
+              // editable host. Explicit structural anchors bypass that fallback so
+              // they retain their own block ID before movement begins.
+              pointer = {
+                startX: event.clientX,
+                startY: event.clientY,
+                anchorPosition: { blockId, offset: 0 },
+                textAcrossBlocks: false,
+                crossBlock: false,
+                wholeBlocks: false,
+              };
+            } else {
+              const anchor = clicked;
+              const anchorPosition = anchor && readDOMPointPosition(root, anchor);
+              pointer = anchor && anchorPosition ? {
+                startX: event.clientX,
+                startY: event.clientY,
+                anchor,
+                anchorPosition,
+                textAcrossBlocks: event.altKey,
+                crossBlock: false,
+                wholeBlocks: false,
+              } : null;
+            }
+          }
         }
-
-        const text = current.find((item) => item.type === "text");
-        const anchor = text && resolveDOMSelectionPoint(root, text.anchor);
-        if (text && anchor) {
-          ownsCrossBlockSelection = true;
-          const active: PointerSelection = {
-            startX: event.clientX,
-            startY: event.clientY,
-            anchor,
-            anchorPosition: text.anchor,
-            textAcrossBlocks: event.altKey,
-            crossBlock: false,
-            wholeBlocks: false,
-          };
-          pointer = active;
-          publish(active, clicked, clickedPosition);
-          return true;
-        }
       }
-
-      if (!textTarget && blockId) {
-        // `readDOMSelectionPoint` intentionally falls back to the nearest
-        // editable host. Explicit structural anchors bypass that fallback so
-        // they retain their own block ID before movement begins.
-        pointer = {
-          startX: event.clientX,
-          startY: event.clientY,
-          anchorPosition: { blockId, offset: 0 },
-          textAcrossBlocks: false,
-          crossBlock: false,
-          wholeBlocks: false,
-        };
-        return false;
-      }
-
-      const anchor = clicked;
-      const anchorPosition = anchor && readDOMPointPosition(root, anchor);
-      pointer = anchor && anchorPosition ? {
-        startX: event.clientX,
-        startY: event.clientY,
-        anchor,
-        anchorPosition,
-        textAcrossBlocks: event.altKey,
-        crossBlock: false,
-        wholeBlocks: false,
-      } : null;
-      return false;
+      return handled;
   });
 
   reactEditor.events.register({
@@ -223,6 +225,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       if (!active || Math.hypot(event.clientX - active.startX, event.clientY - active.startY) < 3) return false;
 
       const pointedBlockId = readBlockIdAtPoint(root, event.clientX, event.clientY);
+      let handled = false;
       if (!active.textAcrossBlocks && pointedBlockId && (
         pointedBlockId !== active.anchorPosition.blockId || !active.anchor
       )) {
@@ -232,26 +235,27 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
         ownsCrossBlockSelection = true;
         if (!active.anchor) suppressClickBlockId = active.anchorPosition.blockId;
         publish(active, undefined, { blockId: pointedBlockId, offset: 0 }, true);
-        return true;
+        handled = true;
+      } else {
+        const head = readDOMSelectionPoint(root, event.clientX, event.clientY);
+        const headPosition = head && readDOMPointPosition(root, head);
+        if (head && headPosition) {
+          const sameBlock = headPosition.blockId === active.anchorPosition.blockId;
+          // Native selection owns a gesture only until it first crosses an editing
+          // host. After that transition, continue publishing every move—even after
+          // returning to the anchor block—so `active.head` follows the pointer
+          // instead of freezing at the first same-block re-entry offset.
+          if (!(sameBlock && !ownsCrossBlockSelection)) {
+            // Native contenteditable selection owns same-block dragging. Once the
+            // gesture crosses hosts, preventing its default movement avoids Chromium
+            // replacing our original endpoint with a collapsed range in the new host.
+            ownsCrossBlockSelection = true;
+            publish(active, head, headPosition);
+            handled = true;
+          }
+        }
       }
-
-      const head = readDOMSelectionPoint(root, event.clientX, event.clientY);
-      const headPosition = head && readDOMPointPosition(root, head);
-      if (!head || !headPosition) return false;
-
-      const sameBlock = headPosition.blockId === active.anchorPosition.blockId;
-      // Native selection owns a gesture only until it first crosses an editing
-      // host. After that transition, continue publishing every move—even after
-      // returning to the anchor block—so `active.head` follows the pointer
-      // instead of freezing at the first same-block re-entry offset.
-      if (sameBlock && !ownsCrossBlockSelection) return false;
-
-      // Native contenteditable selection owns same-block dragging. Once the
-      // gesture crosses hosts, preventing its default movement avoids Chromium
-      // replacing our original endpoint with a collapsed range in the new host.
-      ownsCrossBlockSelection = true;
-      publish(active, head, headPosition);
-      return true;
+      return handled;
   });
 
   const stop = (): false => {
@@ -271,7 +275,6 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
         setNativeSelection(completed.anchor!, completed.head!);
         reactEditor.selection.updateDOMHighlight(completed.selection);
       }
-
       // Firefox and Chromium can emit one delayed selectionchange after
       // pointer-up. Keep the synthetic result authoritative through that task.
       releaseTimer = root.ownerDocument.defaultView?.setTimeout(() => {
@@ -324,22 +327,18 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       if (selection) {
         editor.selection.set(selection);
         reactEditor.selection.updateDOMHighlight(selection);
-        return false;
-      }
-
-      // Canvas selection owns visibility only. Keep the portable page text or
-      // block selection available for a later return to block mode.
-      if (editor.mode.get() === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active) {
+      } else if (editor.mode.get() === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active) {
+        // Canvas selection owns visibility only. Keep the portable page text or
+        // block selection available for a later return to block mode.
         reactEditor.selection.clearDOMHighlight();
-        return false;
+      } else {
+        // Losing the browser range clears only text items. A separate whole-block
+        // selection remains valid local state.
+        const current = editor.selection.get();
+        const remaining = current.filter((item) => item.type !== "text");
+        if (remaining.length !== current.length) editor.selection.set(remaining);
+        reactEditor.selection.clearDOMHighlight();
       }
-
-      // Losing the browser range clears only text items. A separate whole-block
-      // selection remains valid local state.
-      const current = editor.selection.get();
-      const remaining = current.filter((item) => item.type !== "text");
-      if (remaining.length !== current.length) editor.selection.set(remaining);
-      reactEditor.selection.clearDOMHighlight();
       return false;
   });
 

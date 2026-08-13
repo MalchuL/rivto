@@ -391,46 +391,51 @@ export class EditorRuntime implements RivtoEditorApi {
     const order = new Map(visibleIds.map((id, index) => [id, index]));
     let changed = false;
     const valid = selection.flatMap((item): EditorSelectionItem[] => {
+      let result: EditorSelectionItem[] = [];
       if (item.type === "text") {
         const anchorBlock = this.blocks.getBlock(item.anchor.blockId);
         const headBlock = this.blocks.getBlock(item.head.blockId);
         if (!anchorBlock || !headBlock) {
           changed = true;
-          return [];
+        } else {
+          const anchorOffset = Math.min(item.anchor.offset, anchorBlock.content.length);
+          const headOffset = Math.min(item.head.offset, headBlock.content.length);
+          if (anchorOffset === item.anchor.offset && headOffset === item.head.offset) {
+            result = [item];
+          } else {
+            changed = true;
+            result = [{
+              ...item,
+              anchor: { ...item.anchor, offset: anchorOffset },
+              head: { ...item.head, offset: headOffset },
+            }];
+          }
         }
-        const anchorOffset = Math.min(item.anchor.offset, anchorBlock.content.length);
-        const headOffset = Math.min(item.head.offset, headBlock.content.length);
-        if (anchorOffset === item.anchor.offset && headOffset === item.head.offset) return [item];
-        changed = true;
-        return [{
-          ...item,
-          anchor: { ...item.anchor, offset: anchorOffset },
-          head: { ...item.head, offset: headOffset },
-        }];
+      } else {
+        const selected = new Set(item.blockIds);
+        const blockIds = visibleIds.filter((id) => selected.has(id));
+        if (!blockIds.length) {
+          changed = true;
+        } else {
+          const anchorIndex = item.blockIds.indexOf(item.anchorBlockId);
+          const focusIndex = item.blockIds.indexOf(item.focusBlockId);
+          const forward = anchorIndex <= focusIndex;
+          const anchorBlockId = selected.has(item.anchorBlockId) && order.has(item.anchorBlockId)
+            ? item.anchorBlockId
+            : forward ? blockIds[0]! : blockIds.at(-1)!;
+          const focusBlockId = selected.has(item.focusBlockId) && order.has(item.focusBlockId)
+            ? item.focusBlockId
+            : forward ? blockIds.at(-1)! : blockIds[0]!;
+          if (
+            blockIds.length !== item.blockIds.length ||
+            blockIds.some((id, index) => id !== item.blockIds[index]) ||
+            anchorBlockId !== item.anchorBlockId ||
+            focusBlockId !== item.focusBlockId
+          ) changed = true;
+          result = [{ ...item, blockIds, anchorBlockId, focusBlockId }];
+        }
       }
-
-      const selected = new Set(item.blockIds);
-      const blockIds = visibleIds.filter((id) => selected.has(id));
-      if (!blockIds.length) {
-        changed = true;
-        return [];
-      }
-      const anchorIndex = item.blockIds.indexOf(item.anchorBlockId);
-      const focusIndex = item.blockIds.indexOf(item.focusBlockId);
-      const forward = anchorIndex <= focusIndex;
-      const anchorBlockId = selected.has(item.anchorBlockId) && order.has(item.anchorBlockId)
-        ? item.anchorBlockId
-        : forward ? blockIds[0]! : blockIds.at(-1)!;
-      const focusBlockId = selected.has(item.focusBlockId) && order.has(item.focusBlockId)
-        ? item.focusBlockId
-        : forward ? blockIds.at(-1)! : blockIds[0]!;
-      if (
-        blockIds.length !== item.blockIds.length ||
-        blockIds.some((id, index) => id !== item.blockIds[index]) ||
-        anchorBlockId !== item.anchorBlockId ||
-        focusBlockId !== item.focusBlockId
-      ) changed = true;
-      return [{ ...item, blockIds, anchorBlockId, focusBlockId }];
+      return result;
     });
     if (changed) this.selection.set(valid);
   }

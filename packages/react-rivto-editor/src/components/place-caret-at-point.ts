@@ -33,17 +33,18 @@ export function placeCaretAtPoint(
     offset = nearest.offset;
   }
 
+  let placed = false;
   try {
     selection.setBaseAndExtent(node, offset, node, offset);
-    return true;
+    placed = true;
   } catch {
     const range = document.createRange();
     range.selectNodeContents(element);
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
-    return false;
   }
+  return placed;
 }
 
 /** Scans text nodes in `element` for the caret closest to `(x, y)`. */

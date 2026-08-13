@@ -91,6 +91,7 @@ export class SelectionManager {
     // Block item: start/end of the selected set; blocks = selected IDs only (gaps stay).
     // Text item: start/end in document order; blocks = every block between endpoints.
     const normalizeItem = (item: EditorSelectionItem): NormalizedSelection | undefined => {
+      let result: NormalizedSelection | undefined;
       // Block-only selection (no text items): union selected ids, gaps stay
       if (item.type !== "text") {
         const selected = new Set(item.blockIds);
@@ -99,32 +100,34 @@ export class SelectionManager {
         const blocks = all.filter((block) => selected.has(block.id));
         const first = blocks[0];
         const last = blocks.at(-1);
-        return first && last ? {
+        result = first && last ? {
           start: { blockId: first.id, offset: 0 },
           end: { blockId: last.id, offset: last.content.length },
           blocks,
         } : undefined;
+      } else {
+        // Handle text selection which is TextSelection
+        // This is a consecutive selection between two positions with blocks and offsets.
+        // Example: from block 1, offset 10 to block 3, offset 5
+        const anchorIndex = indices.get(item.anchor.blockId);
+        const headIndex = indices.get(item.head.blockId);
+        if (anchorIndex !== undefined && headIndex !== undefined) {
+          // Determine the start and end of the selection. Selection can be forward or backward.
+          // Forward means the selection is from first to last or it's the same block and selection moves forward inside the block.
+          // Backward means the selection is from last to first.
+          const forward = anchorIndex < headIndex
+            || (anchorIndex === headIndex && item.anchor.offset <= item.head.offset);
+          const start = forward ? item.anchor : item.head;
+          const end = forward ? item.head : item.anchor;
+          // Result is from first to last, including blocks in between
+          result = {
+            start: { ...start },
+            end: { ...end },
+            blocks: all.slice(Math.min(anchorIndex, headIndex), Math.max(anchorIndex, headIndex) + 1),
+          };
+        }
       }
-
-      // Handle text selection which is TextSelection
-      // This is a consecutive selection between two positions with blocks and offsets.
-      // Example: from block 1, offset 10 to block 3, offset 5
-      const anchorIndex = indices.get(item.anchor.blockId);
-      const headIndex = indices.get(item.head.blockId);
-      if (anchorIndex === undefined || headIndex === undefined) return undefined;
-      // Determine the start and end of the selection. Selection can be forward or backward.
-      // Forward means the selection is from first to last or it's the same block and selection moves forward inside the block.
-      // Backward means the selection is from last to first.
-      const forward = anchorIndex < headIndex
-        || (anchorIndex === headIndex && item.anchor.offset <= item.head.offset);
-      const start = forward ? item.anchor : item.head;
-      const end = forward ? item.head : item.anchor;
-      // Result is from first to last, including blocks in between
-      return {
-        start: { ...start },
-        end: { ...end },
-        blocks: all.slice(Math.min(anchorIndex, headIndex), Math.max(anchorIndex, headIndex) + 1),
-      };
+      return result;
     };
 
     // Create ranges list without empty ranges
@@ -132,46 +135,50 @@ export class SelectionManager {
       const range = normalizeItem(item);
       return range ? [range] : [];
     });
-    if (!ranges.length) return undefined;
-
-    // If selection has only block selections
-    if (isStructuralSelection(selection)) {
-      // Get all blocks ids that are selected from all ranges and put inside set
-      // Needed because several ranges might overlap and we need to get all blocks that are selected.
-      const selected = new Set(ranges.flatMap((range) => range.blocks.map((block) => block.id)));
-      // Get all blocks that are selected and additionally exclude unexisting blocks.
-      // And them sort by document order.
-      const blocks = all.filter((block) => selected.has(block.id));
-      const first = blocks[0];
-      const last = blocks.at(-1);
-      return first && last ? {
-        start: { blockId: first.id, offset: 0 },
-        end: { blockId: last.id, offset: last.content.length },
-        blocks,
-      } : undefined;
+    let result: NormalizedSelection | undefined;
+    if (ranges.length) {
+      // If selection has only block selections
+      if (isStructuralSelection(selection)) {
+        // Get all blocks ids that are selected from all ranges and put inside set
+        // Needed because several ranges might overlap and we need to get all blocks that are selected.
+        const selected = new Set(ranges.flatMap((range) => range.blocks.map((block) => block.id)));
+        // Get all blocks that are selected and additionally exclude unexisting blocks.
+        // And them sort by document order.
+        const blocks = all.filter((block) => selected.has(block.id));
+        const first = blocks[0];
+        const last = blocks.at(-1);
+        result = first && last ? {
+          start: { blockId: first.id, offset: 0 },
+          end: { blockId: last.id, offset: last.content.length },
+          blocks,
+        } : undefined;
+      } else {
+        // Text or mixed: earliest..latest, including blocks in between
+        const compare = (left: EditorPosition, right: EditorPosition): number => {
+          const blockDifference = (indices.get(left.blockId) ?? -1) - (indices.get(right.blockId) ?? -1);
+          return blockDifference || left.offset - right.offset;
+        };
+        const start = ranges
+          .map((range) => range.start)
+          .reduce((earliest, position) => compare(position, earliest) < 0 ? position : earliest);
+        const end = ranges
+          .map((range) => range.end)
+          .reduce((latest, position) => compare(position, latest) > 0 ? position : latest);
+        const startIndex = indices.get(start.blockId);
+        const endIndex = indices.get(end.blockId);
+        if (startIndex !== undefined && endIndex !== undefined) {
+          // Text or mixed: return the first and last block and blocks in between
+          // Merging text items and block items into consecutive range.
+          // Because browser can select text in non-consecutive blocks and we need to merge them into one range.
+          result = {
+            start: { ...start },
+            end: { ...end },
+            blocks: all.slice(startIndex, endIndex + 1),
+          };
+        }
+      }
     }
-    // Text or mixed: earliest..latest, including blocks in between
-    const compare = (left: EditorPosition, right: EditorPosition): number => {
-      const blockDifference = (indices.get(left.blockId) ?? -1) - (indices.get(right.blockId) ?? -1);
-      return blockDifference || left.offset - right.offset;
-    };
-    const start = ranges
-      .map((range) => range.start)
-      .reduce((earliest, position) => compare(position, earliest) < 0 ? position : earliest);
-    const end = ranges
-      .map((range) => range.end)
-      .reduce((latest, position) => compare(position, latest) > 0 ? position : latest);
-    const startIndex = indices.get(start.blockId);
-    const endIndex = indices.get(end.blockId);
-    if (startIndex === undefined || endIndex === undefined) return undefined;
-    // Text or mixed: return the first and last block and blocks in between
-    // Merging text items and block items into consecutive range.
-    // Because browser can select text in non-consecutive blocks and we need to merge them into one range.
-    return {
-      start: { ...start },
-      end: { ...end },
-      blocks: all.slice(startIndex, endIndex + 1),
-    };
+    return result;
   }
 
   /**
@@ -188,34 +195,36 @@ export class SelectionManager {
     // Returns ordered and existing blocks ids for each selection item.
     const normalized = selection.map((item): EditorSelectionItem => {
       if (!item || !["text", "block"].includes(item.type)) throw new Error("Invalid selection");
+      let result: EditorSelectionItem;
       // Text selection is just a pair of positions.
       if (item.type === "text") {
         // Just validate types and block exists
         this.validatePosition(item.anchor.blockId, item.anchor.offset);
         this.validatePosition(item.head.blockId, item.head.offset);
-        return item;
-      }
+        result = item;
+      } else {
+        if (!item.blockIds.length) throw new Error("Selection requires at least one block");
+        item.blockIds.forEach((id) => {
+          if (!this.editor.blocks.getBlock(id)) throw new Error(`Selection block ${id} not found`);
+        });
+        // We check by includes because we can select in order 1, 3, 10 or 3, 10, 1
+        // So we can have non-consecutive blocks selected.
+        if (!item.blockIds.includes(item.anchorBlockId) || !item.blockIds.includes(item.focusBlockId)) {
+          throw new Error("Block selection endpoints must be selected");
+        }
 
-      if (!item.blockIds.length) throw new Error("Selection requires at least one block");
-      item.blockIds.forEach((id) => {
-        if (!this.editor.blocks.getBlock(id)) throw new Error(`Selection block ${id} not found`);
-      });
-      // We check by includes because we can select in order 1, 3, 10 or 3, 10, 1
-      // So we can have non-consecutive blocks selected.
-      if (!item.blockIds.includes(item.anchorBlockId) || !item.blockIds.includes(item.focusBlockId)) {
-        throw new Error("Block selection endpoints must be selected");
+        const selected = new Set(item.blockIds);
+        const ordered: string[] = [];
+        // Visit all blocks and add them to the ordered array if they are selected
+        // Also filter blocks that don't exist.
+        const visit = (blocks: Block[]): void => blocks.forEach((block) => {
+          if (selected.has(block.id)) ordered.push(block.id);
+          visit(block.children);
+        });
+        visit(this.editor.blocks.getBlocks());
+        result = { ...item, blockIds: ordered };
       }
-
-      const selected = new Set(item.blockIds);
-      const ordered: string[] = [];
-      // Visit all blocks and add them to the ordered array if they are selected
-      // Also filter blocks that don't exist.
-      const visit = (blocks: Block[]): void => blocks.forEach((block) => {
-        if (selected.has(block.id)) ordered.push(block.id);
-        visit(block.children);
-      });
-      visit(this.editor.blocks.getBlocks());
-      return { ...item, blockIds: ordered };
+      return result;
     });
 
     // Save copy of normalized selection
@@ -260,23 +269,22 @@ export class SelectionManager {
         } else {
           this.clear();
         }
-        return;
+      } else {
+        // If selection has items with text selections
+        const target = range.blocks[0]!;
+        const end = range.blocks.at(-1) ?? target;
+        const prefix = target.content.slice(0, range.start.offset);
+        const suffix = end.content.slice(range.end.offset);
+        this.editor.document.transact(() => {
+          // Remove all blocks in selection keep only first block and merge text into it.
+          // E.g. we have 4 blocks and selection keeps first part from first block and last part from last block.
+          // 1. "The" 2. "quick" 3. "brown" 4. "fox" and selection is start 1. offset 2 and end 4 offset 1.
+          // The results after removal and text merge will be: 1. "Thox" (remaining part of "The" and "fox") with id of first block
+          range.blocks.slice(1).forEach((block) => this.editor.document.blocks.removeBlock(block.id));
+          this.editor.document.blocks.setBlockText(target.id, prefix + suffix);
+        });
+        this.collapse(target.id, prefix.length);
       }
-
-      // If selection has items with text selections
-      const target = range.blocks[0]!;
-      const end = range.blocks.at(-1) ?? target;
-      const prefix = target.content.slice(0, range.start.offset);
-      const suffix = end.content.slice(range.end.offset);
-      this.editor.document.transact(() => {
-        // Remove all blocks in selection keep only first block and merge text into it.
-        // E.g. we have 4 blocks and selection keeps first part from first block and last part from last block.
-        // 1. "The" 2. "quick" 3. "brown" 4. "fox" and selection is start 1. offset 2 and end 4 offset 1.
-        // The results after removal and text merge will be: 1. "Thox" (remaining part of "The" and "fox") with id of first block
-        range.blocks.slice(1).forEach((block) => this.editor.document.blocks.removeBlock(block.id));
-        this.editor.document.blocks.setBlockText(target.id, prefix + suffix);
-      });
-      this.collapse(target.id, prefix.length);
     } finally {
       this.editor.history.stopCapturing();
     }

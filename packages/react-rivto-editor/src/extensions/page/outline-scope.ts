@@ -41,14 +41,18 @@ export function owningBlockElement(
  */
 export function navigationOutlineBlocks(editor: Editor, blockId: string): EditorBlock[] {
   const roots = editor.blocks.getBlocks();
-  if (editor.mode.get() !== "edgeless") return roots;
-  const element = owningBlockElement(editor, blockId);
-  if (!element) {
-    const root = roots.find((block) => block.id === owningRootId(editor, blockId));
-    return root ? [root] : [];
+  let outline = roots;
+  if (editor.mode.get() === "edgeless") {
+    const element = owningBlockElement(editor, blockId);
+    if (!element) {
+      const root = roots.find((block) => block.id === owningRootId(editor, blockId));
+      outline = root ? [root] : [];
+    } else {
+      const allowed = new Set(blockIdsOf(element, editor.blocks.getRootIds()));
+      outline = roots.filter((block) => allowed.has(block.id));
+    }
   }
-  const allowed = new Set(blockIdsOf(element, editor.blocks.getRootIds()));
-  return roots.filter((block) => allowed.has(block.id));
+  return outline;
 }
 
 /**

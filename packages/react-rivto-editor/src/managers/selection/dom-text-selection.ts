@@ -105,23 +105,28 @@ function savePoint(root: HTMLElement, node: Node, offset: number): SavedPoint {
  * @param point - Value previously produced by {@link savePoint}.
  */
 function restorePoint(root: HTMLElement, point: SavedPoint): [Node, number] {
+  let restored: [Node, number];
   if ("node" in point) return [point.node, point.offset];
 
   // Walk Text nodes only — character Nodes under root, not Element tags.
   const walker = root.ownerDocument.createTreeWalker(root, 4); // NodeFilter.SHOW_TEXT
   let remaining = point.textOffset;
   let textNode = walker.nextNode();
+  // Empty editable: no Text node, but the element itself accepts
+  // a child offset of zero as a valid caret position.
+  restored = [root, 0];
 
   while (textNode) {
     const length = textNode.textContent?.length ?? 0;
-    if (remaining <= length) return [textNode, remaining];
+    if (remaining <= length) {
+      restored = [textNode, remaining];
+      break;
+    }
     remaining -= length;
     textNode = walker.nextNode();
   }
 
-  // Empty editable: no Text node, but the element itself accepts
-  // a child offset of zero as a valid caret position.
-  return [root, 0];
+  return restored;
 }
 
 /**

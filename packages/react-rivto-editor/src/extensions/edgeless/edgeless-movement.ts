@@ -12,13 +12,13 @@ export function registerEdgelessMovement(reactEditor: ReactEditor): void {
     if (!items.length) return false;
     if (editor.commands.has("edgeless.selection.move")) {
       editor.execute("edgeless.selection.move", { dx, dy });
-      return true;
+    } else {
+      const updates = items.flatMap((id) => {
+        const element = editor.elements.getElement(id);
+        return element ? [{ id, patch: { frame: { x: element.frame.x + dx, y: element.frame.y + dy } } }] : [];
+      });
+      if (updates.length) editor.elements.updateElements(updates);
     }
-    const updates = items.flatMap((id) => {
-      const element = editor.elements.getElement(id);
-      return element ? [{ id, patch: { frame: { x: element.frame.x + dx, y: element.frame.y + dy } } }] : [];
-    });
-    if (updates.length) editor.elements.updateElements(updates);
     return true;
   };
 

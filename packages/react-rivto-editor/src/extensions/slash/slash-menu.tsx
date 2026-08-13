@@ -69,12 +69,14 @@ function caretOffset(content: HTMLElement): number | undefined {
   if (!selection?.rangeCount || !selection.isCollapsed || !selection.focusNode || !content.contains(selection.focusNode)) return;
   const range = content.ownerDocument.createRange();
   range.selectNodeContents(content);
+  let offset: number | undefined;
   try {
     range.setEnd(selection.focusNode, selection.focusOffset);
+    offset = range.toString().length;
   } catch {
-    return;
+    offset = undefined;
   }
-  return range.toString().length;
+  return offset;
 }
 
 /** Groups already-ranked commands without changing their search order. */
@@ -128,38 +130,43 @@ export function SlashMenu() {
     const source = content.textContent ?? "";
     const trigger = offset === undefined ? undefined : findSlash(source, offset);
     const current = sessionRef.current;
+    const triggerChanged = Boolean(
+      current && trigger && (current.blockId !== blockId || current.slashOffset !== trigger.slashOffset),
+    );
 
-    if (!trigger || (current && (current.blockId !== blockId || current.slashOffset !== trigger.slashOffset))) {
+    if (!trigger || triggerChanged) {
       if (current) setSession(null);
       if (!trigger) ignoredTrigger.current = undefined;
-      if (!discover) return;
-    }
-    if (!trigger) return;
-
-    const key = `${blockId}:${trigger.slashOffset}`;
-    if (!current && (!discover || ignoredTrigger.current === key)) return;
-    const commands = slashCommands.getAll({ blockId });
-    const matches = rankSlashCommands(commands, trigger.query);
-    const lastMatchedLength = matches.length
-      ? trigger.query.length
-      : current?.lastMatchedLength ?? 0;
-    if (!matches.length && !keepNoResultMenuOpen(trigger.query.length, lastMatchedLength)) {
-      ignoredTrigger.current = key;
-      setSession(null);
-      return;
     }
 
-    const position = popupPosition(content);
-    setSession({
-      blockId,
-      slashOffset: trigger.slashOffset,
-      query: trigger.query,
-      lastMatchedLength,
-      ...position,
-      activeIndex: matches.length
-        ? Math.min(current?.activeIndex ?? 0, matches.length - 1)
-        : 0,
-    });
+    const key = trigger ? `${blockId}:${trigger.slashOffset}` : undefined;
+    if (
+      trigger && key &&
+      (discover || !triggerChanged) &&
+      (current || (discover && ignoredTrigger.current !== key))
+    ) {
+      const commands = slashCommands.getAll({ blockId });
+      const matches = rankSlashCommands(commands, trigger.query);
+      const lastMatchedLength = matches.length
+        ? trigger.query.length
+        : current?.lastMatchedLength ?? 0;
+      if (!matches.length && !keepNoResultMenuOpen(trigger.query.length, lastMatchedLength)) {
+        ignoredTrigger.current = key;
+        setSession(null);
+      } else {
+        const position = popupPosition(content);
+        setSession({
+          blockId,
+          slashOffset: trigger.slashOffset,
+          query: trigger.query,
+          lastMatchedLength,
+          ...position,
+          activeIndex: matches.length
+            ? Math.min(current?.activeIndex ?? 0, matches.length - 1)
+            : 0,
+        });
+      }
+    }
   }, [slashCommands]);
 
   useDOMEvent({

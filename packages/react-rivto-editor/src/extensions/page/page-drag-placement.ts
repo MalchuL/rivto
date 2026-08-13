@@ -14,13 +14,13 @@ export interface AfterDropPlacement {
 
 /** Returns the root-to-block path for one block ID. */
 function findBlockPath(blocks: DropBlock[], targetId: string, parents: DropBlock[] = []): DropBlock[] | undefined {
+  let found: DropBlock[] | undefined;
   for (const block of blocks) {
     const path = [...parents, block];
-    if (block.id === targetId) return path;
-    const childPath = findBlockPath(block.children, targetId, path);
-    if (childPath) return childPath;
+    found = block.id === targetId ? path : findBlockPath(block.children, targetId, path);
+    if (found) break;
   }
-  return undefined;
+  return found;
 }
 
 /** Finds the shallowest structurally valid level at the end of a block path. */

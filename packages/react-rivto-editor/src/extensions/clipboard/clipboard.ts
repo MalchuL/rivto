@@ -179,14 +179,17 @@ export function registerClipboard(
           content: prepared.content ?? "",
           children: [],
         } satisfies EditorBlock;
+        let result: EditorBlock | undefined;
         try {
           validateBlock(replacement);
-          return reactEditor.blocks.validateListProps(replacement.listProps) ? replacement : undefined;
+          result = reactEditor.blocks.validateListProps(replacement.listProps) ? replacement : undefined;
         } catch {
-          return undefined;
+          result = undefined;
         }
+        return result;
       };
       const prepare = (block: EditorBlock): EditorBlock | undefined => {
+        let result: EditorBlock | undefined;
         try {
           validateBlock(block);
           const candidate = {
@@ -196,11 +199,12 @@ export function registerClipboard(
           if (!reactEditor.blocks.validateListProps(candidate.listProps)) {
             throw new TypeError("Invalid block list properties");
           }
-          return { ...candidate, children: block.children.flatMap((child) => prepare(child) ?? []) };
+          result = { ...candidate, children: block.children.flatMap((child) => prepare(child) ?? []) };
         } catch (error) {
           const replacement = options.onBlockError?.(block, error);
-          return replacement ? materializeReplacement(replacement) : undefined;
+          result = replacement ? materializeReplacement(replacement) : undefined;
         }
+        return result;
       };
       sourceBundle = { ...sourceBundle, blocks: sourceBundle.blocks.flatMap((block) => prepare(block) ?? []) };
       structured = JSON.stringify(sourceBundle);
@@ -304,23 +308,27 @@ export function registerClipboard(
     const current = editor.selection.get();
     const canvas = canvasSelection();
     if (!editorHasFocus || (!canvas && (!current.length || !isStructuralSelection(current)))) return false;
+    let handled = false;
     if (event.type === "paste") {
       pasteClipboard(event);
-      return true;
+      handled = true;
+    } else {
+      const payload = canvas
+        ? editor.clipboard.copy([canvas])
+        : event.type === "cut" ? editor.clipboard.cut() : editor.clipboard.copy();
+      if (payload) {
+        writeClipboard(event, payload);
+        if (canvas && event.type === "cut") {
+          editor.batchUpdates(() => {
+            canvas.blockIds.forEach((id) => editor.blocks.removeBlock(id));
+            editor.elements.removeElements(selectedCanvasElementIds());
+          });
+          findEdgelessRuntime(reactEditor)?.clear();
+        }
+        handled = true;
+      }
     }
-    const payload = canvas
-      ? editor.clipboard.copy([canvas])
-      : event.type === "cut" ? editor.clipboard.cut() : editor.clipboard.copy();
-    if (!payload) return false;
-    writeClipboard(event, payload);
-    if (canvas && event.type === "cut") {
-      editor.batchUpdates(() => {
-        canvas.blockIds.forEach((id) => editor.blocks.removeBlock(id));
-        editor.elements.removeElements(selectedCanvasElementIds());
-      });
-      findEdgelessRuntime(reactEditor)?.clear();
-    }
-    return true;
+    return handled;
   };
 
   reactEditor.events.register({

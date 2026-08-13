@@ -129,11 +129,15 @@ export function elementContainsBlock(
 ): boolean {
   const roots = new Set(blockIdsOf(element, rootIds));
   let id: string | null | undefined = blockId;
+  let contains = false;
   while (id) {
-    if (roots.has(id)) return true;
+    if (roots.has(id)) {
+      contains = true;
+      break;
+    }
     id = editor.blocks.getParentId(id);
   }
-  return false;
+  return contains;
 }
 
 /** @returns Inclusive persisted boundaries for one non-empty ordered root range. */

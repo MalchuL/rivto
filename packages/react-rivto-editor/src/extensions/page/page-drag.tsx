@@ -226,32 +226,34 @@ function resolveGeometryPlacement(
   gapDropZone: number,
 ): DropPlacement | null {
   const edgeSize = Math.min(gapDropZone, row.rect.height / 3);
+  let result: DropPlacement | null = null;
   if (cursorY >= row.rect.top + edgeSize && cursorY <= row.rect.bottom - edgeSize) {
-    return {
+    result = {
       targetId: row.id,
       position: "inside",
       indicatorId: row.id,
       indicatorOffset: 0,
     };
-  }
-  if (cursorY <= row.rect.bottom - edgeSize) {
-    return {
+  } else if (cursorY <= row.rect.bottom - edgeSize) {
+    result = {
       targetId: row.id,
       position: "before",
       indicatorId: row.id,
       indicatorEdge: "before",
       indicatorOffset: 0,
     };
+  } else {
+    const depthOffset = Math.trunc((cursorX - row.rect.left) / childDropIndent);
+    const placement = resolveAfterDropPlacement(blocks, row.id, depthOffset);
+    result = placement ? {
+      targetId: placement.targetId,
+      position: placement.position,
+      indicatorId: row.id,
+      indicatorEdge: "after",
+      indicatorOffset: placement.depthOffset * PAGE_INDENT,
+    } : null;
   }
-  const depthOffset = Math.trunc((cursorX - row.rect.left) / childDropIndent);
-  const placement = resolveAfterDropPlacement(blocks, row.id, depthOffset);
-  return placement ? {
-    targetId: placement.targetId,
-    position: placement.position,
-    indicatorId: row.id,
-    indicatorEdge: "after",
-    indicatorOffset: placement.depthOffset * PAGE_INDENT,
-  } : null;
+  return result;
 }
 
 function resolveCrossDocumentPageRootPlacement(
@@ -267,22 +269,28 @@ function resolveCrossDocumentPageRootPlacement(
     const id = block.dataset.blockId;
     return row && id ? [{ id, rect: row.getBoundingClientRect() }] : [];
   });
-  if (rows.length === 0) return { targetId: null, position: "after", indicator: null };
-  const row = closestPageRow(rows, y);
-  if (!row) return null;
-  const indicator = resolveGeometryPlacement(
-    editor.blocks.getBlocks(),
-    row,
-    x,
-    y,
-    childDropIndent,
-    gapDropZone,
-  );
-  return indicator ? {
-    targetId: indicator.targetId,
-    position: indicator.position,
-    indicator,
-  } : null;
+  let result: (CrossDocumentBlockTransferPlacement & { readonly indicator: DropPlacement | null }) | null = null;
+  if (rows.length === 0) {
+    result = { targetId: null, position: "after", indicator: null };
+  } else {
+    const row = closestPageRow(rows, y);
+    if (row) {
+      const indicator = resolveGeometryPlacement(
+        editor.blocks.getBlocks(),
+        row,
+        x,
+        y,
+        childDropIndent,
+        gapDropZone,
+      );
+      result = indicator ? {
+        targetId: indicator.targetId,
+        position: indicator.position,
+        indicator,
+      } : null;
+    }
+  }
+  return result;
 }
 
 /**
@@ -317,8 +325,9 @@ function resolveDropPlacement(
     ? activator.clientY + event.delta.y
     : activeRect ? activeRect.top + activeRect.height / 2 : event.over.rect.top;
   const hasPointerY = typeof activator.clientY === "number";
+  let result: DropPlacement | null = null;
   if (pointerX !== undefined && hasPointerY) {
-    return resolveGeometryPlacement(
+    result = resolveGeometryPlacement(
       blocks,
       { id: indicatorId, rect: event.over.rect },
       cursorX,
@@ -326,41 +335,43 @@ function resolveDropPlacement(
       childDropIndent,
       gapDropZone,
     );
+  } else {
+    const edgeSize = Math.min(gapDropZone, event.over.rect.height / 3);
+    if (hasPointerY
+      && cursorY >= event.over.rect.top + edgeSize
+      && cursorY <= event.over.rect.bottom - edgeSize) {
+      result = {
+        targetId: indicatorId,
+        position: "inside",
+        indicatorId,
+        indicatorOffset: 0,
+      };
+    } else {
+      const after = hasPointerY
+        ? cursorY > event.over.rect.bottom - edgeSize
+        : cursorY >= event.over.rect.top + event.over.rect.height / 2;
+      if (!after) {
+        result = {
+          targetId: indicatorId,
+          position: "before",
+          indicatorId,
+          indicatorEdge: "before",
+          indicatorOffset: 0,
+        };
+      } else {
+        const depthOffset = 0;
+        const placement = resolveAfterDropPlacement(blocks, indicatorId, depthOffset);
+        result = placement ? {
+          targetId: placement.targetId,
+          position: placement.position,
+          indicatorId,
+          indicatorEdge: "after",
+          indicatorOffset: placement.depthOffset * PAGE_INDENT,
+        } : null;
+      }
+    }
   }
-  const edgeSize = Math.min(gapDropZone, event.over.rect.height / 3);
-  if (hasPointerY
-    && cursorY >= event.over.rect.top + edgeSize
-    && cursorY <= event.over.rect.bottom - edgeSize) {
-    return {
-      targetId: indicatorId,
-      position: "inside",
-      indicatorId,
-      indicatorOffset: 0,
-    };
-  }
-  const after = hasPointerY
-    ? cursorY > event.over.rect.bottom - edgeSize
-    : cursorY >= event.over.rect.top + event.over.rect.height / 2;
-  if (!after) {
-    return {
-      targetId: indicatorId,
-      position: "before",
-      indicatorId,
-      indicatorEdge: "before",
-      indicatorOffset: 0,
-    };
-  }
-
-  const depthOffset = 0;
-  const placement = resolveAfterDropPlacement(blocks, indicatorId, depthOffset);
-  if (!placement) return null;
-  return {
-    targetId: placement.targetId,
-    position: placement.position,
-    indicatorId,
-    indicatorEdge: "after",
-    indicatorOffset: placement.depthOffset * PAGE_INDENT,
-  };
+  return result;
 }
 
 /** One visible row in the height-limited, pre-order subtree preview. */
@@ -520,18 +531,20 @@ export function PageDragProvider({
     if (editor.mode.get() !== "block") return false;
     const pointer = eventPointer(event);
     const controller = pointer ? findCrossDocumentPageController(root, pointer) : null;
+    let handled = false;
     if (!pointer || !controller) {
       clearCrossDocumentTarget();
-      return false;
+    } else {
+      if (crossDocumentTarget.current?.controller !== controller) clearCrossDocumentTarget();
+      const placement = controller.resolvePlacement(pointer.x, pointer.y);
+      controller.setPlacement(placement?.indicator ?? null, placement?.targetId === null);
+      crossDocumentTarget.current = placement ? {
+        controller,
+        placement: { targetId: placement.targetId, position: placement.position },
+      } : null;
+      handled = true;
     }
-    if (crossDocumentTarget.current?.controller !== controller) clearCrossDocumentTarget();
-    const placement = controller.resolvePlacement(pointer.x, pointer.y);
-    controller.setPlacement(placement?.indicator ?? null, placement?.targetId === null);
-    crossDocumentTarget.current = placement ? {
-      controller,
-      placement: { targetId: placement.targetId, position: placement.position },
-    } : null;
-    return true;
+    return handled;
   };
 
   /** Removes feedback for targets owned by any currently moved subtree. */
@@ -548,10 +561,16 @@ export function PageDragProvider({
     return invalid ? null : placement;
   };
   const collisionDetection: CollisionDetection = (arguments_) => {
-    if (editor.mode.get() === "edgeless") return edgelessCollisionDetection(arguments_);
-    const pointer = arguments_.pointerCoordinates;
-    if (pointer && findCrossDocumentPageController(root, pointer)) return [];
-    return pageCollisionDetection(arguments_);
+    let collisions: ReturnType<CollisionDetection>;
+    if (editor.mode.get() === "edgeless") {
+      collisions = edgelessCollisionDetection(arguments_);
+    } else {
+      const pointer = arguments_.pointerCoordinates;
+      collisions = pointer && findCrossDocumentPageController(root, pointer)
+        ? []
+        : pageCollisionDetection(arguments_);
+    }
+    return collisions;
   };
 
   /**
@@ -588,6 +607,7 @@ export function PageDragProvider({
     setDropPlacement(null);
     clearCrossDocumentTarget();
     if (crossDocument && move) {
+      let transferred = false;
       try {
         crossDocumentBlockTransfer(
           editor,
@@ -595,35 +615,36 @@ export function PageDragProvider({
           move.ids,
           crossDocument.placement,
         );
+        transferred = true;
       } catch {
-        return;
+        transferred = false;
       }
-      editor.selection.clear();
-      const firstId = move.ids[0]!;
-      const lastId = move.ids.at(-1)!;
-      crossDocument.controller.editor.selection.set([{
-        type: "block",
-        blockIds: [...move.ids],
-        anchorBlockId: firstId,
-        focusBlockId: lastId,
-      }]);
-      requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));
-      return;
+      if (transferred) {
+        editor.selection.clear();
+        const firstId = move.ids[0]!;
+        const lastId = move.ids.at(-1)!;
+        crossDocument.controller.editor.selection.set([{
+          type: "block",
+          blockIds: [...move.ids],
+          anchorBlockId: firstId,
+          focusBlockId: lastId,
+        }]);
+        requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));
+      }
+    } else if (placement && move) {
+      const { targetId, position } = placement;
+      editor.blocks.moveBlocks(move.ids, targetId, position);
+      const selection = move.grouped && move.selection
+        ? move.selection
+        : {
+            type: "block" as const,
+            blockIds: [move.ids[0]!],
+            anchorBlockId: move.ids[0]!,
+            focusBlockId: move.ids[0]!,
+      };
+      editor.selection.set([selection]);
+      requestAnimationFrame(() => root?.focus({ preventScroll: true }));
     }
-    if (!placement || !move) return;
-
-    const { targetId, position } = placement;
-    editor.blocks.moveBlocks(move.ids, targetId, position);
-    const selection = move.grouped && move.selection
-      ? move.selection
-      : {
-          type: "block" as const,
-          blockIds: [move.ids[0]!],
-          anchorBlockId: move.ids[0]!,
-          focusBlockId: move.ids[0]!,
-    };
-    editor.selection.set([selection]);
-    requestAnimationFrame(() => root?.focus({ preventScroll: true }));
   };
 
   return (

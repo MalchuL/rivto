@@ -432,8 +432,13 @@ export function readDOMSelectionPoint(root: HTMLElement, x: number, y: number): 
     .caretRangeFromPoint?.(x, y);
   const node = caret?.offsetNode ?? fallback?.startContainer;
   const offset = caret?.offset ?? fallback?.startOffset;
-  if (node && offset !== undefined && content.contains(node)) return { node, offset, content };
-  return nearestTextPoint(content, x, y);
+  let point: DOMSelectionPoint;
+  if (node && offset !== undefined && content.contains(node)) {
+    point = { node, offset, content };
+  } else {
+    point = nearestTextPoint(content, x, y);
+  }
+  return point;
 }
 
 /**
@@ -450,26 +455,29 @@ export function readDOMSelectionPoint(root: HTMLElement, x: number, y: number): 
 export function setNativeSelection(anchor: DOMSelectionPoint, head: DOMSelectionPoint): void {
   const selection = anchor.content.ownerDocument.getSelection();
   if (!selection) return;
+  let restored = false;
   try {
     // Ends are Nodes (usually Text), not HTMLElements — same model as getSelection().
     selection.setBaseAndExtent(anchor.node, anchor.offset, head.node, head.offset);
-    return;
+    restored = true;
   } catch {
     // Fall through to a normalized Range for detached/browser-rejected points.
   }
 
-  // Range requires document order; compareDocumentPosition works on any Node
-  // (Text or Element), which is why endpoints stay typed as Node.
-  const anchorBeforeHead = anchor.node === head.node
-    ? anchor.offset <= head.offset
-    : Boolean(anchor.node.compareDocumentPosition(head.node) & Node.DOCUMENT_POSITION_FOLLOWING);
-  const start = anchorBeforeHead ? anchor : head;
-  const end = anchorBeforeHead ? head : anchor;
-  const range = anchor.content.ownerDocument.createRange();
-  range.setStart(start.node, start.offset);
-  range.setEnd(end.node, end.offset);
-  selection.removeAllRanges();
-  selection.addRange(range);
+  if (!restored) {
+    // Range requires document order; compareDocumentPosition works on any Node
+    // (Text or Element), which is why endpoints stay typed as Node.
+    const anchorBeforeHead = anchor.node === head.node
+      ? anchor.offset <= head.offset
+      : Boolean(anchor.node.compareDocumentPosition(head.node) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const start = anchorBeforeHead ? anchor : head;
+    const end = anchorBeforeHead ? head : anchor;
+    const range = anchor.content.ownerDocument.createRange();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
 }
 
 /**
@@ -493,16 +501,23 @@ function pointAtOffset(content: HTMLElement, requestedOffset: number): { node: N
   const walker = content.ownerDocument.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
   let remaining = Math.max(0, requestedOffset);
   let last: Node | undefined;
+  let point: { node: Node; offset: number } | undefined;
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     last = node;
     const length = node.textContent?.length ?? 0;
-    if (remaining <= length) return { node, offset: remaining };
+    if (remaining <= length) {
+      point = { node, offset: remaining };
+      break;
+    }
     remaining -= length;
   }
   // Past the end → clamp to last Text node; empty content → content Element.
-  return last
-    ? { node: last, offset: last.textContent?.length ?? 0 }
-    : { node: content, offset: 0 };
+  if (!point) {
+    point = last
+      ? { node: last, offset: last.textContent?.length ?? 0 }
+      : { node: content, offset: 0 };
+  }
+  return point;
 }
 
 /**

@@ -53,12 +53,16 @@ function cloneBlock(block: Block): Block {
  * @returns The matching detached block, or undefined when it is absent.
  */
 export function findBlock(blocks: Block[], id: string): Block | undefined {
+  let found: Block | undefined;
   for (const block of blocks) {
-    if (block.id === id) return block;
-    const child = findBlock(block.children, id);
-    if (child) return child;
+    if (block.id === id) {
+      found = block;
+      break;
+    }
+    found = findBlock(block.children, id);
+    if (found) break;
   }
-  return undefined;
+  return found;
 }
 
 /**
@@ -102,11 +106,15 @@ export function cloneSelectedTopLevelSubtrees(
   });
   return range.blocks.filter((block) => {
     let parent = parents.get(block.id);
+    let isTopLevel = true;
     while (parent) {
-      if (selectedIds.has(parent)) return false;
+      if (selectedIds.has(parent)) {
+        isTopLevel = false;
+        break;
+      }
       parent = parents.get(parent);
     }
-    return true;
+    return isTopLevel;
   }).map(wholeBlocks ? cloneBlock : cloneSelection);
 }
 
