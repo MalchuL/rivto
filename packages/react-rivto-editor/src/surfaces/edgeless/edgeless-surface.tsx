@@ -6,7 +6,14 @@ import {
   useReactEditor,
 } from "../../hooks";
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
-import { useCallback, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { EdgelessToolButton } from "../../extensions/edgeless/visuals/components/tool-button";
 import { EDGELESS_GRID_SIZE } from "../../extensions/edgeless/visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
@@ -263,7 +270,18 @@ export function EdgelessSurface({ snapping }: { readonly snapping: EdgelessSnapp
       <div
         className="edgeless-plane"
         data-edgeless-plane="true"
-        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          // Move and size the capture box against the plane transform so it
+          // continues covering the viewport after any pan or zoom. The offset
+          // variables below restore absolute canvas coordinates inside that box.
+          "--edgeless-capture-left": `${-pan.x / zoom}px`,
+          "--edgeless-capture-top": `${-pan.y / zoom}px`,
+          "--edgeless-capture-width": `${100 / zoom}%`,
+          "--edgeless-capture-height": `${100 / zoom}%`,
+          "--edgeless-capture-offset-x": `${pan.x / zoom}px`,
+          "--edgeless-capture-offset-y": `${pan.y / zoom}px`,
+        } as CSSProperties}
       >
         {/* Element boundary IDs resolve against current root order; inserted
             roots between them render without rewriting element props. */}

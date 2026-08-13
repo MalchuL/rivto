@@ -293,6 +293,36 @@ test("shows compact creation and contextual toolbars and places at the click poi
   await expect(page.getByRole("toolbar", { name: "Canvas zoom" })).toHaveCSS("bottom", "14px");
 });
 
+test("creates visuals in canvas regions exposed by panning", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const viewport = page.locator(".edgeless-viewport");
+  const box = await viewport.boundingBox();
+  if (!box) throw new Error("Expected viewport geometry");
+
+  const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down({ button: "middle" });
+  await page.mouse.move(center.x + 300, center.y, { steps: 6 });
+  await page.mouse.up({ button: "middle" });
+
+  // Panning right exposes the viewport's left side beyond the capture SVG's
+  // original bounds; both placement and drawing must remain available there.
+  const shapes = await openCreateMenu(page, "Shapes");
+  await shapes.getByRole("button", { name: "Rectangle" }).click();
+  const exposedPoint = { x: box.x + 80, y: box.y + 180 };
+  await page.mouse.click(exposedPoint.x, exposedPoint.y);
+  await expect(page.locator('[data-edgeless-visual-kind="rectangle"][data-selected="true"]')).toHaveCount(1);
+
+  const drawings = page.locator('[data-edgeless-visual-kind="drawing"]');
+  const drawingsBefore = await drawings.count();
+  await chooseDrawing(page, "Pen");
+  await page.mouse.move(box.x + 80, box.y + 320);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 180, box.y + 350, { steps: 6 });
+  await page.mouse.up();
+  await expect(drawings).toHaveCount(drawingsBefore + 1);
+});
+
 test("snaps creation, reuses the active preset size, and constrains Shift drags", async ({ page }) => {
   await switchMode(page, "edgeless");
   const zoom = page.getByRole("toolbar", { name: "Canvas zoom" });

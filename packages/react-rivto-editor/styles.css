@@ -644,12 +644,16 @@
   display: contents;
 }
 
+/* Counter-transform the hit surface so the panned plane cannot move drawing
+   and placement coverage away from newly exposed viewport regions. */
 .edgeless-drawing-capture {
   position: absolute;
   z-index: 0;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  inset: auto;
+  top: var(--edgeless-capture-top, 0);
+  left: var(--edgeless-capture-left, 0);
+  width: var(--edgeless-capture-width, 100%);
+  height: var(--edgeless-capture-height, 100%);
   pointer-events: none;
 }
 

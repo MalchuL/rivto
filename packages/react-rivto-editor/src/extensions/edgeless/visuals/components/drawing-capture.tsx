@@ -77,6 +77,11 @@ export function DrawingCapture({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
+      {/* The capture box follows the viewport, while previews use absolute
+          canvas coordinates. Restore the panned plane origin for their paths. */}
+      <g style={{
+        transform: "translate(var(--edgeless-capture-offset-x, 0px), var(--edgeless-capture-offset-y, 0px))",
+      }}>
       {preview.length > 1 && tool.tool === "drawing" && (
         <path
           d={preview.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ")}
@@ -143,6 +148,7 @@ export function DrawingCapture({
           ))}
         </g>
       )}
+      </g>
     </svg>
   );
 }
