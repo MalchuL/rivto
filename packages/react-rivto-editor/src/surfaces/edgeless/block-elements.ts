@@ -1,13 +1,73 @@
 import type { EditorBlock, EditorElement } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
+import { EDGELESS_GRID_SIZE } from "../../extensions/edgeless/visuals/utils/geometry";
 
 export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
 export const EDGELESS_BLOCK_ELEMENT_ID_PREFIX = "rivto:block-element:";
-export const EDGELESS_CARD_DEFAULT_FRAME = { x: 60, y: 60, width: 320, height: 120 } as const;
+export const EDGELESS_CARD_DEFAULT_FRAME = { x: 60, y: 60, width: 720, height: 120 } as const;
+export const EDGELESS_BLOCK_PLACEMENT_STEP = EDGELESS_GRID_SIZE;
 const RECONCILE_ORIGIN = Symbol("rivto-react-block-elements");
+const placementSettings = new WeakMap<ReactEditor, boolean>();
+const defaultWidthSettings = new WeakMap<ReactEditor, number>();
 
 interface ReconciliationState {
   readonly memberships: ReadonlyMap<string, readonly string[]>;
+}
+
+/**
+ * Configures whether future reconciled block cards avoid existing cards.
+ *
+ * @param reactEditor - Runtime whose reconciler reads the behavior.
+ * @param enabled - Whether new cards should search for a free frame.
+ */
+export function setBlockElementOverlapAvoidance(reactEditor: ReactEditor, enabled: boolean): void {
+  placementSettings.set(reactEditor, enabled);
+}
+
+/**
+ * Configures the width used only when the reconciler creates a new block card.
+ *
+ * @param reactEditor - Runtime whose reconciler reads the width.
+ * @param width - Positive finite width in canvas units.
+ */
+export function setBlockElementDefaultWidth(reactEditor: ReactEditor, width: number): void {
+  defaultWidthSettings.set(reactEditor, Number.isFinite(width) && width > 0 ? width : EDGELESS_CARD_DEFAULT_FRAME.width);
+}
+
+/**
+ * Tests whether two positive frames overlap with area; touching edges are allowed.
+ *
+ * @param left - First candidate frame.
+ * @param right - Second candidate frame.
+ * @returns Whether their intersection has positive width and height.
+ */
+export function blockFramesOverlap(left: EditorElement["frame"], right: EditorElement["frame"]): boolean {
+  return left.x < right.x + right.width
+    && left.x + left.width > right.x
+    && left.y < right.y + right.height
+    && left.y + left.height > right.y;
+}
+
+/**
+ * Finds the first free right/down grid position in deterministic Manhattan shells.
+ *
+ * @param preferred - Requested starting frame.
+ * @param occupied - Frames that the result must not overlap.
+ * @param step - Positive grid offset between candidates.
+ * @returns The preferred frame or the first deterministic free candidate.
+ */
+export function nonOverlappingBlockFrame(
+  preferred: EditorElement["frame"],
+  occupied: readonly EditorElement["frame"][],
+  step = EDGELESS_BLOCK_PLACEMENT_STEP,
+): EditorElement["frame"] {
+  const offset = Math.max(1, step);
+  for (let shell = 0; ; shell += 1) {
+    for (let xStep = shell; xStep >= 0; xStep -= 1) {
+      const candidate = { ...preferred, x: preferred.x + xStep * offset, y: preferred.y + (shell - xStep) * offset };
+      if (!occupied.some((frame) => blockFramesOverlap(candidate, frame))) return candidate;
+    }
+  }
 }
 
 // Range endpoints are canonical persisted data, but moving an endpoint makes
@@ -98,6 +158,8 @@ export interface BlockElementProps {
   readonly startBlockId: string;
   /** Last root rendered by the card. */
   readonly endBlockId: string;
+  /** Missing/true fits the card height to all rendered blocks; false keeps a fixed frame. */
+  readonly autoHeight?: boolean;
 }
 
 /**
@@ -215,14 +277,18 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
     });
   });
   const matches = maximumWeightMatching(weights);
+  const avoidOverlap = placementSettings.get(reactEditor) !== false;
+  const defaultWidth = defaultWidthSettings.get(reactEditor) ?? EDGELESS_CARD_DEFAULT_FRAME.width;
+  const occupied = existing.map((element) => element.frame);
   const desired = segments.map((blocks, index): EditorElement => {
     const existingElement = existing[matches[index] ?? -1];
+    const preferred = { ...EDGELESS_CARD_DEFAULT_FRAME, width: defaultWidth, x: 60 + index * 24, y: 60 + index * 24 };
+    const frame = existingElement?.frame ?? (avoidOverlap ? nonOverlappingBlockFrame(preferred, occupied) : preferred);
+    if (!existingElement) occupied.push(frame);
     return {
       id: existingElement?.id ?? `${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${blocks[0]!.id}`,
       type: EDGELESS_BLOCK_ELEMENT_TYPE,
-      frame: existingElement
-        ? existingElement.frame
-        : { ...EDGELESS_CARD_DEFAULT_FRAME, x: 60 + index * 24, y: 60 + index * 24 },
+      frame,
       zIndex: existingElement?.zIndex ?? index,
       props: { ...existingElement?.props, ...blockRangeProps(blocks.map((block) => block.id)) },
     };

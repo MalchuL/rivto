@@ -9,7 +9,7 @@ import {
   type CreationSnapOptions,
 } from "../utils/creation-geometry";
 import { padDrawingFrame } from "../utils/drawing-frame";
-import { edgeAnchors, inflateFrame, nearestAnchor, pointInFrame, segmentIntersectsFrame } from "../utils/geometry";
+import { edgeAnchors, endpointPoint, inflateFrame, nearestAnchor, pointInRotatedFrame, segmentIntersectsRotatedFrame } from "../utils/geometry";
 import { showSnapGuides } from "../utils/snap-guides";
 
 /** Outside attach halo in canvas units (screen-constant via zoom). */
@@ -57,13 +57,11 @@ function placePayload(tool: Extract<EdgelessVisualTool, { tool: "place" }>, fram
 export function useDrawingGesture({
   controller,
   root,
-  plane,
   zoom,
   tool,
 }: {
   controller: EdgelessVisualController;
   root: HTMLElement | null;
-  plane: HTMLElement | null;
   zoom: number;
   tool: EdgelessVisualTool;
 }) {
@@ -98,7 +96,7 @@ export function useDrawingGesture({
   const objectAt = (point: CanvasPoint): string | undefined => {
     const candidates = controller.reactEditor.editor.elements.getElements()
       .filter((element) => element.type !== "connector" && element.type !== "group"
-        && pointInFrame(point, inflateFrame(element.frame, attachPad)))
+        && pointInRotatedFrame(point, inflateFrame(element.frame, attachPad), controller.getRotation(element.id)))
       .sort((a, b) => b.zIndex - a.zIndex);
     let id = candidates[0]?.id;
     while (id) {
@@ -110,22 +108,24 @@ export function useDrawingGesture({
   };
 
   const endpoint = (id: string, point: CanvasPoint): ConnectorEndpoint => {
-    const frame = controller.getBounds(id)!;
-    const anchor = nearestAnchor(frame, point);
-    return { elementId: id, anchor, position: { x: frame.x + frame.width * anchor.x, y: frame.y + frame.height * anchor.y } };
+    const frame = controller.getFrame(id)!;
+    const rotation = controller.getRotation(id);
+    const anchor = nearestAnchor(frame, point, rotation);
+    return { elementId: id, anchor, position: endpointPoint({ anchor, position: point }, frame, rotation) };
   };
 
   const hoverFor = (point: CanvasPoint, excludeId?: string): ConnectorHover | null => {
     const id = objectAt(point);
     if (!id || id === excludeId) return null;
-    const frame = controller.getBounds(id);
+    const frame = controller.getFrame(id);
     if (!frame) return null;
-    const nearest = nearestAnchor(frame, point);
+    const rotation = controller.getRotation(id);
+    const nearest = nearestAnchor(frame, point, rotation);
     return {
       elementId: id,
       frame,
-      outline: inflateFrame(frame, attachPad),
-      anchors: edgeAnchors(frame).map((anchor) => ({
+      outline: inflateFrame(controller.getBounds(id) ?? frame, attachPad),
+      anchors: edgeAnchors(frame, rotation).map((anchor) => ({
         x: anchor.x,
         y: anchor.y,
         active: anchor.ax === nearest.x && anchor.ay === nearest.y,
@@ -178,7 +178,7 @@ export function useDrawingGesture({
 
   const pointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (tool.tool === "select" || tool.tool === "pan" || event.button !== 0) return;
-    const point = canvasPoint(event.nativeEvent, plane, zoom);
+    const point = canvasPoint(event.nativeEvent, root, zoom);
     const start: Gesture = { pointerId: event.pointerId, points: [point], erased: new Set() };
     if (tool.tool === "connector") {
       const id = objectAt(point);
@@ -199,7 +199,7 @@ export function useDrawingGesture({
   };
 
   const pointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const point = canvasPoint(event.nativeEvent, plane, zoom);
+    const point = canvasPoint(event.nativeEvent, root, zoom);
     if (tool.tool === "connector") {
       const active = gesture.current;
       if (!active || active.pointerId !== event.pointerId) {
@@ -248,7 +248,7 @@ export function useDrawingGesture({
     if (tool.tool === "eraser") {
       const elements = controller.reactEditor.editor.elements.getElements().filter((element) => element.type !== "group");
       elements.forEach((element) => {
-        if (!segmentIntersectsFrame(previous, point, element.frame)) return;
+        if (!segmentIntersectsRotatedFrame(previous, point, element.frame, controller.getRotation(element.id))) return;
         let id = element.id;
         while (controller.getParentId(id)) id = controller.getParentId(id)!;
         active.erased.add(id);
@@ -296,7 +296,7 @@ export function useDrawingGesture({
       setPlacePreview(placedFrame(end, event.altKey).frame);
     }
     if (tool.tool === "connector") {
-      const point = canvasPoint(event.nativeEvent, plane, zoom);
+      const point = canvasPoint(event.nativeEvent, root, zoom);
       setConnectorHover(hoverFor(point));
     }
   };

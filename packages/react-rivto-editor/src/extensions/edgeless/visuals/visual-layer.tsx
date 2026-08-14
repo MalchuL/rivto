@@ -4,6 +4,7 @@ import { useEditorMode, useEditorRoot } from "../../../hooks";
 import { useEdgelessSelection } from "../edgeless-runtime";
 import { EdgelessDragHandle } from "../edgeless-drag-handle";
 import { DrawingCapture } from "./components/drawing-capture";
+import { BlockProperties } from "./components/block-properties";
 import { SelectionToolbar } from "./components/selection-toolbar";
 import { ToolBar } from "./components/tool-bar";
 import { VisualElement } from "./components/visual-element";
@@ -46,27 +47,27 @@ export function EdgelessVisualLayer({
     [options.stickers],
   );
   const presetDrag = usePresetDrag({ controller, root, plane, zoom });
-  const drawing = useDrawingGesture({ controller, root, plane, zoom, tool });
+  const drawing = useDrawingGesture({ controller, root, zoom, tool });
   const drawingRef = useRef(drawing);
   drawingRef.current = drawing;
   const [reconnectHover, setReconnectHover] = useState<ConnectorHover | null>(null);
 
   const resolveEndpoint = useCallback((event: Pick<PointerEvent, "clientX" | "clientY">): ConnectorEndpoint => {
-    const point = canvasPoint(event, plane, zoom);
+    const point = canvasPoint(event, root, zoom);
     const targetId = drawingRef.current.objectAt(point);
     return targetId
       ? drawingRef.current.endpoint(targetId, point)
       : { elementId: undefined, anchor: { x: .5, y: .5 }, position: point };
-  }, [plane, zoom]);
+  }, [root, zoom]);
 
   const onReconnectHover = useCallback((event: Pick<PointerEvent, "clientX" | "clientY"> | null) => {
     if (!event) {
       setReconnectHover(null);
       return;
     }
-    const point = canvasPoint(event, plane, zoom);
+    const point = canvasPoint(event, root, zoom);
     setReconnectHover(drawingRef.current.hoverFor(point));
-  }, [plane, zoom]);
+  }, [root, zoom]);
 
   useEffect(() => {
     if (!root) return;
@@ -109,6 +110,12 @@ export function EdgelessVisualLayer({
     && sameType.every((visual) => visual.kind === sameType[0]!.kind)
     ? sameType
     : [];
+  const propertyBlocks = selection.items.length
+    ? selection.items.flatMap((id) => {
+      const element = controller.reactEditor.editor.elements.getElement(id);
+      return element?.type === "block" ? [element] : [];
+    })
+    : [];
   const defaults = controller.getDefaults();
   const connectorHover = drawing.connectorHover ?? reconnectHover;
 
@@ -145,7 +152,7 @@ export function EdgelessVisualLayer({
                 data-edgeless-group-bound-id={group.id}
                 data-edgeless-object-kind="group"
                 data-edgeless-object-id={group.id}
-                style={{ left: bounds.x, top: bounds.y, width: bounds.width, height: bounds.height }}
+                style={{ left: bounds.x, top: bounds.y, width: bounds.width, height: bounds.height, zIndex: controller.getGroupHitZIndex(group.id) }}
               />
               <div
                 className="edgeless-group-bound"
@@ -222,6 +229,9 @@ export function EdgelessVisualLayer({
             fonts={fontOptions}
             controller={controller}
           />
+        )}
+        {propertyBlocks.length === selection.items.length && propertyBlocks.length > 0 && (
+          <BlockProperties elements={propertyBlocks} controller={controller} />
         )}
       </>,
       root,

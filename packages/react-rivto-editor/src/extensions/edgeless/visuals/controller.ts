@@ -26,7 +26,7 @@ import type {
   VisualGroup,
 } from "./types";
 import { DEFAULT_STICKERS } from "./presets";
-import { connectorFrame, endpointPoint, unionFrames } from "./utils/geometry";
+import { connectorFrame, endpointPoint, normalizeRotation, rotatedFrameBounds, unionFrames } from "./utils/geometry";
 import { DEFAULT_PLACE_SIZE } from "./utils/creation-geometry";
 
 const DEFAULT_FRAME: VisualFrame = { x: 120, y: 120, width: 160, height: 120 };
@@ -114,6 +114,7 @@ export class EdgelessVisualController {
       if (element.type === "sticker" && typeof element.props.text !== "string") return [];
       const preview = this.propertyPreview.get(element.id);
       const props = { ...element.props, ...preview };
+      if (element.type !== "connector") props.rotation = normalizeRotation(typeof props.rotation === "number" ? props.rotation : 0);
       // Older documents may lack label fields on shapes/connectors; fill session defaults.
       if (element.type === "rectangle" || element.type === "ellipse") {
         Object.assign(props, {
@@ -199,6 +200,16 @@ export class EdgelessVisualController {
 
   /** @param item - Element ID. @returns Derived outer geometry. */
   getBounds(item: EdgelessSelectionRef): VisualFrame | undefined { return this.bounds(item); }
+  /** @param item - Element ID. @returns Its unrotated persisted frame. */
+  getFrame(item: EdgelessSelectionRef): VisualFrame | undefined { return this.element(item)?.frame; }
+  /** @param item - Element ID. @returns Its normalized visual rotation. */
+  getRotation(item: EdgelessSelectionRef): number { return this.rotation(item); }
+  /** @param item - Element ID. @returns Its persisted stacking order. */
+  getZIndex(item: EdgelessSelectionRef): number { return this.element(item)?.zIndex ?? 0; }
+  /** @param item - Group ID. @returns A layer below every descendant but above older canvas content. */
+  getGroupHitZIndex(item: EdgelessSelectionRef): number {
+    return Math.min(...this.leaves([item]).map((id) => this.element(id)?.zIndex ?? 0), this.getZIndex(item)) - 1;
+  }
   /** @returns Current local creation tool. */
   getTool(): EdgelessVisualTool { return this.currentTool; }
   /** @returns Default size for the currently active place preset. */
@@ -259,12 +270,12 @@ export class EdgelessVisualController {
     const zIndex = Math.max(0, ...this.reactEditor.editor.elements.getElements().map((element) => element.zIndex)) + 1;
     let props: Record<string, unknown>;
     if (payload.kind === "sticker") {
-      props = { ...this.defaults.sticker, text: payload.text ?? "Sticky note", fill: payload.fill ?? this.defaults.sticker.fill, color: payload.color ?? this.defaults.sticker.color, fontFamily: payload.fontFamily ?? this.defaults.sticker.fontFamily, fontSize: payload.fontSize ?? this.defaults.sticker.fontSize, align: payload.align ?? this.defaults.sticker.align, verticalAlign: payload.verticalAlign ?? this.defaults.sticker.verticalAlign };
+      props = { ...this.defaults.sticker, rotation: normalizeRotation(payload.rotation ?? 0), text: payload.text ?? "Sticky note", fill: payload.fill ?? this.defaults.sticker.fill, color: payload.color ?? this.defaults.sticker.color, fontFamily: payload.fontFamily ?? this.defaults.sticker.fontFamily, fontSize: payload.fontSize ?? this.defaults.sticker.fontSize, align: payload.align ?? this.defaults.sticker.align, verticalAlign: payload.verticalAlign ?? this.defaults.sticker.verticalAlign };
     } else if (payload.kind === "drawing") {
       if (!Array.isArray(payload.points) || payload.points.length < 2) throw new Error("Drawing requires at least two points");
       const brush = payload.brush ?? this.defaults.drawing.brush;
       const preset = brush === this.defaults.drawing.brush ? this.defaults.drawing : drawingDefaults[brush];
-      props = { points: copy(payload.points), brush, stroke: payload.stroke ?? preset.stroke, strokeWidth: payload.strokeWidth ?? preset.strokeWidth, opacity: payload.opacity ?? preset.opacity };
+      props = { rotation: normalizeRotation(payload.rotation ?? 0), points: copy(payload.points), brush, stroke: payload.stroke ?? preset.stroke, strokeWidth: payload.strokeWidth ?? preset.strokeWidth, opacity: payload.opacity ?? preset.opacity };
     } else if (payload.kind === "connector") {
       const source = this.endpoint(payload.source);
       const target = this.endpoint(payload.target);
@@ -300,9 +311,10 @@ export class EdgelessVisualController {
         verticalAlign: payload.verticalAlign ?? this.defaults.connector.verticalAlign,
       };
     } else if (payload.kind === "text") {
-      props = { ...this.defaults.text, text: payload.text ?? "Text", color: payload.color ?? this.defaults.text.color, fontFamily: payload.fontFamily ?? this.defaults.text.fontFamily, fontSize: payload.fontSize ?? this.defaults.text.fontSize, align: payload.align ?? this.defaults.text.align, verticalAlign: payload.verticalAlign ?? this.defaults.text.verticalAlign };
+      props = { ...this.defaults.text, rotation: normalizeRotation(payload.rotation ?? 0), text: payload.text ?? "Text", color: payload.color ?? this.defaults.text.color, fontFamily: payload.fontFamily ?? this.defaults.text.fontFamily, fontSize: payload.fontSize ?? this.defaults.text.fontSize, align: payload.align ?? this.defaults.text.align, verticalAlign: payload.verticalAlign ?? this.defaults.text.verticalAlign };
     } else {
       props = {
+        rotation: normalizeRotation(payload.rotation ?? 0),
         fill: payload.fill ?? this.defaults.shape.fill,
         stroke: payload.stroke ?? this.defaults.shape.stroke,
         strokeWidth: payload.strokeWidth ?? this.defaults.shape.strokeWidth,
@@ -328,6 +340,7 @@ export class EdgelessVisualController {
     const safe = copy(patch) as Record<string, unknown>;
     delete safe.id;
     delete safe.kind;
+    if ("rotation" in safe) safe.rotation = normalizeRotation(typeof safe.rotation === "number" ? safe.rotation : 0);
     const framePatch = isRecord(safe.frame) ? safe.frame as Partial<VisualFrame> : undefined;
     delete safe.frame;
     delete safe.zIndex;
@@ -356,26 +369,36 @@ export class EdgelessVisualController {
     const items = this.selection.get().items;
     const bounds = unionFrames(items.flatMap((id) => this.bounds(id) ?? []));
     if (!bounds || width <= 0 || height <= 0 || bounds.width <= 0 || bounds.height <= 0) return;
+    const scaleX = width / bounds.width;
+    const scaleY = height / bounds.height;
     this.reactEditor.editor.batchUpdates(() => this.leaves(items).forEach((id) => {
-      const frame = this.bounds(id);
+      const frame = this.element(id)?.frame;
       if (!frame) return;
+      const center = {
+        x: bounds.x + (frame.x + frame.width / 2 - bounds.x) * scaleX,
+        y: bounds.y + (frame.y + frame.height / 2 - bounds.y) * scaleY,
+      };
+      const nextWidth = frame.width * scaleX;
+      const nextHeight = frame.height * scaleY;
       this.setFrame(id, {
-        x: bounds.x + (frame.x - bounds.x) * width / bounds.width,
-        y: bounds.y + (frame.y - bounds.y) * height / bounds.height,
-        width: frame.width * width / bounds.width,
-        height: frame.height * height / bounds.height,
+        x: center.x - nextWidth / 2,
+        y: center.y - nextHeight / 2,
+        width: nextWidth,
+        height: nextHeight,
       });
     }));
   }
 
   /** Creates one nested-capable group from same-parent selected elements. */
   group(): string {
-    const items = [...this.selection.get().items];
+    const selected = [...this.selection.get().items];
+    const internalConnectors = this.internalConnectorIds(selected);
+    const items = [...selected, ...internalConnectors];
     if (items.length < 2) throw new Error("Grouping requires at least two objects");
     const parents = new Set(items.map((id) => this.parentId(id)));
     if (parents.size !== 1) throw new Error("Grouped objects must share one parent");
     const bounds = unionFrames(items.flatMap((id) => this.bounds(id) ?? [])) ?? DEFAULT_FRAME;
-    const parentId = [...parents][0];
+    const groupParentId = [...parents][0];
     // Batch insert + parent rewrite so normalizeGroups never sees a child claimed by
     // both the old parent and the new nested group in the same pass.
     const id = this.reactEditor.editor.batchUpdates(() => {
@@ -385,10 +408,10 @@ export class EdgelessVisualController {
         zIndex: Math.max(0, ...items.map((item) => this.element(item)?.zIndex ?? 0)),
         props: { title: `Group ${this.getGroups().length + 1}`, children: items },
       });
-      if (parentId) {
-        const parent = this.groupRecord(parentId)!;
+      if (groupParentId) {
+        const parent = this.groupRecord(groupParentId)!;
         const children = parent.children.map((child) => items.includes(child) ? created : child).filter((child, index, all) => all.indexOf(child) === index);
-        this.reactEditor.editor.elements.updateElement(parentId, { props: { children } });
+        this.reactEditor.editor.elements.updateElement(groupParentId, { props: { children } });
       }
       return created;
     });
@@ -446,18 +469,32 @@ export class EdgelessVisualController {
 
   /** Reorders selected leaves in the shared element layer. */
   reorder(direction: EdgelessReorder): void {
-    const selected = new Set(this.leaves(this.selection.get().items));
+    const items = this.selection.get().items;
+    const selected = new Set([...this.leaves(items), ...this.internalConnectorIds(items)]);
     const layers = this.reactEditor.editor.elements.getElements().filter((element) => element.type !== "group").sort((a, b) => a.zIndex - b.zIndex).map((element) => element.id);
     const moving = layers.filter((id) => selected.has(id));
-    const next = layers.filter((id) => !selected.has(id));
-    if (direction === "front") next.push(...moving);
-    else if (direction === "back") next.unshift(...moving);
-    else moving.forEach((id) => {
-      const old = layers.indexOf(id);
-      const base = next.filter((candidate) => layers.indexOf(candidate) < old).length;
-      next.splice(direction === "forward" ? Math.min(next.length, base + 1) : Math.max(0, base - 1), 0, id);
-    });
+    const stationary = layers.filter((id) => !selected.has(id));
+    const frontmost = Math.max(...moving.map((id) => layers.indexOf(id)));
+    const current = stationary.filter((id) => layers.indexOf(id) < frontmost).length;
+    const insertion = direction === "front" ? stationary.length
+      : direction === "back" ? 0
+        : direction === "forward" ? Math.min(stationary.length, current + 1)
+          : Math.max(0, current - 1);
+    const next = [...stationary];
+    next.splice(insertion, 0, ...moving);
     this.reactEditor.editor.elements.updateElements(next.map((id, zIndex) => ({ id, patch: { zIndex } })));
+  }
+
+  /**
+   * Sets automatic content-height behavior on selected block cards.
+   *
+   * @param items - Selected element or group IDs; only direct block cards change.
+   * @param enabled - Whether content measurement controls card height.
+   */
+  setBlockAutoHeight(items: readonly EdgelessSelectionRef[], enabled: boolean): void {
+    const blocks = items.filter((id) => this.element(id)?.type === "block");
+    if (!blocks.length) return;
+    this.reactEditor.editor.elements.updateElements(blocks.map((id) => ({ id, patch: { props: { autoHeight: enabled } } })));
   }
 
   /** Structurally deletes selected elements and block trees represented by block elements. */
@@ -712,17 +749,49 @@ export class EdgelessVisualController {
   duplicateSelection(): EdgelessSelectionRef[] { const items = this.selection.get().items; if (!items.length) return []; this.pasteClipboardBundle(this.createClipboardBundle(items)); return [...this.selection.get().items]; }
 
   private translate(items: readonly string[], dx: number, dy: number): void {
-    this.reactEditor.editor.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.bounds(id); if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));
+    this.reactEditor.editor.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.element(id)?.frame; if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));
   }
 
   private leaves(items: readonly string[], visited = new Set<string>()): string[] {
     return items.flatMap((id): string[] => { if (visited.has(id)) return []; visited.add(id); const group = this.groupRecord(id); return group ? this.leaves(group.children, visited) : this.element(id) ? [id] : []; });
   }
 
+  /**
+   * Finds same-level connectors whose two endpoints are contained by selected objects.
+   *
+   * This derives ownership for older persisted groups that predate automatic
+   * connector membership, while new groups persist the same connector IDs.
+   *
+   * @param items - Selected element or group IDs.
+   * @returns Connector IDs in document layer order.
+   */
+  private internalConnectorIds(items: readonly string[]): string[] {
+    const contained = new Set(items);
+    const collect = (id: string): void => {
+      this.groupRecord(id)?.children.forEach((child) => {
+        if (contained.has(child)) return;
+        contained.add(child);
+        collect(child);
+      });
+    };
+    items.forEach(collect);
+    const parents = new Set(items.map((id) => this.parentId(id)));
+    const parentId = parents.size === 1 ? [...parents][0] : undefined;
+    return parents.size === 1
+      ? this.getVisuals().filter((visual) => visual.kind === "connector"
+        && !contained.has(visual.id)
+        && this.parentId(visual.id) === parentId
+        && Boolean(visual.source.elementId && contained.has(visual.source.elementId))
+        && Boolean(visual.target.elementId && contained.has(visual.target.elementId)))
+        .map((visual) => visual.id)
+      : [];
+  }
+
   private bounds(id: string): VisualFrame | undefined {
     const group = this.groupRecord(id);
     if (group) return unionFrames(group.children.flatMap((child) => this.bounds(child) ?? []));
-    return this.element(id)?.frame;
+    const element = this.element(id);
+    return element ? rotatedFrameBounds(element.frame, this.rotation(id)) : undefined;
   }
 
   private setFrame(id: string, frame: VisualFrame): void { if (this.element(id)?.type !== "group") this.reactEditor.editor.elements.updateElement(id, { frame: this.frame(frame) }); }
@@ -748,7 +817,7 @@ export class EdgelessVisualController {
         if (!endpoint.elementId) return endpoint;
         const frame = this.bounds(endpoint.elementId);
         if (!frame) { missing = true; return { ...endpoint, elementId: undefined }; }
-        return { ...endpoint, position: endpointPoint(endpoint, frame) };
+        return { ...endpoint, position: endpointPoint(endpoint, this.element(endpoint.elementId)?.frame, this.rotation(endpoint.elementId)) };
       };
       const source = resolve(connector.source);
       const target = resolve(connector.target);
@@ -778,7 +847,15 @@ export class EdgelessVisualController {
     return endpoint;
   }
 
-  private resolveEndpoint(endpoint: ConnectorEndpoint): { x: number; y: number } { return endpointPoint(endpoint, endpoint.elementId ? this.bounds(endpoint.elementId) : undefined); }
+  private resolveEndpoint(endpoint: ConnectorEndpoint): { x: number; y: number } {
+    const frame = endpoint.elementId ? this.element(endpoint.elementId)?.frame : undefined;
+    return endpointPoint(endpoint, frame, endpoint.elementId ? this.rotation(endpoint.elementId) : 0);
+  }
+
+  private rotation(id: string): number {
+    const element = this.element(id);
+    return element?.type !== "connector" && typeof element?.props.rotation === "number" ? normalizeRotation(element.props.rotation) : 0;
+  }
 
   private remember(kind: EdgelessVisual["kind"], patch: Record<string, unknown>): void {
     const target = kind === "rectangle" || kind === "ellipse" ? this.defaults.shape : kind === "drawing" ? this.defaults.drawing : kind === "text" ? this.defaults.text : kind === "sticker" ? this.defaults.sticker : kind === "connector" ? this.defaults.connector : undefined;

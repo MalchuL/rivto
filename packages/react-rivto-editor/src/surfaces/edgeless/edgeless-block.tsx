@@ -1,8 +1,16 @@
 import type { EditorElement } from "@chulane/rivto";
-import { useRef, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, type CSSProperties } from "react";
 import { EdgelessDragHandle } from "../../extensions/edgeless/edgeless-drag-handle";
 import { useEdgelessSelection } from "../../extensions/edgeless/edgeless-runtime";
 import { BlockTree } from "../../blocks";
+import { useReactEditor } from "../../hooks";
+
+const AUTO_HEIGHT_ORIGIN = Symbol("rivto-react-block-element-auto-height");
+const CARD_CLASS = "edgeless-card";
+const CARD_CONTENT_CLASS = "edgeless-card-content";
+const RESIZE_HANDLE_CLASS = "edgeless-resize-handle";
+const RESIZE_HANDLES = ["n", "e", "s", "w", "nw", "ne", "sw", "se"] as const;
+const MIN_CARD_HEIGHT = 100;
 
 /**
  * Renders one block element as a positioned canvas card.
@@ -19,9 +27,11 @@ export function EdgelessBlockElement({
   readonly blockIds: readonly string[];
 }) {
   const selection = useEdgelessSelection();
+  const reactEditor = useReactEditor();
   const hostRef = useRef<HTMLElement | null>(null);
-  if (!blockIds.length) return null;
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const selected = selection.active && selection.items.includes(element.id);
+  const autoHeight = element.props.autoHeight !== false;
   /**
    * During resize, transform writes preview geometry as inline styles and sets
    * data-edgeless-geometry-lock. Re-renders must echo those inline values back
@@ -38,26 +48,52 @@ export function EdgelessBlockElement({
     zIndex: element.zIndex,
   };
 
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    const host = hostRef.current;
+    if (!autoHeight || !content || !host) return;
+    const measure = () => {
+      if (host.dataset.edgelessGeometryLock === "true") return;
+      const previousHeight = host.style.height;
+      host.style.height = "auto";
+      const height = Math.max(MIN_CARD_HEIGHT, Math.ceil(content.scrollHeight + 2));
+      host.style.height = previousHeight;
+      if (Math.abs(element.frame.height - height) < 1) return;
+      reactEditor.editor.document.crdt.transact(() => {
+        reactEditor.editor.document.elements.updateElement(element.id, { frame: { height } });
+      }, AUTO_HEIGHT_ORIGIN);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    [...content.children].forEach((child) => observer.observe(child));
+    return () => observer.disconnect();
+  });
+
+  if (!blockIds.length) return null;
+
   return (
     <section
       ref={hostRef}
-      className="edgeless-card"
+      className={CARD_CLASS}
       data-edgeless-root={element.id}
       data-edgeless-object-kind="block"
       data-edgeless-object-id={element.id}
       data-block-selected={selected || undefined}
+      data-auto-height={autoHeight ? "true" : "false"}
       style={style}
       tabIndex={0}
     >
-      <div className="edgeless-card-content" data-edgeless-card-content="true">
+      <div ref={contentRef} className={CARD_CONTENT_CLASS} data-edgeless-card-content="true">
         <BlockTree blockIds={blockIds} />
       </div>
       {selected && <EdgelessDragHandle label="Drag canvas block" />}
-      {(["nw", "ne", "sw", "se"] as const).map((corner) => (
+      {RESIZE_HANDLES.map((corner) => (
         <button
           key={corner}
           type="button"
-          className="edgeless-resize-handle"
+          className={RESIZE_HANDLE_CLASS}
           data-edgeless-resize-handle={corner}
           aria-label={`Resize canvas block ${corner}`}
         />

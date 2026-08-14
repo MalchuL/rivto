@@ -27,7 +27,7 @@ interface RectangleGesture {
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
 const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
-const HANDLE_SELECTOR = "[data-edgeless-resize-handle]";
+const HANDLE_SELECTOR = "[data-edgeless-resize-handle], [data-edgeless-rotation-handle]";
 
 /** Returns true for controls that retain their normal interaction without Primary. */
 function isInteractive(target: Element): boolean {

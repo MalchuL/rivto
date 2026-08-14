@@ -22,6 +22,7 @@ import {
   EDGELESS_BLOCK_ELEMENT_TYPE,
   EDGELESS_CARD_DEFAULT_FRAME,
   insertBlockElementSeparator,
+  nonOverlappingBlockFrame,
 } from "./block-elements";
 import { EdgelessSnappingStore } from "./snapping-store";
 
@@ -44,7 +45,15 @@ const clampZoom = (value: number): number => Math.max(MIN_ZOOM, Math.min(MAX_ZOO
  * important when a surface is replaced: its root, document, and window
  * listeners move together instead of leaving global listeners behind.
  */
-export function EdgelessSurface({ snapping }: { readonly snapping: EdgelessSnappingStore }) {
+export function EdgelessSurface({
+  snapping,
+  avoidBlockElementOverlap = true,
+  blockElementWidth = EDGELESS_CARD_DEFAULT_FRAME.width,
+}: {
+  readonly snapping: EdgelessSnappingStore;
+  readonly avoidBlockElementOverlap?: boolean;
+  readonly blockElementWidth?: number;
+}) {
   const editor = useEditor();
   const reactEditor = useReactEditor();
   const rootIds = editor.blocks.getRootIds();
@@ -143,6 +152,15 @@ export function EdgelessSurface({ snapping }: { readonly snapping: EdgelessSnapp
     const rect = root.getBoundingClientRect();
     const x = (event.clientX - rect.left - pan.x) / zoom;
     const y = (event.clientY - rect.top - pan.y) / zoom;
+    const preferredFrame = {
+      ...EDGELESS_CARD_DEFAULT_FRAME,
+      width: Number.isFinite(blockElementWidth) && blockElementWidth > 0 ? blockElementWidth : EDGELESS_CARD_DEFAULT_FRAME.width,
+      x,
+      y,
+    };
+    const frame = avoidBlockElementOverlap
+      ? nonOverlappingBlockFrame(preferredFrame, editor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
+      : preferredFrame;
     const roots = editor.blocks.getBlocks();
     const zIndex = Math.max(0, ...editor.elements.getElements().map((element) => element.zIndex)) + 1;
     let id = "";
@@ -155,7 +173,7 @@ export function EdgelessSurface({ snapping }: { readonly snapping: EdgelessSnapp
       id = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock(), afterId);
       editor.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
-        frame: { ...EDGELESS_CARD_DEFAULT_FRAME, x, y },
+        frame,
         zIndex,
         props: { startBlockId: id, endBlockId: id },
       });

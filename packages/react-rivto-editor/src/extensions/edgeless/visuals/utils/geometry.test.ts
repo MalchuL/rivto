@@ -1,14 +1,17 @@
 import {
   applyCornerResize,
+  applyRotatedResize,
   connectorFrame,
   connectorLabelCssDegrees,
   connectorLabelPoint,
   connectorPath,
   connectorPoints,
   nearestAnchor,
+  normalizeRotation,
   normalizeUprightLabelAngle,
   polylineCutsNodes,
   segmentIntersectsFrame,
+  segmentIntersectsRotatedFrame,
   snapFrame,
   snapMoveToGrid,
   snapResize,
@@ -112,6 +115,32 @@ describe("edgeless visual geometry", () => {
     expect(applyCornerResize(frame, -20, 10, "sw", 1, 1)).toEqual({ x: 20, y: 40, width: 120, height: 90 });
     expect(applyCornerResize(frame, 20, -10, "ne", 1, 1)).toEqual({ x: 40, y: 30, width: 120, height: 90 });
     expect(applyCornerResize(frame, -20, -10, "nw", 1, 1)).toEqual({ x: 20, y: 30, width: 120, height: 90 });
+  });
+
+  test("resizes from edge centers on only one axis", () => {
+    const frame = { x: 40, y: 40, width: 100, height: 80 };
+    expect(applyCornerResize(frame, 20, 30, "e", 1, 1)).toEqual({ x: 40, y: 40, width: 120, height: 80 });
+    expect(applyCornerResize(frame, -20, 30, "w", 1, 1)).toEqual({ x: 20, y: 40, width: 120, height: 80 });
+    expect(applyCornerResize(frame, 20, -10, "n", 1, 1)).toEqual({ x: 40, y: 30, width: 100, height: 90 });
+    expect(applyCornerResize(frame, 20, 10, "s", 1, 1)).toEqual({ x: 40, y: 40, width: 100, height: 90 });
+  });
+
+  test("resizes rotated frames in local axes and normalizes angles", () => {
+    const frame = { x: 40, y: 40, width: 100, height: 80 };
+    const resized = applyRotatedResize(frame, 0, 20, "e", 1, 1, 90);
+    expect(resized.width).toBeCloseTo(120);
+    expect(resized.height).toBe(80);
+    expect(resized.x).toBeCloseTo(30);
+    expect(resized.y).toBeCloseTo(50);
+    expect(normalizeRotation(-15)).toBe(345);
+    expect(normalizeRotation(375)).toBe(15);
+  });
+
+  test("uses rotated edges for connector anchors and eraser hits", () => {
+    const frame = { x: 0, y: 0, width: 100, height: 40 };
+    expect(nearestAnchor(frame, { x: 50, y: 70 }, 90)).toEqual({ x: 1, y: .5 });
+    expect(segmentIntersectsRotatedFrame({ x: 50, y: -20 }, { x: 50, y: 80 }, frame, 90)).toBe(true);
+    expect(segmentIntersectsRotatedFrame({ x: 0, y: -40 }, { x: 10, y: -30 }, frame, 90)).toBe(false);
   });
 
   test("prefers center alignment when edge and center deltas tie", () => {

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef } from "react";
 import type { EdgelessVisualController } from "../controller";
 import type { EdgelessFontOption, EdgelessVisual, TextHorizontalAlign, TextVerticalAlign } from "../types";
 import { ColorControl } from "./color-control";
 import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
 import { SizeControl } from "./size-control";
+import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "./properties-panel";
 
 const horizontalAlignments: readonly { value: TextHorizontalAlign; label: string; icon: EdgelessToolIcon }[] = [
   { value: "left", label: "Align text left", icon: "align-left" },
@@ -16,24 +17,6 @@ const verticalAlignments: readonly { value: TextVerticalAlign; label: string; ic
   { value: "middle", label: "Align text middle", icon: "align-middle" },
   { value: "bottom", label: "Align text bottom", icon: "align-bottom" },
 ];
-
-function PropertyGroup({ title, children }: { readonly title: string; readonly children: ReactNode }) {
-  return (
-    <section className="edgeless-property-group" aria-label={title}>
-      <header className="edgeless-property-group-title">{title}</header>
-      <div className="edgeless-property-group-body">{children}</div>
-    </section>
-  );
-}
-
-function PropertyRow({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-  return (
-    <div className="edgeless-property-row">
-      <span className="edgeless-property-row-label">{label}</span>
-      <div className="edgeless-property-row-controls">{children}</div>
-    </div>
-  );
-}
 
 /** Same-type multi-selection property editor with deferred undo commits. */
 export function VisualProperties({
@@ -48,7 +31,6 @@ export function VisualProperties({
   const visual = visuals[0]!;
   const ids = visuals.map((item) => item.id);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -255,37 +237,14 @@ export function VisualProperties({
   );
 
   return (
-    <div
-      ref={panelRef}
-      className="edgeless-visual-properties edgeless-shared-properties"
-      data-edgeless-ui="true"
-      data-collapsed={collapsed || undefined}
-      role="region"
-      aria-label="Visual properties"
-      onPointerDown={(event) => event.stopPropagation()}
+    <EdgelessPropertiesPanel
+      title={kindTitle}
+      count={visuals.length}
+      ariaLabel="Visual properties"
+      panelRef={panelRef}
+      onClose={() => controller.reactEditor.editor.execute("edgeless.selection.clear")}
     >
-      <header className="edgeless-properties-header">
-        <div className="edgeless-properties-title">
-          <span className="edgeless-properties-kind">{kindTitle}</span>
-          {visuals.length > 1 && <span className="edgeless-properties-count">{visuals.length} selected</span>}
-        </div>
-        <div className="edgeless-properties-actions">
-          <EdgelessToolButton
-            label={collapsed ? "Expand properties" : "Collapse properties"}
-            icon={collapsed ? "chevron-down" : "chevron-up"}
-            className="edgeless-properties-action"
-            aria-expanded={!collapsed}
-            onClick={() => setCollapsed((value) => !value)}
-          />
-          <EdgelessToolButton
-            label="Close properties"
-            icon="close"
-            className="edgeless-properties-action"
-            onClick={() => controller.reactEditor.editor.execute("edgeless.selection.clear")}
-          />
-        </div>
-      </header>
-      {!collapsed && body}
-    </div>
+      {body}
+    </EdgelessPropertiesPanel>
   );
 }

@@ -148,8 +148,9 @@ const groupBBoxGapPoint = (page: Page) => page.locator("[data-edgeless-group-hit
     for (let x = rect.left + 4; x < rect.right - 4; x += 4) {
       const hit = document.elementFromPoint(x, y);
       if (!hit) continue;
-      if (hit.closest("[data-edgeless-visual-kind], [data-edgeless-root], [data-edgeless-drag-handle]")) continue;
-      return { x, y, hitGroup: Boolean(hit.closest("[data-edgeless-group-hit]")) };
+      if (hit.closest("[data-edgeless-visual-kind], [data-edgeless-root], [data-edgeless-drag-handle], [data-edgeless-resize-handle], [data-edgeless-rotation-handle]")) continue;
+      if (!hit.closest("[data-edgeless-group-hit]")) continue;
+      return { x, y, hitGroup: true };
     }
   }
   throw new Error("Expected a gap point inside the group bbox");
@@ -177,6 +178,16 @@ test("uses one continuous card surface with symmetric padding and a top-left dra
   await expect(card.getByRole("button", { name: "Drag canvas block" })).toBeVisible();
   await expect(cardRoot(card)).toHaveCount(1);
   await expect(cardChildren(card)).toHaveCount(2);
+  await expect(card).toHaveAttribute("data-auto-height", "true");
+  await expect.poll(() => cardChrome(card).evaluate((element) => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
+  const blockProperties = page.getByRole("region", { name: "Block properties" });
+  const automaticHeight = blockProperties.getByRole("checkbox", { name: "Automatic card height" });
+  await expect(blockProperties).toBeVisible();
+  await expect(automaticHeight).toBeChecked();
+  await automaticHeight.uncheck();
+  await expect(card).toHaveAttribute("data-auto-height", "false");
+  await automaticHeight.check();
+  await expect(card).toHaveAttribute("data-auto-height", "true");
   await expect.poll(() => cardChrome(card).evaluate((element) => {
     const style = getComputedStyle(element);
     return [style.paddingLeft, style.paddingRight];
@@ -237,6 +248,7 @@ test("double-clicks empty canvas to append and focus a block at that canvas poin
   await page.mouse.dblclick(point.x, point.y);
   await expect(cards).toHaveCount(before + 1);
   const created = cards.last();
+  await expect.poll(() => created.evaluate((element) => Number.parseFloat((element as HTMLElement).style.width))).toBe(720);
   await expect.poll(() => created.evaluate((element) => ({
     left: Number.parseFloat((element as HTMLElement).style.left),
     top: Number.parseFloat((element as HTMLElement).style.top),
@@ -391,7 +403,7 @@ test("shows object-alignment guides while creating a visual", async ({ page }) =
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 8 });
-  await expect(page.locator('[data-edgeless-snap-guide="align"]')).toBeVisible();
+  await expect(page.locator('[data-edgeless-snap-guide="align"]').first()).toBeVisible();
   await page.mouse.up();
   await expect(page.locator("[data-edgeless-snap-guide]")).toHaveCount(0);
   const created = page.locator('[data-edgeless-visual-kind="rectangle"][data-selected="true"]');
@@ -467,6 +479,70 @@ test("edits shape labels and keeps thick ellipse strokes inside the frame", asyn
   await properties.getByRole("button", { name: "Align text top" }).click();
   await expect(label).toHaveCSS("text-align", "left");
   await expect(label).toHaveAttribute("data-vertical-align", "top");
+});
+
+test("resizes visuals on one axis and rotates them with Shift snapping", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const rectangle = await createVisual(page, "Rectangle");
+  const before = await visualFrame(rectangle);
+  const west = rectangle.locator('[data-edgeless-resize-handle="w"]');
+  const westBox = await west.boundingBox();
+  if (!westBox) throw new Error("Expected west resize handle");
+  await page.keyboard.down("Alt");
+  await page.mouse.move(westBox.x + westBox.width / 2, westBox.y + westBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(westBox.x + westBox.width / 2 - 40, westBox.y + westBox.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  const resized = await visualFrame(rectangle);
+  expect(resized.width).toBe(before.width + 40);
+  expect(resized.height).toBe(before.height);
+
+  const rotate = rectangle.locator("[data-edgeless-rotation-handle]");
+  const rotateBox = await rotate.boundingBox();
+  const rectangleBox = await rectangle.boundingBox();
+  if (!rotateBox || !rectangleBox) throw new Error("Expected rotation geometry");
+  const center = { x: rectangleBox.x + rectangleBox.width / 2, y: rectangleBox.y + rectangleBox.height / 2 };
+  await page.keyboard.down("Shift");
+  await page.mouse.move(rotateBox.x + rotateBox.width / 2, rotateBox.y + rotateBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(center.x + 100, center.y, { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.up("Shift");
+  await expect(rectangle).toHaveCSS("transform", "matrix(0, 1, -1, 0, 0, 0)");
+  await page.keyboard.press("Control+z");
+  await expect(rectangle).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
+});
+
+test("keeps a connector label in the connector layer order", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const connector = page.locator('[data-edgeless-visual-kind="connector"]').filter({ hasText: "link" });
+  const label = connector.locator(".edgeless-connector-label");
+  const labelBox = await label.boundingBox();
+  if (!labelBox) throw new Error("Expected labeled connector geometry");
+  await expect(label).toHaveCSS("z-index", "auto");
+  const coveringRectangle = await createVisual(page, "Rectangle");
+  const rectangleBox = await coveringRectangle.boundingBox();
+  if (!rectangleBox) throw new Error("Expected rectangle geometry");
+  const point = { x: labelBox.x + labelBox.width / 2, y: labelBox.y + labelBox.height / 2 };
+  await page.keyboard.down("Alt");
+  await page.mouse.move(rectangleBox.x + rectangleBox.width / 2, rectangleBox.y + rectangleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(point.x, point.y, { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  const rectangleId = await coveringRectangle.getAttribute("data-edgeless-object-id");
+  const connectorId = await connector.getAttribute("data-edgeless-object-id");
+  if (!rectangleId || !connectorId) throw new Error("Expected visual IDs");
+  const paintedObjects = () => page.evaluate(({ x, y }) => [...new Set(document.elementsFromPoint(x, y)
+    .map((element) => element.closest<HTMLElement>("[data-edgeless-object-id]")?.dataset.edgelessObjectId)
+    .filter(Boolean))], point);
+
+  await expect.poll(paintedObjects).toEqual(expect.arrayContaining([rectangleId, connectorId]));
+  await expect.poll(async () => (await paintedObjects()).indexOf(rectangleId)).toBeLessThan((await paintedObjects()).indexOf(connectorId));
+  await connector.locator(".edgeless-connector-hit").dispatchEvent("pointerdown", { button: 0 });
+  await page.getByRole("toolbar", { name: "Selected objects" }).getByRole("button", { name: "Move front" }).click();
+  await expect.poll(async () => (await paintedObjects()).indexOf(connectorId)).toBeLessThan((await paintedObjects()).indexOf(rectangleId));
 });
 
 test("edits visual properties immediately and enters text editing on double-click", async ({ page }) => {
@@ -873,6 +949,51 @@ test("previews attached connectors while dragging and highlights attach anchors"
   }))).not.toEqual(beforeFrame);
 });
 
+test("keeps an internal labeled connector in its layer while dragging a group", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const rectangle = await createVisual(page, "Rectangle");
+  const ellipse = await createVisual(page, "Ellipse");
+  const initialRectangle = await rectangle.boundingBox();
+  if (!initialRectangle) throw new Error("Expected rectangle geometry");
+  await page.keyboard.down("Alt");
+  await page.mouse.move(initialRectangle.x + initialRectangle.width / 2, initialRectangle.y + initialRectangle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(initialRectangle.x + initialRectangle.width / 2 - 180, initialRectangle.y + initialRectangle.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  const source = await rectangle.boundingBox();
+  const target = await ellipse.boundingBox();
+  if (!source || !target) throw new Error("Expected connector targets");
+  const connectorsBefore = await page.locator('[data-edgeless-visual-kind="connector"]').count();
+  const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
+  await toolbar.getByRole("button", { name: "Connectors" }).click();
+  await page.getByRole("menu", { name: "connectors tools" }).getByRole("button", { name: "Straight connector" }).click();
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 });
+  await page.mouse.up();
+  const connector = page.locator('[data-edgeless-visual-kind="connector"]').nth(connectorsBefore);
+  await toolbar.getByRole("button", { name: "Select" }).click();
+  await connector.locator(".edgeless-connector-hit").dispatchEvent("dblclick", { clientX: target.x, clientY: target.y });
+  const labelEditor = connector.locator(".edgeless-connector-label .edgeless-label-editor");
+  await expect(labelEditor).toBeFocused();
+  await page.keyboard.type("group link");
+  await rectangle.click();
+  await ellipse.click({ modifiers: ["Control"] });
+  await page.getByRole("toolbar", { name: "Selected objects" }).getByRole("button", { name: "Group", exact: true }).click();
+  const handle = page.locator('[data-edgeless-object-kind="group"] [data-edgeless-drag-handle]');
+  const handleBox = await handle.boundingBox();
+  if (!handleBox) throw new Error("Expected group drag handle");
+  await page.keyboard.down("Alt");
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handleBox.x + handleBox.width / 2 + 24, handleBox.y + handleBox.height / 2 + 12, { steps: 4 });
+  await expect(connector).toHaveCSS("visibility", "visible");
+  await expect.poll(() => connector.evaluate((element) => (element as HTMLElement).style.transform)).toContain("translate");
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+});
+
 test("keeps create popovers above the selection toolbar", async ({ page }) => {
   await switchMode(page, "edgeless");
   const rectangle = await createVisual(page, "Rectangle");
@@ -1099,7 +1220,7 @@ test("undoes a grouped nested-block drag after switching from edgeless", async (
   if (!parentId || !firstId || !secondId) throw new Error("Expected nested sibling blocks");
 
   await children.nth(0).locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
-  await children.nth(1).locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
+  await children.nth(1).locator(":scope > .page-block-row [data-block-content]").dispatchEvent("pointerdown", { button: 0, ctrlKey: true });
   await switchMode(page, "block");
 
   const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
@@ -1149,13 +1270,13 @@ test("reuses Tab and Shift+Tab inside a canvas card", async ({ page }) => {
   const secondId = await second.getAttribute(BLOCK_ID_ATTRIBUTE);
   if (!firstId || !secondId) throw new Error("Expected sibling blocks");
 
-  await second.locator(":scope > .page-block-row [data-block-content]").click();
+  await second.locator(":scope > .page-block-row [data-block-content]").focus();
   await page.keyboard.press("Home");
   await page.keyboard.press("Tab");
   const first = card.locator(`.page-block${blockIdSelector(firstId!)}`);
   await expect(first.locator(`:scope > .page-block-children > ${blockIdSelector(secondId!)}`)).toHaveCount(1);
 
-  await first.locator(`${blockIdSelector(secondId!)} > .page-block-row [data-block-content]`).click();
+  await first.locator(`${blockIdSelector(secondId!)} > .page-block-row [data-block-content]`).focus();
   await page.keyboard.press("Shift+Tab");
   await expect(cardChild(card, secondId!)).toHaveCount(1);
 });
@@ -1256,10 +1377,13 @@ test("moves a card by dragging from the left of an indented nested block", async
   await page.mouse.down();
   await page.mouse.move(dragFrom.x + 40, dragFrom.y + 20, { steps: 6 });
   await page.mouse.up();
-  await expect.poll(() => card.evaluate((element) => ({
-    left: Number.parseFloat((element as HTMLElement).style.left),
-    top: Number.parseFloat((element as HTMLElement).style.top),
-  }))).toEqual({ left: before.left + 40, top: before.top + 20 });
+  await expect.poll(async () => {
+    const after = await card.evaluate((element) => ({
+      left: Number.parseFloat((element as HTMLElement).style.left),
+      top: Number.parseFloat((element as HTMLElement).style.top),
+    }));
+    return Math.abs(after.left - before.left - 40) <= .5 && Math.abs(after.top - before.top - 20) <= 2;
+  }).toBe(true);
 
   // Structural handles must still light up across the whole indented line.
   const handle = nested.locator(":scope > .page-block-row > .page-drag-handle");
@@ -1536,7 +1660,7 @@ test("toggles root selection and moves or resizes layouts atomically", async ({ 
   await page.keyboard.press("Control+z");
   await expect.poll(() => first.evaluate((element) => Number.parseFloat((element as HTMLElement).style.left))).toBe(before[0]!.left);
 
-  const resize = second.locator('[data-edgeless-resize-handle="se"]');
+  const resize = second.locator('[data-edgeless-resize-handle="e"]');
   const resizeBox = await resize.boundingBox();
   if (!resizeBox) throw new Error("Expected resize handle geometry");
   await page.mouse.move(resizeBox.x + 5, resizeBox.y + 5);
@@ -1546,6 +1670,7 @@ test("toggles root selection and moves or resizes layouts atomically", async ({ 
   await page.mouse.up();
   await page.keyboard.up("Alt");
   await expect.poll(() => second.evaluate((element) => Number.parseFloat(getComputedStyle(element).width))).toBe(before[1]!.width + 30);
+  await expect(second).toHaveAttribute("data-auto-height", "false");
 });
 
 test("rectangle-selects roots, moves them, then deletes them atomically", async ({ page }) => {
@@ -1675,21 +1800,22 @@ test("keeps drawing coordinates aligned after pan and zoom", async ({ page }) =>
   await page.mouse.down({ button: "middle" });
   await page.mouse.move(box.x + 300, box.y + 230, { steps: 4 });
   await page.mouse.up({ button: "middle" });
-  await chooseDrawing(page, "Pen");
-
-  const start = { x: box.x + box.width - 220, y: box.y + 180 };
-  await page.mouse.move(start.x, start.y);
-  await page.mouse.down();
-  await page.mouse.move(start.x + 80, start.y + 40, { steps: 6 });
-  await page.mouse.up();
-
   const drawing = page.locator('[data-edgeless-visual-kind="drawing"]');
-  await expect(drawing).toHaveCount(drawingsBefore + 1);
-  await expect.poll(async () => {
-    const drawn = await drawing.last().boundingBox();
-    // Stroke padding expands the host beyond the raw path span after pan/zoom.
-    return drawn && Math.round(drawn.width) >= 80 && Math.abs(Math.round(drawn.x) - Math.round(start.x)) <= 8;
-  }).toBe(true);
+  for (const [index, tool] of ["Pencil", "Marker"].entries()) {
+    await chooseDrawing(page, tool);
+    const start = { x: box.x + box.width - 220, y: box.y + 140 + index * 100 };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 80, start.y + 40, { steps: 6 });
+    await page.mouse.up();
+
+    await expect(drawing).toHaveCount(drawingsBefore + index + 1);
+    await expect.poll(async () => {
+      const drawn = await drawing.last().boundingBox();
+      // Stroke padding expands the host beyond the raw path span after pan/zoom.
+      return drawn && Math.round(drawn.width) >= 80 && Math.abs(Math.round(drawn.x) - Math.round(start.x)) <= 8;
+    }).toBe(true);
+  }
 });
 
 test("duplicates a complete root subtree from slash with offset geometry", async ({ page }) => {

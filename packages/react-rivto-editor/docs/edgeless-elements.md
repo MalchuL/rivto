@@ -45,6 +45,12 @@ removes intersected whole canvas objects in one transaction. Escape or right-cli
 on the canvas returns to Select while a place, pan, drawing, eraser, or connector
 tool is active (Escape also cancels an in-progress transform).
 
+Selected non-connector visuals have four corner and four edge-center resize
+handles. Edge-center handles change one local axis. The top-center rotation
+handle rotates freely; hold Shift to snap the angle to 15-degree increments.
+Rotation is stored with shapes, text, stickers, and drawings and is preserved by
+clipboard and undo.
+
 `sticker` is a styled editable sticky note. Its props are `text`, `fill`,
 `color`, `fontFamily`, `fontSize`, and `align`; image/emoji sticker props are
 not supported. Applications may append font and sticky presets:
@@ -84,12 +90,26 @@ snapping.subscribe(() => {
   localStorage.setItem("canvas-snapping", JSON.stringify(snapping.getSnapshot()));
 });
 
-standardPreset({ edgeless: { snapping } });
+standardPreset({
+  edgeless: {
+    snapping,
+    avoidBlockElementOverlap: true,
+    blockElementWidth: 720,
+  },
+});
 ```
 
 The same store can be updated programmatically with
 `snapping.set({ snapToGrid, alignObjects })`; mounted toolbar toggles publish
 through that store.
+
+New block cards avoid existing block cards by default. Pass
+`avoidBlockElementOverlap: false` to retain the exact requested creation point;
+visual objects never participate in this placement check.
+
+New cards use the page surface's `720px` width by default. Set
+`blockElementWidth` in the edgeless surface options to choose another initial
+width; existing and manually resized cards retain their persisted width.
 
 Shapes (`rectangle` / `ellipse`) and connectors also accept optional label props
 (`text`, `color`, `fontFamily`, `fontSize`, `align`, `verticalAlign`). Shapes also
@@ -101,6 +121,10 @@ vertical text alignment toggles.
 
 Connectors attach to any non-connector element using a stable element ID and a
 normalized edge anchor. Straight, orthogonal, and curved routes are supported.
+Grouping objects automatically includes same-level connectors whose two
+endpoints are contained by the selection, including endpoints inside nested
+groups. Layer commands derive the same relationship for older persisted groups
+that do not list those connectors in their children.
 Deleting an endpoint detaches it at its last absolute coordinate by default;
 set `orphanConnectors: "delete"` to remove such connectors instead. Clipboard
 paste remaps included endpoints and detaches references to objects outside the
@@ -135,6 +159,14 @@ properties panel. Create-toolbar category menus stay open after picking a tool
 or placing a preset so multiple objects can be created quickly.
 
 ## Block projection and separators
+
+Block cards fit their complete block content vertically by default, retaining
+their configured width without a vertical scrollbar. A manual resize stores
+`autoHeight: false` in the block element props and makes both dimensions fixed.
+Set the same element prop back to `true` to retain its current width and resume
+automatic content-height measurement. Selecting one or more block cards opens
+the shared right-side properties panel with the same **Automatic card height**
+toggle used to switch between automatic and fixed layout.
 
 React reconciles root-block runs after document updates. A root partitions
 adjacent block elements when its React block registration declares

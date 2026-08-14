@@ -56,7 +56,13 @@ import {
 } from "../../surfaces/edgeless";
 import { separatorBlockExtension } from "../separator/separator-block";
 import { defaultWritingBlockExtension, type DefaultWritingBlockOptions } from "../page/default-writing-block";
-import { blockIdsOf, insertBlockElementSeparator } from "../../surfaces/edgeless/block-elements";
+import {
+  blockIdsOf,
+  EDGELESS_CARD_DEFAULT_FRAME,
+  insertBlockElementSeparator,
+  setBlockElementDefaultWidth,
+  setBlockElementOverlapAvoidance,
+} from "../../surfaces/edgeless/block-elements";
 import { createErrorBlockInput, errorBlockExtension } from "../error/error-block";
 import { PageSurface } from "../../surfaces/page";
 import {
@@ -99,8 +105,10 @@ export const edgelessSurfaceExtension = (options: EdgelessSurfaceOptions = {}): 
   const snapping = options.snapping ?? new EdgelessSnappingStore();
   return {
     id: "surface.edgeless",
-    setup: (reactEditor) => {
-      reactEditor.surfaces.register("edgeless", () => <EdgelessSurface snapping={snapping} />);
+  setup: (reactEditor) => {
+      setBlockElementOverlapAvoidance(reactEditor, options.avoidBlockElementOverlap !== false);
+      setBlockElementDefaultWidth(reactEditor, options.blockElementWidth ?? EDGELESS_CARD_DEFAULT_FRAME.width);
+      reactEditor.surfaces.register("edgeless", () => <EdgelessSurface snapping={snapping} avoidBlockElementOverlap={options.avoidBlockElementOverlap !== false} blockElementWidth={options.blockElementWidth} />);
     },
   };
 };

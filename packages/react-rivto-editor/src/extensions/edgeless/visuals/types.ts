@@ -5,6 +5,7 @@ export type { EdgelessSelectionRef } from "../edgeless-runtime";
 export interface VisualFrame { x: number; y: number; width: number; height: number }
 
 interface VisualBase { readonly id: string; frame: VisualFrame; zIndex: number }
+interface RotatableVisualBase extends VisualBase { rotation: number }
 
 /** Freehand brush preset stored with each drawing. */
 export type EdgelessBrush = "pencil" | "pen" | "marker";
@@ -39,7 +40,7 @@ export type TextHorizontalAlign = "left" | "center" | "right";
 export type TextVerticalAlign = "top" | "middle" | "bottom";
 
 /** Styled editable sticky note. */
-export interface StickerVisual extends VisualBase {
+export interface StickerVisual extends RotatableVisualBase {
   readonly kind: "sticker";
   text: string;
   fill: string;
@@ -51,7 +52,7 @@ export interface StickerVisual extends VisualBase {
 }
 
 /** Freehand stroke whose points are stored relative to its frame. */
-export interface DrawingVisual extends VisualBase {
+export interface DrawingVisual extends RotatableVisualBase {
   readonly kind: "drawing";
   points: Array<{ x: number; y: number; pressure?: number }>;
   brush: EdgelessBrush;
@@ -61,7 +62,7 @@ export interface DrawingVisual extends VisualBase {
 }
 
 /** Rectangle or ellipse with fill, stroke, and optional centered label. */
-export interface ShapeVisual extends VisualBase {
+export interface ShapeVisual extends RotatableVisualBase {
   readonly kind: "rectangle" | "ellipse";
   fill: string;
   stroke: string;
@@ -79,7 +80,7 @@ export interface ShapeVisual extends VisualBase {
 }
 
 /** Canvas text independent from document blocks. */
-export interface TextVisual extends VisualBase {
+export interface TextVisual extends RotatableVisualBase {
   readonly kind: "text";
   text: string;
   color: string;
@@ -141,11 +142,11 @@ export interface EdgelessVisualsOptions {
 
 /** Payload accepted by `edgeless.visual.create`. */
 export type CreateVisualPayload =
-  | { kind: "sticker"; frame?: Partial<VisualFrame>; text?: string; fill?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
-  | { kind: "drawing"; frame: VisualFrame; points: DrawingVisual["points"]; brush?: EdgelessBrush; stroke?: string; strokeWidth?: number; opacity?: number }
+  | { kind: "sticker"; frame?: Partial<VisualFrame>; rotation?: number; text?: string; fill?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
+  | { kind: "drawing"; frame: VisualFrame; rotation?: number; points: DrawingVisual["points"]; brush?: EdgelessBrush; stroke?: string; strokeWidth?: number; opacity?: number }
   | { kind: "connector"; frame?: Partial<VisualFrame>; source: ConnectorEndpoint; target: ConnectorEndpoint; route?: ConnectorRoute; stroke?: string; strokeWidth?: number; opacity?: number; lineStyle?: ConnectorLineStyle; startStyle?: ConnectorEndpointStyle; endStyle?: ConnectorEndpointStyle; text?: string; textRotation?: ConnectorTextRotation; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
-  | { kind: "rectangle" | "ellipse"; frame?: Partial<VisualFrame>; fill?: string; stroke?: string; strokeWidth?: number; filled?: boolean; stroked?: boolean; text?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
-  | { kind: "text"; frame?: Partial<VisualFrame>; text?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign };
+  | { kind: "rectangle" | "ellipse"; frame?: Partial<VisualFrame>; rotation?: number; fill?: string; stroke?: string; strokeWidth?: number; filled?: boolean; stroked?: boolean; text?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
+  | { kind: "text"; frame?: Partial<VisualFrame>; rotation?: number; text?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign };
 
 /** Click/drag presets from the create toolbar (not drawing or connector tools). */
 export type PresetPayload = Exclude<CreateVisualPayload, { kind: "drawing" | "connector" }>;

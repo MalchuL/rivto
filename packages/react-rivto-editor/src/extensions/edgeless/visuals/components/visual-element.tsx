@@ -10,6 +10,9 @@ import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from "
 import { shapeStrokePad } from "../utils/shape-stroke";
 
 const LABEL_KINDS = new Set(["text", "sticker", "rectangle", "ellipse", "connector"]);
+const VISUAL_RESIZE_CLASS = "edgeless-visual-resize";
+const VISUAL_ROTATION_CLASS = "edgeless-visual-rotation";
+const RESIZE_HANDLES = ["n", "e", "s", "w", "nw", "ne", "sw", "se"] as const;
 
 /** Renders one persisted visual without owning canvas movement. */
 export function VisualElement({
@@ -47,6 +50,9 @@ export function VisualElement({
     width: geometryLocked && host.style.width ? host.style.width : visual.frame.width,
     height: geometryLocked && host.style.height ? host.style.height : visual.frame.height,
     zIndex: visual.zIndex,
+    transform: geometryLocked && host.style.transform
+      ? host.style.transform
+      : visual.kind !== "connector" ? `rotate(${visual.rotation}deg)` : undefined,
   };
   const canEditLabel = LABEL_KINDS.has(visual.kind);
   const content = useMemo(() => {
@@ -258,15 +264,23 @@ export function VisualElement({
       {selected && visual.kind !== "connector" && (
         <EdgelessDragHandle label={`Drag ${visual.kind}`} />
       )}
-      {selected && visual.kind !== "connector" && (["nw", "ne", "sw", "se"] as const).map((corner) => (
+      {selected && visual.kind !== "connector" && RESIZE_HANDLES.map((corner) => (
         <button
           key={corner}
-          className="edgeless-visual-resize"
+          className={VISUAL_RESIZE_CLASS}
           data-edgeless-resize-handle={corner}
           type="button"
           aria-label={`Resize ${corner}`}
         />
       ))}
+      {selected && visual.kind !== "connector" && (
+        <button
+          className={VISUAL_ROTATION_CLASS}
+          data-edgeless-rotation-handle="true"
+          type="button"
+          aria-label={`Rotate ${visual.kind}`}
+        />
+      )}
       {selected && visual.kind === "connector" && source && target && (["source", "target"] as const).map((key) => {
         const point = (key === "source" ? source : target).position;
         return (

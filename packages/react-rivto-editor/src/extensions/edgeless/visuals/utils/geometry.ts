@@ -1,5 +1,6 @@
 import type { ConnectorEndpoint, VisualFrame } from "../types";
 import type { Point } from "./geometry-core";
+import { segmentIntersectsFrame } from "./geometry-core";
 
 export type { Point } from "./geometry-core";
 export {
@@ -41,26 +42,129 @@ export function unionFrames(frames: readonly VisualFrame[]): VisualFrame | undef
   return { x, y, width: right - x, height: bottom - y };
 }
 
-/** Resolves an attached endpoint against its current object frame. */
-export function endpointPoint(endpoint: ConnectorEndpoint, frame?: VisualFrame): Point {
-  return frame ? { x: frame.x + frame.width * endpoint.anchor.x, y: frame.y + frame.height * endpoint.anchor.y } : endpoint.position;
+/**
+ * Normalizes a finite clockwise rotation into the half-open `[0, 360)` range.
+ *
+ * @param rotation - Rotation in degrees; non-finite input is treated as zero.
+ * @returns The equivalent finite clockwise degree value.
+ */
+export function normalizeRotation(rotation: number): number {
+  return Number.isFinite(rotation) ? ((rotation % 360) + 360) % 360 : 0;
 }
 
-/** Edge-center anchors used for connector attachment. */
-export function edgeAnchors(frame: VisualFrame): Array<{ x: number; y: number; ax: number; ay: number }> {
+/**
+ * Rotates one canvas point around a center by clockwise CSS degrees.
+ *
+ * @param point - Canvas point to rotate.
+ * @param center - Fixed center of rotation.
+ * @param rotation - Clockwise rotation in degrees.
+ * @returns The rotated canvas point.
+ */
+export function rotatePoint(point: Point, center: Point, rotation: number): Point {
+  const radians = normalizeRotation(rotation) * Math.PI / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  const x = point.x - center.x;
+  const y = point.y - center.y;
+  return { x: center.x + x * cosine - y * sine, y: center.y + x * sine + y * cosine };
+}
+
+/**
+ * Returns the axis-aligned canvas bounds occupied by a rotated frame.
+ *
+ * @param frame - Unrotated persisted frame.
+ * @param rotation - Clockwise visual rotation in degrees.
+ * @returns Axis-aligned bounds containing all rotated corners.
+ */
+export function rotatedFrameBounds(frame: VisualFrame, rotation = 0): VisualFrame {
+  if (!normalizeRotation(rotation)) return { ...frame };
+  const center = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
+  const points = [
+    { x: frame.x, y: frame.y },
+    { x: frame.x + frame.width, y: frame.y },
+    { x: frame.x + frame.width, y: frame.y + frame.height },
+    { x: frame.x, y: frame.y + frame.height },
+  ].map((point) => rotatePoint(point, center, rotation));
+  const x = Math.min(...points.map((point) => point.x));
+  const y = Math.min(...points.map((point) => point.y));
+  const right = Math.max(...points.map((point) => point.x));
+  const bottom = Math.max(...points.map((point) => point.y));
+  return { x, y, width: right - x, height: bottom - y };
+}
+
+/**
+ * Tests a point against a frame after undoing the frame's visual rotation.
+ *
+ * @param point - Canvas point to test.
+ * @param frame - Unrotated persisted frame.
+ * @param rotation - Clockwise visual rotation in degrees.
+ * @returns Whether the point lies inside or on the rotated frame.
+ */
+export function pointInRotatedFrame(point: Point, frame: VisualFrame, rotation = 0): boolean {
+  const center = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
+  const local = rotatePoint(point, center, -rotation);
+  return local.x >= frame.x && local.x <= frame.x + frame.width && local.y >= frame.y && local.y <= frame.y + frame.height;
+}
+
+/**
+ * Tests a canvas segment against a rotated frame in the frame's local axes.
+ *
+ * @param a - First segment endpoint.
+ * @param b - Second segment endpoint.
+ * @param frame - Unrotated persisted frame.
+ * @param rotation - Clockwise visual rotation in degrees.
+ * @returns Whether the segment crosses or touches the rotated frame.
+ */
+export function segmentIntersectsRotatedFrame(a: Point, b: Point, frame: VisualFrame, rotation = 0): boolean {
+  const center = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
+  return segmentIntersectsFrame(rotatePoint(a, center, -rotation), rotatePoint(b, center, -rotation), frame);
+}
+
+/**
+ * Resolves an attached endpoint against its current object frame and rotation.
+ *
+ * @param endpoint - Stored connector endpoint and normalized anchor.
+ * @param frame - Current unrotated frame of the attached element.
+ * @param rotation - Clockwise visual rotation in degrees.
+ * @returns The endpoint's current canvas position.
+ */
+export function endpointPoint(endpoint: ConnectorEndpoint, frame?: VisualFrame, rotation = 0): Point {
+  if (!frame) return endpoint.position;
+  const point = { x: frame.x + frame.width * endpoint.anchor.x, y: frame.y + frame.height * endpoint.anchor.y };
+  return rotatePoint(point, { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 }, rotation);
+}
+
+/**
+ * Produces edge-center anchors used for connector attachment.
+ *
+ * @param frame - Current unrotated frame.
+ * @param rotation - Clockwise visual rotation in degrees.
+ * @returns Rotated canvas positions paired with normalized anchor coordinates.
+ */
+export function edgeAnchors(frame: VisualFrame, rotation = 0): Array<{ x: number; y: number; ax: number; ay: number }> {
+  const center = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
   return [
     { ax: .5, ay: 0, x: frame.x + frame.width * .5, y: frame.y },
     { ax: 1, ay: .5, x: frame.x + frame.width, y: frame.y + frame.height * .5 },
     { ax: .5, ay: 1, x: frame.x + frame.width * .5, y: frame.y + frame.height },
     { ax: 0, ay: .5, x: frame.x, y: frame.y + frame.height * .5 },
-  ];
+  ].map((anchor) => ({ ...anchor, ...rotatePoint(anchor, center, rotation) }));
 }
 
-/** Chooses the nearest of four edge-center anchors for a pointer. */
-export function nearestAnchor(frame: VisualFrame, point: Point): Point {
-  return edgeAnchors(frame).reduce((best, anchor) => {
+/**
+ * Chooses the nearest of four edge-center anchors for a pointer.
+ *
+ * @param frame - Current unrotated frame.
+ * @param point - Canvas pointer position.
+ * @param rotation - Clockwise visual rotation in degrees.
+ * @returns Normalized coordinates of the nearest anchor.
+ */
+export function nearestAnchor(frame: VisualFrame, point: Point, rotation = 0): Point {
+  const anchors = edgeAnchors(frame, rotation);
+  return anchors.reduce((best, anchor) => {
     const distance = Math.hypot(anchor.x - point.x, anchor.y - point.y);
-    const bestDistance = Math.hypot(frame.x + frame.width * best.x - point.x, frame.y + frame.height * best.y - point.y);
+    const current = anchors.find((candidate) => candidate.ax === best.x && candidate.ay === best.y)!;
+    const bestDistance = Math.hypot(current.x - point.x, current.y - point.y);
     return distance < bestDistance ? { x: anchor.ax, y: anchor.ay } : best;
   }, { x: .5, y: 0 });
 }
@@ -146,10 +250,20 @@ export function snapFrame(moving: VisualFrame, candidates: readonly VisualFrame[
   return { dx, dy, guides };
 }
 
-/** Corner used by the active resize handle. */
-export type ResizeCorner = "nw" | "ne" | "sw" | "se";
+/** Edge or corner used by the active resize handle. */
+export type ResizeCorner = "n" | "e" | "s" | "w" | "nw" | "ne" | "sw" | "se";
 
-/** Applies pointer delta from one corner while keeping the opposite edges fixed. */
+/**
+ * Applies pointer delta from one handle while keeping the opposite edges fixed.
+ *
+ * @param frame - Initial unrotated frame.
+ * @param dx - Horizontal local-axis pointer delta.
+ * @param dy - Vertical local-axis pointer delta.
+ * @param corner - Active side or corner handle.
+ * @param minWidth - Smallest permitted width.
+ * @param minHeight - Smallest permitted height.
+ * @returns The resized unrotated frame.
+ */
 export function applyCornerResize(
   frame: VisualFrame,
   dx: number,
@@ -164,17 +278,53 @@ export function applyCornerResize(
   let y = frame.y;
   let width = frame.width;
   let height = frame.height;
-  if (corner === "se" || corner === "ne") width = Math.max(minWidth, frame.width + dx);
-  if (corner === "sw" || corner === "nw") {
+  if (corner.includes("e")) width = Math.max(minWidth, frame.width + dx);
+  if (corner.includes("w")) {
     width = Math.max(minWidth, frame.width - dx);
     x = right - width;
   }
-  if (corner === "se" || corner === "sw") height = Math.max(minHeight, frame.height + dy);
-  if (corner === "ne" || corner === "nw") {
+  if (corner.includes("s")) height = Math.max(minHeight, frame.height + dy);
+  if (corner.includes("n")) {
     height = Math.max(minHeight, frame.height - dy);
     y = bottom - height;
   }
   return { x, y, width, height };
+}
+
+/**
+ * Resizes in a rotated frame's local axes while keeping its opposite handle fixed.
+ *
+ * @param frame - Initial unrotated persisted frame.
+ * @param dx - Horizontal canvas pointer delta.
+ * @param dy - Vertical canvas pointer delta.
+ * @param handle - Active side or corner handle.
+ * @param minWidth - Smallest permitted width.
+ * @param minHeight - Smallest permitted height.
+ * @param rotation - Clockwise visual rotation in degrees.
+ * @returns Resized frame whose opposite handle stays at its canvas position.
+ */
+export function applyRotatedResize(
+  frame: VisualFrame,
+  dx: number,
+  dy: number,
+  handle: ResizeCorner,
+  minWidth: number,
+  minHeight: number,
+  rotation = 0,
+): VisualFrame {
+  const radians = -normalizeRotation(rotation) * Math.PI / 180;
+  const localDx = dx * Math.cos(radians) - dy * Math.sin(radians);
+  const localDy = dx * Math.sin(radians) + dy * Math.cos(radians);
+  const local = applyCornerResize({ x: 0, y: 0, width: frame.width, height: frame.height }, localDx, localDy, handle, minWidth, minHeight);
+  const widthDelta = local.width - frame.width;
+  const heightDelta = local.height - frame.height;
+  const localShift = {
+    x: handle.includes("e") ? widthDelta / 2 : handle.includes("w") ? -widthDelta / 2 : 0,
+    y: handle.includes("s") ? heightDelta / 2 : handle.includes("n") ? -heightDelta / 2 : 0,
+  };
+  const center = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
+  const shifted = rotatePoint({ x: center.x + localShift.x, y: center.y + localShift.y }, center, rotation);
+  return { x: shifted.x - local.width / 2, y: shifted.y - local.height / 2, width: local.width, height: local.height };
 }
 
 /** Snaps a resized frame's moving edges to candidate edges and centers. */
@@ -189,8 +339,8 @@ export function snapResize(
   minHeight = 1,
 ): SnapResult {
   const next = applyCornerResize(frame, dx, dy, corner, minWidth, minHeight);
-  const moveLeft = corner === "nw" || corner === "sw";
-  const moveTop = corner === "nw" || corner === "ne";
+  const moveLeft = corner.includes("w");
+  const moveTop = corner.includes("n");
   let bestX: RankedSnap | undefined;
   let bestY: RankedSnap | undefined;
   const edgeX = moveLeft ? next.x : next.x + next.width;
@@ -203,7 +353,9 @@ export function snapResize(
     ].forEach((target) => {
       const delta = target.position - edgeX;
       const ranked = { delta, position: target.position, frame: candidate, kind: "align" as const, rank: target.rank };
-      if (Math.abs(delta) <= threshold && betterSnap(bestX, ranked)) bestX = ranked;
+      if (corner.includes("e") || corner.includes("w")) {
+        if (Math.abs(delta) <= threshold && betterSnap(bestX, ranked)) bestX = ranked;
+      }
     });
     [
       { position: candidate.y, rank: 0 },
@@ -212,7 +364,9 @@ export function snapResize(
     ].forEach((target) => {
       const delta = target.position - edgeY;
       const ranked = { delta, position: target.position, frame: candidate, kind: "align" as const, rank: target.rank };
-      if (Math.abs(delta) <= threshold && betterSnap(bestY, ranked)) bestY = ranked;
+      if (corner.includes("n") || corner.includes("s")) {
+        if (Math.abs(delta) <= threshold && betterSnap(bestY, ranked)) bestY = ranked;
+      }
     });
   });
   // Moving left/top edges still advance with +delta: applyCornerResize maps
@@ -282,15 +436,15 @@ export function snapResizeToGrid(
   locked: { readonly x?: boolean; readonly y?: boolean } = {},
 ): { dx: number; dy: number } {
   const next = applyCornerResize(frame, dx, dy, corner, minWidth, minHeight);
-  const moveLeft = corner === "nw" || corner === "sw";
-  const moveTop = corner === "nw" || corner === "ne";
+  const moveLeft = corner.includes("w");
+  const moveTop = corner.includes("n");
   let nextDx = dx;
   let nextDy = dy;
-  if (!locked.x) {
+  if (!locked.x && (corner.includes("e") || corner.includes("w"))) {
     const edge = moveLeft ? next.x : next.x + next.width;
     nextDx = dx + (snapScalarToGrid(edge, grid) - edge);
   }
-  if (!locked.y) {
+  if (!locked.y && (corner.includes("n") || corner.includes("s"))) {
     const edge = moveTop ? next.y : next.y + next.height;
     nextDy = dy + (snapScalarToGrid(edge, grid) - edge);
   }

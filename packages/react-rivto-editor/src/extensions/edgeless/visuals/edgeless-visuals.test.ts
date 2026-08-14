@@ -16,11 +16,12 @@ describe("edgelessVisualsExtension", () => {
       extension,
     ] });
 
-    const first = extension.createRectangle({ frame: { x: 10, y: 20, width: 40, height: 30 } });
+    const first = extension.createRectangle({ frame: { x: 10, y: 20, width: 40, height: 30 }, rotation: 375 });
     const second = extension.createEllipse({ frame: { x: 90, y: 50, width: 20, height: 20 } });
     expect(editor.selection.get()).toEqual([{ type: "text", anchor: { blockId, offset: 2 }, head: { blockId, offset: 2 } }]);
     expect(editor.blocks.getBlocks()).toHaveLength(1);
     expect(editor.dump().elements.map((element) => element.type)).toEqual(["rectangle", "ellipse"]);
+    expect(editor.elements.getElement(first)?.props.rotation).toBe(15);
     editor.mode.set("block");
     editor.mode.set("edgeless");
     expect(editor.execute("edgeless.selection.get")).toMatchObject({ active: true, items: [second] });
@@ -106,6 +107,95 @@ describe("edgelessVisualsExtension", () => {
     editor.execute("edgeless.visual.delete", { selection: true });
     expect(editor.blocks.getBlock(blockId)).toBeUndefined();
     expect(editor.elements.getElement(visualId)).toBeUndefined();
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("reorders connectors recursively through nested groups without reversing descendants", () => {
+    const editor = createRivtoEditor({ mode: "edgeless" });
+    const reactEditor = createReactEditor({ editor, extensions: [
+      edgelessSelectionExtension(),
+      edgelessVisualsExtension({ toolbar: false }),
+    ] });
+    const outsideBack = editor.execute("edgeless.visual.create", { kind: "ellipse" }) as string;
+    const shape = editor.execute("edgeless.visual.create", { kind: "rectangle" }) as string;
+    const outsideFront = editor.execute("edgeless.visual.create", { kind: "sticker" }) as string;
+    const connector = editor.execute("edgeless.visual.create", {
+      kind: "connector",
+      source: { anchor: { x: .5, y: .5 }, position: { x: 0, y: 0 } },
+      target: { anchor: { x: .5, y: .5 }, position: { x: 100, y: 100 } },
+    }) as string;
+    editor.execute("edgeless.selection.set", [shape, connector]);
+    const innerGroup = editor.execute("edgeless.selection.group") as string;
+    const sibling = editor.execute("edgeless.visual.create", { kind: "text", text: "Sibling" }) as string;
+    editor.execute("edgeless.selection.set", [innerGroup, sibling]);
+    const outerGroup = editor.execute("edgeless.selection.group") as string;
+
+    editor.execute("edgeless.selection.reorder", "backward");
+    expect([outsideBack, shape, connector, sibling, outsideFront].map((id) => editor.elements.getElement(id)!.zIndex)).toEqual([0, 1, 2, 3, 4]);
+
+    editor.execute("edgeless.selection.set", [outerGroup]);
+    editor.execute("edgeless.selection.reorder", "forward");
+    expect([outsideBack, outsideFront, shape, connector, sibling].map((id) => editor.elements.getElement(id)!.zIndex)).toEqual([0, 1, 2, 3, 4]);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("automatically groups connectors whose endpoints are inside selected objects", () => {
+    const editor = createRivtoEditor({ mode: "edgeless" });
+    const reactEditor = createReactEditor({ editor, extensions: [
+      edgelessSelectionExtension(),
+      edgelessVisualsExtension({ toolbar: false }),
+    ] });
+    const left = editor.execute("edgeless.visual.create", { kind: "rectangle" }) as string;
+    const right = editor.execute("edgeless.visual.create", { kind: "ellipse" }) as string;
+    const innerConnector = editor.execute("edgeless.visual.create", {
+      kind: "connector",
+      text: "inner link",
+      source: { elementId: left, anchor: { x: 1, y: .5 }, position: { x: 0, y: 0 } },
+      target: { elementId: right, anchor: { x: 0, y: .5 }, position: { x: 100, y: 0 } },
+    }) as string;
+    editor.execute("edgeless.selection.set", [left, right]);
+    const innerGroup = editor.execute("edgeless.selection.group") as string;
+    expect(editor.elements.getElement(innerGroup)?.props.children).toEqual([left, right, innerConnector]);
+
+    const sticky = editor.execute("edgeless.visual.create", { kind: "sticker" }) as string;
+    const outerConnector = editor.execute("edgeless.visual.create", {
+      kind: "connector",
+      text: "outer link",
+      source: { elementId: right, anchor: { x: 1, y: .5 }, position: { x: 100, y: 0 } },
+      target: { elementId: sticky, anchor: { x: 0, y: .5 }, position: { x: 200, y: 0 } },
+    }) as string;
+    editor.execute("edgeless.selection.set", [innerGroup, sticky]);
+    const outerGroup = editor.execute("edgeless.selection.group") as string;
+    expect(editor.elements.getElement(outerGroup)?.props.children).toEqual([innerGroup, sticky, outerConnector]);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("reorders internal connectors omitted by older persisted groups", () => {
+    const editor = createRivtoEditor({ mode: "edgeless" });
+    const reactEditor = createReactEditor({ editor, extensions: [
+      edgelessSelectionExtension(),
+      edgelessVisualsExtension({ toolbar: false }),
+    ] });
+    const left = editor.execute("edgeless.visual.create", { kind: "rectangle" }) as string;
+    const right = editor.execute("edgeless.visual.create", { kind: "ellipse" }) as string;
+    const connector = editor.execute("edgeless.visual.create", {
+      kind: "connector",
+      text: "legacy link",
+      source: { elementId: left, anchor: { x: 1, y: .5 }, position: { x: 0, y: 0 } },
+      target: { elementId: right, anchor: { x: 0, y: .5 }, position: { x: 100, y: 0 } },
+    }) as string;
+    editor.execute("edgeless.selection.set", [left, right]);
+    const group = editor.execute("edgeless.selection.group") as string;
+    editor.elements.updateElement(group, { props: { children: [left, right] } });
+    const covering = editor.execute("edgeless.visual.create", { kind: "sticker" }) as string;
+
+    editor.execute("edgeless.selection.set", [group]);
+    editor.execute("edgeless.selection.reorder", "front");
+
+    expect(editor.elements.getElement(connector)!.zIndex).toBeGreaterThan(editor.elements.getElement(covering)!.zIndex);
     reactEditor.destroy();
     editor.destroy();
   });

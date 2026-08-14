@@ -581,6 +581,10 @@
   cursor: grab;
 }
 
+.edgeless-card[data-auto-height="true"] .edgeless-card-content {
+  overflow-y: visible;
+}
+
 .edgeless-card-content:active {
   cursor: grabbing;
 }
@@ -628,6 +632,38 @@
   cursor: nwse-resize;
 }
 
+.edgeless-resize-handle[data-edgeless-resize-handle="n"],
+.edgeless-visual-resize[data-edgeless-resize-handle="n"] {
+  top: -10px;
+  left: 50%;
+  translate: -50% 0;
+  cursor: ns-resize;
+}
+
+.edgeless-resize-handle[data-edgeless-resize-handle="e"],
+.edgeless-visual-resize[data-edgeless-resize-handle="e"] {
+  top: 50%;
+  right: -10px;
+  translate: 0 -50%;
+  cursor: ew-resize;
+}
+
+.edgeless-resize-handle[data-edgeless-resize-handle="s"],
+.edgeless-visual-resize[data-edgeless-resize-handle="s"] {
+  bottom: -10px;
+  left: 50%;
+  translate: -50% 0;
+  cursor: ns-resize;
+}
+
+.edgeless-resize-handle[data-edgeless-resize-handle="w"],
+.edgeless-visual-resize[data-edgeless-resize-handle="w"] {
+  top: 50%;
+  left: -10px;
+  translate: 0 -50%;
+  cursor: ew-resize;
+}
+
 .edgeless-selection-rectangle {
   position: fixed;
   z-index: 1000;
@@ -659,6 +695,7 @@
 
 .edgeless-visual {
   position: absolute;
+  isolation: isolate;
   display: grid;
   place-items: stretch;
   box-sizing: border-box;
@@ -819,7 +856,6 @@
 
 .edgeless-connector-label {
   position: absolute;
-  z-index: 2;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -1110,6 +1146,34 @@
   right: -10px;
   bottom: -10px;
   cursor: nwse-resize;
+}
+
+.edgeless-visual-rotation {
+  position: absolute;
+  top: -38px;
+  left: 50%;
+  z-index: 3;
+  width: 14px;
+  height: 14px;
+  translate: -50% 0;
+  padding: 0;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: var(--rivto-accent, #6c5ce7);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 18%);
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.edgeless-visual-rotation::after {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: 1px;
+  height: 14px;
+  background: var(--rivto-accent, #6c5ce7);
+  content: "";
 }
 
 .edgeless-drawing-capture[data-active] {

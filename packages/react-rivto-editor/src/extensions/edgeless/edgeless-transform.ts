@@ -5,13 +5,15 @@ import { canvasDelta } from "./edgeless-geometry";
 import { getEdgelessRuntime } from "./edgeless-runtime";
 import { elementContainsBlock } from "../../surfaces/edgeless/block-elements";
 import {
-  applyCornerResize,
+  applyRotatedResize,
   connectorLabelCssDegrees,
   connectorLabelPoint,
   connectorPath,
   connectorPoints,
   EDGELESS_GRID_SIZE,
   endpointPoint,
+  normalizeRotation,
+  rotatedFrameBounds,
   snapFrame,
   snapMoveToGrid,
   snapResize,
@@ -27,15 +29,17 @@ const ROOT_SELECTOR = "[data-edgeless-root]";
 const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
 const BLOCK_SELECTOR = "[data-block-id]";
 const CONTROL_SELECTOR = "[data-block-content], [data-edgeless-ui], button:not([data-edgeless-drag-handle]), input, textarea, select, a, [contenteditable=true]";
-const RESIZE_CORNERS = new Set<ResizeCorner>(["nw", "ne", "sw", "se"]);
+const RESIZE_CORNERS = new Set<ResizeCorner>(["n", "e", "s", "w", "nw", "ne", "sw", "se"]);
 
 interface TransformStart {
-  readonly kind: "move" | "resize";
+  readonly kind: "move" | "resize" | "rotate";
   readonly x: number;
   readonly y: number;
   readonly ids: string[];
   readonly frames: Map<string, EditorElementFrame>;
   readonly corner?: ResizeCorner;
+  readonly rotation?: number;
+  readonly pointerAngle?: number;
   /**
    * AFFiNE progressive groups: after drilling into a child, a click-without-drag
    * should re-select this parent group (exit drill-in) instead of leaving the child selected.
@@ -46,6 +50,8 @@ interface TransformStart {
   moved: boolean;
   guides: readonly SnapGuide[];
   snapDisabled: boolean;
+  rotationSnapped: boolean;
+  previewRotation?: number;
 }
 
 const isEndpoint = (value: unknown): value is ConnectorEndpoint =>
@@ -58,6 +64,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
   let start: TransformStart | null = null;
   let previewTargets: HTMLElement[] | null = null;
   let hiddenConnectors: HTMLElement[] = [];
+  let translatedConnectors: HTMLElement[] = [];
   let overlayLabels: HTMLElement[] = [];
   let overlaySvg: SVGSVGElement | null = null;
 
@@ -66,6 +73,12 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     return element?.type === "group" && Array.isArray(element.props.children) ? element.props.children.filter((child): child is string => typeof child === "string") : [];
   };
   const parentId = (id: string): string | undefined => editor.elements.getElements().find((element) => groupChildren(element.id).includes(id))?.id;
+  const rotation = (id: string): number => {
+    const element = editor.elements.getElement(id);
+    return element?.type !== "block" && element?.type !== "connector" && typeof element?.props.rotation === "number"
+      ? normalizeRotation(element.props.rotation)
+      : 0;
+  };
   const leaves = (ids: readonly string[], seen = new Set<string>()): string[] => ids.flatMap((id): string[] => {
     if (seen.has(id)) return [];
     seen.add(id);
@@ -74,8 +87,10 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
   });
   const bounds = (id: string): EditorElementFrame | undefined => {
     const children = groupChildren(id);
-    return children.length ? unionFrames(children.flatMap((child) => bounds(child) ?? [])) : editor.elements.getElement(id)?.frame;
+    const element = editor.elements.getElement(id);
+    return children.length ? unionFrames(children.flatMap((child) => bounds(child) ?? [])) : element ? rotatedFrameBounds(element.frame, rotation(id)) : undefined;
   };
+  const transformFrame = (id: string): EditorElementFrame | undefined => groupChildren(id).length ? bounds(id) : editor.elements.getElement(id)?.frame;
   const rendered = (root: HTMLElement, ids: readonly string[]): HTMLElement[] => {
     const included = new Set([...ids, ...leaves(ids)]);
     return [...root.querySelectorAll<HTMLElement>("[data-edgeless-root], [data-edgeless-object-id], [data-edgeless-group-bound-id]")].filter((element) => {
@@ -89,15 +104,34 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
   };
   const minSize = (id: string) => editor.elements.getElement(id)?.type === "block" ? { width: 180, height: 100 } : { width: 1, height: 1 };
   const previewFrame = (id: string, active: TransformStart, dx: number, dy: number): EditorElementFrame | undefined => {
-    const base = active.frames.get(id) ?? bounds(id);
+    const base = active.frames.get(id) ?? transformFrame(id);
     if (!base) return undefined;
     if (active.kind === "move") return { ...base, x: base.x + dx, y: base.y + dy };
+    if (active.kind === "rotate") return base;
     const min = minSize(id);
-    return applyCornerResize(base, dx, dy, active.corner ?? "se", min.width, min.height);
+    return applyRotatedResize(base, dx, dy, active.corner ?? "se", min.width, min.height, rotation(id));
+  };
+  const targetId = (target: HTMLElement): string => target.dataset.edgelessRoot ?? target.dataset.edgelessObjectId ?? target.dataset.edgelessGroupBoundId ?? "";
+  const rotationAt = (root: HTMLElement, active: TransformStart, clientX: number, clientY: number, shiftKey = false): number => {
+    const frame = active.frames.get(active.ids[0]!);
+    if (!frame) return active.rotation ?? 0;
+    const rect = root.getBoundingClientRect();
+    const zoom = Number(root.dataset.edgelessZoom) || 1;
+    const panX = Number(root.dataset.edgelessPanX) || 0;
+    const panY = Number(root.dataset.edgelessPanY) || 0;
+    const point = { x: (clientX - rect.left - panX) / zoom, y: (clientY - rect.top - panY) / zoom };
+    const angle = Math.atan2(point.y - frame.y - frame.height / 2, point.x - frame.x - frame.width / 2) * 180 / Math.PI;
+    const next = normalizeRotation((active.rotation ?? 0) + angle - (active.pointerAngle ?? angle));
+    return shiftKey ? normalizeRotation(Math.round(next / 15) * 15) : next;
   };
   const clearConnectorPreview = () => {
     hiddenConnectors.forEach((host) => host.style.removeProperty("visibility"));
     hiddenConnectors = [];
+    translatedConnectors.forEach((host) => {
+      host.style.removeProperty("transform");
+      delete host.dataset.edgelessGeometryLock;
+    });
+    translatedConnectors = [];
     overlayLabels.forEach((label) => label.remove());
     overlayLabels = [];
     overlaySvg?.replaceChildren();
@@ -129,6 +163,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     const moving = new Set(leaves(active.ids));
     const selected = new Set(active.ids);
     const nextHidden: HTMLElement[] = [];
+    const nextTranslated: HTMLElement[] = [];
     const nextLabels: HTMLElement[] = [];
     const labelsById = new Map(
       overlayLabels.flatMap((label) => {
@@ -149,19 +184,30 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       const connectorMoves = moving.has(element.id) || selected.has(element.id);
       if (!sourceMoves && !targetMoves && !connectorMoves) return;
       if (!sourceMoves && !targetMoves && source.elementId && target.elementId) return;
+      const sourceTranslates = sourceMoves || Boolean(connectorMoves && !source.elementId);
+      const targetTranslates = targetMoves || Boolean(connectorMoves && !target.elementId);
+      const host = root.querySelector<HTMLElement>(`[data-edgeless-object-id="${element.id}"]`);
+      if (active.kind === "move" && sourceTranslates && targetTranslates && host) {
+        host.dataset.edgelessGeometryLock = "true";
+        host.style.transform = `translate(${dx}px, ${dy}px)`;
+        nextTranslated.push(host);
+        return;
+      }
 
       const sourceBound = source.elementId ? bounds(source.elementId) : undefined;
       const targetBound = target.elementId ? bounds(target.elementId) : undefined;
       const sourceFrame = source.elementId ? previewFrame(source.elementId, active, sourceMoves ? dx : 0, sourceMoves ? dy : 0) : undefined;
       const targetFrame = target.elementId ? previewFrame(target.elementId, active, targetMoves ? dx : 0, targetMoves ? dy : 0) : undefined;
-      let nextSource = endpointPoint(source, sourceFrame);
-      let nextTarget = endpointPoint(target, targetFrame);
+      const sourceRotation = source.elementId && active.kind === "rotate" && active.ids.includes(source.elementId) ? active.previewRotation ?? rotation(source.elementId) : source.elementId ? rotation(source.elementId) : 0;
+      const targetRotation = target.elementId && active.kind === "rotate" && active.ids.includes(target.elementId) ? active.previewRotation ?? rotation(target.elementId) : target.elementId ? rotation(target.elementId) : 0;
+      let nextSource = endpointPoint(source, sourceFrame, sourceRotation);
+      let nextTarget = endpointPoint(target, targetFrame, targetRotation);
       if (connectorMoves && !source.elementId) nextSource = { x: source.position.x + dx, y: source.position.y + dy };
       if (connectorMoves && !target.elementId) nextTarget = { x: target.position.x + dx, y: target.position.y + dy };
 
       const route = (typeof element.props.route === "string" ? element.props.route : "straight") as ConnectorRoute;
-      const routeSourceFrame = sourceFrame ?? sourceBound;
-      const routeTargetFrame = targetFrame ?? targetBound;
+      const routeSourceFrame = sourceFrame ? rotatedFrameBounds(sourceFrame, sourceRotation) : sourceBound;
+      const routeTargetFrame = targetFrame ? rotatedFrameBounds(targetFrame, targetRotation) : targetBound;
       const absPoints = connectorPoints(
         nextSource,
         nextTarget,
@@ -180,7 +226,6 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
         routeSourceFrame,
         routeTargetFrame,
       );
-      const host = root.querySelector<HTMLElement>(`[data-edgeless-object-id="${element.id}"]`);
       if (host) {
         host.style.visibility = "hidden";
         nextHidden.push(host);
@@ -272,6 +317,11 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     });
     hiddenConnectors.filter((host) => !nextHidden.includes(host)).forEach((host) => host.style.removeProperty("visibility"));
     hiddenConnectors = nextHidden;
+    translatedConnectors.filter((host) => !nextTranslated.includes(host)).forEach((host) => {
+      host.style.removeProperty("transform");
+      delete host.dataset.edgelessGeometryLock;
+    });
+    translatedConnectors = nextTranslated;
     labelsById.forEach((label) => label.remove());
     overlayLabels = nextLabels;
     overlay.replaceChildren(defs, ...paths);
@@ -285,7 +335,9 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     const root = reactEditor.events.getRoot();
     if (!root) return;
     (previewTargets ?? rendered(root, start?.ids ?? [])).forEach((element) => {
-      element.style.removeProperty("transform");
+      const id = targetId(element);
+      if (rotation(id)) element.style.transform = `rotate(${rotation(id)}deg)`;
+      else element.style.removeProperty("transform");
       delete element.dataset.edgelessGeometryLock;
       if (start?.kind === "resize" && restoreSize) {
         element.style.removeProperty("left");
@@ -311,15 +363,17 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     const snapEnabled = root.dataset.edgelessSnap !== "false";
     if (!alignEnabled && !snapEnabled) return { dx: rawDx, dy: rawDy, guides: [] as readonly SnapGuide[] };
     const excluded = new Set(leaves(active.ids));
-    const candidates = editor.elements.getElements().filter((element) => element.type !== "connector" && element.type !== "group" && !excluded.has(element.id)).map((element) => element.frame);
+    const candidates = editor.elements.getElements().filter((element) => element.type !== "connector" && element.type !== "group" && !excluded.has(element.id)).map((element) => rotatedFrameBounds(element.frame, rotation(element.id)));
     const zoom = Number(root.dataset.edgelessZoom) || 1;
     const grid = Number(root.dataset.edgelessGrid) || EDGELESS_GRID_SIZE;
+    if (active.kind === "rotate") return { dx: 0, dy: 0, guides: [] as readonly SnapGuide[] };
     if (active.kind === "resize") {
       const id = active.ids[0]!;
       const frame = active.frames.get(id);
       if (!frame) return { dx: rawDx, dy: rawDy, guides: [] as readonly SnapGuide[] };
       const min = minSize(id);
       const corner = active.corner ?? "se";
+      if (rotation(id)) return { dx: rawDx, dy: rawDy, guides: [] as readonly SnapGuide[] };
       let dx = rawDx;
       let dy = rawDy;
       let guides: readonly SnapGuide[] = [];
@@ -335,7 +389,10 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       }
       return { dx, dy, guides };
     }
-    const moving = unionFrames(active.ids.flatMap((id) => active.frames.get(id) ?? bounds(id) ?? []));
+    const moving = unionFrames(active.ids.flatMap((id) => {
+      const frame = active.frames.get(id) ?? transformFrame(id);
+      return frame ? [rotatedFrameBounds(frame, rotation(id))] : [];
+    }));
     if (!moving) return { dx: rawDx, dy: rawDy, guides: [] as readonly SnapGuide[] };
     let dx = rawDx;
     let dy = rawDy;
@@ -358,6 +415,8 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     if (root.dataset.panningReady === "true" || root.dataset.edgelessTool === "pan") return false;
     const resizeHandle = event.target.closest<HTMLElement>("[data-edgeless-resize-handle]");
     const resize = Boolean(resizeHandle);
+    const rotationHandle = event.target.closest<HTMLElement>("[data-edgeless-rotation-handle]");
+    const rotating = Boolean(rotationHandle);
     const cornerAttr = resizeHandle?.dataset.edgelessResizeHandle;
     const corner: ResizeCorner | undefined = cornerAttr && RESIZE_CORNERS.has(cornerAttr as ResizeCorner)
       ? cornerAttr as ResizeCorner
@@ -388,7 +447,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     if (parent && !primary) {
       const selectedId = current.length === 1 ? current[0] : undefined;
       const inActiveGroup = Boolean(selectedId && (selectedId === parent || parentId(selectedId) === parent));
-      if (resize) {
+      if (resize || rotating) {
         // Purpose: scale only the handle's child; group bounds follow children.
         id = childId;
         if (!current.includes(childId)) selection.set([childId]);
@@ -417,7 +476,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       !hitBlock ||
       (element?.type === "block" && elementContainsBlock(editor, element, editor.blocks.getRootIds(), hitBlockId))
     );
-    if (!resize && !movable) return false;
+    if (!resize && !rotating && !movable) return false;
     event.stopPropagation();
     const selected = current.includes(id);
     if (primary) {
@@ -427,36 +486,45 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       return true;
     }
     if (!selected) selection.set([id]);
-    const ids = resize ? [id] : selected ? [...current] : [id];
+    const ids = resize || rotating ? [id] : selected ? [...current] : [id];
     const frames = new Map<string, EditorElementFrame>();
     ids.forEach((item) => {
-      const frame = bounds(item);
+      const frame = transformFrame(item);
       if (frame) frames.set(item, { ...frame });
     });
     // Cache leaf frames so attached connector previews stay accurate for groups.
     leaves(ids).forEach((item) => {
       if (frames.has(item)) return;
-      const frame = bounds(item);
+      const frame = transformFrame(item);
       if (frame) frames.set(item, { ...frame });
     });
     start = {
-      kind: resize ? "resize" : "move",
+      kind: rotating ? "rotate" : resize ? "resize" : "move",
       x: event.clientX,
       y: event.clientY,
       ids,
       frames,
       corner: resize ? corner ?? "se" : undefined,
-      returnToGroup: resize ? undefined : returnToGroup,
+      rotation: rotating ? rotation(id) : undefined,
+      pointerAngle: rotating && frames.get(id)
+        ? Math.atan2(
+          (event.clientY - root.getBoundingClientRect().top - (Number(root.dataset.edgelessPanY) || 0)) / (Number(root.dataset.edgelessZoom) || 1) - frames.get(id)!.y - frames.get(id)!.height / 2,
+          (event.clientX - root.getBoundingClientRect().left - (Number(root.dataset.edgelessPanX) || 0)) / (Number(root.dataset.edgelessZoom) || 1) - frames.get(id)!.x - frames.get(id)!.width / 2,
+        ) * 180 / Math.PI
+        : undefined,
+      returnToGroup: resize || rotating ? undefined : returnToGroup,
       lastX: event.clientX,
       lastY: event.clientY,
       moved: false,
       guides: [],
       snapDisabled: event.altKey,
+      rotationSnapped: event.shiftKey,
+      previewRotation: rotating ? rotation(id) : undefined,
     };
     root.dataset.transforming = start.kind;
     // Resize previews write left/top/width/height on the host; lock so React
     // style props cannot clobber the opposite-corner-stable geometry mid-drag.
-    if (resize) lockGeometry(root, ids);
+    if (resize || rotating) lockGeometry(root, ids);
     (card ?? object)?.focus({ preventScroll: true });
     return true;
   });
@@ -466,6 +534,17 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     const active = start;
     if (!active) return false;
     active.lastX = event.clientX; active.lastY = event.clientY;
+    if (active.kind === "rotate") {
+      active.rotationSnapped = event.shiftKey;
+      const next = rotationAt(root, active, event.clientX, event.clientY, event.shiftKey);
+      active.previewRotation = next;
+      active.moved ||= Math.abs(next - (active.rotation ?? 0)) >= .1;
+      if (!active.moved) return false;
+      previewTargets ??= rendered(root, active.ids);
+      previewTargets.forEach((target) => { target.style.transform = `rotate(${next}deg)`; });
+      previewAttachedConnectors(root, active, 0, 0);
+      return true;
+    }
     const zoom = Number(root.dataset.edgelessZoom) || 1;
     active.snapDisabled = event.altKey;
     const result = snappedDelta(root, active, canvasDelta(event.clientX - active.x, zoom), canvasDelta(event.clientY - active.y, zoom), active.snapDisabled);
@@ -477,7 +556,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     }
     previewTargets ??= rendered(root, active.ids);
     previewTargets.forEach((target) => {
-      if (active.kind === "move") target.style.transform = `translate(${result.dx}px, ${result.dy}px)`;
+      if (active.kind === "move") target.style.transform = `translate(${result.dx}px, ${result.dy}px) rotate(${rotation(targetId(target))}deg)`;
       else {
         const frame = previewFrame(active.ids[0]!, active, result.dx, result.dy);
         if (frame) {
@@ -511,10 +590,17 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       }
       return false;
     }
+    if (active.kind === "rotate") {
+      editor.elements.updateElement(active.ids[0]!, { props: { rotation: rotationAt(root, active, active.lastX, active.lastY, active.rotationSnapped) } });
+      return true;
+    }
     if (active.kind === "move" && editor.commands.has("edgeless.selection.move")) { editor.execute("edgeless.selection.move", { dx: result.dx, dy: result.dy }); return true; }
     editor.batchUpdates(() => active.ids.forEach((id) => {
       const frame = previewFrame(id, active, result.dx, result.dy);
-      if (frame) editor.elements.updateElement(id, { frame });
+      if (frame) editor.elements.updateElement(id, {
+        frame,
+        props: editor.elements.getElement(id)?.type === "block" ? { autoHeight: false } : undefined,
+      });
     }));
     return true;
   };

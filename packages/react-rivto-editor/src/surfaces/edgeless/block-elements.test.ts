@@ -3,9 +3,14 @@ import { createReactEditor } from "../../react-editor";
 import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../../extensions/separator/separator-block";
 import {
   blockIdsOf,
+  blockFramesOverlap,
+  EDGELESS_CARD_DEFAULT_FRAME,
   EDGELESS_BLOCK_ELEMENT_ID_PREFIX,
   elementContainsBlock,
+  nonOverlappingBlockFrame,
   reconcileBlockElements,
+  setBlockElementDefaultWidth,
+  setBlockElementOverlapAvoidance,
 } from "./block-elements";
 
 describe("edgeless block element reconciliation", () => {
@@ -17,6 +22,56 @@ describe("edgeless block element reconciliation", () => {
     const rootIds = editor.blocks.getRootIds();
     return editor.elements.getElements().map((element) => blockIdsOf(element, rootIds));
   };
+
+  test("finds deterministic free block frames while allowing touching edges", () => {
+    const preferred = { x: 0, y: 0, width: 40, height: 40 };
+    expect(blockFramesOverlap(preferred, { x: 40, y: 0, width: 40, height: 40 })).toBe(false);
+    expect(blockFramesOverlap(preferred, { x: 39, y: 0, width: 40, height: 40 })).toBe(true);
+    expect(nonOverlappingBlockFrame(preferred, [preferred], 20))
+      .toEqual({ x: 40, y: 0, width: 40, height: 40 });
+  });
+
+  test("avoids only block cards when reconciling new ranges and supports opt-out", () => {
+    const editor = createRivtoEditor();
+    const reactEditor = createRuntime(editor);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
+    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, first);
+    editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, separator);
+    editor.elements.insertElement({ type: "rectangle", frame: { x: 60, y: 60, width: 1000, height: 1000 }, zIndex: 0 });
+    reconcileBlockElements(reactEditor);
+    const cards = editor.elements.getElements().filter((element) => element.type === "block");
+    expect(cards).toHaveLength(2);
+    expect(blockFramesOverlap(cards[0]!.frame, cards[1]!.frame)).toBe(false);
+    expect(cards[0]!.frame).toMatchObject({ x: 60, y: 60 });
+    reactEditor.destroy();
+    editor.destroy();
+
+    const overlapEditor = createRivtoEditor();
+    const overlapRuntime = createRuntime(overlapEditor);
+    const left = overlapEditor.blocks.insertBlock({ type: "paragraph" });
+    const split = overlapEditor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, left);
+    overlapEditor.blocks.insertBlock({ type: "paragraph" }, split);
+    setBlockElementOverlapAvoidance(overlapRuntime, false);
+    reconcileBlockElements(overlapRuntime);
+    const overlapping = overlapEditor.elements.getElements();
+    expect(blockFramesOverlap(overlapping[0]!.frame, overlapping[1]!.frame)).toBe(true);
+    overlapRuntime.destroy();
+    overlapEditor.destroy();
+  });
+
+  test("uses the page-sized default card width and accepts a runtime override", () => {
+    const editor = createRivtoEditor();
+    const reactEditor = createRuntime(editor);
+    editor.blocks.insertBlock({ type: "paragraph" });
+    setBlockElementDefaultWidth(reactEditor, 640);
+
+    reconcileBlockElements(reactEditor);
+
+    expect(EDGELESS_CARD_DEFAULT_FRAME.width).toBe(720);
+    expect(editor.elements.getElements()[0]!.frame.width).toBe(640);
+    reactEditor.destroy();
+    editor.destroy();
+  });
 
   test("automatically reconciles block edits without adding derived history steps", async () => {
     const editor = createRivtoEditor();

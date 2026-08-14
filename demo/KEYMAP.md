@@ -117,7 +117,8 @@ or delete its complete subtree; and collapse or expand it when applicable.
 | Drag empty canvas | Rectangle-selects intersecting root cards. |
 | Drag `Move` | Moves one root, or every selected root when the handle belongs to the selection. |
 | Drag a block `⋮⋮` handle | Uses the shared structural drag/drop behavior within the exact card under the pointer, including cross-card reorder and nesting. Blank canvas is not a drop target. |
-| Drag resize corner | Resizes one root card, with a minimum size of 180×100. |
+| Drag resize corner or edge center | Resizes one root card on two axes or the selected single axis, with a minimum size of 180×100. Manual resize switches an auto-height card to fixed size. |
+| Drag a visual rotation handle | Rotates a shape, text, sticky, or drawing freely; hold `Shift` for 15° increments. |
 | Arrow keys (canvas selection active) | Moves selected roots by one canvas pixel. |
 | `Shift+Arrow` (canvas selection active) | Moves selected roots by ten canvas pixels. |
 | `Backspace` / `Delete` | For a structural block selection, the first press clears content and descendants while preserving each selected block; a second press deletes the empty blocks. Canvas object selection deletes selected elements. Text selections keep character / range deletion. |

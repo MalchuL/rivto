@@ -8,6 +8,10 @@ export interface EdgelessSnappingSnapshot {
 export interface EdgelessSurfaceOptions {
   /** Shared settings store; a private default store is created when omitted. */
   readonly snapping?: EdgelessSnappingStore;
+  /** Places newly created block cards away from existing block cards. */
+  readonly avoidBlockElementOverlap?: boolean;
+  /** Width of newly created block cards in canvas units; defaults to the 720px page width. */
+  readonly blockElementWidth?: number;
 }
 
 /** Observable snapping settings whose persistence is owned by the host. */
