@@ -1,8 +1,19 @@
+/**
+ * Synchronizes native text gestures with Rivto's portable text and whole-block
+ * selections. Editable anchors retain browser caret behavior, while explicit
+ * structural anchors support plain-click, range, modifier, and drag selection
+ * without taking activation away from their interactive descendants.
+ *
+ * @module
+ */
 import type {
   EditorPosition,
   EditorSelection,
 } from "@chulane/rivto";
-import { BLOCK_SELECTION_ANCHOR_SELECTOR } from "../../constants";
+import {
+  BLOCK_CONTENT_SELECTOR,
+  BLOCK_SELECTION_ANCHOR_SELECTOR,
+} from "../../constants";
 import type { ReactEditor } from "../../types";
 import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
 import {
@@ -16,6 +27,14 @@ import {
   setNativeSelection,
   type DOMSelectionPoint,
 } from "../../managers";
+
+const INTERACTIVE_STRUCTURAL_TARGET_SELECTOR =
+  `${BLOCK_CONTENT_SELECTOR}, input, textarea, select, button, a`;
+
+/** Returns whether a control inside a structural anchor keeps its native click. */
+function isInteractiveStructuralTarget(target: Element): boolean {
+  return Boolean(target.closest(INTERACTIVE_STRUCTURAL_TARGET_SELECTOR));
+}
 
 /** Live state retained only for the duration of one pointer selection gesture. */
 interface PointerSelection {
@@ -308,12 +327,31 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
     type: "click",
     capture: true,
     scope: "block",
-  }, ({ blockId }) => {
-      if (!blockId || blockId !== suppressClickBlockId) return false;
-      // A control may still receive `click` after its pointer gesture became a
-      // structural drag. Claim that click so controls respecting
-      // `defaultPrevented` do not perform their normal action.
-      suppressClickBlockId = undefined;
+  }, ({ raw: event, blockId, root }) => {
+      if (!blockId) return false;
+      if (blockId === suppressClickBlockId) {
+        // A control may still receive `click` after its pointer gesture became a
+        // structural drag. Claim that click so controls respecting
+        // `defaultPrevented` do not perform their normal action.
+        suppressClickBlockId = undefined;
+        return true;
+      }
+      if (
+        event.button !== 0 ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        !(event.target instanceof Element) ||
+        isInteractiveStructuralTarget(event.target)
+      ) return false;
+      const anchor = event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);
+      if (!anchor || anchor.isContentEditable || !root.contains(anchor)) return false;
+
+      editor.selection.set(createBlockSelection(orderedBlockIds(root), blockId, blockId));
+      if (editor.mode.get() === "edgeless") findEdgelessRuntime(reactEditor)?.deactivate();
+      root.ownerDocument.getSelection()?.removeAllRanges();
+      root.focus({ preventScroll: true });
+      reactEditor.selection.clearDOMHighlight();
       return true;
   });
 

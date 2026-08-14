@@ -79,16 +79,18 @@ function CounterBlock({ blockId }: { blockId: string }) {
 }
 ```
 
-Put `attributes` on the region from which a pointer drag should begin. Using an
-outer block-level `<div>` lets empty space around the compact button start
-whole-block selection. Putting the attributes on the button limits the
-selection anchor to the button's own rectangle.
+Put `attributes` on the region from which whole-block pointer selection should
+begin. A plain click on its non-interactive space selects the complete block;
+dragging may extend that selection. Using an outer block-level `<div>` lets
+empty space around the compact button select the block while the button keeps
+its own action. Putting the attributes directly on an interactive control keeps
+that control's native click instead of turning the click into block selection.
 
 Both modes provide `data-block-selection-anchor`. With `textEdit: false`, the
 anchor element is not contenteditable, so the selection plugin interprets its
 gesture structurally. Interactive descendants must ignore a click whose event
 is already `defaultPrevented`, because a completed selection drag claims the
-browser's follow-up click.
+browser's follow-up click. Plain clicks on those descendants are not claimed.
 
 Do not put a structural selection anchor around a nested text editor. The outer
 anchor could claim pointer gestures intended for `data-block-content`.

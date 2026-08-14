@@ -19,6 +19,28 @@ async function selectRoots(page: Page, indexes: number[]): Promise<string[]> {
   return ids;
 }
 
+/** Inserts a separator followed by the focused empty writing block it creates. */
+async function insertSeparatorContinuation(page: Page): Promise<{
+  readonly separator: Locator;
+  readonly writing: Locator;
+  readonly content: Locator;
+  readonly separatorId: string;
+  readonly writingId: string;
+}> {
+  const sourceContent = page.locator(".page-surface > .page-block [data-block-content]").first();
+  const source = sourceContent.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
+  await sourceContent.click();
+  await page.keyboard.press("Control+Shift+Enter");
+  const separator = source.locator(`xpath=following-sibling::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
+  const writing = separator.locator(`xpath=following-sibling::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
+  const content = writing.locator(":scope > .page-block-row [data-block-content]");
+  const separatorId = await separator.getAttribute(BLOCK_ID_ATTRIBUTE);
+  const writingId = await writing.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!separatorId || !writingId) throw new Error("Expected inserted separator continuation IDs");
+  await expect(content).toBeFocused();
+  return { separator, writing, content, separatorId, writingId };
+}
+
 /** Resolves a stable block locator after undo recreates its rendered element. */
 function blockById(page: Page, id: string): Locator {
   return page.locator(blockIdSelector(id));
@@ -49,6 +71,61 @@ test("Backspace and Delete remove root-focused block selections atomically", asy
   await page.keyboard.press("Delete");
   await expect(blockById(page, firstId!)).toHaveCount(0);
   await expect(blockById(page, secondId!)).toHaveCount(0);
+});
+
+test("Backspace and Delete remove an empty writing block after a structural block", async ({ page }) => {
+  const inserted = await insertSeparatorContinuation(page);
+
+  await page.keyboard.press("Backspace");
+  await expect(blockById(page, inserted.writingId)).toHaveCount(0);
+  await expect(blockById(page, inserted.separatorId)).toHaveAttribute("data-block-selected", "true");
+
+  await page.keyboard.press("Control+z");
+  await expect(blockById(page, inserted.writingId)).toBeVisible();
+  await blockById(page, inserted.writingId).locator("[data-block-content]").click();
+  await page.keyboard.press("Delete");
+  await expect(blockById(page, inserted.writingId)).toHaveCount(0);
+  await expect(blockById(page, inserted.separatorId)).toHaveAttribute("data-block-selected", "true");
+});
+
+test("removing an empty parent promotes its first child and adopts later children", async ({ page }) => {
+  const inserted = await insertSeparatorContinuation(page);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("First child");
+  const firstContent = page.locator("[data-block-content]:focus");
+  const first = firstContent.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
+  const firstId = await first.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!firstId) throw new Error("Expected first child ID");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Second child");
+  const secondContent = page.locator("[data-block-content]:focus");
+  const second = secondContent.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
+  const secondId = await second.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!secondId) throw new Error("Expected second child ID");
+
+  const collapse = inserted.writing.locator(":scope > .page-block-row [data-collapse-toggle]");
+  await collapse.click();
+  await inserted.content.click();
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Delete");
+  await expect(blockById(page, inserted.writingId)).toBeVisible();
+  await collapse.click();
+  await inserted.content.click();
+  await page.keyboard.press("Backspace");
+
+  await expect(blockById(page, inserted.writingId)).toHaveCount(0);
+  await expect(blockById(page, firstId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}]`)).toHaveCount(0);
+  await expect(blockById(page, secondId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`))
+    .toHaveAttribute(BLOCK_ID_ATTRIBUTE, firstId);
+  await expect(blockById(page, inserted.separatorId)).toHaveAttribute("data-block-selected", "true");
+
+  await page.keyboard.press("Control+z");
+  await expect(blockById(page, inserted.writingId)).toBeVisible();
+  await expect(blockById(page, firstId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`))
+    .toHaveAttribute(BLOCK_ID_ATTRIBUTE, inserted.writingId);
+  await expect(blockById(page, secondId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`))
+    .toHaveAttribute(BLOCK_ID_ATTRIBUTE, inserted.writingId);
 });
 
 test("undo works immediately after deleting blocks from a focused editable", async ({ page }) => {

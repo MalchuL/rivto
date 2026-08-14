@@ -1,3 +1,10 @@
+/**
+ * Owns forward Delete behavior at editable block boundaries. It preserves
+ * ordinary forward merging while sharing the narrowly scoped empty-writing
+ * removal used when a structural predecessor prevents a meaningful merge.
+ *
+ * @module
+ */
 import type { ReactEditor } from "../../types";
 import {
   BUILTIN_KEYMAP,
@@ -8,9 +15,11 @@ import {
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
+  readKeyboardSelection,
   shouldDeleteSelection,
 } from "../../managers";
 import { navigationDomRoot } from "./outline-scope";
+import { removeEmptyBlockAfterStructuralPredecessor } from "./page-backspace";
 
 /** Merges the next visible editable block at a collapsed block-end caret. */
 export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
@@ -18,16 +27,18 @@ export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMergeForward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
-    when: ({ selection, raw: event }) =>
-      !shouldDeleteSelection(selection) && isEditableKeyboardEvent(event),
-  }, ({ root }) => {
-    const target = firstKeyboardTarget(editor.selection.get());
+    when: ({ raw: event, blockId }) =>
+      isEditableKeyboardEvent(event) &&
+      !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, editor, blockId)),
+  }, ({ root, blockId }) => {
+    const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, editor, blockId));
     const block = target?.collapsed ? editor.blocks.getBlock(target.blockId) : undefined;
     if (!target?.collapsed || !block || target.offset !== block.content.length) return false;
     // A collapsed parent behaves as a visible leaf: Delete must not merge one
     // of its deliberately hidden descendants.
     if (reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true) return false;
     const scope = navigationDomRoot(root, block.id);
+    if (removeEmptyBlockAfterStructuralPredecessor(reactEditor, scope, block.id)) return true;
     const next = findNextEditableBlock(scope, block.id);
     if (!next) return false;
     const joinOffset = editor.blocks.mergeBlocks(block.id, next.blockId);

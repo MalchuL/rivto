@@ -20,6 +20,7 @@ describe("separator block extension", () => {
     expect(reactEditor.blocks.separatesBlockElements(SEPARATOR_BLOCK_TYPE)).toBe(true);
     expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('role="separator"');
     expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('data-separator-block="true"');
+    expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('data-block-selection-anchor=""');
 
     reactEditor.destroy();
     editor.destroy();

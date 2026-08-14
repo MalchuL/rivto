@@ -206,6 +206,27 @@ test("dragging from the empty right side of Counter starts structural selection"
   await expect(button).toHaveText("Count: 2");
 });
 
+test("plain clicks select structural regions without activating their controls", async ({ page }) => {
+  const separator = page.locator('[data-separator-block="true"]').first();
+  const separatorBlock = separator.locator(BLOCK_ANCESTOR_XPATH);
+  await separator.click();
+  await expect(separatorBlock).toHaveAttribute("data-block-selected", "true");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
+
+  const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+  const region = counter.locator(".custom-counter-selection-region");
+  const button = counter.locator(".custom-counter-block");
+  const regionBox = await region.boundingBox();
+  if (!regionBox) throw new Error("Expected Counter selection-region geometry");
+  await region.click({ position: { x: regionBox.width - 8, y: regionBox.height / 2 } });
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
+  await expect(separatorBlock).not.toHaveAttribute("data-block-selected", "true");
+  await expect(button).toHaveText("Count: 2");
+
+  await button.click();
+  await expect(button).toHaveText("Count: 3");
+});
+
 test("Shift click ranges complete blocks", async ({ page }) => {
   const contents = textContents(page);
   await contents.nth(0).click();

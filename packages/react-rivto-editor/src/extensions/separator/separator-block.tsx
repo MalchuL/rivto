@@ -1,3 +1,10 @@
+/**
+ * Provides Rivto's contentless separator block, including accessible
+ * presentation, structural selection participation, insertion commands, and
+ * edgeless card-partition metadata.
+ *
+ * @module
+ */
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -6,24 +13,30 @@ import {
   KEYBOARD_BINDING_IDS,
   type ReactEditorExtension,
 } from "../../managers";
+import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../constants";
 import type { CreateDefaultBlock } from "../page/empty-block";
 import type { ReactEditor } from "../../types";
 
 /** Persisted native type installed by the built-in separator extension. */
 export const SEPARATOR_BLOCK_TYPE = "separator";
+const SEPARATOR_BLOCK_CLASS = "rivto-separator-block";
+const SEPARATOR_LINE_CLASS = "rivto-separator-line";
+const SEPARATOR_ARROW_CLASS = "rivto-separator-arrow";
+const SEPARATOR_SELECTION_ATTRIBUTES = { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
 
 /** Contentless divider renderer shared by page and nested edgeless block trees. */
 export function SeparatorBlock() {
   return (
     <div
-      className="rivto-separator-block"
+      {...SEPARATOR_SELECTION_ATTRIBUTES}
+      className={SEPARATOR_BLOCK_CLASS}
       data-separator-block="true"
       role="separator"
       aria-label="Block element separator"
     >
-      <span className="rivto-separator-arrow" aria-hidden="true">↑</span>
-      <span className="rivto-separator-line" aria-hidden="true" />
-      <span className="rivto-separator-arrow" aria-hidden="true">↓</span>
+      <span className={SEPARATOR_ARROW_CLASS} aria-hidden="true">↑</span>
+      <span className={SEPARATOR_LINE_CLASS} aria-hidden="true" />
+      <span className={SEPARATOR_ARROW_CLASS} aria-hidden="true">↓</span>
     </div>
   );
 }

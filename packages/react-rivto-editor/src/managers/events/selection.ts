@@ -1,8 +1,16 @@
+/**
+ * Provides shared conversion and focus helpers for keyboard commands that act
+ * on Rivto's portable selection while respecting the browser's latest native
+ * caret, including clicks dispatched before `selectionchange` synchronization.
+ *
+ * @module
+ */
 import type {
   RivtoEditorApi as Editor,
   EditorSelection,
   EditorSelectionItem,
 } from "@chulane/rivto";
+import type { SelectionCapability } from "../../capabilities";
 import {
   findBlockFromEvent,
   focusBlock,
@@ -46,6 +54,38 @@ export function firstKeyboardTarget(selection: EditorSelection): KeyboardSelecti
 /** Returns true when the complete editor selection is not one collapsed caret. */
 export function shouldDeleteSelection(selection: EditorSelection): boolean {
   return selection.length !== 1 || !firstKeyboardTarget(selection)?.collapsed;
+}
+
+/**
+ * Resolves keyboard state from a live native caret before portable state.
+ *
+ * Chromium may dispatch a key immediately after click and before its delayed
+ * `selectionchange`. Preferring a readable DOM selection prevents that key from
+ * acting on the previously focused block while retaining portable structural
+ * selection when no native range exists.
+ *
+ * @param selectionManager - React selection bridge that reads the active DOM range.
+ * @param editor - Core editor whose portable selection is synchronized when needed.
+ * @param emptyBlockId - Editable event target used when an empty host has no DOM range.
+ * @returns Current selection suitable for a keyboard command.
+ */
+export function readKeyboardSelection(
+  selectionManager: SelectionCapability,
+  editor: Editor,
+  emptyBlockId?: string,
+): EditorSelection {
+  const nativeSelection = selectionManager.readDOM();
+  const emptyBlock = emptyBlockId ? editor.blocks.getBlock(emptyBlockId) : undefined;
+  const focusedEmptySelection: EditorSelection | undefined = !nativeSelection && emptyBlock?.content === ""
+    ? [{
+        type: "text",
+        anchor: { blockId: emptyBlock.id, offset: 0 },
+        head: { blockId: emptyBlock.id, offset: 0 },
+      }]
+    : undefined;
+  const current = nativeSelection ?? focusedEmptySelection;
+  if (current) editor.selection.set(current);
+  return current ?? editor.selection.get();
 }
 
 /** Uses the event target only to scope shortcuts to editable page content. */

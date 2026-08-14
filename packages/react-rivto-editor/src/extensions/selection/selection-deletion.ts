@@ -1,8 +1,16 @@
+/**
+ * Routes Backspace and Delete for expanded text and whole-block selections.
+ * The extension reconciles an immediately clicked native caret before deciding
+ * whether a previously portable structural selection still owns the key.
+ *
+ * @module
+ */
 import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import {
   focusSelectionCaret,
   isEditableKeyboardEvent,
+  readKeyboardSelection,
   shouldDeleteSelection,
 } from "../../managers";
 
@@ -19,12 +27,17 @@ export function registerSelectionDeletion(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.selectionDelete,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
-    when: ({ selection, raw: event }) => {
+    when: ({ selection, raw: event, blockId }) => {
       const root = reactEditor.events.getRoot();
-      if (!root || !shouldDeleteSelection(selection)) return false;
+      if (!root) return false;
+      const editableEvent = isEditableKeyboardEvent(event);
+      const current = editableEvent
+        ? readKeyboardSelection(reactEditor.selection, editor, blockId)
+        : selection;
+      if (!shouldDeleteSelection(current)) return false;
       const rootBlockSelection = root.ownerDocument.activeElement === root &&
-        selection.some((item) => item.type === "block");
-      return rootBlockSelection || isEditableKeyboardEvent(event);
+        current.some((item) => item.type === "block");
+      return rootBlockSelection || editableEvent;
     },
   }, ({ root }) => {
     editor.deleteSelection();

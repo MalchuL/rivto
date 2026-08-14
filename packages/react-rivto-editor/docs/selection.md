@@ -156,7 +156,7 @@ endpoints become their collapsed ancestor (often converting text → block).
 | Portable list and mutation range | `@chulane/rivto` `SelectionManager` | Store, validate, normalize, delete, notify |
 | Reconcile after document changes | `Editor` | Repair IDs, offsets, and tree order |
 | DOM ↔ portable bridge | `textSelectionExtension` | Pointer + `selectionchange` |
-| Whole-block UX | `blockSelectionExtension` | Ctrl/Cmd click toggle in either surface |
+| Whole-block UX | selection extensions | Plain structural-anchor click and Ctrl/Cmd BlockView toggle |
 | Caret / Shift+Arrow | `caretNavigationExtension`, `blockSelectionNavigationExtension` | Keyboard |
 | Delete expanded selection | `selectionDeletionExtension` | Backspace/Delete |
 | Canvas object UX | `edgelessSelectionExtension` | Card click / marquee |
@@ -299,14 +299,17 @@ Implementation: `extensions/selection/block-selection.ts` and
 ### How users get a block selection
 
 1. **Drag across blocks** (default text plugin path above).
-2. **Ctrl/Cmd + click** a `BlockView` — toggles membership in a block
+2. **Plain-click a non-editable `data-block-selection-anchor` region** — replaces
+   the current selection with that complete block. Buttons, inputs, links, and
+   other interactive descendants keep their native activation.
+3. **Ctrl/Cmd + click** a `BlockView` — toggles membership in a block
    selection (`toggleBlockSelection`). Capture-phase handler claims the event
    so the browser does not place a caret.
-3. **Shift+Arrow** once a block selection exists
+4. **Shift+Arrow** once a block selection exists
    (`registerBlockSelectionNavigation` / `extendBlockSelection`).
-4. **Shift+Arrow from text** across a block boundary
+5. **Shift+Arrow from text** across a block boundary
    (`registerCaretNavigation`) converts to a block selection.
-5. Slash delete / duplicate temporarily set a block selection around one ID.
+6. Slash delete / duplicate temporarily set a block selection around one ID.
 
 While Ctrl/Cmd is held, the root gets `data-block-selecting="true"` so CSS can
 show a block-select cursor.
@@ -373,6 +376,7 @@ Text editing inside a card still uses `type: "text"` and the same text-selection
 | Alt+Shift+Up/Down | `keyboardBlockMoveExtension` | Move selected sibling group structurally |
 | Backspace/Delete (expanded) | `selectionDeletionExtension` | `editor.deleteSelection()` then restore caret |
 | Backspace at start / Delete at end | merge / outdent / empty-reset extensions | Only when selection is a collapsed caret |
+| Backspace/Delete (empty writing after structural sibling) | merge extensions | Remove the root empty writer; promote its first child unless collapsed; select predecessor |
 | Edgeless arrows | `edgelessMovementExtension` | Nudge selected roots; does not create text carets |
 | Edgeless Backspace/Delete (block) | `edgelessDeletionExtension` | Clear selected top-level blocks first; delete them only when all are already empty leaves |
 
