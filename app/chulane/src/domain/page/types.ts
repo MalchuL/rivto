@@ -16,7 +16,7 @@ export interface Page {
   /** References Tag.id from the project (or ancestor) vocabulary. */
   tagIds: string[];
   properties: Record<string, unknown>;
-  /** TipTap HTML for V1; later replaced by Rivto block content. */
+  /** Serialized Rivto `EditorSnapshot` JSON. */
   content: string;
   createdAt: string;
   updatedAt: string;

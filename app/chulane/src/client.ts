@@ -31,5 +31,16 @@ export {
   useJournalDaysQuery,
 } from "./domain/journal/hooks";
 
-export { DocumentEditor, TipTapEditor } from "./editor/TipTapEditor";
-export type { DocumentEditorProps, EditorValue } from "./editor/editor-types";
+export { DocumentEditor, RivtoEditor } from "./editor/RivtoEditor";
+export { EditorModeToggle } from "./editor/editor-mode-toggle";
+export type { DocumentEditorProps, EditorMode } from "./editor/editor-types";
+export {
+  EMPTY_EDITOR_CONTENT,
+  EMPTY_EDITOR_SNAPSHOT,
+  extractPageOutline,
+  extractPageText,
+  parseEditorSnapshot,
+  serializeEditorSnapshot,
+  serializeSeedSnapshot,
+} from "./editor/snapshot";
+export type { PageOutlineItem, SeedWritingBlock } from "./editor/snapshot";

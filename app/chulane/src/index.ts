@@ -48,3 +48,13 @@ export {
 export { SYSTEM_PROJECT_IDS } from "./lib/mock/db";
 export { QUERY_KEYS } from "./lib/query-keys";
 export { cn } from "./lib/utils";
+export {
+  EMPTY_EDITOR_CONTENT,
+  EMPTY_EDITOR_SNAPSHOT,
+  extractPageOutline,
+  extractPageText,
+  parseEditorSnapshot,
+  serializeEditorSnapshot,
+  serializeSeedSnapshot,
+} from "./editor/snapshot";
+export type { PageOutlineItem, SeedWritingBlock } from "./editor/snapshot";

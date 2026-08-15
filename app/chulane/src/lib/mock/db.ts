@@ -1,6 +1,7 @@
 import type { Page } from "../../domain/page/types";
 import type { Project, SystemContainer } from "../../domain/project/types";
 import type { Tag } from "../../domain/tag/types";
+import { EMPTY_EDITOR_CONTENT, serializeSeedSnapshot } from "../../editor/snapshot";
 import { formatDayTitle, toDayKey } from "../../domain/journal/utils";
 
 export const SYSTEM_PROJECT_IDS: Record<SystemContainer, string> = {
@@ -86,7 +87,7 @@ function makePage(input: {
     kind: input.kind ?? "page",
     tagIds: input.tagIds ?? [],
     properties: input.properties ?? {},
-    content: input.content ?? "<p></p>",
+    content: input.content ?? EMPTY_EDITOR_CONTENT,
     createdAt: created,
     updatedAt: created,
   };
@@ -221,8 +222,16 @@ function seed(): MockDb {
       projectId: rivto.id,
       title: "Rivto architecture",
       tagIds: ["tag-rivto-architecture", "tag-rivto-editor"],
-      content:
-        "<h1>Rivto architecture</h1><p>High-level design of the editor and the app shell.</p><h2>Document model</h2><p>Pages are trees of blocks stored in a CRDT-backed document model.</p><h2>Rendering</h2><p>React surface renders blocks; edgeless canvas is a separate surface over the same data.</p><h2>AI integration</h2><p>AI operates on blocks through the same commands the user has.</p>",
+      content: serializeSeedSnapshot([
+        "# Rivto architecture",
+        "High-level design of the editor and the app shell.",
+        "## Document model",
+        "Pages are trees of blocks stored in a CRDT-backed document model.",
+        "## Rendering",
+        "React surface renders blocks; edgeless canvas is a separate surface over the same data.",
+        "## AI integration",
+        "AI operates on blocks through the same commands the user has.",
+      ]),
       createdDaysAgo: 20,
     }),
     makePage({
@@ -231,8 +240,10 @@ function seed(): MockDb {
       title: "Document model",
       parentPageId: "page-rivto-architecture",
       tagIds: ["tag-rivto-editor"],
-      content:
-        "<h2>Blocks</h2><p>A block is the minimal editable unit. Pages, journal days and databases are all documents made of blocks.</p>",
+      content: serializeSeedSnapshot([
+        "## Blocks",
+        "A block is the minimal editable unit. Pages, journal days and databases are all documents made of blocks.",
+      ]),
       createdDaysAgo: 18,
     }),
     makePage({
@@ -240,8 +251,10 @@ function seed(): MockDb {
       projectId: rivto.id,
       title: "Rendering",
       parentPageId: "page-rivto-architecture",
-      content:
-        "<h2>Surfaces</h2><p>The page surface renders a document as a vertical list of blocks. Edgeless renders the same blocks on a canvas.</p>",
+      content: serializeSeedSnapshot([
+        "## Surfaces",
+        "The page surface renders a document as a vertical list of blocks. Edgeless renders the same blocks on a canvas.",
+      ]),
       createdDaysAgo: 18,
     }),
     makePage({
@@ -249,8 +262,13 @@ function seed(): MockDb {
       projectId: rivto.id,
       title: "Roadmap",
       tagIds: ["tag-rivto-research"],
-      content:
-        "<h1>Roadmap</h1><ul><li><p>App shell with tabs and sidebar</p></li><li><p>Journal timeline</p></li><li><p>Project dashboards</p></li><li><p>Swap TipTap for the Rivto editor</p></li></ul>",
+      content: serializeSeedSnapshot([
+        "# Roadmap",
+        { content: "App shell with tabs and sidebar", list: "checkbox", checked: true },
+        { content: "Journal timeline", list: "checkbox", checked: true },
+        { content: "Project dashboards", list: "checkbox", checked: true },
+        { content: "Swap TipTap for the Rivto editor", list: "checkbox", checked: true },
+      ]),
       createdDaysAgo: 15,
     }),
     makePage({
@@ -258,8 +276,10 @@ function seed(): MockDb {
       projectId: rivtoDocs.id,
       title: "Getting started",
       tagIds: ["tag-docs-guide", "tag-rivto-editor"],
-      content:
-        "<h1>Getting started</h1><p>Install Rivto, open a workspace, and create your first page. Inherited tags like <code>#editor</code> come from the parent Rivto project.</p>",
+      content: serializeSeedSnapshot([
+        "# Getting started",
+        "Install Rivto, open a workspace, and create your first page. Inherited tags like `#editor` come from the parent Rivto project.",
+      ]),
       createdDaysAgo: 10,
     }),
     makePage({
@@ -267,23 +287,33 @@ function seed(): MockDb {
       projectId: research.id,
       title: "AI research",
       tagIds: ["tag-research-ai"],
-      content:
-        "<h1>AI research</h1><p>Notes on retrieval, agents and how they apply to a second-brain editor.</p><h2>Open questions</h2><ul><li><p>How should AI edits show up in history?</p></li><li><p>Per-page chat vs workspace chat?</p></li></ul>",
+      content: serializeSeedSnapshot([
+        "# AI research",
+        "Notes on retrieval, agents and how they apply to a second-brain editor.",
+        "## Open questions",
+        { content: "How should AI edits show up in history?", list: "checkbox" },
+        { content: "Per-page chat vs workspace chat?", list: "checkbox" },
+      ]),
       createdDaysAgo: 10,
     }),
     makePage({
       id: "page-personal-reading",
       projectId: personal.id,
       title: "Reading list",
-      content:
-        "<h1>Reading list</h1><ul><li><p>Thinking, Fast and Slow</p></li><li><p>The Design of Everyday Things</p></li></ul>",
+      content: serializeSeedSnapshot([
+        "# Reading list",
+        { content: "Thinking, Fast and Slow", list: "checkbox" },
+        { content: "The Design of Everyday Things", list: "checkbox" },
+      ]),
       createdDaysAgo: 8,
     }),
     makePage({
       id: "page-inbox-scratch",
       projectId: SYSTEM_PROJECT_IDS.inbox,
       title: "Scratchpad",
-      content: "<p>Quick thoughts land here before they find a project.</p>",
+      content: serializeSeedSnapshot([
+        "Quick thoughts land here before they find a project.",
+      ]),
       createdDaysAgo: 2,
     }),
   ];
@@ -294,17 +324,23 @@ function seed(): MockDb {
   seedJournalPage(
     db,
     0,
-    "<p>Started building the Rivto app shell: tabs, sidebar, journal.</p>",
+    serializeSeedSnapshot([
+      "Started building the Rivto app shell: tabs, sidebar, journal.",
+    ]),
   );
   seedJournalPage(
     db,
     1,
-    "<p>Sketched the contextual right sidebar. Details / Outline / Relations / AI.</p>",
+    serializeSeedSnapshot([
+      "Sketched the contextual right sidebar. Details / Outline / Relations / AI.",
+    ]),
   );
   seedJournalPage(
     db,
     2,
-    "<p>Decided journal days are ordinary pages with <code>kind: journal</code>.</p>",
+    serializeSeedSnapshot([
+      "Decided journal days are ordinary pages with `kind: journal`.",
+    ]),
   );
 
   return db;

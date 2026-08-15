@@ -1,13 +1,12 @@
 # Rivto App (Stage 1)
 
-Self-contained nested workspace for the Rivto product shell:
+Product shell for Rivto. It lives in the repository workspace so it can import
+the editor packages the same way `demo/` does:
 
 - `web/` — Next.js App Router UI (app shell: left sidebar, tabs, journal, projects, pages, contextual right sidebar)
-- `chulane/` — product kit: domain types, in-memory mock services, TanStack Query hooks, TipTap editor adapter
+- `chulane/` — product kit: domain types, in-memory mock services, TanStack Query hooks, Rivto editor adapter
 - `desktop/` — Electron window around the web UI
 - `server/` — Encore.ts page API + SQL (not used by V1; storage is mocked in-memory)
-
-This folder is independent of the Rivto library workspace at the repo root. Install and run from here only.
 
 ## Prerequisites
 
@@ -23,12 +22,11 @@ resets on dev-server restart / full page reload.
 ## Run
 
 ```sh
-cd app
-pnpm install
-pnpm web        # Next.js on http://127.0.0.1:3000
+pnpm install    # from the repository root
+pnpm app        # Next.js on http://127.0.0.1:3000
 ```
 
-`pnpm dev` is an alias for `pnpm web` in V1. `pnpm server` still starts the
+From `app/`, `pnpm web` still starts the Next app. `pnpm server` starts the
 Encore (or fallback) page API for later stages, but the web app does not call
 it yet.
 
@@ -69,8 +67,8 @@ same model.
 - Domain / services (server-safe): `@chulane/app`
 - React hooks / editor (client): `@chulane/app/client`
 
-## Editor swap
+## Editor
 
-`@chulane/app/client` exposes `DocumentEditor` (TipTap today). Replace the
-implementation behind that export with `@chulane/rivto-react` later without
-changing the shell, tabs or page CRUD.
+`@chulane/app/client` exposes `DocumentEditor`, a Rivto host that follows the
+same create / `EditorView` / destroy pattern as `demo/`. Page bodies are
+serialized Rivto snapshots (`editor.dump()` JSON) stored on `Page.content`.

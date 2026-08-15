@@ -1,6 +1,6 @@
 "use client";
 
-import type { Page, Project } from "@chulane/app";
+import { extractPageOutline, type Page, type Project } from "@chulane/app";
 import {
   usePageQuery,
   useProjectQuery,
@@ -101,19 +101,8 @@ function ProjectDetails({ project }: { project: Project }) {
   );
 }
 
-type OutlineItem = { level: number; text: string };
-
-function parseOutline(html: string): OutlineItem[] {
-  if (typeof DOMParser === "undefined") return [];
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  return [...doc.querySelectorAll("h1, h2, h3")].map((el) => ({
-    level: Number(el.tagName[1]),
-    text: el.textContent?.trim() ?? "",
-  }));
-}
-
 function PageOutline({ page }: { page: Page }) {
-  const outline = useMemo(() => parseOutline(page.content), [page.content]);
+  const outline = useMemo(() => extractPageOutline(page.content), [page.content]);
   if (outline.length === 0) {
     return (
       <p className="px-4 py-3 text-sm text-muted-foreground">

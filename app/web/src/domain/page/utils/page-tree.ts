@@ -1,4 +1,4 @@
-import type { Page } from "@chulane/app";
+import { extractPageText, type Page } from "@chulane/app";
 
 export type PageTreeNode = {
   page: Page;
@@ -31,6 +31,7 @@ export function buildPageTree(pages: Page[]): PageTreeNode[] {
   return roots;
 }
 
-export function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+/** Plain-text preview of persisted Rivto snapshot JSON (or leftover HTML). */
+export function stripHtml(content: string): string {
+  return extractPageText(content);
 }

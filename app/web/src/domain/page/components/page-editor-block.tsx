@@ -1,7 +1,7 @@
 "use client";
 
 import type { Page } from "@chulane/app";
-import { DocumentEditor, useUpdatePageMutation } from "@chulane/app/client";
+import { DocumentEditor, EditorModeToggle, useUpdatePageMutation } from "@chulane/app/client";
 import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -21,13 +21,13 @@ export function PageEditorBlock({
 }) {
   const updatePage = useUpdatePageMutation();
   const [title, setTitle] = useState(page.title);
-  const [html, setHtml] = useState(page.content || "<p></p>");
+  const [content, setContent] = useState(page.content);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setTitle(page.title);
-    setHtml(page.content || "<p></p>");
+    setContent(page.content);
     setSaveState("saved");
   }, [page.id, page.title, page.content]);
 
@@ -49,39 +49,42 @@ export function PageEditorBlock({
 
   return (
     <article className="scroll-mt-4 py-6">
-      <div className="mb-2 flex items-center gap-2">
-        {heading || readOnlyTitle ? (
-          <h2 className="min-w-0 flex-1 text-xl font-semibold tracking-tight">
-            {heading ?? title}
-          </h2>
-        ) : (
-          <Input
-            value={title}
-            onChange={(event) => {
-              setTitle(event.target.value);
-              scheduleSave({ title: event.target.value });
-            }}
-            placeholder="Untitled"
-            className="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-xl font-semibold shadow-none focus-visible:ring-0"
-          />
-        )}
-        <span
-          aria-label={saveState === "saved" ? "Saved" : "Unsaved changes"}
-          title={saveState === "saved" ? "Saved" : "Saving…"}
-          className={cn(
-            "size-1.5 shrink-0 rounded-full transition-colors",
-            saveState === "saved" ? "bg-border" : "bg-primary",
-          )}
-        />
-      </div>
       <DocumentEditor
-        value={{ html }}
-        onChange={(value) => {
-          setHtml(value.html);
-          scheduleSave({ content: value.html });
+        documentId={page.id}
+        content={content}
+        onChange={(next) => {
+          setContent(next);
+          scheduleSave({ content: next });
         }}
-        className="[&_.prose]:min-h-[8rem]"
-      />
+        showModeSwitch={false}
+      >
+        <div className="mb-2 flex items-center gap-2">
+          {heading || readOnlyTitle ? (
+            <h2 className="min-w-0 flex-1 text-xl font-semibold tracking-tight">
+              {heading ?? title}
+            </h2>
+          ) : (
+            <Input
+              value={title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                scheduleSave({ title: event.target.value });
+              }}
+              placeholder="Untitled"
+              className="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-xl font-semibold shadow-none focus-visible:ring-0"
+            />
+          )}
+          <EditorModeToggle />
+          <span
+            aria-label={saveState === "saved" ? "Saved" : "Unsaved changes"}
+            title={saveState === "saved" ? "Saved" : "Saving…"}
+            className={cn(
+              "size-1.5 shrink-0 rounded-full transition-colors",
+              saveState === "saved" ? "bg-border" : "bg-primary",
+            )}
+          />
+        </div>
+      </DocumentEditor>
     </article>
   );
 }

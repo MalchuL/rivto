@@ -15,7 +15,9 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@chulane/rivto": ["../../packages/rivto-editor-core/src/index.ts"],
+      "@chulane/rivto-react": ["../../packages/react-rivto-editor/src/index.ts"]
     }
   },
   "include": ["src"]

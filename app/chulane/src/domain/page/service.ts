@@ -1,3 +1,4 @@
+import { EMPTY_EDITOR_CONTENT, extractPageText } from "../../editor/snapshot";
 import { getMockDb, SYSTEM_PROJECT_IDS } from "../../lib/mock/db";
 import type {
   CreatePageInput,
@@ -8,10 +9,6 @@ import type {
 
 function nowIso(): string {
   return new Date().toISOString();
-}
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
 export const pageService = {
@@ -41,7 +38,7 @@ export const pageService = {
       kind: input.kind ?? "page",
       tagIds: input.tagIds ?? [],
       properties: input.properties ?? {},
-      content: input.content ?? "<p></p>",
+      content: input.content ?? EMPTY_EDITOR_CONTENT,
       createdAt: created,
       updatedAt: created,
     };
@@ -88,7 +85,7 @@ export const pageService = {
     return [...db.pages.values()]
       .filter((page) => {
         if (page.title.toLowerCase().includes(needle)) return true;
-        return stripHtml(page.content).toLowerCase().includes(needle);
+        return extractPageText(page.content).toLowerCase().includes(needle);
       })
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },

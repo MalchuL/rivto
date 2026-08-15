@@ -3,6 +3,12 @@ packages:
   - packages/*
   - demo
   - docs
+  - app/chulane
+  - app/web
+  - app/desktop
+  - app/server
 
 allowBuilds:
+  electron: true
   esbuild: true
+  sharp: true

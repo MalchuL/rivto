@@ -28,13 +28,12 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
+    "@chulane/rivto": "workspace:*",
+    "@chulane/rivto-react": "workspace:*",
     "@tanstack/react-query": "^5.83.0",
-    "@tiptap/extension-placeholder": "^2.26.1",
-    "@tiptap/pm": "^2.26.1",
-    "@tiptap/react": "^2.26.1",
-    "@tiptap/starter-kit": "^2.26.1",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^3.3.1"
+    "tailwind-merge": "^3.3.1",
+    "yjs": "^13.6.27"
   },
   "devDependencies": {
     "@types/react": "^19.1.8",

@@ -3,6 +3,7 @@
 import type { Page } from "@chulane/app";
 import {
   DocumentEditor,
+  EditorModeToggle,
   useDeletePageMutation,
   usePagesQuery,
   useProjectsQuery,
@@ -62,6 +63,8 @@ function collectDescendantIds(rootId: string, pages: Page[]): Set<string> {
 
 type SaveState = "saved" | "dirty" | "saving";
 
+const PAGE_DOCUMENT_CLASS = "rivto-page-document";
+
 export function PageDocument({
   page,
   breadcrumbs,
@@ -88,13 +91,13 @@ export function PageDocument({
   );
 
   const [title, setTitle] = useState(page.title);
-  const [html, setHtml] = useState(page.content || "<p></p>");
+  const [content, setContent] = useState(page.content);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setTitle(page.title);
-    setHtml(page.content || "<p></p>");
+    setContent(page.content);
     setSaveState("saved");
   }, [page.id]);
 
@@ -138,154 +141,157 @@ export function PageDocument({
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-8">
-      <header className="flex items-center justify-between gap-3 pb-1 pt-5">
-        <div className="min-w-0 text-sm text-muted-foreground">{breadcrumbs}</div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <span
-            aria-label={saveState === "saved" ? "Saved" : "Unsaved changes"}
-            title={saveState === "saved" ? "Saved" : "Saving…"}
-            className={cn(
-              "mx-1.5 size-1.5 rounded-full transition-colors",
-              saveState === "saved" ? "bg-border" : "bg-primary",
-            )}
-          />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => togglePinnedPage(page.id)}
-            aria-label={isPinned ? "Unpin page" : "Pin page"}
-          >
-            <Pin className={isPinned ? "fill-current text-primary" : ""} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={toggleRightSidebar}
-            aria-label="Toggle context sidebar"
-          >
-            <PanelRight />
-          </Button>
-          {allowManage ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label="Page menu">
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem
-                  onSelect={() => void newPage(page.projectId, page.id)}
-                >
-                  <FilePlus />
-                  Add subpage
-                </DropdownMenuItem>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <CornerDownRight />
-                    Move under page
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
-                    {page.parentPageId ? (
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          void updatePage.mutateAsync({
-                            id: page.id,
-                            parentPageId: null,
-                          })
-                        }
-                      >
-                        Move to project root
-                      </DropdownMenuItem>
-                    ) : null}
-                    {nestTargets.length === 0 ? (
-                      <DropdownMenuItem disabled>No other pages</DropdownMenuItem>
-                    ) : (
-                      nestTargets.map((candidate) => (
+    <div className={cn(PAGE_DOCUMENT_CLASS, "mx-auto flex h-full w-full max-w-3xl flex-col px-8")}>
+      <DocumentEditor
+        documentId={page.id}
+        content={content}
+        onChange={(next) => {
+          setContent(next);
+          scheduleSave({ content: next });
+        }}
+        initialMode={page.kind === "canvas" ? "edgeless" : "block"}
+        showModeSwitch={false}
+        className="flex min-h-0 flex-1 flex-col pb-16"
+      >
+        <header className="flex items-center justify-between gap-3 pb-1 pt-5">
+          <div className="min-w-0 text-sm text-muted-foreground">{breadcrumbs}</div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <span
+              aria-label={saveState === "saved" ? "Saved" : "Unsaved changes"}
+              title={saveState === "saved" ? "Saved" : "Saving…"}
+              className={cn(
+                "mx-1.5 size-1.5 rounded-full transition-colors",
+                saveState === "saved" ? "bg-border" : "bg-primary",
+              )}
+            />
+            <EditorModeToggle />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => togglePinnedPage(page.id)}
+              aria-label={isPinned ? "Unpin page" : "Pin page"}
+            >
+              <Pin className={isPinned ? "fill-current text-primary" : ""} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={toggleRightSidebar}
+              aria-label="Toggle context sidebar"
+            >
+              <PanelRight />
+            </Button>
+            {allowManage ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label="Page menu">
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem
+                    onSelect={() => void newPage(page.projectId, page.id)}
+                  >
+                    <FilePlus />
+                    Add subpage
+                  </DropdownMenuItem>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <CornerDownRight />
+                      Move under page
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
+                      {page.parentPageId ? (
                         <DropdownMenuItem
-                          key={candidate.id}
                           onSelect={() =>
                             void updatePage.mutateAsync({
                               id: page.id,
-                              parentPageId: candidate.id,
+                              parentPageId: null,
                             })
                           }
                         >
-                          {candidate.title}
+                          Move to project root
                         </DropdownMenuItem>
-                      ))
-                    )}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <FolderInput />
-                    Move to project
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {moveTargets.map((project) => (
-                      <DropdownMenuItem
-                        key={project.id}
-                        onSelect={() =>
-                          void updatePage.mutateAsync({
-                            id: page.id,
-                            projectId: project.id,
-                            parentPageId: null,
-                          })
-                        }
-                      >
-                        <span className="text-sm leading-none">
-                          {project.icon ?? (project.system === "inbox" ? "•" : "•")}
-                        </span>
-                        {project.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => void handleDelete()}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 />
-                  Delete page
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </div>
-      </header>
+                      ) : null}
+                      {nestTargets.length === 0 ? (
+                        <DropdownMenuItem disabled>No other pages</DropdownMenuItem>
+                      ) : (
+                        nestTargets.map((candidate) => (
+                          <DropdownMenuItem
+                            key={candidate.id}
+                            onSelect={() =>
+                              void updatePage.mutateAsync({
+                                id: page.id,
+                                parentPageId: candidate.id,
+                              })
+                            }
+                          >
+                            {candidate.title}
+                          </DropdownMenuItem>
+                        ))
+                      )}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <FolderInput />
+                      Move to project
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {moveTargets.map((project) => (
+                        <DropdownMenuItem
+                          key={project.id}
+                          onSelect={() =>
+                            void updatePage.mutateAsync({
+                              id: page.id,
+                              projectId: project.id,
+                              parentPageId: null,
+                            })
+                          }
+                        >
+                          <span className="text-sm leading-none">
+                            {project.icon ?? (project.system === "inbox" ? "•" : "•")}
+                          </span>
+                          {project.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => void handleDelete()}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 />
+                    Delete page
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        </header>
 
-      <Input
-        value={title}
-        readOnly={readOnlyTitle}
-        placeholder="Untitled"
-        onChange={(event) => {
-          setTitle(event.target.value);
-          scheduleSave({ title: event.target.value });
-        }}
-        className="h-auto border-0 bg-transparent px-0 py-1 text-3xl font-bold shadow-none focus-visible:ring-0"
-      />
-
-      {allowManage ? (
-        <div className="mt-2">
-          <PageTagPicker
-            pageId={page.id}
-            projectId={page.projectId}
-            tagIds={page.tagIds}
-          />
-        </div>
-      ) : null}
-
-      <div className="min-h-0 flex-1 pb-16 pt-2">
-        <DocumentEditor
-          value={{ html }}
-          onChange={(value) => {
-            setHtml(value.html);
-            scheduleSave({ content: value.html });
+        <Input
+          value={title}
+          readOnly={readOnlyTitle}
+          placeholder="Untitled"
+          onChange={(event) => {
+            setTitle(event.target.value);
+            scheduleSave({ title: event.target.value });
           }}
+          className="h-auto border-0 bg-transparent px-0 py-1 text-3xl font-bold shadow-none focus-visible:ring-0"
         />
-      </div>
+
+        {allowManage ? (
+          <div className="mt-2">
+            <PageTagPicker
+              pageId={page.id}
+              projectId={page.projectId}
+              tagIds={page.tagIds}
+            />
+          </div>
+        ) : null}
+      </DocumentEditor>
     </div>
   );
 }

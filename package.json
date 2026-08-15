@@ -7,6 +7,7 @@
     "clean": "pnpm --filter @chulane/rivto clean && pnpm --filter @chulane/rivto-react clean",
     "build": "pnpm --filter @chulane/rivto build && pnpm --filter @chulane/rivto-react build && pnpm docs:build",
     "dev": "pnpm --filter @chulane/rivto dev",
+    "app": "pnpm --filter @chulane/rivto-app-web dev",
     "demo": "pnpm --dir demo dev",
     "demo:build": "pnpm --dir demo build",
     "demo:check": "pnpm --dir demo check-types",
