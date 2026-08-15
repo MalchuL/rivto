@@ -1,5 +1,5 @@
 import type {
-  BasicCRDTType,
+  CRDTType,
   BasicType,
   CRDTArray,
   CRDTMap,
@@ -30,10 +30,10 @@ export interface BlockStorage {
   type: string;
   /** Opaque collaborative page/outline properties. */
   listProps: CRDTMap<BlockListPropsStorage>;
-  props: CRDTMap<Record<IDProp, BasicCRDTType>>;
+  props: CRDTMap<Record<IDProp, CRDTType>>;
   content: CRDTText;
   children: CRDTArray<IDBlock>;
-  pluginData: CRDTMap<Record<IDPlugin, BasicCRDTType>>;
+  pluginData: CRDTMap<Record<IDPlugin, CRDTType>>;
 }
 
 /** Exact shared fields stored for one generic canvas element. */
@@ -42,7 +42,7 @@ export interface ElementStorage {
   type: string;
   frame: CRDTMap<ElementFrameStorage>;
   zIndex: number;
-  props: CRDTMap<Record<IDProp, BasicCRDTType>>;
+  props: CRDTMap<Record<IDProp, CRDTType>>;
 }
 
 /** Exact shared fields stored for a first-class link. */

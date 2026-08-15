@@ -27,23 +27,23 @@ describe('YjsInstantiator', () => {
     expect((t as YjsText).yjsObj.doc).toBeNull();
   });
 
-  test('plainObjectToCRDT wraps values using the same rules/options as basicToCRDT', () => {
+  test('convertBasicToCRDTType uses the shared conversion rules and options', () => {
     const doc = new Y.Doc();
     const root = new YjsMap(doc.getMap('root'));
 
-    const wrappedText = inst.plainObjectToCRDT('hello') as any;
+    const wrappedText = inst.convertBasicToCRDTType('hello') as any;
     expect(wrappedText).toBeInstanceOf(YjsText);
     root.set('t', wrappedText);
     expect((root.get('t') as YjsText).toString()).toBe('hello');
 
-    const wrappedMap = inst.plainObjectToCRDT({ a: 'x', nested: { b: 1 } }) as any;
+    const wrappedMap = inst.convertBasicToCRDTType({ a: 'x', nested: { b: 1 } }) as any;
     expect(wrappedMap).toBeInstanceOf(YjsMap);
     root.set('m', wrappedMap);
     const storedMap = root.get('m') as YjsMap;
     expect((storedMap.get('a') as YjsText).toString()).toBe('x');
     expect((storedMap.get('nested') as YjsMap).get('b')).toBe(1);
 
-    const plain = inst.plainObjectToCRDT({ a: 'x' }, { object2crdtmap: false });
+    const plain = inst.convertBasicToCRDTType({ a: 'x' }, { object2crdtmap: false });
     expect(plain).toEqual({ a: 'x' });
   });
 
@@ -56,4 +56,3 @@ describe('YjsInstantiator', () => {
     expect(inst.isPlainRecord(new Y.Text() as any)).toBe(false);
   });
 });
-

@@ -1,22 +1,22 @@
 import { CRDTArray } from "../array";
 import { CRDTMap } from "../map";
 import { CRDTText } from "../text";
-import { BasicCRDTType, BasicType } from "../basic-types";
+import { CRDTType, BasicType } from "../basic-types";
 import { WrapBasicTypeToCRDTOptions } from "./wrapping-options";
 
-export interface Instantiator {
+export interface CRDTInstantiator {
 
     /**
      * Creates a new CRDT array not attached to any document.
      * @returns The new CRDT array.
      */
-    createArray<Item extends BasicCRDTType = BasicCRDTType>(): CRDTArray<Item>;
+    createArray<Item extends CRDTType = CRDTType>(): CRDTArray<Item>;
 
     /**
      * Creates a new CRDT map not attached to any document.
      * @returns The new CRDT map.
      */
-    createMap<Schema extends object = Record<string, BasicCRDTType>>(): CRDTMap<Schema>;
+    createMap<Schema extends object = Record<string, CRDTType>>(): CRDTMap<Schema>;
 
     /**
      * Creates a new CRDT text not attached to any document.
@@ -25,12 +25,12 @@ export interface Instantiator {
     createText(): CRDTText;
 
     /**
-     * Converts a PlainType to a CRDT type.
+     * Converts a BasicType to a CRDT type.
      * @param item - The BasicType to wrap.
      * @param options - The options to wrap the BasicType.
      * @returns The wrapped CRDT type.
      */
-    plainObjectToCRDT(item: BasicType, options?: WrapBasicTypeToCRDTOptions): BasicCRDTType;
+    convertBasicToCRDTType(item: BasicType, options?: WrapBasicTypeToCRDTOptions): CRDTType;
 
     /**
      * Checks if a value is a plain record.

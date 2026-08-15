@@ -18,7 +18,7 @@ export type BasicType =
 | object;
 
 /**
- * BasicCRDTType represents document-compatible values that the
+ * CRDTType represents document-compatible values that the
  * CRDT types can hold, including primitives and other CRDT objects.
  * - CRDTArray
  * - CRDTMap
@@ -27,7 +27,7 @@ export type BasicType =
  * - BasicType[]
  * - BasicType
  */
-export type BasicCRDTType = 
+export type CRDTType =
 // CRDT types, synchronized any changes to the CRDT types are synchronized to the other clients.
 | CRDTArray<any>
 | CRDTMap<any>

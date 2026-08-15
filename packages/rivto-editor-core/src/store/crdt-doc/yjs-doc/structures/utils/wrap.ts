@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import {
-  BasicCRDTType,
+  CRDTType,
   BasicType,
   WrapBasicTypeToCRDTOptions,
 } from '../../../types';
@@ -11,7 +11,8 @@ import { isDeepPlainRecord } from './plain-check';
 import { YjsConvertError } from './error';
 
 /**
- * Helper to unwrap a BasicCRDTType into something Y.js can digest.
+ * Helper to unwrap a CRDTType into something Y.js can digest.
+ * Don't miss yjs is a framework not a a current YjsMap, YjsArray, or YjsText is a wrapper class for Y.Map, Y.Array, or Y.Text.
  * If it's a wrapper class, we extract the underlying Y.js type.
  * If it's a primitive, we return it as is.
  * YjsMap -> Y.Map
@@ -25,7 +26,7 @@ import { YjsConvertError } from './error';
  * null -> null
  * undefined -> throw error
  */
-export function unwrapCRDTtoYJS(item: BasicCRDTType): YJSType {
+export function unwrapCRDTtoYJS(item: CRDTType): YJSType {
   // Primitives 
   if (item === null) return item;
   if (typeof item === 'number' || typeof item === 'string' || typeof item === 'boolean') return item;
@@ -34,7 +35,7 @@ export function unwrapCRDTtoYJS(item: BasicCRDTType): YJSType {
   // If the item is an object, we need to convert it to a YJS type.
   if (itemType === 'object') {
     // CRDT Array, Map, Text
-    // If the item is a Y.Map, Y.Array, or Y.Text, we return it as is.
+    // If the item is a Y.Map, Y.Array, or Y.Text, we raise an error.
     if (item instanceof Y.Map) throw new Error('Unsupported item type: Y.Map it must be wrapped to YjsMap');
     if (item instanceof Y.Array) throw new Error('Unsupported item type: Y.Array it must be wrapped to YjsArray');
     if (item instanceof Y.Text) throw new Error('Unsupported item type: Y.Text it must be wrapped to YjsText');
@@ -56,7 +57,8 @@ export function unwrapCRDTtoYJS(item: BasicCRDTType): YJSType {
 }
 
 /**
- * Helper to wrap a Y.js value into a BasicCRDTType.
+ * Helper to wrap a Y.js value into a CRDTType.
+ * Don't miss yjs is a framework not a a current YjsMap, YjsArray, or YjsText is a wrapper class for Y.Map, Y.Array, or Y.Text.
  * primitives -> primitives
  * Y.Map -> YjsMap
  * Y.Array -> YjsArray
@@ -69,7 +71,7 @@ export function unwrapCRDTtoYJS(item: BasicCRDTType): YJSType {
  * null -> null
  * undefined -> throw error
  */
-export function wrapYJStoCRDT(item: YJSType): BasicCRDTType {
+export function wrapYJStoCRDT(item: YJSType): CRDTType {
   const itemType = typeof item;
   if (itemType === 'number' || itemType === 'string' || itemType === 'boolean') {
     return item as number | string | boolean;
@@ -79,6 +81,7 @@ export function wrapYJStoCRDT(item: YJSType): BasicCRDTType {
     if (item instanceof Y.Map) return new YjsMap(item);
     if (item instanceof Y.Array) return new YjsArray(item);
     if (item instanceof Y.Text) return new YjsText(item);
+    // Just avoid passing wrapped already wrapped YjsMap, YjsArray, or YjsText to wrapYJStoCRDT
     if (item instanceof YjsMap) throw new Error('Unsupported item type: YjsMap it must be unwrapped to Y.Map');
     if (item instanceof YjsArray) throw new Error('Unsupported item type: YjsArray it must be unwrapped to Y.Array');
     if (item instanceof YjsText) throw new Error('Unsupported item type: YjsText it must be unwrapped to Y.Text');
@@ -89,6 +92,6 @@ export function wrapYJStoCRDT(item: YJSType): BasicCRDTType {
   throw new YjsConvertError(`Unsupported item type: ${itemType}, value: ${item.toString()}, class: ${item?.constructor?.name}`);
 }
 
-export function basicToCRDT(item: BasicType, options?: WrapBasicTypeToCRDTOptions): BasicCRDTType {
+export function wrapBasicTypeToCRDTType(item: BasicType, options?: WrapBasicTypeToCRDTOptions): CRDTType {
   return wrapYJStoCRDT(convertBasicTypeToYJS(item, options));
 }

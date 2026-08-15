@@ -1,4 +1,4 @@
-import { BasicCRDTType, BasicType } from "./basic-types";
+import { CRDTType, BasicType } from "./basic-types";
 import { Serializible } from "./crdt";
 
 /**
@@ -7,7 +7,7 @@ import { Serializible } from "./crdt";
  * Pass an object schema to restrict keys and values at compile time:
  * `CRDTMap<{ content: CRDTText; children: CRDTArray<string> }>`.
  */
-export interface CRDTMap<Schema extends object = Record<string, BasicCRDTType>> extends Serializible {
+export interface CRDTMap<Schema extends object = Record<string, CRDTType>> extends Serializible {
     /**
      * Observe this map and its nested shared values without exposing an
      * adapter-specific map or transaction type.
@@ -22,7 +22,7 @@ export interface CRDTMap<Schema extends object = Record<string, BasicCRDTType>> 
     /**
      * Set the value for a given key.
      */
-    set<Key extends keyof Schema & string>(key: Key, val: Schema[Key] & BasicCRDTType): this;
+    set<Key extends keyof Schema & string>(key: Key, val: Schema[Key] & CRDTType): this;
 
     /**
      * Returns the number of key-value pairs in the map.

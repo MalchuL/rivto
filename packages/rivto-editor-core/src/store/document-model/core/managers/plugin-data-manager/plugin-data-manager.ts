@@ -1,5 +1,5 @@
 import type {
-  BasicCRDTType,
+  CRDTType,
   BasicType,
   CRDTMap,
   CRDTUndoScope,
@@ -19,7 +19,7 @@ const PLUGINS_KEY = "rivto.editor.plugins";
 export class DocumentPluginDataManager {
   /** Collaborative root included in document undo history. */
   readonly undoScopes: CRDTUndoScope[];
-  private readonly root: CRDTMap<Record<string, BasicCRDTType>>;
+  private readonly root: CRDTMap<Record<string, CRDTType>>;
 
   /**
    * Creates a generic plugin-data owner for one document.
@@ -27,7 +27,7 @@ export class DocumentPluginDataManager {
    * @param document - Document providing CRDT storage and transactions.
    */
   constructor(private readonly document: DocumentModel) {
-    this.root = document.crdt.getMap<Record<string, BasicCRDTType>>(PLUGINS_KEY);
+    this.root = document.crdt.getMap<Record<string, CRDTType>>(PLUGINS_KEY);
     this.undoScopes = [this.root];
   }
 
@@ -51,7 +51,7 @@ export class DocumentPluginDataManager {
    * @returns No value.
    */
   set(pluginId: string, value: BasicType): void {
-    this.document.transact(() => this.root.set(this.requireId(pluginId), clone(value) as BasicCRDTType));
+    this.document.transact(() => this.root.set(this.requireId(pluginId), clone(value) as CRDTType));
   }
 
   /**
@@ -65,14 +65,14 @@ export class DocumentPluginDataManager {
    * @returns Attached collaborative namespace map.
    * @throws {Error} When existing namespace data is not an object.
    */
-  getMap(pluginId: string): CRDTMap<Record<string, BasicCRDTType>> {
+  getMap(pluginId: string): CRDTMap<Record<string, CRDTType>> {
     const id = this.requireId(pluginId);
     const current = this.root.get(id);
     if (isCRDTMap(current)) return current;
     if (current !== undefined && (!current || typeof current !== "object" || Array.isArray(current))) {
       throw new Error(`Plugin data ${id} is not an object namespace`);
     }
-    const map = this.document.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
+    const map = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
     if (current) assignMap(map, current as Record<string, unknown>);
     this.document.transact(() => this.root.set(id, map));
     return map;
@@ -114,14 +114,14 @@ export class DocumentPluginDataManager {
   }
 
   /** Preserves existing shared child maps while replacing portable fields. */
-  private mergeMap(map: CRDTMap<Record<string, BasicCRDTType>>, values: Record<string, unknown>): void {
+  private mergeMap(map: CRDTMap<Record<string, CRDTType>>, values: Record<string, unknown>): void {
     [...map.keys()].filter((key) => !(key in values)).forEach((key) => map.delete(key));
     Object.entries(values).forEach(([key, value]) => {
       const current = map.get(key);
       if (isCRDTMap(current) && value && typeof value === "object" && !Array.isArray(value)) {
-        this.mergeMap(current as CRDTMap<Record<string, BasicCRDTType>>, value as Record<string, unknown>);
+        this.mergeMap(current as CRDTMap<Record<string, CRDTType>>, value as Record<string, unknown>);
       } else if (value !== undefined) {
-        map.set(key, clone(value) as BasicCRDTType);
+        map.set(key, clone(value) as CRDTType);
       }
     });
   }

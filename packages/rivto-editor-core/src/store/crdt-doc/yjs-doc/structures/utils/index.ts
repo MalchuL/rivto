@@ -1,2 +1,2 @@
 export { convertBasicTypeToYJS, convertYJSTypeToBasic } from './yjs-converters';
-export { unwrapCRDTtoYJS, wrapYJStoCRDT, basicToCRDT } from './wrap';
+export { unwrapCRDTtoYJS, wrapYJStoCRDT, wrapBasicTypeToCRDTType } from './wrap';

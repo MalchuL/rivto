@@ -6,6 +6,6 @@ export * from './basic-types';
 export * from './crdt';
 export * from './provider';
 export * from './undo';
-export * from './utils/instantiator';
+export * from './utils/crdt-instantiator';
 export * from './error';
 export * from './utils';

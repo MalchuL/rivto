@@ -1,5 +1,5 @@
 import {
-    BasicCRDTType,
+    CRDTType,
     CRDTArray,
     CRDTMap,
     CRDTText,
@@ -237,7 +237,7 @@ export class DocumentBlockManager {
                     for (const key of Object.keys(patch.props)) {
                         const value = validatedProps[key];
                         if (value === undefined) props.delete(key);
-                        else props.set(key, clone(value) as BasicCRDTType);
+                        else props.set(key, clone(value) as CRDTType);
                     }
                 }
                 if (patch.pluginData) assignMap(this.requiredMap(block, "pluginData"), patch.pluginData, false);
@@ -329,7 +329,7 @@ export class DocumentBlockManager {
         this.transact(() => {
             const data = this.requiredMap(this.requiredBlock(id), "pluginData");
             if (value === undefined) data.delete(pluginId);
-            else data.set(pluginId, clone(value) as BasicCRDTType);
+            else data.set(pluginId, clone(value) as CRDTType);
         });
     }
 
@@ -738,11 +738,11 @@ export class DocumentBlockManager {
         const id = block.id ?? crypto.randomUUID();
         if (this.storage.has(id)) throw new Error(`Block ${id} already exists`);
         const model = this.document.crdt.instantiator.createMap<BlockStorage>();
-        const props = this.document.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
+        const props = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
         const content = this.document.crdt.instantiator.createText();
         const children = this.document.crdt.instantiator.createArray<string>();
         const listPropsStorage = this.document.crdt.instantiator.createMap<BlockListPropsStorage>();
-        const pluginData = this.document.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
+        const pluginData = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
         model.set("id", id);
         model.set("type", block.type);
         model.set("listProps", listPropsStorage);
@@ -948,14 +948,14 @@ export class DocumentBlockManager {
      */
     private patchProps(
         type: string,
-        props: CRDTMap<Record<string, BasicCRDTType>>,
+        props: CRDTMap<Record<string, CRDTType>>,
         patch: Record<string, unknown>,
     ): void {
         const validated = this.validateProps(type, { ...props.toObject(), ...patch } as Record<string, unknown>);
         for (const key of Object.keys(patch)) {
             const value = validated[key];
             if (value === undefined) props.delete(key);
-            else props.set(key, clone(value) as BasicCRDTType);
+            else props.set(key, clone(value) as CRDTType);
         }
     }
 

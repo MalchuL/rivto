@@ -1,4 +1,4 @@
-import type { BasicCRDTType, CRDTArray, CRDTMap, CRDTText } from "../../../crdt-doc";
+import type { CRDTType, CRDTArray, CRDTMap, CRDTText } from "../../../crdt-doc";
 import { clone } from "./clone";
 
 /**
@@ -45,9 +45,9 @@ export function assignMap<Schema extends object>(
     clear = true,
 ): void {
     if (clear) map.clear();
-    const writable = map as unknown as CRDTMap<Record<string, BasicCRDTType>>;
+    const writable = map as unknown as CRDTMap<Record<string, CRDTType>>;
     Object.entries(values).forEach(([key, value]) => {
-        if (value !== undefined) writable.set(key, clone(value) as BasicCRDTType);
+        if (value !== undefined) writable.set(key, clone(value) as CRDTType);
     });
 }
 
@@ -71,7 +71,7 @@ export function assignText(text: CRDTText, content: string): void {
  * @param clear - Whether to remove existing items before insertion.
  * @returns No value.
  */
-export function assignArray<Item extends BasicCRDTType>(
+export function assignArray<Item extends CRDTType>(
     array: CRDTArray<Item>,
     values: readonly Item[],
     clear = true,

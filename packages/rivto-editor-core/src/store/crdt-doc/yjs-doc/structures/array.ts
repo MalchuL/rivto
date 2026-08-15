@@ -1,4 +1,4 @@
-import { BasicCRDTType, BasicType, CRDTArray } from "../../types";
+import { CRDTType, BasicType, CRDTArray } from "../../types";
 import * as Y from 'yjs';
 import * as utils from './utils';
 import { YjsBasic } from "./basic";
@@ -6,7 +6,7 @@ import { YjsNotAttachedError } from "../error";
 
 const NOT_ATTACHED_ERROR = 'YjsArray is not attached to a document. Add this array to any object that is attached to a document like a YjsMap or a YjsArray';
 const IS_FROM_JSON_ERROR = NOT_ATTACHED_ERROR + ' and this array was created from JSON. Add this array to any object that is attached to a document like a YjsMap or a YjsArray';
-export class YjsArray<Item extends BasicCRDTType = BasicCRDTType>
+export class YjsArray<Item extends CRDTType = CRDTType>
     extends YjsBasic<Y.Array<any>> implements CRDTArray<Item> {
     // If the array was created from JSON, then it is not attached to a document.
     private isFromJson: boolean = false;
@@ -74,7 +74,7 @@ export class YjsArray<Item extends BasicCRDTType = BasicCRDTType>
      */
     forEach(callbackfn: (value: Item, index?: number, array?: CRDTArray<Item>) => void): void {
         this.checkIfNotAttached();
-        this.yjsObj.forEach((item: BasicCRDTType, index: number) => {
+        this.yjsObj.forEach((item: CRDTType, index: number) => {
             callbackfn(utils.wrapYJStoCRDT(item) as Item, index, this);
         });
     }

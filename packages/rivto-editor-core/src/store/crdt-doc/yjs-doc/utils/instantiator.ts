@@ -1,16 +1,16 @@
-import { BasicCRDTType, BasicType, CRDTArray, CRDTMap, CRDTText, Instantiator, WrapBasicTypeToCRDTOptions } from "../../types";
+import { CRDTType, BasicType, CRDTArray, CRDTMap, CRDTText, CRDTInstantiator, WrapBasicTypeToCRDTOptions } from "../../types";
 import { YjsArray, YjsMap, YjsText } from "../structures";
 import { isDeepPlainRecord } from "../structures/utils/plain-check";
-import { basicToCRDT } from "../structures/utils/wrap";
+import { wrapBasicTypeToCRDTType } from "../structures/utils/wrap";
 
-export class YjsInstantiator implements Instantiator {
+export class YjsInstantiator implements CRDTInstantiator {
 
 
     /**
      * Creates a new CRDT array not attached to any document.
      * @returns The new CRDT array.
      */
-    createArray<Item extends BasicCRDTType = BasicCRDTType>(): CRDTArray<Item> {
+    createArray<Item extends CRDTType = CRDTType>(): CRDTArray<Item> {
         return new YjsArray<Item>();
     }
 
@@ -18,7 +18,7 @@ export class YjsInstantiator implements Instantiator {
      * Creates a new CRDT map not attached to any document.
      * @returns The new CRDT map.
      */
-    createMap<Schema extends object = Record<string, BasicCRDTType>>(): CRDTMap<Schema> {
+    createMap<Schema extends object = Record<string, CRDTType>>(): CRDTMap<Schema> {
         return new YjsMap<Schema>();
     }
 
@@ -36,8 +36,8 @@ export class YjsInstantiator implements Instantiator {
      * @param options - The options to convert the plain object to a CRDT type.
      * @returns The converted CRDT type.
      */
-    plainObjectToCRDT(item: BasicType, options?: WrapBasicTypeToCRDTOptions): BasicCRDTType {
-        return basicToCRDT(item, options);
+    convertBasicToCRDTType(item: BasicType, options?: WrapBasicTypeToCRDTOptions): CRDTType {
+        return wrapBasicTypeToCRDTType(item, options);
     }
 
     /**

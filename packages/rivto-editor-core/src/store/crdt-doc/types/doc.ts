@@ -2,9 +2,9 @@ import { Serializible } from "./crdt";
 import { CRDTArray } from "./array";
 import { CRDTMap } from "./map";
 import { CRDTText } from "./text";
-import { Instantiator } from "./utils";
+import { CRDTInstantiator } from "./utils";
 import { CRDTUndoManager, CRDTUndoScope } from "./undo";
-import { BasicCRDTType } from "./basic-types";
+import { CRDTType } from "./basic-types";
 import type { Provider, ProviderCleanup } from "./provider";
 
 
@@ -26,7 +26,7 @@ export interface CRDTDoc extends Serializible {
     /**
      * The instantiator for creating detached CRDT structures.
      */
-    get instantiator(): Instantiator;
+    get instantiator(): CRDTInstantiator;
 
     /**
      * Attach a real-time provider (e.g. WebSocket) for syncing updates.
@@ -53,12 +53,12 @@ export interface CRDTDoc extends Serializible {
     /**
      * Get a typed CRDT-backed array at the given document path.
      */
-    getArray<Item extends BasicCRDTType = BasicCRDTType>(path: string): CRDTArray<Item>;
+    getArray<Item extends CRDTType = CRDTType>(path: string): CRDTArray<Item>;
 
     /**
      * Get a schema-typed CRDT-backed map at the given document path.
      */
-    getMap<Schema extends object = Record<string, BasicCRDTType>>(path: string): CRDTMap<Schema>;
+    getMap<Schema extends object = Record<string, CRDTType>>(path: string): CRDTMap<Schema>;
 
     /**
      * Get a CRDT-backed collaborative text at the given document path.

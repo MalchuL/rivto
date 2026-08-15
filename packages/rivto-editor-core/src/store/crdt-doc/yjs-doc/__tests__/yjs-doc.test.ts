@@ -279,7 +279,7 @@ describe('YjsDoc', () => {
     });
   });
 
-  describe('Nested structures via Instantiator', () => {
+  describe('Nested structures via CRDTInstantiator', () => {
     let rootMap: YjsMap;
 
     beforeEach(() => {

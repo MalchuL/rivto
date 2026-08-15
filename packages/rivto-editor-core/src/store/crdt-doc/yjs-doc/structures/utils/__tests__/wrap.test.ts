@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import { basicToCRDT, unwrapCRDTtoYJS, wrapYJStoCRDT } from '../wrap';
+import { unwrapCRDTtoYJS, wrapBasicTypeToCRDTType, wrapYJStoCRDT } from '../wrap';
 import { YjsArray, YjsMap, YjsText } from '../../';
 
 function containsYjsTypes(value: unknown): boolean {
@@ -86,9 +86,9 @@ describe('wrap/unwrap utils', () => {
     });
   });
 
-  describe('basicToCRDT (options + nesting)', () => {
+  describe('wrapBasicTypeToCRDTType (options + nesting)', () => {
     it('wraps string to YjsText by default (and can be attached later)', () => {
-      const crdt = basicToCRDT('hello');
+      const crdt = wrapBasicTypeToCRDTType('hello');
       expect(crdt).toBeInstanceOf(YjsText);
 
       // Unattached text cannot be read; once attached it becomes readable.
@@ -103,13 +103,13 @@ describe('wrap/unwrap utils', () => {
     });
 
     it('does not wrap string when string2crdttext=false', () => {
-      const crdt = basicToCRDT('hello', { string2crdttext: false });
+      const crdt = wrapBasicTypeToCRDTType('hello', { string2crdttext: false });
       expect(crdt).toBe('hello');
     });
 
     it('returns a deep plain object when object2crdtmap=false (no nested CRDT wrappers)', () => {
       const input = { a: 'x', nested: { b: 'y', arr: [1, { c: 'z' }] } };
-      const out = basicToCRDT(input, { object2crdtmap: false });
+      const out = wrapBasicTypeToCRDTType(input, { object2crdtmap: false });
 
       expect(out).toEqual(input);
       expect(containsYjsTypes(out)).toBe(false);
@@ -120,7 +120,7 @@ describe('wrap/unwrap utils', () => {
         ['a', 1],
         ['nested', { b: 'x' }],
       ]);
-      const out = basicToCRDT(input as any, { map2crdtmap: false });
+      const out = wrapBasicTypeToCRDTType(input as any, { map2crdtmap: false });
 
       expect(out).toEqual({ a: 1, nested: { b: 'x' } });
       expect(containsYjsTypes(out)).toBe(false);
@@ -128,7 +128,7 @@ describe('wrap/unwrap utils', () => {
 
     it('returns a deep plain array when array2crdtarray=false (and disables nested CRDT conversion)', () => {
       const input = ['a', { nested: 'b' }, [1, { c: 'd' }]];
-      const out = basicToCRDT(input as any, { array2crdtarray: false });
+      const out = wrapBasicTypeToCRDTType(input as any, { array2crdtarray: false });
 
       expect(out).toEqual(input);
       expect(Array.isArray(out)).toBe(true);
@@ -136,4 +136,3 @@ describe('wrap/unwrap utils', () => {
     });
   });
 });
-

@@ -1,4 +1,4 @@
-import { BasicCRDTType, BasicType, CRDTMap } from "../../types";
+import { CRDTType, BasicType, CRDTMap } from "../../types";
 import * as Y from 'yjs';
 import * as utils from './utils';
 import { YjsBasic } from "./basic";
@@ -8,7 +8,7 @@ import { YjsNotAttachedError } from "../error";
 const NOT_ATTACHED_ERROR = 'YjsMap is not attached to a document. Add this map to any object that is attached to a document like a YjsMap or a YjsArray';
 const IS_FROM_JSON_ERROR = NOT_ATTACHED_ERROR + ' and this map was created from JSON. Add this map to any object that is attached to a document like a YjsMap or a YjsArray';
 
-export class YjsMap<Schema extends object = Record<string, BasicCRDTType>>
+export class YjsMap<Schema extends object = Record<string, CRDTType>>
     extends YjsBasic<Y.Map<any>> implements CRDTMap<Schema> {
     
     // If the map was created from JSON, then it is not attached to a document.
@@ -47,7 +47,7 @@ export class YjsMap<Schema extends object = Record<string, BasicCRDTType>>
      * @param val - The value to set.
      * @returns The map.
      */
-    set<Key extends keyof Schema & string>(key: Key, val: Schema[Key] & BasicCRDTType): this {
+    set<Key extends keyof Schema & string>(key: Key, val: Schema[Key] & CRDTType): this {
         this.yjsObj.set(key, utils.unwrapCRDTtoYJS(val));
         return this;
     }
@@ -128,7 +128,7 @@ export class YjsMap<Schema extends object = Record<string, BasicCRDTType>>
      */
     forEach(callbackfn: (value: Schema[keyof Schema], key: keyof Schema & string, map: CRDTMap<Schema>) => void): void {
         this.checkIfNotAttached();
-        this.yjsObj.forEach((val: BasicCRDTType, key: string) => {
+        this.yjsObj.forEach((val: CRDTType, key: string) => {
             callbackfn(utils.wrapYJStoCRDT(val) as Schema[keyof Schema], key as keyof Schema & string, this);
         });
     }

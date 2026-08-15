@@ -1,12 +1,12 @@
 import { Serializible } from "./crdt";
-import { BasicCRDTType, BasicType } from "./basic-types";
+import { CRDTType, BasicType } from "./basic-types";
 
 /**
  * CRDTArray is an interface for a typed CRDT-backed array-like data type.
  * Methods closely resemble Array, but may include operational transforms and sync.
  * Pass an item type such as `CRDTArray<string>` to constrain inserted values.
  */
-export interface CRDTArray<Item extends BasicCRDTType = BasicCRDTType> extends Serializible {
+export interface CRDTArray<Item extends CRDTType = CRDTType> extends Serializible {
     /**
      * Get element at the given index.
      */

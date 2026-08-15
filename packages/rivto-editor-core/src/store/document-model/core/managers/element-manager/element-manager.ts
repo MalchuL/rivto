@@ -1,4 +1,4 @@
-import type { BasicCRDTType, CRDTMap } from "../../../../crdt-doc";
+import type { CRDTType, CRDTMap } from "../../../../crdt-doc";
 import type {
   DocumentElement,
   DocumentModel,
@@ -46,7 +46,7 @@ export class DocumentElementManager {
     this.document.transact(() => {
       const model = this.document.crdt.instantiator.createMap<ElementStorage>();
       const frameMap = this.document.crdt.instantiator.createMap<ElementFrameStorage>();
-      const props = this.document.crdt.instantiator.createMap<Record<string, BasicCRDTType>>();
+      const props = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
       model.set("id", id);
       model.set("type", input.type);
       model.set("frame", frameMap);
@@ -79,7 +79,7 @@ export class DocumentElementManager {
     this.document.transact(() => prepared.forEach(({ element, patch, frame, zIndex }) => {
       if (frame) assignMap(this.requiredMap<ElementFrameStorage>(element, "frame"), frame as ElementFrameStorage, false);
       if (zIndex !== undefined) element.set("zIndex", zIndex);
-      if (patch.props) assignMap(this.requiredMap<Record<string, BasicCRDTType>>(element, "props"), patch.props, false);
+      if (patch.props) assignMap(this.requiredMap<Record<string, CRDTType>>(element, "props"), patch.props, false);
     }));
   }
 
@@ -118,7 +118,7 @@ export class DocumentElementManager {
       type: String(value.get("type")),
       frame: this.frame(this.requiredMap<ElementFrameStorage>(value, "frame").toObject() as unknown as ElementFrame),
       zIndex: this.zIndex(value.get("zIndex")),
-      props: clone(this.requiredMap<Record<IDProp, BasicCRDTType>>(value, "props").toObject() as Record<string, unknown>),
+      props: clone(this.requiredMap<Record<IDProp, CRDTType>>(value, "props").toObject() as Record<string, unknown>),
     };
   }
 

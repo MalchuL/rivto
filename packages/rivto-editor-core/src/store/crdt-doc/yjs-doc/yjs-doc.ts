@@ -1,4 +1,4 @@
-import { BasicCRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, ProviderCleanup, Instantiator, WrapBasicTypeToCRDTOptions } from "../types";
+import { CRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, ProviderCleanup, CRDTInstantiator, WrapBasicTypeToCRDTOptions } from "../types";
 import * as utils from "./structures/utils";
 import * as Y from 'yjs';
 import { Storage } from "../../../utils";
@@ -13,7 +13,7 @@ export class YjsDoc implements CRDTDoc {
     /**
      * The instantiator of the YjsDoc.
      */
-    public readonly instantiator: Instantiator = new YjsInstantiator();
+    public readonly instantiator: CRDTInstantiator = new YjsInstantiator();
 
     /**
      * Creates a new YjsDoc.
@@ -100,7 +100,7 @@ export class YjsDoc implements CRDTDoc {
      * @param path - The path to the array.
      * @returns The array.
      */
-    getArray<Item extends BasicCRDTType = BasicCRDTType>(path: string): CRDTArray<Item> {
+    getArray<Item extends CRDTType = CRDTType>(path: string): CRDTArray<Item> {
         return utils.wrapYJStoCRDT(this.doc.getArray(path)) as CRDTArray<Item>;
     }
 
@@ -109,7 +109,7 @@ export class YjsDoc implements CRDTDoc {
      * @param path - The path to the map.
      * @returns The map.
      */
-    getMap<Schema extends object = Record<string, BasicCRDTType>>(path: string): CRDTMap<Schema> {
+    getMap<Schema extends object = Record<string, CRDTType>>(path: string): CRDTMap<Schema> {
         return utils.wrapYJStoCRDT(this.doc.getMap(path)) as CRDTMap<Schema>;
     }
 
@@ -201,13 +201,13 @@ export class YjsDoc implements CRDTDoc {
                 if (value instanceof Map) {
                     const map = this.getMap(key);
                     value.forEach((v, k) => {
-                        const basic = utils.basicToCRDT(v, options);
+                        const basic = utils.wrapBasicTypeToCRDTType(v, options);
                         map.set(k, basic);
                     });
                 } else if (Array.isArray(value)) {
                     const array = this.getArray(key);
                     value.forEach((v, i) => {
-                        const basic = utils.basicToCRDT(v, options);
+                        const basic = utils.wrapBasicTypeToCRDTType(v, options);
                         array.insert(i, basic);
                     });
                 } else if (typeof value === 'string') {
@@ -216,7 +216,7 @@ export class YjsDoc implements CRDTDoc {
                 } else if (typeof value === 'object') {
                     const map = this.getMap(key);
                     Object.entries(value as Record<string, BasicType>).forEach(([k, v]) => {
-                        const basic = utils.basicToCRDT(v, options);
+                        const basic = utils.wrapBasicTypeToCRDTType(v, options);
                         map.set(k, basic);
                     });
                 } else {

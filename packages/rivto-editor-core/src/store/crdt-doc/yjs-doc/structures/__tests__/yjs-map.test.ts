@@ -2,7 +2,7 @@ import * as Y from 'yjs';
 import { YjsMap as YjsMapClass } from '../map';
 import { YjsArray } from '../array';
 import { YjsText } from '../text';
-import { basicToCRDT } from '../utils';
+import { wrapBasicTypeToCRDTType } from '../utils';
 import { isDeepPlainRecord } from '../utils/plain-check';
 
 
@@ -225,7 +225,7 @@ describe('YjsMap wrapper', () => {
             const complexArray = [1, 2, 3, { foo: 'bar', count: 3 }];
             const complexObject = { foo: 'bar', count: 3, nested: { foo: 'bar', count: 3, complexArray } };
 
-            const convertedComplexObject = basicToCRDT(complexObject, { array2crdtarray: false });
+            const convertedComplexObject = wrapBasicTypeToCRDTType(complexObject, { array2crdtarray: false });
             wrapper.set('complexObject', convertedComplexObject);
             expect((convertedComplexObject as YjsMapClass).get("foo")).toBeInstanceOf(YjsText);
             expect((convertedComplexObject as YjsMapClass).get("count")).toBe(3);
