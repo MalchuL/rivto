@@ -1,7 +1,8 @@
 .rivto-app-editor {
   --rivto-accent: var(--primary, #0f766e);
-  /* Same left gutter as the demo: drag handle is -28px, collapse is -48px. */
-  --rivto-block-surface-padding: 8px 8px 48px 56px;
+  /* Demo page-surface uses 56px 64px. Keep the 56px left gutter for the
+     drag/collapse handles, and restore comparable top/bottom breathing room. */
+  --rivto-block-surface-padding: 32px 8px 56px 56px;
   min-width: 0;
 }
 
@@ -127,6 +128,16 @@
 /* Edgeless needs a real viewport; page mode stays in the document column. */
 .rivto-app-editor:has(.edgeless-viewport) {
   min-height: 70vh;
+  padding-bottom: 0;
+}
+
+/* Library default is margin 8px 16px 24px and width calc(100% - 32px). The
+   app column already has horizontal padding, so only keep top/bottom inset. */
+.rivto-app-editor .edgeless-viewport {
+  width: 100%;
+  height: calc(100vh - 12rem);
+  min-height: 520px;
+  margin: 24px 0 32px;
 }
 
 /* Edgeless needs the workspace column, not the reading-width page card. */

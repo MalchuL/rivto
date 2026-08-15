@@ -151,7 +151,7 @@ export function PageDocument({
         }}
         initialMode={page.kind === "canvas" ? "edgeless" : "block"}
         showModeSwitch={false}
-        className="flex min-h-0 flex-1 flex-col pb-16"
+        className="flex min-h-0 flex-1 flex-col"
       >
         <header className="flex items-center justify-between gap-3 pb-1 pt-5">
           <div className="min-w-0 text-sm text-muted-foreground">{breadcrumbs}</div>
