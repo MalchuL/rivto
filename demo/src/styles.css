@@ -5,6 +5,12 @@
   --rivto-accent: #6c5ce7;
 }
 
+/* Keep the viewport scrollbar reserved so collapsing nested blocks cannot
+   shift the centered journal when document height crosses the window. */
+html {
+  overflow-y: scroll;
+}
+
 body { margin: 0; }
 
 .demo-header {
