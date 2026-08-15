@@ -28,13 +28,12 @@ test("creates interactive checkboxes from a shortcut and inherits them with Ente
   await editor.click();
   await replaceContent(page, "[ ] ");
 
-  await expect(block).toHaveAttribute("data-block-list-type", "checkbox");
   await expect(editor).toHaveText("");
   const checkbox = block.locator(":scope > .page-block-row > .page-list-checkbox");
   await expect(checkbox).not.toBeChecked();
   await page.keyboard.type("Task");
   await checkbox.check();
-  await expect(block).toHaveAttribute("data-block-checked", "true");
+  await expect(checkbox).toBeChecked();
   await expect(editor).toHaveCSS("text-decoration-line", "line-through");
 
   await editor.click();
@@ -43,12 +42,11 @@ test("creates interactive checkboxes from a shortcut and inherits them with Ente
   await page.keyboard.press("Enter");
   await expect(roots).toHaveCount(beforeEnter + 1);
   const inherited = roots.nth(1);
-  await expect(inherited).toHaveAttribute("data-block-list-type", "checkbox");
   await expect(inherited.locator(":scope > .page-block-row > .page-list-checkbox")).not.toBeChecked();
 
   await page.keyboard.press("Enter");
   await expect(roots).toHaveCount(beforeEnter + 1);
-  await expect(inherited).toHaveAttribute("data-block-list-type", "list");
+  await expect(inherited.locator(":scope > .page-block-row > .page-list-checkbox")).toHaveCount(0);
   await expect(inherited.locator(":scope > .page-block-row > .page-list-marker")).toHaveCount(0);
 });
 

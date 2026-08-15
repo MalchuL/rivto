@@ -93,8 +93,6 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
       fallback={BlockTreeShell}
       block={block}
       isSelected={Boolean(selection)}
-      data-block-list-type={listActive ? block.listProps.type : undefined}
-      data-block-checked={listActive && block.listProps.checked === true ? "true" : undefined}
       controls={(marker || (collapseActive && block.children.length > 0)) && (
         <Fragment>
           {marker}

@@ -158,7 +158,7 @@
   outline-offset: 1px;
 }
 
-.page-block[data-block-list-type="checkbox"][data-block-checked="true"] > .page-block-row .page-block-content {
+.page-block:has(> .page-block-row > .page-list-checkbox:checked) > .page-block-row .page-block-content {
   color: #888;
   text-decoration: line-through;
 }
