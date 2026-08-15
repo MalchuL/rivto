@@ -2,7 +2,6 @@ export * from './doc';
 export * from './array';
 export * from './map';
 export * from './text';
-export * from './transaction';
 export * from './basic-types';
 export * from './crdt';
 export * from './provider';

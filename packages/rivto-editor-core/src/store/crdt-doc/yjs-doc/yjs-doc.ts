@@ -1,4 +1,4 @@
-import { BasicCRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTTransaction, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, Instantiator, WrapBasicTypeToCRDTOptions } from "../types";
+import { BasicCRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, Instantiator, WrapBasicTypeToCRDTOptions } from "../types";
 import * as utils from "./structures/utils";
 import * as Y from 'yjs';
 import { Storage } from "../../../utils";
@@ -48,7 +48,7 @@ export class YjsDoc implements CRDTDoc {
      * Executes a transaction on the YjsDoc.
      * @param fn - The function to execute within the transaction.
      */
-    transact(fn: (tx: CRDTTransaction) => void, origin?: unknown): void {
+    transact(fn: () => void, origin?: unknown): void {
         this.doc.transact(fn, origin);
     }
 
