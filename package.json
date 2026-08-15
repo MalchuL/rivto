@@ -5,16 +5,21 @@
   "packageManager": "pnpm@11.8.0",
   "scripts": {
     "clean": "pnpm --filter @chulane/rivto clean && pnpm --filter @chulane/rivto-react clean",
-    "build": "pnpm --filter @chulane/rivto build && pnpm --filter @chulane/rivto-react build",
+    "build": "pnpm --filter @chulane/rivto build && pnpm --filter @chulane/rivto-react build && pnpm docs:build",
     "dev": "pnpm --filter @chulane/rivto dev",
     "demo": "pnpm --dir demo dev",
     "demo:build": "pnpm --dir demo build",
     "demo:check": "pnpm --dir demo check-types",
+    "docs:dev": "pnpm --dir docs dev",
+    "docs:build": "pnpm --dir docs build",
+    "docs:check": "pnpm --dir docs check-types",
+    "docs:preview": "pnpm --dir docs preview",
+    "docs:test": "pnpm --dir docs test",
     "lint": "eslint packages/rivto-editor-core/src packages/react-rivto-editor/src --max-warnings=0",
     "test": "pnpm --filter @chulane/rivto test",
     "test:e2e": "pnpm demo:build && playwright test --project=chromium --project=firefox",
     "check-types:core": "pnpm --filter @chulane/rivto check-types",
-    "check-types": "pnpm check-types:core && pnpm --filter @chulane/rivto-react check-types && pnpm --dir demo check-types"
+    "check-types": "pnpm check-types:core && pnpm --filter @chulane/rivto-react check-types && pnpm --dir demo check-types && pnpm docs:check"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

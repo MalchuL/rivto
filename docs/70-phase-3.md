@@ -38,4 +38,3 @@ src/editor/managers/command-registry.ts
 8. registerDynamic not needed. Just use register() with dynamic name. We adds this for typing, but now we default names.
 9. executeDynamic not needed. Just use execute() with dynamic name. We adds this for typing, but now we default names.
 To supports type inference make this method generic. If we want to call something from plugin just specify plugin commands in <> brackets
-
