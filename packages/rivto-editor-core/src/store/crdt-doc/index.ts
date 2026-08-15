@@ -7,5 +7,5 @@ export {
   YjsUndefinedError,
 } from './yjs-doc';
 export type { CRDTDoc, CRDTArray, CRDTMap, CRDTText,
-              Unsubscribe, Provider, Instantiator, BasicType, BasicCRDTType, 
+              Unsubscribe, Provider, ProviderCleanup, Instantiator, BasicType, BasicCRDTType,
               CRDTError, CRDTTextDelta, CRDTUndoManager, CRDTUndoScope } from './types';

@@ -1,4 +1,4 @@
-import { BasicCRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, Instantiator, WrapBasicTypeToCRDTOptions } from "../types";
+import { BasicCRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, ProviderCleanup, Instantiator, WrapBasicTypeToCRDTOptions } from "../types";
 import * as utils from "./structures/utils";
 import * as Y from 'yjs';
 import { Storage } from "../../../utils";
@@ -27,19 +27,36 @@ export class YjsDoc implements CRDTDoc {
     /**
      * Attaches a provider to the YjsDoc.
      * @param provider - The provider to attach.
-     * @returns A Promise that resolves when the provider is attached.
+    * @returns Cleanup that disconnects this exact provider attachment.
      */
-    async attachProvider(provider: Provider): Promise<void> {
-        this.providersStorage.setItem(provider.id, provider);
-        await provider.connect(this);
+    async attachProvider(provider: Provider): Promise<ProviderCleanup> {
+        const id = provider.id;
+        if (this.providersStorage.hasItem(id)) {
+            throw new Error(`Provider with id ${id} is already attached`);
+        }
+        this.providersStorage.setItem(id, provider);
+        try {
+            await provider.connect(this);
+        } catch (error) {
+            this.providersStorage.removeItem(id);
+            throw error;
+        }
+        return async () => {
+            if (this.providersStorage.hasItem(id)) {
+                await this.detachProvider(id);
+            }
+        };
     }
 
     /**
      * Detaches a provider from the YjsDoc.
+     * @param id - Optional provider ID, required when multiple providers are attached.
      * @returns A Promise that resolves when the provider is detached.
      */
-    async detachProvider(): Promise<void> {
-        const provider = this.providersStorage.getOne();
+    async detachProvider(id?: string): Promise<void> {
+        const provider = id === undefined
+            ? this.providersStorage.getOne()
+            : this.providersStorage.getItem(id);
         await provider.disconnect(this);
         this.providersStorage.removeItem(provider.id);
     }

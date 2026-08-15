@@ -5,6 +5,7 @@ import { CRDTText } from "./text";
 import { Instantiator } from "./utils";
 import { CRDTUndoManager, CRDTUndoScope } from "./undo";
 import { BasicCRDTType } from "./basic-types";
+import type { Provider, ProviderCleanup } from "./provider";
 
 
 /**
@@ -29,13 +30,17 @@ export interface CRDTDoc extends Serializible {
 
     /**
      * Attach a real-time provider (e.g. WebSocket) for syncing updates.
+     * @param provider - Provider to connect and register by its unique ID.
+     * @returns Cleanup that disconnects this exact provider attachment.
      */
-    attachProvider(provider: any): Promise<void>;
+    attachProvider(provider: Provider): Promise<ProviderCleanup>;
 
     /**
-     * Detach the currently attached provider.
+     * Detach a provider, inferring it when exactly one is attached.
+     * @param id - Optional provider ID, required when multiple providers are attached.
+     * @returns A Promise that resolves when the provider is disconnected.
      */
-    detachProvider(): Promise<void>;
+    detachProvider(id?: string): Promise<void>;
 
     /**
      * Execute operations within a transaction for atomicity.

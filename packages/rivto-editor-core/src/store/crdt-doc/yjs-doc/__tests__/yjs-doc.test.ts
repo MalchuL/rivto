@@ -40,25 +40,69 @@ describe('YjsDoc', () => {
       disconnect: jest.fn(),
     };
 
-    it('attachProvider should store provider and connect', async () => {
-      await yjsDoc.attachProvider(mockProvider);
+    it('attachProvider should store provider, connect, and return cleanup', async () => {
+      const cleanup = await yjsDoc.attachProvider(mockProvider);
       
-      // Verify provider is stored by trying to access it via detach
-      // Also verify connect was called
       expect(mockProvider.connect).toHaveBeenCalledWith(yjsDoc);
+      await cleanup();
+      expect(mockProvider.disconnect).toHaveBeenCalledWith(yjsDoc);
+
+      // Cleanup belongs to one exact attachment and is safe to call again.
+      await expect(cleanup()).resolves.toBeUndefined();
     });
 
-    it('detachProvider should get provider, disconnect, and remove', async () => {
+    it('detachProvider should infer the provider when exactly one is attached', async () => {
       await yjsDoc.attachProvider(mockProvider);
       await yjsDoc.detachProvider();
       
       expect(mockProvider.disconnect).toHaveBeenCalledWith(yjsDoc);
-      
-      // Verify provider is removed
-      // The underlying storage throws if we try to getOne from empty storage
-      // But since it's private, we can't check directly.
-      // However, if we try to detach again, it should throw if storage is empty/provider not found
       await expect(yjsDoc.detachProvider()).rejects.toThrow();
+    });
+
+    it('detachProvider should select one of multiple providers by ID', async () => {
+      const otherProvider: Provider = {
+        id: 'provider-2',
+        connect: jest.fn(),
+        disconnect: jest.fn(),
+      };
+      await yjsDoc.attachProvider(mockProvider);
+      await yjsDoc.attachProvider(otherProvider);
+
+      await expect(yjsDoc.detachProvider()).rejects.toThrow('multiple items');
+      await yjsDoc.detachProvider(mockProvider.id);
+
+      expect(mockProvider.disconnect).toHaveBeenCalledWith(yjsDoc);
+      expect(otherProvider.disconnect).not.toHaveBeenCalled();
+      await yjsDoc.detachProvider(otherProvider.id);
+    });
+
+    it('attachProvider should reject duplicate IDs', async () => {
+      const duplicateProvider: Provider = {
+        id: mockProvider.id,
+        connect: jest.fn(),
+        disconnect: jest.fn(),
+      };
+      await yjsDoc.attachProvider(mockProvider);
+
+      await expect(yjsDoc.attachProvider(duplicateProvider)).rejects.toThrow('already attached');
+      expect(duplicateProvider.connect).not.toHaveBeenCalled();
+    });
+
+    it('attachProvider should release the ID when connecting fails', async () => {
+      const error = new Error('connect failed');
+      const failingProvider: Provider = {
+        id: 'failing-provider',
+        connect: jest.fn().mockRejectedValue(error),
+        disconnect: jest.fn(),
+      };
+      const replacementProvider: Provider = {
+        id: failingProvider.id,
+        connect: jest.fn(),
+        disconnect: jest.fn(),
+      };
+
+      await expect(yjsDoc.attachProvider(failingProvider)).rejects.toBe(error);
+      await expect(yjsDoc.attachProvider(replacementProvider)).resolves.toEqual(expect.any(Function));
     });
   });
 

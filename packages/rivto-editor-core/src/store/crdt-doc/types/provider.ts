@@ -1,4 +1,7 @@
-import { CRDTDoc } from "./doc";
+import type { CRDTDoc } from "./doc";
+
+/** Disconnects one exact provider attachment. */
+export type ProviderCleanup = () => Promise<void>;
 
 /**
  * Interface representing a provider for synchronizing CRDT documents.
