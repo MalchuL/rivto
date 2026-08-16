@@ -32,7 +32,8 @@ export function isCRDTText(value: unknown): value is CRDTText {
 }
 
 /**
- * Copies portable object fields into a shared map.
+ * Copies portable object fields into a shared map. Stores only first level of of values. 
+ * Object under keys stored as plain objects without CRDT wrapping (changing values doesn't trigger CRDT updates).
  *
  * @param map - Collaborative map receiving cloned portable values.
  * @param values - String-keyed portable values to copy.
@@ -65,6 +66,7 @@ export function assignText(text: CRDTText, content: string): void {
 
 /**
  * Copies portable array items into a shared array.
+ * Values are stored as plain objects without CRDT wrapping (changing values doesn't trigger CRDT updates).
  *
  * @param array - Collaborative array receiving portable values.
  * @param values - Ordered portable items to copy.
