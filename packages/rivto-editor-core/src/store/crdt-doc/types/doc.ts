@@ -82,7 +82,8 @@ export interface CRDTDoc extends Serializible {
     applySnapshot(snapshot: any): void;
 
     /**
-     * Destroys all internal state and unregisters handlers.
+     * Disconnects every provider, then destroys all internal state and handlers.
+     * @returns A Promise that resolves after provider and document cleanup.
      */
-    destroy(): void;
+    destroy(): Promise<void>;
 }

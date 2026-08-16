@@ -1,4 +1,5 @@
 import { createTestEditor as createRivtoEditor } from "../test-utils";
+import { YjsDoc } from "../../store/crdt-doc";
 
 describe("EditorRuntime methods", () => {
   it("supports a complete lifecycle without blocks", () => {
@@ -23,6 +24,16 @@ describe("EditorRuntime methods", () => {
     editor.redo();
     expect(editor.blocks.getBlocks()).toEqual([]);
     editor.destroy();
+  });
+
+  it("destroys the CRDT document owned by the runtime", async () => {
+    const document = new YjsDoc("editor-lifecycle");
+    const destroy = jest.spyOn(document, "destroy");
+    const editor = createRivtoEditor({ document });
+
+    await editor.destroy();
+
+    expect(destroy).toHaveBeenCalledTimes(1);
   });
 
   it("mutates blocks through editor methods", () => {

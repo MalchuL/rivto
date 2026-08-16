@@ -125,6 +125,9 @@ export class DocumentModelImpl implements DocumentModel {
    * @throws {Error} When a supplied block or element collection is unsupported.
    */
   loadSnapshot(snapshot: SnapshotUpdate): void {
+    if (snapshot.version !== 6) {
+      throw new Error(`Unsupported Rivto document snapshot version: ${String(snapshot.version)}`);
+    }
     if ((snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks)) ||
       (snapshot.elements !== undefined && !Array.isArray(snapshot.elements))) {
       throw new Error("Unsupported Rivto document snapshot");

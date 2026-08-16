@@ -150,10 +150,21 @@ export class YjsDoc implements CRDTDoc {
     }
 
     /**
-     * Destroys the YjsDoc.
+     * Disconnects every attached provider before destroying the Yjs document.
+     * @returns A Promise that resolves after all lifecycle cleanup completes.
      */
-    destroy(): void {
-        this.doc.destroy();
+    destroy(): Promise<void> {
+        const providers = this.providersStorage.values();
+        this.providersStorage.clear();
+        if (providers.length === 0) {
+            this.doc.destroy();
+            return Promise.resolve();
+        }
+        return Promise.allSettled(providers.map((provider) => Promise.resolve().then(() => provider.disconnect(this)))).then((results) => {
+            this.doc.destroy();
+            const failure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+            if (failure) throw failure.reason;
+        });
     }
 
     /**

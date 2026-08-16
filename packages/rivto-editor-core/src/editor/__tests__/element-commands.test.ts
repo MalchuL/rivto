@@ -42,11 +42,13 @@ describe("EditorRuntime element commands", () => {
     editor.destroy();
   });
 
-  it("rejects invalid geometry without rejecting a different snapshot version", () => {
+  it("rejects invalid geometry and unsupported snapshot versions", () => {
     const editor = createRivtoEditor();
     expect(() => editor.elements.insertElement({ ...input, frame: { ...input.frame, width: 0 } })).toThrow();
     editor.elements.insertElement(input);
-    expect(() => editor.load({ version: 4, blocks: [], links: [] } as never)).not.toThrow();
+    expect(() => editor.load({ version: 4, blocks: [], links: [] } as never)).toThrow(
+      "Unsupported Rivto document snapshot version: 4",
+    );
     expect(editor.elements.getElement("shape")).toBeDefined();
     editor.destroy();
   });

@@ -13,8 +13,8 @@ describe('YjsDoc', () => {
     yjsDoc = new YjsDoc(docId);
   });
 
-  afterEach(() => {
-    yjsDoc.destroy();
+  afterEach(async () => {
+    await yjsDoc.destroy();
   });
 
   it('should initialize with correct ID', () => {
@@ -192,10 +192,16 @@ describe('YjsDoc', () => {
   });
 
   describe('Lifecycle', () => {
-    it('destroy should clean up resources', () => {
-      // We can't easily check internal state of Y.Doc after destroy without mocking,
-      // but we can ensure it doesn't throw
-      yjsDoc.destroy();
+    it('destroy should disconnect every provider before cleaning up resources', async () => {
+      const first: Provider = { id: 'first', connect: jest.fn(), disconnect: jest.fn() };
+      const second: Provider = { id: 'second', connect: jest.fn(), disconnect: jest.fn() };
+      await yjsDoc.attachProvider(first);
+      await yjsDoc.attachProvider(second);
+
+      await yjsDoc.destroy();
+
+      expect(first.disconnect).toHaveBeenCalledWith(yjsDoc);
+      expect(second.disconnect).toHaveBeenCalledWith(yjsDoc);
     });
   });
   describe('Snapshot', () => {

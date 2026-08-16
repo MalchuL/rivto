@@ -212,7 +212,7 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Replaces supplied document sections from a snapshot v5 update.
+   * Replaces supplied document sections from a snapshot v6 update.
    *
    * Loading establishes a new history baseline, so earlier local changes
    * cannot be restored with undo.
@@ -228,7 +228,7 @@ export class EditorRuntime implements RivtoEditorApi {
   /**
    * Materializes the complete portable document state.
    *
-   * @returns Detached snapshot v5 suitable for persistence or transfer.
+   * @returns Detached snapshot v6 suitable for persistence or transfer.
    */
   dump(): EditorSnapshot {
     const snapshot = this.document.getSnapshot() satisfies Snapshot;
@@ -452,21 +452,26 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Releases subscriptions owned by the runtime.
+   * Releases subscriptions owned by the runtime, then destroys its CRDT document.
    *
    * Registered block definitions are removed in reverse order so callers see a
    * predictable teardown path even when definitions depend on earlier defaults.
-   * @returns No value.
+   * @returns A Promise that resolves after providers and CRDT state are destroyed.
    */
-  destroy(): void {
-    this.unsubscribeFns.splice(0).forEach((unsubscribe) => unsubscribe());
-    this.links.destroy();
-    this.elements.destroy();
-    this.blocks.destroy();
-    this.blocksRegistry.destroy();
-    this.history.destroy();
-    this.commands.clear();
-    this.listeners.clear();
+  async destroy(): Promise<void> {
+    try {
+      this.unsubscribeFns.splice(0).forEach((unsubscribe) => unsubscribe());
+      this.links.destroy();
+      this.elements.destroy();
+      this.blocks.destroy();
+      this.blocksRegistry.destroy();
+      this.history.destroy();
+      this.commands.clear();
+      this.listeners.clear();
+    } finally {
+      // The CRDT is the final lifecycle owner and must be released even if a manager cleanup fails.
+      await this.document.crdt.destroy();
+    }
   }
 
   /**

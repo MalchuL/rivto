@@ -446,9 +446,9 @@ function JournalDemoApp() {
   // This useEffect returns a cleanup function that destroys the editor.
   useEffect(() => () => {
     todayEditor.reactEditor.destroy();
-    todayEditor.editor.destroy();
+    void todayEditor.editor.destroy();
     yesterdayEditor.reactEditor.destroy();
-    yesterdayEditor.editor.destroy();
+    void yesterdayEditor.editor.destroy();
   }, [todayEditor, yesterdayEditor]);
 
   return (
@@ -607,9 +607,9 @@ function MultiEditorApp() {
   const [right] = useState(() => createMultiEditor("right", { empty: emptyDestination, conflict }));
   useEffect(() => () => {
     left.reactEditor.destroy();
-    left.editor.destroy();
+    void left.editor.destroy();
     right.reactEditor.destroy();
-    right.editor.destroy();
+    void right.editor.destroy();
   }, [left, right]);
   return (
     <div className="multi-editor-page">
@@ -678,12 +678,10 @@ function SyncEditorsApp() {
     })();
     return () => {
       cancelled = true;
-      void peers.left.yjsDoc.detachProvider().catch(() => undefined);
-      void peers.right.yjsDoc.detachProvider().catch(() => undefined);
       peers.left.reactEditor.destroy();
-      peers.left.editor.destroy();
+      void peers.left.editor.destroy().catch(() => undefined);
       peers.right.reactEditor.destroy();
-      peers.right.editor.destroy();
+      void peers.right.editor.destroy().catch(() => undefined);
     };
   }, [peers]);
 

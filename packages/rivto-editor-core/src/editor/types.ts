@@ -159,7 +159,7 @@ export interface RivtoEditorApi {
   /**
    * Replaces supplied document sections and clears previous local history.
    *
-   * @param snapshot - Snapshot-v5 sections to validate and load.
+   * @param snapshot - Snapshot-v6 sections to validate and load.
    * @returns No value.
    */
   load(snapshot: EditorSnapshotUpdate): void;
@@ -167,7 +167,7 @@ export interface RivtoEditorApi {
   /**
    * Materializes the complete portable document state.
    *
-   * @returns Detached snapshot-v5 value.
+   * @returns Detached snapshot-v6 value.
    */
   dump(): EditorSnapshot;
 
@@ -188,7 +188,7 @@ export interface RivtoEditorApi {
   /**
    * Releases runtime subscriptions, managers, registries, and history.
    *
-   * @returns No value.
+   * @returns A Promise that resolves after runtime, provider, and CRDT cleanup.
    */
-  destroy(): void;
+  destroy(): Promise<void>;
 }

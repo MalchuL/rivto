@@ -12,6 +12,18 @@ const exchangeUpdates = (left: YjsDoc, right: YjsDoc): void => {
 };
 
 describe("DocumentModelImpl schema v6 Markdown storage", () => {
+  it("rejects unsupported snapshot versions before mutating the document", () => {
+    const doc = new YjsDoc("unsupported-version");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({ id: "preserved", type: "paragraph" });
+
+    expect(() => model.loadSnapshot({ version: 5, blocks: [] } as never)).toThrow(
+      "Unsupported Rivto document snapshot version: 5",
+    );
+    expect(model.blocks.getBlock("preserved")).toBeDefined();
+    void doc.destroy();
+  });
+
   it("loads, removes, and recreates blocks around a valid empty document", () => {
     const doc = new YjsDoc("empty-document");
     const model = new DocumentModelImpl(doc);
