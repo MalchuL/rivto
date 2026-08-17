@@ -59,6 +59,8 @@
 
 .page-block-row {
   position: relative;
+  display: flex;
+  align-items: flex-start;
   width: 100%;
 }
 
@@ -75,6 +77,135 @@
 .page-block-row > * {
   position: relative;
   z-index: 1;
+}
+
+/* Ordered perimeter slots are overlays by default. Hosts may override these
+   public selectors together with their owner layout to make one position flow. */
+.rivto-slot {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  gap: var(--rivto-slot-gap, 4px);
+  align-items: center;
+  pointer-events: none;
+}
+
+.rivto-slot > * {
+  position: relative;
+  inset: auto;
+  flex: none;
+  margin: 0;
+  translate: none;
+  pointer-events: auto;
+}
+
+/* Logical block slots participate in row layout. Their fixed first-line
+   height keeps controls aligned when the block content spans multiple lines. */
+.rivto-slot[data-slot-owner="block"][data-slot-position="start"],
+.rivto-slot[data-slot-owner="block"][data-slot-position="end"] {
+  position: relative;
+  min-height: var(--rivto-default-block-height);
+  transform: none;
+}
+
+.rivto-slot[data-slot-owner="block"][data-slot-position="start"] {
+  flex-direction: row-reverse;
+}
+
+.rivto-block-content-flow {
+  /* Filling the remaining row width makes `start` appear next to the first
+     character but places `end` at the row edge. `end` does not follow the
+     final character or move to the last visual line of multiline content. */
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Built-in controls historically positioned themselves against their owner.
+   Slot ownership now supplies that geometry. */
+.rivto-slot > .page-drag-handle,
+.rivto-slot > .page-collapse-toggle,
+.rivto-slot > .page-list-marker,
+.rivto-slot > .page-list-checkbox,
+.rivto-slot > .edgeless-drag-handle {
+  position: relative;
+  inset: auto;
+  margin: 0;
+  translate: none;
+}
+
+.rivto-slot[data-slot-position="left"] {
+  top: 50%;
+  left: 0;
+  flex-direction: row-reverse;
+  transform: translate(-100%, -50%);
+}
+
+.rivto-slot[data-slot-position="right"] {
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%);
+}
+
+.rivto-slot[data-slot-position="right-top"],
+.rivto-slot[data-slot-position="right-bottom"] {
+  left: 100%;
+  flex-direction: row;
+}
+
+.rivto-slot[data-slot-position="right-top"],
+.rivto-slot[data-slot-position="left-top"] {
+  top: 0;
+  align-items: flex-start;
+}
+
+.rivto-slot[data-slot-position="right-bottom"],
+.rivto-slot[data-slot-position="left-bottom"] {
+  bottom: 0;
+  align-items: flex-end;
+}
+
+.rivto-slot[data-slot-position="left-top"],
+.rivto-slot[data-slot-position="left-bottom"] {
+  right: 100%;
+  flex-direction: row-reverse;
+}
+
+.rivto-slot[data-slot-owner="block"][data-slot-position="left-top"] {
+  gap: 0;
+}
+
+.rivto-slot[data-slot-owner="block"][data-slot-position="left-top"] > .page-collapse-toggle {
+  translate: 4px 0;
+}
+
+.rivto-slot[data-slot-position="top-left"],
+.rivto-slot[data-slot-position="top"],
+.rivto-slot[data-slot-position="top-right"] {
+  bottom: 100%;
+  flex-direction: column-reverse;
+}
+
+.rivto-slot[data-slot-position="bottom-left"],
+.rivto-slot[data-slot-position="bottom"],
+.rivto-slot[data-slot-position="bottom-right"] {
+  top: 100%;
+  flex-direction: column;
+}
+
+.rivto-slot[data-slot-position="top-left"],
+.rivto-slot[data-slot-position="bottom-left"] {
+  left: 0;
+}
+
+.rivto-slot[data-slot-position="top"],
+.rivto-slot[data-slot-position="bottom"] {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.rivto-slot[data-slot-position="top-right"],
+.rivto-slot[data-slot-position="bottom-right"] {
+  right: 0;
 }
 
 [data-block-selecting] .page-block-row,
@@ -105,8 +236,8 @@
 
 /* Children live outside their parent's row, so only the line under the cursor
    or owning the caret reveals its handle. */
-.page-block-row:hover > .page-drag-handle,
-.page-block-row:focus-within > .page-drag-handle,
+.page-block-row:hover .page-drag-handle,
+.page-block-row:focus-within .page-drag-handle,
 .page-drag-handle:focus-visible {
   opacity: 1;
   pointer-events: auto;
@@ -144,9 +275,8 @@
   text-align: right;
 }
 
-.page-block-row:has(> .page-list-marker, > .page-list-checkbox) {
-  box-sizing: border-box;
-  padding-left: 24px;
+.rivto-slot[data-slot-owner="block"][data-slot-position="start"] > .page-list-checkbox {
+  margin-inline-end: 4px;
 }
 
 .page-list-checkbox {
@@ -158,7 +288,7 @@
   outline-offset: 1px;
 }
 
-.page-block:has(> .page-block-row > .page-list-checkbox:checked) > .page-block-row .page-block-content {
+.page-block:has(> .page-block-row .page-list-checkbox:checked) > .page-block-row .page-block-content {
   color: #888;
   text-decoration: line-through;
 }
@@ -564,6 +694,17 @@
   pointer-events: auto;
   touch-action: none;
   overflow: hidden;
+}
+
+/* Restore the frame-relative height that the handle had before it moved into
+   a slot. The slot supplies the 75% reference; the handle keeps its 56px cap. */
+.rivto-slot[data-slot-owner="element"]:has(> .edgeless-drag-handle) {
+  height: 75%;
+}
+
+.rivto-slot > .edgeless-drag-handle {
+  height: min(56px, 100%);
+  max-height: 100%;
 }
 
 .edgeless-drag-handle:active {

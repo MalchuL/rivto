@@ -27,6 +27,12 @@ import type {
   SlashCommand,
   SlashCommandContext,
   SurfaceComponent,
+  BlockSlotPosition,
+  BlockSlotProps,
+  BlockSlotRegistration,
+  ElementSlotProps,
+  ElementSlotRegistration,
+  SlotPosition,
 } from "./managers";
 
 export interface BlocksCapability {
@@ -113,6 +119,20 @@ export interface SurfacesCapability {
   get(mode: EditorMode): SurfaceComponent | undefined;
   registerBlockWrapper(mode: EditorMode, wrapper: BlockWrapperComponent): () => void;
   getBlockWrappers(mode: EditorMode): readonly BlockWrapperComponent[];
+  /** Registers one ordered block-row slot contribution. */
+  registerBlockSlot(registration: BlockSlotRegistration): () => void;
+  /** Resolves matching block-slot components from nearest to farthest. */
+  getBlockSlots(
+    position: BlockSlotPosition,
+    props: BlockSlotProps,
+  ): readonly ComponentType<BlockSlotProps>[];
+  /** Registers one ordered first-class element slot contribution. */
+  registerElementSlot(registration: ElementSlotRegistration): () => void;
+  /** Resolves matching element-slot components from nearest to farthest. */
+  getElementSlots(
+    position: SlotPosition,
+    props: ElementSlotProps,
+  ): readonly ComponentType<ElementSlotProps>[];
   registerEditorWrapper(
     wrapper: ComponentType<{ readonly children?: ReactNode }>,
     mode?: EditorMode | readonly EditorMode[],

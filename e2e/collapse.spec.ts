@@ -24,9 +24,23 @@ test.beforeEach(async ({ page }) => {
 test("toggles an accessible collapsed subtree without exposing hidden rows", async ({ page }) => {
   const parent = await collapsibleRoot(page);
   const toggle = parent.locator(":scope > .page-block-row [data-collapse-toggle]");
+  const leftTopSlot = parent.locator(':scope > .page-block-row > .rivto-slot[data-slot-owner="block"][data-slot-position="left-top"]');
+  const content = parent.locator(":scope > .page-block-row [data-block-content]");
   const childText = parent.locator(":scope > .page-block-children [data-block-content]").first();
   const childValue = await childText.textContent();
 
+  await expect(leftTopSlot.locator(":scope > *")).toHaveCount(2);
+  await expect(leftTopSlot.locator(":scope > *").nth(0)).toHaveClass(/page-drag-handle/);
+  await expect(leftTopSlot.locator(":scope > *").nth(1)).toHaveClass(/page-collapse-toggle/);
+  const [dragBox, toggleBox, contentBox] = await Promise.all([
+    leftTopSlot.locator(".page-drag-handle").boundingBox(),
+    toggle.boundingBox(),
+    content.boundingBox(),
+  ]);
+  if (!dragBox || !toggleBox || !contentBox) throw new Error("Expected block control geometry");
+  expect(toggleBox.x).toBeLessThan(dragBox.x);
+  expect(dragBox.x - toggleBox.x - toggleBox.width).toBeLessThanOrEqual(-3);
+  expect(dragBox.x + dragBox.width).toBeLessThanOrEqual(contentBox.x);
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "false");

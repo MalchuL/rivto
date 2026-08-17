@@ -1,15 +1,12 @@
 import {
-  BlockElementRefProvider,
-  type BlockWrapperProps,
+  type BlockSlotProps,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import {
   createContext,
   useContext,
-  useState,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 
 const BlockIdsVisibleContext = createContext(true);
 
@@ -28,29 +25,20 @@ export function BlockIdsVisibleProvider({
   );
 }
 
-/** Adds a demo-only short ID label to the right edge of every block row. */
-function BlockIdWrapper({ block, children }: BlockWrapperProps) {
+/** Adds a demo-only short ID label after the content of every block row. */
+function BlockIdSlot({ block }: BlockSlotProps) {
   const visible = useContext(BlockIdsVisibleContext);
-  const [blockElement, setBlockElement] = useState<HTMLDivElement | null>(null);
-  const row = blockElement?.querySelector<HTMLElement>(":scope > .page-block-row");
   const shortId = block.id.split("-", 1)[0];
-
-  return (
-    <BlockElementRefProvider elementRef={setBlockElement}>
-      {children}
-      {visible && row && createPortal(
-        <span className="demo-block-id" title={block.id}>{shortId}</span>,
-        row,
-      )}
-    </BlockElementRefProvider>
-  );
+  return visible ? <span className="demo-block-id" title={block.id}>{shortId}</span> : null;
 }
 
 /** Demo-only extension showing shortened block IDs in page and edgeless rows. */
 export const blockIdExtension = (): ReactEditorExtension => ({
   id: "demo.block-id",
   setup(reactEditor) {
-    reactEditor.surfaces.registerBlockWrapper("block", BlockIdWrapper);
-    reactEditor.surfaces.registerBlockWrapper("edgeless", BlockIdWrapper);
+    reactEditor.surfaces.registerBlockSlot({
+      position: "end",
+      component: BlockIdSlot,
+    });
   },
 });

@@ -1,8 +1,7 @@
 import type { EditorElement } from "@chulane/rivto";
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
-import { EdgelessDragHandle } from "../../extensions/edgeless/edgeless-drag-handle";
 import { useEdgelessSelection } from "../../extensions/edgeless/edgeless-runtime";
-import { BlockTree } from "../../blocks";
+import { BlockTree, ElementSlots } from "../../blocks";
 import { useReactEditor } from "../../hooks";
 
 const AUTO_HEIGHT_ORIGIN = Symbol("rivto-react-block-element-auto-height");
@@ -88,7 +87,7 @@ export function EdgelessBlockElement({
       <div ref={contentRef} className={CARD_CONTENT_CLASS} data-edgeless-card-content="true">
         <BlockTree blockIds={blockIds} />
       </div>
-      {selected && <EdgelessDragHandle label="Drag canvas block" />}
+      <ElementSlots element={element} selected={selected} />
       {RESIZE_HANDLES.map((corner) => (
         <button
           key={corner}

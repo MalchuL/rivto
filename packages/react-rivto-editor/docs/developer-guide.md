@@ -184,6 +184,10 @@ its content. `BlockTree` owns traversal and block layout while each surface owns
 only its outer page or canvas geometry. A wrapper decorates the shared shell and
 must render its children exactly once.
 
+Visible per-owner chrome belongs in ordered block or element slots rather than
+wrappers. See [Ordered owner slots](./slots.md) for positions, priorities,
+filters, and CSS layout overrides.
+
 ## Extensions and capabilities
 
 An extension is a setup function with a stable ID:

@@ -167,15 +167,29 @@ test("loads the visual-object plugin in the demo", async ({ page }) => {
   const before = await page.locator('[data-edgeless-visual-kind="rectangle"]').count();
   const rectangle = await createVisual(page, "Rectangle");
   await expect(rectangle).toBeVisible();
+  const dragHandle = rectangle.getByRole("button", { name: "Drag rectangle" });
+  await expect(dragHandle).toBeVisible();
+  await expect(dragHandle.locator("xpath=parent::*")).toHaveAttribute("data-slot-owner", "element");
+  await expect(dragHandle.locator("xpath=parent::*")).toHaveAttribute("data-slot-position", "left-top");
   await expect(page.locator('[data-edgeless-visual-kind="rectangle"]')).toHaveCount(before + 1);
 });
 
-test("uses one continuous card surface with symmetric padding and a top-left drag handle when selected", async ({ page }) => {
+test("uses one continuous card surface with symmetric padding and a left-edge-top drag handle when selected", async ({ page }) => {
   await switchMode(page, "edgeless");
   const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
+  const beforeSelection = await card.boundingBox();
   await expect(card.getByRole("button", { name: "Drag canvas block" })).toHaveCount(0);
   await clickCardChrome(page, card);
-  await expect(card.getByRole("button", { name: "Drag canvas block" })).toBeVisible();
+  const dragHandle = card.getByRole("button", { name: "Drag canvas block" });
+  await expect(dragHandle).toBeVisible();
+  await expect(dragHandle.locator("xpath=parent::*")).toHaveAttribute("data-slot-owner", "element");
+  await expect(dragHandle.locator("xpath=parent::*")).toHaveAttribute("data-slot-position", "left-top");
+  const afterSelection = await card.boundingBox();
+  const handleBox = await dragHandle.boundingBox();
+  if (!afterSelection || !handleBox) throw new Error("Expected selected card drag geometry");
+  expect(afterSelection).toEqual(beforeSelection);
+  expect(Math.abs(handleBox.y - afterSelection.y)).toBeLessThanOrEqual(1);
+  expect(handleBox.height).toBeCloseTo(Math.min(56, afterSelection.height * 0.75), 0);
   await expect(cardRoot(card)).toHaveCount(1);
   await expect(cardChildren(card)).toHaveCount(2);
   await expect(card).toHaveAttribute("data-auto-height", "true");
@@ -1317,7 +1331,7 @@ test("keeps an indented block drag handle visible while moving onto it", async (
   const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
   const nested = cardChildren(card).first();
   const row = nested.locator(":scope > .page-block-row");
-  const handle = row.locator(":scope > .page-drag-handle");
+  const handle = row.locator(":scope .page-drag-handle");
 
   const box = await handle.boundingBox();
   const bodyBox = await cardChrome(card).boundingBox();
@@ -1386,7 +1400,7 @@ test("moves a card by dragging from the left of an indented nested block", async
   }).toBe(true);
 
   // Structural handles must still light up across the whole indented line.
-  const handle = nested.locator(":scope > .page-block-row > .page-drag-handle");
+  const handle = nested.locator(":scope > .page-block-row .page-drag-handle");
   const bodyBox = await cardChrome(card).boundingBox();
   const handleBox = await handle.boundingBox();
   if (!bodyBox || !handleBox) throw new Error("Expected handle geometry after move");

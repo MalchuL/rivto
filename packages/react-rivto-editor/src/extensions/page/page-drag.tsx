@@ -26,6 +26,7 @@ import {
   type BlockWrapperProps,
 } from "../../blocks";
 import { useEditor, useEditorRoot, useReactEditor } from "../../hooks";
+import type { BlockSlotProps } from "../../managers";
 import {
   createContext,
   useContext,
@@ -50,6 +51,8 @@ const PAGE_INDENT = 24;
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 const CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE = "data-rivto-cross-document-page-root";
 const CROSS_DOCUMENT_PAGE_ROOT_SELECTOR = `[${CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE}]`;
+const PAGE_DRAG_HANDLE_CLASS = "page-drag-handle";
+const PAGE_DROP_LINE_CLASS = "page-drop-line";
 
 /**
  * Normalized document destination and visual feedback for the current pointer.
@@ -120,6 +123,7 @@ interface PageDragState {
  * tests or when a host registers the wrapper without the provider.
  */
 const PageDragStateContext = createContext<PageDragState>({ placement: null, draggedIds: [] });
+const PageDragItemContext = createContext<ReturnType<typeof useDraggable> | null>(null);
 
 /** Properties for the page drag-and-drop boundary. */
 export interface PageDragExtensionOptions {
@@ -728,34 +732,45 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
     return () => row.removeAttribute("data-drop-inside");
   }, [indicator, row]);
 
-  const controls = row ? createPortal(
-    <>
-        <button
-          {...draggable.attributes}
-          {...draggable.listeners}
-          ref={draggable.setNodeRef}
-          type="button"
-          className="page-drag-handle"
-          aria-label={`Move block: ${block.content || block.type}`}
-          contentEditable={false}
-        >
-          ⋮⋮
-        </button>
-        {indicator?.indicatorEdge && (
-          <span
-            className="page-drop-line"
-            data-edge={indicator.indicatorEdge}
-            style={{ left: indicator.indicatorOffset }}
-          />
-        )}
-    </>,
+  const indicatorPortal = row && indicator?.indicatorEdge ? createPortal(
+    <span
+      className={PAGE_DROP_LINE_CLASS}
+      data-edge={indicator.indicatorEdge}
+      style={{ left: indicator.indicatorOffset }}
+    />,
     row,
   ) : null;
 
   return (
     <BlockElementRefProvider elementRef={setBlockElement}>
-      {children}
-      {controls}
+      <PageDragItemContext.Provider value={draggable}>
+        {children}
+      </PageDragItemContext.Provider>
+      {indicatorPortal}
     </BlockElementRefProvider>
+  );
+}
+
+/**
+ * Renders the visible drag activator supplied by the owning drag wrapper.
+ *
+ * @param props - Current block slot context used for the accessible label.
+ * @returns Drag button, or nothing when the mechanical wrapper is absent.
+ */
+export function PageDragBlockSlot({ block }: BlockSlotProps) {
+  const draggable = useContext(PageDragItemContext);
+  if (!draggable) return null;
+  return (
+    <button
+      {...draggable.attributes}
+      {...draggable.listeners}
+      ref={draggable.setNodeRef}
+      type="button"
+      className={PAGE_DRAG_HANDLE_CLASS}
+      aria-label={`Move block: ${block.content || block.type}`}
+      contentEditable={false}
+    >
+      ⋮⋮
+    </button>
   );
 }

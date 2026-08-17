@@ -159,20 +159,16 @@ body { margin: 0; }
   background: var(--rivto-accent);
 }
 
-.page-block-row > .demo-block-id {
-  position: absolute;
-  top: 50%;
-  right: 0;
+.rivto-slot > .demo-block-id {
   padding-left: 12px;
   color: #999;
   background: linear-gradient(to right, transparent, white 12px);
   font: 11px/1 ui-monospace, monospace;
   pointer-events: none;
-  transform: translateY(-50%);
   user-select: none;
 }
 
-.edgeless-card .page-block-row > .demo-block-id {
+.edgeless-card .rivto-slot > .demo-block-id {
   background: linear-gradient(to right, transparent, var(--rivto-edgeless-card-background, white) 12px);
 }
 

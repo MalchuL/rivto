@@ -3,7 +3,7 @@ import {
   EditableLabel,
   type EditableLabelFocusPoint,
 } from "../../../../components";
-import { EdgelessDragHandle } from "../../edgeless-drag-handle";
+import { ElementSlots } from "../../../../blocks";
 import type { EdgelessVisualController } from "../controller";
 import type { ConnectorEndpoint, EdgelessVisual } from "../types";
 import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from "../utils/geometry";
@@ -32,6 +32,7 @@ export function VisualElement({
   readonly onReconnectHover: (event: Pick<PointerEvent, "clientX" | "clientY"> | null) => void;
   readonly onReconnect: (key: "source" | "target", endpoint: ConnectorEndpoint) => void;
 }) {
+  const element = controller.reactEditor.editor.elements.getElement(visual.id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<{ key: "source" | "target"; endpoint: ConnectorEndpoint } | null>(null);
   const focusPointRef = useRef<EditableLabelFocusPoint | null>(null);
@@ -261,9 +262,7 @@ export function VisualElement({
       }}
     >
       {content}
-      {selected && visual.kind !== "connector" && (
-        <EdgelessDragHandle label={`Drag ${visual.kind}`} />
-      )}
+      {element && <ElementSlots element={element} selected={selected} />}
       {selected && visual.kind !== "connector" && RESIZE_HANDLES.map((corner) => (
         <button
           key={corner}

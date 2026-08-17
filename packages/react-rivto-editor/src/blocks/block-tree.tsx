@@ -7,8 +7,7 @@
  *
  * @module
  */
-import { Fragment, useCallback, useSyncExternalStore } from "react";
-import { resolveBlockListNumbers } from "../extensions/page/list-properties";
+import { useCallback, useSyncExternalStore } from "react";
 import { useBlock, useBlockSelection, useReactEditor } from "../hooks";
 import {
   BlockElementRefBoundary,
@@ -18,6 +17,10 @@ import {
 } from "./block-wrapper";
 import { BlockView } from "./block-view";
 import { UnknownBlock } from "./unknown-block";
+import { BlockSlots } from "./owner-slots";
+
+const BLOCK_ROW_CLASS = "page-block-row";
+const BLOCK_CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 
 /** Root block IDs rendered by the shared recursive block tree. */
 export interface BlockTreeProps {
@@ -35,9 +38,11 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
       isSelected={isSelected}
       className="page-block"
     >
-      <div className="page-block-row">
+      <div className={BLOCK_ROW_CLASS}>
         {controls}
-        {content}
+        <BlockSlots block={block} selected={isSelected}>
+          <div className={BLOCK_CONTENT_FLOW_CLASS}>{content}</div>
+        </BlockSlots>
       </div>
       <BlockElementRefBoundary>{children}</BlockElementRefBoundary>
     </BlockView>
@@ -46,7 +51,7 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
 
 /** Resolves and renders one block together with its visible descendants. */
 function BlockTreeNode({ blockId }: { readonly blockId: string }) {
-  const { block, operations } = useBlock(blockId);
+  const { block } = useBlock(blockId);
   const reactEditor = useReactEditor();
   const selection = useBlockSelection(blockId);
   const subscribeRenderers = useCallback(
@@ -62,57 +67,13 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   if (!block) return null;
   const Content = reactEditor.renderers.get(block.type) ?? UnknownBlock;
   const childrenId = `block-children-${block.id}`;
-  const parentId = reactEditor.editor.blocks.getParentId(block.id);
-  const siblingIds = parentId === null
-    ? reactEditor.editor.blocks.getRootIds()
-    : parentId === undefined ? [] : reactEditor.editor.blocks.getChildIds(parentId);
-  const siblings = siblingIds.flatMap((id) => {
-    const sibling = reactEditor.editor.blocks.getBlock(id);
-    return sibling ? [sibling] : [];
-  });
-  const listActive = reactEditor.blocks.hasListProps("list");
   const collapseActive = reactEditor.blocks.hasListProps("collapse");
-  const listNumber = listActive ? resolveBlockListNumbers(siblings).get(block.id) : undefined;
-  const marker = listActive && block.listProps.type === "checkbox" ? (
-    <input
-      type="checkbox"
-      className="page-list-checkbox"
-      aria-label={`Mark block as ${block.listProps.checked ? "incomplete" : "complete"}: ${block.content || block.type}`}
-      checked={block.listProps.checked === true}
-      onPointerDown={(event) => event.stopPropagation()}
-      onChange={(event) => operations.update({ listProps: { checked: event.currentTarget.checked } })}
-    />
-  ) : listNumber !== undefined ? (
-    <span className="page-list-marker" aria-hidden="true">
-      {listNumber}.
-    </span>
-  ) : null;
 
   return (
     <BlockWrapper
       fallback={BlockTreeShell}
       block={block}
       isSelected={Boolean(selection)}
-      controls={(marker || (collapseActive && block.children.length > 0)) && (
-        <Fragment>
-          {marker}
-          {collapseActive && block.children.length > 0 && <button
-            type="button"
-            className="page-collapse-toggle"
-            data-collapse-toggle="true"
-            aria-label={`${block.listProps.collapsed === true ? "Expand" : "Collapse"} block: ${block.content || block.type}`}
-            aria-expanded={block.listProps.collapsed !== true}
-            aria-controls={childrenId}
-            onPointerDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            onClick={() => operations.update({ listProps: { collapsed: block.listProps.collapsed !== true } })}
-          >
-            {block.listProps.collapsed === true ? "▸" : "▾"}
-          </button>}
-        </Fragment>
-      )}
       content={<Content blockId={block.id} />}
     >
       {block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true) && (

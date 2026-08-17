@@ -96,6 +96,9 @@ export {
 } from "./managers";
 export type {
   BlockRenderer,
+  BlockSlotProps,
+  BlockSlotPosition,
+  BlockSlotRegistration,
   ClipboardFormatContext,
   ClipboardFormatter,
   ClipboardParser,
@@ -111,7 +114,11 @@ export type {
   ReactBlockRegistration,
   ReactBlockSlashCommand,
   ReactEditorExtension,
+  ElementSlotProps,
+  ElementSlotRegistration,
   SlashCommand,
   SlashCommandContext,
   SurfaceComponent,
+  SlotPosition,
 } from "./managers";
+export { BLOCK_FLOW_SLOT_POSITIONS, SLOT_POSITIONS } from "./managers";

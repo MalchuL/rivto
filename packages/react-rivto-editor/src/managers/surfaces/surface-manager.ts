@@ -1,14 +1,28 @@
 import type { EditorMode } from "@chulane/rivto";
+import type { ComponentType } from "react";
 import type { BlockWrapperComponent } from "../../blocks/block-wrapper";
 import type { SurfacesCapability } from "../../capabilities";
 import type { ReactEditorImpl } from "../../react-editor";
 import { RevisionStore } from "../../internal-store";
 import type {
   BlockWrapperRegistration,
+  BlockSlotPosition,
+  BlockSlotProps,
+  BlockSlotRegistration,
   EditorWrapper,
   EditorWrapperRegistration,
+  ElementSlotProps,
+  ElementSlotRegistration,
+  SlotPosition,
   SurfaceComponent,
 } from "./types";
+import { BLOCK_FLOW_SLOT_POSITIONS, SLOT_POSITIONS } from "./types";
+
+const SLOT_POSITION_SET = new Set<SlotPosition>(SLOT_POSITIONS);
+const BLOCK_SLOT_POSITION_SET = new Set<BlockSlotPosition>([
+  ...SLOT_POSITIONS,
+  ...BLOCK_FLOW_SLOT_POSITIONS,
+]);
 
 /**
  * Owns mode-specific surface composition.
@@ -26,6 +40,8 @@ export class SurfaceManager implements SurfacesCapability {
   }>();
   private readonly blockWrappers = new Map<EditorMode, BlockWrapperRegistration[]>();
   private readonly editorWrappers: EditorWrapperRegistration[] = [];
+  private readonly blockSlots: BlockSlotRegistration[] = [];
+  private readonly elementSlots: ElementSlotRegistration[] = [];
 
   /**
    * Creates empty presentation registries.
@@ -120,6 +136,113 @@ export class SurfaceManager implements SurfacesCapability {
    */
   getBlockWrappers(mode: EditorMode): readonly BlockWrapperComponent[] {
     return (this.blockWrappers.get(mode) ?? []).map(({ wrapper }) => wrapper);
+  }
+
+  /**
+   * Registers one priority-ordered component at a block-row anchor.
+   *
+   * @param registration - Component, anchor, ordering, and optional filters.
+   * @returns Idempotent disposer removing this exact contribution.
+   */
+  registerBlockSlot(registration: BlockSlotRegistration): () => void {
+    this.validateSlotRegistration(
+      registration.position,
+      registration.priority,
+      BLOCK_SLOT_POSITION_SET,
+    );
+    this.blockSlots.push(registration);
+    this.store.changed();
+    return this.reactEditor.extensions.own(() => {
+      const index = this.blockSlots.indexOf(registration);
+      if (index < 0) return;
+      this.blockSlots.splice(index, 1);
+      this.store.changed();
+    });
+  }
+
+  /**
+   * Resolves matching block-slot components from nearest to farthest.
+   *
+   * @param position - Perimeter or in-flow anchor being rendered.
+   * @param props - Current block presentation context.
+   * @returns Defensive ordered component list.
+   */
+  getBlockSlots(
+    position: BlockSlotPosition,
+    props: BlockSlotProps,
+  ): readonly ComponentType<BlockSlotProps>[] {
+    return this.resolveSlots(this.blockSlots, position, props).map(({ component }) => component);
+  }
+
+  /**
+   * Registers one priority-ordered component at a canvas-element perimeter anchor.
+   *
+   * @param registration - Component, anchor, ordering, and optional filters.
+   * @returns Idempotent disposer removing this exact contribution.
+   */
+  registerElementSlot(registration: ElementSlotRegistration): () => void {
+    this.validateSlotRegistration(
+      registration.position,
+      registration.priority,
+      SLOT_POSITION_SET,
+    );
+    this.elementSlots.push(registration);
+    this.store.changed();
+    return this.reactEditor.extensions.own(() => {
+      const index = this.elementSlots.indexOf(registration);
+      if (index < 0) return;
+      this.elementSlots.splice(index, 1);
+      this.store.changed();
+    });
+  }
+
+  /**
+   * Resolves matching element-slot components from nearest to farthest.
+   *
+   * @param position - Perimeter anchor being rendered.
+   * @param props - Current element presentation context.
+   * @returns Defensive ordered component list.
+   */
+  getElementSlots(
+    position: SlotPosition,
+    props: ElementSlotProps,
+  ): readonly ComponentType<ElementSlotProps>[] {
+    return this.resolveSlots(this.elementSlots, position, props).map(({ component }) => component);
+  }
+
+  /** Validates the shared public fields of a slot registration. */
+  private validateSlotRegistration<Position extends string>(
+    position: Position,
+    priority: number | undefined,
+    positions: ReadonlySet<Position>,
+  ): void {
+    this.reactEditor.extensions.assertActive();
+    if (!positions.has(position)) throw new Error(`Unsupported slot position ${position}`);
+    if (priority !== undefined && !Number.isFinite(priority)) {
+      throw new Error("Slot priority must be finite");
+    }
+  }
+
+  /** Filters and stably orders one owner-kind registration list. */
+  private resolveSlots<
+    Props extends { readonly mode: EditorMode },
+    Position extends string,
+    Registration extends {
+      readonly position: Position;
+      readonly priority?: number;
+      readonly mode?: EditorMode | readonly EditorMode[];
+      readonly when?: (props: Props) => boolean;
+    },
+  >(
+    registrations: readonly Registration[],
+    position: Position,
+    props: Props,
+  ): Registration[] {
+    return registrations
+      .filter((registration) => registration.position === position &&
+        matchesMode(registration.mode, props.mode) &&
+        (!registration.when || registration.when(props)))
+      .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
   }
 
   /**

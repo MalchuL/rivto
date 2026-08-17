@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExt
 import { createPortal } from "react-dom";
 import { useEditorMode, useEditorRoot } from "../../../hooks";
 import { useEdgelessSelection } from "../edgeless-runtime";
-import { EdgelessDragHandle } from "../edgeless-drag-handle";
+import { ElementSlots } from "../../../blocks";
 import { DrawingCapture } from "./components/drawing-capture";
 import { BlockProperties } from "./components/block-properties";
 import { SelectionToolbar } from "./components/selection-toolbar";
@@ -140,6 +140,7 @@ export function EdgelessVisualLayer({
         {groups.map((group) => {
           const bounds = controller.getBounds(group.id);
           const selected = selection.active && selection.items.includes(group.id);
+          const element = controller.reactEditor.editor.elements.getElement(group.id);
           return bounds && selected ? (
             <Fragment key={group.id}>
               {/*
@@ -161,7 +162,7 @@ export function EdgelessVisualLayer({
                 data-edgeless-object-id={group.id}
                 style={{ left: bounds.x, top: bounds.y, width: bounds.width, height: bounds.height }}
               >
-                <EdgelessDragHandle label={`Move ${group.title}`} />
+                {element && <ElementSlots element={element} selected={selected} />}
               </div>
             </Fragment>
           ) : null;

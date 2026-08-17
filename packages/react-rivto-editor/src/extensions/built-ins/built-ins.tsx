@@ -25,6 +25,7 @@ import { installEdgelessRuntime } from "../edgeless/edgeless-runtime";
 import { registerEdgelessDeletion } from "../edgeless/edgeless-deletion";
 import { registerEdgelessMovement } from "../edgeless/edgeless-movement";
 import { registerEdgelessTransform } from "../edgeless/edgeless-transform";
+import { EdgelessElementDragSlot } from "../edgeless/edgeless-drag-handle";
 import {
   registerBlockSelectionNavigation,
   registerCaretNavigation,
@@ -40,9 +41,11 @@ import { registerCollapse } from "../page/page-collapse";
 import { registerForwardBlockMerge } from "../page/page-delete";
 import {
   PageDragBlockWrapper,
+  PageDragBlockSlot,
   PageDragProvider,
   type PageDragExtensionOptions,
 } from "../page/page-drag";
+import { BlockCollapseSlot, BlockListSlot } from "../../blocks/block-slot-controls";
 import { registerBlockCreation } from "../page/page-enter";
 import { SlashMenu } from "../slash/slash-menu";
 import { registerSelectionDeletion } from "../selection/selection-deletion";
@@ -215,6 +218,13 @@ export const listShortcutsExtension = (): ReactEditorExtension =>
           BLOCK_LIST_TYPES.includes(candidate.type as BlockListType) &&
           typeof candidate.checked === "boolean",
       });
+      reactEditor.surfaces.registerBlockSlot({
+        position: "start",
+        priority: 300,
+        component: BlockListSlot,
+        when: ({ block }) =>
+          block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type),
+      });
       reactEditor.clipboard.registerFormatter({
         id: "list",
         matches: ({ block }) =>
@@ -293,6 +303,12 @@ export const collapseExtension = (): ReactEditorExtension => ({
       defaults: { collapsed: false },
       validate: (candidate) => typeof candidate.collapsed === "boolean",
     });
+    reactEditor.surfaces.registerBlockSlot({
+      position: "left-top",
+      priority: 100,
+      component: BlockCollapseSlot,
+      when: ({ block }) => block.children.length > 0,
+    });
     return registerCollapse(reactEditor);
   },
 });
@@ -319,7 +335,16 @@ export const edgelessMovementExtension = (): ReactEditorExtension =>
 /** @returns Pointer drag and resize interactions for edgeless root cards. */
 export const edgelessTransformExtension = (): ReactEditorExtension => ({
   id: "transform.edgeless",
-  setup: registerEdgelessTransform,
+  setup: (reactEditor) => {
+    reactEditor.surfaces.registerElementSlot({
+      position: "left-top",
+      priority: 100,
+      component: EdgelessElementDragSlot,
+      mode: "edgeless",
+      when: ({ element, selected }) => selected && element.type !== "connector",
+    });
+    return registerEdgelessTransform(reactEditor);
+  },
 });
 
 /** Page drag configuration excluding the wrapper-owned React children slot. */
@@ -346,6 +371,11 @@ export const pageDragExtension = (options: PageDragOptions = {}): ReactEditorExt
       reactEditor.surfaces.registerEditorWrapper(DragBoundary);
       reactEditor.surfaces.registerBlockWrapper("block", PageDragBlockWrapper);
       reactEditor.surfaces.registerBlockWrapper("edgeless", PageDragBlockWrapper);
+      reactEditor.surfaces.registerBlockSlot({
+        position: "left-top",
+        priority: 200,
+        component: PageDragBlockSlot,
+      });
     },
   };
 };
