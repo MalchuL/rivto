@@ -1,13 +1,14 @@
 /** Verifies the smallest security and discovery invariants of the docs file layer. */
 
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
   createDocumentationImage,
   createMarkdownDocument,
+  deleteMarkdownDocument,
   generateLlmsText,
   readMarkdownDocuments,
   resolveMarkdownPath,
@@ -63,6 +64,22 @@ test("creates ordered nested Markdown without overwriting", async function creat
     }),
     /numeric prefixes/,
   );
+});
+
+test("deletes only the selected page and preserves nested pages", async function deletesOnePage() {
+  const root = await mkdtemp(join(tmpdir(), "rivto-docs-delete-"));
+  const parent = await createMarkdownDocument(root, {
+    path: "10-guide.md",
+    content: "# Guide\n",
+  });
+  await createMarkdownDocument(root, {
+    path: "10-guide/10-introduction.md",
+    content: "# Introduction\n",
+  });
+
+  await deleteMarkdownDocument(root, parent.path, parent.modifiedAt);
+  await assert.rejects(readFile(join(root, "10-guide.md")), /ENOENT/);
+  assert.equal(await readFile(join(root, "10-guide", "10-introduction.md"), "utf8"), "# Introduction\n");
 });
 
 test("stores a valid pasted image under its owning page folder", async function storesImage() {

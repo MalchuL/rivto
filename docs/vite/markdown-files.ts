@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
@@ -52,6 +52,10 @@ interface SaveDocumentRequest {
 interface CreateDocumentRequest {
   path: string;
   content: string;
+}
+
+interface DeleteDocumentRequest {
+  expectedModifiedAt: number;
 }
 
 /**
@@ -499,6 +503,12 @@ async function routeDocumentsRequest(
       const payload = await readSaveRequest(request);
       const savedDocument = await saveMarkdownDocument(rootDirectory, documentPath, payload);
       sendJson(response, 200, savedDocument);
+    } else if (request.method === "DELETE" && request.url?.startsWith("/")) {
+      const documentPath = decodeURIComponent(request.url.slice(1));
+      const payload = await readDeleteRequest(request);
+      await deleteMarkdownDocument(rootDirectory, documentPath, payload.expectedModifiedAt);
+      response.statusCode = 204;
+      response.end();
     } else {
       sendJson(response, 404, { message: "Document endpoint not found." });
     }
@@ -507,6 +517,34 @@ async function routeDocumentsRequest(
     const message = error instanceof Error ? error.message : "Unable to process document request.";
     sendJson(response, statusCode, { message });
   }
+}
+
+/**
+ * Deletes one Markdown page after checking its current modification token.
+ * Same-named child directories are deliberately retained so nested pages and
+ * pasted images are never removed by a page-only action.
+ *
+ * @param rootDirectory Absolute documentation directory.
+ * @param documentPath Relative Markdown page path.
+ * @param expectedModifiedAt Modification token loaded by the browser.
+ * @returns Promise completed after the file is removed.
+ */
+export async function deleteMarkdownDocument(
+  rootDirectory: string,
+  documentPath: string,
+  expectedModifiedAt: number,
+): Promise<void> {
+  const absolutePath = resolveMarkdownPath(rootDirectory, documentPath);
+  const realRoot = await realpath(rootDirectory);
+  const realParent = await realpath(dirname(absolutePath));
+  if (realParent !== realRoot && !realParent.startsWith(`${realRoot}${sep}`)) {
+    throw new Error("Document path resolves outside the documentation directory.");
+  }
+  const metadata = await stat(absolutePath);
+  if (metadata.mtimeMs !== expectedModifiedAt) {
+    throw new StaleDocumentError();
+  }
+  await unlink(absolutePath);
 }
 
 /**
@@ -654,6 +692,20 @@ async function readCreateRequest(request: IncomingMessage): Promise<CreateDocume
 }
 
 /**
+ * Reads and validates a bounded page-deletion request.
+ *
+ * @param request Incoming HTTP request body.
+ * @returns Validated deletion modification token.
+ */
+async function readDeleteRequest(request: IncomingMessage): Promise<DeleteDocumentRequest> {
+  const payload = await readJsonRequest(request);
+  if (!isDeleteDocumentRequest(payload)) {
+    throw new Error("Invalid document deletion request.");
+  }
+  return payload;
+}
+
+/**
  * Reads a bounded JSON request body shared by document mutations.
  *
  * @param request Incoming HTTP request body.
@@ -701,6 +753,19 @@ function isCreateDocumentRequest(value: unknown): value is CreateDocumentRequest
   }
   const candidate = value as Record<string, unknown>;
   return typeof candidate.path === "string" && typeof candidate.content === "string";
+}
+
+/**
+ * Validates the shape of a browser page-deletion payload.
+ *
+ * @param value Unknown decoded JSON value.
+ * @returns Whether the value contains a modification token.
+ */
+function isDeleteDocumentRequest(value: unknown): value is DeleteDocumentRequest {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return typeof (value as Record<string, unknown>).expectedModifiedAt === "number";
 }
 
 /**

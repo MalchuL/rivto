@@ -43,6 +43,24 @@ export async function createDocumentationPage(
 }
 
 /**
+ * Deletes one page through the local development server.
+ *
+ * @param page Canonical page and modification token to delete.
+ * @returns Promise completed after the Markdown file is removed.
+ */
+export async function deleteDocumentationPage(page: DocumentationPage): Promise<void> {
+  const response = await fetch(`${DOCUMENTS_ENDPOINT}/${encodeURIComponent(page.path)}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expectedModifiedAt: page.modifiedAt }),
+  });
+  if (!response.ok) {
+    const result = await response.json() as { message?: string };
+    throw new Error(result.message ?? "Unable to delete Markdown document.");
+  }
+}
+
+/**
  * Stores a pasted image inside the selected page's asset folder.
  *
  * @param page Owning Markdown page.

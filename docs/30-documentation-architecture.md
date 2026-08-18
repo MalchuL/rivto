@@ -28,6 +28,8 @@ The application currently has one documentation root named **Rivto**. Every Mark
 
 A page and directory with the same basename form one parent page with nested navigation. For example, `10-packages.md` owns the pages inside `10-packages/`. The editor toolbar creates either a sibling page at the current level or a child inside the selected page's matching directory. New pages receive the next available prefix in increments of ten.
 
+The **Delete** action removes only the selected Markdown file after confirmation and modification-time validation. Its same-named directory, nested pages, and pasted image assets remain intact to prevent an ordinary page deletion from becoming a recursive data-loss operation.
+
 Additional roots should be introduced only when another independently owned product requires one.
 
 ## Pasted images

@@ -14,6 +14,7 @@ import {
 } from "./document-tree";
 import {
   createDocumentationPage,
+  deleteDocumentationPage,
   downloadDocumentationPage,
   getDocumentationPageTitle,
   loadDocumentationPages,
@@ -22,6 +23,12 @@ import {
   type DocumentationPage,
 } from "./documents";
 import { resolvePastedImageForEditor } from "./image-paths";
+import {
+  createDocumentationUrl,
+  decodeAnchor,
+  getDocumentationPath,
+  resolveDocumentationLink,
+} from "./navigation";
 
 const DOCUMENTATION_ROOT_TITLE = "Rivto";
 const UNSAVED_CHANGES_MESSAGE = "Discard unsaved changes to this document?";
@@ -34,6 +41,7 @@ const UNSAVED_CHANGES_MESSAGE = "Discard unsaved changes to this document?";
 export function App(): React.JSX.Element {
   const [pages, setPages] = useState<DocumentationPage[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selectedAnchor, setSelectedAnchor] = useState("");
   const [isDirty, setIsDirty] = useState(false);
   const [status, setStatus] = useState("Loading documentation…");
   const [getMarkdown, setGetMarkdown] = useState<(() => string) | null>(null);
@@ -54,7 +62,15 @@ export function App(): React.JSX.Element {
       .then(function showPages(loadedPages) {
         if (isCurrent) {
           setPages(loadedPages);
-          setSelectedPath(loadedPages[0]?.path ?? null);
+          const urlPath = getDocumentationPath(window.location.pathname);
+          const initialPage = loadedPages.find(function matchesUrl(page) { return page.path === urlPath; })
+            ?? loadedPages[0]
+            ?? null;
+          setSelectedPath(initialPage?.path ?? null);
+          setSelectedAnchor(initialPage?.path === urlPath ? decodeAnchor(window.location.hash) : "");
+          if (initialPage && initialPage.path !== urlPath) {
+            window.history.replaceState(null, "", createDocumentationUrl(initialPage.path));
+          }
           setStatus(loadedPages.length > 0 ? "Ready" : "No Markdown files found.");
         }
       })
@@ -67,6 +83,27 @@ export function App(): React.JSX.Element {
       isCurrent = false;
     };
   }, []);
+
+  useEffect(function followBrowserHistory() {
+    function handlePopState(): void {
+      const nextPath = getDocumentationPath(window.location.pathname);
+      if (!pages.some(function pageExists(page) { return page.path === nextPath; })) {
+        return;
+      }
+      if (isDirty && !window.confirm(UNSAVED_CHANGES_MESSAGE)) {
+        window.history.pushState(null, "", selectedPath ? createDocumentationUrl(selectedPath, selectedAnchor) : "/");
+        return;
+      }
+      setSelectedPath(nextPath);
+      setSelectedAnchor(decodeAnchor(window.location.hash));
+      setIsDirty(false);
+      setStatus("Ready");
+    }
+    window.addEventListener("popstate", handlePopState);
+    return function removePopStateListener() {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isDirty, pages, selectedAnchor, selectedPath]);
 
   useEffect(function warnBeforeClosing() {
     /** Prevents accidental loss when a dirty browser tab is closed. */
@@ -135,12 +172,50 @@ export function App(): React.JSX.Element {
       const createdPage = await createDocumentationPage(path, title);
       setPages(function appendCreatedPage(currentPages) { return [...currentPages, createdPage]; });
       setSelectedPath(createdPage.path);
+      setSelectedAnchor("");
+      window.history.pushState(null, "", createDocumentationUrl(createdPage.path));
       setIsDirty(false);
       setStatus(`Created ${createdPage.path}`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to create document.");
     }
   }, [isDirty, pages, selectedPage]);
+
+  const handleDelete = useCallback(async function deleteSelectedPage(): Promise<void> {
+    if (!selectedPage || !import.meta.env.DEV) {
+      setStatus("Page deletion is available while running pnpm docs:dev.");
+      return;
+    }
+    const ownedFolderPrefix = selectedPage.path.replace(/\.md$/i, "/");
+    const hasNestedPages = pages.some(function isNestedPage(page) {
+      return page.path.startsWith(ownedFolderPrefix);
+    });
+    const retainedContent = hasNestedPages
+      ? " Nested pages and its image folder will remain."
+      : " Its image folder will remain.";
+    if (!window.confirm(`Delete ${selectedPage.path}? Unsaved edits will be lost.${retainedContent}`)) {
+      return;
+    }
+
+    try {
+      await deleteDocumentationPage(selectedPage);
+      const selectedIndex = pages.findIndex(function findDeletedPage(page) {
+        return page.path === selectedPage.path;
+      });
+      const remainingPages = pages.filter(function retainOtherPages(page) {
+        return page.path !== selectedPage.path;
+      });
+      const nextPage = remainingPages[Math.min(selectedIndex, remainingPages.length - 1)] ?? null;
+      setPages(remainingPages);
+      setSelectedPath(nextPage?.path ?? null);
+      setSelectedAnchor("");
+      window.history.replaceState(null, "", nextPage ? createDocumentationUrl(nextPage.path) : "/");
+      setIsDirty(false);
+      setStatus(`Deleted ${selectedPage.path}`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to delete document.");
+    }
+  }, [pages, selectedPage]);
 
   const handlePasteImage = useCallback(async function savePastedImage(
     image: File,
@@ -179,12 +254,27 @@ export function App(): React.JSX.Element {
   }, [handleSave]);
 
   /** Selects another page after protecting current unsaved work. */
-  function selectPage(nextPath: string): void {
+  function selectPage(nextPath: string, anchor = ""): void {
     if (!isDirty || window.confirm(UNSAVED_CHANGES_MESSAGE)) {
       setSelectedPath(nextPath);
+      setSelectedAnchor(anchor);
       setIsDirty(false);
       setStatus("Ready");
+      window.history.pushState(null, "", createDocumentationUrl(nextPath, anchor));
     }
+  }
+
+  /** Handles links to documentation pages and heading fragments inside the editor. */
+  function navigateLink(href: string): boolean {
+    if (!selectedPage) {
+      return false;
+    }
+    const target = resolveDocumentationLink(href, selectedPage.path);
+    if (!target || !pages.some(function targetExists(page) { return page.path === target.path; })) {
+      return false;
+    }
+    selectPage(target.path, target.anchor);
+    return true;
   }
 
   return (
@@ -195,10 +285,12 @@ export function App(): React.JSX.Element {
           <div><strong>{DOCUMENTATION_ROOT_TITLE}</strong><small>Documentation</small></div>
         </header>
         <nav aria-label="Documentation pages">
-          <p data-root-label>{DOCUMENTATION_ROOT_TITLE}</p>
-          <ul data-navigation-list>
-            {renderNavigationNodes(navigationTree, selectedPath, selectPage)}
-          </ul>
+          <details open data-navigation-root>
+            <summary data-root-label>{DOCUMENTATION_ROOT_TITLE}</summary>
+            <ul data-navigation-list>
+              {renderNavigationNodes(navigationTree, selectedPath, selectPage)}
+            </ul>
+          </details>
         </nav>
       </aside>
       <main data-main-content>
@@ -214,6 +306,9 @@ export function App(): React.JSX.Element {
             <button type="button" data-create-button disabled={!selectedPage || !import.meta.env.DEV} title={import.meta.env.DEV ? "Create a nested page under the current page" : "Available with pnpm docs:dev"} onClick={function createChild() { void handleCreate("child"); }}>
               New child
             </button>
+            <button type="button" data-delete-button disabled={!selectedPage || !import.meta.env.DEV} title={import.meta.env.DEV ? "Delete only the current Markdown page" : "Available with pnpm docs:dev"} onClick={function deletePage() { void handleDelete(); }}>
+              Delete
+            </button>
             <button type="button" data-save-button disabled={!selectedPage || !getMarkdown} onClick={function saveFromButton() { void handleSave(); }}>
               {import.meta.env.DEV ? "Save Markdown" : "Download Markdown"}{isDirty ? " •" : ""}
             </button>
@@ -224,9 +319,11 @@ export function App(): React.JSX.Element {
           <DocumentationEditor
             content={selectedPage.content}
             pagePath={selectedPage.path}
+            anchor={selectedAnchor}
             onDirtyChange={handleDirtyChange}
             onEditorReady={handleEditorReady}
             onPasteImage={handlePasteImage}
+            onNavigateLink={navigateLink}
           />
         ) : <p data-empty-state>{status}</p>}
       </main>
@@ -262,22 +359,32 @@ function renderNavigationNodes(
     }
 
     const isSelected = node.page.path === selectedPath;
+    const pageButton = (
+      <button
+        type="button"
+        data-selected={isSelected || undefined}
+        aria-current={isSelected ? "page" : undefined}
+        onClick={function choosePage(event) {
+          event.stopPropagation();
+          onSelect(node.page.path);
+        }}
+      >
+        <span>{getDocumentationPageTitle(node.page)}</span>
+        <small>{node.page.path}</small>
+      </button>
+    );
     return (
       <li key={node.page.path} data-navigation-page>
-        <button
-          type="button"
-          data-selected={isSelected || undefined}
-          aria-current={isSelected ? "page" : undefined}
-          onClick={function choosePage() { onSelect(node.page.path); }}
-        >
-          <span>{getDocumentationPageTitle(node.page)}</span>
-          <small>{node.page.path}</small>
-        </button>
         {node.children.length > 0 ? (
-          <ul data-navigation-list data-page-children>
-            {renderNavigationNodes(node.children, selectedPath, onSelect)}
-          </ul>
-        ) : null}
+          <details open data-navigation-page-group>
+            <summary aria-label={`Toggle ${getDocumentationPageTitle(node.page)}`}>
+              {pageButton}
+            </summary>
+            <ul data-navigation-list data-page-children>
+              {renderNavigationNodes(node.children, selectedPath, onSelect)}
+            </ul>
+          </details>
+        ) : pageButton}
       </li>
     );
   });

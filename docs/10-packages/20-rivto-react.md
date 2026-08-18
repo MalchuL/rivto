@@ -1,17 +1,23 @@
-# `@chulane/rivto-react` package
+# `@chulane/rivto-react`
 
-`@chulane/rivto-react` owns browser presentation and interaction behavior around an existing `@chulane/rivto` runtime. It does not own canonical document state.
+`@chulane/rivto-react` — пользовательский React-слой Rivto. Он превращает framework-neutral runtime из `@chulane/rivto` в редактируемые page и edgeless surfaces, подключает block renderers, DOM selection, keyboard, clipboard, slash commands и extensions.
 
-## Responsibilities
+## Архитектурная граница
 
-- Page and edgeless surfaces.
-- React block renderers and component lifecycle.
-- DOM events, keyboard bindings, and DOM/editor selection conversion.
-- Clipboard formatting, slash commands, drag behavior, and browser overlays.
-- Functional extensions with setup and cleanup ownership.
-- Built-in writing, separator, error, and edgeless visual behavior.
+```text
+@chulane/rivto
+  document, CRDT, blocks, history, portable selection
+             ↓
+@chulane/rivto-react
+  React runtime, rendering, DOM events, browser interaction
+             ↓
+application / demo
+  lifecycle, toolbar, persistence, providers, product extensions
+```
 
-## Basic setup
+React-пакет не создаёт и не уничтожает core editor автоматически. Application владеет обоими runtime.
+
+## Минимальная интеграция
 
 ```tsx
 import { createRivtoEditor } from "@chulane/rivto";
@@ -33,21 +39,15 @@ export function RivtoView() {
 }
 ```
 
-The host owns both lifecycles. Destroy the React runtime before destroying the core runtime:
+Application владеет обоими lifecycle. Сначала уничтожайте React runtime:
 
 ```ts
 reactEditor.destroy();
 editor.destroy();
 ```
 
-## Extension model
+## Как читать раздел
 
-Optional behavior is installed through `ReactEditorExtension` values. An extension registers its renderers, blocks, surfaces, events, keyboard actions, slash commands, or mounted UI during `setup`, and returns cleanup when necessary. `standardPreset()` installs the normal page and edgeless editing experience.
+Вложенные страницы идут от общего public API к конкретным сценариям: quick start, runtime lifecycle, blocks/rendering, hooks, extensions, capability и manager reference, browser interaction, page и edgeless surfaces, patterns из `demo` и карта exports.
 
-## Package commands
-
-```sh
-pnpm --filter @chulane/rivto-react check-types
-pnpm --filter @chulane/rivto-react test
-pnpm --filter @chulane/rivto-react build
-```
+Для большинства приложений достаточно quick start, runtime, blocks и extensions. Low-level managers нужны авторам собственных extensions и surfaces.
