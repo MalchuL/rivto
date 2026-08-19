@@ -603,6 +603,11 @@
 }
 
 .edgeless-viewport {
+  /* Public host override for the cursor-reactive dot field. */
+  --rivto-edgeless-spotlight-radius: 90px;
+  --rivto-edgeless-zoom: 1;
+  /* Written by EdgelessSurface: 0% at 100% zoom, 70% at 50% zoom. */
+  --rivto-edgeless-grid-dot-fade: 0%;
   position: relative;
   width: calc(100% - 32px);
   height: calc(100vh - 96px);
@@ -612,10 +617,35 @@
   border: 1px solid #dedbe7;
   border-radius: 16px;
   background-color: #f7f6fa;
-  background-image: radial-gradient(#c8c3d3 1px, transparent 1px);
+  background-image: radial-gradient(
+    color-mix(in srgb, transparent var(--rivto-edgeless-grid-dot-fade), #c8c3d3) 1px,
+    transparent 1px
+  );
   background-repeat: repeat;
   outline: none;
   overscroll-behavior: contain;
+}
+
+.edgeless-viewport::before {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(#81798f 1px, transparent 1px);
+  background-position: inherit;
+  background-size: inherit;
+  background-repeat: repeat;
+  content: "";
+  mask-image: radial-gradient(
+    circle var(--rivto-edgeless-spotlight-radius)
+      at var(--rivto-edgeless-pointer-x, 50%) var(--rivto-edgeless-pointer-y, 50%),
+    black,
+    transparent
+  );
+  opacity: 0;
+  pointer-events: none;
+}
+
+.edgeless-viewport:hover::before {
+  opacity: 1;
 }
 
 .edgeless-viewport[data-panning-ready],

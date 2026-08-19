@@ -1,3 +1,10 @@
+/**
+ * React surface for the zoomable edgeless canvas.
+ *
+ * Owns viewport-local presentation state, browser gestures, and projection of
+ * canonical block elements onto the canvas. Persisted document mutations stay
+ * in core managers while transient pan, zoom, and pointer visuals remain here.
+ */
 import {
   useDOMEvent,
   useEditor,
@@ -8,11 +15,13 @@ import {
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   useSyncExternalStore,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { EdgelessToolButton } from "../../extensions/edgeless/visuals/components/tool-button";
 import { EDGELESS_GRID_SIZE } from "../../extensions/edgeless/visuals/utils/geometry";
@@ -28,6 +37,8 @@ import { EdgelessSnappingStore } from "./snapping-store";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
+/** Strongest background-dot fade at minimum zoom; keeps a faint residual grid. */
+const MAX_GRID_DOT_FADE = 0.7;
 
 interface PanGesture {
   readonly x: number;
@@ -37,6 +48,20 @@ interface PanGesture {
 }
 
 const clampZoom = (value: number): number => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
+
+/**
+ * Mix amount toward transparent background grid dots at the current zoom.
+ *
+ * 100% zoom keeps the designed pale dots. As scale drops toward the minimum,
+ * packed cells fade, but a residual mix remains so the field never vanishes.
+ *
+ * @param zoom - Viewport scale already clamped to `[MIN_ZOOM, MAX_ZOOM]`.
+ * @returns A CSS percentage for `--rivto-edgeless-grid-dot-fade`.
+ */
+function gridDotFade(zoom: number): string {
+  const amount = Math.max(0, Math.min(1, (1 - zoom) / (1 - MIN_ZOOM))) * MAX_GRID_DOT_FADE;
+  return `${Math.round(amount * 100)}%`;
+}
 
 /**
  * Projects root block layouts onto an unbounded, zoomable canvas.
@@ -60,6 +85,8 @@ export function EdgelessSurface({
   const blockElements = editor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
   const { ref: registerRoot } = useEditorRoot();
   const viewport = useRef<HTMLElement | null>(null);
+  const spotlightFrame = useRef<number | null>(null);
+  const spotlightPoint = useRef({ x: 0, y: 0 });
   const spaceHeld = useRef(false);
   const panGesture = useRef<PanGesture | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -81,6 +108,41 @@ export function EdgelessSurface({
   };
 
   const panReady = () => spaceHeld.current || viewport.current?.dataset.edgelessTool === "pan";
+
+  /**
+   * Moves the CSS-rendered grid spotlight without causing a React render.
+   *
+   * @param event - Pointer movement bubbling through the edgeless viewport.
+   * @returns Nothing.
+   */
+  const updatePointerSpotlight = (event: ReactPointerEvent<HTMLElement>): void => {
+    spotlightPoint.current = {
+      x: event.clientX,
+      y: event.clientY,
+    };
+    if (spotlightFrame.current !== null) return;
+    spotlightFrame.current = requestAnimationFrame(() => {
+      const root = viewport.current;
+      spotlightFrame.current = null;
+      if (!root) return;
+      const bounds = root.getBoundingClientRect();
+      root.style.setProperty("--rivto-edgeless-pointer-x", `${spotlightPoint.current.x - bounds.left}px`);
+      root.style.setProperty("--rivto-edgeless-pointer-y", `${spotlightPoint.current.y - bounds.top}px`);
+    });
+  };
+
+  /**
+   * Cancels a pending pointer-spotlight animation frame.
+   *
+   * @returns Nothing.
+   */
+  const cancelPointerSpotlight = (): void => {
+    if (spotlightFrame.current === null) return;
+    cancelAnimationFrame(spotlightFrame.current);
+    spotlightFrame.current = null;
+  };
+
+  useEffect(() => () => cancelPointerSpotlight(), []);
 
   useKeyboardEvent({
     id: KEYBOARD_BINDING_IDS.edgelessPanStart,
@@ -262,10 +324,13 @@ export function EdgelessSurface({
       aria-label="Edgeless document canvas"
       tabIndex={-1}
       onDoubleClick={createBlockAt}
+      onPointerMove={updatePointerSpotlight}
       style={{
         backgroundPosition: `${pan.x}px ${pan.y}px`,
         backgroundSize: `${EDGELESS_GRID_SIZE * zoom}px ${EDGELESS_GRID_SIZE * zoom}px`,
-      }}
+        "--rivto-edgeless-zoom": String(zoom),
+        "--rivto-edgeless-grid-dot-fade": gridDotFade(zoom),
+      } as CSSProperties}
     >
       <div className="edgeless-zoom-controls" data-edgeless-ui="true" role="toolbar" aria-label="Canvas zoom">
         <EdgelessToolButton label="Zoom out" icon="zoom-out" onClick={() => zoomAt(zoom - 0.1)} />

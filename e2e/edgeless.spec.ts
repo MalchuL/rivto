@@ -160,6 +160,52 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
+test("darkens grid dots around the pointer with a CSS-configurable radius", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const viewport = page.locator(".edgeless-viewport");
+  await viewport.evaluate((element) => {
+    (element as HTMLElement).style.setProperty("--rivto-edgeless-spotlight-radius", "240px");
+  });
+  const bounds = await viewport.boundingBox();
+  if (!bounds) throw new Error("Expected edgeless viewport bounds");
+
+  await page.mouse.move(bounds.x + 120, bounds.y + 140);
+
+  await expect.poll(() => viewport.evaluate((element) => {
+    const style = (element as HTMLElement).style;
+    const spotlight = getComputedStyle(element, "::before");
+    return {
+      x: style.getPropertyValue("--rivto-edgeless-pointer-x"),
+      y: style.getPropertyValue("--rivto-edgeless-pointer-y"),
+      mask: spotlight.maskImage,
+      opacity: spotlight.opacity,
+    };
+  })).toEqual({
+    x: "120px",
+    y: "140px",
+    mask: expect.stringContaining("240px"),
+    opacity: "1",
+  });
+});
+
+test("fades background grid dots when canvas zoom decreases", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const viewport = page.locator(".edgeless-viewport");
+  const gridDotFade = () => viewport.evaluate((element) => (
+    (element as HTMLElement).style.getPropertyValue("--rivto-edgeless-grid-dot-fade")
+  ));
+
+  await expect(viewport).toHaveAttribute("data-edgeless-zoom", "1");
+  expect(await gridDotFade()).toBe("0%");
+
+  for (let step = 0; step < 5; step += 1) {
+    await page.getByRole("button", { name: "Zoom out" }).click();
+  }
+
+  await expect.poll(async () => Number(await viewport.getAttribute("data-edgeless-zoom"))).toBeCloseTo(0.5, 5);
+  await expect.poll(gridDotFade).toBe("70%");
+});
+
 test("loads the visual-object plugin in the demo", async ({ page }) => {
   await switchMode(page, "edgeless");
   const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
