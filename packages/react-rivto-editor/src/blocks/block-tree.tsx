@@ -7,8 +7,8 @@
  *
  * @module
  */
-import { useCallback, useSyncExternalStore } from "react";
-import { useBlock, useBlockSelection, useReactEditor } from "../hooks";
+import { memo, useCallback, useSyncExternalStore } from "react";
+import { useBlock, useBlockSelected, useReactEditor } from "../hooks";
 import {
   BlockElementRefBoundary,
   BlockWrapper,
@@ -49,11 +49,20 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
   );
 }
 
-/** Resolves and renders one block together with its visible descendants. */
+/**
+ * Resolves and renders one block together with its visible descendants.
+ *
+ * Selection chrome uses a per-id boolean so caret publishes and range growth
+ * do not re-render neighbors whose selected bit stayed the same.
+ *
+ * @param props - Stable block ID for this node.
+ * @param props.blockId - Block to render.
+ * @returns The block shell and expanded children, or null after deletion.
+ */
 function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   const { block } = useBlock(blockId);
   const reactEditor = useReactEditor();
-  const selection = useBlockSelection(blockId);
+  const selected = useBlockSelected(blockId);
   const subscribeRenderers = useCallback(
     (listener: () => void) => reactEditor.renderers.subscribe(listener),
     [reactEditor],
@@ -73,7 +82,7 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
     <BlockWrapper
       fallback={BlockTreeShell}
       block={block}
-      isSelected={Boolean(selection)}
+      isSelected={selected}
       content={<Content blockId={block.id} />}
     >
       {block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true) && (
@@ -90,9 +99,13 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
 /**
  * Renders ordered block roots through the same recursive policy in every mode.
  *
+ * Memoized so an edgeless card's selection chrome can re-render without
+ * rebuilding Markdown when `blockIds` keeps the same reference. Per-block
+ * `useBlockSelected` still wakes individual nodes whose selected bit flips.
+ *
  * @param props - Ordered root IDs assigned to the active surface container.
  * @returns Block roots and their expanded descendants without an extra DOM wrapper.
  */
-export function BlockTree({ blockIds }: BlockTreeProps) {
+export const BlockTree = memo(function BlockTree({ blockIds }: BlockTreeProps) {
   return <>{blockIds.map((blockId) => <BlockTreeNode key={blockId} blockId={blockId} />)}</>;
-}
+});

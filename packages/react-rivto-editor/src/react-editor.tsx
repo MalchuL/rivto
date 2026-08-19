@@ -124,7 +124,7 @@ export class ReactEditorImpl implements ReactEditor {
     });
   }
 
-  /** Forwards the core editor's global revision stream. */
+  /** Forwards the core editor's document/mode/registry revision stream. */
   subscribe(listener: () => void): () => void {
     return this.editor.subscribe(listener);
   }

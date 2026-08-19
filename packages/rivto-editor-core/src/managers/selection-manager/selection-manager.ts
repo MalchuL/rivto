@@ -1,3 +1,11 @@
+/**
+ * Local text and whole-block selection owned by one editor runtime.
+ *
+ * Selection is session state, not CRDT document state. `set`/`clear` no-op when
+ * membership is unchanged so pointermove republishes do not wake subscribers.
+ * React reads `snapshot()` and `isBlockSelected(id)` instead of cloning `get()`
+ * on every store poll.
+ */
 import type { EditorPosition, EditorSelection, EditorSelectionItem } from "../../editor/types";
 import type { EditorRuntime } from "../../editor/rivto-editor";
 import type { Block } from "../../store/document-model";
@@ -18,6 +26,68 @@ function cloneSelection(selection: EditorSelectionItem): EditorSelectionItem {
 }
 
 /**
+ * Returns whether two UTF-16 positions name the same block offset.
+ *
+ * @param left - First position.
+ * @param right - Second position.
+ * @returns True when block ID and offset both match.
+ */
+function samePosition(left: EditorPosition, right: EditorPosition): boolean {
+  return left.blockId === right.blockId && left.offset === right.offset;
+}
+
+/**
+ * Returns whether two selection items are interchangeable after normalization.
+ *
+ * @param left - First item.
+ * @param right - Second item.
+ * @returns True when type, endpoints, and ordered block IDs match.
+ */
+function sameSelectionItem(left: EditorSelectionItem, right: EditorSelectionItem): boolean {
+  if (left.type !== right.type) return false;
+  let equal = false;
+  if (left.type === "text" && right.type === "text") {
+    equal = samePosition(left.anchor, right.anchor) && samePosition(left.head, right.head);
+  } else if (left.type === "block" && right.type === "block") {
+    equal = left.anchorBlockId === right.anchorBlockId
+      && left.focusBlockId === right.focusBlockId
+      && left.blockIds.length === right.blockIds.length
+      && left.blockIds.every((id, index) => id === right.blockIds[index]);
+  }
+  return equal;
+}
+
+/**
+ * Returns whether two ordered selection lists are identical.
+ *
+ * @param left - First list.
+ * @param right - Second list.
+ * @returns True when lengths and every item match.
+ */
+function sameSelection(left: EditorSelection, right: EditorSelection): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => sameSelectionItem(item, right[index]!));
+}
+
+/**
+ * Collects IDs that belong to whole-block selection items.
+ *
+ * Text carets and ranges are excluded so block chrome does not light up while
+ * the user is editing inside a block.
+ *
+ * @param selection - Current selection list.
+ * @returns Unique selected block IDs.
+ */
+function selectedBlockIdsOf(selection: EditorSelection): Set<string> {
+  const ids = new Set<string>();
+  for (const item of selection) {
+    if (item.type !== "block") continue;
+    for (const id of item.blockIds) ids.add(id);
+  }
+  return ids;
+}
+
+/**
  * Owns an ordered list of detached local selection items.
  *
  * Selection is local editor-session state. It is intentionally not stored in
@@ -26,9 +96,12 @@ function cloneSelection(selection: EditorSelectionItem): EditorSelectionItem {
  *
  * The manager belongs to one EditorRuntime, so `set()` can validate block IDs,
  * text offsets, endpoint membership, and document order before publishing state.
+ * Unchanged `set`/`clear` do not notify, and `snapshot()` / `isBlockSelected()`
+ * give React a stable identity until membership actually changes.
  */
 export class SelectionManager {
   private value: EditorSelection = [];
+  private selectedBlockIds = new Set<string>();
   private readonly listeners = new Listeners<{ selectionChanged: void }>();
 
   /**
@@ -46,6 +119,33 @@ export class SelectionManager {
    */
   get(): EditorSelection {
     return this.value.map(cloneSelection);
+  }
+
+  /**
+   * Returns the stored selection list without cloning.
+   *
+   * React `useSyncExternalStore` compares this by identity. The array is
+   * replaced only when `set`/`clear` actually change membership, so subscribers
+   * skip re-render on repeated identical publishes.
+   *
+   * @returns Current selection; treat as immutable.
+   */
+  snapshot(): EditorSelection {
+    return this.value;
+  }
+
+  /**
+   * Reports whether a block is in an active whole-block selection.
+   *
+   * Text carets and text ranges return false even when an endpoint sits in
+   * `id`, matching `useBlockSelection`'s rule that a caret must not paint the
+   * complete block as selected.
+   *
+   * @param id - Stable block ID.
+   * @returns True only while a block-selection item contains `id`.
+   */
+  isBlockSelected(id: string): boolean {
+    return this.selectedBlockIds.has(id);
   }
 
   /**
@@ -186,7 +286,8 @@ export class SelectionManager {
    *
    * Text selection direction is preserved. Operations that need document-order
    * ranges can normalize later, while UI can still know whether the user dragged
-   * top-to-bottom or bottom-to-top.
+   * top-to-bottom or bottom-to-top. Identical membership after normalization
+   * does not notify, so pointermove republishes stay off React.
    *
    * @param selection - Local selection list to validate and publish.
    */
@@ -226,9 +327,10 @@ export class SelectionManager {
       }
       return result;
     });
+    if (sameSelection(this.value, normalized)) return;
 
-    // Save copy of normalized selection
     this.value = normalized.map(cloneSelection);
+    this.selectedBlockIds = selectedBlockIdsOf(this.value);
     this.notify();
   }
 
@@ -294,6 +396,7 @@ export class SelectionManager {
   clear(): void {
     if (!this.value.length) return;
     this.value = [];
+    this.selectedBlockIds = new Set();
     this.notify();
   }
 

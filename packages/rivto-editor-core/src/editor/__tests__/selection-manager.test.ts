@@ -17,6 +17,11 @@ describe("EditorRuntime selection", () => {
     editor.selection.set(selection);
     expect(editor.selection.get()).toEqual(selection);
     expect(listener).toHaveBeenCalledTimes(1);
+    const snapshot = editor.selection.snapshot();
+    editor.selection.set(selection);
+    editor.selection.set([textSelection(id, 1, 3)]);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(editor.selection.snapshot()).toBe(snapshot);
     expect(() => editor.selection.set([textSelection(id, 99)])).toThrow("outside block");
 
     editor.selection.clear();
@@ -67,17 +72,57 @@ describe("EditorRuntime selection", () => {
     editor.destroy();
   });
 
-  it("notifies runtime subscribers when selection changes", () => {
+  it("does not notify runtime subscribers when only selection changes", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
-    const listener = jest.fn();
-    const unsubscribe = editor.subscribe(listener);
+    const runtime = jest.fn();
+    const selection = jest.fn();
+    const unsubscribeRuntime = editor.subscribe(runtime);
+    const unsubscribeSelection = editor.selection.subscribe(selection);
+    const before = editor.revision;
 
     editor.execute("selection.set", { selection: [textSelection(id, 0, 2)] });
     editor.execute("selection.clear");
 
+    expect(selection).toHaveBeenCalledTimes(2);
+    expect(runtime).not.toHaveBeenCalled();
+    expect(editor.revision).toBe(before);
+    unsubscribeRuntime();
+    unsubscribeSelection();
+    editor.destroy();
+  });
+
+  it("notifies caret moves without selecting the whole block", () => {
+    const editor = createRivtoEditor();
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
+    const listener = jest.fn();
+    const unsubscribe = editor.selection.subscribe(listener);
+
+    editor.selection.set([textSelection(id, 0)]);
+    expect(editor.selection.isBlockSelected(id)).toBe(false);
+    editor.selection.set([textSelection(id, 2)]);
     expect(listener).toHaveBeenCalledTimes(2);
+    expect(editor.selection.isBlockSelected(id)).toBe(false);
     unsubscribe();
+    editor.destroy();
+  });
+
+  it("tracks whole-block membership independently of caret", () => {
+    const editor = createRivtoEditor();
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+
+    editor.selection.set([{
+      type: "block",
+      blockIds: [firstId, secondId],
+      anchorBlockId: firstId,
+      focusBlockId: secondId,
+    }]);
+    expect(editor.selection.isBlockSelected(firstId)).toBe(true);
+    expect(editor.selection.isBlockSelected(secondId)).toBe(true);
+    editor.selection.set([textSelection(firstId, 0)]);
+    expect(editor.selection.isBlockSelected(firstId)).toBe(false);
+    expect(editor.selection.isBlockSelected(secondId)).toBe(false);
     editor.destroy();
   });
 

@@ -2,8 +2,10 @@
  * Positioned canvas card for one block element.
  *
  * Selection chrome subscribes per card ID so marquee growth does not re-render
- * unselected neighbors. Auto-height measure is scoped to geometry and content,
- * never to selection, so reading `scrollHeight` cannot hitch pointermove.
+ * unselected neighbors. `BlockTree` is memoized on the `blockIds` reference so
+ * flipping `data-block-selected` does not re-parse Markdown. Auto-height
+ * measure is scoped to geometry and content, never to selection, so reading
+ * `scrollHeight` cannot hitch pointermove.
  */
 import type { EditorElement } from "@chulane/rivto";
 import { useLayoutEffect, useRef, type CSSProperties } from "react";

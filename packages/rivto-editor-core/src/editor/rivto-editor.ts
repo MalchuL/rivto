@@ -106,10 +106,8 @@ export class EditorRuntime implements RivtoEditorApi {
       this.notifyChanges();
     });
     this.unsubscribeFns.push(unsubscribeFromDocumentChanges);
-    // Selection is local view state, but renderers still need to redraw selected blocks.
-    const unsubscribeFromSelectionChanges = this.selection.subscribe(() => this.notifyChanges());
-    this.unsubscribeFns.push(unsubscribeFromSelectionChanges);
-    // Mode changes are local runtime state, so they still notify directly.
+    // Selection is local view state. React chrome subscribes through
+    // `editor.selection`; folding it into `revision` would re-render every block.
     const unsubscribeFromModeChanges = this.mode.subscribe(() => {
       this.history.stopCapturing();
       this.reconcileSelection();
@@ -122,8 +120,9 @@ export class EditorRuntime implements RivtoEditorApi {
   /**
    * Returns the current monotonic runtime revision.
    *
-   * Document, selection, mode, and block-definition changes increment this
-   * value before runtime subscribers are notified.
+   * Document, mode, and block-definition changes increment this value before
+   * runtime subscribers are notified. Selection is excluded so caret and
+   * block-range publishes do not invalidate the whole React tree.
    *
    * @returns Current editor revision.
    */
@@ -131,6 +130,9 @@ export class EditorRuntime implements RivtoEditorApi {
 
   /**
    * Subscribes to runtime revision changes.
+   *
+   * Selection changes do not fire this stream. Subscribe to
+   * `editor.selection` for caret and block-range updates.
    *
    * @param listener - Callback called after an observable runtime change.
    * @returns Function that removes this listener.

@@ -25,8 +25,11 @@ export interface EditorViewProps {
  * or render a DOM wrapper. The host owns runtime lifetime and the child surface
  * owns presentation and registers its own DOM root through `useEditorRoot`.
  *
- * Core document changes use one global revision subscription. The focused
- * surface and extension subscriptions cover React-only registration changes.
+ * Core document, mode, and registry changes use one global revision
+ * subscription. Selection chrome subscribes through `useEditorSelection` /
+ * `useBlockSelected`, not this revision, so caret and block-range publishes
+ * do not re-render the whole tree. The focused surface and extension
+ * subscriptions cover React-only registration changes.
  *
  * @param props - Editor runtime and React subtree to bind together.
  * @returns A context provider; EditorView adds no DOM element.
