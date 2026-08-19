@@ -626,14 +626,13 @@
   overscroll-behavior: contain;
 }
 
-.edgeless-viewport::before {
+.edgeless-grid-spotlight {
   position: absolute;
   inset: 0;
   background-image: radial-gradient(#81798f 1px, transparent 1px);
   background-position: inherit;
   background-size: inherit;
   background-repeat: repeat;
-  content: "";
   mask-image: radial-gradient(
     circle var(--rivto-edgeless-spotlight-radius)
       at var(--rivto-edgeless-pointer-x, 50%) var(--rivto-edgeless-pointer-y, 50%),
@@ -644,8 +643,13 @@
   pointer-events: none;
 }
 
-.edgeless-viewport:hover::before {
+.edgeless-viewport:hover .edgeless-grid-spotlight {
   opacity: 1;
+}
+
+.edgeless-viewport[data-transforming] .edgeless-grid-spotlight,
+.edgeless-viewport[data-panning] .edgeless-grid-spotlight {
+  opacity: 0;
 }
 
 .edgeless-viewport[data-panning-ready],

@@ -1,7 +1,19 @@
+/**
+ * Delegated move, resize, and rotate for edgeless cards, visuals, and groups.
+ *
+ * Pointerdown snapshots attached connectors and snap candidates so pointermove
+ * only writes CSS transforms and, when needed, updates reused SVG path `d`
+ * attributes. An empty connector snapshot never mounts the live-preview overlay.
+ */
 import type { EditorElementFrame } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { canvasDelta } from "./edgeless-geometry";
+import {
+  attachedConnectorsForTransform,
+  isConnectorEndpoint,
+  type ConnectorPreviewTarget,
+} from "./edgeless-transform-connectors";
 import { getEdgelessRuntime } from "./edgeless-runtime";
 import { elementContainsBlock } from "../../surfaces/edgeless/block-elements";
 import {
@@ -23,13 +35,17 @@ import {
   type SnapGuide,
 } from "./visuals/utils/geometry";
 import { showSnapGuides } from "./visuals/utils/snap-guides";
-import type { ConnectorEndpoint, ConnectorRoute, ConnectorTextRotation } from "./visuals/types";
+import type { ConnectorRoute, ConnectorTextRotation } from "./visuals/types";
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
 const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
 const BLOCK_SELECTOR = "[data-block-id]";
 const CONTROL_SELECTOR = "[data-block-content], [data-edgeless-ui], button:not([data-edgeless-drag-handle]), input, textarea, select, a, [contenteditable=true]";
 const RESIZE_CORNERS = new Set<ResizeCorner>(["n", "e", "s", "w", "nw", "ne", "sw", "se"]);
+const CONNECTOR_PREVIEW_CLASS = "edgeless-connector-live-preview";
+const CONNECTOR_LABEL_CLASS = "edgeless-connector-label";
+const CONNECTOR_LABEL_PREVIEW_CLASS = "edgeless-connector-label-preview";
+const SVG_NS = "http://www.w3.org/2000/svg";
 
 interface TransformStart {
   readonly kind: "move" | "resize" | "rotate";
@@ -37,6 +53,12 @@ interface TransformStart {
   readonly y: number;
   readonly ids: string[];
   readonly frames: Map<string, EditorElementFrame>;
+  /** Leaf IDs in this gesture, including group children. */
+  readonly moving: ReadonlySet<string>;
+  /** Connectors that must live-preview; empty means pointermove skips overlay work. */
+  readonly attachedConnectors: readonly ConnectorPreviewTarget[];
+  /** Align-snap frames excluding moving leaves, captured once at pointerdown. */
+  readonly snapCandidates: readonly EditorElementFrame[];
   readonly corner?: ResizeCorner;
   readonly rotation?: number;
   readonly pointerAngle?: number;
@@ -54,8 +76,11 @@ interface TransformStart {
   previewRotation?: number;
 }
 
-const isEndpoint = (value: unknown): value is ConnectorEndpoint =>
-  Boolean(value && typeof value === "object" && "anchor" in value && "position" in value);
+/** Reused SVG path and optional label for one path-rebuild connector. */
+interface ConnectorOverlayNode {
+  readonly path: SVGPathElement;
+  label: HTMLElement | null;
+}
 
 /** Adds one delegated move/resize path for cards, visuals, and nested groups. */
 export function registerEdgelessTransform(reactEditor: ReactEditor): () => void {
@@ -67,6 +92,8 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
   let translatedConnectors: HTMLElement[] = [];
   let overlayLabels: HTMLElement[] = [];
   let overlaySvg: SVGSVGElement | null = null;
+  const overlayNodes = new Map<string, ConnectorOverlayNode>();
+  const connectorHosts = new Map<string, HTMLElement | null>();
 
   const groupChildren = (id: string): string[] => {
     const element = editor.elements.getElement(id);
@@ -124,6 +151,24 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     const next = normalizeRotation((active.rotation ?? 0) + angle - (active.pointerAngle ?? angle));
     return shiftKey ? normalizeRotation(Math.round(next / 15) * 15) : next;
   };
+  /**
+   * Returns the rendered connector host, caching the query for the gesture.
+   *
+   * @param root - Edgeless viewport.
+   * @param id - Connector element ID.
+   * @returns Host node, or null when it is not mounted.
+   */
+  const hostFor = (root: HTMLElement, id: string): HTMLElement | null => {
+    if (!connectorHosts.has(id)) {
+      connectorHosts.set(id, root.querySelector<HTMLElement>(`[data-edgeless-object-id="${id}"]`));
+    }
+    return connectorHosts.get(id) ?? null;
+  };
+  /**
+   * Restores connector hosts and removes the reused preview overlay.
+   *
+   * @returns Nothing.
+   */
   const clearConnectorPreview = () => {
     hiddenConnectors.forEach((host) => host.style.removeProperty("visibility"));
     hiddenConnectors = [];
@@ -134,15 +179,24 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     translatedConnectors = [];
     overlayLabels.forEach((label) => label.remove());
     overlayLabels = [];
-    overlaySvg?.replaceChildren();
+    overlayNodes.clear();
+    connectorHosts.clear();
+    overlaySvg?.remove();
+    overlaySvg = null;
   };
+  /**
+   * Creates the connector preview SVG once per gesture, with a persistent defs node.
+   *
+   * @param root - Edgeless viewport that owns the plane.
+   * @returns Connected overlay svg, or null when the plane is missing.
+   */
   const ensureOverlay = (root: HTMLElement) => {
     const plane = root.querySelector<HTMLElement>("[data-edgeless-plane]");
     if (!plane) return null;
     if (overlaySvg?.isConnected) return overlaySvg;
-    const svg = root.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const svg = root.ownerDocument.createElementNS(SVG_NS, "svg");
     svg.setAttribute("data-edgeless-connector-preview", "true");
-    svg.setAttribute("class", "edgeless-connector-live-preview");
+    svg.setAttribute("class", CONNECTOR_PREVIEW_CLASS);
     Object.assign(svg.style, {
       position: "absolute",
       inset: "0",
@@ -152,59 +206,82 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       pointerEvents: "none",
       zIndex: "2147483638",
     });
+    svg.append(root.ownerDocument.createElementNS(SVG_NS, "defs"));
     plane.append(svg);
     overlaySvg = svg;
     return svg;
   };
+  /**
+   * Appends a reusable arrow marker to the overlay defs.
+   *
+   * @param defs - Overlay defs element.
+   * @param id - Marker element ID, stable for the gesture.
+   * @param stroke - Fill color matching the connector stroke.
+   * @param start - True for the source-end marker.
+   * @returns Nothing.
+   */
+  const appendMarker = (defs: SVGDefsElement, id: string, stroke: string, start: boolean): void => {
+    const marker = defs.ownerDocument.createElementNS(SVG_NS, "marker");
+    marker.setAttribute("id", id);
+    marker.setAttribute("markerWidth", "8");
+    marker.setAttribute("markerHeight", "8");
+    marker.setAttribute("refX", start ? "1" : "7");
+    marker.setAttribute("refY", "4");
+    marker.setAttribute("orient", start ? "auto-start-reverse" : "auto");
+    const tip = defs.ownerDocument.createElementNS(SVG_NS, "path");
+    tip.setAttribute("d", "M0 0L8 4L0 8z");
+    tip.setAttribute("fill", stroke);
+    marker.append(tip);
+    defs.append(marker);
+  };
+  /**
+   * Updates live connector previews from the pointerdown snapshot.
+   *
+   * Empty membership is a no-op so a shape drag never mounts an overlay.
+   * Path nodes are created once and then only have `d` / label position written.
+   *
+   * @param root - Edgeless viewport.
+   * @param active - Gesture whose attached connectors were snapshotted at start.
+   * @param dx - Preview translation X in canvas units.
+   * @param dy - Preview translation Y in canvas units.
+   * @returns Nothing.
+   */
   const previewAttachedConnectors = (root: HTMLElement, active: TransformStart, dx: number, dy: number) => {
+    const attached = active.attachedConnectors;
+    if (!attached.length) return;
+    for (const item of attached) {
+      if (item.kind !== "translate") continue;
+      const host = hostFor(root, item.id);
+      if (!host) continue;
+      host.dataset.edgelessGeometryLock = "true";
+      host.style.transform = `translate(${dx}px, ${dy}px)`;
+      if (!translatedConnectors.includes(host)) translatedConnectors.push(host);
+    }
+    const pathItems = attached.filter((item) => item.kind === "path");
+    if (!pathItems.length) return;
     const overlay = ensureOverlay(root);
     const plane = overlay?.parentElement;
-    if (!overlay || !plane) return;
-    const moving = new Set(leaves(active.ids));
-    const selected = new Set(active.ids);
-    const nextHidden: HTMLElement[] = [];
-    const nextTranslated: HTMLElement[] = [];
-    const nextLabels: HTMLElement[] = [];
-    const labelsById = new Map(
-      overlayLabels.flatMap((label) => {
-        const id = label.dataset.edgelessConnectorPreviewLabel;
-        return id ? [[id, label] as const] : [];
-      }),
-    );
-    const ns = "http://www.w3.org/2000/svg";
-    const defs = root.ownerDocument.createElementNS(ns, "defs");
-    const paths: SVGPathElement[] = [];
-    editor.elements.getElements().forEach((element) => {
-      if (element.type !== "connector") return;
-      const source = element.props.source;
-      const target = element.props.target;
-      if (!isEndpoint(source) || !isEndpoint(target)) return;
-      const sourceMoves = Boolean(source.elementId && moving.has(source.elementId));
-      const targetMoves = Boolean(target.elementId && moving.has(target.elementId));
-      const connectorMoves = moving.has(element.id) || selected.has(element.id);
-      if (!sourceMoves && !targetMoves && !connectorMoves) return;
-      if (!sourceMoves && !targetMoves && source.elementId && target.elementId) return;
-      const sourceTranslates = sourceMoves || Boolean(connectorMoves && !source.elementId);
-      const targetTranslates = targetMoves || Boolean(connectorMoves && !target.elementId);
-      const host = root.querySelector<HTMLElement>(`[data-edgeless-object-id="${element.id}"]`);
-      if (active.kind === "move" && sourceTranslates && targetTranslates && host) {
-        host.dataset.edgelessGeometryLock = "true";
-        host.style.transform = `translate(${dx}px, ${dy}px)`;
-        nextTranslated.push(host);
-        return;
-      }
-
+    const defs = overlay?.querySelector<SVGDefsElement>("defs");
+    if (!overlay || !plane || !defs) return;
+    for (const item of pathItems) {
+      const element = editor.elements.getElement(item.id);
+      const source = element?.props.source;
+      const target = element?.props.target;
+      if (!element || !isConnectorEndpoint(source) || !isConnectorEndpoint(target)) continue;
       const sourceBound = source.elementId ? bounds(source.elementId) : undefined;
       const targetBound = target.elementId ? bounds(target.elementId) : undefined;
-      const sourceFrame = source.elementId ? previewFrame(source.elementId, active, sourceMoves ? dx : 0, sourceMoves ? dy : 0) : undefined;
-      const targetFrame = target.elementId ? previewFrame(target.elementId, active, targetMoves ? dx : 0, targetMoves ? dy : 0) : undefined;
-      const sourceRotation = source.elementId && active.kind === "rotate" && active.ids.includes(source.elementId) ? active.previewRotation ?? rotation(source.elementId) : source.elementId ? rotation(source.elementId) : 0;
-      const targetRotation = target.elementId && active.kind === "rotate" && active.ids.includes(target.elementId) ? active.previewRotation ?? rotation(target.elementId) : target.elementId ? rotation(target.elementId) : 0;
+      const sourceFrame = source.elementId ? previewFrame(source.elementId, active, item.sourceMoves ? dx : 0, item.sourceMoves ? dy : 0) : undefined;
+      const targetFrame = target.elementId ? previewFrame(target.elementId, active, item.targetMoves ? dx : 0, item.targetMoves ? dy : 0) : undefined;
+      const sourceRotation = source.elementId && active.kind === "rotate" && active.ids.includes(source.elementId)
+        ? active.previewRotation ?? rotation(source.elementId)
+        : source.elementId ? rotation(source.elementId) : 0;
+      const targetRotation = target.elementId && active.kind === "rotate" && active.ids.includes(target.elementId)
+        ? active.previewRotation ?? rotation(target.elementId)
+        : target.elementId ? rotation(target.elementId) : 0;
       let nextSource = endpointPoint(source, sourceFrame, sourceRotation);
       let nextTarget = endpointPoint(target, targetFrame, targetRotation);
-      if (connectorMoves && !source.elementId) nextSource = { x: source.position.x + dx, y: source.position.y + dy };
-      if (connectorMoves && !target.elementId) nextTarget = { x: target.position.x + dx, y: target.position.y + dy };
-
+      if (item.connectorMoves && !source.elementId) nextSource = { x: source.position.x + dx, y: source.position.y + dy };
+      if (item.connectorMoves && !target.elementId) nextTarget = { x: target.position.x + dx, y: target.position.y + dy };
       const route = (typeof element.props.route === "string" ? element.props.route : "straight") as ConnectorRoute;
       const routeSourceFrame = sourceFrame ? rotatedFrameBounds(sourceFrame, sourceRotation) : sourceBound;
       const routeTargetFrame = targetFrame ? rotatedFrameBounds(targetFrame, targetRotation) : targetBound;
@@ -226,105 +303,71 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
         routeSourceFrame,
         routeTargetFrame,
       );
-      if (host) {
-        host.style.visibility = "hidden";
-        nextHidden.push(host);
-      }
-      const stroke = typeof element.props.stroke === "string" ? element.props.stroke : "#52525b";
-      const lineStyle = element.props.lineStyle === "dashed" || element.props.lineStyle === "dashed-animated"
-        ? element.props.lineStyle
-        : "solid";
-      const startStyle = element.props.startStyle === "arrow" ? "arrow" : "none";
-      const endStyle = element.props.endStyle === "arrow" ? "arrow" : "none";
-      const markerEndId = `connector-preview-end-${element.id}`;
-      const markerStartId = `connector-preview-start-${element.id}`;
-      if (endStyle === "arrow") {
-        const marker = root.ownerDocument.createElementNS(ns, "marker");
-        marker.setAttribute("id", markerEndId);
-        marker.setAttribute("markerWidth", "8");
-        marker.setAttribute("markerHeight", "8");
-        marker.setAttribute("refX", "7");
-        marker.setAttribute("refY", "4");
-        marker.setAttribute("orient", "auto");
-        const tip = root.ownerDocument.createElementNS(ns, "path");
-        tip.setAttribute("d", "M0 0L8 4L0 8z");
-        tip.setAttribute("fill", stroke);
-        marker.append(tip);
-        defs.append(marker);
-      }
-      if (startStyle === "arrow") {
-        const marker = root.ownerDocument.createElementNS(ns, "marker");
-        marker.setAttribute("id", markerStartId);
-        marker.setAttribute("markerWidth", "8");
-        marker.setAttribute("markerHeight", "8");
-        marker.setAttribute("refX", "1");
-        marker.setAttribute("refY", "4");
-        marker.setAttribute("orient", "auto-start-reverse");
-        const tip = root.ownerDocument.createElementNS(ns, "path");
-        tip.setAttribute("d", "M0 0L8 4L0 8z");
-        tip.setAttribute("fill", stroke);
-        marker.append(tip);
-        defs.append(marker);
-      }
-      const path = root.ownerDocument.createElementNS(ns, "path");
-      path.setAttribute("data-edgeless-connector-preview-stroke", "true");
-      path.setAttribute("data-line-style", lineStyle);
-      path.setAttribute("d", d);
-      path.setAttribute("fill", "none");
-      path.setAttribute("stroke", stroke);
-      path.setAttribute("stroke-width", String(typeof element.props.strokeWidth === "number" ? element.props.strokeWidth : 2));
-      path.setAttribute("opacity", String(typeof element.props.opacity === "number" ? element.props.opacity : 1));
-      path.setAttribute("vector-effect", "non-scaling-stroke");
-      if (startStyle === "arrow") path.setAttribute("marker-start", `url(#${markerStartId})`);
-      if (endStyle === "arrow") path.setAttribute("marker-end", `url(#${markerEndId})`);
-      paths.push(path);
-
-      const text = typeof element.props.text === "string" ? element.props.text : "";
-      if (text) {
-        const textRotation = (
-          element.props.textRotation === "90"
-          || element.props.textRotation === "180"
-          || element.props.textRotation === "270"
-          || element.props.textRotation === "along"
-          || element.props.textRotation === "horizontal"
-            ? element.props.textRotation
-            : "horizontal"
-        ) as ConnectorTextRotation;
-        const labelAt = connectorLabelPoint(absPoints, route);
-        const degrees = connectorLabelCssDegrees(absPoints, route, textRotation);
-        let label = labelsById.get(element.id);
-        if (label) labelsById.delete(element.id);
-        else {
-          label = root.ownerDocument.createElement("div");
-          label.className = "edgeless-connector-label edgeless-connector-label-preview";
-          label.dataset.edgelessConnectorPreviewLabel = element.id;
-          plane.append(label);
+      let nodes = overlayNodes.get(item.id);
+      if (!nodes) {
+        const host = hostFor(root, item.id);
+        if (host) {
+          host.style.visibility = "hidden";
+          hiddenConnectors.push(host);
         }
+        const stroke = typeof element.props.stroke === "string" ? element.props.stroke : "#52525b";
+        const lineStyle = element.props.lineStyle === "dashed" || element.props.lineStyle === "dashed-animated"
+          ? element.props.lineStyle
+          : "solid";
+        const startStyle = element.props.startStyle === "arrow" ? "arrow" : "none";
+        const endStyle = element.props.endStyle === "arrow" ? "arrow" : "none";
+        const markerEndId = `connector-preview-end-${element.id}`;
+        const markerStartId = `connector-preview-start-${element.id}`;
+        if (endStyle === "arrow") appendMarker(defs, markerEndId, stroke, false);
+        if (startStyle === "arrow") appendMarker(defs, markerStartId, stroke, true);
+        const path = root.ownerDocument.createElementNS(SVG_NS, "path");
+        path.setAttribute("data-edgeless-connector-preview-stroke", "true");
+        path.setAttribute("data-line-style", lineStyle);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", stroke);
+        path.setAttribute("stroke-width", String(typeof element.props.strokeWidth === "number" ? element.props.strokeWidth : 2));
+        path.setAttribute("opacity", String(typeof element.props.opacity === "number" ? element.props.opacity : 1));
+        path.setAttribute("vector-effect", "non-scaling-stroke");
+        if (startStyle === "arrow") path.setAttribute("marker-start", `url(#${markerStartId})`);
+        if (endStyle === "arrow") path.setAttribute("marker-end", `url(#${markerEndId})`);
+        overlay.append(path);
+        nodes = { path, label: null };
+        overlayNodes.set(item.id, nodes);
+      }
+      nodes.path.setAttribute("d", d);
+      const text = typeof element.props.text === "string" ? element.props.text : "";
+      if (!text) continue;
+      const textRotation = (
+        element.props.textRotation === "90"
+        || element.props.textRotation === "180"
+        || element.props.textRotation === "270"
+        || element.props.textRotation === "along"
+        || element.props.textRotation === "horizontal"
+          ? element.props.textRotation
+          : "horizontal"
+      ) as ConnectorTextRotation;
+      const labelAt = connectorLabelPoint(absPoints, route);
+      const degrees = connectorLabelCssDegrees(absPoints, route, textRotation);
+      let label = nodes.label;
+      if (!label) {
+        label = root.ownerDocument.createElement("div");
+        label.className = `${CONNECTOR_LABEL_CLASS} ${CONNECTOR_LABEL_PREVIEW_CLASS}`;
+        label.dataset.edgelessConnectorPreviewLabel = element.id;
         label.dataset.textRotation = textRotation;
         label.textContent = text;
-        Object.assign(label.style, {
-          left: `${labelAt.x}px`,
-          top: `${labelAt.y}px`,
-          color: typeof element.props.color === "string" ? element.props.color : "#222222",
-          fontFamily: typeof element.props.fontFamily === "string" ? element.props.fontFamily : "inherit",
-          fontSize: typeof element.props.fontSize === "number" ? `${element.props.fontSize}px` : "14px",
-          textAlign: typeof element.props.align === "string" ? element.props.align : "center",
-          transform: degrees ? `rotate(${degrees}deg)` : "",
-          zIndex: "2147483639",
-        });
-        nextLabels.push(label);
+        label.style.color = typeof element.props.color === "string" ? element.props.color : "#222222";
+        label.style.fontFamily = typeof element.props.fontFamily === "string" ? element.props.fontFamily : "inherit";
+        label.style.fontSize = typeof element.props.fontSize === "number" ? `${element.props.fontSize}px` : "14px";
+        label.style.textAlign = typeof element.props.align === "string" ? element.props.align : "center";
+        label.style.zIndex = "2147483639";
+        plane.append(label);
+        overlayLabels.push(label);
+        nodes.label = label;
       }
-    });
-    hiddenConnectors.filter((host) => !nextHidden.includes(host)).forEach((host) => host.style.removeProperty("visibility"));
-    hiddenConnectors = nextHidden;
-    translatedConnectors.filter((host) => !nextTranslated.includes(host)).forEach((host) => {
-      host.style.removeProperty("transform");
-      delete host.dataset.edgelessGeometryLock;
-    });
-    translatedConnectors = nextTranslated;
-    labelsById.forEach((label) => label.remove());
-    overlayLabels = nextLabels;
-    overlay.replaceChildren(defs, ...paths);
+      label.style.left = `${labelAt.x}px`;
+      label.style.top = `${labelAt.y}px`;
+      label.style.transform = degrees ? `rotate(${degrees}deg)` : "";
+    }
   };
   const guidesEqual = (left: readonly SnapGuide[], right: readonly SnapGuide[]) =>
     left.length === right.length && left.every((guide, index) => {
@@ -362,8 +405,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     const alignEnabled = root.dataset.edgelessAlign !== "false";
     const snapEnabled = root.dataset.edgelessSnap !== "false";
     if (!alignEnabled && !snapEnabled) return { dx: rawDx, dy: rawDy, guides: [] as readonly SnapGuide[] };
-    const excluded = new Set(leaves(active.ids));
-    const candidates = editor.elements.getElements().filter((element) => element.type !== "connector" && element.type !== "group" && !excluded.has(element.id)).map((element) => rotatedFrameBounds(element.frame, rotation(element.id)));
+    const candidates = active.snapCandidates;
     const zoom = Number(root.dataset.edgelessZoom) || 1;
     const grid = Number(root.dataset.edgelessGrid) || EDGELESS_GRID_SIZE;
     if (active.kind === "rotate") return { dx: 0, dy: 0, guides: [] as readonly SnapGuide[] };
@@ -493,17 +535,27 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       if (frame) frames.set(item, { ...frame });
     });
     // Cache leaf frames so attached connector previews stay accurate for groups.
-    leaves(ids).forEach((item) => {
+    const moving = new Set(leaves(ids));
+    moving.forEach((item) => {
       if (frames.has(item)) return;
       const frame = transformFrame(item);
       if (frame) frames.set(item, { ...frame });
     });
+    const canvasElements = editor.elements.getElements();
+    const kind = rotating ? "rotate" as const : resize ? "resize" as const : "move" as const;
+    const attachedConnectors = attachedConnectorsForTransform(canvasElements, moving, new Set(ids), kind);
+    const snapCandidates = canvasElements
+      .filter((element) => element.type !== "connector" && element.type !== "group" && !moving.has(element.id))
+      .map((element) => rotatedFrameBounds(element.frame, rotation(element.id)));
     start = {
-      kind: rotating ? "rotate" : resize ? "resize" : "move",
+      kind,
       x: event.clientX,
       y: event.clientY,
       ids,
       frames,
+      moving,
+      attachedConnectors,
+      snapCandidates,
       corner: resize ? corner ?? "se" : undefined,
       rotation: rotating ? rotation(id) : undefined,
       pointerAngle: rotating && frames.get(id)

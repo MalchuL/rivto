@@ -39,6 +39,7 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
 /** Strongest background-dot fade at minimum zoom; keeps a faint residual grid. */
 const MAX_GRID_DOT_FADE = 0.7;
+const GRID_SPOTLIGHT_CLASS = "edgeless-grid-spotlight";
 
 interface PanGesture {
   readonly x: number;
@@ -85,8 +86,10 @@ export function EdgelessSurface({
   const blockElements = editor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
   const { ref: registerRoot } = useEditorRoot();
   const viewport = useRef<HTMLElement | null>(null);
+  const spotlightOverlay = useRef<HTMLDivElement | null>(null);
   const spotlightFrame = useRef<number | null>(null);
   const spotlightPoint = useRef({ x: 0, y: 0 });
+  const viewportOrigin = useRef({ left: 0, top: 0 });
   const spaceHeld = useRef(false);
   const panGesture = useRef<PanGesture | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -110,7 +113,23 @@ export function EdgelessSurface({
   const panReady = () => spaceHeld.current || viewport.current?.dataset.edgelessTool === "pan";
 
   /**
+   * Caches the viewport's client origin so pointermove can avoid layout reads.
+   *
+   * @returns Nothing.
+   */
+  const refreshViewportOrigin = (): void => {
+    const root = viewport.current;
+    if (!root) return;
+    const bounds = root.getBoundingClientRect();
+    viewportOrigin.current = { left: bounds.left, top: bounds.top };
+  };
+
+  /**
    * Moves the CSS-rendered grid spotlight without causing a React render.
+   *
+   * Writes `--rivto-edgeless-pointer-x/y` only on the empty overlay so inherited
+   * custom properties do not restyle the canvas tree. Skipped during transform
+   * and pan so those gestures do not also invalidate spotlight styles.
    *
    * @param event - Pointer movement bubbling through the edgeless viewport.
    * @returns Nothing.
@@ -123,11 +142,12 @@ export function EdgelessSurface({
     if (spotlightFrame.current !== null) return;
     spotlightFrame.current = requestAnimationFrame(() => {
       const root = viewport.current;
+      const overlay = spotlightOverlay.current;
       spotlightFrame.current = null;
-      if (!root) return;
-      const bounds = root.getBoundingClientRect();
-      root.style.setProperty("--rivto-edgeless-pointer-x", `${spotlightPoint.current.x - bounds.left}px`);
-      root.style.setProperty("--rivto-edgeless-pointer-y", `${spotlightPoint.current.y - bounds.top}px`);
+      if (!root || !overlay) return;
+      if (root.dataset.transforming || root.dataset.panning === "true") return;
+      overlay.style.setProperty("--rivto-edgeless-pointer-x", `${spotlightPoint.current.x - viewportOrigin.current.left}px`);
+      overlay.style.setProperty("--rivto-edgeless-pointer-y", `${spotlightPoint.current.y - viewportOrigin.current.top}px`);
     });
   };
 
@@ -143,6 +163,19 @@ export function EdgelessSurface({
   };
 
   useEffect(() => () => cancelPointerSpotlight(), []);
+
+  useEffect(() => {
+    const root = viewport.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    refreshViewportOrigin();
+    const observer = new ResizeObserver(() => refreshViewportOrigin());
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    refreshViewportOrigin();
+  }, [pan, zoom]);
 
   useKeyboardEvent({
     id: KEYBOARD_BINDING_IDS.edgelessPanStart,
@@ -325,6 +358,7 @@ export function EdgelessSurface({
       tabIndex={-1}
       onDoubleClick={createBlockAt}
       onPointerMove={updatePointerSpotlight}
+      onPointerEnter={refreshViewportOrigin}
       style={{
         backgroundPosition: `${pan.x}px ${pan.y}px`,
         backgroundSize: `${EDGELESS_GRID_SIZE * zoom}px ${EDGELESS_GRID_SIZE * zoom}px`,
@@ -332,6 +366,7 @@ export function EdgelessSurface({
         "--rivto-edgeless-grid-dot-fade": gridDotFade(zoom),
       } as CSSProperties}
     >
+      <div ref={spotlightOverlay} className={GRID_SPOTLIGHT_CLASS} aria-hidden="true" />
       <div className="edgeless-zoom-controls" data-edgeless-ui="true" role="toolbar" aria-label="Canvas zoom">
         <EdgelessToolButton label="Zoom out" icon="zoom-out" onClick={() => zoomAt(zoom - 0.1)} />
         <EdgelessToolButton label="Reset zoom" className="edgeless-zoom-value" onClick={() => zoomAt(1)}>{Math.round(zoom * 100)}%</EdgelessToolButton>

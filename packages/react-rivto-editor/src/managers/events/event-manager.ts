@@ -218,12 +218,21 @@ export class EventManager implements EventsCapability {
     return this.root;
   }
 
+  /**
+   * Runs matching registrations for one native event until one claims it.
+   *
+   * @param group - Capture/passive/target identity of the native listener.
+   * @param raw - Browser event dispatched to that listener.
+   * @returns Nothing.
+   */
   private dispatch(group: NativeListenerGroup, raw: globalThis.Event): void {
     const root = this.root;
     if (!root || raw.defaultPrevented || this.claimedEvents.has(raw)) return;
 
     const event = this.createEditorEvent(group.target, raw, root);
-    for (const registration of [...this.registrations]) {
+    // Iterate in place: pointermove fires hundreds of times per gesture and
+    // these handlers do not splice `registrations` while dispatch is running.
+    for (const registration of this.registrations) {
       if (raw.defaultPrevented || this.claimedEvents.has(raw)) return;
       if (
         registration.type !== group.type ||
