@@ -1,3 +1,11 @@
+/**
+ * Pointer gestures for whole-object edgeless selection, including marquee.
+ *
+ * The marquee rectangle is a DOM node updated from pointermove without React
+ * state. Object rects and the group-parent index are captured once when the
+ * gesture crosses slop so later moves only intersect and call `selection.set`,
+ * which no-ops when membership is unchanged.
+ */
 import { BLOCK_CONTENT_SELECTOR } from "../../constants";
 import {
   useDOMEvent,
@@ -6,11 +14,13 @@ import {
   useReactEditor,
   useKeyboardEvent,
 } from "../../hooks";
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef } from "react";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import {
+  groupParentByChild,
+  outermostGroupId,
   rootsInRect,
+  type EdgelessObjectHit,
   type EdgelessRect,
 } from "./edgeless-geometry";
 import {
@@ -23,15 +33,89 @@ interface RectangleGesture {
   readonly y: number;
   readonly base: readonly EdgelessSelectionRef[];
   moved: boolean;
+  objects: readonly EdgelessObjectHit[];
+  parentByChild: ReadonlyMap<string, string>;
 }
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
 const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
 const HANDLE_SELECTOR = "[data-edgeless-resize-handle], [data-edgeless-rotation-handle]";
+const RECTANGLE_CLASS = "edgeless-selection-rectangle";
+const MARQUEE_SLOP_PX = 3;
 
-/** Returns true for controls that retain their normal interaction without Primary. */
+/**
+ * Returns true for controls that retain their normal interaction without Primary.
+ *
+ * @param target - Event target under the pointer.
+ * @returns True when the target is editable content or a native control.
+ */
 function isInteractive(target: Element): boolean {
   return Boolean(target.closest(`${BLOCK_CONTENT_SELECTOR}, input, textarea, select, button, a`));
+}
+
+/**
+ * Captures unique object IDs and viewport rects for one marquee gesture.
+ *
+ * @param root - Edgeless viewport that owns rendered canvas objects.
+ * @returns Deduped hits in query order.
+ */
+function snapshotObjectHits(root: HTMLElement): EdgelessObjectHit[] {
+  const seen = new Set<string>();
+  const objects: EdgelessObjectHit[] = [];
+  for (const element of root.querySelectorAll<HTMLElement>(OBJECT_SELECTOR)) {
+    const id = element.dataset.edgelessObjectId;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const box = element.getBoundingClientRect();
+    objects.push({
+      id,
+      rect: { left: box.left, top: box.top, right: box.right, bottom: box.bottom },
+    });
+  }
+  return objects;
+}
+
+/**
+ * Creates or returns the persistent marquee node on `document.body`.
+ *
+ * @param doc - Owner document for the overlay.
+ * @param node - Previously created node, if any.
+ * @returns Live marquee element, hidden until painted.
+ */
+function ensureRectangle(doc: Document, node: HTMLElement | null): HTMLElement {
+  if (node) return node;
+  const next = doc.createElement("div");
+  next.className = RECTANGLE_CLASS;
+  next.dataset.edgelessSelectionRectangle = "true";
+  next.style.display = "none";
+  doc.body.appendChild(next);
+  return next;
+}
+
+/**
+ * Writes marquee geometry onto the overlay node.
+ *
+ * @param node - Persistent marquee element.
+ * @param rect - Inclusive viewport rectangle for this pointer sample.
+ * @returns Nothing.
+ */
+function paintRectangle(node: HTMLElement, rect: EdgelessRect): void {
+  node.style.display = "block";
+  node.style.left = `${rect.left}px`;
+  node.style.top = `${rect.top}px`;
+  node.style.width = `${rect.right - rect.left}px`;
+  node.style.height = `${rect.bottom - rect.top}px`;
+}
+
+/**
+ * Hides the marquee overlay without unmounting it.
+ *
+ * @param node - Persistent marquee element, if created.
+ * @returns Nothing.
+ */
+function hideRectangle(node: HTMLElement | null): void {
+  if (!node) return;
+  node.style.display = "none";
 }
 
 /**
@@ -41,6 +125,8 @@ function isInteractive(target: Element): boolean {
  * gestures select root cards because only roots are independent canvas
  * objects. Layout extensions project arbitrary selected blocks back to their
  * owning roots when a canvas move is requested.
+ *
+ * @returns Null; the marquee rectangle is an imperative DOM node.
  */
 export function EdgelessInteractionOverlay() {
   const reactEditor = useReactEditor();
@@ -48,13 +134,19 @@ export function EdgelessInteractionOverlay() {
   const { mode } = useEditorMode();
   const { element: root } = useEditorRoot();
   const gesture = useRef<RectangleGesture | null>(null);
-  const [rectangle, setRectangle] = useState<EdgelessRect | null>(null);
+  const rectangleRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (mode !== "edgeless") {
-      gesture.current = null;
-      setRectangle(null);
-    }
+    return () => {
+      rectangleRef.current?.remove();
+      rectangleRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mode === "edgeless") return;
+    gesture.current = null;
+    hideRectangle(rectangleRef.current);
   }, [mode]);
 
   useDOMEvent({
@@ -107,6 +199,8 @@ export function EdgelessInteractionOverlay() {
         y: event.clientY,
         base: primary ? selection.get().items : [],
         moved: false,
+        objects: [],
+        parentByChild: new Map(),
       };
     }
     return handled;
@@ -121,45 +215,39 @@ export function EdgelessInteractionOverlay() {
   }, ({ raw: event }) => {
     const start = gesture.current;
     if (!start || !root || root.dataset.panning === "true") return false;
-    if (!start.moved && Math.hypot(event.clientX - start.x, event.clientY - start.y) < 3) return false;
-    start.moved = true;
+    if (!start.moved && Math.hypot(event.clientX - start.x, event.clientY - start.y) < MARQUEE_SLOP_PX) return false;
+    if (!start.moved) {
+      start.moved = true;
+      start.objects = snapshotObjectHits(root);
+      start.parentByChild = groupParentByChild(reactEditor.editor.elements.getElements());
+    }
     const next = {
       left: Math.min(start.x, event.clientX),
       top: Math.min(start.y, event.clientY),
       right: Math.max(start.x, event.clientX),
       bottom: Math.max(start.y, event.clientY),
     };
-    setRectangle(next);
-    const editor = reactEditor.editor;
-    const parentOf = (id: string): string | undefined =>
-      editor.elements.getElements().find((element) =>
-        element.type === "group"
-        && Array.isArray(element.props.children)
-        && element.props.children.includes(id),
-      )?.id;
-    const topLevel = (id: string): string => {
-      let current = id;
-      for (let parent = parentOf(current); parent; parent = parentOf(current)) current = parent;
-      return current;
-    };
+    const node = ensureRectangle(root.ownerDocument, rectangleRef.current);
+    rectangleRef.current = node;
+    paintRectangle(node, next);
     // Dedupe DOM hits (group hit + outline share an id) and lift children to their
     // outermost group so marquee can select an existing group + siblings to re-group.
-    const seen = new Set<string>();
-    const objects = [...root.querySelectorAll<HTMLElement>(OBJECT_SELECTOR)].flatMap((element) => {
-      const id = element.dataset.edgelessObjectId;
-      if (!id || seen.has(id)) return [];
-      seen.add(id);
-      return [{ id, rect: element.getBoundingClientRect() }];
-    });
-    const intersecting = [...new Set(rootsInRect(objects, next).map(topLevel))];
+    const intersecting = [...new Set(
+      rootsInRect(start.objects, next).map((id) => outermostGroupId(id, start.parentByChild)),
+    )];
     selection.set([...start.base, ...intersecting]);
     return true;
   });
 
-  const stopRectangle = () => {
+  /**
+   * Ends an in-progress marquee without claiming the pointerup for other handlers.
+   *
+   * @returns False so later listeners still see the event.
+   */
+  const stopRectangle = (): boolean => {
     if (!gesture.current) return false;
     gesture.current = null;
-    setRectangle(null);
+    hideRectangle(rectangleRef.current);
     return false;
   };
   useDOMEvent({
@@ -190,17 +278,5 @@ export function EdgelessInteractionOverlay() {
     return true;
   });
 
-  return rectangle && root ? createPortal(
-    <div
-      className="edgeless-selection-rectangle"
-      data-edgeless-selection-rectangle="true"
-      style={{
-        left: rectangle.left,
-        top: rectangle.top,
-        width: rectangle.right - rectangle.left,
-        height: rectangle.bottom - rectangle.top,
-      }}
-    />,
-    root.ownerDocument.body,
-  ) : null;
+  return null;
 }

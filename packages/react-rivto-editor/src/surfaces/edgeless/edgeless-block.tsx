@@ -1,6 +1,13 @@
+/**
+ * Positioned canvas card for one block element.
+ *
+ * Selection chrome subscribes per card ID so marquee growth does not re-render
+ * unselected neighbors. Auto-height measure is scoped to geometry and content,
+ * never to selection, so reading `scrollHeight` cannot hitch pointermove.
+ */
 import type { EditorElement } from "@chulane/rivto";
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
-import { useEdgelessSelection } from "../../extensions/edgeless/edgeless-runtime";
+import { useEdgelessSelected } from "../../extensions/edgeless/edgeless-runtime";
 import { BlockTree, ElementSlots } from "../../blocks";
 import { useReactEditor } from "../../hooks";
 
@@ -17,6 +24,11 @@ const MIN_CARD_HEIGHT = 100;
  * The shell owns only canvas geometry and object controls. BlockTree supplies
  * the existing recursive BlockView/content/dnd tree inside it, so both surfaces
  * share the complete block rendering and interaction policy.
+ *
+ * @param props - Card element snapshot and the block IDs it currently owns.
+ * @param props.element - Persisted block element including frame and auto-height.
+ * @param props.blockIds - Ordered root block IDs projected into this card.
+ * @returns Positioned card host, or null when it owns no blocks.
  */
 export function EdgelessBlockElement({
   element,
@@ -25,12 +37,12 @@ export function EdgelessBlockElement({
   readonly element: EditorElement;
   readonly blockIds: readonly string[];
 }) {
-  const selection = useEdgelessSelection();
+  const selected = useEdgelessSelected(element.id);
   const reactEditor = useReactEditor();
   const hostRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const selected = selection.active && selection.items.includes(element.id);
   const autoHeight = element.props.autoHeight !== false;
+  const contentKey = blockIds.join("\0");
   /**
    * During resize, transform writes preview geometry as inline styles and sets
    * data-edgeless-geometry-lock. Re-renders must echo those inline values back
@@ -51,6 +63,15 @@ export function EdgelessBlockElement({
     const content = contentRef.current;
     const host = hostRef.current;
     if (!autoHeight || !content || !host) return;
+    /**
+     * Writes content-driven height into the element frame when it drifted.
+     *
+     * Temporarily unlocks CSS height so `scrollHeight` reflects content, then
+     * restores the previous inline height. Geometry-lock skips the read during
+     * live resize.
+     *
+     * @returns Nothing.
+     */
     const measure = () => {
       if (host.dataset.edgelessGeometryLock === "true") return;
       const previousHeight = host.style.height;
@@ -67,8 +88,10 @@ export function EdgelessBlockElement({
     const observer = new ResizeObserver(measure);
     observer.observe(content);
     [...content.children].forEach((child) => observer.observe(child));
+    // Selection is intentionally omitted from deps: chrome-only
+    // `data-block-selected` must not remount ResizeObserver or force scrollHeight.
     return () => observer.disconnect();
-  });
+  }, [autoHeight, contentKey, element.frame.height, element.frame.width, element.id, reactEditor]);
 
   if (!blockIds.length) return null;
 

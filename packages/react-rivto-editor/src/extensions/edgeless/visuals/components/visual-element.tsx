@@ -1,9 +1,16 @@
+/**
+ * One first-class edgeless visual (shape, text, sticker, drawing, connector).
+ *
+ * Selection handles subscribe per visual ID so marquee growth over a neighbor
+ * does not re-render this node or recreate its label editor.
+ */
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import {
   EditableLabel,
   type EditableLabelFocusPoint,
 } from "../../../../components";
 import { ElementSlots } from "../../../../blocks";
+import { useEdgelessSelected } from "../../edgeless-runtime";
 import type { EdgelessVisualController } from "../controller";
 import type { ConnectorEndpoint, EdgelessVisual } from "../types";
 import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from "../utils/geometry";
@@ -14,11 +21,24 @@ const VISUAL_RESIZE_CLASS = "edgeless-visual-resize";
 const VISUAL_ROTATION_CLASS = "edgeless-visual-rotation";
 const RESIZE_HANDLES = ["n", "e", "s", "w", "nw", "ne", "sw", "se"] as const;
 
-/** Renders one persisted visual without owning canvas movement. */
+/**
+ * Renders one persisted visual without owning canvas movement.
+ *
+ * Selection chrome is subscribed per visual ID so a sibling entering the
+ * marquee does not re-render this node.
+ *
+ * @param props - Visual snapshot, controller, and connector gesture callbacks.
+ * @param props.visual - Persisted visual to render.
+ * @param props.controller - Owning visuals controller.
+ * @param props.zoom - Current canvas zoom factor.
+ * @param props.resolveEndpoint - Maps a pointer to a connector endpoint.
+ * @param props.onReconnectHover - Hover preview while dragging an endpoint.
+ * @param props.onReconnect - Commits a connector endpoint reconnect.
+ * @returns Positioned visual host with optional resize/rotate chrome.
+ */
 export function VisualElement({
   visual,
   controller,
-  selected,
   zoom,
   resolveEndpoint,
   onReconnectHover,
@@ -26,12 +46,12 @@ export function VisualElement({
 }: {
   readonly visual: EdgelessVisual;
   readonly controller: EdgelessVisualController;
-  readonly selected: boolean;
   readonly zoom: number;
   readonly resolveEndpoint: (event: Pick<PointerEvent, "clientX" | "clientY">) => ConnectorEndpoint;
   readonly onReconnectHover: (event: Pick<PointerEvent, "clientX" | "clientY"> | null) => void;
   readonly onReconnect: (key: "source" | "target", endpoint: ConnectorEndpoint) => void;
 }) {
+  const selected = useEdgelessSelected(visual.id);
   const element = controller.reactEditor.editor.elements.getElement(visual.id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<{ key: "source" | "target"; endpoint: ConnectorEndpoint } | null>(null);
