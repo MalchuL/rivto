@@ -605,6 +605,135 @@ test("keeps a connector label in the connector layer order", async ({ page }) =>
   await expect.poll(async () => (await paintedObjects()).indexOf(connectorId)).toBeLessThan((await paintedObjects()).indexOf(rectangleId));
 });
 
+test("keeps Enter newlines in connector labels", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const connector = page.locator('[data-edgeless-visual-kind="connector"]').filter({ hasText: "link" });
+  const labelBox = await connector.locator(".edgeless-connector-label").boundingBox();
+  if (!labelBox) throw new Error("Expected connector label geometry");
+  await connector.locator(".edgeless-connector-hit").dispatchEvent("dblclick", {
+    clientX: labelBox.x + labelBox.width / 2,
+    clientY: labelBox.y + labelBox.height / 2,
+  });
+  const editor = connector.locator(".edgeless-connector-label .edgeless-label-editor");
+  await expect(editor).toBeFocused();
+  await page.keyboard.press("Control+a");
+  await page.keyboard.type("hello");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("world");
+  await page.locator(".edgeless-viewport").click({ position: { x: 24, y: 24 } });
+  await expect.poll(() => editor.evaluate((element) => (element as HTMLElement).innerText)).toBe("hello\nworld");
+});
+
+const visualClipboardBundle = JSON.stringify({
+  version: 4,
+  blocks: [],
+  links: [],
+  elements: [{
+    id: "copied-visual",
+    type: "text",
+    frame: { x: 40, y: 40, width: 120, height: 40 },
+    zIndex: 1,
+    props: { text: "Copied visual" },
+  }],
+  selectedElementIds: ["copied-visual"],
+});
+
+const blockClipboardBundle = JSON.stringify({
+  version: 4,
+  startsWithText: true,
+  blocks: [{
+    id: "copied-block",
+    type: "paragraph",
+    listProps: { collapsed: false, type: "list", checked: false },
+    content: "Copied into block",
+    props: {},
+    pluginData: {},
+    children: [],
+  }],
+  links: [],
+});
+
+const pasteIntoLabel = async (
+  editor: Locator,
+  payload: { readonly text: string; readonly structured?: string },
+) => {
+  await editor.evaluate((element, { text, structured }) => {
+    const data = new DataTransfer();
+    data.setData("text/plain", text);
+    if (structured) data.setData("application/x-rivto+json", structured);
+    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: data });
+    element.dispatchEvent(event);
+  }, payload);
+};
+
+test("pastes plain text into visual labels instead of the previous block", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const blockContent = page.locator("[data-edgeless-root] [data-block-content]").first();
+  await blockContent.click();
+  const blockBefore = await blockContent.textContent();
+  const textsBefore = await page.locator('[data-edgeless-visual-kind="text"]').count();
+
+  const text = await createVisual(page, "Text");
+  await text.dblclick();
+  const editor = text.locator(".edgeless-visual-text .edgeless-label-editor");
+  await expect(editor).toBeFocused();
+  await page.keyboard.press("Control+a");
+  await pasteIntoLabel(editor, { text: "pasted-in-label", structured: blockClipboardBundle });
+  await page.locator(".edgeless-viewport").click({ position: { x: 24, y: 24 } });
+
+  await expect.poll(() => editor.evaluate((element) => (element as HTMLElement).innerText)).toBe("pasted-in-label");
+  await expect(blockContent).toHaveText(blockBefore ?? "");
+  await expect(page.locator('[data-edgeless-visual-kind="text"]')).toHaveCount(textsBefore + 1);
+
+  const connector = page.locator('[data-edgeless-visual-kind="connector"]').filter({ hasText: "link" });
+  const labelBox = await connector.locator(".edgeless-connector-label").boundingBox();
+  if (!labelBox) throw new Error("Expected connector label geometry");
+  await connector.locator(".edgeless-connector-hit").dispatchEvent("dblclick", {
+    clientX: labelBox.x + labelBox.width / 2,
+    clientY: labelBox.y + labelBox.height / 2,
+  });
+  const connectorEditor = connector.locator(".edgeless-connector-label .edgeless-label-editor");
+  await expect(connectorEditor).toBeFocused();
+  await page.keyboard.press("Control+a");
+  await pasteIntoLabel(connectorEditor, { text: "pasted-connector", structured: visualClipboardBundle });
+  await page.locator(".edgeless-viewport").click({ position: { x: 24, y: 24 } });
+  await expect.poll(() => connectorEditor.evaluate((element) => (element as HTMLElement).innerText)).toBe("pasted-connector");
+  await expect(page.locator('[data-edgeless-visual-kind="text"]')).toHaveCount(textsBefore + 1);
+});
+
+test("copies visual label text as text instead of duplicating the element", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const text = await createVisual(page, "Text");
+  await text.dblclick();
+  const editor = text.locator(".edgeless-visual-text .edgeless-label-editor");
+  await expect(editor).toBeFocused();
+  await page.keyboard.press("Control+a");
+  await page.keyboard.type("label-copy");
+  await page.keyboard.press("Control+a");
+  await page.evaluate(() => {
+    document.addEventListener("copy", (event) => {
+      (window as typeof window & { labelCopy?: { text: string; structured: string } }).labelCopy = {
+        text: event.clipboardData?.getData("text/plain") ?? "",
+        structured: event.clipboardData?.getData("application/x-rivto+json") ?? "",
+      };
+    }, { once: true });
+  });
+  await page.keyboard.press("Control+c");
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { labelCopy?: { text: string } }
+  ).labelCopy?.text)).toBe("label-copy");
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { labelCopy?: { structured: string } }
+  ).labelCopy?.structured)).toBe("");
+
+  const textsBeforePaste = await page.locator('[data-edgeless-visual-kind="text"]').count();
+  await pasteIntoLabel(editor, { text: "label-copy", structured: visualClipboardBundle });
+  await page.locator(".edgeless-viewport").click({ position: { x: 24, y: 24 } });
+  await expect.poll(() => editor.evaluate((element) => (element as HTMLElement).innerText)).toBe("label-copy");
+  await expect(page.locator('[data-edgeless-visual-kind="text"]')).toHaveCount(textsBeforePaste);
+});
+
 test("edits visual properties immediately and enters text editing on double-click", async ({ page }) => {
   await switchMode(page, "edgeless");
   const toolbar = page.getByRole("toolbar", { name: "Visual objects" });

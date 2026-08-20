@@ -13,6 +13,7 @@ import {
   KEYBOARD_BINDING_IDS,
 } from "../../managers";
 import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
+import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
 import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../surfaces/edgeless/block-elements";
 
 /** Configuration for browser clipboard integration. */
@@ -46,6 +47,9 @@ export interface ClipboardExtensionOptions {
  *
  * DOM selection is synchronized immediately before each action because the
  * browser's `selectionchange` event may arrive after a keyboard clipboard event.
+ * Visual label editors (non-block contenteditable hosts) are left to native
+ * plain-text copy/paste so a previous block selection is not reused and a
+ * copied label does not re-enter as a new canvas element.
  * Event listeners are delegated to the active surface root and are removed by
  * the keyboard and DOM event runtimes when this component unmounts.
  *
@@ -271,6 +275,7 @@ export function registerClipboard(
     id: "clipboard.copy",
     type: "copy",
     scope: "surface",
+    when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
   }, ({ raw: event }) => {
     synchronizeSelection();
     const payload = editor.clipboard.copy(canvasSelection() ? [canvasSelection()!] : undefined);
@@ -283,6 +288,7 @@ export function registerClipboard(
     id: "clipboard.cut",
     type: "cut",
     scope: "surface",
+    when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
   }, ({ raw: event }) => {
     synchronizeSelection();
     const canvas = canvasSelection();
@@ -301,7 +307,7 @@ export function registerClipboard(
 
   /** Handles Firefox clipboard events dispatched to body for block selection. */
   const handleDocumentClipboard = (root: HTMLElement, event: ClipboardEvent, insideRoot: boolean): boolean => {
-    if (insideRoot) return false;
+    if (insideRoot || isNonBlockEditableClipboardEvent(event)) return false;
     const activeElement = root.ownerDocument.activeElement;
     const editorHasFocus = activeElement === root ||
       (activeElement !== null && root.contains(activeElement));
@@ -375,6 +381,7 @@ export function registerClipboard(
     id: "clipboard.paste",
     type: "paste",
     scope: "surface",
+    when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
   }, ({ raw: event }) => {
     synchronizeSelection();
     pasteClipboard(event);

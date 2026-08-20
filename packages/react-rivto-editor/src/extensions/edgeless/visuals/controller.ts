@@ -7,6 +7,7 @@ import {
 } from "@chulane/rivto";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
 import type { ReactEditor } from "../../../types";
+import { isNonBlockEditableClipboardEvent } from "../../clipboard/clipboard-target";
 import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../surfaces/edgeless/block-elements";
 import { getEdgelessRuntime, type EdgelessSelectionRef } from "../edgeless-runtime";
 import type {
@@ -592,6 +593,8 @@ export class EdgelessVisualController {
   }
 
   private registerClipboard(): void {
+    // Label editors are plain-text hosts. Claiming copy/paste here would
+    // serialize the selected visual and ignore the caret inside the label.
     const write = (event: ClipboardEvent, cut: boolean): boolean => {
       const snapshot = this.selection.get();
       if (!snapshot.active || !snapshot.items.length) return false;
@@ -604,9 +607,27 @@ export class EdgelessVisualController {
       if (cut) this.deleteSelection();
       return true;
     };
-    this.reactEditor.events.register({ id: "edgeless.visuals.copy", type: "copy", capture: true, mode: "edgeless" }, ({ raw }) => write(raw, false));
-    this.reactEditor.events.register({ id: "edgeless.visuals.cut", type: "cut", capture: true, mode: "edgeless" }, ({ raw }) => write(raw, true));
-    this.reactEditor.events.register({ id: "edgeless.visuals.paste", type: "paste", capture: true, mode: "edgeless" }, ({ raw }) => {
+    this.reactEditor.events.register({
+      id: "edgeless.visuals.copy",
+      type: "copy",
+      capture: true,
+      mode: "edgeless",
+      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
+    }, ({ raw }) => write(raw, false));
+    this.reactEditor.events.register({
+      id: "edgeless.visuals.cut",
+      type: "cut",
+      capture: true,
+      mode: "edgeless",
+      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
+    }, ({ raw }) => write(raw, true));
+    this.reactEditor.events.register({
+      id: "edgeless.visuals.paste",
+      type: "paste",
+      capture: true,
+      mode: "edgeless",
+      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
+    }, ({ raw }) => {
       const structured = raw.clipboardData?.getData(RIVTO_CLIPBOARD_MIME);
       if (!structured) return false;
       const bundle = JSON.parse(structured) as ClipboardBundle;
