@@ -130,6 +130,17 @@ export type BlockPropsValidator = (
 ) => Record<string, unknown>;
 
 /**
+ * Optional parent/child placement check used at insert, move, and load.
+ *
+ * @param childType - Native type of the block being placed.
+ * @param parentType - Native type of the new parent, or `null` for the root.
+ */
+export type BlockParentConstraintValidator = (
+  childType: string,
+  parentType: string | null,
+) => void;
+
+/**
  * Public collaborative document coordinator used by editors and persistence.
  *
  * Block, link, and element behavior is intentionally available only through
@@ -171,14 +182,18 @@ export interface DocumentModel {
   transact(operation: () => void): void;
 
   /**
-   * Produces a lossless schema-v5 snapshot.
+   * Produces a lossless schema-v6 snapshot.
    *
    * @returns Detached blocks, links, elements, and document plugin data.
    */
   getSnapshot(): Snapshot;
 
   /**
-   * Replaces only supplied schema-v5 snapshot sections.
+   * Replaces only supplied schema-v6 snapshot sections.
+   *
+   * Partial updates replace present sections and leave omitted collaborative
+   * state unchanged, except that replacing `blocks` without `links` removes
+   * retained links whose endpoints are no longer placed.
    *
    * @param snapshot - Complete snapshot or partial persistence update.
    * @returns No value.

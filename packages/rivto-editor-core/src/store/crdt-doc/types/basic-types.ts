@@ -4,18 +4,22 @@ import { CRDTText } from "./text";
 /**
  * BasicType represents any serializable primitive or recursive
  * structure for document properties. This includes:
- * - number, string, boolean, null
- * - Map (with string keys and BasicType values)
+ * - finite number, string, boolean, null
  * - Array of BasicType
- * - Object with string keys and BasicType values
+ * - Plain object with string keys and BasicType values
+ *
+ * Document props, plugin data, and snapshots still reject Dates, Maps,
+ * typed arrays, and class instances through `assertPortableValue`.
+ * `Map` remains here only for Yjs adapter conversion (`toMap` / fromJSON).
  */
-export type BasicType = 
-| number 
-| string 
-| boolean 
-| null 
-| BasicType[] 
-| object;
+export type BasicType =
+  | number
+  | string
+  | boolean
+  | null
+  | BasicType[]
+  | { [key: string]: BasicType }
+  | Map<string, BasicType>;
 
 /**
  * CRDTType represents document-compatible values that the

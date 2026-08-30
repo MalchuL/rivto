@@ -1,9 +1,14 @@
-/** Stable action IDs used by creation-time keyboard overrides. */
+/**
+ * Stable action IDs used by keymap overrides and inventory rows.
+ *
+ * Defaults live beside each `keyboard.register` call. This catalog is only an
+ * ID index so hosts can target built-in actions without depending on a static
+ * shortcut table as the runtime source of truth.
+ */
 export const KEYBOARD_BINDING_IDS = {
   historyUndo: "history.undo",
   historyRedo: "history.redo",
   clipboardPasteAsPlainText: "clipboard.paste-as-plain-text",
-  clipboardPasteAsPlainTextRelease: "clipboard.paste-as-plain-text-release",
   blockCreate: "block.create",
   blockSeparatorCreate: "block.separator-create",
   selectionDelete: "selection.delete",
@@ -54,17 +59,16 @@ export const KEYBOARD_BINDING_IDS = {
   edgelessPanStop: "edgeless.pan-stop",
 } as const;
 
-/** Default shortcuts keyed by their public binding IDs. */
+/**
+ * Convenience defaults that match the built-in extension registrations.
+ *
+ * Runtime inventory comes from `keyboard.list()`, not this table. Third-party
+ * actions appear there without being added here.
+ */
 export const BUILTIN_KEYMAP: Readonly<Record<string, readonly string[]>> = {
   [KEYBOARD_BINDING_IDS.historyUndo]: ["Primary+z"],
   [KEYBOARD_BINDING_IDS.historyRedo]: ["Primary+Shift+z", "Primary+y"],
   [KEYBOARD_BINDING_IDS.clipboardPasteAsPlainText]: ["Primary+Shift+v"],
-  [KEYBOARD_BINDING_IDS.clipboardPasteAsPlainTextRelease]: [
-    "Primary+Shift+v",
-    "Primary+v",
-    "Shift+v",
-    "v",
-  ],
   [KEYBOARD_BINDING_IDS.blockCreate]: ["Enter"],
   [KEYBOARD_BINDING_IDS.blockSeparatorCreate]: ["Primary+Shift+Enter"],
   [KEYBOARD_BINDING_IDS.selectionDelete]: ["Backspace", "Delete"],

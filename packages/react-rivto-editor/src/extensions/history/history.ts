@@ -1,8 +1,5 @@
 import type { ReactEditor } from "../../types";
-import {
-  BUILTIN_KEYMAP,
-  KEYBOARD_BINDING_IDS,
-} from "../../managers";
+import { KEYBOARD_BINDING_IDS } from "../../managers";
 
 /** One document-history action recognized from a browser editing event. */
 type HistoryAction = "undo" | "redo";
@@ -75,7 +72,7 @@ export function registerHistory(
 
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.historyUndo,
-    keys: options.undoKeys ?? BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.historyUndo]!,
+    keys: options.undoKeys ?? ["Primary+z"],
     composing: "prevent",
   }, ({ root }) => {
     run(root, "undo");
@@ -84,7 +81,7 @@ export function registerHistory(
 
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.historyRedo,
-    keys: options.redoKeys ?? BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.historyRedo]!,
+    keys: options.redoKeys ?? ["Primary+Shift+z", "Primary+y"],
     composing: "prevent",
   }, ({ root }) => {
     run(root, "redo");

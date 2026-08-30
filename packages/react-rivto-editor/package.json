@@ -29,7 +29,7 @@
     "dev": "tsup src/index.ts src/extensions.ts --format esm --dts --sourcemap --clean --out-dir dist/esm --watch",
     "check-types": "tsc --noEmit",
     "lint": "eslint src --max-warnings=0",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand"
+    "test": "NODE_OPTIONS=--experimental-vm-modules ../../scripts/run-test.sh --runInBand"
   },
   "dependencies": {
     "@chulane/rivto": "workspace:*",

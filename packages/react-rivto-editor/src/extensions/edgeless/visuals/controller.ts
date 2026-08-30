@@ -1,5 +1,6 @@
 import {
   RIVTO_CLIPBOARD_MIME,
+  validateClipboardBundle,
   type ClipboardBundle,
   type EditorBlock,
   type EditorBlockInput,
@@ -630,8 +631,14 @@ export class EdgelessVisualController {
     }, ({ raw }) => {
       const structured = raw.clipboardData?.getData(RIVTO_CLIPBOARD_MIME);
       if (!structured) return false;
-      const bundle = JSON.parse(structured) as ClipboardBundle;
-      if (bundle.version !== 4 || !bundle.elements?.length) return false;
+      let bundle: ClipboardBundle;
+      try {
+        bundle = JSON.parse(structured) as unknown as ClipboardBundle;
+        validateClipboardBundle(bundle);
+      } catch {
+        return false;
+      }
+      if (!bundle.elements?.length) return false;
       this.pasteClipboardBundle(bundle);
       return true;
     });
@@ -658,7 +665,8 @@ export class EdgelessVisualController {
   }
 
   private pasteClipboardBundle(bundle: ClipboardBundle): void {
-    if (bundle.version !== 4 || !Array.isArray(bundle.blocks) || !Array.isArray(bundle.links) || !Array.isArray(bundle.elements)) throw new Error("Invalid edgeless clipboard payload");
+    validateClipboardBundle(bundle);
+    if (!Array.isArray(bundle.elements)) throw new Error("Invalid edgeless clipboard payload");
     const blockMap = new Map<string, string>();
     const remapBlock = (block: EditorBlock): EditorBlockInput => { const id = crypto.randomUUID(); blockMap.set(block.id, id); return { ...copy(block), id, children: block.children.map(remapBlock) }; };
     const blocks = bundle.blocks.map(remapBlock);
@@ -837,7 +845,12 @@ export class EdgelessVisualController {
       const resolve = (endpoint: ConnectorEndpoint): ConnectorEndpoint => {
         if (!endpoint.elementId) return endpoint;
         const frame = this.bounds(endpoint.elementId);
-        if (!frame) { missing = true; return { ...endpoint, elementId: undefined }; }
+        if (!frame) {
+          missing = true;
+          const detached = { ...endpoint };
+          delete detached.elementId;
+          return detached;
+        }
         return { ...endpoint, position: endpointPoint(endpoint, this.element(endpoint.elementId)?.frame, this.rotation(endpoint.elementId)) };
       };
       const source = resolve(connector.source);

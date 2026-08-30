@@ -186,3 +186,56 @@ body { margin: 0; }
   background: #f7f5ff;
   cursor: pointer;
 }
+
+.keyboard-panel {
+  margin: 0 24px 12px;
+  padding: 8px 12px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  background: #fafafa;
+  font-size: 13px;
+}
+
+.keyboard-panel-list {
+  display: grid;
+  gap: 10px;
+  max-height: 280px;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.keyboard-panel-row {
+  display: grid;
+  gap: 4px;
+}
+
+.keyboard-panel-id,
+.keyboard-panel-defaults,
+.keyboard-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.keyboard-panel-edit {
+  display: grid;
+  gap: 4px;
+}
+
+.keyboard-panel-edit span {
+  color: #666;
+}
+
+.keyboard-panel-conflict {
+  margin: 0;
+  color: #9a3412;
+}
+
+.keyboard-panel-help,
+.keyboard-panel-indent-hint {
+  margin: 8px 0 0;
+  color: #666;
+}

@@ -20,12 +20,33 @@ const normalizeKey = (key: string): string => {
 const letterFromCode = (code: string): string | undefined =>
   /^Key([A-Z])$/.exec(code)?.[1]?.toLowerCase();
 
+/**
+ * Resolves the platform exclusive modifier represented by `Primary`.
+ *
+ * macOS and iOS use Meta; other platforms use Ctrl. Explicit `Ctrl` and `Meta`
+ * bindings are unaffected.
+ *
+ * @returns `meta` on Apple platforms, otherwise `ctrl`.
+ */
+export function resolvePrimaryModifier(): "ctrl" | "meta" {
+  const platform = typeof navigator === "undefined" ? "" : navigator.platform;
+  return /Mac|iPhone|iPad|iPod/i.test(platform) ? "meta" : "ctrl";
+}
+
 /** Parses and validates one exact, single-stroke shortcut. */
 export function parseShortcut(shortcut: string): ParsedShortcut {
-  const parts = shortcut.split("+").filter(Boolean);
-  const key = normalizeKey(parts.pop() ?? "");
+  const parts = shortcut.split("+");
+  if (!parts.length || parts.some((part) => part === "")) {
+    throw new Error(`Invalid keyboard shortcut: ${shortcut}`);
+  }
+  const keyToken = parts.pop() ?? "";
+  const key = keyToken.toLowerCase() === "plus" ? "+" : normalizeKey(keyToken);
   if (!key) throw new Error(`Invalid keyboard shortcut: ${shortcut}`);
-  const modifiers = new Set(parts.map((part) => part.toLowerCase()));
+  const normalizedParts = parts.map((part) => part.toLowerCase());
+  if (normalizedParts.length !== new Set(normalizedParts).size) {
+    throw new Error(`Duplicate keyboard modifier in ${shortcut}`);
+  }
+  const modifiers = new Set(normalizedParts);
   for (const modifier of modifiers) {
     if (!["primary", "ctrl", "control", "meta", "cmd", "command", "alt", "shift"].includes(modifier)) {
       throw new Error(`Unknown keyboard modifier ${modifier} in ${shortcut}`);
@@ -42,7 +63,7 @@ export function parseShortcut(shortcut: string): ParsedShortcut {
       primary ? "Primary" : ctrl ? "Ctrl" : meta ? "Meta" : "",
       modifiers.has("alt") ? "Alt" : "",
       modifiers.has("shift") ? "Shift" : "",
-      key,
+      key === "+" ? "Plus" : key,
     ].filter(Boolean).join("+"),
     key,
     modifier: primary ? "primary" : ctrl ? "ctrl" : meta ? "meta" : "none",
@@ -71,7 +92,11 @@ export function matchesShortcut(
   const physicalKey = shortcut.modifier === "none" ? undefined : letterFromCode(event.code);
   if (shortcut.key !== logicalKey && shortcut.key !== physicalKey) return false;
   if (shortcut.alt !== modifiers.alt || shortcut.shift !== modifiers.shift) return false;
-  if (shortcut.modifier === "primary") return modifiers.ctrl !== modifiers.meta;
+  if (shortcut.modifier === "primary") {
+    return resolvePrimaryModifier() === "meta"
+      ? modifiers.meta && !modifiers.ctrl
+      : modifiers.ctrl && !modifiers.meta;
+  }
   if (shortcut.modifier === "ctrl") return modifiers.ctrl && !modifiers.meta;
   if (shortcut.modifier === "meta") return modifiers.meta && !modifiers.ctrl;
   return !modifiers.ctrl && !modifiers.meta;
@@ -80,11 +105,15 @@ export function matchesShortcut(
 /** Returns the canonical portable description of a native keyboard event. */
 export function shortcutFromKeyboardEvent(event: globalThis.KeyboardEvent): string {
   const modifiers = eventModifiers(event);
-  const key = modifiers.ctrl !== modifiers.meta
+  const primary = resolvePrimaryModifier();
+  const usesPrimary = primary === "meta"
+    ? modifiers.meta && !modifiers.ctrl
+    : modifiers.ctrl && !modifiers.meta;
+  const key = usesPrimary
     ? letterFromCode(event.code) ?? normalizeKey(event.key)
     : normalizeKey(event.key);
   return [
-    modifiers.ctrl !== modifiers.meta ? "Primary" : modifiers.ctrl ? "Ctrl+Meta" : "",
+    usesPrimary ? "Primary" : modifiers.ctrl && modifiers.meta ? "Ctrl+Meta" : modifiers.ctrl ? "Ctrl" : modifiers.meta ? "Meta" : "",
     modifiers.alt ? "Alt" : "",
     modifiers.shift ? "Shift" : "",
     key,

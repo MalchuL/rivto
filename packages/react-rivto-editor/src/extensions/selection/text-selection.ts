@@ -15,6 +15,7 @@ import {
   BLOCK_SELECTION_ANCHOR_SELECTOR,
 } from "../../constants";
 import type { ReactEditor } from "../../types";
+import { isElementNode } from "../../managers/events/dom-nodes";
 import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
 import {
   createBlockSelection,
@@ -145,7 +146,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
         pointer = null;
         ownsCrossBlockSelection = false;
       } else if (event.button === 0) {
-        const selectionAnchor = event.target instanceof Element
+        const selectionAnchor = isElementNode(event.target)
           ? event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR)
           : null;
         if (selectionAnchor && root.contains(selectionAnchor)) {
@@ -341,7 +342,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
         event.ctrlKey ||
         event.metaKey ||
         event.shiftKey ||
-        !(event.target instanceof Element) ||
+        !isElementNode(event.target) ||
         isInteractiveStructuralTarget(event.target)
       ) return false;
       const anchor = event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);

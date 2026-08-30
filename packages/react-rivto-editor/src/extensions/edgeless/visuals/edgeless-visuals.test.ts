@@ -331,7 +331,7 @@ describe("edgelessVisualsExtension", () => {
       return { editor, reactEditor, connector };
     };
     const detached = setup("detach");
-    expect(detached.editor.elements.getElement(detached.connector)?.props.source).toMatchObject({ elementId: undefined });
+    expect(detached.editor.elements.getElement(detached.connector)?.props.source).not.toHaveProperty("elementId");
     detached.reactEditor.destroy(); detached.editor.destroy();
     const deleted = setup("delete");
     expect(deleted.editor.elements.getElement(deleted.connector)).toBeUndefined();

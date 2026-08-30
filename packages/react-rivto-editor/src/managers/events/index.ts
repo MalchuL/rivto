@@ -1,6 +1,7 @@
 export * from "./event-manager";
 export * from "./block-dom";
 export * from "./dom-types";
+export * from "./dom-nodes";
 export * from "./editor-event";
 export * from "./keyboard-editor-event";
 export * from "./keyboard-manager";

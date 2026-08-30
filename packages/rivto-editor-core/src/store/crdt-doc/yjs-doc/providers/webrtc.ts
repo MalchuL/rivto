@@ -4,7 +4,8 @@ import { YjsDoc } from "../yjs-doc";
 
 
 export class WebRTCProvider implements Provider {
-    public readonly id: string = "webrtc";
+    /** Room-qualified identity so two WebRTC rooms can attach to one document. */
+    public readonly id: string;
 
     private _provider: YWebrtcProvider | null = null;
     /**
@@ -13,6 +14,7 @@ export class WebRTCProvider implements Provider {
      * @param options - The options to pass to the WebRTC provider.
      */
     constructor(private readonly roomId: string, private readonly options?: ProviderOptions) {
+        this.id = `webrtc:${roomId}`;
     }
     /**
      * Connects the provider to the given CRDT document.

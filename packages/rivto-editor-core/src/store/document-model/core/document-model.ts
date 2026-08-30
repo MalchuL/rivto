@@ -1,16 +1,18 @@
 import { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../crdt-doc";
 import {
+  collectBlockIds,
   DocumentBlockManager,
   DocumentElementManager,
   DocumentLinkManager,
   DocumentPluginDataManager,
+  validateLinkCollection,
 } from "./managers";
 import type {
   DocumentModel,
   Snapshot,
   SnapshotUpdate,
 } from "./types";
-import { clone } from "./utils";
+import { assertPortableRecord, clone } from "./utils";
 
 /**
  * Coordinates collaborative document lifecycle through block and link managers.
@@ -77,6 +79,10 @@ export class DocumentModelImpl implements DocumentModel {
       ...this.pluginData.undoScopes,
     ];
     this.blocks.normalize();
+    this.crdt.on("update", (_update: unknown, origin?: unknown) => {
+      if (origin === this.origin) return;
+      this.blocks.normalize();
+    });
   }
 
   /**
@@ -117,31 +123,48 @@ export class DocumentModelImpl implements DocumentModel {
   /**
    * Applies supplied schema-v6 snapshot sections atomically.
    *
-   * Complete snapshots replace the complete document; partial updates replace
-   * only present sections and leave omitted collaborative state unchanged.
+   * Every supplied section and its cross-references are validated before the
+   * transaction begins. CRDT transactions do not roll back thrown writes, so
+   * the transaction performs writes only.
+   *
+   * Complete snapshots replace the complete document. Partial updates replace
+   * only present sections and leave omitted collaborative state unchanged,
+   * except that replacing `blocks` without `links` removes retained links
+   * whose endpoints are no longer placed.
    *
    * @param snapshot - Complete snapshot or partial persistence update.
    * @returns No value.
-   * @throws {Error} When a supplied block or element collection is unsupported.
+   * @throws {Error} When a supplied section is unsupported or cross-references
+   * are invalid.
    */
   loadSnapshot(snapshot: SnapshotUpdate): void {
     if (snapshot.version !== 6) {
       throw new Error(`Unsupported Rivto document snapshot version: ${String(snapshot.version)}`);
     }
     if ((snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks)) ||
+      (snapshot.links !== undefined && !Array.isArray(snapshot.links)) ||
       (snapshot.elements !== undefined && !Array.isArray(snapshot.elements))) {
       throw new Error("Unsupported Rivto document snapshot");
     }
     if (snapshot.blocks) this.blocks.validateBlocks(snapshot.blocks);
     if (snapshot.elements) this.elements.validateElements(snapshot.elements);
+    if (snapshot.pluginData) assertPortableRecord(snapshot.pluginData, "pluginData");
+    const nextBlockIds = snapshot.blocks
+      ? collectBlockIds(snapshot.blocks)
+      : collectBlockIds(this.blocks.getBlocks());
+    if (snapshot.links) validateLinkCollection(snapshot.links, nextBlockIds);
+    const danglingLinkIds = snapshot.blocks && snapshot.links === undefined
+      ? this.links.getLinks()
+        .filter((link) => !nextBlockIds.has(link.from.blockId) || !nextBlockIds.has(link.to.blockId))
+        .map((link) => link.id)
+      : [];
 
     this.transact(() => {
       if (snapshot.blocks) this.blocks.loadBlocks(snapshot.blocks);
       if (snapshot.links) this.links.loadLinks(snapshot.links);
+      else danglingLinkIds.forEach((id) => this.links.removeLink(id));
       if (snapshot.elements) this.elements.loadElements(snapshot.elements);
-      if (snapshot.pluginData) {
-        this.pluginData.load(snapshot.pluginData);
-      }
+      if (snapshot.pluginData) this.pluginData.load(snapshot.pluginData);
     });
   }
 }

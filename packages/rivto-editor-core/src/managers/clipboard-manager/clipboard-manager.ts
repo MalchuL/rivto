@@ -11,6 +11,7 @@ import {
   flattenBlocks,
   remapClipboardBundle,
   cloneSelectedTopLevelSubtrees,
+  validateClipboardBundle,
   type ClipboardIdReusePolicy,
 } from "./utils";
 
@@ -44,12 +45,12 @@ export class ClipboardManager {
   /**
    * Serializes the current selection without changing document or selection.
    *
-   * The payload contains lossless Rivto structure plus interoperable HTML and
-   * plain-text flavors for the host to write into a native clipboard event.
+   * The payload is a lossless Rivto `ClipboardBundle`. Interoperable HTML and
+   * plain-text flavors are produced later by the React clipboard host, not by
+   * this headless manager.
    *
    * @param selection - Optional detached selection used without changing editor state.
-   * @returns Structured, HTML, and plain-text flavors, or undefined when there
-   * is no copyable selection.
+   * @returns Structured Rivto data, or undefined when there is no copyable selection.
    */
   copy(selection?: EditorSelection): ClipboardBundle | undefined {
     return this.createClipboardBundle(selection);
@@ -83,21 +84,28 @@ export class ClipboardManager {
    */
   paste(input: ClipboardPasteInput = {}): void {
     this.documentAction(() => {
-      const bundle = input.bundle
-        ?? (input.structured ? JSON.parse(input.structured) as ClipboardBundle : undefined);
+      let bundle: ClipboardBundle | undefined;
+      try {
+        const candidate = input.bundle
+          ?? (input.structured ? JSON.parse(input.structured) as unknown : undefined);
+        if (candidate !== undefined) {
+          validateClipboardBundle(candidate);
+          bundle = candidate;
+        }
+      } catch {
+        bundle = undefined;
+      }
       if (bundle) {
         this.pasteClipboardBundle(bundle, input.mergeText !== false, input.placement);
         return;
       }
+      const text = input.text;
+      if (text === undefined || text === "") return;
       const defaultBlockType = input.defaultBlockType;
       if (!defaultBlockType) {
         throw new Error("clipboard.paste requires defaultBlockType for plain-text paste");
       }
-      this.pastePlainText(
-        defaultBlockType,
-        input.text ?? "",
-        input.preserveNewlines === true,
-      );
+      this.pastePlainText(defaultBlockType, text, input.preserveNewlines === true);
     });
   }
 
@@ -115,6 +123,10 @@ export class ClipboardManager {
     const current = selection ?? this.editor.selection.get();
     const range = this.editor.selection.normalize(current);
     if (!range?.blocks.length) return undefined;
+    const collapsedText = range.startsWithText
+      && range.start.blockId === range.end.blockId
+      && range.start.offset === range.end.offset;
+    if (collapsedText) return undefined;
     // Clone only top level blocks in selection range (we might have nested blocks inside selection).
 
     const blocks = cloneSelectedTopLevelSubtrees(
@@ -136,7 +148,7 @@ export class ClipboardManager {
     const links = this.editor.links.getLinks().filter(
       (link) => ids.has(link.from.blockId) && ids.has(link.to.blockId),
     );
-    return { version: 4, startsWithText: current[0]?.type === "text", blocks, links };
+    return { version: 4, startsWithText: range.startsWithText, blocks, links };
   }
 
   /**
@@ -261,12 +273,13 @@ export class ClipboardManager {
     const lines = preserveNewlines ? [value] : value.split(/\r\n?|\n/);
     // Handle case when we paste text into empty selection (without caret or text selection).
     // Finds latest block in the document and pastes text into it.
+    const prepared = this.editor.blocksRegistry.prepare({ type: defaultBlockType });
     if (!range) {
       let lastId: string | undefined;
       this.editor.document.transact(() => {
         lines.forEach((line) => {
           lastId = this.editor.document.blocks.insertBlock(
-            { type: defaultBlockType, content: line },
+            { ...prepared, content: line },
             lastId,
           );
         });
@@ -297,7 +310,7 @@ export class ClipboardManager {
           lines.slice(1).forEach((line, index, rest) => {
             const isLast = index === rest.length - 1;
             lastId = this.editor.document.blocks.insertBlock(
-              { type: defaultBlockType, content: `${line}${isLast ? suffix : ""}` },
+              { ...prepared, content: `${line}${isLast ? suffix : ""}` },
               previous,
             );
             previous = lastId;

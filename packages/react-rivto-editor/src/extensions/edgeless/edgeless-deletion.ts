@@ -1,6 +1,6 @@
 import type { BlockSelection } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS, isHTMLElementNode } from "../../managers";
 import { getEdgelessRuntime } from "./edgeless-runtime";
 import { blockIdsOf } from "../../surfaces/edgeless/block-elements";
 
@@ -29,7 +29,7 @@ export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
       const hasCanvas = selection.get().active && selection.get().items.length > 0;
       if (!hasCanvas && !coreSelection.some((item) => item.type === "block")) return false;
       const target = event.target;
-      return target instanceof HTMLElement &&
+      return isHTMLElementNode(target) &&
         !target.isContentEditable &&
         !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName);
     },

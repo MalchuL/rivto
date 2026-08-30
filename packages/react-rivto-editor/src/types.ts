@@ -69,11 +69,13 @@ export interface ReactEditor {
   isEmptyBlock: IsEmptyBlock;
   /**
    * Installs writing factories. Called by `defaultWritingBlockExtension`.
+   *
+   * @returns Disposer that restores the previous factories.
    */
   installDefaultWriting(options: {
     createDefaultBlock: CreateDefaultBlock;
     isEmptyBlock: IsEmptyBlock;
-  }): void;
+  }): () => void;
   readonly renderers: RenderersCapability;
   readonly blocks: BlocksCapability;
   /** React-owned portable clipboard formatter and parser registry. */

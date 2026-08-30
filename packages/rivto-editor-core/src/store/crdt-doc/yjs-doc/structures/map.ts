@@ -1,6 +1,7 @@
 import { CRDTType, BasicType, CRDTMap } from "../../types";
 import * as Y from 'yjs';
 import * as utils from './utils';
+import type { YJSType } from "./utils/types";
 import { YjsBasic } from "./basic";
 import { YjsNotAttachedError } from "../error";
 
@@ -128,8 +129,8 @@ export class YjsMap<Schema extends object = Record<string, CRDTType>>
      */
     forEach(callbackfn: (value: Schema[keyof Schema], key: keyof Schema & string, map: CRDTMap<Schema>) => void): void {
         this.checkIfNotAttached();
-        this.yjsObj.forEach((val: CRDTType, key: string) => {
-            callbackfn(utils.wrapYJStoCRDT(val) as Schema[keyof Schema], key as keyof Schema & string, this);
+        this.yjsObj.forEach((val, key: string) => {
+            callbackfn(utils.wrapYJStoCRDT(val as YJSType) as Schema[keyof Schema], key as keyof Schema & string, this);
         });
     }
 
