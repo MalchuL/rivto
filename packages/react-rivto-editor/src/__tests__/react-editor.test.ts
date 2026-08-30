@@ -477,6 +477,8 @@ describe("delegated events", () => {
     ownerDocument!: FakeDocument;
     parent: FakeElement | null = null;
     attributes = new Map<string, string>();
+    readonly nodeType = 1;
+    readonly tagName = "DIV";
 
     contains(candidate: unknown): boolean {
       let found = false;
@@ -490,15 +492,13 @@ describe("delegated events", () => {
     }
 
     closest(selector: string): FakeElement | null {
-      let match: FakeElement | null = null;
       if (selector.includes("data-block-id") && this.attributes.has("data-block-id")) {
-        match = this;
-      } else if (selector.includes("data-block-content") && this.attributes.has("data-block-content")) {
-        match = this;
-      } else {
-        match = this.parent?.closest(selector) ?? null;
+        return this;
       }
-      return match;
+      if (selector.includes("data-block-content") && this.attributes.has("data-block-content")) {
+        return this;
+      }
+      return this.parent?.closest(selector) ?? null;
     }
 
     getAttribute(name: string): string | null {
@@ -947,6 +947,22 @@ describe("delegated events", () => {
     root.emit("keydown", keyboardEvent(root, "ArrowRight", { ctrlKey: true, shiftKey: true }));
     root.emit("keydown", keyboardEvent(root, "Escape"));
     expect(calls).toEqual(["remapped"]);
+    const listed = keyboard.list();
+    expect(listed.find((item) => item.id === "unknown")).toMatchObject({
+      installed: false,
+      keys: ["Escape"],
+    });
+    expect(listed.find((item) => item.id === "disabled")).toMatchObject({
+      disabled: true,
+      overridden: true,
+    });
+    const revisions: number[] = [];
+    const stop = keyboard.subscribe(() => revisions.push(keyboard.revision));
+    keyboard.setKeymapOverride("remapped", ["Enter"]);
+    expect(listed.find((item) => item.id === "remapped")?.conflicts ?? []).not.toContain("temporary");
+    expect(keyboard.list().find((item) => item.id === "remapped")?.keys).toEqual(["Enter"]);
+    expect(revisions.length).toBeGreaterThan(0);
+    stop();
     reactEditor.destroy();
     editor.destroy();
   });
@@ -1037,6 +1053,7 @@ describe("delegated events", () => {
     root.emit("keydown", prevented);
     root.emit("keyup", { ...keyboardEvent(root, "d"), type: "keyup" } as KeyboardEvent);
     expect(calls).toEqual(["handled", "released"]);
+    expect(keyboard.list().find((item) => item.id === "released")?.phase).toBe("keyup");
     expect(ignored.defaultPrevented).toBe(false);
     expect(handled.defaultPrevented).toBe(true);
     expect(prevented.defaultPrevented).toBe(true);

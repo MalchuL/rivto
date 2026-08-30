@@ -75,12 +75,16 @@ export function defaultWritingBlockExtension(
   return {
     id: "block.default-writing",
     setup: (reactEditor) => {
-      reactEditor.installDefaultWriting({ createDefaultBlock, isEmptyBlock });
-      return reactEditor.blocks.register({
+      const restoreWriting = reactEditor.installDefaultWriting({ createDefaultBlock, isEmptyBlock });
+      const unregisterBlock = reactEditor.blocks.register({
         definition: { type, title },
         render,
         slashCommand,
       });
+      return () => {
+        restoreWriting();
+        unregisterBlock();
+      };
     },
   };
 }

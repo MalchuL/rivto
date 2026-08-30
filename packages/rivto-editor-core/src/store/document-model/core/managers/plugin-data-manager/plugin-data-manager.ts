@@ -5,7 +5,7 @@ import type {
   CRDTUndoScope,
 } from "../../../../crdt-doc";
 import type { DocumentModel } from "../../types";
-import { assignMap, clone, isCRDTMap } from "../../utils";
+import { assignMap, assertPortableRecord, assertPortableValue, clone, isCRDTMap } from "../../utils";
 
 const PLUGINS_KEY = "rivto.editor.plugins";
 
@@ -51,6 +51,7 @@ export class DocumentPluginDataManager {
    * @returns No value.
    */
   set(pluginId: string, value: BasicType): void {
+    assertPortableValue(value, "pluginData");
     this.document.transact(() => this.root.set(this.requireId(pluginId), clone(value) as CRDTType));
   }
 
@@ -103,6 +104,7 @@ export class DocumentPluginDataManager {
    * @returns No value.
    */
   load(values: Record<string, unknown>): void {
+    assertPortableRecord(values, "pluginData");
     this.document.transact(() => this.mergeMap(this.root, values));
   }
 

@@ -115,7 +115,7 @@ useful prototype for loading states, not yet a Rivto entity repository.
 
 Migration should happen in this order:
 
-1. Persist a schema-v5 Rivto snapshot or Yjs update per page/document.
+1. Persist a schema-v6 Rivto snapshot or Yjs update per page/document.
 2. Implement `EntityRepository.resolve(id)` above that service and let it find
    the owning document internally.
 3. Open the primary page through the same repository.

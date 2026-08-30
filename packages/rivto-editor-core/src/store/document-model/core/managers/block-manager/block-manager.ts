@@ -9,6 +9,7 @@ import type {
     BlockInput,
     BlockListProps,
     BlockPatch,
+    BlockParentConstraintValidator,
     BlockPropsValidator,
     BlockUpdate,
     DocumentModel,
@@ -20,8 +21,23 @@ import type {
     IDPlugin,
     IDProp,
 } from "../../types/storage";
-import { assignMap, assignText, clone, isCRDTArray, isCRDTMap, isCRDTText } from "../../utils";
-import { contentFrom, strings, validateBlockListProps } from "./utils";
+import {
+    assignMap,
+    assignText,
+    assertPortableRecord,
+    assertPortableValue,
+    clone,
+    isCRDTArray,
+    isCRDTMap,
+    isCRDTText,
+    requireNonemptyId,
+} from "../../utils";
+import {
+    contentFrom,
+    strings,
+    validateBlockForest,
+    validateBlockListProps,
+} from "./utils";
 
 const ROOTS_KEY = "rivto.editor.roots";
 const BLOCKS_KEY = "rivto.editor.blocks";
@@ -46,6 +62,8 @@ export class DocumentBlockManager {
 
     /** Block property validator. */
     private validateProps: BlockPropsValidator = (_type, props) => props;
+    /** Optional parent/child placement check; omitted definitions stay unconstrained. */
+    private validateParent: BlockParentConstraintValidator = () => undefined;
     /** Cached block paths for each block. */
     private readonly blockPaths = new Map<IDBlock, readonly number[]>();
     /** Root blocks. */
@@ -82,6 +100,16 @@ export class DocumentBlockManager {
      */
     setPropsValidator(validator: BlockPropsValidator): void {
         this.validateProps = validator;
+    }
+
+    /**
+     * Installs parent/child placement checks without coupling storage to plugins.
+     *
+     * @param validator - Function that throws when a child type cannot live under a parent.
+     * @returns No value.
+     */
+    setParentConstraintValidator(validator: BlockParentConstraintValidator): void {
+        this.validateParent = validator;
     }
 
     /**
@@ -172,9 +200,10 @@ export class DocumentBlockManager {
      */
     insertBlock(block: BlockInput, afterId?: string | null): string {
         if (!block.type) throw new Error("Block type is required");
+        const container = this.resolveInsertContainer(afterId);
+        this.validateInsertedForest([block], this.resolveInsertParentType(afterId));
         let id = "";
         this.transact(() => {
-            const container = afterId ? this.findContainer(afterId)?.array ?? this.roots : this.roots;
             id = this.insertInto(block, container, afterId);
         });
         return id;
@@ -221,9 +250,13 @@ export class DocumentBlockManager {
             if (patch.props) {
                 const current = simulatedProps.get(id)
                     ?? this.requiredMap(block, "props").toObject() as Record<string, unknown>;
+                Object.entries(patch.props).forEach(([key, value]) => {
+                    if (value !== undefined) assertPortableValue(value, `block.props.${key}`);
+                });
                 validatedProps = this.validateProps(type, { ...current, ...patch.props });
                 simulatedProps.set(id, validatedProps);
             }
+            if (patch.pluginData) assertPortableRecord(patch.pluginData, "block.pluginData");
             return { block, patch, validatedListProps, validatedProps };
         });
 
@@ -446,6 +479,7 @@ export class DocumentBlockManager {
             // removed after its transferable data has been copied to the target.
             const sourceContainer = this.findContainer(sourceId);
             if (!sourceContainer) throw new Error(`Block ${sourceId} not found`);
+            if (!this.findContainer(targetId)) throw new Error(`Block ${targetId} not found`);
 
             // Moving a source into one of its own descendants would leave that
             // descendant referring to a deleted ancestor and corrupt the tree.
@@ -496,9 +530,15 @@ export class DocumentBlockManager {
      */
     moveBlock(id: string, targetId: string | null, position: "before" | "after" | "inside" = "after"): void {
         if (id === targetId) return;
+        const source = this.findContainer(id);
+        if (!source) throw new Error(`Block ${id} not found`);
+        // User operations require a placed target. Orphan recovery is an
+        // explicit repair path, not a side effect of move or merge.
+        if (targetId !== null && !this.findContainer(targetId)) {
+            throw new Error(`Target block ${targetId} not found`);
+        }
+        this.validateParent(this.requiredType(this.requiredBlock(id), id), this.resolveMoveParentType(targetId, position));
         this.transact(() => {
-            const source = this.findContainer(id);
-            if (!source) throw new Error(`Block ${id} not found`);
             // A subtree cannot be inserted into its own descendants. Besides
             // being an invalid outline operation, doing so would create a
             // recursive ownership cycle that detached snapshots cannot render.
@@ -673,6 +713,7 @@ export class DocumentBlockManager {
      */
     loadBlocks(blocks: readonly Block[]): void {
         this.validateBlocks(blocks);
+        this.blockPaths.clear();
         this.roots.delete(0, this.roots.length);
         this.storage.clear();
         blocks.forEach((block) => this.insertInto(block, this.roots));
@@ -682,19 +723,20 @@ export class DocumentBlockManager {
      * Validates portable block trees before a snapshot transaction starts.
      *
      * Validation precedes destructive replacement because CRDT transactions do
-     * not roll back writes when an operation throws.
+     * not roll back writes when an operation throws. Unique IDs, nonempty types,
+     * portable records, schema props, and acyclic children are all required.
      *
      * @param blocks - Portable root block trees to validate recursively.
      * @returns No value.
-     * @throws {Error} When list properties or child collections are malformed.
+     * @throws {Error} When any descendant is malformed, duplicated, or cyclic.
      */
     validateBlocks(blocks: readonly Block[]): void {
-        const validate = (block: Block): void => {
-            validateBlockListProps(block.listProps);
-            if (!Array.isArray(block.children)) throw new Error("Snapshot block children must be an array");
-            block.children.forEach(validate);
-        };
-        blocks.forEach(validate);
+        validateBlockForest(blocks, {
+            requireComplete: true,
+            validateProps: this.validateProps,
+            validateParent: this.validateParent,
+            parentType: null,
+        });
     }
 
     /**
@@ -735,8 +777,9 @@ export class DocumentBlockManager {
     private insertInto(block: BlockInput, container: CRDTArray<string>, afterId?: string | null): string {
         if (!block.type) throw new Error("Block type is required");
         const listProps = validateBlockListProps(block.listProps ?? {});
-        const id = block.id ?? crypto.randomUUID();
+        const id = block.id === undefined ? crypto.randomUUID() : requireNonemptyId(block.id, "Block");
         if (this.storage.has(id)) throw new Error(`Block ${id} already exists`);
+        const index = this.placementIndex(container, afterId);
         const model = this.document.crdt.instantiator.createMap<BlockStorage>();
         const props = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
         const content = this.document.crdt.instantiator.createText();
@@ -756,10 +799,85 @@ export class DocumentBlockManager {
         assignText(content, contentFrom(block.content));
         assignMap(pluginData, block.pluginData ?? {});
         block.children?.forEach((child) => this.insertInto(child, children));
-        const index = afterId === undefined ? container.length : afterId === null ? 0 : strings(container).indexOf(afterId) + 1;
-        if (index < 0) throw new Error(`Target block ${afterId} not found`);
         container.insert(index, id);
         return id;
+    }
+
+    /**
+     * Resolves the sibling array that will receive an insertion.
+     *
+     * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
+     * @returns The root array or the sibling's current container.
+     * @throws {Error} When a named sibling is not placed in the tree.
+     */
+    private resolveInsertContainer(afterId?: string | null): CRDTArray<string> {
+        if (afterId === undefined || afterId === null) return this.roots;
+        const found = this.findContainer(afterId);
+        if (!found) throw new Error(`Target block ${afterId} not found`);
+        return found.array;
+    }
+
+    /**
+     * Computes the insertion index after the exact requested sibling.
+     *
+     * @param container - Sibling array that must contain `afterId` when named.
+     * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
+     * @returns Index at which the new ID should be inserted.
+     * @throws {Error} When a named sibling is missing from the container.
+     */
+    private placementIndex(container: CRDTArray<string>, afterId?: string | null): number {
+        if (afterId === undefined) return container.length;
+        if (afterId === null) return 0;
+        const found = strings(container).indexOf(afterId);
+        if (found < 0) throw new Error(`Target block ${afterId} not found`);
+        return found + 1;
+    }
+
+    /**
+     * Resolves the parent type that will own an insertion.
+     *
+     * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
+     * @returns Parent native type, or `null` when the insertion is a document root.
+     */
+    private resolveInsertParentType(afterId?: string | null): string | null {
+        if (afterId === undefined || afterId === null) return null;
+        const found = this.findContainer(afterId);
+        if (!found) throw new Error(`Target block ${afterId} not found`);
+        return found.parentId == null ? null : this.requiredType(this.requiredBlock(found.parentId), found.parentId);
+    }
+
+    /**
+     * Resolves the parent type that will own a moved block.
+     *
+     * @param targetId - Placement target, or `null` for the document root.
+     * @param position - Placement relative to `targetId`.
+     * @returns Parent native type, or `null` when the destination is a document root.
+     */
+    private resolveMoveParentType(
+        targetId: string | null,
+        position: "before" | "after" | "inside",
+    ): string | null {
+        if (targetId === null) return null;
+        if (position === "inside") return this.requiredType(this.requiredBlock(targetId), targetId);
+        const parentId = this.findContainer(targetId)?.parentId;
+        return parentId == null ? null : this.requiredType(this.requiredBlock(parentId), parentId);
+    }
+
+    /**
+     * Preflights one inserted forest against current storage before writing.
+     *
+     * @param blocks - Root inputs that will be written in one insertion.
+     * @param parentType - Native type of the insertion parent, or `null` for roots.
+     * @returns No value.
+     * @throws {Error} When any descendant is malformed or collides with storage.
+     */
+    private validateInsertedForest(blocks: readonly BlockInput[], parentType: string | null): void {
+        validateBlockForest(blocks, {
+            existingIds: new Set([...this.storage.keys()]),
+            validateProps: this.validateProps,
+            validateParent: this.validateParent,
+            parentType,
+        });
     }
 
     /**
@@ -916,26 +1034,36 @@ export class DocumentBlockManager {
     /**
      * Deletes a block and all descendants from the block map.
      *
+     * Path-cache entries are removed with the tree. A visited set stops
+     * recursive ownership cycles from looping forever.
+     *
      * @param id - Root ID of the subtree to delete.
+     * @param visited - IDs already removed during this walk.
      * @returns No value.
      */
-    private removeTree(id: string): void {
+    private removeTree(id: string, visited = new Set<string>()): void {
+        if (visited.has(id)) return;
+        visited.add(id);
+        this.blockPaths.delete(id);
         const value = this.storage.get(id);
         if (!isCRDTMap(value)) return;
-        strings(this.requiredArray(value, "children")).forEach((child) => this.removeTree(child));
+        strings(this.requiredArray(value, "children")).forEach((child) => this.removeTree(child, visited));
         this.storage.delete(id);
     }
 
     /**
-     * Collects every block ID in a subtree.
+     * Collects every block ID in a subtree without recursing forever on cycles.
      *
      * @param id - Root ID of the subtree.
+     * @param visited - IDs already collected during this walk.
      * @returns Root and descendant IDs in depth-first order.
      */
-    private collectTreeIds(id: string): string[] {
+    private collectTreeIds(id: string, visited = new Set<string>()): string[] {
+        if (visited.has(id)) return [];
+        visited.add(id);
         const value = this.storage.get(id);
         if (!isCRDTMap(value)) return [];
-        return [id, ...strings(this.requiredArray(value, "children")).flatMap((child) => this.collectTreeIds(child))];
+        return [id, ...strings(this.requiredArray(value, "children")).flatMap((child) => this.collectTreeIds(child, visited))];
     }
 
     /**

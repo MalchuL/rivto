@@ -51,9 +51,9 @@ export function unwrapCRDTtoYJS(item: CRDTType): YJSType {
   }
   // Check arrays and objects (and them combinations)
   if (isDeepPlainRecord(item)) {
-    return item;
+    return item as YJSType;
   }
-  throw new YjsConvertError(`Unsupported item type: ${itemType}, value: ${item.toString()}, class: ${item?.constructor?.name}`);
+  throw new YjsConvertError(`Unsupported item type: ${itemType}, value: ${String(item)}, class: ${Object.getPrototypeOf(item)?.constructor?.name}`);
 }
 
 /**
@@ -87,9 +87,9 @@ export function wrapYJStoCRDT(item: YJSType): CRDTType {
     if (item instanceof YjsText) throw new Error('Unsupported item type: YjsText it must be unwrapped to Y.Text');
   }
   if (isDeepPlainRecord(item)) {
-    return item;
+    return item as CRDTType;
   }
-  throw new YjsConvertError(`Unsupported item type: ${itemType}, value: ${item.toString()}, class: ${item?.constructor?.name}`);
+  throw new YjsConvertError(`Unsupported item type: ${itemType}, value: ${String(item)}, class: ${Object.getPrototypeOf(item)?.constructor?.name}`);
 }
 
 export function wrapBasicTypeToCRDTType(item: BasicType, options?: WrapBasicTypeToCRDTOptions): CRDTType {

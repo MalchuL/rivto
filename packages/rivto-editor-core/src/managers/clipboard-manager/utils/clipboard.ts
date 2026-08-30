@@ -1,6 +1,44 @@
 import type { NormalizedSelection } from "../../selection-manager";
-import type { Block, BlockInput, Link } from "../../../store/document-model";
+import {
+  validateBlockForest,
+  validateLinkCollection,
+  type Block,
+  type BlockInput,
+  type Link,
+} from "../../../store/document-model";
 import type { ClipboardBundle } from "../types";
+
+/** Clipboard schema version accepted by structured paste. */
+export const CLIPBOARD_BUNDLE_VERSION = 4;
+
+/**
+ * Asserts that an unknown payload is a complete, trusted clipboard bundle.
+ *
+ * Version, unique IDs, portable records, link shape, and acyclic forests are
+ * all checked before callers remap or write. Invalid custom MIME must fall back
+ * to plain text rather than reaching insert.
+ *
+ * @param bundle - Candidate structured clipboard payload.
+ * @returns No value.
+ * @throws {Error} When the payload is not a valid version-4 bundle.
+ */
+export function validateClipboardBundle(bundle: unknown): asserts bundle is ClipboardBundle {
+  if (!bundle || typeof bundle !== "object" || Array.isArray(bundle)) {
+    throw new Error("Unsupported Rivto clipboard payload");
+  }
+  const value = bundle as Partial<ClipboardBundle>;
+  if (value.version !== CLIPBOARD_BUNDLE_VERSION) {
+    throw new Error(`Unsupported Rivto clipboard version: ${String(value.version)}`);
+  }
+  if (!Array.isArray(value.blocks) || !Array.isArray(value.links)) {
+    throw new Error("Unsupported Rivto clipboard payload");
+  }
+  const blockIds = validateBlockForest(value.blocks, { requireComplete: true });
+  validateLinkCollection(value.links, blockIds);
+  if (value.pluginData !== undefined && (typeof value.pluginData !== "object" || value.pluginData === null || Array.isArray(value.pluginData))) {
+    throw new Error("Unsupported Rivto clipboard payload");
+  }
+}
 
 /**
  * Detached clipboard data after every persisted identity has been remapped.
@@ -152,19 +190,7 @@ export function remapClipboardBundle(
   firstTargetId?: string,
   reusePolicy?: ClipboardIdReusePolicy,
 ): RemappedClipboardBundle {
-  if (!Array.isArray(bundle.blocks) || !Array.isArray(bundle.links)) {
-    throw new Error("Unsupported Rivto clipboard payload");
-  }
-  const validateBlock = (block: Block): void => {
-    if (!Array.isArray(block.children)) {
-      throw new Error("Invalid Rivto clipboard block");
-    }
-    if (!block.listProps || typeof block.listProps !== "object" || Array.isArray(block.listProps)) {
-      throw new Error("Invalid Rivto clipboard block list state");
-    }
-    block.children.forEach(validateBlock);
-  };
-  bundle.blocks.forEach(validateBlock);
+  validateClipboardBundle(bundle);
 
   const idMap = new Map<string, string>();
   const reusedBlockIds = new Set<string>();

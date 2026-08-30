@@ -8,7 +8,7 @@ import type {
   ElementUpdate,
 } from "../../types";
 import type { ElementFrameStorage, ElementStorage, IDElement, IDProp } from "../../types/storage";
-import { assignMap, clone, isCRDTMap } from "../../utils";
+import { assignMap, assertPortableRecord, assertPortableValue, clone, isCRDTMap, requireNonemptyId } from "../../utils";
 
 const ELEMENTS_KEY = "rivto.editor.elements";
 
@@ -37,10 +37,11 @@ export class DocumentElementManager {
 
   /** @param input - Complete type, geometry, layer, and optional props. @returns Stable element ID. */
   insertElement(input: ElementInput): string {
-    const id = input.id ?? crypto.randomUUID();
+    const id = input.id === undefined ? crypto.randomUUID() : requireNonemptyId(input.id, "Element");
     if (!input.type) throw new Error("Element type is required");
     if (this.storage.has(id)) throw new Error(`Element ${id} already exists`);
     this.props(input.props ?? {});
+    assertPortableRecord(input.props ?? {}, "element.props");
     const frame = this.frame(input.frame);
     const zIndex = this.zIndex(input.zIndex);
     this.document.transact(() => {
@@ -73,13 +74,25 @@ export class DocumentElementManager {
       const frame = patch.frame ? this.frame({ ...(simulatedFrames.get(id) ?? current.frame), ...patch.frame }) : undefined;
       if (frame) simulatedFrames.set(id, frame);
       const zIndex = patch.zIndex === undefined ? undefined : this.zIndex(patch.zIndex);
-      if (patch.props) this.props(patch.props);
+      if (patch.props) {
+        this.props(patch.props);
+        Object.entries(patch.props).forEach(([key, value]) => {
+          if (value !== undefined) assertPortableValue(value, `element.props.${key}`);
+        });
+      }
       return { element, patch, frame, zIndex };
     });
     this.document.transact(() => prepared.forEach(({ element, patch, frame, zIndex }) => {
       if (frame) assignMap(this.requiredMap<ElementFrameStorage>(element, "frame"), frame as ElementFrameStorage, false);
       if (zIndex !== undefined) element.set("zIndex", zIndex);
-      if (patch.props) assignMap(this.requiredMap<Record<string, CRDTType>>(element, "props"), patch.props, false);
+      if (patch.props) {
+        const props = this.requiredMap<Record<string, CRDTType>>(element, "props");
+        for (const key of Object.keys(patch.props)) {
+          const value = patch.props[key];
+          if (value === undefined) props.delete(key);
+          else props.set(key, clone(value) as CRDTType);
+        }
+      }
     }));
   }
 
@@ -95,12 +108,14 @@ export class DocumentElementManager {
   validateElements(elements: readonly DocumentElement[]): void {
     const ids = new Set<string>();
     elements.forEach((element) => {
-      if (!element.id || !element.type) throw new Error("Snapshot element ID and type are required");
-      if (ids.has(element.id)) throw new Error(`Duplicate element ${element.id}`);
-      ids.add(element.id);
+      const id = requireNonemptyId(element.id, "Element");
+      if (!element.type) throw new Error("Snapshot element ID and type are required");
+      if (ids.has(id)) throw new Error(`Duplicate element ${id}`);
+      ids.add(id);
       this.frame(element.frame);
       this.zIndex(element.zIndex);
-      if (!element.props || typeof element.props !== "object" || Array.isArray(element.props)) throw new Error("Element props must be an object");
+      this.props(element.props);
+      assertPortableRecord(element.props, "element.props");
     });
   }
 

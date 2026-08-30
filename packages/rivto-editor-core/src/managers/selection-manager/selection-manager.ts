@@ -204,6 +204,7 @@ export class SelectionManager {
           start: { blockId: first.id, offset: 0 },
           end: { blockId: last.id, offset: last.content.length },
           blocks,
+          startsWithText: false,
         } : undefined;
       } else {
         // Handle text selection which is TextSelection
@@ -224,6 +225,7 @@ export class SelectionManager {
             start: { ...start },
             end: { ...end },
             blocks: all.slice(Math.min(anchorIndex, headIndex), Math.max(anchorIndex, headIndex) + 1),
+            startsWithText: true,
           };
         }
       }
@@ -251,6 +253,7 @@ export class SelectionManager {
           start: { blockId: first.id, offset: 0 },
           end: { blockId: last.id, offset: last.content.length },
           blocks,
+          startsWithText: false,
         } : undefined;
       } else {
         // Text or mixed: earliest..latest, including blocks in between
@@ -270,10 +273,14 @@ export class SelectionManager {
           // Text or mixed: return the first and last block and blocks in between
           // Merging text items and block items into consecutive range.
           // Because browser can select text in non-consecutive blocks and we need to merge them into one range.
+          const earliest = ranges.reduce((current, range) => (
+            compare(range.start, current.start) < 0 ? range : current
+          ));
           result = {
             start: { ...start },
             end: { ...end },
             blocks: all.slice(startIndex, endIndex + 1),
+            startsWithText: earliest.startsWithText,
           };
         }
       }

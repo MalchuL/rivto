@@ -4,8 +4,29 @@ import type { KeyboardEditorEvent } from "./keyboard-editor-event";
 
 /** One exact + separated shortcut such as Primary+Shift+Z. */
 export type KeyboardShortcut = string;
-/** Creation-time replacement keys indexed by stable semantic binding ID. */
+/**
+ * Runtime replacement keys indexed by stable semantic binding ID.
+ *
+ * Unknown IDs are retained for future registrations so a typo stays visible
+ * in the inventory as an uninstalled override.
+ */
 export type KeymapOverrides = Readonly<Record<string, readonly KeyboardShortcut[]>>;
+
+/** Immutable view of one installed or orphan keyboard binding. */
+export interface KeyboardBindingSnapshot {
+  readonly id: string;
+  readonly defaultKeys: readonly KeyboardShortcut[];
+  readonly keys: readonly KeyboardShortcut[];
+  readonly overridden: boolean;
+  readonly disabled: boolean;
+  readonly installed: boolean;
+  readonly phase: KeyboardEventPhase;
+  readonly target: KeyboardEventTarget;
+  readonly scope?: DOMEventScope;
+  readonly mode?: EditorMode | readonly EditorMode[];
+  readonly priority: number;
+  readonly conflicts: readonly string[];
+}
 /** Native keyboard event phase on which a binding is evaluated. */
 export type KeyboardEventPhase = "keydown" | "keyup";
 /** Policy used while the browser reports an active IME composition. */
