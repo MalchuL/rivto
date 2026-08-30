@@ -12,8 +12,13 @@ test("edits and restores a live binding without reloading the editor", async ({ 
   await panel.locator("summary").click();
   const indentRow = panel.locator(`[data-binding-id="block.indent"]`);
   await expect(indentRow).toHaveAttribute("data-binding-status", "default");
-  await indentRow.getByLabel("Shortcut for block.indent").fill("Primary+ArrowRight");
-  await indentRow.getByRole("button", { name: "Apply" }).click();
+  await indentRow.getByRole("button", { name: "Shortcut for block.indent" }).click();
+  const recorder = page.getByRole("dialog", { name: /Record shortcut for block.indent/ });
+  await expect(recorder).toBeVisible();
+  await page.keyboard.press("Control+ArrowRight");
+  await expect(page.locator("[data-keyboard-recorder-preview]")).toHaveText("Primary+ArrowRight");
+  await page.keyboard.press("Enter");
+  await expect(recorder).toHaveCount(0);
   await expect(indentRow).toHaveAttribute("data-binding-status", "overridden");
 
   const contents = page.locator("[data-journal-document=today] [data-block-content]");

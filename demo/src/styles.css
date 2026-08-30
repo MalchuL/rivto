@@ -196,46 +196,114 @@ body { margin: 0; }
   font-size: 13px;
 }
 
-.keyboard-panel-list {
-  display: grid;
-  gap: 10px;
-  max-height: 280px;
+.keyboard-panel-table-wrap {
+  max-height: 320px;
   margin: 8px 0 0;
-  padding: 0;
   overflow: auto;
-  list-style: none;
 }
 
-.keyboard-panel-row {
-  display: grid;
-  gap: 4px;
+.keyboard-panel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
 }
 
-.keyboard-panel-id,
-.keyboard-panel-defaults,
+.keyboard-panel-table th,
+.keyboard-panel-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+  vertical-align: top;
+}
+
+.keyboard-panel-table thead th {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  color: #666;
+  font-weight: 600;
+}
+
+.keyboard-panel-table th[scope="row"] {
+  font-weight: 500;
+}
+
 .keyboard-panel-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
-.keyboard-panel-edit {
-  display: grid;
-  gap: 4px;
+.keyboard-panel-key,
+.keyboard-panel-actions button {
+  padding: 3px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  font: inherit;
+  cursor: pointer;
 }
 
-.keyboard-panel-edit span {
-  color: #666;
+.keyboard-panel-key {
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
 }
 
 .keyboard-panel-conflict {
-  margin: 0;
+  margin: 4px 0 0;
   color: #9a3412;
+  font-weight: 400;
 }
 
 .keyboard-panel-help,
 .keyboard-panel-indent-hint {
   margin: 8px 0 0;
   color: #666;
+}
+
+.keyboard-shortcut-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(20 20 20 / 35%);
+}
+
+.keyboard-shortcut-modal {
+  width: min(420px, calc(100vw - 32px));
+  padding: 20px 22px;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 18%);
+}
+
+.keyboard-shortcut-modal h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.keyboard-shortcut-preview {
+  min-height: 2.2em;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed #cfcfcf;
+  border-radius: 8px;
+  background: #fafafa;
+  font-family: ui-monospace, monospace;
+}
+
+.keyboard-shortcut-hint,
+.keyboard-shortcut-error {
+  margin: 10px 0 0;
+}
+
+.keyboard-shortcut-hint {
+  color: #666;
+}
+
+.keyboard-shortcut-error {
+  color: #9a3412;
 }
