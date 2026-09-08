@@ -123,22 +123,22 @@ export interface SnapshotUpdate {
   pluginData?: Record<string, unknown>;
 }
 
-/** Library-neutral block property validator. */
-export type BlockPropsValidator = (
-  type: string,
-  props: Record<string, unknown>,
-) => Record<string, unknown>;
-
 /**
- * Optional parent/child placement check used at insert, move, and load.
+ * Validates or normalizes one portable block against its destination parent.
  *
- * @param childType - Native type of the block being placed.
- * @param parentType - Native type of the new parent, or `null` for the root.
+ * Document storage runs every installed validator in order before a write.
+ * A validator may throw to reject the block. Returning a new object is how a
+ * validator normalizes fields such as `props`; returning the same instance is
+ * allowed when the block is already valid.
+ *
+ * @param block - Portable block being inserted, updated, moved, or loaded.
+ * @param parentType - Native type of the destination parent, or `null` at root.
+ * @returns The original block or a normalized replacement.
  */
-export type BlockParentConstraintValidator = (
-  childType: string,
+export type BlockValidator = (
+  block: BlockInput,
   parentType: string | null,
-) => void;
+) => BlockInput;
 
 /**
  * Public collaborative document coordinator used by editors and persistence.

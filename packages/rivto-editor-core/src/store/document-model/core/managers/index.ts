@@ -1,5 +1,6 @@
 export {
   DocumentBlockManager,
+  BlockValidators,
   collectBlockIds,
   validateBlockForest,
   validateBlockListProps,

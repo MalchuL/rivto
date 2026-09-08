@@ -1,4 +1,5 @@
 export { DocumentBlockManager } from "./block-manager";
+export { BlockValidators } from "./block-validators";
 export {
   collectBlockIds,
   validateBlockForest,

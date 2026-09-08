@@ -21,7 +21,7 @@ const complete = (
 });
 
 describe("block parent constraints", () => {
-  test("rejects disallowed parents at insert, move, and load", () => {
+  test("rejects disallowed parents at insert, move, indent, and load", () => {
     const editor = createRivtoEditor();
     editor.blocksRegistry.defineBlock({
       type: "note-only",
@@ -47,6 +47,18 @@ describe("block parent constraints", () => {
     expect(() => editor.blocks.moveBlock("note-child", paragraphId, "inside"))
       .toThrow(/cannot be placed under paragraph/);
     expect(editor.blocks.getParentId("note-child")).toBe(noteId);
+
+    const nestedNoteId = editor.blocks.insertBlock({
+      type: "note",
+      content: "Nested",
+      children: [
+        { id: "inner-para", type: "paragraph", content: "P" },
+        { id: "indent-me", type: "note-only", content: "Indent" },
+      ],
+    });
+    expect(() => editor.blocks.indentBlock("indent-me"))
+      .toThrow(/cannot be placed under paragraph/);
+    expect(editor.blocks.getParentId("indent-me")).toBe(nestedNoteId);
 
     const before = editor.document.getSnapshot();
     expect(() => editor.document.loadSnapshot({

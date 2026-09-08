@@ -1,5 +1,6 @@
 import type { CRDTArray } from "../../../../crdt-doc";
-import type { BlockInput, BlockListProps, BlockPropsValidator, Link } from "../../types";
+import type { BlockInput, BlockListProps, Link } from "../../types";
+import type { BlockValidators } from "./block-validators";
 import { assertPortableRecord, assertPortableValue, requireNonemptyId } from "../../utils/portable";
 
 /**
@@ -13,12 +14,10 @@ export interface ValidateBlockForestOptions {
   readonly requireComplete?: boolean;
   /** IDs already present in storage that incoming supplied IDs must not collide with. */
   readonly existingIds?: ReadonlySet<string>;
-  /** Optional schema validator applied to each block's props. */
-  readonly validateProps?: BlockPropsValidator;
   /** Parent type of the forest roots; `null` is the document root. */
   readonly parentType?: string | null;
-  /** Optional parent/child placement check applied to every node. */
-  readonly validateParent?: (childType: string, parentType: string | null) => void;
+  /** Installed block validators applied to every node in document order. */
+  readonly validators?: BlockValidators;
 }
 
 /**
@@ -88,31 +87,27 @@ export function validateBlockForest(
       ids.add(id);
     }
     if (!block.type || typeof block.type !== "string") throw new Error("Block type is required");
-    options.validateParent?.(block.type, parentType);
+    const validated = options.validators?.apply(block, parentType) ?? block;
     if (options.requireComplete) {
-      if (typeof block.content !== "string") throw new Error("Block content must be a string");
-      if (!Array.isArray(block.children)) throw new Error("Snapshot block children must be an array");
-      validateBlockListProps(block.listProps);
-      assertPortableRecord(block.props, "block.props");
-      assertPortableRecord(block.pluginData, "block.pluginData");
-      options.validateProps?.(block.type, block.props);
+      if (typeof validated.content !== "string") throw new Error("Block content must be a string");
+      if (!Array.isArray(validated.children)) throw new Error("Snapshot block children must be an array");
+      validateBlockListProps(validated.listProps);
+      assertPortableRecord(validated.props, "block.props");
+      assertPortableRecord(validated.pluginData, "block.pluginData");
     } else {
-      if (block.content !== undefined && typeof block.content !== "string") {
+      if (validated.content !== undefined && typeof validated.content !== "string") {
         throw new Error("Block content must be a string");
       }
-      if (block.children !== undefined && !Array.isArray(block.children)) {
+      if (validated.children !== undefined && !Array.isArray(validated.children)) {
         throw new Error("Snapshot block children must be an array");
       }
-      if (block.listProps !== undefined) validateBlockListProps(block.listProps);
-      if (block.props !== undefined) {
-        assertPortableRecord(block.props, "block.props");
-        options.validateProps?.(block.type, block.props);
-      } else {
-        options.validateProps?.(block.type, {});
+      if (validated.listProps !== undefined) validateBlockListProps(validated.listProps);
+      if (validated.props !== undefined) {
+        assertPortableRecord(validated.props, "block.props");
       }
-      if (block.pluginData !== undefined) assertPortableRecord(block.pluginData, "block.pluginData");
+      if (validated.pluginData !== undefined) assertPortableRecord(validated.pluginData, "block.pluginData");
     }
-    (block.children ?? []).forEach((child) => visit(child, block.type));
+    (validated.children ?? []).forEach((child) => visit(child, validated.type));
     visiting.delete(block);
   };
   blocks.forEach((block) => visit(block, options.parentType ?? null));

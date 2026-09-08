@@ -95,10 +95,14 @@ export class EditorRuntime implements RivtoEditorApi {
     this.links = new LinkManager(this);
     this.elements = new ElementManager(this);
     this.clipboard = new ClipboardManager(this);
-    this.document.blocks.setPropsValidator((type, props) => this.blocksRegistry.validate(type, props));
-    this.document.blocks.setParentConstraintValidator((childType, parentType) => (
-      this.blocksRegistry.assertAllowedParent(childType, parentType)
-    ));
+    this.unsubscribeFns.push(this.document.blocks.validators.add((block, parentType) => {
+      this.blocksRegistry.assertAllowedParent(block.type, parentType);
+      return block;
+    }));
+    this.unsubscribeFns.push(this.document.blocks.validators.add((block) => ({
+      ...block,
+      props: this.blocksRegistry.validate(block.type, block.props ?? {}),
+    })));
     this.registerRuntimeCommands();
     this.registerClipboardCommands();
 

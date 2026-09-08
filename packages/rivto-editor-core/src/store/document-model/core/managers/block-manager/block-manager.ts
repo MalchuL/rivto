@@ -9,8 +9,6 @@ import type {
     BlockInput,
     BlockListProps,
     BlockPatch,
-    BlockParentConstraintValidator,
-    BlockPropsValidator,
     BlockUpdate,
     DocumentModel,
 } from "../../types";
@@ -32,6 +30,7 @@ import {
     isCRDTText,
     requireNonemptyId,
 } from "../../utils";
+import { BlockValidators } from "./block-validators";
 import {
     contentFrom,
     strings,
@@ -54,16 +53,16 @@ interface LocatedBlock {
  *
  * The manager is exposed as `document.blocks`. It preserves stable CRDT
  * container identities, lazily repairs cached tree paths, and coordinates link
- * cleanup whenever a block operation removes endpoints.
+ * cleanup whenever a block operation removes endpoints. Plugin constraints are
+ * registered on `validators` and applied to portable block instances before
+ * writes.
  */
 export class DocumentBlockManager {
     /** Collaborative containers tracked by the owning document's undo manager. */
     readonly undoScopes: readonly [CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>, CRDTArray<IDBlock>];
 
-    /** Block property validator. */
-    private validateProps: BlockPropsValidator = (_type, props) => props;
-    /** Optional parent/child placement check; omitted definitions stay unconstrained. */
-    private validateParent: BlockParentConstraintValidator = () => undefined;
+    /** Ordered plugin validators applied to portable blocks before writes. */
+    readonly validators = new BlockValidators();
     /** Cached block paths for each block. */
     private readonly blockPaths = new Map<IDBlock, readonly number[]>();
     /** Root blocks. */
@@ -90,26 +89,6 @@ export class DocumentBlockManager {
      */
     private transact(operation: () => void): void {
         this.document.transact(operation);
-    }
-
-    /**
-     * Installs block-property validation without coupling storage to plugins.
-     *
-     * @param validator - Function that validates and normalizes props by block type.
-     * @returns No value.
-     */
-    setPropsValidator(validator: BlockPropsValidator): void {
-        this.validateProps = validator;
-    }
-
-    /**
-     * Installs parent/child placement checks without coupling storage to plugins.
-     *
-     * @param validator - Function that throws when a child type cannot live under a parent.
-     * @returns No value.
-     */
-    setParentConstraintValidator(validator: BlockParentConstraintValidator): void {
-        this.validateParent = validator;
     }
 
     /**
@@ -204,7 +183,7 @@ export class DocumentBlockManager {
         this.validateInsertedForest([block], this.resolveInsertParentType(afterId));
         let id = "";
         this.transact(() => {
-            id = this.insertInto(block, container, afterId);
+            id = this.insertInto(block, container, afterId, this.resolveInsertParentType(afterId));
         });
         return id;
     }
@@ -253,7 +232,13 @@ export class DocumentBlockManager {
                 Object.entries(patch.props).forEach(([key, value]) => {
                     if (value !== undefined) assertPortableValue(value, `block.props.${key}`);
                 });
-                validatedProps = this.validateProps(type, { ...current, ...patch.props });
+                validatedProps = this.applyValidators({
+                    ...this.storedBlockInput(id),
+                    type,
+                    props: { ...current, ...patch.props },
+                    listProps: simulatedListProps.get(id)
+                        ?? this.requiredMap(block, "listProps").toObject(),
+                }).props ?? {};
                 simulatedProps.set(id, validatedProps);
             }
             if (patch.pluginData) assertPortableRecord(patch.pluginData, "block.pluginData");
@@ -290,9 +275,13 @@ export class DocumentBlockManager {
      */
     setBlockType(id: string, type: string, props: Record<string, unknown> = {}): void {
         if (!type) throw new Error("Block type is required");
+        const nextProps = this.applyValidators({
+            ...this.storedBlockInput(id),
+            type,
+            props,
+        }).props ?? {};
         this.transact(() => {
             const block = this.requiredBlock(id);
-            const nextProps = this.validateProps(type, props);
             block.set("type", type);
             assignMap(this.requiredMap(block, "props"), nextProps);
         });
@@ -311,7 +300,7 @@ export class DocumentBlockManager {
     setBlockProp(id: string, key: string, value: unknown): void {
         this.transact(() => {
             const block = this.requiredBlock(id);
-            this.patchProps(String(block.get("type")), this.requiredMap(block, "props"), { [key]: value });
+            this.patchProps(id, String(block.get("type")), this.requiredMap(block, "props"), { [key]: value });
         });
     }
 
@@ -537,7 +526,7 @@ export class DocumentBlockManager {
         if (targetId !== null && !this.findContainer(targetId)) {
             throw new Error(`Target block ${targetId} not found`);
         }
-        this.validateParent(this.requiredType(this.requiredBlock(id), id), this.resolveMoveParentType(targetId, position));
+        this.applyValidators(this.storedBlockInput(id), this.resolveMoveParentType(targetId, position));
         this.transact(() => {
             // A subtree cannot be inserted into its own descendants. Besides
             // being an invalid outline operation, doing so would create a
@@ -621,11 +610,14 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     indentBlocks(ids: string[]): void {
+        const roots = this.selectedTopLevelRoots(ids);
+        if (!this.isConsecutiveSelection(roots)) return;
+        const source = this.findContainer(roots[0]!);
+        if (!source || source.index === 0) return;
+        const parentId = String(source.array.get(source.index - 1));
+        const parentType = this.requiredType(this.requiredBlock(parentId), parentId);
+        roots.forEach((rootId) => this.applyValidators(this.storedBlockInput(rootId), parentType));
         this.transact(() => {
-            const roots = this.selectedTopLevelRoots(ids);
-            if (!this.isConsecutiveSelection(roots)) return;
-            const source = this.findContainer(roots[0]!);
-            if (!source || source.index === 0) return;
             const parent = this.requiredBlock(String(source.array.get(source.index - 1)));
             roots.forEach((rootId) => {
                 const current = this.findContainer(rootId);
@@ -667,21 +659,25 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     outdentBlocks(ids: string[]): void {
-        this.transact(() => {
-            const roots = this.selectedTopLevelRoots(ids);
-            if (!this.isConsecutiveSelection(roots)) return;
-            const source = this.findContainer(roots[0]!);
-            if (!source?.parentId) return;
-            const parentContainer = this.findContainer(source.parentId);
-            if (!parentContainer) return;
+        const roots = this.selectedTopLevelRoots(ids);
+        if (!this.isConsecutiveSelection(roots)) return;
+        const source = this.findContainer(roots[0]!);
+        if (!source?.parentId) return;
+        const parentContainer = this.findContainer(source.parentId);
+        if (!parentContainer) return;
 
-            // A range may continue with blocks already at the destination depth.
-            // Stop before them instead of moving them one level too far.
-            const firstDestinationLevel = roots.findIndex(
-                (rootId) => this.findContainer(rootId)?.parentId === parentContainer.parentId,
-            );
-            const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
-            if (!moving.length) return;
+        // A range may continue with blocks already at the destination depth.
+        // Stop before them instead of moving them one level too far.
+        const firstDestinationLevel = roots.findIndex(
+            (rootId) => this.findContainer(rootId)?.parentId === parentContainer.parentId,
+        );
+        const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
+        if (!moving.length) return;
+        const destParentType = parentContainer.parentId == null
+            ? null
+            : this.requiredType(this.requiredBlock(parentContainer.parentId), parentContainer.parentId);
+        moving.forEach((rootId) => this.applyValidators(this.storedBlockInput(rootId), destParentType));
+        this.transact(() => {
             const last = this.findContainer(moving.at(-1)!);
             if (!last) return;
             const followingSiblingIds = strings(last.array).slice(last.index + 1);
@@ -733,8 +729,7 @@ export class DocumentBlockManager {
     validateBlocks(blocks: readonly Block[]): void {
         validateBlockForest(blocks, {
             requireComplete: true,
-            validateProps: this.validateProps,
-            validateParent: this.validateParent,
+            validators: this.validators,
             parentType: null,
         });
     }
@@ -771,13 +766,20 @@ export class DocumentBlockManager {
      * @param block - Portable block data, including its type and optional descendants.
      * @param container - Root or child array that receives the block ID.
      * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
+     * @param parentType - Native type of the insertion parent, or `null` for roots.
      * @returns Stable ID assigned to the block.
      * @throws If the ID already exists or the requested sibling is missing.
      */
-    private insertInto(block: BlockInput, container: CRDTArray<string>, afterId?: string | null): string {
+    private insertInto(
+        block: BlockInput,
+        container: CRDTArray<string>,
+        afterId?: string | null,
+        parentType: string | null = null,
+    ): string {
         if (!block.type) throw new Error("Block type is required");
-        const listProps = validateBlockListProps(block.listProps ?? {});
-        const id = block.id === undefined ? crypto.randomUUID() : requireNonemptyId(block.id, "Block");
+        const validated = this.applyValidators(block, parentType);
+        const listProps = validateBlockListProps(validated.listProps ?? {});
+        const id = validated.id === undefined ? crypto.randomUUID() : requireNonemptyId(validated.id, "Block");
         if (this.storage.has(id)) throw new Error(`Block ${id} already exists`);
         const index = this.placementIndex(container, afterId);
         const model = this.document.crdt.instantiator.createMap<BlockStorage>();
@@ -787,7 +789,7 @@ export class DocumentBlockManager {
         const listPropsStorage = this.document.crdt.instantiator.createMap<BlockListPropsStorage>();
         const pluginData = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
         model.set("id", id);
-        model.set("type", block.type);
+        model.set("type", validated.type);
         model.set("listProps", listPropsStorage);
         model.set("props", props);
         model.set("content", content);
@@ -795,10 +797,10 @@ export class DocumentBlockManager {
         model.set("pluginData", pluginData);
         this.storage.set(id, model);
         assignMap(listPropsStorage, { ...listProps }, true);
-        assignMap(props, this.validateProps(block.type, block.props ?? {}));
-        assignText(content, contentFrom(block.content));
-        assignMap(pluginData, block.pluginData ?? {});
-        block.children?.forEach((child) => this.insertInto(child, children));
+        assignMap(props, validated.props ?? {});
+        assignText(content, contentFrom(validated.content));
+        assignMap(pluginData, validated.pluginData ?? {});
+        validated.children?.forEach((child) => this.insertInto(child, children, undefined, validated.type));
         container.insert(index, id);
         return id;
     }
@@ -874,8 +876,7 @@ export class DocumentBlockManager {
     private validateInsertedForest(blocks: readonly BlockInput[], parentType: string | null): void {
         validateBlockForest(blocks, {
             existingIds: new Set([...this.storage.keys()]),
-            validateProps: this.validateProps,
-            validateParent: this.validateParent,
+            validators: this.validators,
             parentType,
         });
     }
@@ -1067,19 +1068,71 @@ export class DocumentBlockManager {
     }
 
     /**
+     * Runs installed validators against one portable block instance.
+     *
+     * @param block - Candidate block, typically a stored snapshot or insert input.
+     * @param parentType - Destination parent type; omitted uses the stored parent.
+     * @returns The original block or a validator-normalized replacement.
+     */
+    private applyValidators(block: BlockInput, parentType?: string | null): BlockInput {
+        const resolvedParent = parentType !== undefined
+            ? parentType
+            : (block.id ? this.currentParentType(block.id) : null);
+        return this.validators.apply(block, resolvedParent);
+    }
+
+    /**
+     * Resolves the native type of a block's current tree parent.
+     *
+     * @param id - Placed block identifier.
+     * @returns Parent native type, or `null` for a root or unplaced block.
+     */
+    private currentParentType(id: string): string | null {
+        const parentId = this.findContainer(id)?.parentId;
+        return parentId == null ? null : this.requiredType(this.requiredBlock(parentId), parentId);
+    }
+
+    /**
+     * Snapshots one stored block as portable input without walking children.
+     *
+     * Child trees are omitted so node-level validators cannot recurse through
+     * descendants that are not part of the current operation.
+     *
+     * @param id - Stored block identifier to materialize.
+     * @returns Detached block input for the requested record.
+     */
+    private storedBlockInput(id: string): BlockInput {
+        const block = this.requiredBlock(id);
+        return {
+            id,
+            type: this.requiredType(block, id),
+            listProps: this.requiredMap(block, "listProps").toObject(),
+            props: this.requiredMap(block, "props").toObject() as Record<string, unknown>,
+            pluginData: this.requiredMap(block, "pluginData").toObject() as Record<string, unknown>,
+            content: this.requiredText(block, "content").toString(),
+        };
+    }
+
+    /**
      * Applies caller-owned prop keys without rebuilding the live CRDT map.
      *
-     * @param type - Block type passed to the installed validator.
+     * @param id - Block identifier used to resolve the current parent type.
+     * @param type - Block type passed to the installed validators.
      * @param props - Shared property map to patch.
      * @param patch - Property keys owned by this operation.
      * @returns No value.
      */
     private patchProps(
+        id: string,
         type: string,
         props: CRDTMap<Record<string, CRDTType>>,
         patch: Record<string, unknown>,
     ): void {
-        const validated = this.validateProps(type, { ...props.toObject(), ...patch } as Record<string, unknown>);
+        const validated = this.applyValidators({
+            ...this.storedBlockInput(id),
+            type,
+            props: { ...props.toObject(), ...patch } as Record<string, unknown>,
+        }).props ?? {};
         for (const key of Object.keys(patch)) {
             const value = validated[key];
             if (value === undefined) props.delete(key);
