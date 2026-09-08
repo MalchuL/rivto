@@ -197,6 +197,8 @@ function createDemoEditor() {
       ...customBlockExtensions,
     ],
   });
+  // Playwright and host scripts locate this demo instance through window, not React refs.
+  // The token changes on each create so a stale handle cannot be mistaken for a remount.
   const demoToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   Object.assign(window, {
     __rivtoDemo: { token: demoToken, editor: reactEditor },
