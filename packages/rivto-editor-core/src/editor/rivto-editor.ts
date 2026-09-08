@@ -1,6 +1,14 @@
-import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, LinkManager, ModeManager, SelectionManager, UndoManager } from "../managers";
+import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
 import { YjsDoc } from "../store/crdt-doc";
-import { DocumentModelImpl, type Block, type DocumentModel, type Snapshot, type SnapshotUpdate } from "../store/document-model";
+import {
+  DocumentModelImpl,
+  createBlockParentConstraintProcessor,
+  createBlockPropsProcessor,
+  type Block,
+  type DocumentModel,
+  type Snapshot,
+  type SnapshotUpdate,
+} from "../store/document-model";
 import {
   RIVTO_CLIPBOARD_MIME,
   type ClipboardBundle,
@@ -44,19 +52,17 @@ interface ClipboardEventLike {
 /**
  * Coordinates editor lifecycle around focused public managers.
  *
- * Block and link APIs live exclusively on `.blocks` and `.links`. The runtime
+ * Block APIs live exclusively on `.blocks`. The runtime
  * owns cross-cutting commands, selection, history, mode, subscriptions,
  * batching, clipboard bridges, and the shared revision stream.
  */
 export class EditorRuntime implements RivtoEditorApi {
-  /** Collaborative block, tree, link, and snapshot storage owned by this runtime. */
+  /** Collaborative block, tree, and snapshot storage owned by this runtime. */
   readonly document: DocumentModel;
   /** Public owner of block commands and typed block operations. */
   readonly blocks: BlockManager;
   /** Public owner of native block definitions and property validation. */
   readonly blocksRegistry: BlockRegistryManager;
-  /** Public owner of link commands and typed link operations. */
-  readonly links: LinkManager;
   /** Public owner of first-class canvas element commands. */
   readonly elements: ElementManager;
   /** Named command handlers exposed to integrations and typed runtime methods. */
@@ -92,17 +98,16 @@ export class EditorRuntime implements RivtoEditorApi {
     const unsubscribeFromBlockRegistryChanges = this.blocksRegistry.subscribe(() => this.notifyChanges());
     this.unsubscribeFns.push(unsubscribeFromBlockRegistryChanges);
     this.blocks = new BlockManager(this);
-    this.links = new LinkManager(this);
     this.elements = new ElementManager(this);
     this.clipboard = new ClipboardManager(this);
-    this.unsubscribeFns.push(this.document.blocks.validators.add((block, parentType) => {
-      this.blocksRegistry.assertAllowedParent(block.type, parentType);
-      return block;
-    }));
-    this.unsubscribeFns.push(this.document.blocks.validators.add((block) => ({
-      ...block,
-      props: this.blocksRegistry.validate(block.type, block.props ?? {}),
-    })));
+    this.unsubscribeFns.push(this.document.blocks.pipe.register(
+      createBlockParentConstraintProcessor((childType, parentType) => {
+        this.blocksRegistry.assertAllowedParent(childType, parentType);
+      }),
+    ));
+    this.unsubscribeFns.push(this.document.blocks.pipe.register(
+      createBlockPropsProcessor((type, props) => this.blocksRegistry.validate(type, props)),
+    ));
     this.registerRuntimeCommands();
     this.registerClipboardCommands();
 
@@ -286,7 +291,7 @@ export class EditorRuntime implements RivtoEditorApi {
   /**
    * Registers document-, selection-, and history-level runtime commands.
    *
-   * Block and link command ownership belongs to their public managers.
+   * Block command ownership belongs to the public block manager.
    *
    * @returns No value.
    */
@@ -477,7 +482,6 @@ export class EditorRuntime implements RivtoEditorApi {
       }
     };
     this.unsubscribeFns.splice(0).forEach((unsubscribe) => run(unsubscribe));
-    run(() => this.links.destroy());
     run(() => this.elements.destroy());
     run(() => this.blocks.destroy());
     run(() => this.blocksRegistry.destroy());

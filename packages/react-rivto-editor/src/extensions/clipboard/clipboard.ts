@@ -167,7 +167,7 @@ export function registerClipboard(
             children: (prepared.children ?? []).map(materialize),
           };
         };
-        sourceBundle = { version: 4, blocks: parsed.map(materialize), links: [] };
+        sourceBundle = { version: 4, blocks: parsed.map(materialize) };
       }
     }
     if (sourceBundle) {

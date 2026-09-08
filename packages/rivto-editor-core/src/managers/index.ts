@@ -5,5 +5,4 @@ export * from "./selection-manager";
 export * from "./undo-manager";
 export * from "./block-manager";
 export * from "./block-registry-manager";
-export * from "./link-manager";
 export * from "./element-manager";

@@ -20,6 +20,10 @@ _Avoid_: Selected as block
 A text-editable block that the host considers to contain no meaningful writing content.
 _Avoid_: Blank block, zero-length block
 
+**Markdown hyperlink**:
+A URL or in-document href inside writing-block Markdown content. This is not a first-class document entity.
+_Avoid_: Document link, block link
+
 **First-child promotion**:
 Replacement of an empty parent by its first child, with the remaining children retained beneath that promoted child in their existing order.
 _Avoid_: Flatten children, delete parent subtree

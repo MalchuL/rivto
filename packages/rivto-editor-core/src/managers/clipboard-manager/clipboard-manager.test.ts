@@ -179,7 +179,6 @@ describe("core ClipboardManager", () => {
           content: "Pasted",
           children: [],
         }],
-        links: [],
       },
       mergeText: false,
       placement: { parentId: parent, afterId: child },
@@ -192,7 +191,7 @@ describe("core ClipboardManager", () => {
     editor.destroy();
   });
 
-  it("restores original block and link IDs when pasting a cut bundle", () => {
+  it("restores original block IDs when pasting a cut bundle", () => {
     const editor = createRivtoEditor();
     const first = editor.blocks.insertBlock({
       type: "paragraph",
@@ -201,7 +200,6 @@ describe("core ClipboardManager", () => {
     });
     const child = editor.blocks.getBlock(first)!.children[0]!.id;
     const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first);
-    editor.links.createLink({ id: "cut-link", from: { blockId: first }, to: { blockId: second } });
     editor.selection.set([{
       type: "block",
       blockIds: [first, second],
@@ -216,9 +214,6 @@ describe("core ClipboardManager", () => {
       { id: first, content: "First", children: [{ id: child, content: "Nested" }] },
       { id: second, content: "Second" },
     ]);
-    expect(editor.links.getLinks()).toMatchObject([
-      { id: "cut-link", from: { blockId: first }, to: { blockId: second } },
-    ]);
     editor.destroy();
   });
 
@@ -226,7 +221,6 @@ describe("core ClipboardManager", () => {
     const editor = createRivtoEditor();
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
     const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first);
-    editor.links.createLink({ id: "copy-link", from: { blockId: first }, to: { blockId: second } });
     editor.selection.set([{
       type: "block",
       blockIds: [first, second],
@@ -241,10 +235,6 @@ describe("core ClipboardManager", () => {
     expect(ids).toHaveLength(4);
     expect(new Set(ids).size).toBe(4);
     expect(ids.slice(0, 2)).toEqual([first, second]);
-    const linkIds = editor.links.getLinks().map((link) => link.id);
-    expect(linkIds).toHaveLength(2);
-    expect(linkIds).toContain("copy-link");
-    expect(new Set(linkIds).size).toBe(2);
     editor.destroy();
   });
 
@@ -341,7 +331,7 @@ describe("core ClipboardManager", () => {
     cyclic.children.push(cyclic);
 
     editor.clipboard.paste({
-      bundle: { version: 4, blocks: [cyclic], links: [] } as never,
+      bundle: { version: 4, blocks: [cyclic] } as never,
     });
     expect(editor.blocks.getRootIds()).toEqual([id]);
     expect(editor.blocks.getBlock(id)?.content).toBe("Kept");

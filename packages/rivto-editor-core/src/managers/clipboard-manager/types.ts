@@ -1,11 +1,11 @@
-import type { Block, DocumentElement, Link } from "../../store/document-model";
+import type { Block, DocumentElement } from "../../store/document-model";
 
 /**
  * Lossless Rivto clipboard representation.
  *
  * Unlike interoperable HTML and plain text, this flavor preserves hierarchy,
- * native block fields, custom properties, plugin data, and internal
- * links. Browser integrations serialize it under `RIVTO_CLIPBOARD_MIME`.
+ * native block fields, custom properties, plugin data, and first-class canvas
+ * elements. Browser integrations serialize it under `RIVTO_CLIPBOARD_MIME`.
  */
 export interface ClipboardBundle {
   /** Clipboard schema version, independent from document snapshot versions. */
@@ -14,8 +14,6 @@ export interface ClipboardBundle {
   startsWithText?: boolean;
   /** Selected block subtrees preserving native types, props, and plugin data. */
   blocks: Block[];
-  /** Links whose endpoints are both inside the copied block set. */
-  links: Link[];
   /** Optional first-class canvas elements contributed by an edgeless host. */
   elements?: DocumentElement[];
   /** Top-level element IDs that should be selected after an edgeless paste. */

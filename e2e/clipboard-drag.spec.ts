@@ -41,7 +41,6 @@ const structuredBundle = JSON.stringify({
     pluginData: {},
     children: [],
   }],
-  links: [],
 });
 
 async function paste(page: import("@playwright/test").Page, asPlainText: boolean): Promise<void> {
@@ -185,7 +184,6 @@ test("replaces invalid structured block properties with an Error block", async (
         pluginData: {},
         children: [],
       }],
-      links: [],
     }));
     const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "clipboardData", { value: data });

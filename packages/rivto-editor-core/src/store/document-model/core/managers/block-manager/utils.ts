@@ -1,6 +1,6 @@
 import type { CRDTArray } from "../../../../crdt-doc";
-import type { BlockInput, BlockListProps, Link } from "../../types";
-import type { BlockValidators } from "./block-validators";
+import type { BlockInput, BlockListProps } from "../../types";
+import type { BlockPipe } from "./block-pipe";
 import { assertPortableRecord, assertPortableValue, requireNonemptyId } from "../../utils/portable";
 
 /**
@@ -16,8 +16,8 @@ export interface ValidateBlockForestOptions {
   readonly existingIds?: ReadonlySet<string>;
   /** Parent type of the forest roots; `null` is the document root. */
   readonly parentType?: string | null;
-  /** Installed block validators applied to every node in document order. */
-  readonly validators?: BlockValidators;
+  /** Installed block pipe applied to every node in document order. */
+  readonly pipe?: BlockPipe;
 }
 
 /**
@@ -87,7 +87,7 @@ export function validateBlockForest(
       ids.add(id);
     }
     if (!block.type || typeof block.type !== "string") throw new Error("Block type is required");
-    const validated = options.validators?.apply(block, parentType) ?? block;
+    const validated = options.pipe?.process(block, { parentType }) ?? block;
     if (options.requireComplete) {
       if (typeof validated.content !== "string") throw new Error("Block content must be a string");
       if (!Array.isArray(validated.children)) throw new Error("Snapshot block children must be an array");
@@ -112,66 +112,6 @@ export function validateBlockForest(
   };
   blocks.forEach((block) => visit(block, options.parentType ?? null));
   return ids;
-}
-
-/**
- * Validates a portable link collection against a known set of block IDs.
- *
- * @param links - Candidate link records.
- * @param blockIds - Block IDs that endpoints must reference.
- * @returns No value.
- * @throws {Error} When an ID is empty, duplicated, malformed, or dangling.
- */
-export function validateLinkCollection(
-  links: readonly Link[],
-  blockIds: ReadonlySet<string>,
-): void {
-  if (!Array.isArray(links)) throw new Error("Snapshot links must be an array");
-  const ids = new Set<string>();
-  links.forEach((link) => {
-    validateLinkRecord(link, blockIds);
-    if (ids.has(link.id)) throw new Error(`Duplicate link ${link.id}`);
-    ids.add(link.id);
-  });
-}
-
-/**
- * Validates one complete portable link record.
- *
- * @param link - Candidate link.
- * @param blockIds - Block IDs that endpoints must reference.
- * @returns No value.
- * @throws {Error} When the record, ID, endpoints, or meta are invalid.
- */
-export function validateLinkRecord(link: Link, blockIds?: ReadonlySet<string>): void {
-  if (!link || typeof link !== "object" || Array.isArray(link)) {
-    throw new Error("Link record is invalid");
-  }
-  requireNonemptyId(link.id, "Link");
-  validateLinkEndpoint(link.from, "Link from");
-  validateLinkEndpoint(link.to, "Link to");
-  if (link.meta !== undefined) assertPortableRecord(link.meta, "link.meta");
-  if (blockIds && (!blockIds.has(link.from.blockId) || !blockIds.has(link.to.blockId))) {
-    throw new Error("Link endpoints must reference existing blocks");
-  }
-}
-
-/**
- * Validates one link endpoint object.
- *
- * @param endpoint - Candidate `{ blockId, port? }` value.
- * @param label - Noun used in the error.
- * @returns No value.
- * @throws {Error} When the endpoint is missing a nonempty block ID.
- */
-function validateLinkEndpoint(endpoint: Link["from"] | Link["to"], label: string): void {
-  if (!endpoint || typeof endpoint !== "object" || Array.isArray(endpoint)) {
-    throw new Error(`${label} endpoint is invalid`);
-  }
-  requireNonemptyId(endpoint.blockId, `${label} block`);
-  if (endpoint.port !== undefined && typeof endpoint.port !== "string") {
-    throw new Error(`${label} port must be a string`);
-  }
 }
 
 /**

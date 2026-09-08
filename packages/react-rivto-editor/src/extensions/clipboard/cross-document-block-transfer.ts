@@ -1,7 +1,6 @@
 import type {
   EditorBlock,
   EditorBlockInput,
-  EditorLink,
   RivtoEditorApi,
 } from "@chulane/rivto";
 
@@ -16,7 +15,6 @@ export interface CrossDocumentBlockTransferPlacement {
 /** Complete data transported between two independent editor documents. */
 interface CrossDocumentBlockTransferBundle {
   readonly blocks: readonly EditorBlockInput[];
-  readonly links: readonly EditorLink[];
 }
 
 function collectBlockIds(block: EditorBlock, ids: Set<string>): void {
@@ -65,16 +63,8 @@ function createCrossDocumentBlockTransferBundle(
     if (destination.blocks.getBlock(id)) throw new Error(`Destination already contains block ${id}`);
   }
 
-  const links = source.links.getLinks()
-    .filter(({ from, to }) => blockIds.has(from.blockId) && blockIds.has(to.blockId))
-    .map((link) => structuredClone(link));
-  for (const link of links) {
-    if (destination.links.getLink(link.id)) throw new Error(`Destination already contains link ${link.id}`);
-  }
-
   return {
     blocks: roots.map((block) => prepareBlock(destination, block)),
-    links,
   };
 }
 
@@ -97,7 +87,6 @@ export function crossDocumentBlockTransfer(
     if (placement.targetId !== null) {
       destination.blocks.moveBlocks(insertedIds, placement.targetId, placement.position);
     }
-    bundle.links.forEach((link) => destination.links.createLink(link));
   });
   source.batchUpdates(() => {
     rootIds.forEach((id) => source.blocks.removeBlock(id));

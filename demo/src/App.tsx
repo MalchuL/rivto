@@ -492,7 +492,7 @@ function JournalDemoApp() {
  */
 function createMultiEditor(
   side: "left" | "right",
-  options: { readonly empty?: boolean; readonly conflict?: "block" | "link" } = {},
+  options: { readonly empty?: boolean; readonly conflict?: "block" } = {},
 ) {
   const editor = createRivtoEditor();
   const reactEditor = createReactEditor({
@@ -529,18 +529,6 @@ function createMultiEditor(
       props: { count: 7 },
     });
     editor.blocks.insertBlock({ id: "left-stay", type: DEFAULT_WRITING_BLOCK_TYPE, content: "Stays in the source" });
-    // Internal link moves with the subtree; external link should drop when its
-    // endpoint leaves the source document.
-    editor.links.createLink({
-      id: "left-internal-link",
-      from: { blockId: "left-parent" },
-      to: { blockId: "left-child" },
-    });
-    editor.links.createLink({
-      id: "left-external-link",
-      from: { blockId: "left-child" },
-      to: { blockId: "left-stay" },
-    });
   } else if (!options.empty) {
     editor.blocks.insertBlock({
       id: "right-target",
@@ -555,20 +543,12 @@ function createMultiEditor(
       ],
     });
     editor.blocks.insertBlock({ id: "right-counter", type: COUNTER_BLOCK_TYPE, props: { count: 20 } });
-    if (options.conflict === "link") {
-      // Used by e2e + manual `?conflict=link`: duplicate link id must reject the drop.
-      editor.links.createLink({
-        id: "left-internal-link",
-        from: { blockId: "right-target" },
-        to: { blockId: "right-nested" },
-      });
-    }
   }
   editor.history.clear();
   return { editor, reactEditor };
 }
 
-/** Used by e2e: hidden `editor.dump()` for asserting links / structure not shown in the UI. */
+/** Used by e2e: hidden `editor.dump()` for asserting structure not shown in the UI. */
 function DocumentStateDump() {
   const editor = useEditor();
   const snapshot = useSyncExternalStore(
@@ -604,13 +584,13 @@ function MultiEditorPane({
 /**
  * Side-by-side editors for manual cross-document practice (`?editors=2`).
  *
- * Query extras (also used by e2e): `emptyDestination=1`, `conflict=block|link`.
+ * Query extras (also used by e2e): `emptyDestination=1`, `conflict=block`.
  */
 function MultiEditorApp() {
   const params = new URLSearchParams(window.location.search);
   const emptyDestination = params.get("emptyDestination") === "1";
   const conflictParam = params.get("conflict");
-  const conflict = conflictParam === "block" || conflictParam === "link" ? conflictParam : undefined;
+  const conflict = conflictParam === "block" ? conflictParam : undefined;
   const [left] = useState(() => createMultiEditor("left"));
   const [right] = useState(() => createMultiEditor("right", { empty: emptyDestination, conflict }));
   useEffect(() => () => {

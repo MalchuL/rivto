@@ -1,11 +1,8 @@
 import { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../crdt-doc";
 import {
-  collectBlockIds,
   DocumentBlockManager,
   DocumentElementManager,
-  DocumentLinkManager,
   DocumentPluginDataManager,
-  validateLinkCollection,
 } from "./managers";
 import type {
   DocumentModel,
@@ -15,9 +12,9 @@ import type {
 import { assertPortableRecord, clone } from "./utils";
 
 /**
- * Coordinates collaborative document lifecycle through block and link managers.
+ * Coordinates collaborative document lifecycle through block and element managers.
  *
- * Block, element, and link APIs live exclusively on their focused managers.
+ * Block and element APIs live exclusively on their focused managers.
  * This class retains CRDT transactions, undo scope aggregation,
  * document-level plugin data, subscriptions, and complete snapshot orchestration.
  */
@@ -32,8 +29,6 @@ export class DocumentModelImpl implements DocumentModel {
   readonly blocks: DocumentBlockManager;
   /** Generic first-class canvas elements and their geometry. */
   readonly elements: DocumentElementManager;
-  /** First-class link records and link snapshot behavior. */
-  readonly links: DocumentLinkManager;
   /** Generic namespaced collaborative document plugin data. */
   readonly pluginData: DocumentPluginDataManager;
   /** Collaborative containers tracked by document undo managers. */
@@ -70,12 +65,10 @@ export class DocumentModelImpl implements DocumentModel {
     this.id = typeof idOrCrdt === "string" ? idOrCrdt : crdt.id;
     this.blocks = new DocumentBlockManager(this);
     this.elements = new DocumentElementManager(this);
-    this.links = new DocumentLinkManager(this);
     this.pluginData = new DocumentPluginDataManager(this);
     this.undoScopes = [
       ...this.blocks.undoScopes,
       ...this.elements.undoScopes,
-      ...this.links.undoScopes,
       ...this.pluginData.undoScopes,
     ];
     this.blocks.normalize();
@@ -108,13 +101,12 @@ export class DocumentModelImpl implements DocumentModel {
   /**
    * Produces a lossless portable schema-v6 snapshot.
    *
-   * @returns Detached blocks, links, elements, and document-level plugin data.
+   * @returns Detached blocks, elements, and document-level plugin data.
    */
   getSnapshot(): Snapshot {
     return {
       version: 6,
       blocks: clone(this.blocks.getBlocks()),
-      links: clone(this.links.getLinks()),
       elements: clone(this.elements.getElements()),
       pluginData: this.pluginData.getAll(),
     };
@@ -128,9 +120,7 @@ export class DocumentModelImpl implements DocumentModel {
    * the transaction performs writes only.
    *
    * Complete snapshots replace the complete document. Partial updates replace
-   * only present sections and leave omitted collaborative state unchanged,
-   * except that replacing `blocks` without `links` removes retained links
-   * whose endpoints are no longer placed.
+   * only present sections and leave omitted collaborative state unchanged.
    *
    * @param snapshot - Complete snapshot or partial persistence update.
    * @returns No value.
@@ -142,27 +132,15 @@ export class DocumentModelImpl implements DocumentModel {
       throw new Error(`Unsupported Rivto document snapshot version: ${String(snapshot.version)}`);
     }
     if ((snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks)) ||
-      (snapshot.links !== undefined && !Array.isArray(snapshot.links)) ||
       (snapshot.elements !== undefined && !Array.isArray(snapshot.elements))) {
       throw new Error("Unsupported Rivto document snapshot");
     }
     if (snapshot.blocks) this.blocks.validateBlocks(snapshot.blocks);
     if (snapshot.elements) this.elements.validateElements(snapshot.elements);
     if (snapshot.pluginData) assertPortableRecord(snapshot.pluginData, "pluginData");
-    const nextBlockIds = snapshot.blocks
-      ? collectBlockIds(snapshot.blocks)
-      : collectBlockIds(this.blocks.getBlocks());
-    if (snapshot.links) validateLinkCollection(snapshot.links, nextBlockIds);
-    const danglingLinkIds = snapshot.blocks && snapshot.links === undefined
-      ? this.links.getLinks()
-        .filter((link) => !nextBlockIds.has(link.from.blockId) || !nextBlockIds.has(link.to.blockId))
-        .map((link) => link.id)
-      : [];
 
     this.transact(() => {
       if (snapshot.blocks) this.blocks.loadBlocks(snapshot.blocks);
-      if (snapshot.links) this.links.loadLinks(snapshot.links);
-      else danglingLinkIds.forEach((id) => this.links.removeLink(id));
       if (snapshot.elements) this.elements.loadElements(snapshot.elements);
       if (snapshot.pluginData) this.pluginData.load(snapshot.pluginData);
     });

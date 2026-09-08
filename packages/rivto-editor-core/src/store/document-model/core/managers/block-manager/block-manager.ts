@@ -1,3 +1,9 @@
+/**
+ * Stores collaborative block records, text, and ordered subtree placement.
+ * Keeps IDs stable, validates writes before mutation, and repairs cached paths.
+ * Editor commands and outline policies belong to the public block manager;
+ * this layer supplies generic storage operations and snapshot validation.
+ */
 import {
     CRDTType,
     CRDTArray,
@@ -30,7 +36,8 @@ import {
     isCRDTText,
     requireNonemptyId,
 } from "../../utils";
-import { BlockValidators } from "./block-validators";
+import { Pipe } from "../../../../../utils/pipe";
+import type { BlockPipeContext } from "./block-pipe";
 import {
     contentFrom,
     strings,
@@ -52,17 +59,16 @@ interface LocatedBlock {
  * Owns block records, collaborative text, and ordered tree placement.
  *
  * The manager is exposed as `document.blocks`. It preserves stable CRDT
- * container identities, lazily repairs cached tree paths, and coordinates link
- * cleanup whenever a block operation removes endpoints. Plugin constraints are
- * registered on `validators` and applied to portable block instances before
+ * container identities and lazily repairs cached tree paths. Plugin constraints are
+ * registered on `pipe` and processed against portable block instances before
  * writes.
  */
 export class DocumentBlockManager {
     /** Collaborative containers tracked by the owning document's undo manager. */
     readonly undoScopes: readonly [CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>, CRDTArray<IDBlock>];
 
-    /** Ordered plugin validators applied to portable blocks before writes. */
-    readonly validators = new BlockValidators();
+    /** Priority-ordered processors applied to portable blocks before writes. */
+    readonly pipe = new Pipe<BlockInput, BlockPipeContext>();
     /** Cached block paths for each block. */
     private readonly blockPaths = new Map<IDBlock, readonly number[]>();
     /** Root blocks. */
@@ -103,8 +109,8 @@ export class DocumentBlockManager {
     /**
      * Reports whether canonical storage contains one block record.
      *
-     * Link validation uses this storage-level check even when a concurrent move
-     * has temporarily detached the block from the ordered tree.
+     * This storage-level check remains true even when a concurrent move has
+     * temporarily detached the block from the ordered tree.
      *
      * @param id - Stable block identifier to inspect.
      * @returns True when the block record exists.
@@ -232,7 +238,7 @@ export class DocumentBlockManager {
                 Object.entries(patch.props).forEach(([key, value]) => {
                     if (value !== undefined) assertPortableValue(value, `block.props.${key}`);
                 });
-                validatedProps = this.applyValidators({
+                validatedProps = this.processBlock({
                     ...this.storedBlockInput(id),
                     type,
                     props: { ...current, ...patch.props },
@@ -275,7 +281,7 @@ export class DocumentBlockManager {
      */
     setBlockType(id: string, type: string, props: Record<string, unknown> = {}): void {
         if (!type) throw new Error("Block type is required");
-        const nextProps = this.applyValidators({
+        const nextProps = this.processBlock({
             ...this.storedBlockInput(id),
             type,
             props,
@@ -356,11 +362,11 @@ export class DocumentBlockManager {
     }
 
     /**
-     * Reconcile DOM plain text as the smallest delete/insert range possible.
+     * Reconciles plain text as the smallest delete/insert range possible.
      * This preserves CRDTText identity and unchanged formatted runs.
      *
      * @param id - ID of the text block.
-     * @param text - Complete plain-text value received from the view.
+     * @param text - Complete replacement plain-text value.
      * @throws If the block or its content field does not exist.
      * @returns No value.
      */
@@ -419,7 +425,7 @@ export class DocumentBlockManager {
     }
 
     /**
-     * Removes a block subtree and every link touching a removed descendant.
+     * Removes a block subtree and every descendant placement.
      *
      * @param id - Root ID of the subtree to remove.
      * @returns No value.
@@ -428,271 +434,79 @@ export class DocumentBlockManager {
         this.transact(() => {
             const found = this.findContainer(id);
             if (!found) return;
-            const removed = new Set(this.collectTreeIds(id));
             this.removeTree(id);
             found.array.delete(found.index, 1);
-            this.document.links.removeForBlockIds(removed);
         });
     }
 
     /**
-     * Joins two blocks while preserving the target block's identity.
+     * Relocates one subtree without choosing editor-specific grouping behavior.
      *
-     * This is the document operation used when Backspace is pressed at the
-     * beginning of a block. For example, merging `"World"` into `"Hello "`
-     * produces one target block containing `"Hello World"`; the source block
-     * no longer exists.
-     *
-     * A merge transfers more than text. Source children are appended after the
-     * target's existing children, preserving their relative order. Links that
-     * point directly to the removed source are deleted because their endpoint
-     * would otherwise be invalid. The source's other fields are intentionally
-     * discarded: the target keeps its type, props, and plugin data.
-     *
-     * Every mutation runs inside one CRDT transaction. Remote collaborators see
-     * one coherent change, and Undo restores the entire source block—including
-     * its text and children—in one step.
-     *
-     * @param targetId - Block that remains in the document and receives content.
-     * @param sourceId - Block whose text and children are transferred, then removed.
-     * @returns The target's original text length. A view can place the caret at
-     * this offset, which is the boundary between the old target and source text.
-     * @throws If either block is missing, both IDs match, or target is inside source.
-     */
-    mergeBlocks(targetId: string, sourceId: string): number {
-        if (targetId === sourceId) throw new Error("Cannot merge a block into itself");
-
-        let joinOffset = 0;
-        this.transact(() => {
-            // Keep the source's parent array and index so its tree entry can be
-            // removed after its transferable data has been copied to the target.
-            const sourceContainer = this.findContainer(sourceId);
-            if (!sourceContainer) throw new Error(`Block ${sourceId} not found`);
-            if (!this.findContainer(targetId)) throw new Error(`Block ${targetId} not found`);
-
-            // Moving a source into one of its own descendants would leave that
-            // descendant referring to a deleted ancestor and corrupt the tree.
-            if (this.collectTreeIds(sourceId).includes(targetId)) {
-                throw new Error(`Cannot merge block ${sourceId} into its descendant ${targetId}`);
-            }
-
-            const target = this.requiredBlock(targetId);
-            const source = this.requiredBlock(sourceId);
-            const targetContent = this.requiredText(target, "content");
-            const sourceContent = this.requiredText(source, "content").toString();
-            const targetChildren = this.requiredArray(target, "children");
-            const sourceChildren = this.requiredArray(source, "children");
-            const sourceChildIds = strings(sourceChildren);
-
-            // Capture this before inserting source text. The Backspace plugin
-            // uses the returned boundary to restore the caret after React rerenders.
-            joinOffset = targetContent.length;
-            if (sourceContent) targetContent.insert(joinOffset, sourceContent);
-            if (sourceChildIds.length > 0) {
-                // A CRDT child array is ownership, not a copy. Detach the child
-                // IDs from the source before attaching them to the target so a
-                // child appears in exactly one parent list throughout the change.
-                sourceChildren.delete(0, sourceChildIds.length);
-                targetChildren.push(...sourceChildIds);
-            }
-
-            // Remove both representations of the source: its ID in the tree and
-            // its stored block record. The moved children remain stored normally.
-            sourceContainer.array.delete(sourceContainer.index, 1);
-            this.storage.delete(sourceId);
-
-            // Links address blocks by ID. Once sourceId is gone, links touching
-            // it cannot be resolved and must be removed in the same transaction.
-            this.document.links.removeForBlockIds(new Set([sourceId]));
-        });
-        return joinOffset;
-    }
-
-    /**
-     * Moves a block within its sibling list by editing the ordered CRDT array.
-     *
-     * @param id - ID of the block to move.
-     * @param targetId - Sibling to move beside, or `null` to move to the start.
-     * @param position - Whether to insert before, after, or inside the target. "inside" is append to the target childrent at the end.
-     * @throws If the block or target sibling does not exist.
+     * @param id - Placed subtree root to move.
+     * @param targetId - Placement anchor, or null for the current sibling-list start.
+     * @param position - Placement before, after, or appended inside the anchor.
      * @returns No value.
      */
     moveBlock(id: string, targetId: string | null, position: "before" | "after" | "inside" = "after"): void {
-        if (id === targetId) return;
-        const source = this.findContainer(id);
-        if (!source) throw new Error(`Block ${id} not found`);
-        // User operations require a placed target. Orphan recovery is an
-        // explicit repair path, not a side effect of move or merge.
-        if (targetId !== null && !this.findContainer(targetId)) {
-            throw new Error(`Target block ${targetId} not found`);
+        this.relocateBlocks([{ id, targetId, position }]);
+    }
+
+    /**
+     * Applies explicit subtree placements after validating the complete sequence.
+     *
+     * Editors decide which subtrees to move. Storage checks destination parent
+     * constraints and cycles before any write because CRDT transactions cannot
+     * roll back. Later placements observe the parents established by earlier ones.
+     *
+     * @param placements - Ordered subtree moves with explicit placement anchors.
+     * @returns No value.
+     * @throws When a source or anchor is unplaced, a cycle forms, or a pipe rejects placement.
+     */
+    relocateBlocks(placements: readonly {
+        id: string;
+        targetId: string | null;
+        position: "before" | "after" | "inside";
+    }[]): void {
+        const parents = new Map<string, string | null>();
+        /**
+         * Resolves a parent after preceding simulated moves.
+         * @param id - Placed block identifier.
+         * @returns Its simulated or current parent.
+         */
+        const parentOf = (id: string): string | null => parents.has(id)
+            ? parents.get(id)!
+            : this.getParentId(id) ?? null;
+        const moves = placements.filter(({ id, targetId }) => id !== targetId);
+        for (const { id, targetId, position } of moves) {
+            if (!this.findContainer(id)) throw new Error(`Block ${id} not found`);
+            if (targetId !== null && !this.findContainer(targetId)) {
+                throw new Error(`Target block ${targetId} not found`);
+            }
+            // Even a sibling placement beside a descendant is rejected: its
+            // anchor belongs to the subtree being detached.
+            let ancestor = targetId;
+            while (ancestor !== null) {
+                if (ancestor === id) throw new Error(`Cannot move block ${id} relative to its descendant ${targetId}`);
+                ancestor = parentOf(ancestor);
+            }
+            const parentId = targetId === null ? parentOf(id)
+                : position === "inside" ? targetId : parentOf(targetId);
+            // Preserve the existing null-anchor contract: root eligibility is
+            // checked even though placement prepends within the current list.
+            this.processBlock(this.storedBlockInput(id), targetId === null || parentId === null
+                ? null : this.requiredType(this.requiredBlock(parentId), parentId));
+            parents.set(id, parentId);
         }
-        this.applyValidators(this.storedBlockInput(id), this.resolveMoveParentType(targetId, position));
         this.transact(() => {
-            // A subtree cannot be inserted into its own descendants. Besides
-            // being an invalid outline operation, doing so would create a
-            // recursive ownership cycle that detached snapshots cannot render.
-            if (targetId !== null && this.collectTreeIds(id).includes(targetId)) {
-                throw new Error(`Cannot move block ${id} relative to its descendant ${targetId}`);
-            }
-            const targetBlock = targetId === null ? undefined : this.requiredBlock(targetId);
-            const target = position === "inside" && targetBlock
-                ? this.requiredArray(targetBlock, "children")
-                : targetId === null ? source.array : this.findContainer(targetId)?.array;
-            if (!target) throw new Error(`Target block ${targetId} not found`);
-            source.array.delete(source.index, 1);
-            const targetIndex = targetId === null ? 0 : strings(target).indexOf(targetId);
-            const index = position === "inside"
-                ? target.length
-                : targetId === null ? 0 : Math.max(0, targetIndex + (position === "after" ? 1 : 0));
-            target.insert(index, id);
-        });
-    }
-
-    /**
-     * Moves sibling block roots as one ordered, atomic operation.
-     *
-     * Selected descendants are ignored because moving their selected ancestor
-     * already carries them. Every remaining root must belong to the same direct
-     * parent; accepting mixed source levels would make one drag silently change
-     * the relative hierarchy of otherwise independent branches.
-     *
-     * @param ids - Selected block IDs in any order, including descendants.
-     * @param targetId - Block beside or inside which the roots are inserted.
-     * @param position - Placement relative to `targetId`.
-     * @throws If selected roots are not siblings or target their own subtree.
-     * @returns No value.
-     */
-    moveBlocks(
-        ids: string[],
-        targetId: string | null,
-        position: "before" | "after" | "inside" = "after",
-    ): void {
-        this.transact(() => {
-            const roots = this.selectedTopLevelRoots(ids);
-            if (!roots.length) return;
-            const parentId = this.findContainer(roots[0]!)?.parentId;
-            if (roots.some((id) => this.findContainer(id)?.parentId !== parentId)) {
-                throw new Error("Moved blocks must share the same parent");
-            }
-            if (targetId !== null && roots.some((id) => this.collectTreeIds(id).includes(targetId))) {
-                throw new Error(`Cannot move blocks relative to their descendant ${targetId}`);
-            }
-
-            // Repeated "after" and root-start insertions target the same index,
-            // so process from the end to retain visible source order. "before"
-            // and "inside" naturally retain order when processed forwards.
-            const ordered = targetId === null || position === "after" ? [...roots].reverse() : roots;
-            ordered.forEach((id) => this.moveBlock(id, targetId, position));
-        });
-    }
-
-    /**
-     * Nests a block under its preceding sibling.
-     *
-     * @param id - ID of the block to indent.
-     * @returns No value.
-     */
-    indentBlock(id: string): void {
-        this.indentBlocks([id]);
-    }
-
-    /**
-     * Nests consecutive selected roots under the first root's previous sibling.
-     *
-     * Descendants whose ancestors are also selected are removed from the move
-     * list: moving the selected ancestor already carries its complete subtree.
-     * The remaining roots must cover one uninterrupted visible range. If the
-     * first root has no previous sibling, the complete operation is a no-op;
-     * later roots are never partially indented. This matches grouped
-     * outliner behavior and keeps the supplied roots at the same new depth.
-     *
-     * @param ids - Selected block IDs in any order, including descendants.
-     * @returns No value.
-     */
-    indentBlocks(ids: string[]): void {
-        const roots = this.selectedTopLevelRoots(ids);
-        if (!this.isConsecutiveSelection(roots)) return;
-        const source = this.findContainer(roots[0]!);
-        if (!source || source.index === 0) return;
-        const parentId = String(source.array.get(source.index - 1));
-        const parentType = this.requiredType(this.requiredBlock(parentId), parentId);
-        roots.forEach((rootId) => this.applyValidators(this.storedBlockInput(rootId), parentType));
-        this.transact(() => {
-            const parent = this.requiredBlock(String(source.array.get(source.index - 1)));
-            roots.forEach((rootId) => {
-                const current = this.findContainer(rootId);
-                if (current) current.array.delete(current.index, 1);
-            });
-            this.requiredArray(parent, "children").push(...roots);
-        });
-    }
-
-    /**
-     * Moves a nested block directly after its parent and adopts later siblings.
-     *
-     * Following siblings become children of the outdented block, preserving the
-     * visible tree order: the block's existing children stay first, followed by
-     * the siblings that previously appeared after it. Removing and reinserting
-     * every affected ID inside this method's transaction publishes one update
-     * and creates one undoable tree operation.
-     *
-     * @param id - ID of the block to outdent.
-     * @returns No value.
-     */
-    outdentBlock(id: string): void {
-        this.outdentBlocks([id]);
-    }
-
-    /**
-     * Outdents consecutive selected roots as one ordered group.
-     *
-     * Only top-level selected roots move, so selected descendants travel with
-     * their selected ancestor exactly once. The group is inserted directly
-     * after its parent. Unselected siblings following the last moved root become
-     * children of that last root, preserving the visible outline order and the
-     * direct-outdent behavior used by the single-block command.
-     *
-     * Selection that begins at root depth or skips visible blocks is a no-op.
-     * All detach, insert, and adoption mutations share one CRDT transaction.
-     *
-     * @param ids - Selected block IDs in any order, including descendants.
-     * @returns No value.
-     */
-    outdentBlocks(ids: string[]): void {
-        const roots = this.selectedTopLevelRoots(ids);
-        if (!this.isConsecutiveSelection(roots)) return;
-        const source = this.findContainer(roots[0]!);
-        if (!source?.parentId) return;
-        const parentContainer = this.findContainer(source.parentId);
-        if (!parentContainer) return;
-
-        // A range may continue with blocks already at the destination depth.
-        // Stop before them instead of moving them one level too far.
-        const firstDestinationLevel = roots.findIndex(
-            (rootId) => this.findContainer(rootId)?.parentId === parentContainer.parentId,
-        );
-        const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
-        if (!moving.length) return;
-        const destParentType = parentContainer.parentId == null
-            ? null
-            : this.requiredType(this.requiredBlock(parentContainer.parentId), parentContainer.parentId);
-        moving.forEach((rootId) => this.applyValidators(this.storedBlockInput(rootId), destParentType));
-        this.transact(() => {
-            const last = this.findContainer(moving.at(-1)!);
-            if (!last) return;
-            const followingSiblingIds = strings(last.array).slice(last.index + 1);
-
-            moving.forEach((rootId) => {
-                const current = this.findContainer(rootId);
-                if (current) current.array.delete(current.index, 1);
-            });
-            followingSiblingIds.forEach((siblingId) => {
-                const current = this.findContainer(siblingId);
-                if (current) current.array.delete(current.index, 1);
-            });
-            parentContainer.array.insert(parentContainer.index + 1, ...moving);
-            if (followingSiblingIds.length > 0) {
-                this.requiredArray(this.requiredBlock(moving.at(-1)!), "children").push(...followingSiblingIds);
+            for (const { id, targetId, position } of moves) {
+                const source = this.findContainer(id)!;
+                const target = targetId === null ? source.array
+                    : position === "inside" ? this.requiredArray(this.requiredBlock(targetId), "children")
+                        : this.findContainer(targetId)!.array;
+                source.array.delete(source.index, 1);
+                const index = targetId === null ? 0 : position === "inside" ? target.length
+                    : strings(target).indexOf(targetId) + (position === "after" ? 1 : 0);
+                target.insert(index, id);
             }
         });
     }
@@ -729,7 +543,7 @@ export class DocumentBlockManager {
     validateBlocks(blocks: readonly Block[]): void {
         validateBlockForest(blocks, {
             requireComplete: true,
-            validators: this.validators,
+            pipe: this.pipe,
             parentType: null,
         });
     }
@@ -777,7 +591,7 @@ export class DocumentBlockManager {
         parentType: string | null = null,
     ): string {
         if (!block.type) throw new Error("Block type is required");
-        const validated = this.applyValidators(block, parentType);
+        const validated = this.processBlock(block, parentType);
         const listProps = validateBlockListProps(validated.listProps ?? {});
         const id = validated.id === undefined ? crypto.randomUUID() : requireNonemptyId(validated.id, "Block");
         if (this.storage.has(id)) throw new Error(`Block ${id} already exists`);
@@ -849,23 +663,6 @@ export class DocumentBlockManager {
     }
 
     /**
-     * Resolves the parent type that will own a moved block.
-     *
-     * @param targetId - Placement target, or `null` for the document root.
-     * @param position - Placement relative to `targetId`.
-     * @returns Parent native type, or `null` when the destination is a document root.
-     */
-    private resolveMoveParentType(
-        targetId: string | null,
-        position: "before" | "after" | "inside",
-    ): string | null {
-        if (targetId === null) return null;
-        if (position === "inside") return this.requiredType(this.requiredBlock(targetId), targetId);
-        const parentId = this.findContainer(targetId)?.parentId;
-        return parentId == null ? null : this.requiredType(this.requiredBlock(parentId), parentId);
-    }
-
-    /**
      * Preflights one inserted forest against current storage before writing.
      *
      * @param blocks - Root inputs that will be written in one insertion.
@@ -876,7 +673,7 @@ export class DocumentBlockManager {
     private validateInsertedForest(blocks: readonly BlockInput[], parentType: string | null): void {
         validateBlockForest(blocks, {
             existingIds: new Set([...this.storage.keys()]),
-            validators: this.validators,
+            pipe: this.pipe,
             parentType,
         });
     }
@@ -989,50 +786,6 @@ export class DocumentBlockManager {
     }
 
     /**
-     * Filters a selection to independently movable subtree roots.
-     *
-     * @param ids - Candidate selected block identifiers.
-     * @returns Selected roots in visible order, excluding selected descendants.
-     */
-    private selectedTopLevelRoots(ids: string[]): string[] {
-        const selected = new Set(ids.filter((id) => this.storage.has(id)));
-        const hasSelectedAncestor = (id: string): boolean => {
-            let parentId = this.findContainer(id)?.parentId;
-            while (parentId) {
-                if (selected.has(parentId)) return true;
-                parentId = this.findContainer(parentId)?.parentId;
-            }
-            return false;
-        };
-        return this.visibleBlockIds().filter((id) => selected.has(id) && !hasSelectedAncestor(id));
-    }
-
-    /**
-     * Checks whether selected subtrees cover one uninterrupted visible range.
-     *
-     * @param roots - Selected top-level subtree roots in visible order.
-     * @returns True when their complete subtrees form one consecutive range.
-     */
-    private isConsecutiveSelection(roots: string[]): boolean {
-        if (!roots.length) return false;
-        const visible = this.visibleBlockIds();
-        const covered = new Set(roots.flatMap((id) => this.collectTreeIds(id)));
-        const first = visible.indexOf(roots[0]!);
-        const lastTree = this.collectTreeIds(roots.at(-1)!);
-        const last = visible.indexOf(lastTree.at(-1)!);
-        return first >= 0 && last >= first && visible.slice(first, last + 1).every((id) => covered.has(id));
-    }
-
-    /**
-     * Materializes every placed tree identifier, including collapsed descendants.
-     *
-     * @returns Stored tree identifiers in depth-first order.
-     */
-    private visibleBlockIds(): string[] {
-        return strings(this.roots).flatMap((id) => this.collectTreeIds(id));
-    }
-
-    /**
      * Deletes a block and all descendants from the block map.
      *
      * Path-cache entries are removed with the tree. A visited set stops
@@ -1053,32 +806,17 @@ export class DocumentBlockManager {
     }
 
     /**
-     * Collects every block ID in a subtree without recursing forever on cycles.
-     *
-     * @param id - Root ID of the subtree.
-     * @param visited - IDs already collected during this walk.
-     * @returns Root and descendant IDs in depth-first order.
-     */
-    private collectTreeIds(id: string, visited = new Set<string>()): string[] {
-        if (visited.has(id)) return [];
-        visited.add(id);
-        const value = this.storage.get(id);
-        if (!isCRDTMap(value)) return [];
-        return [id, ...strings(this.requiredArray(value, "children")).flatMap((child) => this.collectTreeIds(child, visited))];
-    }
-
-    /**
-     * Runs installed validators against one portable block instance.
+     * Runs the block pipe against one portable block instance.
      *
      * @param block - Candidate block, typically a stored snapshot or insert input.
      * @param parentType - Destination parent type; omitted uses the stored parent.
-     * @returns The original block or a validator-normalized replacement.
+     * @returns The original block or a processor-normalized replacement.
      */
-    private applyValidators(block: BlockInput, parentType?: string | null): BlockInput {
+    private processBlock(block: BlockInput, parentType?: string | null): BlockInput {
         const resolvedParent = parentType !== undefined
             ? parentType
             : (block.id ? this.currentParentType(block.id) : null);
-        return this.validators.apply(block, resolvedParent);
+        return this.pipe.process(block, { parentType: resolvedParent });
     }
 
     /**
@@ -1117,7 +855,7 @@ export class DocumentBlockManager {
      * Applies caller-owned prop keys without rebuilding the live CRDT map.
      *
      * @param id - Block identifier used to resolve the current parent type.
-     * @param type - Block type passed to the installed validators.
+     * @param type - Block type used when reconstructing the portable block.
      * @param props - Shared property map to patch.
      * @param patch - Property keys owned by this operation.
      * @returns No value.
@@ -1128,7 +866,7 @@ export class DocumentBlockManager {
         props: CRDTMap<Record<string, CRDTType>>,
         patch: Record<string, unknown>,
     ): void {
-        const validated = this.applyValidators({
+        const validated = this.processBlock({
             ...this.storedBlockInput(id),
             type,
             props: { ...props.toObject(), ...patch } as Record<string, unknown>,

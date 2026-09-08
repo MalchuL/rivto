@@ -1,3 +1,9 @@
+/**
+ * Implements editor block features and their command registrations.
+ * Owns selection grouping, outline indentation, outdent adoption, and merge
+ * policy. Mutations use document storage primitives inside the editor batch
+ * boundary so each command retains stable IDs and one undo operation.
+ */
 import type {
   CommandHandler,
   RegisteredCommand,
@@ -20,7 +26,7 @@ import type { RuntimeBlockSelection } from "./utils";
 /**
  * Owns editor block commands and typed block operations.
  *
- * Collaborative block state remains in DocumentModel. This manager composes a
+ * Collaborative block state remains in DocumentModel.
  * Block definitions remain in the editor's separate `.blocksRegistry`
  * manager. This manager validates command payloads and expands structural
  * commands through the current local selection.
@@ -313,7 +319,7 @@ export class BlockManager {
     }));
     register("block.merge", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { targetId: string; sourceId: string };
-      return this.editor.document.blocks.mergeBlocks(
+      return this.mergeBlockContent(
         commandString(data.targetId, "targetId"),
         commandString(data.sourceId, "sourceId"),
       );
@@ -343,20 +349,20 @@ export class BlockManager {
       }
       const targetId = data.targetId === null ? null : commandString(data.targetId, "targetId");
       const position = data.position === "before" || data.position === "inside" ? data.position : "after";
-      this.editor.document.blocks.moveBlocks(data.ids, targetId, position);
+      this.moveSelectedBlocks(data.ids, targetId, position);
     }));
     register("block.indent", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { id: string };
       const before = this.editor.selection.get();
       const ids = this.selectedStructuralBlockIds(commandString(data.id, "id"));
-      this.editor.document.blocks.indentBlocks(ids);
+      this.indentBlocks(ids);
       this.restoreBlockSelection(before, ids);
     }));
     register("block.outdent", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { id: string };
       const before = this.editor.selection.get();
       const ids = this.selectedStructuralBlockIds(commandString(data.id, "id"));
-      this.editor.document.blocks.outdentBlocks(ids);
+      this.outdentBlocks(ids);
       this.restoreBlockSelection(before, ids);
     }));
     register("block.prop.set", documentCommand((value) => {
@@ -371,6 +377,146 @@ export class BlockManager {
         data.value,
       );
     }));
+  }
+
+  /**
+   * Merges text and adopts children while retaining the target's other fields.
+   * @param targetId - Surviving placed block.
+   * @param sourceId - Placed block to consume.
+   * @returns Original target text length for caret restoration.
+   */
+  private mergeBlockContent(targetId: string, sourceId: string): number {
+    if (targetId === sourceId) throw new Error("Cannot merge a block into itself");
+    const target = this.getBlock(targetId);
+    const source = this.getBlock(sourceId);
+    if (!source) throw new Error(`Block ${sourceId} not found`);
+    if (!target) throw new Error(`Block ${targetId} not found`);
+    if (this.collectTreeIds(sourceId).includes(targetId)) {
+      throw new Error(`Cannot merge block ${sourceId} into its descendant ${targetId}`);
+    }
+    const blocks = this.editor.document.blocks;
+    // Validate and transfer children before text changes so a forbidden parent
+    // cannot leave a partially merged document when validation throws.
+    blocks.relocateBlocks(source.children.map(({ id }) => ({ id, targetId, position: "inside" })));
+    if (source.content) blocks.insertText(targetId, target.content.length, source.content);
+    blocks.removeBlock(sourceId);
+    return target.content.length;
+  }
+
+  /**
+   * Moves selected sibling roots in visible order, carrying descendants once.
+   * @param ids - Candidate selected blocks in arbitrary order.
+   * @param targetId - Destination anchor, or null for sibling-list start.
+   * @param position - Placement relative to the anchor.
+   * @returns No value.
+   */
+  private moveSelectedBlocks(ids: string[], targetId: string | null, position: "before" | "after" | "inside"): void {
+    const roots = this.selectedTopLevelRoots(ids);
+    if (!roots.length) return;
+    const parentId = this.getParentId(roots[0]!);
+    if (roots.some((id) => this.getParentId(id) !== parentId)) {
+      throw new Error("Moved blocks must share the same parent");
+    }
+    if (targetId !== null && roots.some((id) => this.collectTreeIds(id).includes(targetId))) {
+      throw new Error(`Cannot move blocks relative to their descendant ${targetId}`);
+    }
+    // Inserting repeatedly after the same anchor reverses order unless the
+    // selected roots are processed backwards. Prepending has the same rule.
+    const ordered = targetId === null || position === "after" ? [...roots].reverse() : roots;
+    this.editor.document.blocks.relocateBlocks(ordered.map((id) => ({ id, targetId, position })));
+  }
+
+  /**
+   * Nests a consecutive outline range under its first root's previous sibling.
+   * @param ids - Selected identifiers, including any selected descendants.
+   * @returns No value; an ineligible range is unchanged.
+   */
+  private indentBlocks(ids: string[]): void {
+    const roots = this.selectedTopLevelRoots(ids);
+    if (!this.isConsecutiveSelection(roots)) return;
+    const siblings = this.siblingIds(roots[0]!);
+    const index = siblings.indexOf(roots[0]!);
+    if (index <= 0) return;
+    const targetId = siblings[index - 1]!;
+    this.editor.document.blocks.relocateBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
+  }
+
+  /**
+   * Outdents a consecutive range and adopts trailing siblings into its last root.
+   * @param ids - Selected identifiers, including any selected descendants.
+   * @returns No value; a root-level or nonconsecutive range is unchanged.
+   */
+  private outdentBlocks(ids: string[]): void {
+    const roots = this.selectedTopLevelRoots(ids);
+    if (!this.isConsecutiveSelection(roots)) return;
+    const parentId = this.getParentId(roots[0]!);
+    if (!parentId) return;
+    const destinationParent = this.getParentId(parentId);
+    // A range may continue at the destination depth; those blocks stay put.
+    const firstDestinationLevel = roots.findIndex((id) => this.getParentId(id) === destinationParent);
+    const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
+    if (!moving.length) return;
+    const lastId = moving.at(-1)!;
+    const siblings = this.siblingIds(lastId);
+    const following = siblings.slice(siblings.indexOf(lastId) + 1);
+    this.editor.document.blocks.relocateBlocks([
+      ...[...moving].reverse().map((id) => ({ id, targetId: parentId, position: "after" as const })),
+      ...following.map((id) => ({ id, targetId: lastId, position: "inside" as const })),
+    ]);
+  }
+
+  /**
+   * Reads a block's ordered siblings without materializing their contents.
+   * @param id - Placed block whose sibling list is needed.
+   * @returns Sibling identifiers in document order.
+   */
+  private siblingIds(id: string): string[] {
+    const parentId = this.getParentId(id);
+    return parentId == null ? this.getRootIds() : this.getChildIds(parentId);
+  }
+
+  /**
+   * Filters a selection to independently movable roots in document order.
+   * @param ids - Candidate selected identifiers.
+   * @returns Selected roots excluding descendants of other selected blocks.
+   */
+  private selectedTopLevelRoots(ids: string[]): string[] {
+    const selected = new Set(ids);
+    return this.getRootIds().flatMap((id) => this.collectTreeIds(id)).filter((id) => {
+      if (!selected.has(id)) return false;
+      let parentId = this.getParentId(id);
+      while (parentId) {
+        if (selected.has(parentId)) return false;
+        parentId = this.getParentId(parentId);
+      }
+      return true;
+    });
+  }
+
+  /**
+   * Checks whether complete selected subtrees cover an uninterrupted outline range.
+   * @param roots - Selected subtree roots in document order.
+   * @returns Whether every block between the first and last subtree is covered.
+   */
+  private isConsecutiveSelection(roots: string[]): boolean {
+    if (!roots.length) return false;
+    const visible = this.getRootIds().flatMap((id) => this.collectTreeIds(id));
+    const covered = new Set(roots.flatMap((id) => this.collectTreeIds(id)));
+    const first = visible.indexOf(roots[0]!);
+    const last = visible.indexOf(this.collectTreeIds(roots.at(-1)!).at(-1)!);
+    return first >= 0 && last >= first && visible.slice(first, last + 1).every((id) => covered.has(id));
+  }
+
+  /**
+   * Collects a subtree's identifiers, including collapsed descendants.
+   * @param id - Root identifier to walk.
+   * @param visited - Identifiers already traversed to stop malformed cycles.
+   * @returns Root and descendants in depth-first document order.
+   */
+  private collectTreeIds(id: string, visited = new Set<string>()): string[] {
+    if (visited.has(id)) return [];
+    visited.add(id);
+    return [id, ...this.getChildIds(id).flatMap((child) => this.collectTreeIds(child, visited))];
   }
 
   /**

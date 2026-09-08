@@ -17,7 +17,7 @@ export interface BlockOperations {
   setProp(key: string, value: unknown): void;
   /** Sets or removes data owned by one plugin namespace. */
   setPluginData(pluginId: string, value: unknown): void;
-  /** Removes the block subtree and links touching removed descendants. */
+  /** Removes the block subtree. */
   remove(): void;
   /** Appends this block's content and children into a target, then removes it. */
   mergeInto(targetId: string): number;

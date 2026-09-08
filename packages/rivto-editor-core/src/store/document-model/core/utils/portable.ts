@@ -4,7 +4,7 @@
  * Snapshot, clipboard, and create/load paths must reject values that cannot
  * round-trip through CRDT storage without corruption. Callers validate first,
  * then clone. This module is the single definition of those rules so block
- * props, plugin data, link meta, and element props cannot drift apart.
+ * props, plugin data, and element props cannot drift apart.
  */
 
 /** Own keys that prototype pollution or constructor confusion can smuggle. */

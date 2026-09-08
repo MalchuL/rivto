@@ -2,7 +2,6 @@ import type { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../../crdt-doc";
 import type {
   DocumentBlockManager,
   DocumentElementManager,
-  DocumentLinkManager,
   DocumentPluginDataManager,
 } from "../managers";
 
@@ -70,14 +69,6 @@ export interface Block {
   children: Block[];
 }
 
-/** First-class connection between two collaborative blocks. */
-export interface Link {
-  id: string;
-  from: { blockId: string; port?: string };
-  to: { blockId: string; port?: string };
-  meta?: Record<string, unknown>;
-}
-
 /** Complete input accepted when creating a block. */
 export interface BlockInput {
   type: string;
@@ -109,7 +100,6 @@ export interface BlockUpdate {
 export interface Snapshot {
   version: 6;
   blocks: Block[];
-  links: Link[];
   elements: DocumentElement[];
   pluginData?: Record<string, unknown>;
 }
@@ -118,33 +108,15 @@ export interface Snapshot {
 export interface SnapshotUpdate {
   version: 6;
   blocks?: Block[];
-  links?: Link[];
   elements?: DocumentElement[];
   pluginData?: Record<string, unknown>;
 }
 
 /**
- * Validates or normalizes one portable block against its destination parent.
- *
- * Document storage runs every installed validator in order before a write.
- * A validator may throw to reject the block. Returning a new object is how a
- * validator normalizes fields such as `props`; returning the same instance is
- * allowed when the block is already valid.
- *
- * @param block - Portable block being inserted, updated, moved, or loaded.
- * @param parentType - Native type of the destination parent, or `null` at root.
- * @returns The original block or a normalized replacement.
- */
-export type BlockValidator = (
-  block: BlockInput,
-  parentType: string | null,
-) => BlockInput;
-
-/**
  * Public collaborative document coordinator used by editors and persistence.
  *
- * Block, link, and element behavior is intentionally available only through
- * `.blocks`, `.links`, and `.elements`. The document itself owns lifecycle, transactions, undo scopes,
+ * Block and element behavior is intentionally available only through
+ * `.blocks` and `.elements`. The document itself owns lifecycle, transactions, undo scopes,
  * and complete snapshot orchestration.
  */
 export interface DocumentModel {
@@ -160,8 +132,6 @@ export interface DocumentModel {
   readonly blocks: DocumentBlockManager;
   /** First-class generic canvas elements and geometry. */
   readonly elements: DocumentElementManager;
-  /** First-class link records and link snapshot operations. */
-  readonly links: DocumentLinkManager;
   /** Generic namespaced collaborative storage for optional document plugins. */
   readonly pluginData: DocumentPluginDataManager;
 
@@ -184,7 +154,7 @@ export interface DocumentModel {
   /**
    * Produces a lossless schema-v6 snapshot.
    *
-   * @returns Detached blocks, links, elements, and document plugin data.
+   * @returns Detached blocks, elements, and document plugin data.
    */
   getSnapshot(): Snapshot;
 
@@ -192,8 +162,7 @@ export interface DocumentModel {
    * Replaces only supplied schema-v6 snapshot sections.
    *
    * Partial updates replace present sections and leave omitted collaborative
-   * state unchanged, except that replacing `blocks` without `links` removes
-   * retained links whose endpoints are no longer placed.
+   * state unchanged.
    *
    * @param snapshot - Complete snapshot or partial persistence update.
    * @returns No value.

@@ -146,7 +146,6 @@ describe("EditorRuntime block commands", () => {
     });
     const childId = editor.blocks.getChildIds(id)[0]!;
     const outsideId = editor.blocks.insertBlock({ type: "paragraph", content: "Outside" }, id);
-    editor.links.createLink({ id: "child-outside", from: { blockId: childId }, to: { blockId: outsideId } });
     editor.history.clear();
 
     expectOneUpdate(editor, () => editor.blocks.clearBlock(id));
@@ -161,14 +160,13 @@ describe("EditorRuntime block commands", () => {
       children: [],
     });
     expect(editor.blocks.getBlock(childId)).toBeUndefined();
-    expect(editor.links.getLinks()).toEqual([]);
+    expect(editor.blocks.getBlock(outsideId)?.content).toBe("Outside");
 
     editor.undo();
     expect(editor.blocks.getBlock(id)).toMatchObject({
       content: "Parent",
       children: [{ id: childId, children: [{ content: "Grandchild" }] }],
     });
-    expect(editor.links.getLinks()).toMatchObject([{ id: "child-outside" }]);
     editor.redo();
     expect(editor.blocks.getBlock(id)).toMatchObject({ content: "", children: [] });
     editor.destroy();
@@ -684,21 +682,15 @@ describe("EditorRuntime block commands", () => {
     editor.destroy();
   });
 
-  it("creates links and loads/dumps snapshots through editor methods", () => {
+  it("loads and dumps snapshots through editor methods", () => {
     const editor = createRivtoEditor();
     const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Source" });
     const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, sourceId);
 
-    editor.links.createLink({ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } });
-
     expect(editor.dump()).toMatchObject({
       version: 6,
       blocks: [{ id: sourceId }, { id: targetId }],
-      links: [{ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } }],
     });
-
-    editor.links.removeLink("source-target");
-    expect(editor.dump().links).toEqual([]);
 
     editor.load({
       version: 6,
@@ -711,12 +703,11 @@ describe("EditorRuntime block commands", () => {
         content: "Loaded",
         children: [],
       }],
-      links: [],
     });
 
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     expect(() => editor.execute("document.load", {
-      snapshot: { version: 3, blocks: [], links: [] },
+      snapshot: { version: 3, blocks: [] },
     })).toThrow("Unsupported Rivto document snapshot version: 3");
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     expect(() => editor.execute("document.load", {
@@ -730,7 +721,6 @@ describe("EditorRuntime block commands", () => {
           content: "",
           children: [],
         }],
-        links: [],
       },
     })).toThrow("block.listProps must be an object");
     editor.destroy();

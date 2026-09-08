@@ -1,3 +1,8 @@
+/**
+ * Implements editor clipboard export, import, and selection replacement.
+ * Composes portable document storage with block-manager placement policies,
+ * preserving stable identities where allowed and batching each paste for undo.
+ */
 import type { EditorRuntime } from "../../editor/rivto-editor";
 import { isStructuralSelection, type NormalizedSelection } from "../selection-manager";
 import type { EditorSelection } from "../../editor/types";
@@ -8,7 +13,6 @@ import type {
 } from "./types";
 import {
   findBlock,
-  flattenBlocks,
   remapClipboardBundle,
   cloneSelectedTopLevelSubtrees,
   validateClipboardBundle,
@@ -143,12 +147,7 @@ export class ClipboardManager {
       end.content = end.content.slice(0, range.end.offset);
     }
 
-    const visible = flattenBlocks(blocks);
-    const ids = new Set(visible.map((block) => block.id));
-    const links = this.editor.links.getLinks().filter(
-      (link) => ids.has(link.from.blockId) && ids.has(link.to.blockId),
-    );
-    return { version: 4, startsWithText: range.startsWithText, blocks, links };
+    return { version: 4, startsWithText: range.startsWithText, blocks };
   }
 
   /**
@@ -159,7 +158,7 @@ export class ClipboardManager {
    * ID, insert remaining roots as siblings, and move the old suffix to the
    * final inserted block. Every document mutation runs in one CRDT transaction.
    *
-   * @param bundle - Portable block hierarchy and links to validate and insert.
+   * @param bundle - Portable block hierarchy to validate and insert.
    * @param mergeText - Whether a partial first block may merge into a text target.
    * @param placement - Optional structural destination resolved by the host.
    * @returns No value.
@@ -224,7 +223,7 @@ export class ClipboardManager {
         let previous = target.id;
         let caretOffset = prefix.length + first.content.length;
 
-        // Replacement, root insertion, child restoration, and link restoration are
+        // Replacement, root insertion, and child restoration are
         // observed as one atomic document change and one manager history action.
         this.editor.document.transact(() => {
           this.removeRangeTail(range);
@@ -234,7 +233,7 @@ export class ClipboardManager {
           );
           remapped.firstChildren.forEach((child) => {
             const childId = this.editor.document.blocks.insertBlock(child, target.id);
-            this.editor.document.blocks.indentBlock(childId);
+            this.editor.document.blocks.moveBlock(childId, target.id, "inside");
           });
           remapped.blocks.forEach((block, index) => {
             const pastedLength = block.content?.length ?? 0;
@@ -245,7 +244,6 @@ export class ClipboardManager {
             );
             if (isLast) caretOffset = pastedLength;
           });
-          remapped.links.forEach((link) => this.editor.document.links.createLink(link));
         });
         this.collapse(previous, caretOffset);
       }
@@ -345,12 +343,11 @@ export class ClipboardManager {
       });
       // Move blocks before the beforeChildId if it exists.
       if (placement.beforeChildId && insertedIds.length) {
-        this.editor.document.blocks.moveBlocks(insertedIds, placement.beforeChildId, "before");
+        this.editor.blocks.moveBlocks(insertedIds, placement.beforeChildId, "before");
       } else if (placement.parentId && placement.afterId === null && insertedIds.length) {
         // Move blocks inside the parent (Appends to the parent)
-        this.editor.document.blocks.moveBlocks(insertedIds, placement.parentId, "inside");
+        this.editor.blocks.moveBlocks(insertedIds, placement.parentId, "inside");
       }
-      remapped.links.forEach((link) => this.editor.document.links.createLink(link));
     });
     // Set selection to the inserted blocks.
     if (insertedIds.length) {
@@ -366,7 +363,7 @@ export class ClipboardManager {
   /**
    * Builds the destination ID-reuse policy for one paste.
    *
-   * An original clipboard ID survives paste only while no live block or link
+   * An original clipboard ID survives paste only while no live block
    * holds it. Cut releases the source IDs, so cut+paste restores the exact
    * same identities; copy+paste sees the originals still in use and remints.
    *
@@ -375,7 +372,6 @@ export class ClipboardManager {
   private idReusePolicy(): ClipboardIdReusePolicy {
     return {
       canReuseBlockId: (id) => !this.editor.document.blocks.hasBlock(id),
-      canReuseLinkId: (id) => !this.editor.document.links.getLink(id),
     };
   }
 

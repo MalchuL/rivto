@@ -4,7 +4,7 @@
 
 The pnpm workspace has two editor packages:
 
-- `packages/rivto-editor-core/` owns canonical document state and framework-neutral behavior: CRDT storage, blocks, links, elements, commands, selection, clipboard, snapshots, mode, and undo.
+- `packages/rivto-editor-core/` owns canonical document state and framework-neutral behavior: CRDT storage, blocks, elements, commands, selection, clipboard, snapshots, mode, and undo.
 - `packages/react-rivto-editor/` owns presentation and browser behavior: renderers, hooks, DOM events/selection, page and edgeless surfaces, keyboard handling, slash commands, and extensions.
 
 Use `demo/` for integration, `e2e/` for Playwright, and `docs/` or `dev_notes/` for guidance. Keep native `yjs` imports inside core `src/store/crdt-doc/yjs-doc/`.

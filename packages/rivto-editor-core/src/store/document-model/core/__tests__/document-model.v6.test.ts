@@ -1,3 +1,8 @@
+/**
+ * Verifies schema-v6 storage, atomic writes, collaboration, and path-cache repair.
+ * Uses generic storage primitives; editor feature policies are tested with their
+ * public managers so document tests do not depend on outline commands.
+ */
 import * as Y from "yjs";
 import { YjsDoc } from "../../../crdt-doc";
 import { UndoManager } from "../../../../managers/undo-manager";
@@ -32,17 +37,14 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     expect("createLink" in model).toBe(false);
     expect(model.blocks.getBlocks()).toEqual([]);
     expect(model.blocks.getRootIds()).toEqual([]);
-    expect(model.links.getLinks()).toEqual([]);
 
-    model.loadSnapshot({ version: 6, blocks: [], links: [] });
+    model.loadSnapshot({ version: 6, blocks: [] });
     const id = model.blocks.insertBlock({ id: "only", type: "paragraph", content: "Only" });
-    model.links.createLink({ id: "self", from: { blockId: id }, to: { blockId: id } });
     model.blocks.removeBlock(id);
 
     expect(model.blocks.getBlocks()).toEqual([]);
     expect(model.blocks.getRootIds()).toEqual([]);
-    expect(model.links.getLinks()).toEqual([]);
-    expect(model.getSnapshot()).toMatchObject({ version: 6, blocks: [], links: [] });
+    expect(model.getSnapshot()).toMatchObject({ version: 6, blocks: [] });
     expect(model.blocks.insertBlock({ id: "later", type: "paragraph" })).toBe("later");
     doc.destroy();
   });
@@ -61,7 +63,6 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
         content: "Task",
         children: [],
       }],
-      links: [],
     });
     expect(source.blocks.getBlock("listed")?.listProps).toEqual({ collapsed: false, type: "checkbox", checked: true });
 
@@ -167,7 +168,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     const modelB = new DocumentModelImpl(docB);
     modelA.blocks.insertBlock({ id: "left", type: "paragraph" });
     modelA.blocks.insertBlock({ id: "child", type: "paragraph" }, "left");
-    modelA.blocks.indentBlock("child");
+    modelA.blocks.moveBlock("child", "left", "inside");
     modelA.blocks.insertBlock({ id: "right", type: "paragraph" }, "left");
     Y.applyUpdate(docB.doc, Y.encodeStateAsUpdate(docA.doc));
 
@@ -181,7 +182,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     docB.destroy();
   });
 
-  it("repairs cached paths after indent, outdent, deletion, undo, and redo", () => {
+  it("repairs cached paths after reparenting, deletion, undo, and redo", () => {
     const doc = new YjsDoc("lazy-path-history");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "parent", type: "paragraph" });
@@ -190,9 +191,9 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     history.clear();
 
     expect(model.blocks.getParentId("child")).toBeNull();
-    model.blocks.indentBlock("child");
+    model.blocks.moveBlock("child", "parent", "inside");
     expect(model.blocks.getParentId("child")).toBe("parent");
-    model.blocks.outdentBlock("child");
+    model.blocks.moveBlock("child", "parent", "after");
     expect(model.blocks.getParentId("child")).toBeNull();
 
     history.clear();
@@ -213,21 +214,32 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     doc.destroy();
   });
 
-  it("provides direct block and link getters", () => {
+  it("preflights sequential placements against simulated parents before any write", () => {
+    const doc = new YjsDoc("placement-preflight");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({ id: "left", type: "paragraph" });
+    model.blocks.insertBlock({ id: "right", type: "paragraph" });
+    const before = model.getSnapshot();
+    expect(() => model.blocks.relocateBlocks([
+      { id: "left", targetId: "right", position: "inside" },
+      { id: "right", targetId: "left", position: "inside" },
+    ])).toThrow(/descendant/);
+    expect(model.getSnapshot()).toEqual(before);
+    expect(() => model.blocks.relocateBlocks([
+      { id: "left", targetId: "right", position: "inside" },
+      { id: "right", targetId: "missing", position: "after" },
+    ])).toThrow("Target block missing not found");
+    expect(model.getSnapshot()).toEqual(before);
+    doc.destroy();
+  });
+
+  it("provides direct block getters", () => {
     const doc = new YjsDoc("direct-getters");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "from", type: "paragraph" });
     model.blocks.insertBlock({ id: "to", type: "paragraph" });
-    model.links.createLink({ id: "edge", from: { blockId: "from" }, to: { blockId: "to" } });
 
     expect(model.blocks.getBlocks().map((block) => block.id)).toEqual(["from", "to"]);
-    expect(model.links.getLink("edge")).toEqual({
-      id: "edge",
-      from: { blockId: "from" },
-      to: { blockId: "to" },
-      meta: {},
-    });
-    expect(model.links.getLinks()).toEqual([model.links.getLink("edge")]);
     doc.destroy();
   });
 
@@ -262,17 +274,15 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     docB.destroy();
   });
 
-  it("removes descendant links when deleting a block tree", () => {
+  it("removes descendant blocks when deleting a block tree", () => {
     const doc = new YjsDoc("canonical-tree");
     const model = new DocumentModelImpl("canonical-tree", doc);
 
     model.blocks.insertBlock({ id: "parent", type: "group", children: [{ id: "child", type: "paragraph", content: "Nested" }] });
     model.blocks.insertBlock({ id: "target", type: "paragraph" });
-    model.links.createLink({ id: "child-target", from: { blockId: "child" }, to: { blockId: "target" } });
     model.blocks.removeBlock("parent");
 
     expect(model.blocks.getBlocks().map((block) => block.id)).toEqual(["target"]);
-    expect(model.links.getLinks()).toEqual([]);
     doc.destroy();
   });
 

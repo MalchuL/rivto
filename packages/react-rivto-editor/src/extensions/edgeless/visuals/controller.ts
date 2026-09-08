@@ -1,6 +1,7 @@
 import {
   RIVTO_CLIPBOARD_MIME,
   validateClipboardBundle,
+  validateElementCollection,
   type ClipboardBundle,
   type EditorBlock,
   type EditorBlockInput,
@@ -652,13 +653,9 @@ export class EdgelessVisualController {
     const rootIds = this.reactEditor.editor.blocks.getRootIds();
     const blockIds = new Set(leaves.flatMap((id) => { const element = this.element(id); return element?.type === "block" ? blockIdsOf(element, rootIds) : []; }));
     const blocks = this.reactEditor.editor.blocks.getBlocks().filter((block) => blockIds.has(block.id)).map(copy);
-    const allBlockIds = new Set<string>();
-    const visit = (block: EditorBlock): void => { allBlockIds.add(block.id); block.children.forEach(visit); };
-    blocks.forEach(visit);
     return {
       version: 4,
       blocks,
-      links: this.reactEditor.editor.links.getLinks().filter((link) => allBlockIds.has(link.from.blockId) && allBlockIds.has(link.to.blockId)),
       elements: this.reactEditor.editor.elements.getElements().filter((element) => included.has(element.id)).map(copy),
       selectedElementIds: [...items],
     };
@@ -700,7 +697,6 @@ export class EdgelessVisualController {
         const last = blockIdsOf(element, order).at(-1);
         if (last) insertBlockElementSeparator(this.reactEditor, last);
       });
-      bundle.links.forEach((link) => { const from = blockMap.get(link.from.blockId); const to = blockMap.get(link.to.blockId); if (from && to) this.reactEditor.editor.links.createLink({ ...copy(link), id: crypto.randomUUID(), from: { ...link.from, blockId: from }, to: { ...link.to, blockId: to } }); });
       elements.forEach((element) => {
         try {
           this.reactEditor.editor.elements.insertElement(element);
@@ -907,8 +903,8 @@ export class EdgelessVisualController {
   }
 
   private validateElement(value: unknown): EditorElement {
-    if (!isRecord(value) || typeof value.id !== "string" || typeof value.type !== "string" || !isRecord(value.frame) || !isRecord(value.props) || typeof value.zIndex !== "number" || !Number.isFinite(value.zIndex)) throw new Error("Invalid edgeless clipboard element");
-    this.frame(value.frame as unknown as VisualFrame);
+    if (!isRecord(value)) throw new Error("Invalid edgeless clipboard element");
+    validateElementCollection([value as EditorElement]);
     return copy(value) as unknown as EditorElement;
   }
 }

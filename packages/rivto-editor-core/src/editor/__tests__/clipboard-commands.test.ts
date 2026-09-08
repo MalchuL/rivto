@@ -28,7 +28,7 @@ describe("clipboard commands", () => {
     source.destroy();
   });
 
-  it("serializes selected block subtrees with native data and internal links", () => {
+  it("serializes selected block subtrees with native data", () => {
     const editor = createRivtoEditor();
     const parent = editor.blocks.insertBlock({
       type: "paragraph",
@@ -38,7 +38,6 @@ describe("clipboard commands", () => {
     });
     const child = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, parent);
     editor.blocks.indentBlock(child);
-    editor.links.createLink({ id: "link-1", from: { blockId: parent }, to: { blockId: child } });
     editor.execute("selection.set", {
       selection: [{ type: "block", blockIds: [parent, child], anchorBlockId: parent, focusBlockId: child }],
     });
@@ -49,7 +48,6 @@ describe("clipboard commands", () => {
     const bundle = JSON.parse(data.get(RIVTO_CLIPBOARD_MIME)!) as {
       version: number;
       blocks: Array<{ id: string; props: Record<string, unknown>; pluginData: Record<string, unknown>; children: unknown[] }>;
-      links: unknown[];
     };
     expect(bundle.version).toBe(4);
     expect(bundle.blocks).toHaveLength(1);
@@ -57,7 +55,6 @@ describe("clipboard commands", () => {
     expect(bundle.blocks[0]?.props).toEqual({ level: 1 });
     expect(bundle.blocks[0]?.pluginData).toEqual({ local: { pinned: true } });
     expect(bundle.blocks[0]?.children).toHaveLength(1);
-    expect(bundle.links).toHaveLength(1);
     expect([...data.keys()]).toEqual([RIVTO_CLIPBOARD_MIME]);
     editor.destroy();
   });

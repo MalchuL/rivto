@@ -9,7 +9,6 @@ type Snapshot = {
     pluginData: Record<string, unknown>;
     children: Snapshot["blocks"];
   }>;
-  links: Array<{ id: string }>;
   elements: Array<{ id: string; type: string }>;
 };
 
@@ -99,7 +98,6 @@ test("moves selected subtrees into the exact cross-document row and keeps histor
   const source = await snapshot(left);
   const destination = await snapshot(right);
   expect(source.blocks.map(({ id }) => id)).toEqual(["left-stay"]);
-  expect(source.links).toEqual([]);
   expect(destination.blocks[0]?.children.map(({ id }) => id)).toEqual([
     "right-nested",
     "left-parent",
@@ -110,7 +108,6 @@ test("moves selected subtrees into the exact cross-document row and keeps histor
     listProps: expect.objectContaining({ collapsed: true }),
     children: [{ id: "left-child" }],
   });
-  expect(destination.links).toEqual([expect.objectContaining({ id: "left-internal-link" })]);
 
   await right.locator(".page-surface").focus();
   await page.keyboard.press("Control+z");
@@ -177,19 +174,17 @@ test("targets nested cross-document rows and keeps ordinary local dragging local
   });
 });
 
-test("rejects destination block and link ID conflicts without mutating either editor", async ({ page }) => {
-  for (const conflict of ["block", "link"] as const) {
-    await page.goto(`/?editors=2&conflict=${conflict}`);
-    const left = multiEditor(page, "left");
-    const right = multiEditor(page, "right");
-    const sourceBefore = await snapshot(left);
-    const destinationBefore = await snapshot(right);
-    await drag(
-      left.locator(blockIdSelector("left-parent")),
-      right.locator(blockIdSelector("right-target")),
-    );
-    expect(await snapshot(left)).toEqual(sourceBefore);
-    expect(await snapshot(right)).toEqual(destinationBefore);
-    await expect(right.locator("[data-drop-inside]")).toHaveCount(0);
-  }
+test("rejects destination block ID conflicts without mutating either editor", async ({ page }) => {
+  await page.goto("/?editors=2&conflict=block");
+  const left = multiEditor(page, "left");
+  const right = multiEditor(page, "right");
+  const sourceBefore = await snapshot(left);
+  const destinationBefore = await snapshot(right);
+  await drag(
+    left.locator(blockIdSelector("left-parent")),
+    right.locator(blockIdSelector("right-target")),
+  );
+  expect(await snapshot(left)).toEqual(sourceBefore);
+  expect(await snapshot(right)).toEqual(destinationBefore);
+  await expect(right.locator("[data-drop-inside]")).toHaveCount(0);
 });

@@ -1,11 +1,10 @@
 import type {
   CRDTType,
-  BasicType,
   CRDTArray,
   CRDTMap,
   CRDTText,
 } from "../../../crdt-doc";
-import type { BlockListProps, ElementFrame, Link } from "./document";
+import type { BlockListProps, ElementFrame } from "./document";
 
 /** Collaborative geometry stored inside each first-class element record. */
 export type ElementFrameStorage = Record<keyof ElementFrame, number>;
@@ -14,7 +13,6 @@ export type ElementFrameStorage = Record<keyof ElementFrame, number>;
 export type BlockListPropsStorage = BlockListProps;
 
 export type IDBlock = string;
-export type IDLink = string;
 export type IDElement = string;
 export type IDPlugin = string;
 export type IDProp = string;
@@ -45,10 +43,3 @@ export interface ElementStorage {
   props: CRDTMap<Record<IDProp, CRDTType>>;
 }
 
-/** Exact shared fields stored for a first-class link. */
-export interface LinkStorage {
-  id: IDLink;
-  from: Link["from"];
-  to: Link["to"];
-  meta: Record<string, BasicType>;
-}

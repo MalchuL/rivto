@@ -59,19 +59,10 @@ export type EditorBlockPatch = BlockPatch;
 /** Canonical identified block patch. */
 export type EditorBlockUpdate = BlockUpdate;
 
-/** First-class connection between two editor blocks. */
-export interface EditorLink {
-  id: string;
-  from: { blockId: string; port?: string };
-  to: { blockId: string; port?: string };
-  meta?: Record<string, unknown>;
-}
-
 /** Lossless editor document value used for persistence. */
 export interface EditorSnapshot {
   version: 6;
   blocks: EditorBlock[];
-  links: EditorLink[];
   elements: EditorElement[];
   pluginData?: Record<string, unknown>;
 }
@@ -80,7 +71,6 @@ export interface EditorSnapshot {
 export interface EditorSnapshotUpdate {
   version: 6;
   blocks?: EditorBlock[];
-  links?: EditorLink[];
   elements?: EditorElement[];
   pluginData?: Record<string, unknown>;
 }

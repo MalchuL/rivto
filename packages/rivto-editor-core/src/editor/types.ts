@@ -1,4 +1,4 @@
-import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, ElementManager, RegisteredCommand, LinkManager, ModeManager, SelectionManager, UndoManager } from "../managers";
+import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, ElementManager, RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
 import type { CRDTDoc } from "../store/crdt-doc";
 import type { DocumentModel } from "../store/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
@@ -79,8 +79,8 @@ export interface CreateRivtoEditorOptions {
 /**
  * Public editor coordinator exposed to UI and integrations.
  *
- * Block, link, and element behavior is intentionally available only through
- * `.blocks`, `.links`, and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
+ * Block and element behavior is intentionally available only through
+ * `.blocks` and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
  * commands, batching, selection, history, mode, snapshots, and subscriptions.
  */
 export interface RivtoEditorApi {
@@ -90,8 +90,6 @@ export interface RivtoEditorApi {
   readonly blocks: BlockManager;
   /** Native block definitions, defaults, and property validation. */
   readonly blocksRegistry: BlockRegistryManager;
-  /** First-class link commands and typed link operations. */
-  readonly links: LinkManager;
   /** Generic first-class canvas element operations. */
   readonly elements: ElementManager;
   /** Named command registry shared by managers and integrations. */
