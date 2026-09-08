@@ -1,8 +1,15 @@
 #!/usr/bin/env sh
 set -eu
 
-if [ "${1:-}" = "--" ]; then
-  shift
-fi
+# pnpm forwards extra args after a bare "--". Drop those separators so Jest
+# treats flags such as --no-coverage as options rather than test-name patterns.
+args=""
+for arg in "$@"; do
+  if [ "$arg" = "--" ]; then
+    continue
+  fi
+  args="$args $arg"
+done
 
-exec pnpm exec jest "$@"
+# shellcheck disable=SC2086
+exec node "${PWD}/node_modules/jest/bin/jest.js" $args

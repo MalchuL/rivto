@@ -34,10 +34,13 @@ parent `.rv-children`.
 
 ### EdgelessCanvasRenderer
 
-Root blocks рисуются absolute-positioned cards по `block.layout`. Links
-рисуются SVG lines.
+React читает first-class `elements`. Element типа `block` содержит ordered
+`props.startBlockId` / `props.endBlockId` и рендерит включительный диапазон
+root blocks между ними как одну positioned card; frame и
+z-index берутся из element envelope. Visual elements и links рисуются отдельно.
 
-Оба renderer получают один `Block[]`. Различие — presentation policy.
+Block mode получает `Block[]`, а edgeless mode проецирует blocks через
+`DocumentElement[]`. Сами blocks остаются одним источником content/hierarchy.
 
 ## 3. React key связывает renders по ID
 
@@ -237,7 +240,7 @@ DocumentModel.
 
 ## 14. Links render отдельно от blocks
 
-Edgeless renderer читает `editor.document.links`, находит endpoint layouts и
+Edgeless renderer читает `editor.getLinks()`, находит endpoint layouts и
 рисует `<line>`.
 
 Link renderer — projection relation data. Он не меняет links во время render.
@@ -308,4 +311,3 @@ BlockRegistry.get(block.type)
        ↓
   React DOM commit
 ```
-

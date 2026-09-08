@@ -168,7 +168,7 @@ provider
 Binding каждый render читает:
 
 ```ts
-const blocks = editor.document.document;
+const blocks = editor.getBlocks();
 ```
 
 Это detached portable values, а не живые Y.Map/Y.Text. React может безопасно
@@ -238,4 +238,3 @@ runtime command path.
 
 Если да, граница выбрана хорошо. Если command validation или plugin policy
 живёт только внутри JSX handler, её, вероятно, нужно опустить в runtime.
-

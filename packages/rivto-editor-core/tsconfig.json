@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "baseUrl": ".",
+    "paths": {
+      "@/store/crdt-doc": ["./src/store/crdt-doc"],
+      "@/store/document-model": ["./src/store/document-model"],
+      "@/utils": ["./src/utils"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

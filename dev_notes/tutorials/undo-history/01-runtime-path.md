@@ -178,7 +178,7 @@ revision увеличился
     ↓
 React useSyncExternalStore получает новый snapshot
     ↓
-renderer читает editor.document.document заново
+renderer вызывает editor.getBlocks() заново
 ```
 
 Undo manager не вызывает React и не знает о компонентах.
@@ -241,4 +241,3 @@ editor.commands.execute("history.redo");
 ```
 
 Не следует обращаться к native Yjs manager из renderer или plugin.
-

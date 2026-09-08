@@ -2,12 +2,13 @@
 
 ## 1. Внутреннее storage устроено не как готовое дерево
 
-`DocumentModelImpl` хранит четыре top-level CRDT containers:
+`DocumentModelImpl` хранит пять top-level CRDT containers:
 
 ```text
 roots       ordered array root block IDs
 blocks      map block ID → block CRDT map
 links       map link ID → link CRDT map
+elements    map element ID → generic element CRDT map
 pluginData  map plugin namespace → collaborative value
 ```
 
@@ -39,15 +40,15 @@ CRDT containers имеют стабильную identity. Отдельные map
 
 - typing меняет CRDTText content;
 - move меняет ordered ID array;
-- layout patch меняет несколько keys layout map;
+- element frame patch меняет несколько keys frame map;
 - prop patch не перестраивает content и children.
 
 Concurrent изменения разных частей легче merge.
 
-## 3. Публичный getter `document`
+## 3. Публичный метод `getBlocks()`
 
 ```ts
-get document(): Block[] {
+getBlocks(): Block[] {
   return strings(this.storage.roots).flatMap((id) => {
     const block = this.readBlock(id, new Set());
     return block ? [block] : [];
@@ -62,7 +63,7 @@ get document(): Block[] {
 3. missing/malformed result пропускается;
 4. итог — новый обычный `Block[]`.
 
-Getter не возвращает ссылку на внутренний array storage.
+Метод не возвращает ссылку на внутренний array storage.
 
 ## 4. `readBlock()` материализует один subtree
 
@@ -117,19 +118,11 @@ visited.add(id);
 Read path всё равно защищается, потому что внешние updates могут временно или
 ошибочно принести некорректную структуру.
 
-## 7. Default layout при чтении
+## 7. Геометрия принадлежит elements
 
-Stored layout может быть partial или происходить из старых данных. Getter
-возвращает:
-
-```ts
-layout: { ...DEFAULT_LAYOUT, ...layout }
-```
-
-Renderer получает полную geometry и не обязан повсюду повторять defaults.
-
-При insert defaults также записываются с calculated x/y, но read fallback
-остаётся защитой compatibility.
+Blocks не содержат layout. Полный `frame` (`x`, `y`, `width`, `height`) и
+`zIndex` хранятся в first-class element envelope. Core требует finite
+coordinates и положительные dimensions; element-specific props остаются opaque.
 
 ## 8. `Block` — view-friendly contract
 
@@ -141,7 +134,6 @@ interface Block {
   pluginData: Record<string, unknown>;
   content: string;
   children: Block[];
-  layout?: BlockLayout;
 }
 ```
 
@@ -172,12 +164,12 @@ document data.
 
 ## 10. `links` материализуются отдельно
 
-`document` getter возвращает block tree, а `links` getter возвращает first-class
+`getBlocks()` возвращает block tree, а `getLinks()` возвращает first-class
 connections. Edgeless renderer читает оба:
 
 ```ts
-blocks
-editor.document.links
+editor.getBlocks()
+editor.getLinks()
 ```
 
 Link не становится child block, потому что это другая domain relationship.
@@ -266,4 +258,3 @@ plugin отключён
 
 После повторной установки definition тот же persisted type снова resolve в
 renderer.
-

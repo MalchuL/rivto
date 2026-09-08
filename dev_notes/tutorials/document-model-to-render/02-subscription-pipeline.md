@@ -2,7 +2,7 @@
 
 ## 1. Getter сам никого не уведомляет
 
-`editor.document.document` только читает current storage. Он не push stream и
+`editor.getBlocks()` только читает current storage. Он не push stream и
 не React state.
 
 Нужен отдельный сигнал:
@@ -146,7 +146,7 @@ useSyncExternalStore(
 3. получает новый revision number;
 4. планирует render;
 5. component function выполняется снова;
-6. читает `editor.document.document`;
+6. вызывает `editor.getBlocks()`;
 7. получает новый detached tree.
 
 ## 9. Почему результат hook можно не присваивать
@@ -164,7 +164,7 @@ useSyncExternalStore(...);
 ## 10. React читает blocks после hook
 
 ```ts
-const blocks = editor.document.document;
+const blocks = editor.getBlocks();
 ```
 
 Каждый render получает coherent current view model. Renderer props дальше
@@ -300,4 +300,3 @@ plugin/definition update ┘
              ↓
  component reads current model/registries
 ```
-

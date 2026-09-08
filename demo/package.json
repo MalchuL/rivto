@@ -6,12 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs"
   },
   "dependencies": {
     "@chulane/rivto": "workspace:*",
+    "@chulane/rivto-react": "workspace:*",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@types/react": "^19.2.0",

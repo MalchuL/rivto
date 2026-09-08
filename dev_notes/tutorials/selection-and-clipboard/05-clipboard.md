@@ -31,7 +31,7 @@ Clipboard — потребитель selection. Он должен понять �
 Plain text Copy потеряет всё кроме content. Поэтому Rivto пишет несколько MIME
 formats одновременно.
 
-## 2. Три clipboard formats
+## 2. Четыре clipboard formats
 
 ### application/x-rivto+json
 
@@ -46,22 +46,31 @@ application/x-rivto+json
 
 ### text/html
 
-Fallback для rich editors, которые не знают Rivto MIME.
+Fallback для rich editors, которые не знают Rivto MIME. Descendants сохраняют
+иерархию через вложенные `ul`/`li` lists.
+
+### text/markdown
+
+Markdown-aware applications получают roots как raw block text, а descendants
+как вложенные list items.
 
 ### text/plain
 
 Universal fallback для terminal, textarea, messenger и любого приложения.
+Descendants получают отступ в два пробела на каждый уровень hierarchy.
 
-Все три создаются из одного normalized selection. Иначе JSON и text могли бы
+Все четыре создаются из одного normalized selection. Иначе JSON и text могли бы
 описывать разные границы.
 
 ## 3. ClipboardBundle
 
 ```ts
 interface ClipboardBundle {
-  version: 1;
+  version: 3;
   blocks: Block[];
   links: Link[];
+  elements?: DocumentElement[];
+  selectedElementIds?: string[];
 }
 ```
 
@@ -85,8 +94,8 @@ start = A:1
 end   = B:4
 ```
 
-`normalizeSelection()` создаёт временный `NormalizedSelection`, не меняя
-SelectionManager.
+`editor.selection.normalize()` создаёт временный `NormalizedSelection`, не
+меняя состояние `SelectionManager`.
 
 ## 5. NormalizedSelection
 
@@ -155,7 +164,7 @@ Selected text: `pha\nBe`.
 
 Stored runtime selection всё ещё `B:2 → A:2`.
 
-## 8. Нормализация BlockSelection и EdgelessSelection
+## 8. Нормализация BlockSelection
 
 Для structural selection offsets отсутствуют. Clipboard считает каждый block
 выбранным полностью:
@@ -179,7 +188,9 @@ Copy не должен менять document. Поэтому функция ра
 4. Найти boundary blocks внутри copies.
 5. Обрезать content first/last по offsets.
 6. Собрать internal links.
-7. Создать JSON, HTML и text.
+7. Получить portable text каждого block через `BlockDefinition.toRawText` с
+   fallback на `content`.
+8. Создать JSON, hierarchical HTML, Markdown и plain text.
 
 ## 10. Почему selected parent подавляет selected child
 
@@ -205,7 +216,8 @@ Clipboard copy A.content = "pha"
 Document A.content остаётся "Alpha"
 ```
 
-Поэтому `cloneBlock()` копирует block, props, pluginData, layout и children.
+Поэтому `cloneBlock()` копирует block, props, pluginData и children. Геометрия
+не является частью блока и переносится только через `elements` edgeless bundle.
 
 ## 12. Обрезка boundary blocks
 
@@ -284,13 +296,12 @@ Synchronous event path важен: browsers часто разрешают зап
 `cut()` сохраняет selection до async Copy:
 
 ```ts
-const selection = this.selection.get();
-const text = await this.copy();
-const range = normalizeSelection(document, selection);
+const payload = editor.clipboard.copy();
+if (payload) editor.selection.delete();
 ```
 
-Это важно: во время ожидания browser API focus или selection теоретически могут
-измениться. Cut должен удалить именно то, что было скопировано.
+Core не ожидает browser API: React сначала синхронизирует DOM selection, затем
+`ClipboardManager` копирует и удаляет одну и ту же текущую selection.
 
 ## 18. Cut целых блоков
 
@@ -346,7 +357,7 @@ Block A остаётся, block B удаляется, caret становится
 8. Transaction завершается.
 9. Selection collapses после inserted value.
 
-Type, ID, props, pluginData и layout target не меняются.
+Type, ID, props и pluginData target не меняются.
 
 ## 21. Почему mutation одна transaction
 
@@ -370,8 +381,7 @@ Transaction делает user operation атомарной для CRDT observers
 1. Plugins получают paste event первыми.
 2. Builtin handler вызывает `preventDefault()`.
 3. Проверяет custom Rivto MIME.
-4. Если его нет, проверяет HTML.
-5. Если HTML нет, берёт plain text.
+4. Если его нет, берёт plain text.
 
 Priority нужен, чтобы Paste из Rivto сохранял structure, но Paste из других apps
 всё равно работал.
@@ -407,8 +417,10 @@ old ID → new ID
 
 Links затем переписываются через эту map.
 
-Canvas layout сдвигается на 24px по x/y, чтобы pasted object не оказался точно
-под original.
+В edgeless paste remap также охватывает element IDs, group children и
+`blockIds`. Frames вставленных top-level elements сдвигаются, чтобы pasted
+objects не оказались точно под original. Page/block paste игнорирует элементы
+и не переносит canvas geometry.
 
 ## 25. Structured Paste без destination selection
 
@@ -494,23 +506,16 @@ ClipboardManager напрямую вызывает SelectionManager:
 Selection subscribers запускают React, а layout effect восстанавливает native
 caret в новом DOM.
 
-## 30. HTML Paste
+## 30. Error boundaries и доверие
 
-Если custom MIME отсутствует, HTML превращается в visible text через
-`DOMParser` и `body.textContent`.
-
-Текущая реализация не конвертирует rich HTML structure в Rivto block types. Это
-plain-text interoperability fallback.
-
-## 31. Error boundaries и доверие
-
-Structured JSON version и arrays проверяются в `remapClipboardBundle()`.
+Structured JSON version 3 и arrays проверяются в `remapClipboardBundle()`.
+Старые edgeless payloads намеренно отклоняются без миграции plugin data.
 
 Однако custom clipboard data всё равно рассматривается как внешние данные.
 При расширении schema нельзя доверять TypeScript cast: runtime browser может
 передать любой JSON.
 
-## 32. Полный Copy → Paste пример
+## 31. Полный Copy → Paste пример
 
 Source:
 

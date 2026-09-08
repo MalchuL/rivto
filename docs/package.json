@@ -1,0 +1,30 @@
+{
+  "name": "@chulane/rivto-docs",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "check-types": "tsc --noEmit",
+    "preview": "vite preview",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@tiptap/extension-image": "^3.0.0",
+    "@tiptap/markdown": "^3.0.0",
+    "@tiptap/pm": "^3.0.0",
+    "@tiptap/react": "^3.0.0",
+    "@tiptap/starter-kit": "^3.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "5.8.3",
+    "vite": "^7.2.0"
+  }
+}

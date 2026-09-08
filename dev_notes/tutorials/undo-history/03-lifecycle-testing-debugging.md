@@ -71,13 +71,13 @@ const editor = createRivtoEditor({
 });
 
 editor.commands.execute("text.set", { id: "a", text: "Beta" });
-expect(editor.document.document[0].content).toBe("Beta");
+expect(editor.getBlocks()[0].content).toBe("Beta");
 
 editor.commands.execute("history.undo");
-expect(editor.document.document[0].content).toBe("Alpha");
+expect(editor.getBlocks()[0].content).toBe("Alpha");
 
 editor.commands.execute("history.redo");
-expect(editor.document.document[0].content).toBe("Beta");
+expect(editor.getBlocks()[0].content).toBe("Beta");
 ```
 
 В конце настоящего теста полезно вызвать `editor.destroy()` там, где test
@@ -196,4 +196,3 @@ CRDT update
 
 Если ответы известны и закреплены observable tests, изменение обычно находится
 на правильном архитектурном уровне.
-

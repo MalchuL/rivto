@@ -4,6 +4,11 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@chulane/rivto": ["../packages/rivto-editor-core/src/index.ts"],
+      "@chulane/rivto-react": ["../packages/react-rivto-editor/src/index.ts"]
+    },
     "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,

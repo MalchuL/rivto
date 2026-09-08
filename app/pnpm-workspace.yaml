@@ -1,0 +1,14 @@
+packages:
+  - chulane
+  - web
+  - desktop
+  - server
+
+# Keep the store inside the repo so installs resolve identically in every
+# environment (IDE sandboxes, CI, local shells).
+storeDir: ../.pnpm-store
+
+allowBuilds:
+  electron: true
+  esbuild: true
+  sharp: true

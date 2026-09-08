@@ -74,11 +74,10 @@
    ```ts
    TextSelection
    BlockSelection
-   EdgelessSelection
    EditorSelection
    ```
 
-   Это надо прочитать рано, потому что всё остальное крутится вокруг этих трёх shape-ов.
+   Это надо прочитать рано, потому что всё остальное крутится вокруг этих двух shape-ов.
 
 5. [src/editor/managers/selection-manager.ts](/media/ssd_stuff/work/assistants/rivto/src/editor/managers/selection-manager.ts)
 
@@ -117,7 +116,7 @@
 
    - text selection → partial text range;
    - block selection → целые block subtrees;
-   - edgeless selection → выбранные objects/blocks.
+   - edgeless mode → тот же BlockSelection для root или nested blocks.
 
 8. [src/editor/managers/clipboard-manager.ts](/media/ssd_stuff/work/assistants/rivto/src/editor/managers/clipboard-manager.ts)
 
