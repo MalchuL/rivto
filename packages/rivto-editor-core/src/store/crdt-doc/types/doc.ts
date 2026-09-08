@@ -66,10 +66,11 @@ export interface CRDTDoc extends Serializible {
     getText(path: string): CRDTText;
 
     /**
-     * Subscribe to document events: 'update' (local/remote update),
-     * 'sync' (synchronization status), or 'snapshot' (doc state).
+     * Subscribe to real document events: `update` (local/remote change) or
+     * `sync` (provider synchronization status). Snapshot restore is a method,
+     * not an event.
      */
-    on(event: 'update' | 'sync' | 'snapshot', handler: (event: any) => void): Unsubscribe;
+    on(event: 'update' | 'sync', handler: (event: any) => void): Unsubscribe;
 
     /**
      * Get a serializable snapshot of the document state.

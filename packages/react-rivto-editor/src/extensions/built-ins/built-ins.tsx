@@ -69,7 +69,6 @@ import {
 import { createErrorBlockInput, errorBlockExtension } from "../error/error-block";
 import { PageSurface } from "../../surfaces/page";
 import {
-  BUILTIN_KEYMAP,
   KEYBOARD_BINDING_IDS,
   type ReactBlockRegistration,
   type ReactEditorExtension,
@@ -265,8 +264,8 @@ export interface IndentExtensionOptions {
  * @returns A functional extension with two stable keyboard binding IDs.
  */
 export const indentExtension = (options: IndentExtensionOptions = {}): ReactEditorExtension => {
-  const indentKeys = options.indentKeys ?? BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockIndent]!;
-  const outdentKeys = options.outdentKeys ?? BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockOutdent]!;
+  const indentKeys = options.indentKeys ?? ["Tab"];
+  const outdentKeys = options.outdentKeys ?? ["Shift+Tab"];
   return {
     id: "block.indent",
     setup: (reactEditor) => {
@@ -583,11 +582,34 @@ export const standardPreset = (
   return {
     id: "rivto.standard",
     setup: (reactEditor) => {
-      const cleanups = extensions.flatMap((extension) => {
-        const cleanup = extension.setup(reactEditor);
-        return cleanup ? [cleanup] : [];
-      });
-      return () => cleanups.reverse().forEach((cleanup) => cleanup());
+      const cleanups: Array<() => void> = [];
+      try {
+        for (const extension of extensions) {
+          const cleanup = extension.setup(reactEditor);
+          if (cleanup) cleanups.push(cleanup);
+        }
+      } catch (error) {
+        cleanups.slice().reverse().forEach((cleanup) => {
+          try {
+            cleanup();
+          } catch {
+            // Rollback is best-effort so the original setup error is preserved.
+          }
+        });
+        throw error;
+      }
+      return () => {
+        const errors: unknown[] = [];
+        cleanups.slice().reverse().forEach((cleanup) => {
+          try {
+            cleanup();
+          } catch (cleanupError) {
+            errors.push(cleanupError);
+          }
+        });
+        if (errors.length === 1) throw errors[0];
+        if (errors.length > 1) throw new AggregateError(errors, "Standard preset cleanup failed");
+      };
     },
   };
 };

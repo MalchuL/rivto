@@ -93,6 +93,8 @@ export {
   restoreEditorDOMSelection,
   BUILTIN_KEYMAP,
   KEYBOARD_BINDING_IDS,
+  parseShortcut,
+  shortcutFromKeyboardEvent,
 } from "./managers";
 export type {
   BlockRenderer,
@@ -108,7 +110,9 @@ export type {
   DOMEventScope,
   DOMEventTarget,
   EditorEventHandler,
+  ExtensionMountPosition,
   KeymapOverrides,
+  KeyboardBindingSnapshot,
   KeyboardEventDefinition,
   KeyboardShortcut,
   ReactBlockRegistration,

@@ -23,7 +23,8 @@ type BroadcastMessage =
  * or separate tabs on the same PC, converge when they share a room id.
  */
 export class BroadcastChannelProvider implements Provider {
-  public readonly id = "broadcast";
+  /** Room-qualified identity so two broadcast rooms can attach to one document. */
+  public readonly id: string;
 
   private channel: BroadcastChannel | null = null;
   private ydoc: Y.Doc | null = null;
@@ -60,7 +61,9 @@ export class BroadcastChannelProvider implements Provider {
    *
    * @param roomId - Shared channel name; peers must use the same value.
    */
-  constructor(private readonly roomId: string) {}
+  constructor(private readonly roomId: string) {
+    this.id = `broadcast:${roomId}`;
+  }
 
   /**
    * Connects the provider to the given CRDT document.

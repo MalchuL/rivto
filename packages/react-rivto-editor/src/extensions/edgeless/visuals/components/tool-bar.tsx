@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { isNodeLike } from "../../../../managers/events/dom-nodes";
 import type { EdgelessVisualController } from "../controller";
 import type { EdgelessFontOption, EdgelessStickerOption, EdgelessVisualTool, PresetPayload, ToolCategory } from "../types";
 import { CreationPanel } from "./creation-panel";
@@ -57,9 +58,11 @@ export function ToolBar({
 
   useEffect(() => {
     if (!menu) return;
+    const view = barRef.current?.ownerDocument.defaultView;
+    if (!view) return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
-      if (!(target instanceof Node) || barRef.current?.contains(target)) return;
+      if (!isNodeLike(target) || barRef.current?.contains(target)) return;
       // Keep the category submenu open while placing/drawing on the canvas —
       // only dismiss on Select/Pan, category toggle, or Escape.
       const current = controller.getTool().tool;
@@ -73,11 +76,11 @@ export function ToolBar({
       // Close the popover without stopping Escape so tool/select bindings still run.
       setMenu(null);
     };
-    window.addEventListener("pointerdown", onPointerDown, true);
-    window.addEventListener("keydown", onKeyDown, true);
+    view.addEventListener("pointerdown", onPointerDown, true);
+    view.addEventListener("keydown", onKeyDown, true);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown, true);
-      window.removeEventListener("keydown", onKeyDown, true);
+      view.removeEventListener("pointerdown", onPointerDown, true);
+      view.removeEventListener("keydown", onKeyDown, true);
     };
   }, [controller, menu]);
 

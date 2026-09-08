@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -159,7 +160,13 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   const blockResult = useBlock(blockId);
   const elementRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);
+  const pointerCleanupRef = useRef<(() => void) | undefined>(undefined);
   const textEdit = options.textEdit !== false;
+
+  useEffect(() => () => {
+    pointerCleanupRef.current?.();
+    pointerCleanupRef.current = undefined;
+  }, []);
 
   // Reconcile command-driven or remote content without treating the detached
   // block snapshot as mutable React state. Structural mode never attaches this
@@ -219,6 +226,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
     if (!view) return;
     const pointerId = event.pointerId;
     let focus = anchor;
+    pointerCleanupRef.current?.();
     const extend = (move: PointerEvent) => {
       if (move.pointerId !== pointerId) return;
       const next = document.caretPositionFromPoint?.(move.clientX, move.clientY);
@@ -231,11 +239,15 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
         next.offset,
       );
     };
-    const finish = (end: PointerEvent) => {
-      if (end.pointerId !== pointerId) return;
+    const cleanup = (): void => {
       view.removeEventListener("pointermove", extend);
       view.removeEventListener("pointerup", finish);
       view.removeEventListener("pointercancel", finish);
+      if (pointerCleanupRef.current === cleanup) pointerCleanupRef.current = undefined;
+    };
+    const finish = (end: PointerEvent) => {
+      if (end.pointerId !== pointerId) return;
+      cleanup();
       target.focus({ preventScroll: true });
       selection.setBaseAndExtent(
         anchor.offsetNode,
@@ -244,6 +256,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
         focus.offset,
       );
     };
+    pointerCleanupRef.current = cleanup;
     view.addEventListener("pointermove", extend);
     view.addEventListener("pointerup", finish);
     view.addEventListener("pointercancel", finish);

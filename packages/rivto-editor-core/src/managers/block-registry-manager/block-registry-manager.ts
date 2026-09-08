@@ -195,6 +195,25 @@ export class BlockRegistryManager {
   }
 
   /**
+   * Enforces an optional parent/child constraint declared on the child type.
+   *
+   * Unknown types and definitions without `allowedParents` stay unconstrained.
+   *
+   * @param childType - Native type of the block being placed.
+   * @param parentType - Native type of the new parent, or `null` for the root.
+   * @returns No value.
+   * @throws {Error} When the child type forbids that parent.
+   */
+  assertAllowedParent(childType: string, parentType: string | null): void {
+    const allowed = this.get(childType)?.allowedParents;
+    if (!allowed) return;
+    if (allowed.includes(parentType)) return;
+    throw new Error(
+      `Block type ${childType} cannot be placed under ${parentType ?? "document root"}`,
+    );
+  }
+
+  /**
    * Removes every definition owned by this manager.
    *
    * Definitions are disposed in reverse registration order so dependent

@@ -13,4 +13,11 @@ export interface NormalizedSelection {
    * For text or mixed selection: all blocks from start to end inclusive.
    */
   blocks: Block[];
+  /**
+   * Whether the earliest document-order boundary came from a text item.
+   *
+   * Clipboard paste uses this instead of the raw selection array order so a
+   * mixed selection still merges text when the earliest boundary is text.
+   */
+  startsWithText: boolean;
 }

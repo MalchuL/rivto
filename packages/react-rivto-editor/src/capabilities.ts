@@ -1,4 +1,6 @@
 import type {
+  BlockListProps,
+  EditorBlock,
   EditorBlockInput,
   EditorBlockPatch,
   EditorBlockUpdate,
@@ -15,11 +17,15 @@ import type {
   EditorEvent,
   EditorEventHandler,
   ExtensionComponent,
+  ExtensionMountPosition,
+  KeyboardBindingSnapshot,
   KeyboardEditorEvent,
   KeyboardEventDefinition,
   KeyboardShortcut,
   KeymapOverrides,
+  PortableBlockFormats,
   ReactBlockRegistration,
+  ReactEditorExtension,
   ListPropsRegistration,
   BlockMutationResult,
   ClipboardFormatter,
@@ -42,7 +48,7 @@ export interface BlocksCapability {
   /** Returns whether the given list-property registration is active. */
   hasListProps(id: string): boolean;
   /** Returns whether core portability and every active validator accept the record. */
-  validateListProps(candidate: import("@chulane/rivto").BlockListProps): boolean;
+  validateListProps(candidate: BlockListProps): boolean;
   /** Returns a detached recursive input with active defaults shallowly merged. */
   prepareBlock(input: EditorBlockInput): EditorBlockInput;
   /** Inserts a prepared block and returns its stable root identifier. */
@@ -69,7 +75,7 @@ export interface ClipboardCapability {
   /** Registers a first-match parser and returns its lifecycle-owned disposer. */
   registerParser(parser: ClipboardParser): () => void;
   /** Returns composed plain-text, Markdown, and HTML formats for a block forest. */
-  format(blocks: readonly import("@chulane/rivto").EditorBlock[]): import("./managers").PortableBlockFormats;
+  format(blocks: readonly EditorBlock[]): PortableBlockFormats;
   /** Returns the first parsed block-input forest, or undefined when no parser matches. */
   parse(data: { readonly html: string; readonly text: string }): EditorBlockInput[] | undefined;
 }
@@ -104,6 +110,12 @@ export interface KeyboardCapability {
   ): () => void;
   /** Deletes a registered semantic action by ID. */
   delete(id: string): boolean;
+  /** Returns an immutable snapshot of installed bindings and orphan overrides. */
+  list(): readonly KeyboardBindingSnapshot[];
+  /** Increments when registrations or overrides change. */
+  readonly revision: number;
+  /** Subscribes to inventory revisions. */
+  subscribe(listener: () => void): () => void;
   /** Replaces every override, restoring defaults for omitted IDs. */
   replaceKeymap(keymap: KeymapOverrides): void;
   /** Sets one override; an empty array disables it and undefined restores defaults. */
@@ -159,8 +171,15 @@ export interface SlashCommandsCapability {
 }
 
 export interface ExtensionsCapability {
-  mount(component: ExtensionComponent): () => void;
-  getComponents(): readonly ExtensionComponent[];
+  mount(
+    component: ExtensionComponent,
+    position?: ExtensionMountPosition,
+  ): () => void;
+  getComponents(
+    position?: ExtensionMountPosition,
+  ): readonly ExtensionComponent[];
+  /** Installs one extension after creation and returns its disposer. */
+  install(extension: ReactEditorExtension): () => void;
   readonly revision: number;
   subscribe(listener: () => void): () => void;
 }

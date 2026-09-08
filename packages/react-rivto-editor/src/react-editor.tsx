@@ -101,13 +101,24 @@ export class ReactEditorImpl implements ReactEditor {
     }
   }
 
-  /** Installs writing factories used by keyboard, trailing, separator, and clipboard paths. */
+  /**
+   * Installs writing factories used by keyboard, trailing, separator, and clipboard paths.
+   *
+   * @param options - Replacement factories for empty writing blocks.
+   * @returns Disposer that restores the previous factories.
+   */
   installDefaultWriting(options: {
     createDefaultBlock: CreateDefaultBlock;
     isEmptyBlock: IsEmptyBlock;
-  }): void {
+  }): () => void {
+    const previousCreate = this.createDefaultBlock;
+    const previousIsEmpty = this.isEmptyBlock;
     this.createDefaultBlock = options.createDefaultBlock;
     this.isEmptyBlock = options.isEmptyBlock;
+    return () => {
+      this.createDefaultBlock = previousCreate;
+      this.isEmptyBlock = previousIsEmpty;
+    };
   }
 
   /**

@@ -2,6 +2,7 @@ import type { BasicType, CRDTMap } from "../../../../crdt-doc";
 import type { DocumentModel, Link } from "../../types";
 import type { IDLink, LinkStorage } from "../../types/storage";
 import { clone, isCRDTMap } from "../../utils";
+import { collectBlockIds, validateLinkCollection, validateLinkRecord } from "../block-manager/utils";
 
 const LINKS_KEY = "rivto.editor.links";
 
@@ -44,19 +45,23 @@ export class DocumentLinkManager {
    * @returns Detached links in collaborative map iteration order.
    */
   getLinks(): Link[] {
-    return Array.from(this.storage.values()).flatMap((value) =>
-      isCRDTMap(value) ? [this.readLink(value)] : [],
-    );
+    return Array.from(this.storage.values()).flatMap((value) => {
+      const link = isCRDTMap(value) ? this.readLink(value) : undefined;
+      return link ? [link] : [];
+    });
   }
 
   /**
-   * Creates or replaces a first-class link between existing blocks.
+   * Creates a first-class link between existing blocks.
    *
    * @param link - Complete portable link record to persist.
    * @returns No value.
-   * @throws {Error} When either endpoint references a missing block.
+   * @throws {Error} When the ID is empty or already used, the record is
+   * incomplete, or either endpoint references a missing block.
    */
   createLink(link: Link): void {
+    validateLinkRecord(link);
+    if (this.storage.has(link.id)) throw new Error(`Link ${link.id} already exists`);
     this.document.transact(() => {
       if (!this.document.blocks.hasBlock(link.from.blockId) || !this.document.blocks.hasBlock(link.to.blockId)) {
         throw new Error("Link endpoints must reference existing blocks");
@@ -90,6 +95,7 @@ export class DocumentLinkManager {
    * @throws {Error} When a supplied link references a missing block.
    */
   loadLinks(links: readonly Link[]): void {
+    validateLinkCollection(links, collectBlockIds(this.document.blocks.getBlocks()));
     this.storage.clear();
     links.forEach((link) => this.createLink(link));
   }
@@ -114,15 +120,24 @@ export class DocumentLinkManager {
   /**
    * Converts one collaborative link record into detached portable data.
    *
+   * Malformed remote records are skipped rather than repaired in place, so
+   * readers never observe incomplete or last-write-wins garbage as a valid link.
+   *
    * @param value - Stored collaborative link map to read.
-   * @returns Detached link value safe for callers to mutate.
+   * @returns Detached link value, or undefined when the record is malformed.
    */
-  private readLink(value: CRDTMap<LinkStorage>): Link {
-    return {
-      id: String(value.get("id")),
-      from: clone(value.get("from") as Link["from"]),
-      to: clone(value.get("to") as Link["to"]),
-      meta: clone((value.get("meta") as Record<string, unknown> | undefined) ?? {}),
-    };
+  private readLink(value: CRDTMap<LinkStorage>): Link | undefined {
+    try {
+      const link: Link = {
+        id: String(value.get("id") ?? ""),
+        from: clone(value.get("from") as Link["from"]),
+        to: clone(value.get("to") as Link["to"]),
+        meta: clone((value.get("meta") as Record<string, unknown> | undefined) ?? {}),
+      };
+      validateLinkRecord(link);
+      return link;
+    } catch {
+      return undefined;
+    }
   }
 }

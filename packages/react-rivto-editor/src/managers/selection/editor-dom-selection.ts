@@ -59,6 +59,7 @@ import {
   BLOCK_ID_SELECTOR,
   TEXT_SELECTION_FALLBACK_SELECTOR,
 } from "../../constants";
+import { isElementNode } from "../events/dom-nodes";
 
 /**
  * One live browser caret/selection endpoint inside a block's editable content.
@@ -242,7 +243,7 @@ function readPosition(root: HTMLElement, node: Node | null, offset: number): Edi
   // Elements have closest()/querySelector. Climb to a tag Element first:
   //   <div contenteditable>          ← Element / HTMLElement
   //     #text "hello"  ← node here   ← Text (Node, not Element) → use parentElement
-  const element = node instanceof Element ? node : node?.parentElement;
+  const element = isElementNode(node) ? node : node?.parentElement;
   const content = element?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
   const blockId = content ? blockIdForContent(content) : undefined;
   if (!node || !content || !blockId || !root.contains(content)) return;

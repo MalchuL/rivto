@@ -138,12 +138,13 @@ describe("core ClipboardManager", () => {
     }]);
     target.clipboard.paste({ text: "plain", defaultBlockType: "paragraph" });
     expect(target.blocks.getBlock(targetId)?.content).toBe("plain");
-    expect(() => target.clipboard.paste({
+    target.clipboard.paste({
       structured: JSON.stringify({ ...payload, version: 1 }),
-    })).not.toThrow();
+      text: "fallback",
+      defaultBlockType: "paragraph",
+    });
     expect(target.blocks.getBlocks().map(({ content }) => content)).toEqual([
-      "plain",
-      "Structured",
+      "plainfallback",
       "Structured",
     ]);
     source.destroy();
@@ -285,6 +286,65 @@ describe("core ClipboardManager", () => {
 
     expect(editor.blocks.getRootIds()).toEqual([id]);
     expect(editor.blocks.getBlock(id)?.content).toBe("Before first\n    second");
+    editor.destroy();
+  });
+
+  it("does not claim the clipboard for a collapsed caret", () => {
+    const editor = createRivtoEditor();
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Hello" });
+    editor.selection.set([{
+      type: "text",
+      anchor: { blockId: id, offset: 2 },
+      head: { blockId: id, offset: 2 },
+    }]);
+
+    expect(editor.clipboard.copy()).toBeUndefined();
+    expect(editor.clipboard.cut()).toBeUndefined();
+    expect(editor.blocks.getBlock(id)?.content).toBe("Hello");
+    editor.destroy();
+  });
+
+  it("derives startsWithText from the earliest document-order boundary", () => {
+    const editor = createRivtoEditor();
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
+    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first);
+    editor.selection.set([
+      {
+        type: "block",
+        blockIds: [second],
+        anchorBlockId: second,
+        focusBlockId: second,
+      },
+      {
+        type: "text",
+        anchor: { blockId: first, offset: 0 },
+        head: { blockId: first, offset: 5 },
+      },
+    ]);
+
+    expect(editor.clipboard.copy()?.startsWithText).toBe(true);
+    editor.destroy();
+  });
+
+  it("rejects cyclic structured clipboard input and no-ops without a text fallback", () => {
+    const editor = createRivtoEditor();
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Kept" });
+    const cyclic = {
+      id: "cycle",
+      type: "paragraph",
+      listProps: {},
+      props: {},
+      pluginData: {},
+      content: "Loop",
+      children: [] as unknown[],
+    };
+    cyclic.children.push(cyclic);
+
+    editor.clipboard.paste({
+      bundle: { version: 4, blocks: [cyclic], links: [] } as never,
+    });
+    expect(editor.blocks.getRootIds()).toEqual([id]);
+    expect(editor.blocks.getBlock(id)?.content).toBe("Kept");
     editor.destroy();
   });
 });

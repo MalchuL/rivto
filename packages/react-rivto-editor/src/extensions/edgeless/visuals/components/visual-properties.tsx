@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { isNodeLike } from "../../../../managers/events/dom-nodes";
 import type { EdgelessVisualController } from "../controller";
 import type { EdgelessFontOption, EdgelessVisual, TextHorizontalAlign, TextVerticalAlign } from "../types";
 import { ColorControl } from "./color-control";
@@ -33,15 +34,17 @@ export function VisualProperties({
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    const view = panelRef.current?.ownerDocument.defaultView;
+    if (!view) return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
-      if (!(target instanceof Node)) return;
+      if (!isNodeLike(target)) return;
       if (panelRef.current?.contains(target)) return;
       if (controller.hasPropertyPreview()) controller.commitPropertyPreview();
     };
-    window.addEventListener("pointerdown", onPointerDown, true);
+    view.addEventListener("pointerdown", onPointerDown, true);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown, true);
+      view.removeEventListener("pointerdown", onPointerDown, true);
       if (controller.hasPropertyPreview()) controller.commitPropertyPreview();
     };
   }, [controller]);

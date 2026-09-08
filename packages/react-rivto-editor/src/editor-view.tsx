@@ -85,13 +85,19 @@ export function EditorView({ editor, children }: EditorViewProps) {
 
   const Surface = editor.surfaces.get(mode);
   if (!Surface) throw new Error(`No React surface is registered for editor mode ${mode}`);
-  const components = editor.extensions.getComponents();
+  const beforeSurface = editor.extensions.getComponents("beforeSurface");
+  const afterSurface = editor.extensions.getComponents("afterSurface");
   const editorWrappers = editor.surfaces.getEditorWrappers(mode);
   let content: ReactNode = (
     <>
       {children}
-      {components.map((Component, index) => <Component key={`${Component.displayName ?? Component.name}-${index}`} />)}
+      {beforeSurface.map((Component, index) => (
+        <Component key={`before-${Component.displayName ?? Component.name}-${index}`} />
+      ))}
       <Surface />
+      {afterSurface.map((Component, index) => (
+        <Component key={`after-${Component.displayName ?? Component.name}-${index}`} />
+      ))}
     </>
   );
   for (let index = editorWrappers.length - 1; index >= 0; index -= 1) {

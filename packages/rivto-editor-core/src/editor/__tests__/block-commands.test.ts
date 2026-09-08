@@ -266,7 +266,7 @@ describe("EditorRuntime block commands", () => {
     expect(() => editor.execute("block.update-many", { updates: [
       { id: first, patch: { listProps: { type: "list" } } },
       { id: second, patch: { listProps: { checked: Number.POSITIVE_INFINITY } } },
-    ] })).toThrow("block.listProps values must be portable");
+    ] })).toThrow("block.listProps.checked must be a finite number");
     expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
 
     editor.undo();
@@ -717,8 +717,8 @@ describe("EditorRuntime block commands", () => {
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     expect(() => editor.execute("document.load", {
       snapshot: { version: 3, blocks: [], links: [] },
-    })).not.toThrow();
-    expect(editor.blocks.getBlocks()).toEqual([]);
+    })).toThrow("Unsupported Rivto document snapshot version: 3");
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     expect(() => editor.execute("document.load", {
       snapshot: {
         version: 6,

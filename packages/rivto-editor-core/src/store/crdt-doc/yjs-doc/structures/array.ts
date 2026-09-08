@@ -1,6 +1,7 @@
 import { CRDTType, BasicType, CRDTArray } from "../../types";
 import * as Y from 'yjs';
 import * as utils from './utils';
+import type { YJSType } from "./utils/types";
 import { YjsBasic } from "./basic";
 import { YjsNotAttachedError } from "../error";
 
@@ -74,8 +75,8 @@ export class YjsArray<Item extends CRDTType = CRDTType>
      */
     forEach(callbackfn: (value: Item, index?: number, array?: CRDTArray<Item>) => void): void {
         this.checkIfNotAttached();
-        this.yjsObj.forEach((item: CRDTType, index: number) => {
-            callbackfn(utils.wrapYJStoCRDT(item) as Item, index, this);
+        this.yjsObj.forEach((item, index: number) => {
+            callbackfn(utils.wrapYJStoCRDT(item as YJSType) as Item, index, this);
         });
     }
 

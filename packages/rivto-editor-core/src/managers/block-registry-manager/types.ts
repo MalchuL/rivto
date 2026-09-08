@@ -17,4 +17,11 @@ export interface BlockDefinition<Props extends Record<string, unknown> = Record<
   defaultProps?: Partial<Props>;
   /** Runtime validator for the complete property object. */
   propSchema?: ZodType<Props>;
+  /**
+   * Optional parent-type constraint checked at insert, move, and load.
+   *
+   * Omitted means any parent, including the document root. `null` in the list
+   * allows a root placement. Unknown types have no constraint.
+   */
+  allowedParents?: readonly (string | null)[];
 }

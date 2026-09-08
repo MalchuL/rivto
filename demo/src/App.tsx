@@ -16,6 +16,7 @@ import {
   useEditor,
   useEditorMode,
 } from "@chulane/rivto-react";
+import { KeyboardPanel } from "./KeyboardPanel";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   COUNTER_BLOCK_TYPE,
@@ -195,6 +196,12 @@ function createDemoEditor() {
       blockIdExtension(),
       ...customBlockExtensions,
     ],
+  });
+  // Playwright and host scripts locate this demo instance through window, not React refs.
+  // The token changes on each create so a stale handle cannot be mistaken for a remount.
+  const demoToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  Object.assign(window, {
+    __rivtoDemo: { token: demoToken, editor: reactEditor },
   });
   const introId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
@@ -461,6 +468,7 @@ function JournalDemoApp() {
               showBlockIds={showBlockIds}
               onShowBlockIdsChange={setShowBlockIds}
             />
+            <KeyboardPanel />
             <JournalDate date={dates.today} />
           </EditorView>
         </section>

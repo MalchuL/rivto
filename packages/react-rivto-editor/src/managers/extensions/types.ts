@@ -7,6 +7,9 @@ export type RegistrationDisposer = () => void;
 /** Headless or visual component mounted by a functional extension. */
 export type ExtensionComponent = ComponentType;
 
+/** Explicit EditorView placement relative to the active surface. */
+export type ExtensionMountPosition = "beforeSurface" | "afterSurface";
+
 /** Functional extension installed synchronously during ReactEditor creation. */
 export interface ReactEditorExtension {
   /** Stable identity used to reject duplicate installation. */

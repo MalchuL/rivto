@@ -72,7 +72,7 @@ export function convertBasicTypeToYJS(value: BasicType, options?: WrapBasicTypeT
       return new Y.Map(entries);
     }
     // Converts the map to a object.
-    return Object.fromEntries(Array.from(value.entries()).map(([key, val]) => [key, convertBasicTypeToYJS(val, falseOptions)]));
+    return Object.fromEntries(Array.from(value.entries()).map(([key, val]) => [key, convertBasicTypeToYJS(val, falseOptions)])) as YJSType;
   }
   // object -> Y.Map or object
   if (type === "object") {
@@ -80,7 +80,7 @@ export function convertBasicTypeToYJS(value: BasicType, options?: WrapBasicTypeT
       return new Y.Map(Object.entries(value).map(([key, value]) => [key, convertBasicTypeToYJS(value, options)]));
     }
     // Converts the object to a object.
-    return Object.fromEntries(Object.entries(value).map(([key, value]) => [key, convertBasicTypeToYJS(value, falseOptions)]));
+    return Object.fromEntries(Object.entries(value).map(([key, value]) => [key, convertBasicTypeToYJS(value, falseOptions)])) as YJSType;
   }
   throw new YjsConvertError(`Unsupported property type: ${type}`);
 }
@@ -135,7 +135,7 @@ export function convertYJSTypeToBasic(value: YJSType, options?: ConvertCRDTTypeT
   }
   // Plain object -> object
   if (isDeepPlainRecord(value)) {
-    return value;
+    return value as BasicType;
   }
   throw new YjsConvertError(`Unsupported document property type: ${type}, value: ${JSON.stringify(value)}${value && value.constructor && value.constructor.name ? `, class: ${value.constructor.name}` : ''}`);
 }

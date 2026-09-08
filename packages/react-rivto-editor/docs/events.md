@@ -143,9 +143,10 @@ createReactEditor({
 ```
 
 An override replaces a registration's default shortcuts. An empty array
-disables it, and unknown IDs are harmless. `KEYBOARD_BINDING_IDS` and
-`BUILTIN_KEYMAP` list the built-in semantic actions; the demo mapping is in
-[`demo/KEYMAP.md`](../../../demo/KEYMAP.md).
+disables it. Unknown IDs stay in `keyboard.list()` as `installed: false` so
+typos remain visible. Each extension declares its own default keys beside
+`register`; `KEYBOARD_BINDING_IDS` is only a stable ID index. Subscribe with
+`keyboard.subscribe` and read `keyboard.revision` for a live inventory.
 
 The active map can be replaced without reinstalling extensions:
 

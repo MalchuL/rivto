@@ -2,6 +2,7 @@ import {
   isStructuralSelection,
   RIVTO_CLIPBOARD_MIME,
   validateBlockListProps,
+  validateClipboardBundle,
   type EditorBlock,
   type EditorBlockInput,
   type ClipboardBundle,
@@ -9,8 +10,9 @@ import {
 } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import {
-  BUILTIN_KEYMAP,
   KEYBOARD_BINDING_IDS,
+  matchesShortcut,
+  parseShortcut,
 } from "../../managers";
 import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
 import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
@@ -137,7 +139,16 @@ export function registerClipboard(
         || fallbackStructuredClipboard(event);
     }
     const canvas = canvasSelection();
-    let sourceBundle = structured ? JSON.parse(structured) as ClipboardBundle : undefined;
+    let sourceBundle: ClipboardBundle | undefined;
+    if (structured) {
+      try {
+        const parsed = JSON.parse(structured) as unknown;
+        validateClipboardBundle(parsed);
+        sourceBundle = parsed;
+      } catch {
+        sourceBundle = undefined;
+      }
+    }
     if (!sourceBundle && !plainText) {
       const parsed = reactEditor.clipboard.parse({
         html: event.clipboardData?.getData("text/html") ?? "",
@@ -359,23 +370,38 @@ export function registerClipboard(
     handleDocumentClipboard(root, event, insideRoot)
   ));
 
+  const pasteAsPlainTextKeys = ["Primary+Shift+v"] as const;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.clipboardPasteAsPlainText,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.clipboardPasteAsPlainText]!,
+    keys: pasteAsPlainTextKeys,
   }, () => {
     pasteAsPlainText = true;
     return false;
   });
 
-  reactEditor.keyboard.register({
-    id: KEYBOARD_BINDING_IDS.clipboardPasteAsPlainTextRelease,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.clipboardPasteAsPlainTextRelease]!,
-    phase: "keyup",
-    target: "window",
-  }, () => {
+  const clearPasteAsPlainText = (): boolean => {
     pasteAsPlainText = false;
     return false;
+  };
+  reactEditor.events.register({
+    id: "clipboard.paste-as-plain-text-release",
+    type: "keyup",
+    target: "window",
+  }, ({ raw }) => {
+    const binding = reactEditor.keyboard.list().find((item) => (
+      item.id === KEYBOARD_BINDING_IDS.clipboardPasteAsPlainText
+    ));
+    const keys = binding?.keys ?? pasteAsPlainTextKeys;
+    if (keys.some((key) => matchesShortcut(parseShortcut(key), raw))) {
+      return clearPasteAsPlainText();
+    }
+    return false;
   });
+  reactEditor.events.register({
+    id: "clipboard.paste-as-plain-text-blur",
+    type: "blur",
+    target: "window",
+  }, clearPasteAsPlainText);
 
   reactEditor.events.register({
     id: "clipboard.paste",

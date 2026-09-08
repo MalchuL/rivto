@@ -96,6 +96,9 @@ export class EditorRuntime implements RivtoEditorApi {
     this.elements = new ElementManager(this);
     this.clipboard = new ClipboardManager(this);
     this.document.blocks.setPropsValidator((type, props) => this.blocksRegistry.validate(type, props));
+    this.document.blocks.setParentConstraintValidator((childType, parentType) => (
+      this.blocksRegistry.assertAllowedParent(childType, parentType)
+    ));
     this.registerRuntimeCommands();
     this.registerClipboardCommands();
 
@@ -461,19 +464,29 @@ export class EditorRuntime implements RivtoEditorApi {
    * @returns A Promise that resolves after providers and CRDT state are destroyed.
    */
   async destroy(): Promise<void> {
+    const errors: unknown[] = [];
+    const run = (operation: () => void): void => {
+      try {
+        operation();
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+    this.unsubscribeFns.splice(0).forEach((unsubscribe) => run(unsubscribe));
+    run(() => this.links.destroy());
+    run(() => this.elements.destroy());
+    run(() => this.blocks.destroy());
+    run(() => this.blocksRegistry.destroy());
+    run(() => this.history.destroy());
+    run(() => this.commands.clear());
+    run(() => this.listeners.clear());
     try {
-      this.unsubscribeFns.splice(0).forEach((unsubscribe) => unsubscribe());
-      this.links.destroy();
-      this.elements.destroy();
-      this.blocks.destroy();
-      this.blocksRegistry.destroy();
-      this.history.destroy();
-      this.commands.clear();
-      this.listeners.clear();
-    } finally {
-      // The CRDT is the final lifecycle owner and must be released even if a manager cleanup fails.
       await this.document.crdt.destroy();
+    } catch (error) {
+      errors.push(error);
     }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) throw new AggregateError(errors, "Editor teardown failed");
   }
 
   /**

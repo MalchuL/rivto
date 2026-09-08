@@ -183,7 +183,7 @@ export class YjsDoc implements CRDTDoc {
             // We call toJSON to convert the type to a JSON object. 
             // This is necessary because utils.convertYJSTypeToBasic can't convert object that wasn't get via getMap or other getters.
             // In such case it returns Y.AbstractType
-            snapshot[key] = utils.convertYJSTypeToBasic(value)
+            snapshot[key] = utils.convertYJSTypeToBasic(value as import("./structures/utils/types").YJSType)
         });
         return snapshot;
     }
@@ -203,11 +203,24 @@ export class YjsDoc implements CRDTDoc {
         const entries = json instanceof Map
             ? Array.from(json.entries())
             : Object.entries(json as Record<string, BasicType>);
+        entries.forEach(([key, value]) => {
+            if (
+                !(value instanceof Map)
+                && !Array.isArray(value)
+                && typeof value !== "string"
+                && (value === null || typeof value !== "object")
+            ) {
+                throw new Error(`Unsupported root type for key "${key}" 
+                        (got ${typeof value}, value: ${JSON.stringify(value)}, 
+                        data: ${JSON.stringify(value)}) 
+                        when restoring YjsDoc. Entries: ${JSON.stringify(entries)}`);
+            }
+        });
 
         this.doc.transact(() => {
-            // Clear existing share entries before restoring
-            this.doc.share.forEach((_, key) => this.doc.share.delete(key));
-
+            // Clear collaborative contents of known typed roots. Deleting
+            // `doc.share` is not a CRDT operation and is invisible to peers.
+            this.doc.share.forEach((_, key) => this.clearTypedRoot(key));
             entries.forEach(([key, value]) => {
                 if (value instanceof Map) {
                     const map = this.getMap(key);
@@ -230,14 +243,22 @@ export class YjsDoc implements CRDTDoc {
                         const basic = utils.wrapBasicTypeToCRDTType(v, options);
                         map.set(k, basic);
                     });
-                } else {
-                    throw new Error(`Unsupported root type for key "${key}" 
-                        (got ${typeof value}, value: ${JSON.stringify(value)}, 
-                        data: ${JSON.stringify(value)}) 
-                        when restoring YjsDoc. Entries: ${JSON.stringify(entries)}`);
                 }
             });
         });
+    }
+
+    /**
+     * Empties one existing typed root without deleting it from the share registry.
+     *
+     * @param key - Shared root name to clear.
+     * @returns No value.
+     */
+    private clearTypedRoot(key: string): void {
+        const current = this.doc.get(key);
+        if (current instanceof Y.Map) current.clear();
+        else if (current instanceof Y.Array && current.length) current.delete(0, current.length);
+        else if (current instanceof Y.Text && current.length) current.delete(0, current.length);
     }
 
     /**
