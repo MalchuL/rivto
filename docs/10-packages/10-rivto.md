@@ -4,7 +4,7 @@
 
 ## Responsibilities
 
-- CRDT storage through the `CRDTDoc` abstraction and its Yjs implementation.
+- CRDT storage through `@chulane/crdt-doc` (`CRDTDoc` and its Yjs implementation), re-exported from this package.
 - Document blocks, hierarchy, links, elements, snapshots, and validation.
 - Focused managers for blocks, links, elements, selection, mode, clipboard, commands, and undo history.
 - Transactional mutations and portable snapshot loading and dumping.

@@ -1,30 +1,22 @@
 import { createTestEditor as createRivtoEditor } from "../../editor/test-utils";
 
-describe("editor block and link managers", () => {
-  it("exposes separate registry, block, and link managers", () => {
+describe("editor block managers", () => {
+  it("exposes separate registry and block managers", () => {
     const editor = createRivtoEditor();
 
     expect(editor.blocksRegistry.has("paragraph")).toBe(true);
     expect(editor.commands.has("block.insert")).toBe(true);
-    expect(editor.commands.has("link.create")).toBe(true);
+    expect(editor.commands.has("link.create")).toBe(false);
     expect("getBlock" in editor).toBe(false);
     expect("createLink" in editor).toBe(false);
 
     const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Source" });
     const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, sourceId);
     editor.blocks.updateBlock(sourceId, { props: { tone: "info" } });
-    editor.links.createLink({
-      id: "manager-link",
-      from: { blockId: sourceId },
-      to: { blockId: targetId },
-    });
 
     expect(editor.blocks.getBlock(sourceId)?.props).toEqual({ tone: "info" });
-    expect(editor.links.getLink("manager-link")).toMatchObject({ id: "manager-link" });
 
-    editor.links.removeLink("manager-link");
     editor.blocks.removeBlock(targetId);
-    expect(editor.links.getLinks()).toEqual([]);
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([sourceId]);
     editor.destroy();
   });

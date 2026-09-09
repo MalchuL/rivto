@@ -1,324 +1,162 @@
+/**
+ * Copies whole-block forests and pastes them transactionally. Single-block text
+ * editing is an explicit clipboard case: ranges arrive as inputs and resulting
+ * carets are returned to the host, never stored in the block selection manager.
+ */
 import type { EditorRuntime } from "../../editor/rivto-editor";
-import { isStructuralSelection, type NormalizedSelection } from "../selection-manager";
-import type { EditorSelection } from "../../editor/types";
-import type {
-  BlockPastePlacement,
-  ClipboardBundle,
-  ClipboardPasteInput,
-} from "./types";
-import {
-  findBlock,
-  flattenBlocks,
-  remapClipboardBundle,
-  cloneSelectedTopLevelSubtrees,
-  validateClipboardBundle,
-  type ClipboardIdReusePolicy,
-} from "./utils";
+import type { EditorPosition, EditorSelection, TextRange } from "../../editor/types";
+import type { BlockPastePlacement, ClipboardBundle, ClipboardPasteInput } from "./types";
+import { remapClipboardBundle, cloneSelectedTopLevelSubtrees, validateClipboardBundle,
+  type ClipboardIdReusePolicy } from "./utils";
 
-/** Internal placement after resolving a parent's existing first child. */
+/** Resolved first-child destination for structural paste. */
 interface ResolvedBlockPastePlacement extends BlockPastePlacement {
-  /**
-   * Existing child before which inserted roots are moved.
-   *
-   * When present, this exact anchor takes precedence over the inherited
-   * `parentId` destination.
-   */
+  /** Existing child before which pasted roots are moved. */
   readonly beforeChildId?: string;
 }
 
-/**
- * Owns framework-neutral copy, cut, and paste behavior for one editor.
- *
- * Browser integrations remain responsible for native clipboard events. The
- * manager defines the public API and history boundary, while stateless
- * clipboard transformations live in its `utils` folder. One manager belongs
- * to exactly one EditorRuntime and must not be shared between editor instances.
- */
+/** Framework-neutral clipboard operations over blocks and explicit text targets. */
 export class ClipboardManager {
   /**
-   * Creates the clipboard manager owned by one editor runtime.
-   *
-   * @param editor - Runtime whose document, selection, and history are used.
+   * Creates the clipboard owner.
+   * @param editor - Runtime providing document operations and history.
    */
   constructor(private readonly editor: EditorRuntime) {}
 
   /**
-   * Serializes the current selection without changing document or selection.
-   *
-   * The payload is a lossless Rivto `ClipboardBundle`. Interoperable HTML and
-   * plain-text flavors are produced later by the React clipboard host, not by
-   * this headless manager.
-   *
-   * @param selection - Optional detached selection used without changing editor state.
-   * @returns Structured Rivto data, or undefined when there is no copyable selection.
+   * Copies selected subtrees without filling gaps or changing their identities.
+   * @param selection - Optional block selection override.
+   * @returns Detached portable data, or undefined without selected blocks.
    */
   copy(selection?: EditorSelection): ClipboardBundle | undefined {
-    return this.createClipboardBundle(selection);
+    const range = this.editor.selection.normalize(selection);
+    return range ? { version: 4, blocks: cloneSelectedTopLevelSubtrees(
+      this.editor.blocks.getBlocks(), range,
+    ) } : undefined;
   }
 
   /**
-   * Serializes and removes the current selection as one undoable action.
-   *
-   * Copy happens first so the returned payload exactly describes the content
-   * that deletion removes. `SelectionManager.delete()` owns structural and text
-   * deletion semantics; cutting every root leaves a valid empty document.
-   *
-   * @returns The copied flavors, or undefined when there is no selection.
+   * Copies selected characters of one block, excluding its children.
+   * @param range - Explicit editing range within a single block.
+   * @returns Partial-text bundle, or undefined for a caret.
+   */
+  copyText(range: TextRange): ClipboardBundle | undefined {
+    const { block, start, end } = this.textTarget(range);
+    return start === end ? undefined : {
+      version: 4, startsWithText: true,
+      blocks: [{ ...block, content: block.content.slice(start, end), children: [] }],
+    };
+  }
+
+  /**
+   * Copies and removes selected block subtrees as one undoable action.
+   * @returns Copied forest, or undefined without selected blocks.
    */
   cut(): ClipboardBundle | undefined {
     const bundle = this.copy();
-    if (!bundle) return;
-    this.editor.selection.delete();
+    if (bundle) this.editor.selection.delete();
     return bundle;
   }
 
   /**
-   * Pastes the best available portable clipboard flavor at current selection.
-   *
-   * Parsed structured data takes precedence over serialized structured data,
-   * which takes precedence over plain text. The manager separates this paste
-   * from adjacent typing history; utility functions provide the inner atomic
-   * document transaction and resulting portable selection.
-   *
-   * @param input - Clipboard flavors and paste policy supplied by a host.
+   * Pastes structured blocks or plain text using an explicit editing target.
+   * Whole-block bundles remain structural; partial-text bundles and plain text
+   * replace the supplied text range. Plain-text paste can preserve newlines.
+   * @param input - Clipboard flavors, placement and optional single-block range.
+   * @returns Resulting text caret, or undefined for structural/no-op paste.
    */
-  paste(input: ClipboardPasteInput = {}): void {
-    this.documentAction(() => {
-      let bundle: ClipboardBundle | undefined;
-      try {
-        const candidate = input.bundle
-          ?? (input.structured ? JSON.parse(input.structured) as unknown : undefined);
-        if (candidate !== undefined) {
-          validateClipboardBundle(candidate);
-          bundle = candidate;
-        }
-      } catch {
-        bundle = undefined;
+  paste(input: ClipboardPasteInput = {}): EditorPosition | undefined {
+    let bundle: ClipboardBundle | undefined;
+    try {
+      const candidate = input.bundle ?? (input.structured ? JSON.parse(input.structured) as unknown : undefined);
+      if (candidate !== undefined) {
+        validateClipboardBundle(candidate);
+        bundle = candidate;
       }
+    } catch {
+      bundle = undefined;
+    }
+    // Validate text endpoints before opening a transaction: transactions do not roll back.
+    const target = input.textTarget ? this.textTarget(input.textTarget) : undefined;
+    let caret: EditorPosition | undefined;
+    this.editor.batchUpdates(() => {
       if (bundle) {
-        this.pasteClipboardBundle(bundle, input.mergeText !== false, input.placement);
-        return;
-      }
-      const text = input.text;
-      if (text === undefined || text === "") return;
-      const defaultBlockType = input.defaultBlockType;
-      if (!defaultBlockType) {
-        throw new Error("clipboard.paste requires defaultBlockType for plain-text paste");
-      }
-      this.pastePlainText(defaultBlockType, text, input.preserveNewlines === true);
-    });
-  }
-
-  /**
-   * Creates clipboard flavors from the current normalized selection.
-   *
-   * Boundary text is trimmed only on detached clones, never in the document.
-   * Links are included only when both endpoints are carried by the copied
-   * forest. This method performs no document or selection write.
-   *
-   * @param selection - Optional selection override for surface-local objects.
-   * @returns Portable clipboard flavors, or undefined for an empty selection.
-   */
-  private createClipboardBundle(selection?: EditorSelection): ClipboardBundle | undefined {
-    const current = selection ?? this.editor.selection.get();
-    const range = this.editor.selection.normalize(current);
-    if (!range?.blocks.length) return undefined;
-    const collapsedText = range.startsWithText
-      && range.start.blockId === range.end.blockId
-      && range.start.offset === range.end.offset;
-    if (collapsedText) return undefined;
-    // Clone only top level blocks in selection range (we might have nested blocks inside selection).
-
-    const blocks = cloneSelectedTopLevelSubtrees(
-      this.editor.blocks.getBlocks(),
-      range,
-      isStructuralSelection(current),
-    );
-    const start = findBlock(blocks, range.start.blockId);
-    const end = findBlock(blocks, range.end.blockId);
-    if (!start || !end) return undefined;
-    if (start === end) start.content = start.content.slice(range.start.offset, range.end.offset);
-    else {
-      start.content = start.content.slice(range.start.offset);
-      end.content = end.content.slice(0, range.end.offset);
-    }
-
-    const visible = flattenBlocks(blocks);
-    const ids = new Set(visible.map((block) => block.id));
-    const links = this.editor.links.getLinks().filter(
-      (link) => ids.has(link.from.blockId) && ids.has(link.to.blockId),
-    );
-    return { version: 4, startsWithText: range.startsWithText, blocks, links };
-  }
-
-  /**
-   * Pastes a structured Rivto bundle at the current selection.
-   *
-   * Whole-block bundles are inserted structurally. A bundle beginning with
-   * partial text can instead replace the active text range, reuse that block's
-   * ID, insert remaining roots as siblings, and move the old suffix to the
-   * final inserted block. Every document mutation runs in one CRDT transaction.
-   *
-   * @param bundle - Portable block hierarchy and links to validate and insert.
-   * @param mergeText - Whether a partial first block may merge into a text target.
-   * @param placement - Optional structural destination resolved by the host.
-   * @returns No value.
-   */
-  private pasteClipboardBundle(
-    bundle: ClipboardBundle,
-    mergeText: boolean,
-    placement?: BlockPastePlacement,
-  ): void {
-    if (!bundle.blocks.length) return;
-    const current = this.editor.selection.get();
-    const hasTextTarget = current.some((item) => item.type === "text");
-    // Handle case when clipboard contains only blocks or if we have block selection.
-    // We add them after selection.
-    if (!mergeText || bundle.startsWithText !== true || !hasTextTarget) {
-      // For ranges of blocks we insert blocks after the last top-level selected block.
-      const active = current.at(-1);
-      const range = this.editor.selection.normalize(current);
-      // Multiple selection has higher priority than mouse focus.
-      // If parent and nested child are selected and mouse ends on the child,
-      // parent is still the top-level selected block. We paste after the parent,
-      // not after the nested mouse endpoint.
-      const multiSelectionAfterId = range && range.blocks.length > 1
-        ? cloneSelectedTopLevelSubtrees(this.editor.blocks.getBlocks(), range, false).at(-1)?.id
-        : undefined;
-      let afterId = multiSelectionAfterId ?? range?.blocks.at(-1)?.id;
-      // For single selection use the active endpoint.
-      // Block selection uses focus block, text selection uses mouse/caret head.
-      if (!multiSelectionAfterId) {
-        if (active?.type === "block") {
-          afterId = active.focusBlockId;
-        } else if (active?.type === "text") {
-          afterId = active.head.blockId;
-        }
-      }
-      // If placement parent has children, we insert before the first child.
-      // If parent is empty, insertBundleAsBlocks moves pasted blocks inside it.
-      // We resolve first child only if placement and parent id exist.
-      const firstChildId = placement?.parentId
-        ? this.editor.blocks.getChildIds(placement.parentId)[0]
-        : undefined;
-
-      // For single selection use placement and resolved first child.
-      // For multiple selection ignore placement resolved from mouse endpoint.
-      this.insertBundleAsBlocks(bundle, placement && !multiSelectionAfterId ? {
-        afterId: placement.afterId,
-        beforeChildId: placement.parentId && placement.afterId === null ? firstChildId : undefined,
-        parentId: placement.parentId ?? undefined,
-      } : { afterId });
-    } else {
-      // Handle case when we paste blocks into empty selection (wthout caret or text selection)
-      const range = this.editor.selection.normalize(current);
-      if (!range) {
-        this.insertBundleAsBlocks(bundle);
-      } else {
-        // Handle case when we paste text into existing selection and there is not block selection.
-        const target = range.blocks[0]!;
-        const first = bundle.blocks[0]!;
-        const prefix = target.content.slice(0, range.start.offset);
-        const suffix = range.blocks.at(-1)?.content.slice(range.end.offset) ?? "";
-        const remapped = remapClipboardBundle(bundle, target.id, this.idReusePolicy());
-        let previous = target.id;
-        let caretOffset = prefix.length + first.content.length;
-
-        // Replacement, root insertion, child restoration, and link restoration are
-        // observed as one atomic document change and one manager history action.
-        this.editor.document.transact(() => {
-          this.removeRangeTail(range);
-          this.editor.document.blocks.setBlockText(
-            target.id,
-            prefix + first.content + (remapped.blocks.length ? "" : suffix),
-          );
+        if (!bundle.blocks.length) return;
+        if (target && bundle.startsWithText === true && input.mergeText !== false) {
+          const first = bundle.blocks[0]!;
+          const remapped = remapClipboardBundle(bundle, target.block.id, this.idReusePolicy());
+          const prefix = target.block.content.slice(0, target.start);
+          const suffix = target.block.content.slice(target.end);
+          this.editor.document.blocks.setBlockText(target.block.id,
+            prefix + first.content + (remapped.blocks.length ? "" : suffix));
           remapped.firstChildren.forEach((child) => {
-            const childId = this.editor.document.blocks.insertBlock(child, target.id);
-            this.editor.document.blocks.indentBlock(childId);
+            const id = this.editor.document.blocks.insertBlock(child, target.block.id);
+            this.editor.document.blocks.moveBlock(id, target.block.id, "inside");
           });
+          caret = { blockId: target.block.id, offset: prefix.length + first.content.length };
           remapped.blocks.forEach((block, index) => {
-            const pastedLength = block.content?.length ?? 0;
-            const isLast = index === remapped.blocks.length - 1;
-            previous = this.editor.document.blocks.insertBlock(
-              { ...block, content: `${block.content ?? ""}${isLast ? suffix : ""}` },
-              previous,
-            );
-            if (isLast) caretOffset = pastedLength;
+            const last = index === remapped.blocks.length - 1;
+            const id = this.editor.document.blocks.insertBlock({ ...block,
+              content: (block.content ?? "") + (last ? suffix : ""),
+            }, caret!.blockId);
+            caret = { blockId: id, offset: block.content?.length ?? 0 };
           });
-          remapped.links.forEach((link) => this.editor.document.links.createLink(link));
+        } else {
+          const current = this.editor.selection.get();
+          const range = this.editor.selection.normalize(current);
+          // A selected parent owns placement even when focus ends on its child.
+          const multiAfterId = range && range.blocks.length > 1
+            ? cloneSelectedTopLevelSubtrees(this.editor.blocks.getBlocks(), range).at(-1)?.id
+            : undefined;
+          const afterId = multiAfterId ?? current.at(-1)?.focusBlockId ?? target?.block.id;
+          const placement = input.placement && !multiAfterId ? input.placement : { afterId };
+          this.insertBundleAsBlocks(bundle, {
+            ...placement,
+            beforeChildId: placement.parentId && placement.afterId === null
+              ? this.editor.blocks.getChildIds(placement.parentId)[0] : undefined,
+          });
+        }
+      } else if (input.text) {
+        if (!input.defaultBlockType) throw new Error("clipboard.paste requires defaultBlockType for plain-text paste");
+        const prepared = this.editor.blocksRegistry.prepare({ type: input.defaultBlockType });
+        const lines = input.preserveNewlines ? [input.text] : input.text.split(/\r\n?|\n/);
+        const suffix = target ? target.block.content.slice(target.end) : "";
+        let previous = target?.block.id ?? this.copy()?.blocks.at(-1)?.id;
+        lines.forEach((line, index) => {
+          const last = index === lines.length - 1;
+          let offset = line.length;
+          if (target && index === 0) {
+            const prefix = target.block.content.slice(0, target.start);
+            this.editor.document.blocks.setBlockText(target.block.id, prefix + line + (last ? suffix : ""));
+            offset += prefix.length;
+          } else {
+            previous = this.editor.document.blocks.insertBlock({ ...prepared,
+              content: line + (last ? suffix : ""),
+            }, previous);
+          }
+          caret = { blockId: previous!, offset };
         });
-        this.collapse(previous, caretOffset);
       }
-    }
+      if (caret) this.editor.selection.clear();
+    });
+    return caret;
   }
 
   /**
-   * Pastes plain text at the current range.
-   *
-   * A single line replaces selected text or inserts at the caret. Multiple
-   * lines keep the first line in the target, create subsequent sibling blocks,
-   * and append the replaced target suffix to the last new block. With no
-   * selection, every line becomes a new root.
-   *
-   * @param defaultBlockType - Registered block type used for newly created lines.
-   * @param value - Plain clipboard text, including possible newline delimiters.
-   * @param preserveNewlines - Whether all text stays inside one block.
+   * Validates and orders one explicit text editing range.
+   * @param range - Single-block UTF-16 endpoints.
+   * @returns Detached block and ascending character offsets.
+   * @throws When endpoints are missing, out of bounds, or span blocks.
    */
-  private pastePlainText(
-    defaultBlockType: string,
-    value: string,
-    preserveNewlines: boolean,
-  ): void {
-    const range = this.editor.selection.normalize();
-    const lines = preserveNewlines ? [value] : value.split(/\r\n?|\n/);
-    // Handle case when we paste text into empty selection (without caret or text selection).
-    // Finds latest block in the document and pastes text into it.
-    const prepared = this.editor.blocksRegistry.prepare({ type: defaultBlockType });
-    if (!range) {
-      let lastId: string | undefined;
-      this.editor.document.transact(() => {
-        lines.forEach((line) => {
-          lastId = this.editor.document.blocks.insertBlock(
-            { ...prepared, content: line },
-            lastId,
-          );
-        });
-      });
-      if (lastId) this.collapse(lastId, lines.at(-1)?.length ?? 0);
-    } else {
-      // Handle case when we paste text into existing selection and there is only text content with single line.
-      // Paste text into first existing text block. Remove trailing (others) blocks after selection.
-      // Merges blocks into one.
-      const target = range.blocks[0]!;
-      const end = range.blocks.at(-1) ?? target;
-      const prefix = target.content.slice(0, range.start.offset);
-      const suffix = end.content.slice(range.end.offset);
-      if (lines.length === 1) {
-        this.editor.document.transact(() => {
-          this.removeRangeTail(range);
-          this.editor.document.blocks.setBlockText(target.id, prefix + value + suffix);
-        });
-        this.collapse(target.id, prefix.length + value.length);
-      } else {
-        // Handle case when we paste text into existing selection and there is text content with multiple lines.
-        // Fills lines with default block type and appends suffix to the last line.
-        let previous = target.id;
-        let lastId = target.id;
-        this.editor.document.transact(() => {
-          this.removeRangeTail(range);
-          this.editor.document.blocks.setBlockText(target.id, prefix + lines[0]!);
-          lines.slice(1).forEach((line, index, rest) => {
-            const isLast = index === rest.length - 1;
-            lastId = this.editor.document.blocks.insertBlock(
-              { ...prepared, content: `${line}${isLast ? suffix : ""}` },
-              previous,
-            );
-            previous = lastId;
-          });
-        });
-        this.collapse(lastId, lines.at(-1)?.length ?? 0);
-      }
+  private textTarget(range: TextRange) {
+    const block = range?.anchor && this.editor.blocks.getBlock(range.anchor.blockId);
+    if (!block || !range.head || range.anchor.blockId !== range.head.blockId ||
+      ![range.anchor.offset, range.head.offset].every((offset) =>
+        Number.isInteger(offset) && offset >= 0 && offset <= block.content.length)) {
+      throw new Error("Text clipboard ranges must stay inside one existing block");
     }
+    return { block, start: Math.min(range.anchor.offset, range.head.offset),
+      end: Math.max(range.anchor.offset, range.head.offset) };
   }
 
   /**
@@ -345,12 +183,11 @@ export class ClipboardManager {
       });
       // Move blocks before the beforeChildId if it exists.
       if (placement.beforeChildId && insertedIds.length) {
-        this.editor.document.blocks.moveBlocks(insertedIds, placement.beforeChildId, "before");
+        this.editor.blocks.moveBlocks(insertedIds, placement.beforeChildId, "before");
       } else if (placement.parentId && placement.afterId === null && insertedIds.length) {
         // Move blocks inside the parent (Appends to the parent)
-        this.editor.document.blocks.moveBlocks(insertedIds, placement.parentId, "inside");
+        this.editor.blocks.moveBlocks(insertedIds, placement.parentId, "inside");
       }
-      remapped.links.forEach((link) => this.editor.document.links.createLink(link));
     });
     // Set selection to the inserted blocks.
     if (insertedIds.length) {
@@ -366,7 +203,7 @@ export class ClipboardManager {
   /**
    * Builds the destination ID-reuse policy for one paste.
    *
-   * An original clipboard ID survives paste only while no live block or link
+   * An original clipboard ID survives paste only while no live block
    * holds it. Cut releases the source IDs, so cut+paste restores the exact
    * same identities; copy+paste sees the originals still in use and remints.
    *
@@ -375,51 +212,7 @@ export class ClipboardManager {
   private idReusePolicy(): ClipboardIdReusePolicy {
     return {
       canReuseBlockId: (id) => !this.editor.document.blocks.hasBlock(id),
-      canReuseLinkId: (id) => !this.editor.document.links.getLink(id),
     };
   }
 
-  /**
-   * Removes every block after the first boundary block in a text replacement.
-   *
-   * The first block survives because its prefix receives inserted content.
-   * Callers must invoke this helper inside their document transaction.
-   *
-   * @param range - Ordered range whose trailing blocks should be removed.
-   */
-  private removeRangeTail(range: NormalizedSelection): void {
-    range.blocks.slice(1).forEach((block) => this.editor.document.blocks.removeBlock(block.id));
-  }
-
-  /**
-   * Publishes a collapsed text selection after a completed paste.
-   *
-   * @param blockId - Existing block that owns the resulting caret.
-   * @param offset - UTF-16 content offset at which the caret collapses.
-   */
-  private collapse(blockId: string, offset: number): void {
-    this.editor.selection.set([{
-      type: "text",
-      anchor: { blockId, offset },
-      head: { blockId, offset },
-    }]);
-  }
-
-  /**
-   * Prevents one clipboard mutation from merging with adjacent undo captures.
-   *
-   * Both boundaries run through `finally`, so invalid external clipboard data
-   * cannot leave later editor commands grouped with a failed paste.
-   *
-   * @param action - Synchronous clipboard mutation to isolate.
-   * @returns The action result.
-   */
-  private documentAction<T>(action: () => T): T {
-    this.editor.history.stopCapturing();
-    try {
-      return action();
-    } finally {
-      this.editor.history.stopCapturing();
-    }
-  }
 }

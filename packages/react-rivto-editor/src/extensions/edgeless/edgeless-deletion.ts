@@ -1,4 +1,3 @@
-import type { BlockSelection } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS, isHTMLElementNode } from "../../managers";
 import { getEdgelessRuntime } from "./edgeless-runtime";
@@ -41,7 +40,7 @@ export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
       root.focus({ preventScroll: true });
       handled = true;
     } else {
-      const core = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
+      const core = editor.selection.get().find((item) => item.type === "block");
       const blockIds = canvas.active && canvas.items.length
         ? canvas.items.flatMap((id) => {
           const element = editor.elements.getElement(id);

@@ -439,7 +439,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
               props: { startBlockId: duplicateId, endBlockId: duplicateId },
             });
           });
-          editor.selection.set([{
+          reactEditor.selection.set([{
             type: "block",
             blockIds: [duplicateId],
             anchorBlockId: duplicateId,
@@ -455,13 +455,13 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         keywords: ["remove"],
         isAvailable: ({ blockId }) => Boolean(editor.blocks.getBlock(blockId)),
         execute: ({ blockId }) => {
-          editor.selection.set([{
+          reactEditor.selection.set([{
             type: "block",
             blockIds: [blockId],
             anchorBlockId: blockId,
             focusBlockId: blockId,
           }]);
-          editor.deleteSelection();
+          reactEditor.selection.delete();
         },
       }),
       reactEditor.slashCommands.register({
@@ -497,8 +497,8 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
 /**
  * Converts a detached block snapshot into recursive insertion input.
  *
- * IDs and links are intentionally omitted so the core store assigns fresh
- * identity without duplicating link ownership. Mutable payloads are cloned to
+ * IDs are intentionally omitted so the core store assigns fresh identity.
+ * Mutable payloads are cloned to
  * prevent the new subtree from sharing application-owned object references.
  *
  * @param block - Root snapshot of the subtree to duplicate.

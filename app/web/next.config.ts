@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(appDir, "../..");
+const rivtoCrdtDocSrc = path.join(repoRoot, "packages/crdt-doc/src/index.ts");
+const rivtoDocumentModelSrc = path.join(repoRoot, "packages/document-model/src/index.ts");
 const rivtoCoreSrc = path.join(repoRoot, "packages/rivto-editor-core/src/index.ts");
 const rivtoReactSrc = path.join(repoRoot, "packages/react-rivto-editor/src/index.ts");
 const rivtoReactCss = path.join(repoRoot, "packages/react-rivto-editor/styles.css");
@@ -11,7 +13,7 @@ const webReact = path.join(appDir, "node_modules/react");
 const webReactDom = path.join(appDir, "node_modules/react-dom");
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@chulane/app", "@chulane/rivto", "@chulane/rivto-react"],
+  transpilePackages: ["@chulane/app", "@chulane/crdt-doc", "@chulane/document-model", "@chulane/rivto", "@chulane/rivto-react"],
   output: "standalone",
   outputFileTracingRoot: repoRoot,
   eslint: {
@@ -25,6 +27,8 @@ const nextConfig: NextConfig = {
       "@chulane/rivto-react/styles.css": rivtoReactCss,
       "@chulane/rivto-react": rivtoReactSrc,
       "@chulane/rivto": rivtoCoreSrc,
+      "@chulane/document-model": rivtoDocumentModelSrc,
+      "@chulane/crdt-doc": rivtoCrdtDocSrc,
       react: webReact,
       "react-dom": webReactDom,
     };

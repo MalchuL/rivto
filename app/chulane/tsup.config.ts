@@ -10,6 +10,8 @@ export default defineConfig({
     "react",
     "react-dom",
     "react/jsx-runtime",
+    "@chulane/crdt-doc",
+    "@chulane/document-model",
     "@chulane/rivto",
     "@chulane/rivto-react",
     "yjs",

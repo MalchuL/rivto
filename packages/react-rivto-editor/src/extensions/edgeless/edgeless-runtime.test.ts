@@ -4,7 +4,7 @@
  * Marquee pointermoves call `set` with the same IDs many times; listeners must
  * stay quiet unless membership or `active` actually changes.
  */
-import { EdgelessSelectionRuntime } from "./edgeless-runtime";
+import { EdgelessSelectionRuntime, ElementSelection } from "./edgeless-runtime";
 
 describe("EdgelessSelectionRuntime", () => {
   const listen = (runtime: EdgelessSelectionRuntime) => {
@@ -17,6 +17,7 @@ describe("EdgelessSelectionRuntime", () => {
     const runtime = new EdgelessSelectionRuntime();
     const calls = listen(runtime);
     runtime.set(["a", "b"]);
+    expect(runtime.get()).toBeInstanceOf(ElementSelection);
     runtime.set(["a", "b"]);
     runtime.set(["", "a", "b", "a"]);
     expect(calls).toHaveLength(1);

@@ -79,7 +79,7 @@ export function removeEmptyBlockAfterStructuralPredecessor(
     const firstChildId = block.children[0]?.id;
     if (firstChildId) editor.blocks.outdentBlock(firstChildId);
     editor.blocks.removeBlock(block.id);
-    editor.selection.set([{
+    reactEditor.selection.set([{
       type: "block",
       blockIds: [previous.id],
       anchorBlockId: previous.id,
@@ -143,7 +143,7 @@ export function registerBackwardBlockMerge(reactEditor: ReactEditor): void {
     const previous = findPreviousEditableBlock(scope, target.blockId);
     if (!previous) return false;
     const joinOffset = editor.blocks.mergeBlocks(previous.blockId, target.blockId);
-    editor.selection.set([{
+    reactEditor.selection.set([{
       type: "text",
       anchor: { blockId: previous.blockId, offset: joinOffset },
       head: { blockId: previous.blockId, offset: joinOffset },

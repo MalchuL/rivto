@@ -1,7 +1,10 @@
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
+import type { ReactSelection } from "../selection/selection-manager";
 import type {
   RivtoEditorApi as Editor,
   EditorMode,
-  EditorSelection,
 } from "@chulane/rivto";
 import type {
   DOMEventMap,
@@ -28,7 +31,7 @@ export interface EditorEventInit<
   /** Editor mode captured for this dispatch. */
   readonly mode: EditorMode;
   /** Detached structured selection captured for this dispatch. */
-  readonly selection: EditorSelection;
+  readonly selection: ReactSelection;
   /** Realm on which the native listener is attached. */
   readonly eventTarget: Target;
   /** Whether the native target belongs to the active surface. */
@@ -55,7 +58,7 @@ export class EditorEvent<
   readonly editor: Editor;
   readonly root: HTMLElement;
   readonly mode: EditorMode;
-  readonly selection: EditorSelection;
+  readonly selection: ReactSelection;
   readonly eventTarget: Target;
   readonly insideRoot: boolean;
   readonly blockElement: HTMLElement | null;

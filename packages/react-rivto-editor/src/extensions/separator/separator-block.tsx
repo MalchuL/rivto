@@ -78,7 +78,7 @@ function insertSeparator(
       }, block.id);
     }
     writingId = reactEditor.blocks.insertBlock(createDefaultBlock(), separatorId);
-    editor.selection.set([{
+    reactEditor.selection.set([{
       type: "text",
       anchor: { blockId: writingId, offset: 0 },
       head: { blockId: writingId, offset: 0 },
@@ -134,8 +134,8 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         when: ({ raw: event }) => isEditableKeyboardEvent(event),
       }, ({ root }) => {
         const nativeSelection = reactEditor.selection.readDOM();
-        if (nativeSelection) reactEditor.editor.selection.set(nativeSelection);
-        const target = firstKeyboardTarget(nativeSelection ?? reactEditor.editor.selection.get());
+        if (nativeSelection) reactEditor.selection.set(nativeSelection);
+        const target = firstKeyboardTarget(nativeSelection ?? reactEditor.selection.get());
         if (!target) return false;
         const writingId = insertSeparator(
           reactEditor,

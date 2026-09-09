@@ -41,7 +41,6 @@ const structuredBundle = JSON.stringify({
     pluginData: {},
     children: [],
   }],
-  links: [],
 });
 
 async function paste(page: import("@playwright/test").Page, asPlainText: boolean): Promise<void> {
@@ -68,6 +67,45 @@ async function paste(page: import("@playwright/test").Page, asPlainText: boolean
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`cuts and pastes partial text inside one block in ${mode} mode`, async ({ page }) => {
+    await page.locator(`[data-editor-mode="${mode}"]`).click();
+    const content = page.locator("[data-block-content]").first();
+    await content.click();
+    const original = (await content.textContent())!;
+    const blockCount = await page.locator(BLOCK_ID_SELECTOR).count();
+    const copied = await content.evaluate((element) => {
+      const node = element.firstChild!;
+      const selection = element.ownerDocument.getSelection()!;
+      selection.setBaseAndExtent(node, 1, node, 4);
+      const data = new DataTransfer();
+      const event = new ClipboardEvent("cut", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", { value: data });
+      element.dispatchEvent(event);
+      return { structured: data.getData("application/x-rivto+json"), text: data.getData("text/plain") };
+    });
+    expect(copied.text).toBe(original.slice(1, 4));
+    expect(JSON.parse(copied.structured)).toMatchObject({ startsWithText: true, blocks: [{ content: original.slice(1, 4), children: [] }] });
+    await expect(content).toHaveText(original.slice(0, 1) + original.slice(4));
+    await expect.poll(() => caretOffset(content)).toBe(1);
+    await content.evaluate((element, copied) => {
+      const data = new DataTransfer();
+      data.setData("application/x-rivto+json", copied.structured);
+      data.setData("text/plain", copied.text);
+      const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", { value: data });
+      element.dispatchEvent(event);
+    }, copied);
+    await expect(content).toHaveText(original);
+    await expect.poll(() => caretOffset(content)).toBe(4);
+    await expect(page.locator(BLOCK_ID_SELECTOR)).toHaveCount(blockCount);
+    await page.keyboard.press("Control+z");
+    await expect(content).toHaveText(original.slice(0, 1) + original.slice(4));
+    await page.keyboard.press("Control+z");
+    await expect(content).toHaveText(original);
+  });
+}
 
 test("normal structured text paste merges into the target", async ({ page }) => {
   const content = page.locator("[data-block-content]").first();
@@ -185,7 +223,6 @@ test("replaces invalid structured block properties with an Error block", async (
         pluginData: {},
         children: [],
       }],
-      links: [],
     }));
     const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "clipboardData", { value: data });

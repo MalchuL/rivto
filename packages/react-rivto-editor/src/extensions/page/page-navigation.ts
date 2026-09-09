@@ -1,10 +1,13 @@
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
+import type { ReactSelection } from "../../managers/selection/selection-manager";
 import type {
-  BlockSelection,
+  BlockSelectionInput as BlockSelection,
   EditorBlock,
   RivtoEditorApi as Editor,
   EditorPosition,
-  EditorSelection,
-  TextSelection,
+  TextRange as TextSelection,
 } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
@@ -71,19 +74,18 @@ function textSelectionEdge(
 
 function currentSelection(
   selectionManager: SelectionCapability,
-  editor: Editor,
-): EditorSelection {
-  const managed = editor.selection.get();
+): ReactSelection {
+  const managed = selectionManager.get();
   // A click followed immediately by a key can precede `selectionchange`.
   return managed.length ? managed : selectionManager.readDOM() ?? [];
 }
 
 function setCaret(
   root: HTMLElement,
-  editor: Editor,
+  reactEditor: ReactEditor,
   position: EditorPosition,
 ): void {
-  editor.selection.set([{ type: "text", anchor: position, head: position }]);
+  reactEditor.selection.set([{ type: "text", anchor: position, head: position }]);
   focusBlock(root, position.blockId, position.offset);
 }
 
@@ -115,7 +117,7 @@ function focusBlockSelection(root: HTMLElement, blockId: string): void {
     ?.scrollIntoView({ block: "nearest" });
 }
 
-function activeBlockId(selection: EditorSelection): string | undefined {
+function activeBlockId(selection: ReactSelection): string | undefined {
   const text = selection.find((item): item is TextSelection => item.type === "text");
   const blocks = selection.find((item): item is BlockSelection => item.type === "block");
   return text?.head.blockId ?? blocks?.focusBlockId;
@@ -134,14 +136,14 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true
   );
   const movePlain = (root: HTMLElement, direction: "left" | "right" | VerticalDirection): boolean => {
-    const selection = currentSelection(reactEditor.selection, editor);
+    const selection = currentSelection(reactEditor.selection);
     const text = selection.find((item): item is TextSelection => item.type === "text");
     if (!text) return false;
     const scope = navigationDomRoot(root, text.head.blockId);
     let handled = false;
     if (!collapsed(text)) {
       const towardStart = direction === "left" || direction === "up";
-      setCaret(root, editor, textSelectionEdge(reactEditor, editor, text, towardStart ? "start" : "end"));
+      setCaret(root, reactEditor, textSelectionEdge(reactEditor, editor, text, towardStart ? "start" : "end"));
       handled = true;
     } else if (direction === "left" || direction === "right") {
       const block = editor.blocks.getBlock(text.head.blockId);
@@ -151,7 +153,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
           ? findNextEditableBlock(scope, text.head.blockId)
           : null;
       if (adjacent) {
-        setCaret(root, editor, {
+        setCaret(root, reactEditor, {
           blockId: adjacent.blockId,
           offset: direction === "left" ? adjacent.content.textContent?.length ?? 0 : 0,
         });
@@ -160,7 +162,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     } else {
       const moved = verticalCaretPosition(scope, text.head, direction);
       if (moved) {
-        setCaret(root, editor, moved);
+        setCaret(root, reactEditor, moved);
         handled = true;
       } else {
         handled = editor.mode.get() === "block" && focusAdjacentEditor(root, direction);
@@ -170,7 +172,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
   };
 
   const extendText = (root: HTMLElement, direction: VerticalDirection): boolean => {
-    const selection = currentSelection(reactEditor.selection, editor);
+    const selection = currentSelection(reactEditor.selection);
     const text = selection.find((item): item is TextSelection => item.type === "text");
     if (!text) return false;
     const scope = navigationDomRoot(root, text.head.blockId);
@@ -179,11 +181,11 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     if (!moved) return false;
     if (moved.blockId !== text.anchor.blockId) {
       const next = blockSelection(outline, text.anchor.blockId, moved.blockId, isCollapsed);
-      editor.selection.set([next]);
+      reactEditor.selection.set([next]);
       focusBlockSelection(root, next.focusBlockId);
     } else {
-      const next: EditorSelection = [{ type: "text", anchor: text.anchor, head: moved }];
-      editor.selection.set(next);
+      const next: ReactSelection = [{ type: "text", anchor: text.anchor, head: moved }];
+      reactEditor.selection.set(next);
       reactEditor.selection.restoreDOM(next);
     }
     return true;
@@ -218,20 +220,20 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void
     reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true
   );
   const move = (root: HTMLElement, direction: VerticalDirection, extend: boolean): boolean => {
-    const blocks = currentSelection(reactEditor.selection, editor)
+    const blocks = currentSelection(reactEditor.selection)
       .find((item): item is BlockSelection => item.type === "block");
     if (!blocks) return false;
     const outline = navigationOutlineBlocks(editor, blocks.focusBlockId);
     const next = extend
       ? extendBlockSelection(outline, blocks, direction, isCollapsed)
       : adjacentBlockSelection(outline, blocks, direction, isCollapsed);
-    editor.selection.set([next]);
+    reactEditor.selection.set([next]);
     focusBlockSelection(root, next.focusBlockId);
     return true;
   };
 
   const grow = (root: HTMLElement, direction: VerticalDirection): boolean => {
-    const selection = currentSelection(reactEditor.selection, editor);
+    const selection = currentSelection(reactEditor.selection);
     const blocks = selection.find((item): item is BlockSelection => item.type === "block");
     const text = selection.find((item): item is TextSelection => item.type === "text");
     const anchorId = blocks?.focusBlockId ?? text?.head.blockId;
@@ -241,17 +243,17 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void
       ? extendBlockSelection(outline, blocks, direction, isCollapsed)
       : text ? blockSelection(outline, text.head.blockId, text.head.blockId, isCollapsed) : undefined;
     if (!next) return false;
-    editor.selection.set([next]);
+    reactEditor.selection.set([next]);
     focusBlockSelection(root, next.focusBlockId);
     return true;
   };
 
   /** Enters a caret at offset 0 on the focus block. Left and right are one-way. */
   const enterText = (root: HTMLElement): boolean => {
-    const blocks = currentSelection(reactEditor.selection, editor)
+    const blocks = currentSelection(reactEditor.selection)
       .find((item): item is BlockSelection => item.type === "block");
     if (!blocks) return false;
-    setCaret(root, editor, { blockId: blocks.focusBlockId, offset: 0 });
+    setCaret(root, reactEditor, { blockId: blocks.focusBlockId, offset: 0 });
     return true;
   };
 
@@ -279,7 +281,7 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
     reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true
   );
   const move = (root: HTMLElement, direction: VerticalDirection): boolean => {
-    const selection = currentSelection(reactEditor.selection, editor);
+    const selection = currentSelection(reactEditor.selection);
     const text = selection.find((item): item is TextSelection => item.type === "text");
     const blocks = selection.find((item): item is BlockSelection => item.type === "block");
     const activeId = activeBlockId(selection);
@@ -290,9 +292,9 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
     if (!placement) return false;
     editor.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
     if (roots.grouped && roots.selection) {
-      editor.selection.set([roots.selection]);
+      reactEditor.selection.set([roots.selection]);
     } else if (blocks) {
-      editor.selection.set([blockSelection(outline, activeId, activeId, isCollapsed)]);
+      reactEditor.selection.set([blockSelection(outline, activeId, activeId, isCollapsed)]);
     }
     requestAnimationFrame(() => {
       if (text && !blocks) reactEditor.selection.restoreDOM(selection);

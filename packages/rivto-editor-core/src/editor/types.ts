@@ -1,6 +1,9 @@
-import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, ElementManager, RegisteredCommand, LinkManager, ModeManager, SelectionManager, UndoManager } from "../managers";
-import type { CRDTDoc } from "../store/crdt-doc";
-import type { DocumentModel } from "../store/document-model";
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
+import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, ElementManager, RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
+import type { CRDTDoc } from "@chulane/crdt-doc";
+import type { DocumentModel } from "@chulane/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
 /** Local presentation strategy; never persisted in collaborative state. */
@@ -14,14 +17,51 @@ export interface EditorPosition {
   offset: number;
 }
 
-/** Directed browser-compatible text selection. */
-export interface TextSelection {
-  /** Discriminant for browser-compatible text selection. */
+/** Host-provided text range used by framework-neutral editing operations. */
+export interface TextRange {
+  /** Discriminant retained for selection-compatible host values. */
   type: "text";
   /** Endpoint where the gesture began. */
   anchor: EditorPosition;
   /** Active endpoint; may precede anchor for reverse selection. */
   head: EditorPosition;
+}
+
+/**
+ * Shared runtime contract for local selection implementations.
+ *
+ * Selection state belongs to editor runtimes rather than the persisted
+ * document. Concrete implementations keep their own fields and provide the
+ * two operations required by stores: comparison and detached copying.
+ */
+export abstract class BaseSelection<Type extends string = string> {
+  /** Concrete selection discriminator. */
+  abstract readonly type: Type;
+
+  /**
+   * Compares this selection with another runtime selection.
+   * @param other - Selection to compare.
+   * @returns Whether both selections describe the same local state.
+   */
+  abstract equals(other: BaseSelection): boolean;
+
+  /**
+   * Creates a detached selection safe for callers to retain or mutate.
+   * @returns Independent selection with the same local state.
+   */
+  abstract clone(): BaseSelection<Type>;
+}
+
+/** Plain whole-block value accepted at public mutation boundaries. */
+export interface BlockSelectionInput {
+  /** Discriminant for ordered document-block selection. */
+  type: "block";
+  /** Selected IDs in visible document order. */
+  blockIds: string[];
+  /** Block where the selection gesture began. */
+  anchorBlockId: string;
+  /** Active end of the selection gesture. */
+  focusBlockId: string;
 }
 
 /**
@@ -37,9 +77,9 @@ export interface TextSelection {
  * toggled on — so click order `1 → 10 → 3` and `3 → 10 → 1` share
  * `blockIds: ["1","3","10"]` but differ in anchor/focus.
  */
-export interface BlockSelection {
+export class BlockSelection extends BaseSelection<"block"> {
   /** Discriminant for ordered document-block selection. */
-  type: "block";
+  readonly type = "block";
   /**
    * Selected IDs in visible document order.
    * Gaps are allowed; missing IDs between the first and last selected block
@@ -56,18 +96,48 @@ export interface BlockSelection {
    * Shift+Arrow endpoint). May precede `anchorBlockId` in document order.
    */
   focusBlockId: string;
+
+  /**
+   * Creates an ordered whole-block selection.
+   * @param input - Selected IDs and directed gesture endpoints.
+   */
+  constructor(input: Omit<BlockSelectionInput, "type"> | BlockSelectionInput) {
+    super();
+    this.blockIds = [...input.blockIds];
+    this.anchorBlockId = input.anchorBlockId;
+    this.focusBlockId = input.focusBlockId;
+  }
+
+  /**
+   * Compares directed endpoints and ordered block membership.
+   * @param other - Runtime selection to compare.
+   * @returns Whether both block selections describe the same state.
+   */
+  equals(other: BaseSelection): boolean {
+    return other instanceof BlockSelection
+      && this.anchorBlockId === other.anchorBlockId
+      && this.focusBlockId === other.focusBlockId
+      && this.blockIds.length === other.blockIds.length
+      && this.blockIds.every((id, index) => id === other.blockIds[index]);
+  }
+
+  /**
+   * Creates a detached copy of this block selection.
+   * @returns Independent block selection.
+   */
+  clone(): BlockSelection {
+    return new BlockSelection(this);
+  }
 }
 
-/** One independently meaningful selection segment owned by SelectionManager. */
-export type EditorSelectionItem = TextSelection | BlockSelection;
+/** One independently meaningful whole-block value accepted by SelectionManager. */
+export type EditorSelectionItem = BlockSelectionInput;
 
 /**
  * Ordered local selection state.
  *
- * A list can describe heterogeneous selection—for example, partial text at
- * both ends with complete blocks between them. The order is retained for view
- * behavior; commands that mutate document content normalize it to document
- * order before applying changes.
+ * Only whole blocks belong here. Text ranges are explicit editing-operation
+ * inputs owned by the browser host and cannot widen a block selection.
  */
 export type EditorSelection = EditorSelectionItem[];
 
@@ -79,8 +149,8 @@ export interface CreateRivtoEditorOptions {
 /**
  * Public editor coordinator exposed to UI and integrations.
  *
- * Block, link, and element behavior is intentionally available only through
- * `.blocks`, `.links`, and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
+ * Block and element behavior is intentionally available only through
+ * `.blocks` and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
  * commands, batching, selection, history, mode, snapshots, and subscriptions.
  */
 export interface RivtoEditorApi {
@@ -90,8 +160,6 @@ export interface RivtoEditorApi {
   readonly blocks: BlockManager;
   /** Native block definitions, defaults, and property validation. */
   readonly blocksRegistry: BlockRegistryManager;
-  /** First-class link commands and typed link operations. */
-  readonly links: LinkManager;
   /** Generic first-class canvas element operations. */
   readonly elements: ElementManager;
   /** Named command registry shared by managers and integrations. */

@@ -9,23 +9,24 @@ describe("edgelessVisualsExtension", () => {
   test("keeps canvas selection separate and persists visuals as first-class elements", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Page" });
-    editor.selection.set([{ type: "text", anchor: { blockId, offset: 2 }, head: { blockId, offset: 2 } }]);
     const extension = edgelessVisualsExtension({ toolbar: false });
     const reactEditor = createReactEditor({ editor, extensions: [
       edgelessSelectionExtension(),
       extension,
     ] });
 
+    reactEditor.selection.set([{ type: "text", anchor: { blockId, offset: 2 }, head: { blockId, offset: 2 } }]);
+
     const first = extension.createRectangle({ frame: { x: 10, y: 20, width: 40, height: 30 }, rotation: 375 });
     const second = extension.createEllipse({ frame: { x: 90, y: 50, width: 20, height: 20 } });
-    expect(editor.selection.get()).toEqual([{ type: "text", anchor: { blockId, offset: 2 }, head: { blockId, offset: 2 } }]);
+    expect(reactEditor.selection.get()).toEqual([{ type: "text", anchor: { blockId, offset: 2 }, head: { blockId, offset: 2 } }]);
     expect(editor.blocks.getBlocks()).toHaveLength(1);
     expect(editor.dump().elements.map((element) => element.type)).toEqual(["rectangle", "ellipse"]);
     expect(editor.elements.getElement(first)?.props.rotation).toBe(15);
     editor.mode.set("block");
     editor.mode.set("edgeless");
     expect(editor.execute("edgeless.selection.get")).toMatchObject({ active: true, items: [second] });
-    expect(editor.selection.get()[0]).toMatchObject({ type: "text", anchor: { blockId, offset: 2 } });
+    expect(reactEditor.selection.get()[0]).toMatchObject({ type: "text", anchor: { blockId, offset: 2 } });
 
     extension.select([first, second]);
     const groupId = extension.group();

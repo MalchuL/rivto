@@ -1,3 +1,7 @@
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
+import type { ReactSelection } from "./managers/selection/selection-manager";
 import type {
   BlockListProps,
   EditorBlock,
@@ -5,7 +9,6 @@ import type {
   EditorBlockPatch,
   EditorBlockUpdate,
   EditorMode,
-  EditorSelection,
 } from "@chulane/rivto";
 import type { ComponentType, ReactNode } from "react";
 import type { BlockWrapperComponent } from "./blocks";
@@ -155,10 +158,13 @@ export interface SurfacesCapability {
 }
 
 export interface SelectionCapability {
-  readDOM(): EditorSelection | undefined;
-  restoreDOM(selection?: EditorSelection): boolean;
-  clearDOMHighlight(): void;
-  updateDOMHighlight(selection?: EditorSelection): void;
+  get(): ReactSelection;
+  set(selection: ReactSelection): void;
+  clear(): void;
+  subscribe(listener: () => void): () => void;
+  delete(): void;
+  readDOM(): ReactSelection | undefined;
+  restoreDOM(selection?: ReactSelection): boolean;
 }
 
 export interface SlashCommandsCapability {

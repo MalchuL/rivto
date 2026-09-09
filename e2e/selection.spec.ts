@@ -92,13 +92,13 @@ test("switches cross-block drag to blocks and restores text on return", async ({
   expect(await readSelection()).toEqual(expected);
 });
 
-test("Alt drag keeps partial text across blocks", async ({ page }) => {
+test("Alt drag selects complete blocks", async ({ page }) => {
   const contents = textContents(page);
   await page.keyboard.down("Alt");
   await dragText(page, contents.nth(0), 2, contents.nth(1), 8);
   await page.keyboard.up("Alt");
-  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
-  await expect.poll(() => page.evaluate(() => getSelection()?.toString().length ?? 0)).toBeGreaterThan(0);
+  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute("data-block-selected", "true");
+  await expect(contents.nth(1).locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute("data-block-selected", "true");
 });
 
 test("dragging onto a contentless Counter immediately extends block selection", async ({ page }) => {

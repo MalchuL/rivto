@@ -1,5 +1,5 @@
 import { createTestEditor as createRivtoEditor } from "../test-utils";
-import { YjsDoc } from "../../store/crdt-doc";
+import { YjsDoc } from "@chulane/crdt-doc";
 
 describe("EditorRuntime methods", () => {
   it("supports a complete lifecycle without blocks", () => {
@@ -7,9 +7,8 @@ describe("EditorRuntime methods", () => {
 
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.blocks.getRootIds()).toEqual([]);
-    expect(editor.links.getLinks()).toEqual([]);
     expect(editor.selection.get()).toEqual([]);
-    expect(editor.dump()).toMatchObject({ version: 6, blocks: [], links: [] });
+    expect(editor.dump()).toMatchObject({ version: 6, blocks: [] });
 
     editor.deleteSelection();
     editor.undo();
@@ -68,33 +67,6 @@ describe("EditorRuntime methods", () => {
     editor.destroy();
   });
 
-  it("mutates links through editor methods", () => {
-    const editor = createRivtoEditor();
-    const sourceId = editor.blocks.insertBlock({ type: "paragraph" });
-    const targetId = editor.blocks.insertBlock({ type: "paragraph" }, sourceId);
-
-    editor.links.createLink({
-      id: "source-target",
-      from: { blockId: sourceId },
-      to: { blockId: targetId },
-      meta: { label: "related" },
-    });
-
-    expect(editor.dump().links).toEqual([
-      {
-        id: "source-target",
-        from: { blockId: sourceId },
-        to: { blockId: targetId },
-        meta: { label: "related" },
-      },
-    ]);
-
-    editor.links.removeLink("source-target");
-
-    expect(editor.dump().links).toEqual([]);
-    editor.destroy();
-  });
-
   it("loads and dumps snapshots through editor methods", () => {
     const editor = createRivtoEditor();
 
@@ -109,7 +81,6 @@ describe("EditorRuntime methods", () => {
         content: "Loaded",
         children: [],
       }],
-      links: [],
       pluginData: { app: { theme: "dark" } },
     });
 
@@ -121,13 +92,12 @@ describe("EditorRuntime methods", () => {
         listProps: { type: "list", checked: false },
         props: { tone: "success" },
       }],
-      links: [],
       pluginData: { app: { theme: "dark" } },
     });
 
-    editor.load({ version: 6, blocks: [], links: [] });
+    editor.load({ version: 6, blocks: [] });
     expect(editor.blocks.getBlocks()).toEqual([]);
-    expect(editor.dump()).toMatchObject({ version: 6, blocks: [], links: [] });
+    expect(editor.dump()).toMatchObject({ version: 6, blocks: [] });
     editor.destroy();
   });
 });

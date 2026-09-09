@@ -1,11 +1,13 @@
+/**
+ * Clipboard operations and portable format contracts. Whole-block selection is structural; text editing uses explicit single-block ranges.
+ */
 import type { NormalizedSelection } from "../../selection-manager";
 import {
   validateBlockForest,
-  validateLinkCollection,
+  validateElementCollection,
   type Block,
   type BlockInput,
-  type Link,
-} from "../../../store/document-model";
+} from "@chulane/document-model";
 import type { ClipboardBundle } from "../types";
 
 /** Clipboard schema version accepted by structured paste. */
@@ -14,9 +16,9 @@ export const CLIPBOARD_BUNDLE_VERSION = 4;
 /**
  * Asserts that an unknown payload is a complete, trusted clipboard bundle.
  *
- * Version, unique IDs, portable records, link shape, and acyclic forests are
- * all checked before callers remap or write. Invalid custom MIME must fall back
- * to plain text rather than reaching insert.
+ * Version, unique IDs, portable records, acyclic forests, and
+ * optional canvas elements are all checked before callers remap or write.
+ * Invalid custom MIME must fall back to plain text rather than reaching insert.
  *
  * @param bundle - Candidate structured clipboard payload.
  * @returns No value.
@@ -30,11 +32,11 @@ export function validateClipboardBundle(bundle: unknown): asserts bundle is Clip
   if (value.version !== CLIPBOARD_BUNDLE_VERSION) {
     throw new Error(`Unsupported Rivto clipboard version: ${String(value.version)}`);
   }
-  if (!Array.isArray(value.blocks) || !Array.isArray(value.links)) {
+  if (!Array.isArray(value.blocks)) {
     throw new Error("Unsupported Rivto clipboard payload");
   }
-  const blockIds = validateBlockForest(value.blocks, { requireComplete: true });
-  validateLinkCollection(value.links, blockIds);
+  validateBlockForest(value.blocks, { requireComplete: true });
+  if (value.elements !== undefined) validateElementCollection(value.elements);
   if (value.pluginData !== undefined && (typeof value.pluginData !== "object" || value.pluginData === null || Array.isArray(value.pluginData))) {
     throw new Error("Unsupported Rivto clipboard payload");
   }
@@ -51,8 +53,6 @@ export interface RemappedClipboardBundle {
   blocks: BlockInput[];
   /** Children formerly owned by a first root whose ID is being reused. */
   firstChildren: BlockInput[];
-  /** Links rebuilt with fresh IDs and remapped block endpoints. */
-  links: Link[];
 }
 
 /**
@@ -122,26 +122,19 @@ function indexParents(blocks: Block[], parents = new Map<string, string>()): Map
  * Produces the minimum set of copied roots for a normalized selection.
  *
  * If both a parent and descendant are selected, only the parent is returned
- * because its subtree already carries the descendant. Whole-block copy retains
- * all descendants of selected roots. Mixed text/block copy retains only
- * descendants explicitly covered by the normalized range.
+ * because its subtree already carries the descendant. Every selected root
+ * carries its complete subtree; partial text is copied separately.
  *
  * @param document - Complete detached document roots used to resolve ancestry.
  * @param range - Normalized selected blocks and text boundaries.
- * @param wholeBlocks - Whether selected roots carry their complete subtrees.
  * @returns Independent cloned roots in document order without duplicates.
  */
 export function cloneSelectedTopLevelSubtrees(
   document: Block[],
   range: NormalizedSelection,
-  wholeBlocks: boolean,
 ): Block[] {
   const selectedIds = new Set(range.blocks.map((block) => block.id));
   const parents = indexParents(document);
-  const cloneSelection = (block: Block): Block => ({
-    ...cloneBlock(block),
-    children: block.children.filter((child) => selectedIds.has(child.id)).map(cloneSelection),
-  });
   return range.blocks.filter((block) => {
     let parent = parents.get(block.id);
     let isTopLevel = true;
@@ -153,7 +146,7 @@ export function cloneSelectedTopLevelSubtrees(
       parent = parents.get(parent);
     }
     return isTopLevel;
-  }).map(wholeBlocks ? cloneBlock : cloneSelection);
+  }).map(cloneBlock);
 }
 
 /**
@@ -166,12 +159,10 @@ export function cloneSelectedTopLevelSubtrees(
 export interface ClipboardIdReusePolicy {
   /** Returns true when the original block ID is free in the destination. */
   canReuseBlockId?: (id: string) => boolean;
-  /** Returns true when the original link ID is free in the destination. */
-  canReuseLinkId?: (id: string) => boolean;
 }
 
 /**
- * Re-identifies every block and link in an incoming clipboard bundle.
+ * Re-identifies every block in an incoming clipboard bundle.
  *
  * Clipboard IDs belong to the source document and cannot be inserted directly,
  * unless the supplied reuse policy confirms an ID is free in the destination.
@@ -182,7 +173,7 @@ export interface ClipboardIdReusePolicy {
  * @param bundle - Structured clipboard hierarchy to validate and remap.
  * @param firstTargetId - Existing destination ID reused for the first root.
  * @param reusePolicy - Optional policy allowing original IDs to survive paste.
- * @returns Fresh block inputs, detached first-root children, and remapped links.
+ * @returns Fresh block inputs and detached first-root children.
  * @throws When required clipboard arrays are missing.
  */
 export function remapClipboardBundle(
@@ -209,20 +200,5 @@ export function remapClipboardBundle(
   if (first && firstTargetId) idMap.set(first.id, firstTargetId);
   const firstChildren = first && firstTargetId ? first.children.map(remap) : [];
   const blocks = firstTargetId ? rest.map(remap) : bundle.blocks.map(remap);
-  const reusedLinkIds = new Set<string>();
-  const links = bundle.links.flatMap((link) => {
-    const from = idMap.get(link.from.blockId);
-    const to = idMap.get(link.to.blockId);
-    if (!from || !to) return [];
-    const reuse = reusePolicy?.canReuseLinkId?.(link.id) === true && !reusedLinkIds.has(link.id);
-    const id = reuse ? link.id : crypto.randomUUID();
-    if (reuse) reusedLinkIds.add(id);
-    return [{
-      ...link,
-      id,
-      from: { ...link.from, blockId: from },
-      to: { ...link.to, blockId: to },
-    }];
-  });
-  return { blocks, firstChildren, links };
+  return { blocks, firstChildren };
 }

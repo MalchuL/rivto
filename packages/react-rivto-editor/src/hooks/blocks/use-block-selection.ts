@@ -6,7 +6,7 @@
  * list and is for chrome that inspects the containing `BlockSelection`.
  */
 import { useCallback, useSyncExternalStore } from "react";
-import type { BlockSelection } from "@chulane/rivto";
+import type { BlockSelectionInput as BlockSelection } from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
 import { useEditorSelection } from "../editor/use-editor-selection";
 

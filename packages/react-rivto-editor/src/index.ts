@@ -57,6 +57,8 @@ export { type BlockElementProps } from "./surfaces/edgeless";
 export {
   EdgelessSnappingStore,
 } from "./surfaces/edgeless";
+export { ElementSelection } from "./extensions/edgeless/edgeless-runtime";
+export type { EdgelessSelectionSnapshot } from "./extensions/edgeless/edgeless-runtime";
 export type {
   EdgelessSnappingSnapshot,
   EdgelessSurfaceOptions,

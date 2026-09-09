@@ -1,155 +1,43 @@
+/** Core selection invariants: whole blocks, stable snapshots, gaps, and undo. */
+import { BlockSelection } from "../types";
 import { createTestEditor as createRivtoEditor } from "../test-utils";
 
-const textSelection = (blockId: string, anchor = 0, head = anchor) => ({
-  type: "text" as const,
-  anchor: { blockId, offset: anchor },
-  head: { blockId, offset: head },
-});
-
 describe("EditorRuntime selection", () => {
-  it("exposes validated manager operations and subscription cleanup", () => {
-    const editor = createRivtoEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
+  it.each(["block", "edgeless"] as const)("validates block-only state in %s mode", (mode) => {
+    const editor = createRivtoEditor({ mode });
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
+    const gap = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, first);
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, gap);
+    const selection = [{ type: "block" as const, blockIds: [last, first, last],
+      anchorBlockId: last, focusBlockId: first }];
     const listener = jest.fn();
-    const unsubscribe = editor.selection.subscribe(listener);
-    const selection = [textSelection(id, 1, 3)];
-
-    editor.selection.set(selection);
-    expect(editor.selection.get()).toEqual(selection);
-    expect(listener).toHaveBeenCalledTimes(1);
-    const snapshot = editor.selection.snapshot();
-    editor.selection.set(selection);
-    editor.selection.set([textSelection(id, 1, 3)]);
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(editor.selection.snapshot()).toBe(snapshot);
-    expect(() => editor.selection.set([textSelection(id, 99)])).toThrow("outside block");
-
-    editor.selection.clear();
-    expect(editor.selection.get()).toEqual([]);
-    expect(listener).toHaveBeenCalledTimes(2);
-    unsubscribe();
-    editor.selection.set(selection);
-    expect(listener).toHaveBeenCalledTimes(2);
-    editor.destroy();
-  });
-
-  it("validates text and block selections in either editor mode", () => {
-    const editor = createRivtoEditor();
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-
-    editor.execute("selection.set", { selection: [textSelection(firstId, 1, 4)] });
-    expect(editor.selection.get()).toEqual([textSelection(firstId, 1, 4)]);
-
-    editor.execute("selection.set", {
-      selection: [{ type: "block", blockIds: [secondId, firstId, secondId], anchorBlockId: secondId, focusBlockId: firstId }],
-    });
-    expect(editor.selection.get()).toEqual([{
-      type: "block",
-      blockIds: [firstId, secondId],
-      anchorBlockId: secondId,
-      focusBlockId: firstId,
-    }]);
-
-    expect(() => editor.execute("selection.set", {
-      selection: [{ type: "text", anchor: { blockId: firstId, offset: 99 }, head: { blockId: firstId, offset: 99 } }],
-    })).toThrow("outside block");
-    editor.mode.set("edgeless");
-    editor.execute("selection.set", {
-      selection: [{
-        type: "block",
-        blockIds: [firstId],
-        anchorBlockId: firstId,
-        focusBlockId: firstId,
-      }],
-    });
-    expect(editor.selection.get()).toEqual([{
-      type: "block",
-      blockIds: [firstId],
-      anchorBlockId: firstId,
-      focusBlockId: firstId,
-    }]);
-    editor.destroy();
-  });
-
-  it("does not notify runtime subscribers when only selection changes", () => {
-    const editor = createRivtoEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
     const runtime = jest.fn();
-    const selection = jest.fn();
-    const unsubscribeRuntime = editor.subscribe(runtime);
-    const unsubscribeSelection = editor.selection.subscribe(selection);
-    const before = editor.revision;
-
-    editor.execute("selection.set", { selection: [textSelection(id, 0, 2)] });
-    editor.execute("selection.clear");
-
-    expect(selection).toHaveBeenCalledTimes(2);
-    expect(runtime).not.toHaveBeenCalled();
-    expect(editor.revision).toBe(before);
-    unsubscribeRuntime();
-    unsubscribeSelection();
-    editor.destroy();
-  });
-
-  it("notifies caret moves without selecting the whole block", () => {
-    const editor = createRivtoEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
-    const listener = jest.fn();
     const unsubscribe = editor.selection.subscribe(listener);
-
-    editor.selection.set([textSelection(id, 0)]);
-    expect(editor.selection.isBlockSelected(id)).toBe(false);
-    editor.selection.set([textSelection(id, 2)]);
+    editor.subscribe(runtime);
+    editor.selection.set(selection);
+    const snapshot = editor.selection.snapshot();
+    expect(snapshot[0]).toBeInstanceOf(BlockSelection);
+    expect(snapshot[0]?.equals(snapshot[0].clone())).toBe(true);
+    editor.selection.set(selection);
+    expect(editor.selection.snapshot()).toBe(snapshot);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(runtime).not.toHaveBeenCalled();
+    expect(editor.selection.normalize()?.blocks.map((block) => block.id)).toEqual([first, last]);
+    expect(editor.selection.isBlockSelected(gap)).toBe(false);
+    const detached = editor.selection.get();
+    detached[0]!.blockIds.length = 0;
+    expect(editor.selection.get()[0]!.blockIds).toEqual([first, last]);
+    expect(() => editor.execute("selection.set", { selection: [{
+      type: "text", anchor: { blockId: first, offset: 0 }, head: { blockId: first, offset: 1 },
+    }] })).toThrow("whole blocks only");
+    expect(() => editor.selection.set([{ ...selection[0]!, focusBlockId: gap }])).toThrow("endpoints");
+    expect(() => editor.selection.set([{ ...selection[0]!, blockIds: ["missing"] }])).toThrow("not found");
+    expect(editor.selection.snapshot()).toBe(snapshot);
+    editor.selection.clear();
     expect(listener).toHaveBeenCalledTimes(2);
-    expect(editor.selection.isBlockSelected(id)).toBe(false);
     unsubscribe();
-    editor.destroy();
-  });
-
-  it("tracks whole-block membership independently of caret", () => {
-    const editor = createRivtoEditor();
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-
-    editor.selection.set([{
-      type: "block",
-      blockIds: [firstId, secondId],
-      anchorBlockId: firstId,
-      focusBlockId: secondId,
-    }]);
-    expect(editor.selection.isBlockSelected(firstId)).toBe(true);
-    expect(editor.selection.isBlockSelected(secondId)).toBe(true);
-    editor.selection.set([textSelection(firstId, 0)]);
-    expect(editor.selection.isBlockSelected(firstId)).toBe(false);
-    expect(editor.selection.isBlockSelected(secondId)).toBe(false);
-    editor.destroy();
-  });
-
-  it("normalizes directed and heterogeneous selections in document order", () => {
-    const editor = createRivtoEditor();
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const middleId = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, firstId);
-    const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middleId);
-    editor.selection.set([
-      {
-        type: "text",
-        anchor: { blockId: lastId, offset: 3 },
-        head: { blockId: firstId, offset: 1 },
-      },
-      {
-        type: "block",
-        blockIds: [middleId],
-        anchorBlockId: middleId,
-        focusBlockId: middleId,
-      },
-    ]);
-
-    expect(editor.selection.normalize()).toMatchObject({
-      start: { blockId: firstId, offset: 1 },
-      end: { blockId: lastId, offset: 3 },
-      blocks: [{ id: firstId }, { id: middleId }, { id: lastId }],
-    });
+    editor.selection.set(selection);
+    expect(listener).toHaveBeenCalledTimes(2);
     editor.destroy();
   });
 
@@ -210,19 +98,6 @@ describe("EditorRuntime selection", () => {
       anchorBlockId: nextId,
       focusBlockId: nextId,
     }]);
-    editor.destroy();
-  });
-
-  it("clamps text offsets when undo restores shorter content", () => {
-    const editor = createRivtoEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "A" });
-    editor.blocks.updateBlock(id, { content: "Long" });
-    editor.execute("selection.set", { selection: [textSelection(id, 4)] });
-
-    editor.undo();
-
-    expect(editor.blocks.getBlock(id)?.content).toBe("A");
-    expect(editor.selection.get()).toEqual([textSelection(id, 1)]);
     editor.destroy();
   });
 
@@ -305,16 +180,13 @@ describe("EditorRuntime selection", () => {
     editor.destroy();
   });
 
-  it("uses a cross-block text selection as one structural Tab range", () => {
+  it("uses a whole-block selection as one structural Tab range", () => {
     const editor = createRivtoEditor();
     const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" });
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId);
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-    const selection = [{
-      type: "text" as const,
-      anchor: { blockId: firstId, offset: 1 },
-      head: { blockId: secondId, offset: 3 },
-    }];
+    const selection = [{ type: "block" as const, blockIds: [firstId, secondId],
+      anchorBlockId: firstId, focusBlockId: secondId }];
     editor.execute("selection.set", { selection });
 
     editor.blocks.indentBlock(firstId);
@@ -327,25 +199,14 @@ describe("EditorRuntime selection", () => {
     editor.destroy();
   });
 
-  it("indents a bottom-up mixed range without widening its block selection", () => {
+  it("indents a bottom-up block range while preserving its direction", () => {
     const editor = createRivtoEditor();
     const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" });
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId);
     const middleId = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, firstId);
     const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middleId);
-    const selection = [
-      {
-        type: "text" as const,
-        anchor: { blockId: lastId, offset: 3 },
-        head: { blockId: firstId, offset: 1 },
-      },
-      {
-        type: "block" as const,
-        blockIds: [middleId],
-        anchorBlockId: middleId,
-        focusBlockId: middleId,
-      },
-    ];
+    const selection = [{ type: "block" as const, blockIds: [firstId, middleId, lastId],
+      anchorBlockId: lastId, focusBlockId: firstId }];
     editor.execute("selection.set", { selection });
     const documentUpdates = jest.fn();
     const unsubscribe = editor.document.subscribe(documentUpdates);

@@ -4,9 +4,9 @@
   "type": "module",
   "packageManager": "pnpm@11.8.0",
   "scripts": {
-    "clean": "pnpm --filter @chulane/rivto clean && pnpm --filter @chulane/rivto-react clean",
-    "build": "pnpm --filter @chulane/rivto build && pnpm --filter @chulane/rivto-react build && pnpm docs:build",
-    "dev": "pnpm --filter @chulane/rivto dev",
+    "clean": "pnpm --filter @chulane/crdt-doc clean && pnpm --filter @chulane/document-model clean && pnpm --filter @chulane/rivto clean && pnpm --filter @chulane/rivto-react clean",
+    "build": "pnpm --filter @chulane/crdt-doc build && pnpm --filter @chulane/document-model build && pnpm --filter @chulane/rivto build && pnpm --filter @chulane/rivto-react build && pnpm docs:build",
+    "dev": "pnpm --filter @chulane/crdt-doc --filter @chulane/document-model --filter @chulane/rivto --parallel dev",
     "app": "pnpm --filter @chulane/rivto-app-web dev",
     "demo": "pnpm --dir demo dev",
     "demo:build": "pnpm --dir demo build",
@@ -16,10 +16,10 @@
     "docs:check": "pnpm --dir docs check-types",
     "docs:preview": "pnpm --dir docs preview",
     "docs:test": "pnpm --dir docs test",
-    "lint": "eslint packages/rivto-editor-core/src packages/react-rivto-editor/src --max-warnings=0",
-    "test": "pnpm --filter @chulane/rivto test",
+    "lint": "eslint packages/crdt-doc/src packages/document-model/src packages/rivto-editor-core/src packages/react-rivto-editor/src --max-warnings=0",
+    "test": "pnpm --filter @chulane/crdt-doc test && pnpm --filter @chulane/document-model test && pnpm --filter @chulane/rivto test",
     "test:e2e": "pnpm demo:build && playwright test --project=chromium --project=firefox",
-    "check-types:core": "pnpm --filter @chulane/rivto check-types",
+    "check-types:core": "pnpm --filter @chulane/crdt-doc build && pnpm --filter @chulane/crdt-doc check-types && pnpm --filter @chulane/document-model check-types && pnpm --filter @chulane/rivto check-types",
     "check-types": "pnpm check-types:core && pnpm --filter @chulane/rivto-react check-types && pnpm --dir demo check-types && pnpm docs:check"
   },
   "devDependencies": {

@@ -10,12 +10,7 @@ Selection является local runtime state. Remote updates, undo, direct doc
 
 Алгоритм сначала materializes visible IDs depth-first и строит document order map.
 
-### Text selection
-
-- Если anchor или head block удалён, selection item удаляется.
-- Offset ограничивается новой длиной block content.
-- Direction anchor/head сохраняется.
-- Неизменившийся item переиспользуется; изменившийся копируется.
+Core selection содержит только whole-block items. Text ranges внутри одного блока передаются явно в clipboard operations; React хранит browser editing context отдельно.
 
 ### Block selection
 
@@ -33,7 +28,7 @@ Selection является local runtime state. Remote updates, undo, direct doc
 - **Возвращает:** `void`.
 - **Исключения:** command/selection normalization и block mutation errors.
 
-Исполняет built-in `selection.delete`. `SelectionManager` нормализует heterogeneous selection в document order и удаляет её одной undoable operation.
+Исполняет built-in `selection.delete`. `SelectionManager` удаляет выбранные block subtrees одной undoable operation и очищает selection. Пропуски между выбранными IDs сохраняются; text offsets в core selection отсутствуют.
 
 ## Property `revision`
 
@@ -42,7 +37,7 @@ Selection является local runtime state. Remote updates, undo, direct doc
 - **Изменение:** `notifyChanges()` сначала increment, затем вызывает listeners.
 - **Исключения при чтении:** отсутствуют.
 
-Revision является snapshot token для UI subscriptions, а не persisted document version. Он может измениться из-за local-only mode/selection/registry state без CRDT update.
+Revision является snapshot token для UI subscriptions, а не persisted document version. Он может измениться из-за local-only mode/registry state без CRDT update.
 
 ## Источники runtime notification
 
@@ -52,7 +47,7 @@ Constructor подписывается на `document.subscribe()`. Callback с�
 
 ### Selection update
 
-`selection.subscribe()` напрямую вызывает `notifyChanges()`. Если reconciliation изменила selection, возможна отдельная selection revision перед document callback revision.
+Selection changes уведомляют только `selection.subscribe()`; `editor.revision` не увеличивается. `snapshot()` сохраняет identity, пока membership и direction не изменились.
 
 `SelectionManager` поддерживает несколько distinct listeners одновременно и не хранит «текущий единственный callback». Повторная подписка другой function добавляет observer; одинаковая function reference deduplicate-ится. Каждый returned unsubscribe удаляет эту function и безопасен при повторном вызове. Подписка не сообщает initial selection автоматически.
 
@@ -82,7 +77,7 @@ const unsubscribe = editor.subscribe(() => {
 
 ## Что не вызывает revision само по себе
 
-Successful arbitrary command execution обновляет state `CommandRegistry`, но `EditorRuntime` не подписан на registry command-executed events. Revision изменится только если command также изменил document, selection, mode или block registry.
+Successful arbitrary command execution обновляет state `CommandRegistry`, но `EditorRuntime` не подписан на registry command-executed events. Revision изменится только если command также изменил document, mode или block registry.
 
 ## Direction examples
 

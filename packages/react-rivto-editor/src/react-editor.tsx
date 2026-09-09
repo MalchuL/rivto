@@ -155,6 +155,7 @@ export class ReactEditorImpl implements ReactEditor {
     this.slashCommands.destroy();
     this.keyboard.destroy();
     this.events.destroy();
+    this.selection.destroy();
   }
 }
 

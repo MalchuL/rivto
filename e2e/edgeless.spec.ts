@@ -627,7 +627,6 @@ test("keeps Enter newlines in connector labels", async ({ page }) => {
 const visualClipboardBundle = JSON.stringify({
   version: 4,
   blocks: [],
-  links: [],
   elements: [{
     id: "copied-visual",
     type: "text",
@@ -650,7 +649,6 @@ const blockClipboardBundle = JSON.stringify({
     pluginData: {},
     children: [],
   }],
-  links: [],
 });
 
 const pasteIntoLabel = async (

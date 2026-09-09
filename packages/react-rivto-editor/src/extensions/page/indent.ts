@@ -1,3 +1,6 @@
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
 import type { RivtoEditorApi as Editor } from "@chulane/rivto";
 import type { SelectionCapability } from "../../capabilities";
 import {
@@ -24,8 +27,8 @@ export function applyIndentShortcut(
 ): boolean {
     const editable = isEditableKeyboardEvent(event);
     const nativeSelection = editable ? selectionManager.readDOM() : undefined;
-    if (nativeSelection) editor.selection.set(nativeSelection);
-    const selection = nativeSelection ?? editor.selection.get();
+    if (nativeSelection) selectionManager.set(nativeSelection);
+    const selection = nativeSelection ?? selectionManager.get();
     const target = firstKeyboardTarget(selection);
     if (!target) return false;
     const blockSelectionAtRoot = event.target === root && target.item.type === "block";
@@ -38,7 +41,7 @@ export function applyIndentShortcut(
     // a transient empty selectionchange. Re-publish the selection captured
     // before the command, then resolve its text endpoints in the committed DOM.
     requestAnimationFrame(() => {
-      editor.selection.set(selection);
+      selectionManager.set(selection);
       selectionManager.restoreDOM(selection);
     });
     return true;

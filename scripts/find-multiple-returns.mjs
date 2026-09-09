@@ -4,6 +4,8 @@ import { extname, relative } from 'node:path';
 import ts from 'typescript';
 
 const defaultPaths = [
+  'packages/crdt-doc/src',
+  'packages/document-model/src',
   'packages/rivto-editor-core/src',
   'packages/react-rivto-editor/src',
 ];

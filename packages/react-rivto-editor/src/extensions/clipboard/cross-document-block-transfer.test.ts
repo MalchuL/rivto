@@ -9,7 +9,7 @@ function createEditor(): RivtoEditorApi {
 }
 
 describe("cross-document block transfer", () => {
-  test("preserves selected subtree order, data, and internal links", () => {
+  test("preserves selected subtree order and data", () => {
     const source = createEditor();
     const destination = createEditor();
     const first = source.blocks.insertBlock({
@@ -22,8 +22,6 @@ describe("cross-document block transfer", () => {
     });
     const second = source.blocks.insertBlock({ id: "second", type: "paragraph", content: "Second" });
     const outside = source.blocks.insertBlock({ id: "outside", type: "paragraph", content: "Outside" });
-    source.links.createLink({ id: "internal", from: { blockId: first }, to: { blockId: "child" }, meta: { kind: "test" } });
-    source.links.createLink({ id: "external", from: { blockId: "child" }, to: { blockId: outside } });
     const target = destination.blocks.insertBlock({ id: "target", type: "paragraph", content: "Target" });
     source.history.clear();
     destination.history.clear();
@@ -31,7 +29,6 @@ describe("cross-document block transfer", () => {
     crossDocumentBlockTransfer(source, destination, [first, second], { targetId: target, position: "inside" });
 
     expect(source.blocks.getRootIds()).toEqual([outside]);
-    expect(source.links.getLinks()).toEqual([]);
     expect(destination.blocks.getChildIds(target)).toEqual([first, second]);
     expect(destination.blocks.getBlock(first)).toMatchObject({
       id: first,
@@ -39,19 +36,12 @@ describe("cross-document block transfer", () => {
       pluginData: { test: { retained: true } },
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],
     });
-    expect(destination.links.getLinks()).toEqual([{
-      id: "internal",
-      from: { blockId: first },
-      to: { blockId: "child" },
-      meta: { kind: "test" },
-    }]);
 
     destination.undo();
     expect(destination.blocks.getRootIds()).toEqual([target]);
     expect(source.blocks.getRootIds()).toEqual([outside]);
     source.undo();
     expect(source.blocks.getRootIds()).toEqual([first, second, outside]);
-    expect(source.links.getLink("internal")).toBeDefined();
 
     source.destroy();
     destination.destroy();
@@ -70,7 +60,7 @@ describe("cross-document block transfer", () => {
     destination.destroy();
   });
 
-  test.each(["block", "link"])("rejects a duplicate %s ID without changing either document", (kind) => {
+  test("rejects a duplicate block ID without changing either document", () => {
     const source = createEditor();
     const destination = createEditor();
     source.blocks.insertBlock({
@@ -78,21 +68,14 @@ describe("cross-document block transfer", () => {
       type: "paragraph",
       children: [{ id: "child", type: "paragraph" }],
     });
-    source.links.createLink({ id: "shared-link", from: { blockId: "moved" }, to: { blockId: "child" } });
-    if (kind === "block") {
-      destination.blocks.insertBlock({ id: "child", type: "paragraph" });
-    } else {
-      const one = destination.blocks.insertBlock({ id: "one", type: "paragraph" });
-      const two = destination.blocks.insertBlock({ id: "two", type: "paragraph" });
-      destination.links.createLink({ id: "shared-link", from: { blockId: one }, to: { blockId: two } });
-    }
+    destination.blocks.insertBlock({ id: "child", type: "paragraph" });
     const sourceBefore = source.dump();
     const destinationBefore = destination.dump();
 
     expect(() => crossDocumentBlockTransfer(source, destination, ["moved"], {
       targetId: null,
       position: "after",
-    })).toThrow(`Destination already contains ${kind}`);
+    })).toThrow("Destination already contains block");
     expect(source.dump()).toEqual(sourceBefore);
     expect(destination.dump()).toEqual(destinationBefore);
     source.destroy();
