@@ -128,3 +128,11 @@ export type {
   SlotPosition,
 } from "./managers";
 export { BLOCK_FLOW_SLOT_POSITIONS, SLOT_POSITIONS } from "./managers";
+
+export {
+  Kanban,
+  kanbanExtension,
+  createKanbanBlockInput,
+  KANBAN_BLOCK_TYPE,
+  KANBAN_COLUMN_BLOCK_TYPE,
+} from "./extensions/kanban/kanban";

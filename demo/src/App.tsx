@@ -6,6 +6,7 @@ import {
 } from "@chulane/rivto";
 import {
   createReactEditor,
+  createKanbanBlockInput,
   DEFAULT_WRITING_BLOCK_TYPE,
   type MarkdownLinkClick,
   edgelessVisualsExtension,
@@ -331,6 +332,13 @@ function createDemoEditor() {
     zIndex: 1,
     props: { startBlockId: secondBranchId, endBlockId: numberedContinueId },
   });
+  const kanbanId = editor.blocks.insertBlock(createKanbanBlockInput(), numberedContinueId);
+  const column = editor.blocks.getBlock(kanbanId)!.children[0]!;
+  const cardId = editor.blocks.insertBlock({
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content: "Drag me between columns or back into the editor",
+  }, kanbanId);
+  editor.blocks.moveBlocks([cardId], column.id, "inside");
   seedEdgelessShowcase(edgelessVisuals);
   editor.history.clear();
 

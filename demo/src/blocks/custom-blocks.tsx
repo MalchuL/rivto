@@ -1,5 +1,6 @@
 import {
   blockExtension,
+  kanbanExtension,
   useBlockEditing,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
@@ -78,6 +79,7 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
 
 /** Creation-time extensions for the demo's two custom block types. */
 export const customBlockExtensions: readonly ReactEditorExtension[] = [
+    kanbanExtension(),
     blockExtension({
       definition: sliderBlockDefinition,
       render: SliderBlock,

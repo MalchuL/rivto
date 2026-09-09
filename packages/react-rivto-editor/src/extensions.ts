@@ -15,3 +15,11 @@ export type {
   SlashCommand,
   SlashCommandContext,
 } from "./managers";
+
+export {
+  Kanban,
+  kanbanExtension,
+  createKanbanBlockInput,
+  KANBAN_BLOCK_TYPE,
+  KANBAN_COLUMN_BLOCK_TYPE,
+} from "./extensions/kanban/kanban";

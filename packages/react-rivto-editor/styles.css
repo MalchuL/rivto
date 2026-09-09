@@ -741,10 +741,17 @@
   min-height: 0;
   box-sizing: border-box;
   padding: var(--rivto-block-surface-padding);
-  overflow-x: hidden;
+  /* clip, not hidden: hidden still accepts programmatic scrollLeft. */
+  overflow-x: clip;
   overflow-y: auto;
   overscroll-behavior: contain;
   cursor: grab;
+}
+
+/* Wide min-content (Kanban lanes) must not inflate the card's scrollport. */
+.edgeless-card-content > .page-block {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .edgeless-card[data-auto-height="true"] .edgeless-card-content {
@@ -1747,4 +1754,218 @@
   .page-surface {
     padding: 32px 24px;
   }
+}
+
+/* Kanban uses the same recursive block tree and controls as the outline. */
+[data-block-type="kanban"] {
+  min-width: 0;
+  max-width: 100%;
+}
+[data-block-type="kanban"] > .page-block-children {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  /* Outline indent would widen the board and fake a second horizontal scroll. */
+  margin: 8px 0 16px;
+  overflow-x: auto;
+  padding: 16px;
+  border-radius: 14px;
+  background: linear-gradient(125deg, #e9eefc, #e8f4f5);
+  scrollbar-width: thin;
+}
+[data-block-type="kanban"] > .page-block-children > .page-block {
+  /* Anchor the absolute insertion line to this lane, not the outer surface. */
+  position: relative;
+  flex: 1 0 240px;
+  min-width: 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: #f1f2f4;
+  min-height: 160px;
+  box-shadow: 0 1px 2px rgb(9 30 66 / 16%);
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+[data-block-type="kanban-column"] > .page-block-children {
+  margin: 10px 0 0;
+}
+[data-block-type="kanban-column"] > .page-block-children > .page-block {
+  margin: 10px 0;
+  padding: 12px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: white;
+  position: relative;
+  color: #172b4d;
+  box-shadow: 0 1px 2px rgb(9 30 66 / 24%);
+  transition: box-shadow 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+.edgeless-card [data-block-type="kanban"] .page-block-row::before,
+[data-block-type="kanban"] .page-block-row::before {
+  /* Beat the edgeless 100vw hover slab so lane overflow matches the columns. */
+  inset: 0;
+  width: auto;
+}
+[data-block-type="kanban-column"][data-drop-inside="true"] {
+  outline: 2px solid #579dff;
+  background: #e3edfc;
+  outline-offset: 2px;
+}
+/* Keep controls within columns instead of overlapping neighboring cards. */
+[data-block-type="kanban"] .rivto-slot[data-slot-owner="block"][data-slot-position="left-top"] {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  flex-shrink: 0;
+}
+[data-block-type="kanban"] .page-drag-handle {
+  opacity: 1;
+  pointer-events: auto;
+  color: #8590a2;
+  border-radius: 5px;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.rivto-kanban-column-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: #172b4d;
+}
+.rivto-kanban-column-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  border-radius: 4px;
+}
+.rivto-kanban-column-count {
+  color: #626f86;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.rivto-kanban-add-card {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  color: #44546f;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.rivto-kanban-add-card:hover { background: #dcdfe4; }
+.rivto-kanban-add-card:focus-visible,
+.rivto-kanban-column-title:focus-visible { outline: 2px solid #0c66e4; outline-offset: 2px; }
+
+[data-block-type="kanban-column"] > .page-block-children > .page-block:hover {
+  border-color: #85b8ff;
+  box-shadow: 0 3px 8px rgb(9 30 66 / 14%);
+}
+[data-block-type="kanban-column"] > .page-block-children > [data-dragging="true"] {
+  opacity: 0.3;
+  background: #dce6f5;
+  box-shadow: none;
+}
+
+[data-block-type="kanban-column"] .page-drop-line {
+  height: 4px;
+  border-radius: 4px;
+  background: #0c66e4;
+  box-shadow: 0 0 0 3px rgb(12 102 228 / 10%);
+}
+
+[data-block-type="kanban"] .page-drag-handle:hover {
+  color: #0c66e4;
+  background: #dce6f5;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-block-type="kanban"] *,
+  [data-block-type="kanban"] *::before { transition: none !important; }
+}
+
+.rivto-kanban-dialog {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  max-height: none;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  overflow: visible;
+}
+.rivto-kanban-dialog:modal {
+  position: fixed;
+  inset: 3vh 3vw;
+  width: 94vw;
+  height: 94vh;
+  padding: 24px;
+  border-radius: 16px;
+  background: #fff;
+  overflow: auto;
+  box-shadow: 0 24px 80px rgb(9 30 66 / 30%);
+}
+.rivto-kanban-dialog::backdrop { background: rgb(9 30 66 / 55%); }
+/* The right slot owns placement; offsets leave room for the board edge. */
+.rivto-kanban-expand {
+  width: 30px;
+  height: 30px;
+  margin-left: var(--rivto-kanban-control-offset-x, 8px);
+  translate: 0 var(--rivto-kanban-control-offset-y, 0px);
+  border: 1px solid #dcdfe4;
+  border-radius: 6px;
+  background: white;
+  color: #44546f;
+  cursor: pointer;
+  font-size: 20px;
+}
+.rivto-kanban-expand:focus-visible { outline: 2px solid #0c66e4; outline-offset: 2px; }
+.rivto-kanban-dialog:modal { padding-right: 64px; }
+[data-block-type="kanban"] .rivto-slot[data-slot-position="left-top"] { order: -1; right: auto; }
+/* Center the column insertion indicator in the 16px inter-column gap. */
+.page-drop-line[data-axis="horizontal"] {
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  height: auto;
+  background: var(--rivto-accent, #6c5ce7);
+  box-shadow: none;
+}
+.page-drop-line[data-axis="horizontal"][data-edge="before"] { left: -10px; right: auto; }
+.page-drop-line[data-axis="horizontal"][data-edge="after"] { right: -10px; left: auto; }
+
+.rivto-kanban-add-column {
+  order: 1;
+  flex: 0 0 240px;
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border: 2px dashed #b6c5db;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 45%);
+  color: #626f86;
+  font-size: 40px;
+  cursor: pointer;
+}
+.rivto-kanban-add-column:hover { background: #fff; color: #0c66e4; }
+.rivto-kanban-add-column:focus-visible { outline: 2px solid #0c66e4; outline-offset: 2px; }
+
+[data-block-type="kanban"] > .page-block-children > [data-block-type="kanban-column"][data-dragging="true"] {
+  opacity: 0.4;
+  outline: 2px dashed #8590a2;
+  outline-offset: 2px;
+  box-shadow: none;
 }

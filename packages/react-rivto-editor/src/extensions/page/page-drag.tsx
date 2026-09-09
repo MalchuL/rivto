@@ -49,10 +49,12 @@ const MAX_PREVIEW_BLOCKS = 4;
 /** Visual nesting used by `.page-block-children` in the demo stylesheet. */
 const PAGE_INDENT = 24;
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
+const EDGELESS_CARD_CONTENT_SELECTOR = "[data-edgeless-card-content]";
 const CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE = "data-rivto-cross-document-page-root";
 const CROSS_DOCUMENT_PAGE_ROOT_SELECTOR = `[${CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE}]`;
 const PAGE_DRAG_HANDLE_CLASS = "page-drag-handle";
 const PAGE_DROP_LINE_CLASS = "page-drop-line";
+const PAGE_BLOCK_ROW_CLASS = "page-block-row";
 
 /**
  * Normalized document destination and visual feedback for the current pointer.
@@ -72,6 +74,7 @@ interface DropPlacement {
   readonly indicatorEdge?: "before" | "after";
   /** Horizontal line offset relative to the hovered row. */
   readonly indicatorOffset: number;
+  readonly indicatorAxis?: "horizontal";
 }
 
 interface CrossDocumentPageRootController {
@@ -89,6 +92,18 @@ const crossDocumentPageRootControllers = new WeakMap<HTMLElement, CrossDocumentP
 interface PointerCoordinates {
   readonly x: number;
   readonly y: number;
+}
+
+/**
+ * Keeps dnd-kit auto-scroll off canvas cards. Their overflow-x is clip/hidden
+ * so they are not a real horizontal scroller, but the library still writes
+ * scrollLeft and shoves the whole element during Kanban drags.
+ *
+ * @param element - Ancestor dnd-kit is considering as an auto-scroll target.
+ * @returns False for edgeless card chrome; true so lane strips can still scroll.
+ */
+function canPageDragAutoScroll(element: Element): boolean {
+  return !(element instanceof HTMLElement && element.matches(EDGELESS_CARD_CONTENT_SELECTOR));
 }
 
 function eventPointer(event: DragMoveEvent): PointerCoordinates | null {
@@ -159,17 +174,37 @@ function containsBlock(block: Block, candidateId: string): boolean {
  * insertion point across the complete page width. Keyboard dragging retains
  * dnd-kit's nearest-center fallback.
  *
- * @param arguments_ - Rectangles and pointer coordinates supplied by dnd-kit.
+ * @param params - Rectangles and pointer coordinates supplied by dnd-kit.
  * @returns At most one collision: the row whose body or preceding gap owns the
  * current pointer position.
  */
-const pageCollisionDetection: CollisionDetection = (arguments_) => {
-  const { pointerCoordinates, droppableContainers, droppableRects } = arguments_;
-  if (!pointerCoordinates) return closestCenter(arguments_);
+const pageCollisionDetection: CollisionDetection = (params) => {
+  const { pointerCoordinates, droppableRects } = params;
+  // Horizontal lanes reorder only against siblings, never against their cards.
+  const droppableContainers = params.active.data.current?.sortChildren === "horizontal"
+    ? params.droppableContainers.filter(({ data }) => data.current?.sortChildren === "horizontal"
+      && data.current?.sortOwner === params.active.data.current?.sortOwner)
+    : params.droppableContainers;
+  if (!pointerCoordinates) return closestCenter({ ...params, droppableContainers });
   const rows = droppableContainers.flatMap((container) => {
     const rect = droppableRects.get(container.id);
     return rect ? [{ id: container.id, rect }] : [];
   });
+  // Prefer the smallest rectangle containing both coordinates: nested cards win
+  // over their column, and adjacent columns never compete by vertical position.
+  const contained = rows.filter(({ rect }) => (
+    pointerCoordinates.x >= rect.left && pointerCoordinates.x <= rect.right
+    && pointerCoordinates.y >= rect.top && pointerCoordinates.y <= rect.bottom
+  )).sort((left, right) => left.rect.width * left.rect.height - right.rect.width * right.rect.height)[0];
+  if (contained) return [{ id: contained.id, data: { value: 0 } }];
+  // Gaps between horizontal lanes still target the nearest lane on the X axis.
+  // Vertical distance cannot distinguish adjacent columns with matching heights.
+  if (params.active.data.current?.sortChildren === "horizontal") {
+    const nearest = rows.sort((left, right) =>
+      Math.abs(pointerCoordinates.x - (left.rect.left + left.rect.width / 2))
+      - Math.abs(pointerCoordinates.x - (right.rect.left + right.rect.width / 2)))[0];
+    return nearest ? [{ id: nearest.id, data: { value: 0 } }] : [];
+  }
   const hovered = rows
     .filter(({ rect }) => pointerCoordinates.y >= rect.top && pointerCoordinates.y <= rect.bottom)
     .sort((left, right) => Math.abs(pointerCoordinates.y - (left.rect.top + left.rect.height / 2))
@@ -188,16 +223,16 @@ const pageCollisionDetection: CollisionDetection = (arguments_) => {
  * Rows in different cards commonly share vertical coordinates. Filtering by
  * native hit testing prevents registration order from selecting another card.
  */
-const edgelessCollisionDetection: CollisionDetection = (arguments_) => {
-  const { pointerCoordinates, droppableContainers } = arguments_;
-  if (!pointerCoordinates) return closestCenter(arguments_);
+const edgelessCollisionDetection: CollisionDetection = (params) => {
+  const { pointerCoordinates, droppableContainers } = params;
+  if (!pointerCoordinates) return closestCenter(params);
   const document = droppableContainers[0]?.node.current?.ownerDocument;
   const card = document?.elementsFromPoint(pointerCoordinates.x, pointerCoordinates.y)
     .map((element) => element.closest<HTMLElement>(EDGELESS_ROOT_SELECTOR))
     .find((element): element is HTMLElement => Boolean(element));
   if (!card) return [];
   return pageCollisionDetection({
-    ...arguments_,
+    ...params,
     droppableContainers: droppableContainers.filter(({ node }) => (
       Boolean(node.current && card.contains(node.current))
     )),
@@ -330,7 +365,23 @@ function resolveDropPlacement(
     : activeRect ? activeRect.top + activeRect.height / 2 : event.over.rect.top;
   const hasPointerY = typeof activator.clientY === "number";
   let result: DropPlacement | null = null;
-  if (pointerX !== undefined && hasPointerY) {
+  if (event.active.data.current?.sortChildren === "horizontal"
+    && event.over.data.current?.sortChildren === "horizontal") {
+    const edge = cursorX < event.over.rect.left + event.over.rect.width / 2 ? "before" : "after";
+    result = { targetId: indicatorId, position: edge, indicatorId, indicatorEdge: edge,
+      indicatorOffset: 0, indicatorAxis: "horizontal" };
+  } else if (event.over.data.current?.sortChildren === "vertical") {
+    // List cards are siblings, even when they own descendants. Splitting the
+    // complete card in half makes reordering forgiving without nesting cards.
+    const edge = cursorY < event.over.rect.top + event.over.rect.height / 2 ? "before" : "after";
+    result = {
+      targetId: indicatorId,
+      position: edge,
+      indicatorId,
+      indicatorEdge: edge,
+      indicatorOffset: 0,
+    };
+  } else if (pointerX !== undefined && hasPointerY) {
     result = resolveGeometryPlacement(
       blocks,
       { id: indicatorId, rect: event.over.rect },
@@ -564,15 +615,15 @@ export function PageDragProvider({
     });
     return invalid ? null : placement;
   };
-  const collisionDetection: CollisionDetection = (arguments_) => {
+  const collisionDetection: CollisionDetection = (params) => {
     let collisions: ReturnType<CollisionDetection>;
     if (editor.mode.get() === "edgeless") {
-      collisions = edgelessCollisionDetection(arguments_);
+      collisions = edgelessCollisionDetection(params);
     } else {
-      const pointer = arguments_.pointerCoordinates;
+      const pointer = params.pointerCoordinates;
       collisions = pointer && findCrossDocumentPageController(root, pointer)
         ? []
-        : pageCollisionDetection(arguments_);
+        : pageCollisionDetection(params);
     }
     return collisions;
   };
@@ -651,11 +702,24 @@ export function PageDragProvider({
     }
   };
 
+  // Native modal dialogs occupy the top layer; previews must join that layer.
+  const modalRoot = root?.querySelector("dialog:modal");
+  const overlay = (
+    <DragOverlay dropAnimation={null}>
+      {activeBlocks.length > 0 && (
+        <div className="page-drag-overlay" aria-hidden="true">
+          <PageDragPreview blocks={activeBlocks} collapseActive={reactEditor.blocks.hasListProps("collapse")} />
+        </div>
+      )}
+    </DragOverlay>
+  );
+
   return (
     <PageDragStateContext.Provider value={{ placement: dropPlacement, draggedIds: activeIds }}>
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}
+        autoScroll={{ canScroll: canPageDragAutoScroll }}
         onDragStart={handleDragStart}
         onDragMove={(event) => {
           if (updateCrossDocumentTarget(event)) setDropPlacement(null);
@@ -670,13 +734,7 @@ export function PageDragProvider({
         onDragEnd={handleDragEnd}
       >
         {children}
-        <DragOverlay dropAnimation={null}>
-          {activeBlocks.length > 0 && (
-            <div className="page-drag-overlay" aria-hidden="true">
-              <PageDragPreview blocks={activeBlocks} collapseActive={reactEditor.blocks.hasListProps("collapse")} />
-            </div>
-          )}
-        </DragOverlay>
+        {modalRoot ? createPortal(overlay, modalRoot) : overlay}
       </DndContext>
     </PageDragStateContext.Provider>
   );
@@ -698,21 +756,45 @@ export function PageDragProvider({
  * @returns A DOM-free ref provider plus row-portalled drag controls.
  */
 export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
-  const draggable = useDraggable({ id: block.id });
-  const droppable = useDroppable({ id: block.id });
   const dragState = useContext(PageDragStateContext);
   const [blockElement, setBlockElement] = useState<HTMLDivElement | null>(null);
   const dropPlacement = dragState.placement;
   const indicator = dropPlacement?.indicatorId === block.id ? dropPlacement : undefined;
-  const row = blockElement?.querySelector<HTMLElement>(":scope > .page-block-row") ?? null;
+  const row = blockElement?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`) ?? null;
+  const parentRow = blockElement?.parentElement?.closest("[data-block-id]")
+    ?.querySelector(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
+  const axis = parentRow?.querySelector("[data-block-sort-children]")?.getAttribute("data-block-sort-children");
+  const sortable = axis === "vertical" || axis === "horizontal";
+  const data = { sortChildren: axis, sortOwner: parentRow?.parentElement?.getAttribute("data-block-id") };
+  const draggable = useDraggable({ id: block.id, data });
+  const droppable = useDroppable({ id: block.id, data });
+  const dropNode = sortable || row?.querySelector("[data-block-drop-container]") ? blockElement : row;
   const dragging = draggable.isDragging || dragState.draggedIds.includes(block.id);
+  const previousPosition = useRef<number | undefined>(undefined);
+
+  // Animate committed sibling moves, not pointer motion or scrolling. Offsets
+  // stay in the column's layout coordinates and reduced-motion stays instant.
+  useLayoutEffect(() => {
+    if (!sortable || !blockElement) return;
+    const position = axis === "horizontal" ? blockElement.offsetLeft : blockElement.offsetTop;
+    const previous = previousPosition.current;
+    previousPosition.current = position;
+    if (previous !== undefined && previous !== position && dragState.draggedIds.length === 0
+      && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const animation = blockElement.animate([
+        { transform: `translate${axis === "horizontal" ? "X" : "Y"}(${previous - position}px)` },
+        { transform: "translate(0)" },
+      ], { duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+      return () => animation.cancel();
+    }
+  });
 
   // dnd-kit accepts a node imperatively, allowing the decorator to reuse the
   // surface's exact row instead of cloning or replacing its React element.
   useLayoutEffect(() => {
-    droppable.setNodeRef(row);
+    droppable.setNodeRef(dropNode);
     return () => droppable.setNodeRef(null);
-  }, [droppable.setNodeRef, row]);
+  }, [droppable.setNodeRef, dropNode]);
 
   // Dragging and inside-drop state decorate stable surface elements without
   // moving ownership of their data-block markers into this extension.
@@ -723,22 +805,23 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
     return () => blockElement.removeAttribute("data-dragging");
   }, [blockElement, dragging]);
   useLayoutEffect(() => {
-    if (!row) return;
+    if (!dropNode) return;
     if (indicator && !indicator.indicatorEdge) {
-      row.setAttribute("data-drop-inside", "true");
+      dropNode.setAttribute("data-drop-inside", "true");
     } else {
-      row.removeAttribute("data-drop-inside");
+      dropNode.removeAttribute("data-drop-inside");
     }
-    return () => row.removeAttribute("data-drop-inside");
-  }, [indicator, row]);
+    return () => dropNode.removeAttribute("data-drop-inside");
+  }, [indicator, dropNode]);
 
-  const indicatorPortal = row && indicator?.indicatorEdge ? createPortal(
+  const indicatorPortal = dropNode && indicator?.indicatorEdge ? createPortal(
     <span
       className={PAGE_DROP_LINE_CLASS}
       data-edge={indicator.indicatorEdge}
-      style={{ left: indicator.indicatorOffset }}
+      data-axis={indicator.indicatorAxis}
+      style={indicator.indicatorAxis ? undefined : { left: indicator.indicatorOffset }}
     />,
-    row,
+    dropNode,
   ) : null;
 
   return (
