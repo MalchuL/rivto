@@ -447,6 +447,13 @@ export class BlockManager {
 
   /**
    * Outdents a consecutive range and adopts trailing siblings into its last root.
+   *
+   * Lifting a nested range after its parent would otherwise leave later siblings
+   * at the old depth, which visually "breaks out" from under the outdented
+   * outline. Those following siblings are therefore reparented as children of
+   * the last moved root. `inside` appends, so they follow any children that root
+   * already had.
+   *
    * @param ids - Selected identifiers, including any selected descendants.
    * @returns No value; a root-level or nonconsecutive range is unchanged.
    */
@@ -461,9 +468,11 @@ export class BlockManager {
     const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
     if (!moving.length) return;
     const lastId = moving.at(-1)!;
+    // Siblings below the last moved root stay nested under it after the lift.
     const siblings = this.siblingIds(lastId);
     const following = siblings.slice(siblings.indexOf(lastId) + 1);
     this.editor.document.blocks.moveBlocks([
+      // Repeated "after parent" inserts reverse order unless roots go last-first.
       ...[...moving].reverse().map((id) => ({ id, targetId: parentId, position: "after" as const })),
       ...following.map((id) => ({ id, targetId: lastId, position: "inside" as const })),
     ]);
