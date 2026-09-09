@@ -23,3 +23,6 @@ export {
   KANBAN_BLOCK_TYPE,
   KANBAN_COLUMN_BLOCK_TYPE,
 } from "./extensions/kanban/kanban";
+
+export { Bento, bentoExtension, createBentoBlockInput, BENTO_BLOCK_TYPE } from "./extensions/bento/bento";
+export { BlockModal, BlockModalButton } from "./blocks/block-modal";

@@ -100,10 +100,14 @@ interface PointerCoordinates {
  * scrollLeft and shoves the whole element during Kanban drags.
  *
  * @param element - Ancestor dnd-kit is considering as an auto-scroll target.
- * @returns False for edgeless card chrome; true so lane strips can still scroll.
+ * @returns True for eligible scrollers inside the active modal, or normal page scrollers.
  */
 function canPageDragAutoScroll(element: Element): boolean {
-  return !(element instanceof HTMLElement && element.matches(EDGELESS_CARD_CONTENT_SELECTOR));
+  // The top layer makes background ancestors inert, but dnd-kit still discovers
+  // them through the DOM tree. Only the modal and its descendants may scroll.
+  const modal = element.ownerDocument.querySelector("dialog:modal");
+  return (!modal || modal.contains(element))
+    && !(element instanceof HTMLElement && element.matches(EDGELESS_CARD_CONTENT_SELECTOR));
 }
 
 function eventPointer(event: DragMoveEvent): PointerCoordinates | null {
@@ -370,6 +374,18 @@ function resolveDropPlacement(
     const edge = cursorX < event.over.rect.left + event.over.rect.width / 2 ? "before" : "after";
     result = { targetId: indicatorId, position: edge, indicatorId, indicatorEdge: edge,
       indicatorOffset: 0, indicatorAxis: "horizontal" };
+  } else if (event.over.data.current?.sortChildren === "grid") {
+    // Outer edges insert siblings in reading order; the center nests blocks.
+    const rect = event.over.rect;
+    const verticalEdge = Math.min(gapDropZone, rect.height / 3);
+    const horizontalEdge = Math.min(32, rect.width / 4);
+    const vertical = cursorY < rect.top + verticalEdge || cursorY > rect.bottom - verticalEdge;
+    const horizontal = cursorX < rect.left + horizontalEdge || cursorX > rect.right - horizontalEdge;
+    const edge = vertical ? (cursorY < rect.top + rect.height / 2 ? "before" : "after")
+      : (cursorX < rect.left + rect.width / 2 ? "before" : "after");
+    result = { targetId: indicatorId, position: vertical || horizontal ? edge : "inside", indicatorId,
+      indicatorEdge: vertical || horizontal ? edge : undefined, indicatorOffset: 0,
+      indicatorAxis: !vertical && horizontal ? "horizontal" : undefined };
   } else if (event.over.data.current?.sortChildren === "vertical") {
     // List cards are siblings, even when they own descendants. Splitting the
     // complete card in half makes reordering forgiving without nesting cards.
@@ -764,7 +780,7 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
   const parentRow = blockElement?.parentElement?.closest("[data-block-id]")
     ?.querySelector(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
   const axis = parentRow?.querySelector("[data-block-sort-children]")?.getAttribute("data-block-sort-children");
-  const sortable = axis === "vertical" || axis === "horizontal";
+  const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
   const data = { sortChildren: axis, sortOwner: parentRow?.parentElement?.getAttribute("data-block-id") };
   const draggable = useDraggable({ id: block.id, data });
   const droppable = useDroppable({ id: block.id, data });

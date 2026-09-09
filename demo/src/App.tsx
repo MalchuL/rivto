@@ -7,6 +7,7 @@ import {
 import {
   createReactEditor,
   createKanbanBlockInput,
+  createBentoBlockInput,
   DEFAULT_WRITING_BLOCK_TYPE,
   type MarkdownLinkClick,
   edgelessVisualsExtension,
@@ -332,6 +333,11 @@ function createDemoEditor() {
     zIndex: 1,
     props: { startBlockId: secondBranchId, endBlockId: numberedContinueId },
   });
+  editor.blocks.insertBlock({ ...createBentoBlockInput(), children: [
+    { type: DEFAULT_WRITING_BLOCK_TYPE, content: "A small idea", props: { bentoWidth: 220 } },
+    { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Room to explore. Resize this tile from Bento settings. Heights follow your content, and tiles wrap with the editor width.", props: { bentoWidth: 400 } },
+    { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Drag blocks between tiles, nest them inside, or move them back into the editor." },
+  ] }, numberedContinueId);
   const kanbanId = editor.blocks.insertBlock(createKanbanBlockInput(), numberedContinueId);
   const column = editor.blocks.getBlock(kanbanId)!.children[0]!;
   const cardId = editor.blocks.insertBlock({

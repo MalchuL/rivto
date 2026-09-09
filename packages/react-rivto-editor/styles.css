@@ -1969,3 +1969,40 @@
   outline-offset: 2px;
   box-shadow: none;
 }
+
+/* Bento widths are preferences: flex wrapping shrinks tiles on narrow surfaces. */
+[data-block-type="bento"] > .page-block-children {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  margin-left: 0;
+  background: #f4f5f7;
+  border-radius: 14px;
+  min-height: 96px;
+}
+[data-block-type="bento"] > .page-block-children > .page-block {
+  position: relative;
+  flex: 1 1 var(--rivto-bento-width, 280px);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  background: white;
+  border: 1px solid #dcdfe4;
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgb(9 30 66 / 8%);
+}
+[data-block-type="bento"] .rivto-slot[data-slot-position="left-top"] {
+  position: relative;
+  inset: auto;
+  transform: none;
+  order: -1;
+}
+[data-block-type="bento"] .page-block-row::before { display: none; }
+[data-block-type="bento"] [data-drop-inside="true"] { outline: 2px solid var(--rivto-accent, #6c5ce7); }
+.rivto-bento-settings { position: relative; display: inline-flex; }
+.rivto-bento-settings > button { width: 30px; height: 30px; border: 1px solid #dcdfe4; border-radius: 6px; background: white; cursor: pointer; }
+.rivto-bento-settings-panel { position: absolute; top: 36px; right: 0; z-index: 20; width: 240px; max-height: 320px; overflow: auto; padding: 16px; background: white; border: 1px solid #dcdfe4; border-radius: 10px; box-shadow: 0 8px 24px #091e4226; }
+.rivto-bento-settings-panel label { display: grid; gap: 6px; margin-top: 12px; overflow-wrap: anywhere; }

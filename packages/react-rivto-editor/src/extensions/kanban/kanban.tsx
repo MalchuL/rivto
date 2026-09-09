@@ -5,7 +5,7 @@
  * The shared block tree and drag extension render and move every card in both modes.
  * @module
  */
-import { createContext, useContext, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { BlockWrapperProps } from "../../blocks";
 import type { EditorBlockInput } from "@chulane/rivto";
@@ -13,9 +13,7 @@ import { MarkdownContent } from "../../blocks/markdown";
 import { useBlockEditing, useReactEditor } from "../../hooks";
 import { focusBlock, type ReactEditorExtension } from "../../managers";
 
-const DIALOG_CLASS = "rivto-kanban-dialog";
-const EXPAND_CLASS = "rivto-kanban-expand";
-const ExpandContext = createContext<{ expanded: boolean; toggle: () => void } | null>(null);
+import { BlockModal, BlockModalButton } from "../../blocks/block-modal";
 
 const COLUMN_HEADER_CLASS = "rivto-kanban-column-header";
 const COLUMN_TITLE_CLASS = "rivto-kanban-column-title";
@@ -118,51 +116,12 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
 }
 
 /**
- * Expands the existing board into the browser's modal top layer. Keeping one
- * mounted subtree preserves editable DOM, selection and drag registrations.
- * @param props - Board subtree supplied by the shared block renderer.
- * @returns Inline board, or the same board in an accessible modal dialog.
+ * Wraps boards with the shared expandable container.
+ * @param props - Current block and its mounted subtree.
+ * @returns Expandable board or the unchanged subtree.
  */
 function KanbanDialog({ block, children }: BlockWrapperProps) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const [expanded, setExpanded] = useState(false);
-  if (block.type !== KANBAN_BLOCK_TYPE) return children;
-  /**
-   * Switches the existing dialog between inline and modal presentation.
-   * @param modal - Whether the board should open in a centered overlay.
-   * @returns Nothing; native dialog APIs manage focus trapping and inert content.
-   */
-  const expand = (modal: boolean) => {
-    const element = dialog.current;
-    if (!element) return;
-    element.close();
-    if (modal) element.showModal();
-    else element.show();
-    setExpanded(modal);
-    element.querySelector<HTMLButtonElement>(`.${EXPAND_CLASS}`)?.focus();
-  };
-  return (
-    <dialog ref={dialog} open className={DIALOG_CLASS} role={expanded ? "dialog" : "group"}
-      aria-label={expanded ? "Expanded Kanban" : "Kanban board"}
-      onCancel={(event) => { event.preventDefault(); expand(false); }}>
-      <ExpandContext.Provider value={{ expanded, toggle: () => expand(!expanded) }}>
-        {children}
-      </ExpandContext.Provider>
-    </dialog>
-  );
-}
-
-/**
- * Places the board's modal toggle in its registered right-hand block slot.
- * @returns A button using the owning board's dialog state.
- */
-function ExpandButton() {
-  const state = useContext(ExpandContext);
-  if (!state) return null;
-  return <button className={EXPAND_CLASS} type="button" onClick={state.toggle}
-    aria-label={state.expanded ? "Collapse Kanban" : "Expand Kanban"} aria-expanded={state.expanded}>
-    {state.expanded ? "↙" : "↗"}
-  </button>;
+  return block.type === KANBAN_BLOCK_TYPE ? <BlockModal label="Kanban">{children}</BlockModal> : children;
 }
 
 /**
@@ -177,7 +136,7 @@ export function kanbanExtension(): ReactEditorExtension {
         reactEditor.surfaces.registerBlockWrapper("block", KanbanDialog),
         reactEditor.surfaces.registerBlockWrapper("edgeless", KanbanDialog),
         reactEditor.surfaces.registerBlockSlot({
-          position: "right", component: ExpandButton, when: ({ block }) => block.type === KANBAN_BLOCK_TYPE,
+          position: "right", component: BlockModalButton, when: ({ block }) => block.type === KANBAN_BLOCK_TYPE,
         }),
         reactEditor.blocks.register({
           definition: { type: KANBAN_BLOCK_TYPE, title: "Kanban" },

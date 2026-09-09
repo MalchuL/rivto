@@ -6,17 +6,17 @@ import type { SelectionCapability } from "../../capabilities";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
+  type KeyboardSelectionTarget,
 } from "../../managers";
 
 /**
  * Applies one semantic indent or outdent binding.
  *
  * `indentExtension` maps configurable shortcuts to this operation through the
- * keyboard registry. The first editor selection item supplies the command entry point; the
- * runtime expands that point to the complete normalized selection range. The
- * DOM event is used only to confirm that the shortcut originated in editable
+ * keyboard registry. Whole-block selections indent or outdent every selected
+ * ID as one group. A text caret indents only the focused block.
+ * The DOM event is used only to confirm that the shortcut originated in editable
  * page content or from a whole-block selection focused on the page root.
- * Selected roots then move as one structural group.
  */
 export function applyIndentShortcut(
   editor: Editor,
@@ -34,8 +34,8 @@ export function applyIndentShortcut(
     const blockSelectionAtRoot = event.target === root && target.item.type === "block";
     if (!editable && !blockSelectionAtRoot) return false;
 
-    if (outdent) editor.blocks.outdentBlock(target.blockId);
-    else editor.blocks.indentBlock(target.blockId);
+    if (outdent) editor.blocks.outdentBlocks(indentTargetIds(target));
+    else editor.blocks.indentBlocks(indentTargetIds(target));
 
     // React may reparent every selected BlockView and cause the browser to emit
     // a transient empty selectionchange. Re-publish the selection captured
@@ -45,4 +45,14 @@ export function applyIndentShortcut(
       selectionManager.restoreDOM(selection);
     });
     return true;
+}
+
+/**
+ * Resolves the block identifiers a Tab or Shift+Tab shortcut should move.
+ *
+ * @param target - First keyboard selection item that qualified the shortcut.
+ * @returns Whole-block IDs, or only the caret block for a text range.
+ */
+function indentTargetIds(target: KeyboardSelectionTarget): string[] {
+  return target.item.type === "block" ? [...target.item.blockIds] : [target.blockId];
 }
