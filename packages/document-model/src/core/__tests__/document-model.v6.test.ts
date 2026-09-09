@@ -219,16 +219,31 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     model.blocks.insertBlock({ id: "left", type: "paragraph" });
     model.blocks.insertBlock({ id: "right", type: "paragraph" });
     const before = model.getSnapshot();
-    expect(() => model.blocks.relocateBlocks([
+    expect(() => model.blocks.moveBlocks([
       { id: "left", targetId: "right", position: "inside" },
       { id: "right", targetId: "left", position: "inside" },
     ])).toThrow(/descendant/);
     expect(model.getSnapshot()).toEqual(before);
-    expect(() => model.blocks.relocateBlocks([
+    expect(() => model.blocks.moveBlocks([
       { id: "left", targetId: "right", position: "inside" },
       { id: "right", targetId: "missing", position: "after" },
     ])).toThrow("Target block missing not found");
     expect(model.getSnapshot()).toEqual(before);
+    doc.destroy();
+  });
+
+  it("applies sequential moves so later placements see earlier parents", () => {
+    const doc = new YjsDoc("sequential-moves");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({ id: "parent", type: "paragraph" });
+    model.blocks.insertBlock({ id: "child", type: "paragraph" });
+    model.blocks.insertBlock({ id: "extra", type: "paragraph" });
+    model.blocks.moveBlocks([
+      { id: "child", targetId: "parent", position: "inside" },
+      { id: "extra", targetId: "child", position: "after" },
+    ]);
+    expect(model.blocks.getChildIds("parent")).toEqual(["child", "extra"]);
+    expect(model.blocks.getRootIds()).toEqual(["parent"]);
     doc.destroy();
   });
 

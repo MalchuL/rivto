@@ -19,7 +19,6 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     expect(editor.document.blocks).not.toHaveProperty("mergeBlocks");
     expect(editor.document.blocks).not.toHaveProperty("indentBlocks");
     expect(editor.document.blocks).not.toHaveProperty("outdentBlocks");
-    expect(editor.document.blocks).not.toHaveProperty("moveBlocks");
     expect(editor.blocks.mergeBlocks(target, source)).toBe(6);
     expect(editor.blocks.getBlock(target)?.content).toBe("Hello world");
     expect(editor.blocks.getChildIds(target)).toEqual(["child"]);

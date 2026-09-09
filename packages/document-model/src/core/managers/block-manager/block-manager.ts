@@ -448,29 +448,46 @@ export class DocumentBlockManager {
     }
 
     /**
-     * Relocates one subtree without choosing editor-specific grouping behavior.
+     * Moves one placed subtree relative to an anchor.
+     *
+     * This is the single-item wrapper around `moveBlocks`. It does not apply
+     * editor grouping, descendant filtering, or outline indent policy.
      *
      * @param id - Placed subtree root to move.
-     * @param targetId - Placement anchor, or null for the current sibling-list start.
+     * @param targetId - Placement anchor, or null to prepend in the current sibling list.
      * @param position - Placement before, after, or appended inside the anchor.
      * @returns No value.
      */
     moveBlock(id: string, targetId: string | null, position: "before" | "after" | "inside" = "after"): void {
-        this.relocateBlocks([{ id, targetId, position }]);
+        this.moveBlocks([{ id, targetId, position }]);
     }
 
     /**
-     * Applies explicit subtree placements after validating the complete sequence.
+     * Moves placed subtrees according to an ordered list of explicit placements.
      *
-     * Editors decide which subtrees to move. Storage checks destination parent
-     * constraints and cycles before any write because CRDT transactions cannot
-     * roll back. Later placements observe the parents established by earlier ones.
+     * Callers choose which roots to move. This method does not drop selected
+     * descendants or keep sibling groups together; those policies belong to the
+     * editor block manager. Only each named root ID is rewritten between sibling
+     * arrays, so descendants stay attached and travel with that root.
      *
-     * @param placements - Ordered subtree moves with explicit placement anchors.
+     * Placement meaning:
+     * - `"before"` / `"after"` insert beside `targetId` in that sibling list.
+     * - `"inside"` appends as the last child of `targetId`.
+     * - `targetId === null` prepends in the source's current sibling list and
+     *   keeps its parent; `position` is unused for that entry.
+     *
+     * A placement that names itself as the anchor is skipped. Remaining entries
+     * are validated as a sequence before any write because CRDT transactions
+     * cannot roll back. Cycle checks and parent-type pipe constraints run against
+     * simulated parents, so later entries observe parents established by earlier
+     * ones. The write then detaches each ID and inserts it at the resolved index.
+     *
+     * @param moves - Ordered subtree placements; later entries see earlier parents.
      * @returns No value.
-     * @throws When a source or anchor is unplaced, a cycle forms, or a pipe rejects placement.
+     * @throws When a source or anchor is unplaced, a cycle would form, or a pipe
+     *   processor rejects the destination parent.
      */
-    relocateBlocks(placements: readonly {
+    moveBlocks(moves: readonly {
         id: string;
         targetId: string | null;
         position: "before" | "after" | "inside";
@@ -478,42 +495,59 @@ export class DocumentBlockManager {
         const parents = new Map<string, string | null>();
         /**
          * Resolves a parent after preceding simulated moves.
+         *
          * @param id - Placed block identifier.
-         * @returns Its simulated or current parent.
+         * @returns Its simulated parent, or the live parent when not yet moved.
          */
         const parentOf = (id: string): string | null => parents.has(id)
             ? parents.get(id)!
             : this.getParentId(id) ?? null;
-        const moves = placements.filter(({ id, targetId }) => id !== targetId);
-        for (const { id, targetId, position } of moves) {
+        // Self-anchors are already in the requested place; keeping them would
+        // still trip the descendant-cycle walk below.
+        const pending = moves.filter(({ id, targetId }) => id !== targetId);
+        for (const { id, targetId, position } of pending) {
             if (!this.findContainer(id)) throw new Error(`Block ${id} not found`);
             if (targetId !== null && !this.findContainer(targetId)) {
                 throw new Error(`Target block ${targetId} not found`);
             }
-            // Even a sibling placement beside a descendant is rejected: its
-            // anchor belongs to the subtree being detached.
+            // Reject any placement whose anchor sits in the moving subtree,
+            // including a sibling insert beside a descendant: detaching the
+            // root would take the anchor with it.
             let ancestor = targetId;
             while (ancestor !== null) {
                 if (ancestor === id) throw new Error(`Cannot move block ${id} relative to its descendant ${targetId}`);
                 ancestor = parentOf(ancestor);
             }
-            const parentId = targetId === null ? parentOf(id)
-                : position === "inside" ? targetId : parentOf(targetId);
-            // Preserve the existing null-anchor contract: root eligibility is
-            // checked even though placement prepends within the current list.
-            this.processBlock(this.storedBlockInput(id), targetId === null || parentId === null
-                ? null : this.requiredType(this.requiredBlock(parentId), parentId));
+            let parentId: string | null;
+            if (targetId === null) parentId = parentOf(id);
+            else if (position === "inside") parentId = targetId;
+            else parentId = parentOf(targetId);
+            // Null-anchor prepends in the current list, but still runs as a
+            // root-eligibility check so constrained children cannot become roots.
+            let parentType: string | null = null;
+            if (targetId !== null && parentId !== null) {
+                parentType = this.requiredType(this.requiredBlock(parentId), parentId);
+            }
+            this.processBlock(this.storedBlockInput(id), parentType);
             parents.set(id, parentId);
         }
         this.transact(() => {
-            for (const { id, targetId, position } of moves) {
+            for (const { id, targetId, position } of pending) {
                 const source = this.findContainer(id)!;
-                const target = targetId === null ? source.array
-                    : position === "inside" ? this.requiredArray(this.requiredBlock(targetId), "children")
-                        : this.findContainer(targetId)!.array;
+                let target: CRDTArray<string>;
+                if (targetId === null) target = source.array;
+                else if (position === "inside") target = this.requiredArray(this.requiredBlock(targetId), "children");
+                else target = this.findContainer(targetId)!.array;
+                // Detach first so same-array sibling indexes are computed on
+                // the remaining IDs, then insert at the resolved slot.
                 source.array.delete(source.index, 1);
-                const index = targetId === null ? 0 : position === "inside" ? target.length
-                    : strings(target).indexOf(targetId) + (position === "after" ? 1 : 0);
+                let index: number;
+                if (targetId === null) index = 0;
+                else if (position === "inside") index = target.length;
+                else {
+                    index = strings(target).indexOf(targetId);
+                    if (position === "after") index += 1;
+                }
                 target.insert(index, id);
             }
         });

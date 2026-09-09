@@ -187,6 +187,10 @@ export class BlockManager {
   /**
    * Moves several sibling subtree roots as one command and undo item.
    *
+   * Selected descendants are dropped and remaining roots must share a parent.
+   * Document storage `moveBlocks` is the lower-level placement batch and does
+   * not apply those grouping rules.
+   *
    * @param ids - Ordered block identifiers to move together.
    * @param targetId - Destination, or null for the sibling-list start.
    * @param position - Placement before, after, or inside the destination.
@@ -397,7 +401,7 @@ export class BlockManager {
     const blocks = this.editor.document.blocks;
     // Validate and transfer children before text changes so a forbidden parent
     // cannot leave a partially merged document when validation throws.
-    blocks.relocateBlocks(source.children.map(({ id }) => ({ id, targetId, position: "inside" })));
+    blocks.moveBlocks(source.children.map(({ id }) => ({ id, targetId, position: "inside" })));
     if (source.content) blocks.insertText(targetId, target.content.length, source.content);
     blocks.removeBlock(sourceId);
     return target.content.length;
@@ -423,7 +427,7 @@ export class BlockManager {
     // Inserting repeatedly after the same anchor reverses order unless the
     // selected roots are processed backwards. Prepending has the same rule.
     const ordered = targetId === null || position === "after" ? [...roots].reverse() : roots;
-    this.editor.document.blocks.relocateBlocks(ordered.map((id) => ({ id, targetId, position })));
+    this.editor.document.blocks.moveBlocks(ordered.map((id) => ({ id, targetId, position })));
   }
 
   /**
@@ -438,7 +442,7 @@ export class BlockManager {
     const index = siblings.indexOf(roots[0]!);
     if (index <= 0) return;
     const targetId = siblings[index - 1]!;
-    this.editor.document.blocks.relocateBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
+    this.editor.document.blocks.moveBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
   }
 
   /**
@@ -459,7 +463,7 @@ export class BlockManager {
     const lastId = moving.at(-1)!;
     const siblings = this.siblingIds(lastId);
     const following = siblings.slice(siblings.indexOf(lastId) + 1);
-    this.editor.document.blocks.relocateBlocks([
+    this.editor.document.blocks.moveBlocks([
       ...[...moving].reverse().map((id) => ({ id, targetId: parentId, position: "after" as const })),
       ...following.map((id) => ({ id, targetId: lastId, position: "inside" as const })),
     ]);
