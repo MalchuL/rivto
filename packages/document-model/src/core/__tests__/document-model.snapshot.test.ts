@@ -71,6 +71,48 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
     void doc.destroy();
   });
 
+  it("assigns omitted IDs from each manager's generateId independently", () => {
+    const doc = new YjsDoc("custom-ids");
+    let blocks = 0;
+    let elements = 0;
+    const model = new DocumentModelImpl(doc);
+    model.blocks.generateId = () => `block-${++blocks}`;
+    model.elements.generateId = () => `element-${++elements}`;
+
+    expect(model.blocks.insertBlock({ type: "paragraph", content: "Root" })).toBe("block-1");
+    expect(model.blocks.insertBlock({
+      type: "paragraph",
+      children: [{ type: "paragraph", content: "Nested" }],
+    })).toBe("block-2");
+    expect(model.blocks.getBlock("block-2")?.children[0]?.id).toBe("block-3");
+    expect(model.elements.insertElement({
+      type: "note",
+      frame: { x: 0, y: 0, width: 10, height: 10 },
+      zIndex: 0,
+    })).toBe("element-1");
+    expect(model.blocks.insertBlock({ id: "explicit", type: "paragraph" })).toBe("explicit");
+    expect(blocks).toBe(3);
+    expect(elements).toBe(1);
+    void doc.destroy();
+  });
+
+  it("rejects empty identities produced by a manager generateId", () => {
+    const doc = new YjsDoc("empty-generated-ids");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.generateId = () => "  ";
+    model.elements.generateId = () => "  ";
+
+    expect(() => model.blocks.insertBlock({ type: "paragraph" }))
+      .toThrow("Block ID is required");
+    expect(() => model.elements.insertElement({
+      type: "note",
+      frame: { x: 0, y: 0, width: 10, height: 10 },
+      zIndex: 0,
+    })).toThrow("Element ID is required");
+    expect(model.blocks.getRootIds()).toEqual([]);
+    void doc.destroy();
+  });
+
   it("requires a placed target for move inside", () => {
     const doc = new YjsDoc("placed-target");
     const model = new DocumentModelImpl(doc);

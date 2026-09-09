@@ -6,6 +6,7 @@ import type {
   ElementInput,
   ElementPatch,
   ElementUpdate,
+  GenerateId,
 } from "../../types";
 import type { ElementFrameStorage, ElementStorage, IDElement, IDProp } from "../../types/storage";
 import { assignMap, clone, isCRDTMap, requireNonemptyId } from "../../utils";
@@ -37,6 +38,13 @@ export class DocumentElementManager {
   readonly undoScopes: readonly [CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>];
   /** Priority-ordered processors applied to portable elements before writes. */
   readonly pipe = new Pipe<ElementInput, ElementPipeContext>();
+  /**
+   * Creates an element identity when an insert omits `id`.
+   *
+   * Replace this per manager; it is independent of block identity generation.
+   * The default uses `crypto.randomUUID`.
+   */
+  generateId: GenerateId = () => crypto.randomUUID();
   private readonly storage: CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>;
 
   /**
@@ -76,11 +84,11 @@ export class DocumentElementManager {
    * Inserts one element after pipe processing.
    *
    * @param input - Complete type, geometry, layer, and optional props.
-   * @returns Stable element ID.
+   * @returns Stable element ID, either supplied or from `generateId`.
    * @throws {Error} When the ID exists, the type is empty, or a processor rejects the record.
    */
   insertElement(input: ElementInput): string {
-    const id = input.id === undefined ? crypto.randomUUID() : requireNonemptyId(input.id, "Element");
+    const id = requireNonemptyId(input.id ?? this.generateId(), "Element");
     if (this.storage.has(id)) throw new Error(`Element ${id} already exists`);
     const validated = this.processElement({ ...input, id });
     this.document.transact(() => {

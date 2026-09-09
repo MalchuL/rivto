@@ -96,6 +96,9 @@ export interface BlockUpdate {
   patch: BlockPatch;
 }
 
+/** Factory that returns a new stable entity identity. */
+export type GenerateId = () => string;
+
 /** Lossless, versioned document value used for persistence. */
 export interface Snapshot {
   version: 6;

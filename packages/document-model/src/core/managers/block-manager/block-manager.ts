@@ -17,6 +17,7 @@ import type {
     BlockPatch,
     BlockUpdate,
     DocumentModel,
+    GenerateId,
 } from "../../types";
 import type {
     BlockListPropsStorage,
@@ -69,6 +70,13 @@ export class DocumentBlockManager {
 
     /** Priority-ordered processors applied to portable blocks before writes. */
     readonly pipe = new Pipe<BlockInput, BlockPipeContext>();
+    /**
+     * Creates a block identity when an insert omits `id`.
+     *
+     * Replace this per manager; it is independent of element identity generation.
+     * The default uses `crypto.randomUUID`.
+     */
+    generateId: GenerateId = () => crypto.randomUUID();
     /** Cached block paths for each block. */
     private readonly blockPaths = new Map<IDBlock, readonly number[]>();
     /** Root blocks. */
@@ -180,7 +188,7 @@ export class DocumentBlockManager {
      *
      * @param block - Initial portable block data including its required native type.
      * @param afterId - Sibling to insert after block id, `null` for first, or omitted for last.
-     * @returns Stable ID of the inserted block.
+     * @returns Stable ID of the inserted block, either supplied or from `generateId`.
      * @throws If the ID already exists or the requested sibling is missing.
      */
     insertBlock(block: BlockInput, afterId?: string | null): string {
@@ -581,7 +589,7 @@ export class DocumentBlockManager {
      * @param container - Root or child array that receives the block ID.
      * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
      * @param parentType - Native type of the insertion parent, or `null` for roots.
-     * @returns Stable ID assigned to the block.
+     * @returns Stable ID assigned to the block, either supplied or from `generateId`.
      * @throws If the ID already exists or the requested sibling is missing.
      */
     private insertInto(
@@ -593,7 +601,7 @@ export class DocumentBlockManager {
         if (!block.type) throw new Error("Block type is required");
         const validated = this.processBlock(block, parentType);
         const listProps = validateBlockListProps(validated.listProps ?? {});
-        const id = validated.id === undefined ? crypto.randomUUID() : requireNonemptyId(validated.id, "Block");
+        const id = requireNonemptyId(validated.id ?? this.generateId(), "Block");
         if (this.storage.has(id)) throw new Error(`Block ${id} already exists`);
         const index = this.placementIndex(container, afterId);
         const model = this.document.crdt.instantiator.createMap<BlockStorage>();
