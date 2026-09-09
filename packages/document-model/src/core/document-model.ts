@@ -1,4 +1,4 @@
-import { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../crdt-doc";
+import { CRDTDoc, CRDTUndoScope, Unsubscribe } from "@chulane/crdt-doc";
 import {
   DocumentBlockManager,
   DocumentElementManager,

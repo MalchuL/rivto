@@ -3,7 +3,7 @@
  * Rejected imports and placements must leave the persisted document unchanged.
  * Editor-specific merge behavior is covered by the public block manager tests.
  */
-import { YjsDoc } from "../../../crdt-doc";
+import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl } from "../document-model";
 import type { Block } from "../types";
 

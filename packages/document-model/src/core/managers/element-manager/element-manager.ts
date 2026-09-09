@@ -1,4 +1,4 @@
-import type { CRDTType, CRDTMap } from "../../../../crdt-doc";
+import type { CRDTType, CRDTMap } from "@chulane/crdt-doc";
 import type {
   DocumentElement,
   DocumentModel,
@@ -9,7 +9,7 @@ import type {
 } from "../../types";
 import type { ElementFrameStorage, ElementStorage, IDElement, IDProp } from "../../types/storage";
 import { assignMap, clone, isCRDTMap, requireNonemptyId } from "../../utils";
-import { Pipe } from "../../../../../utils/pipe";
+import { Pipe } from "../../../utils/pipe";
 import {
   ELEMENT_FRAME_PROCESSOR,
   ELEMENT_PROPS_PROCESSOR,

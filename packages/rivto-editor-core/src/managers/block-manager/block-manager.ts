@@ -12,7 +12,7 @@ import type {
   BlockInput,
   BlockPatch,
   BlockUpdate,
-} from "../../store/document-model";
+} from "@chulane/document-model";
 import type {
   EditorBlock,
   EditorBlockInput,

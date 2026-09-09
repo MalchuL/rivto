@@ -904,7 +904,7 @@ export class EdgelessVisualController {
 
   private validateElement(value: unknown): EditorElement {
     if (!isRecord(value)) throw new Error("Invalid edgeless clipboard element");
-    validateElementCollection([value as EditorElement]);
+    validateElementCollection([value as unknown as EditorElement]);
     return copy(value) as unknown as EditorElement;
   }
 }

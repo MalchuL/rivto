@@ -20,6 +20,14 @@ export default defineConfig({
         find: /^@chulane\/rivto$/,
         replacement: fileURLToPath(new URL("../packages/rivto-editor-core/src/index.ts", import.meta.url)),
       },
+      {
+        find: /^@chulane\/crdt-doc$/,
+        replacement: fileURLToPath(new URL("../packages/crdt-doc/src/index.ts", import.meta.url)),
+      },
+      {
+        find: /^@chulane\/document-model$/,
+        replacement: fileURLToPath(new URL("../packages/document-model/src/index.ts", import.meta.url)),
+      },
     ],
     // Source imports originate in two workspace packages. Force both to share
     // the demo's React runtime rather than following package-local symlinks.

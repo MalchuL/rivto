@@ -1,4 +1,4 @@
-import type { CRDTDoc, CRDTUndoScope, Unsubscribe } from "../../../crdt-doc";
+import type { CRDTDoc, CRDTUndoScope, Unsubscribe } from "@chulane/crdt-doc";
 import type {
   DocumentBlockManager,
   DocumentElementManager,

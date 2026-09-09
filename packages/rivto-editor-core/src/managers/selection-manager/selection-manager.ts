@@ -8,7 +8,7 @@
  */
 import type { EditorPosition, EditorSelection, EditorSelectionItem } from "../../editor/types";
 import type { EditorRuntime } from "../../editor/rivto-editor";
-import type { Block } from "../../store/document-model";
+import type { Block } from "@chulane/document-model";
 import { Listeners } from "../../utils";
 import type { NormalizedSelection } from "./types";
 import { isStructuralSelection } from "./utils";

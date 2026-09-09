@@ -4,8 +4,7 @@
  * public managers so document tests do not depend on outline commands.
  */
 import * as Y from "yjs";
-import { YjsDoc } from "../../../crdt-doc";
-import { UndoManager } from "../../../../managers/undo-manager";
+import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl } from "../document-model";
 import type { BlockInput, BlockPatch } from "../types";
 
@@ -187,7 +186,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "parent", type: "paragraph" });
     model.blocks.insertBlock({ id: "child", type: "paragraph" }, "parent");
-    const history = new UndoManager(model);
+    const history = model.crdt.createUndoManager(model.undoScopes, [model.origin]);
     history.clear();
 
     expect(model.blocks.getParentId("child")).toBeNull();

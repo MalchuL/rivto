@@ -1,5 +1,5 @@
 import type { EditorPosition } from "../../editor/types";
-import type { Block } from "../../store/document-model";
+import type { Block } from "@chulane/document-model";
 
 /** A directed editor selection normalized into document order. */
 export interface NormalizedSelection {

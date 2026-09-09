@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { z } from "zod";
-import { YjsDoc } from "../../store/crdt-doc";
+import { YjsDoc } from "@chulane/crdt-doc";
 import { createTestEditor as createRivtoEditor } from "../test-utils";
 
 describe("EditorRuntime block commands", () => {

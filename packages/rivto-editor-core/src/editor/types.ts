@@ -1,6 +1,6 @@
 import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, ElementManager, RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
-import type { CRDTDoc } from "../store/crdt-doc";
-import type { DocumentModel } from "../store/document-model";
+import type { CRDTDoc } from "@chulane/crdt-doc";
+import type { DocumentModel } from "@chulane/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
 /** Local presentation strategy; never persisted in collaborative state. */

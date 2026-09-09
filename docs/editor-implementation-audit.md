@@ -49,7 +49,7 @@ The tree is normalized once in `DocumentModelImpl` construction, not after remot
 
 ### 6. `YjsDoc.fromJSON` manipulates Yjs root internals instead of collaborative content
 
-`fromJSON` deletes entries directly from `doc.share`, then recreates roots ([yjs-doc.ts:196](../packages/rivto-editor-core/src/store/crdt-doc/yjs-doc/yjs-doc.ts#L196)). Deleting the JavaScript root registry is not a CRDT deletion that peers observe, root-type replacement is unsafe, and conversion can throw after local clearing. Remove generic in-place whole-doc replacement: validate into a fresh `Y.Doc` and swap at a lifecycle boundary, or clear the contents of known typed roots after preflight.
+`fromJSON` deletes entries directly from `doc.share`, then recreates roots ([yjs-doc.ts:196](../packages/crdt-doc/src/yjs-doc/yjs-doc.ts#L196)). Deleting the JavaScript root registry is not a CRDT deletion that peers observe, root-type replacement is unsafe, and conversion can throw after local clearing. Remove generic in-place whole-doc replacement: validate into a fresh `Y.Doc` and swap at a lifecycle boundary, or clear the contents of known typed roots after preflight.
 
 ### 7. Collapsed-caret copy/cut claims the clipboard with an empty structured block
 
@@ -107,7 +107,7 @@ Core inserts via `document.blocks.insertBlock` ([clipboard-manager.ts:255](../pa
 
 ### 20. “Portable” property typing and cloning accept values they corrupt
 
-`BasicType` includes arbitrary `object` ([basic-types.ts:12](../packages/rivto-editor-core/src/store/crdt-doc/types/basic-types.ts#L12)), while clone turns every object into an enumerable record ([clone.ts:7](../packages/rivto-editor-core/src/store/document-model/core/utils/clone.ts#L7)). Dates, Maps, typed arrays, class instances, and an own `__proto__` key do not round-trip safely. Define recursive primitives/arrays/plain records, validate all props/plugin data/link meta/element props with one utility, then clone safely.
+`BasicType` includes arbitrary `object` ([basic-types.ts:12](../packages/crdt-doc/src/types/basic-types.ts#L12)), while clone turns every object into an enumerable record ([clone.ts:7](../packages/rivto-editor-core/src/store/document-model/core/utils/clone.ts#L7)). Dates, Maps, typed arrays, class instances, and an own `__proto__` key do not round-trip safely. Define recursive primitives/arrays/plain records, validate all props/plugin data/link meta/element props with one utility, then clone safely.
 
 ### 21. Link ID and malformed-record handling is inconsistent
 
@@ -119,7 +119,7 @@ Normalization merges heterogeneous selection items by document order, but copy u
 
 ### 23. The CRDT event contract advertises unsupported events
 
-`CRDTDoc.on` advertises `update | sync | snapshot` ([doc.ts:68](../packages/rivto-editor-core/src/store/crdt-doc/types/doc.ts#L68)), while `YjsDoc.on` only forwards `update | sync` to `Y.Doc` ([yjs-doc.ts:125](../packages/rivto-editor-core/src/store/crdt-doc/yjs-doc/yjs-doc.ts#L125)); snapshot is never emitted and provider sync does not belong to `Y.Doc`. Narrow the interface to real document events or implement provider-owned status aggregation separately.
+`CRDTDoc.on` advertises `update | sync | snapshot` ([doc.ts:68](../packages/crdt-doc/src/types/doc.ts#L68)), while `YjsDoc.on` only forwards `update | sync` to `Y.Doc` ([yjs-doc.ts:125](../packages/crdt-doc/src/yjs-doc/yjs-doc.ts#L125)); snapshot is never emitted and provider sync does not belong to `Y.Doc`. Narrow the interface to real document events or implement provider-owned status aggregation separately.
 
 ### 24. Move/merge can attach visible content under an unreachable orphan
 
@@ -143,7 +143,7 @@ Element updates call `assignMap(..., false)` ([element-manager.ts:68](../package
 
 ### 29. Provider identity prevents two same-kind providers on one document
 
-Broadcast and WebRTC provider IDs are hardcoded by kind ([broadcast.ts:25](../packages/rivto-editor-core/src/store/crdt-doc/yjs-doc/providers/broadcast.ts#L25); [webrtc.ts:6](../packages/rivto-editor-core/src/store/crdt-doc/yjs-doc/providers/webrtc.ts#L6)), while the document rejects duplicate provider IDs ([yjs-doc.ts:32](../packages/rivto-editor-core/src/store/crdt-doc/yjs-doc/yjs-doc.ts#L32)). Use room/instance-qualified IDs or explicitly document singleton semantics.
+Broadcast and WebRTC provider IDs are hardcoded by kind ([broadcast.ts:25](../packages/crdt-doc/src/yjs-doc/providers/broadcast.ts#L25); [webrtc.ts:6](../packages/crdt-doc/src/yjs-doc/providers/webrtc.ts#L6)), while the document rejects duplicate provider IDs ([yjs-doc.ts:32](../packages/crdt-doc/src/yjs-doc/yjs-doc.ts#L32)). Use room/instance-qualified IDs or explicitly document singleton semantics.
 
 ### 30. `useKeyboardEvent` freezes most binding metadata after mount
 

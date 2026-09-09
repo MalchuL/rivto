@@ -1,4 +1,4 @@
-import type { CRDTArray } from "../../../../crdt-doc";
+import type { CRDTArray } from "@chulane/crdt-doc";
 import type { BlockInput, BlockListProps } from "../../types";
 import type { BlockPipe } from "./block-pipe";
 import { assertPortableRecord, assertPortableValue, requireNonemptyId } from "../../utils/portable";

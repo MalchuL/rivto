@@ -1,5 +1,4 @@
-import { YjsDoc } from "../../../crdt-doc";
-import { UndoManager } from "../../../../managers/undo-manager";
+import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl } from "../document-model";
 import * as Y from "yjs";
 
@@ -33,7 +32,7 @@ describe("DocumentPluginDataManager", () => {
 
   test("participates in document undo history", () => {
     const document = new DocumentModelImpl(new YjsDoc("plugin-data-undo"));
-    const history = new UndoManager(document);
+    const history = document.crdt.createUndoManager(document.undoScopes, [document.origin]);
     document.transact(() => document.pluginData.set("test", { value: 1 }));
     history.stopCapturing();
     expect(document.pluginData.get("test")).toEqual({ value: 1 });

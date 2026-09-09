@@ -3,7 +3,7 @@ import type {
   BasicType,
   CRDTMap,
   CRDTUndoScope,
-} from "../../../../crdt-doc";
+} from "@chulane/crdt-doc";
 import type { DocumentModel } from "../../types";
 import { assignMap, assertPortableRecord, assertPortableValue, clone, isCRDTMap } from "../../utils";
 

@@ -1,5 +1,5 @@
 import { createTestEditor as createRivtoEditor } from "../test-utils";
-import { YjsDoc } from "../../store/crdt-doc";
+import { YjsDoc } from "@chulane/crdt-doc";
 
 describe("EditorRuntime methods", () => {
   it("supports a complete lifecycle without blocks", () => {

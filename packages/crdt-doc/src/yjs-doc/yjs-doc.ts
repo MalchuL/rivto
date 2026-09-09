@@ -1,7 +1,7 @@
 import { CRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, ProviderCleanup, CRDTInstantiator, WrapBasicTypeToCRDTOptions } from "../types";
 import * as utils from "./structures/utils";
 import * as Y from 'yjs';
-import { Storage } from "../../../utils";
+import { Storage } from "../utils";
 import { YjsInstantiator } from "./utils/instantiator";
 
 export class YjsDoc implements CRDTDoc {

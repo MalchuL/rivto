@@ -1,5 +1,5 @@
-import type { Pipe, PipeProcessor } from "../../../../../utils/pipe";
-import { PIPE_INTERNAL_PRIORITY_MIN } from "../../../../../utils/pipe";
+import type { Pipe, PipeProcessor } from "../../../utils/pipe";
+import { PIPE_INTERNAL_PRIORITY_MIN } from "../../../utils/pipe";
 import type { ElementInput } from "../../types";
 import {
   normalizeElementFrame,
@@ -20,7 +20,7 @@ export const ELEMENT_PROPS_PROCESSOR_ID = "rivto.element.props";
  * Element processors currently receive no extra placement data. The object
  * slot exists so later steps can share host context without changing the pipe type.
  */
-export interface ElementPipeContext {}
+export type ElementPipeContext = Record<string, never>;
 
 /** One element validation or transform step registered on an element pipe. */
 export type ElementProcessor = PipeProcessor<ElementInput, ElementPipeContext>;

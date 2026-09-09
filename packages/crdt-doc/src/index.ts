@@ -1,3 +1,9 @@
+/**
+ * Adapter-neutral CRDT document contracts and the Yjs implementation.
+ *
+ * Native `yjs` imports stay inside `yjs-doc/`. Consumers should use `CRDTDoc`,
+ * `CRDTMap`, `CRDTArray`, and `CRDTText` unless they need a Yjs-specific API.
+ */
 export {
   YjsDoc,
   BroadcastChannelProvider,

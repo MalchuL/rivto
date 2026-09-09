@@ -1,5 +1,5 @@
-import type { CRDTUndoManager } from "../../store/crdt-doc";
-import type { DocumentModel } from "../../store/document-model";
+import type { CRDTUndoManager } from "@chulane/crdt-doc";
+import type { DocumentModel } from "@chulane/document-model";
 
 /**
  * Owns local undo and redo history for one document model.

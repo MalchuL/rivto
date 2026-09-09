@@ -3,7 +3,7 @@ import type {
   CRDTArray,
   CRDTMap,
   CRDTText,
-} from "../../../crdt-doc";
+} from "@chulane/crdt-doc";
 import type { BlockListProps, ElementFrame } from "./document";
 
 /** Collaborative geometry stored inside each first-class element record. */

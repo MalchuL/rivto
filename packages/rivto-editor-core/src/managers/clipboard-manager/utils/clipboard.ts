@@ -4,7 +4,7 @@ import {
   validateElementCollection,
   type Block,
   type BlockInput,
-} from "../../../store/document-model";
+} from "@chulane/document-model";
 import type { ClipboardBundle } from "../types";
 
 /** Clipboard schema version accepted by structured paste. */

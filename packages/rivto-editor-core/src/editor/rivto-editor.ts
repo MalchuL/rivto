@@ -1,5 +1,5 @@
 import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
-import { YjsDoc } from "../store/crdt-doc";
+import { YjsDoc } from "@chulane/crdt-doc";
 import {
   DocumentModelImpl,
   createBlockParentConstraintProcessor,
@@ -8,7 +8,7 @@ import {
   type DocumentModel,
   type Snapshot,
   type SnapshotUpdate,
-} from "../store/document-model";
+} from "@chulane/document-model";
 import {
   RIVTO_CLIPBOARD_MIME,
   type ClipboardBundle,

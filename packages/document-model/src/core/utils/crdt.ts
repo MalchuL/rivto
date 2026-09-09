@@ -1,4 +1,4 @@
-import type { CRDTType, CRDTArray, CRDTMap, CRDTText } from "../../../crdt-doc";
+import type { CRDTType, CRDTArray, CRDTMap, CRDTText } from "@chulane/crdt-doc";
 import { clone } from "./clone";
 
 /**

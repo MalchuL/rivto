@@ -73,7 +73,7 @@ React EditorView
   -> Yjs adapter
 ```
 
-- Only `store/crdt-doc/yjs-doc/**` may import `yjs` or expose Yjs-specific
+- Only `packages/crdt-doc/src/yjs-doc/**` may import `yjs` or expose Yjs-specific
   classes. Editor, document, renderer, manager, plugin, and block code must use
   `CRDTDoc`, `CRDTMap`, `CRDTArray`, and `CRDTText` interfaces exclusively.
 - `DocumentModelImpl` is the single source of truth for collaborative blocks,

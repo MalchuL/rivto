@@ -9,7 +9,7 @@ import {
     CRDTArray,
     CRDTMap,
     CRDTText,
-} from "../../../../crdt-doc";
+} from "@chulane/crdt-doc";
 import type {
     Block,
     BlockInput,
@@ -36,7 +36,7 @@ import {
     isCRDTText,
     requireNonemptyId,
 } from "../../utils";
-import { Pipe } from "../../../../../utils/pipe";
+import { Pipe } from "../../../utils/pipe";
 import type { BlockPipeContext } from "./block-pipe";
 import {
     contentFrom,

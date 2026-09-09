@@ -1,4 +1,4 @@
-import type { Block, DocumentElement } from "../../store/document-model";
+import type { Block, DocumentElement } from "@chulane/document-model";
 
 /**
  * Lossless Rivto clipboard representation.

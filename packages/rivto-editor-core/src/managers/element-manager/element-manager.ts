@@ -4,7 +4,7 @@ import type {
   EditorElementPatch,
   EditorElementUpdate,
 } from "../../editor/model";
-import type { DocumentElement, ElementInput, ElementPatch, ElementUpdate } from "../../store/document-model";
+import type { DocumentElement, ElementInput, ElementPatch, ElementUpdate } from "@chulane/document-model";
 import type { RivtoEditorApi } from "../../editor/types";
 import type { CommandHandler, RegisteredCommand } from "../command-registry";
 import { commandPayload, commandString } from "../utils";

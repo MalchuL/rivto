@@ -3,7 +3,7 @@ import type {
   BlockInput,
   BlockPatch,
   BlockUpdate,
-} from "../store/document-model";
+} from "@chulane/document-model";
 
 /** Collaborative canvas geometry as seen by editor features. */
 export interface EditorElementFrame {

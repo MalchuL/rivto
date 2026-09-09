@@ -1,11 +1,11 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "rootDir": "src",
+    "rootDir": "../..",
     "baseUrl": ".",
     "paths": {
-      "@/store/crdt-doc": ["./src/store/crdt-doc"],
-      "@/store/document-model": ["./src/store/document-model"],
+      "@chulane/crdt-doc": ["../crdt-doc/src/index.ts"],
+      "@chulane/document-model": ["../document-model/src/index.ts"],
       "@/utils": ["./src/utils"]
     }
   },

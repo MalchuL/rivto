@@ -1,5 +1,5 @@
-import type { Pipe, PipeProcessor } from "../../../../../utils/pipe";
-import { PIPE_INTERNAL_PRIORITY_MIN } from "../../../../../utils/pipe";
+import type { Pipe, PipeProcessor } from "../../../utils/pipe";
+import { PIPE_INTERNAL_PRIORITY_MIN } from "../../../utils/pipe";
 import type { BlockInput } from "../../types";
 
 /** Stable id for the built-in parent/child placement processor. */

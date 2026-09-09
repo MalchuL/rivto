@@ -4,7 +4,7 @@
  * @module
  */
 import { createTestEditor as createRivtoEditor } from "../../editor/test-utils";
-import type { Block } from "../../store/document-model/core/types";
+import type { Block } from "@chulane/document-model";
 
 const complete = (
   id: string,
