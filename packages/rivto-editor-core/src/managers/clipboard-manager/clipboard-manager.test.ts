@@ -1,6 +1,60 @@
+/** Clipboard operations retain hierarchy and handle text ranges explicitly. */
 import { createTestEditor as createRivtoEditor } from "../../editor/test-utils";
 
 describe("core ClipboardManager", () => {
+  it.each(["block", "edgeless"] as const)("replaces an explicit reverse text range in %s mode atomically", (mode) => {
+    const editor = createRivtoEditor({ mode });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "BeforeAfter",
+      children: [{ type: "paragraph", content: "Keep child" }] });
+    const textTarget = { type: "text" as const, anchor: { blockId: id, offset: 6 }, head: { blockId: id, offset: 0 } };
+    const bundle = editor.clipboard.copyText(textTarget)!;
+    expect(bundle.blocks[0]?.children).toEqual([]);
+    expect(bundle.blocks[0]?.content).toBe("Before");
+    const updates = jest.fn();
+    editor.document.subscribe(updates);
+    const caret = editor.clipboard.paste({ textTarget, text: "One\nTwo", defaultBlockType: "paragraph" });
+    expect(updates).toHaveBeenCalledTimes(1);
+    const roots = editor.blocks.getBlocks();
+    expect(roots.map((block) => block.content)).toEqual(["One", "TwoAfter"]);
+    expect(roots[0]?.children[0]?.content).toBe("Keep child");
+    expect(caret).toEqual({ blockId: roots[1]!.id, offset: 3 });
+    expect(editor.selection.get()).toEqual([]);
+    editor.undo();
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "BeforeAfter", children: [{ content: "Keep child" }] }]);
+    editor.destroy();
+  });
+
+  it("rejects cross-block and invalid text inputs before mutating", () => {
+    const editor = createRivtoEditor();
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, first);
+    const before = editor.dump();
+    for (const head of [{ blockId: last, offset: 1 }, { blockId: first, offset: 99 }, { blockId: first, offset: -1 }]) {
+      const textTarget = { type: "text" as const, anchor: { blockId: first, offset: 0 }, head };
+      expect(() => editor.clipboard.copyText(textTarget)).toThrow("one existing block");
+      expect(() => editor.clipboard.paste({ textTarget, text: "Replacement", defaultBlockType: "paragraph" })).toThrow("one existing block");
+    }
+    expect(editor.dump()).toEqual(before);
+    editor.destroy();
+  });
+
+  it("imports older partial-text bundles with multiple blocks into an explicit target", () => {
+    const editor = createRivtoEditor();
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "LeftRight" });
+    const bundle = { version: 4 as const, startsWithText: true, blocks: ["First", "Middle", "Last"].map((content) => ({
+      id: content, type: "paragraph", content, props: {}, listProps: {}, pluginData: {}, children: [],
+    })) };
+    const caret = editor.clipboard.paste({ bundle, textTarget: {
+      type: "text", anchor: { blockId: id, offset: 4 }, head: { blockId: id, offset: 4 },
+    } });
+    const blocks = editor.blocks.getBlocks();
+    expect(blocks.map((block) => block.content)).toEqual(["LeftFirst", "Middle", "LastRight"]);
+    expect(caret).toEqual({ blockId: blocks[2]!.id, offset: 4 });
+    editor.undo();
+    expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "LeftRight" }]);
+    editor.destroy();
+  });
+
   it("copies and atomically cuts the current structured selection", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Selected" });
@@ -59,15 +113,16 @@ describe("core ClipboardManager", () => {
     const editor = createRivtoEditor();
     editor.blocksRegistry.defineBlock({ type: "test.raw" });
     const id = editor.blocks.insertBlock({ type: "test.raw", content: "Selected text" });
-    editor.selection.set([{
-      type: "text",
+    const textTarget = {
+      type: "text" as const,
       anchor: { blockId: id, offset: 0 },
       head: { blockId: id, offset: 8 },
-    }]);
+    };
 
-    const payload = editor.clipboard.copy()!;
+    const payload = editor.clipboard.copyText(textTarget)!;
 
     expect(payload.blocks[0]?.content).toBe("Selected");
+    expect(editor.selection.get()).toEqual([]);
     editor.destroy();
   });
 
@@ -120,25 +175,23 @@ describe("core ClipboardManager", () => {
 
     const target = createRivtoEditor();
     const targetId = target.blocks.insertBlock({ type: "paragraph", content: "" });
-    target.selection.set([{
-      type: "text",
+    const textTarget = {
+      type: "text" as const,
       anchor: { blockId: targetId, offset: 0 },
       head: { blockId: targetId, offset: 0 },
-    }]);
+    };
     target.clipboard.paste({
+      textTarget,
       structured: JSON.stringify(payload),
       text: "plain",
     });
     expect(target.blocks.getBlocks().map(({ content }) => content)).toEqual(["", "Structured"]);
 
-    target.selection.set([{
-      type: "text",
-      anchor: { blockId: targetId, offset: 0 },
-      head: { blockId: targetId, offset: 0 },
-    }]);
-    target.clipboard.paste({ text: "plain", defaultBlockType: "paragraph" });
+
+    target.clipboard.paste({ textTarget, text: "plain", defaultBlockType: "paragraph" });
     expect(target.blocks.getBlock(targetId)?.content).toBe("plain");
     target.clipboard.paste({
+      textTarget: { type: "text", anchor: { blockId: targetId, offset: 5 }, head: { blockId: targetId, offset: 5 } },
       structured: JSON.stringify({ ...payload, version: 1 }),
       text: "fallback",
       defaultBlockType: "paragraph",
@@ -262,13 +315,14 @@ describe("core ClipboardManager", () => {
   it("preserves multiline plain text inside one block when requested", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Before " });
-    editor.selection.set([{
-      type: "text",
+    const textTarget = {
+      type: "text" as const,
       anchor: { blockId: id, offset: 7 },
       head: { blockId: id, offset: 7 },
-    }]);
+    };
 
     editor.clipboard.paste({
+      textTarget,
       text: "first\n    second",
       preserveNewlines: true,
       defaultBlockType: "paragraph",
@@ -282,37 +336,15 @@ describe("core ClipboardManager", () => {
   it("does not claim the clipboard for a collapsed caret", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Hello" });
-    editor.selection.set([{
-      type: "text",
+    const textTarget = {
+      type: "text" as const,
       anchor: { blockId: id, offset: 2 },
       head: { blockId: id, offset: 2 },
-    }]);
+    };
 
-    expect(editor.clipboard.copy()).toBeUndefined();
+    expect(editor.clipboard.copyText(textTarget)).toBeUndefined();
     expect(editor.clipboard.cut()).toBeUndefined();
     expect(editor.blocks.getBlock(id)?.content).toBe("Hello");
-    editor.destroy();
-  });
-
-  it("derives startsWithText from the earliest document-order boundary", () => {
-    const editor = createRivtoEditor();
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first);
-    editor.selection.set([
-      {
-        type: "block",
-        blockIds: [second],
-        anchorBlockId: second,
-        focusBlockId: second,
-      },
-      {
-        type: "text",
-        anchor: { blockId: first, offset: 0 },
-        head: { blockId: first, offset: 5 },
-      },
-    ]);
-
-    expect(editor.clipboard.copy()?.startsWithText).toBe(true);
     editor.destroy();
   });
 

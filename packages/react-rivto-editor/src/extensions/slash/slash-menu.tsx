@@ -1,3 +1,6 @@
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
 import type { SlashCommand } from "../../managers/slash";
 import {
   BLOCK_CONTENT_SELECTOR,
@@ -223,7 +226,7 @@ export function SlashMenu() {
       editor.blocks.updateBlock(current.blockId, {
         content: block.content.slice(0, current.slashOffset) + block.content.slice(caret),
       });
-      editor.selection.set([{
+      reactEditor.selection.set([{
         type: "text",
         anchor: { blockId: current.blockId, offset: current.slashOffset },
         head: { blockId: current.blockId, offset: current.slashOffset },

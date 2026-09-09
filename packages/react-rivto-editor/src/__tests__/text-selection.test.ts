@@ -25,19 +25,10 @@ describe("cross-block selection items", () => {
       blocks,
       { blockId: "first", offset: 4 },
       { blockId: "fourth", offset: 8 },
-    )).toEqual([
-      {
-        type: "text",
-        anchor: { blockId: "first", offset: 4 },
-        head: { blockId: "fourth", offset: 8 },
-      },
-      {
-        type: "block",
-        blockIds: ["second", "third"],
-        anchorBlockId: "second",
-        focusBlockId: "third",
-      },
-    ]);
+    )).toEqual([{
+      type: "block", blockIds: ["first", "second", "third", "fourth"],
+      anchorBlockId: "first", focusBlockId: "fourth",
+    }]);
   });
 
   it("preserves bottom-up direction while keeping block IDs ordered", () => {
@@ -45,30 +36,20 @@ describe("cross-block selection items", () => {
       blocks,
       { blockId: "fourth", offset: 8 },
       { blockId: "first", offset: 4 },
-    )).toEqual([
-      {
-        type: "text",
-        anchor: { blockId: "fourth", offset: 8 },
-        head: { blockId: "first", offset: 4 },
-      },
-      {
-        type: "block",
-        blockIds: ["second", "third"],
-        anchorBlockId: "third",
-        focusBlockId: "second",
-      },
-    ]);
+    )).toEqual([{
+      type: "block", blockIds: ["first", "second", "third", "fourth"],
+      anchorBlockId: "fourth", focusBlockId: "first",
+    }]);
   });
 
-  it("uses only text selection inside one block or adjacent blocks", () => {
+  it("selects adjacent blocks completely", () => {
     expect(createSelectionItems(
       blocks,
       { blockId: "second", offset: 2 },
       { blockId: "third", offset: 3 },
     )).toEqual([{
-      type: "text",
-      anchor: { blockId: "second", offset: 2 },
-      head: { blockId: "third", offset: 3 },
+      type: "block", blockIds: ["second", "third"],
+      anchorBlockId: "second", focusBlockId: "third",
     }]);
   });
 });

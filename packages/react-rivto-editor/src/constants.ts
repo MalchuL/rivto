@@ -34,12 +34,3 @@ export const BLOCK_SELECTION_ANCHOR_ATTRIBUTE = "data-block-selection-anchor";
 
 /** CSS selector matching renderer regions that may begin selection gestures. */
 export const BLOCK_SELECTION_ANCHOR_SELECTOR = `[${BLOCK_SELECTION_ANCHOR_ATTRIBUTE}]`;
-
-/**
- * Logic-owned selector for cross-block text selection fallback highlighting.
- *
- * Selection cleanup queries this marker after it is written on engines without
- * CSS Custom Highlight. Text offsets remain in editor selection state and are
- * never derived from the marker.
- */
-export const TEXT_SELECTION_FALLBACK_SELECTOR = "[data-text-selection-fallback]";

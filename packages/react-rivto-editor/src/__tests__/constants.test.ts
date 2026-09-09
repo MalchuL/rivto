@@ -5,7 +5,6 @@ import {
   BLOCK_ID_SELECTOR,
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
   BLOCK_SELECTION_ANCHOR_SELECTOR,
-  TEXT_SELECTION_FALLBACK_SELECTOR,
 } from "../constants";
 
 describe("React block DOM constants", () => {
@@ -20,9 +19,5 @@ describe("React block DOM constants", () => {
   ])("keeps %s aligned with its JSX attribute and selector", (attribute, selector, expected) => {
     expect(attribute).toBe(expected);
     expect(selector).toBe(`[${attribute}]`);
-  });
-
-  it("keeps the logic-owned text fallback selector explicit", () => {
-    expect(TEXT_SELECTION_FALLBACK_SELECTOR).toBe("[data-text-selection-fallback]");
   });
 });

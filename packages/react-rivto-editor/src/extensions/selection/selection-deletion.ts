@@ -40,15 +40,15 @@ export function registerSelectionDeletion(reactEditor: ReactEditor): void {
       return rootBlockSelection || editableEvent;
     },
   }, ({ root }) => {
-    editor.deleteSelection();
+    reactEditor.selection.delete();
     // Keep keyboard ownership inside Rivto immediately when a normal browser
     // briefly focuses a block deletion just removed. This does not address
     // Cursor Browser intercepting Ctrl/Cmd+Z before the page receives it; see
     // the known-host limitation documented in the history extension.
-    if (!focusSelectionCaret(root, editor)) root.focus({ preventScroll: true });
+    if (!focusSelectionCaret(root, reactEditor.selection)) root.focus({ preventScroll: true });
     // React can replace an editable during reconciliation, so restore once more
     // after the new document DOM has committed.
-    requestAnimationFrame(() => focusSelectionCaret(root, editor));
+    requestAnimationFrame(() => focusSelectionCaret(root, reactEditor.selection));
     return true;
   });
 }

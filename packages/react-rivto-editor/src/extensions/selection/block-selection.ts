@@ -1,4 +1,3 @@
-import type { BlockSelection } from "@chulane/rivto";
 import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
@@ -81,7 +80,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     const blockId = block?.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!block || !blockId || !root.contains(block)) return false;
 
-    const current = editor.selection.get().find((item): item is BlockSelection => item.type === "block");
+    const current = editor.selection.get().find((item) => item.type === "block");
     const next = toggleBlockSelection(
       editor.blocks.getBlocks(),
       current,

@@ -382,16 +382,6 @@
   line-height: 10px;
 }
 
-/* TextSelectionPlugin uses an exact CSS range when the browser supports it. */
-::highlight(rivto-text-selection) {
-  background: #cfc4ff;
-}
-
-/* Older browsers receive a whole-content fallback marker instead. */
-[data-text-selection-fallback] {
-  background: #e5dfff;
-}
-
 /* A page block owns its recursively rendered children, so decorating the
    outer BlockView makes a whole-block selection cover the complete subtree as
    one rectangle. Nested selected markers do not draw additional rectangles. */

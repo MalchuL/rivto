@@ -42,7 +42,7 @@ export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
     const next = findNextEditableBlock(scope, block.id);
     if (!next) return false;
     const joinOffset = editor.blocks.mergeBlocks(block.id, next.blockId);
-    editor.selection.set([{
+    reactEditor.selection.set([{
       type: "text",
       anchor: { blockId: block.id, offset: joinOffset },
       head: { blockId: block.id, offset: joinOffset },

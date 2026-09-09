@@ -1,7 +1,10 @@
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
+import type { ReactSelection } from "../../managers/selection/selection-manager";
 import type {
-  BlockSelection,
-  EditorSelection,
-  TextSelection,
+  BlockSelectionInput as BlockSelection,
+  TextRange as TextSelection,
 } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import { reconcileCollapsedSelection } from "./page-selection-utils";
@@ -9,7 +12,7 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 
 /** Resolves the edited block or all blocks in the active whole-block selection. */
 function collapseTargets(
-  selection: EditorSelection,
+  selection: ReactSelection,
 ): string[] {
   const blocks = selection.find((item): item is BlockSelection => item.type === "block");
   if (blocks) return blocks.blockIds;
@@ -29,10 +32,10 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
   const { editor } = reactEditor;
   const reconcile = () => {
     const root = reactEditor.events.getRoot();
-    const current = editor.selection.get();
+    const current = reactEditor.selection.get();
     const next = reconcileCollapsedSelection(editor.blocks.getBlocks(), current);
     if (next !== current) {
-      editor.selection.set(next);
+      reactEditor.selection.set(next);
       // A native Range retains detached text nodes after React removes a
       // collapsed subtree. Clear it and focus the page's block-selection owner.
       root?.ownerDocument.getSelection()?.removeAllRanges();
@@ -40,10 +43,10 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     }
   };
   const unsubscribeDocument = editor.document.subscribe(reconcile);
-  const unsubscribeSelection = editor.selection.subscribe(reconcile);
+  const unsubscribeSelection = reactEditor.selection.subscribe(reconcile);
 
   const setCollapsed = (value: boolean | "toggle"): boolean => {
-    const current = editor.selection.get();
+    const current = reactEditor.selection.get();
     // Chromium may deliver the shortcut before its selectionchange event after
     // a click. Reading the native caret keeps the keybinding deterministic.
     const nativeSelection = reactEditor.selection.readDOM();

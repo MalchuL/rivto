@@ -1,3 +1,6 @@
+/**
+ * Clipboard operations and portable format contracts. Whole-block selection is structural; text editing uses explicit single-block ranges.
+ */
 import type { NormalizedSelection } from "../../selection-manager";
 import {
   validateBlockForest,
@@ -119,26 +122,19 @@ function indexParents(blocks: Block[], parents = new Map<string, string>()): Map
  * Produces the minimum set of copied roots for a normalized selection.
  *
  * If both a parent and descendant are selected, only the parent is returned
- * because its subtree already carries the descendant. Whole-block copy retains
- * all descendants of selected roots. Mixed text/block copy retains only
- * descendants explicitly covered by the normalized range.
+ * because its subtree already carries the descendant. Every selected root
+ * carries its complete subtree; partial text is copied separately.
  *
  * @param document - Complete detached document roots used to resolve ancestry.
  * @param range - Normalized selected blocks and text boundaries.
- * @param wholeBlocks - Whether selected roots carry their complete subtrees.
  * @returns Independent cloned roots in document order without duplicates.
  */
 export function cloneSelectedTopLevelSubtrees(
   document: Block[],
   range: NormalizedSelection,
-  wholeBlocks: boolean,
 ): Block[] {
   const selectedIds = new Set(range.blocks.map((block) => block.id));
   const parents = indexParents(document);
-  const cloneSelection = (block: Block): Block => ({
-    ...cloneBlock(block),
-    children: block.children.filter((child) => selectedIds.has(child.id)).map(cloneSelection),
-  });
   return range.blocks.filter((block) => {
     let parent = parents.get(block.id);
     let isTopLevel = true;
@@ -150,7 +146,7 @@ export function cloneSelectedTopLevelSubtrees(
       parent = parents.get(parent);
     }
     return isTopLevel;
-  }).map(wholeBlocks ? cloneBlock : cloneSelection);
+  }).map(cloneBlock);
 }
 
 /**

@@ -7,6 +7,7 @@
  * React skip re-render unless that object's selected bit actually flips.
  */
 import { useSyncExternalStore } from "react";
+import { BaseSelection } from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
 import type { ReactEditor } from "../../types";
 
@@ -17,6 +18,49 @@ export type EdgelessSelectionRef = string;
 export interface EdgelessSelectionSnapshot {
   readonly active: boolean;
   readonly items: readonly EdgelessSelectionRef[];
+}
+
+/** React-owned selection of first-class canvas elements. */
+export class ElementSelection extends BaseSelection<"element"> implements EdgelessSelectionSnapshot {
+  /** Whether the edgeless selection currently owns interaction focus. */
+  readonly active: boolean;
+  /** Ordered unique first-class element IDs. */
+  readonly items: readonly EdgelessSelectionRef[];
+
+  /** @returns Canvas element selection discriminator. */
+  get type(): "element" {
+    return "element";
+  }
+
+  /**
+   * Creates detached canvas selection state.
+   * @param active - Whether the edgeless surface owns selection focus.
+   * @param items - Ordered selected element IDs.
+   */
+  constructor(active: boolean, items: readonly EdgelessSelectionRef[]) {
+    super();
+    this.active = active;
+    this.items = [...items];
+  }
+
+  /**
+   * Compares focus and ordered element membership.
+   * @param other - Runtime selection to compare.
+   * @returns Whether both element selections describe the same state.
+   */
+  equals(other: BaseSelection): boolean {
+    return other instanceof ElementSelection
+      && this.active === other.active
+      && sameSequence(this.items, other.items);
+  }
+
+  /**
+   * Creates a detached copy of this canvas selection.
+   * @returns Independent element selection.
+   */
+  clone(): ElementSelection {
+    return new ElementSelection(this.active, this.items);
+  }
 }
 
 /**
@@ -36,21 +80,21 @@ function sameSequence(left: readonly string[], right: readonly string[]): boolea
 
 /** Small per-view store that keeps canvas selection out of core page selection. */
 export class EdgelessSelectionRuntime {
-  private value: EdgelessSelectionSnapshot = { active: false, items: [] };
+  private value = new ElementSelection(false, []);
   private selectedIds = new Set<string>();
   private readonly listeners = new Set<() => void>();
 
   /**
    * @returns Detached current canvas selection.
    */
-  get(): EdgelessSelectionSnapshot {
-    return { active: this.value.active, items: [...this.value.items] };
+  get(): ElementSelection {
+    return this.value.clone();
   }
 
   /**
    * @returns Stable immutable snapshot for React external-store subscriptions.
    */
-  snapshot(): EdgelessSelectionSnapshot {
+  snapshot(): ElementSelection {
     return this.value;
   }
 
@@ -80,9 +124,10 @@ export class EdgelessSelectionRuntime {
       seen.add(item);
       return true;
     });
-    if (this.value.active && sameSequence(this.value.items, unique)) return;
+    const next = new ElementSelection(true, unique);
+    if (this.value.equals(next)) return;
     this.selectedIds = seen;
-    this.value = { active: true, items: unique };
+    this.value = next;
     this.notify();
   }
 
@@ -93,7 +138,7 @@ export class EdgelessSelectionRuntime {
    */
   deactivate(): void {
     if (!this.value.active) return;
-    this.value = { ...this.value, active: false };
+    this.value = new ElementSelection(false, this.value.items);
     this.notify();
   }
 
@@ -105,7 +150,7 @@ export class EdgelessSelectionRuntime {
   clear(): void {
     if (this.value.active && this.value.items.length === 0) return;
     this.selectedIds = new Set();
-    this.value = { active: true, items: [] };
+    this.value = new ElementSelection(true, []);
     this.notify();
   }
 
@@ -124,7 +169,7 @@ export class EdgelessSelectionRuntime {
    * @returns No value.
    */
   destroy(): void {
-    this.value = { active: false, items: [] };
+    this.value = new ElementSelection(false, []);
     this.selectedIds = new Set();
     this.listeners.clear();
   }

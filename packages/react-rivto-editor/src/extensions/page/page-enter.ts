@@ -1,3 +1,6 @@
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
 import { isNumberedListType } from "./list-properties";
 import type { ReactEditor } from "../../types";
 import {
@@ -34,8 +37,8 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
     // Read the key event's native caret synchronously. A newly focused editor
     // can receive Enter before the browser's deferred selectionchange event.
     const nativeSelection = reactEditor.selection.readDOM();
-    if (nativeSelection) editor.selection.set(nativeSelection);
-    const selection = nativeSelection ?? editor.selection.get();
+    if (nativeSelection) reactEditor.selection.set(nativeSelection);
+    const selection = nativeSelection ?? reactEditor.selection.get();
     const initialTarget = firstKeyboardTarget(selection);
     if (!initialTarget) return false;
 
@@ -47,8 +50,8 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
       let target = initialTarget;
       let skip = false;
       if (target.item.type === "text" && shouldDeleteSelection(selection)) {
-        editor.deleteSelection();
-        const collapsed = firstKeyboardTarget(editor.selection.get());
+        reactEditor.selection.delete();
+        const collapsed = firstKeyboardTarget(reactEditor.selection.get());
         if (!collapsed?.collapsed) skip = true;
         else target = collapsed;
       }
@@ -62,7 +65,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
             editor.blocks.outdentBlock(block.id);
           }
           nextBlockId = block.id;
-          editor.selection.set([{
+          reactEditor.selection.set([{
             type: "text",
             anchor: { blockId: nextBlockId, offset: 0 },
             head: { blockId: nextBlockId, offset: 0 },
@@ -105,7 +108,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
               if (element) editor.elements.updateElement(element.id, { props: { endBlockId: nextBlockId } });
             }
 
-            editor.selection.set([{
+            reactEditor.selection.set([{
               type: "text",
               anchor: { blockId: nextBlockId, offset: 0 },
               head: { blockId: nextBlockId, offset: 0 },

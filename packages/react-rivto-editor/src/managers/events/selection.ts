@@ -5,10 +5,9 @@
  *
  * @module
  */
+import type { ReactSelection } from "../selection/selection-manager";
 import type {
   RivtoEditorApi as Editor,
-  EditorSelection,
-  EditorSelectionItem,
 } from "@chulane/rivto";
 import type { SelectionCapability } from "../../capabilities";
 import {
@@ -19,7 +18,7 @@ import {
 /** First selection item resolved to one page block for a keyboard command. */
 export interface KeyboardSelectionTarget {
   /** Original selection item; commands may branch on text versus whole blocks. */
-  readonly item: EditorSelectionItem;
+  readonly item: ReactSelection[number];
   /** First block addressed by that item. */
   readonly blockId: string;
   /** Caret offset when the item is a collapsed text selection. */
@@ -35,7 +34,7 @@ export interface KeyboardSelectionTarget {
  * a block for every selected item. Structural commands such as indent use this
  * target only as an entry point; the runtime expands it to the full selection.
  */
-export function firstKeyboardTarget(selection: EditorSelection): KeyboardSelectionTarget | undefined {
+export function firstKeyboardTarget(selection: ReactSelection): KeyboardSelectionTarget | undefined {
   const item = selection[0];
   if (!item) return;
   if (item.type === "text") {
@@ -52,7 +51,7 @@ export function firstKeyboardTarget(selection: EditorSelection): KeyboardSelecti
 }
 
 /** Returns true when the complete editor selection is not one collapsed caret. */
-export function shouldDeleteSelection(selection: EditorSelection): boolean {
+export function shouldDeleteSelection(selection: ReactSelection): boolean {
   return selection.length !== 1 || !firstKeyboardTarget(selection)?.collapsed;
 }
 
@@ -73,10 +72,10 @@ export function readKeyboardSelection(
   selectionManager: SelectionCapability,
   editor: Editor,
   emptyBlockId?: string,
-): EditorSelection {
+): ReactSelection {
   const nativeSelection = selectionManager.readDOM();
   const emptyBlock = emptyBlockId ? editor.blocks.getBlock(emptyBlockId) : undefined;
-  const focusedEmptySelection: EditorSelection | undefined = !nativeSelection && emptyBlock?.content === ""
+  const focusedEmptySelection: ReactSelection | undefined = !nativeSelection && emptyBlock?.content === ""
     ? [{
         type: "text",
         anchor: { blockId: emptyBlock.id, offset: 0 },
@@ -84,8 +83,8 @@ export function readKeyboardSelection(
       }]
     : undefined;
   const current = nativeSelection ?? focusedEmptySelection;
-  if (current) editor.selection.set(current);
-  return current ?? editor.selection.get();
+  if (current) selectionManager.set(current);
+  return current ?? selectionManager.get();
 }
 
 /** Uses the event target only to scope shortcuts to editable page content. */
@@ -94,7 +93,7 @@ export function isEditableKeyboardEvent(event: Event): boolean {
 }
 
 /** Restores the native caret represented by current editor selection state. */
-export function focusSelectionCaret(root: HTMLElement, editor: Editor): boolean {
-  const target = firstKeyboardTarget(editor.selection.get());
+export function focusSelectionCaret(root: HTMLElement, selectionManager: SelectionCapability): boolean {
+  const target = firstKeyboardTarget(selectionManager.get());
   return Boolean(target?.collapsed && focusBlock(root, target.blockId, target.offset ?? 0));
 }

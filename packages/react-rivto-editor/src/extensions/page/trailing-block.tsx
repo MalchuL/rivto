@@ -1,3 +1,6 @@
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
 import { createPortal } from "react-dom";
 import { useEditor, useEditorRoot, useReactEditor } from "../../hooks";
 import { PAGE_END_SLOT_SELECTOR } from "../../constants";
@@ -37,7 +40,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
               }
             });
             if (!id) return;
-            editor.selection.set([{
+            reactEditor.selection.set([{
               type: "text",
               anchor: { blockId: id, offset: 0 },
               head: { blockId: id, offset: 0 },

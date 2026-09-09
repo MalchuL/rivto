@@ -1,3 +1,6 @@
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
 import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
 import { YjsDoc } from "@chulane/crdt-doc";
 import {
@@ -15,7 +18,7 @@ import {
 } from "../managers/clipboard-manager";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 import { commandPayload } from "../managers/utils";
-import type { CreateRivtoEditorOptions, EditorSelectionItem, RivtoEditorApi } from "./types";
+import type { CreateRivtoEditorOptions, EditorSelectionItem, RivtoEditorApi, TextRange } from "./types";
 import { Listeners } from "../utils";
 
 /** Framework-neutral subset of browser or host clipboard data. */
@@ -321,8 +324,9 @@ export class EditorRuntime implements RivtoEditorApi {
    * @returns No value.
    */
   private registerClipboardCommands(): void {
-    type CopyPayload = { clipboardData?: Pick<ClipboardDataLike, "setData"> };
+    type CopyPayload = { textTarget?: TextRange; clipboardData?: Pick<ClipboardDataLike, "setData"> };
     type PastePayload = {
+      textTarget?: TextRange;
       bundle?: ClipboardBundle;
       structured?: string;
       mergeText?: boolean;
@@ -344,7 +348,7 @@ export class EditorRuntime implements RivtoEditorApi {
     this.commands.register("clipboard.copy", (value) => {
       const event = clipboardEvent(value);
       const data = payload<CopyPayload>(value);
-      const bundle = this.clipboard.copy();
+      const bundle = data.textTarget ? this.clipboard.copyText(data.textTarget) : this.clipboard.copy();
       if (!bundle) return "";
       const structured = JSON.stringify(bundle);
       if (event?.clipboardData) {
@@ -382,7 +386,8 @@ export class EditorRuntime implements RivtoEditorApi {
       const placement = data.placement && typeof data.placement === "object" ? data.placement : undefined;
       const explicitText = text(data.text);
       if (event?.clipboardData) event.preventDefault();
-      this.clipboard.paste({
+      return this.clipboard.paste({
+        textTarget: data.textTarget,
         bundle,
         structured,
         mergeText,
@@ -398,9 +403,8 @@ export class EditorRuntime implements RivtoEditorApi {
    * Reconciles local selection with the latest document.
    *
    * Direct document edits, remote CRDT updates, undo/redo, and mode swaps can
-   * remove selected blocks or shorten selected text. Surviving text offsets are
-   * clamped, deleted structural IDs are
-   * filtered, and block selections are reordered to match the current tree.
+   * remove selected blocks. Deleted IDs are filtered, and block selections
+   * are reordered to match the current tree.
    * When a block-selection endpoint disappeared, its replacement is chosen
    * from the same directional edge so top-down and bottom-up intent survives.
    * @returns No value.
@@ -417,48 +421,27 @@ export class EditorRuntime implements RivtoEditorApi {
     let changed = false;
     const valid = selection.flatMap((item): EditorSelectionItem[] => {
       let result: EditorSelectionItem[] = [];
-      if (item.type === "text") {
-        const anchorBlock = this.blocks.getBlock(item.anchor.blockId);
-        const headBlock = this.blocks.getBlock(item.head.blockId);
-        if (!anchorBlock || !headBlock) {
-          changed = true;
-        } else {
-          const anchorOffset = Math.min(item.anchor.offset, anchorBlock.content.length);
-          const headOffset = Math.min(item.head.offset, headBlock.content.length);
-          if (anchorOffset === item.anchor.offset && headOffset === item.head.offset) {
-            result = [item];
-          } else {
-            changed = true;
-            result = [{
-              ...item,
-              anchor: { ...item.anchor, offset: anchorOffset },
-              head: { ...item.head, offset: headOffset },
-            }];
-          }
-        }
+      const selected = new Set(item.blockIds);
+      const blockIds = visibleIds.filter((id) => selected.has(id));
+      if (!blockIds.length) {
+        changed = true;
       } else {
-        const selected = new Set(item.blockIds);
-        const blockIds = visibleIds.filter((id) => selected.has(id));
-        if (!blockIds.length) {
-          changed = true;
-        } else {
-          const anchorIndex = item.blockIds.indexOf(item.anchorBlockId);
-          const focusIndex = item.blockIds.indexOf(item.focusBlockId);
-          const forward = anchorIndex <= focusIndex;
-          const anchorBlockId = selected.has(item.anchorBlockId) && order.has(item.anchorBlockId)
-            ? item.anchorBlockId
-            : forward ? blockIds[0]! : blockIds.at(-1)!;
-          const focusBlockId = selected.has(item.focusBlockId) && order.has(item.focusBlockId)
-            ? item.focusBlockId
-            : forward ? blockIds.at(-1)! : blockIds[0]!;
-          if (
-            blockIds.length !== item.blockIds.length ||
-            blockIds.some((id, index) => id !== item.blockIds[index]) ||
-            anchorBlockId !== item.anchorBlockId ||
-            focusBlockId !== item.focusBlockId
-          ) changed = true;
-          result = [{ ...item, blockIds, anchorBlockId, focusBlockId }];
-        }
+        const anchorIndex = item.blockIds.indexOf(item.anchorBlockId);
+        const focusIndex = item.blockIds.indexOf(item.focusBlockId);
+        const forward = anchorIndex <= focusIndex;
+        const anchorBlockId = selected.has(item.anchorBlockId) && order.has(item.anchorBlockId)
+          ? item.anchorBlockId
+          : forward ? blockIds[0]! : blockIds.at(-1)!;
+        const focusBlockId = selected.has(item.focusBlockId) && order.has(item.focusBlockId)
+          ? item.focusBlockId
+          : forward ? blockIds.at(-1)! : blockIds[0]!;
+        if (
+          blockIds.length !== item.blockIds.length ||
+          blockIds.some((id, index) => id !== item.blockIds[index]) ||
+          anchorBlockId !== item.anchorBlockId ||
+          focusBlockId !== item.focusBlockId
+        ) changed = true;
+        result = [{ ...item, blockIds, anchorBlockId, focusBlockId }];
       }
       return result;
     });

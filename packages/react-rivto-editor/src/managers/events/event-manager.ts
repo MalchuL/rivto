@@ -1,3 +1,6 @@
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
 import type { EditorMode } from "@chulane/rivto";
 import type { EventsCapability } from "../../capabilities";
 import type { ReactEditorImpl } from "../../react-editor";
@@ -281,7 +284,7 @@ export class EventManager implements EventsCapability {
       editor,
       root,
       mode: editor.mode.get(),
-      selection: editor.selection.get(),
+      selection: this.reactEditor.selection.get(),
       eventTarget,
       insideRoot,
       blockElement,

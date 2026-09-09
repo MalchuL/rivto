@@ -273,7 +273,7 @@ export function EdgelessSurface({
         props: { startBlockId: id, endBlockId: id },
       });
     });
-    editor.selection.set([{
+    reactEditor.selection.set([{
       type: "text",
       anchor: { blockId: id, offset: 0 },
       head: { blockId: id, offset: 0 },

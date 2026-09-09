@@ -1,7 +1,10 @@
+/**
+ * Selection contracts and browser interaction helpers. Whole-block state belongs to core; single-block text editing is explicit host context.
+ */
+import type { ReactSelection } from "../../managers/selection/selection-manager";
 import {
-  type BlockSelection,
+  type BlockSelectionInput as BlockSelection,
   type EditorBlock as Block,
-  type EditorSelection,
 } from "@chulane/rivto";
 
 /** One block's location in the visible outline. */
@@ -40,8 +43,8 @@ export function pageEntries(
  */
 export function reconcileCollapsedSelection(
   blocks: Block[],
-  selection: EditorSelection,
-): EditorSelection {
+  selection: ReactSelection,
+): ReactSelection {
   const isCollapsed = (block: Block) => block.listProps.collapsed === true;
   const visible = pageEntries(blocks, null, false, isCollapsed).map(({ block }) => block.id);
   const visibleSet = new Set(visible);
@@ -56,19 +59,16 @@ export function reconcileCollapsedSelection(
   };
   indexHidden(blocks);
 
+  const text = selection.find((item) => item.type === "text");
+  if (text) {
+    const ancestor = hiddenBy.get(text.anchor.blockId);
+    return ancestor ? [blockSelection(blocks, ancestor)] : selection;
+  }
+
   let changed = false;
-  const mapped: EditorSelection = [];
+  const mapped: BlockSelection[] = [];
   selection.forEach((item) => {
-    if (item.type === "text") {
-      const anchorBlockId = hiddenBy.get(item.anchor.blockId) ?? item.anchor.blockId;
-      const focusBlockId = hiddenBy.get(item.head.blockId) ?? item.head.blockId;
-      if (anchorBlockId === item.anchor.blockId && focusBlockId === item.head.blockId) {
-        mapped.push(item);
-      } else {
-        changed = true;
-        mapped.push(blockSelection(blocks, anchorBlockId, focusBlockId));
-      }
-    } else {
+    if (item.type === "block") {
       const selected = new Set(item.blockIds.map((id) => hiddenBy.get(id) ?? id));
       const blockIds = visible.filter((id) => selected.has(id));
       const anchorBlockId = hiddenBy.get(item.anchorBlockId) ?? item.anchorBlockId;

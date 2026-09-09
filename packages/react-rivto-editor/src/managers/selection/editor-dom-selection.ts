@@ -48,16 +48,15 @@
  *         └── Text ("hello")   ← Selection often points here
  * ```
  */
+import type { ReactSelection } from "./selection-manager";
 
 import type {
   EditorPosition,
-  EditorSelection,
 } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-  TEXT_SELECTION_FALLBACK_SELECTOR,
 } from "../../constants";
 import { isElementNode } from "../events/dom-nodes";
 
@@ -108,8 +107,6 @@ export interface SelectionBlock {
   readonly length: number;
 }
 
-/** Name used by surfaces that style the supplemental CSS Highlight range. */
-export const TEXT_SELECTION_HIGHLIGHT_NAME = "rivto-text-selection";
 
 /**
  * Reads the stable block ID that owns one editable content element.
@@ -134,43 +131,21 @@ function orderedContents(root: HTMLElement): HTMLElement[] {
 }
 
 /**
- * Builds portable selection items from two directed editor positions.
- *
- * The text item retains the real pointer direction and exact boundary offsets.
- * Blocks strictly between those endpoints are fully covered, so a second block
- * item records them explicitly. `blockIds` stay in document order while its
- * anchor/focus preserve whether the gesture moved top-down or bottom-up.
- *
- * @param blocks - Visible editable blocks in document order.
- * @param anchor - Fixed position where the gesture began.
- * @param head - Moving position where the gesture currently ends.
- * @returns One directed text item and, when needed, one middle-block item.
+ * Resolves native endpoints into one local text range or complete blocks.
+ * @param blocks - Visible blocks in document order.
+ * @param anchor - Fixed gesture endpoint.
+ * @param head - Moving gesture endpoint.
+ * @returns One text item inside a block, or an inclusive whole-block range.
  */
 export function createSelectionItems(
   blocks: readonly SelectionBlock[],
   anchor: EditorPosition,
   head: EditorPosition,
-): EditorSelection {
-  const text = { type: "text", anchor: { ...anchor }, head: { ...head } } as const;
-  const anchorIndex = blocks.findIndex((block) => block.id === anchor.blockId);
-  const headIndex = blocks.findIndex((block) => block.id === head.blockId);
-  if (anchorIndex < 0 || headIndex < 0 || anchorIndex === headIndex) return [text];
-
-  const first = Math.min(anchorIndex, headIndex) + 1;
-  const last = Math.max(anchorIndex, headIndex);
-  const blockIds = blocks.slice(first, last).map((block) => block.id);
-  if (!blockIds.length) return [text];
-
-  const forward = anchorIndex < headIndex;
-  return [
-    text,
-    {
-      type: "block",
-      blockIds,
-      anchorBlockId: forward ? blockIds[0]! : blockIds.at(-1)!,
-      focusBlockId: forward ? blockIds.at(-1)! : blockIds[0]!,
-    },
-  ];
+): ReactSelection {
+  if (anchor.blockId === head.blockId) {
+    return [{ type: "text", anchor: { ...anchor }, head: { ...head } }];
+  }
+  return createBlockSelection(blocks.map((block) => block.id), anchor.blockId, head.blockId);
 }
 
 /**
@@ -188,7 +163,7 @@ export function createBlockSelection(
   blockIds: readonly string[],
   anchorBlockId: string,
   focusBlockId: string,
-): EditorSelection {
+): ReactSelection {
   const anchorIndex = blockIds.indexOf(anchorBlockId);
   const focusIndex = blockIds.indexOf(focusBlockId);
   if (anchorIndex < 0 || focusIndex < 0) return [];
@@ -299,7 +274,7 @@ export function readBlockIdAtPoint(
 }
 
 /**
- * Builds a portable {@link EditorSelection} from two editor positions, using
+ * Builds a portable {@link ReactSelection} from two editor positions, using
  * the surface's current visible block order under `root`.
  *
  * @param root - EditorView root used to discover visible blocks / lengths.
@@ -310,7 +285,7 @@ export function createDOMSelectionItems(
   root: HTMLElement,
   anchor: EditorPosition,
   head: EditorPosition,
-): EditorSelection {
+): ReactSelection {
   const blocks = orderedContents(root).flatMap((content) => {
     const id = blockIdForContent(content);
     return id ? [{ id, length: content.textContent?.length ?? 0 }] : [];
@@ -329,7 +304,7 @@ export function createDOMSelectionItems(
  * @returns Directed selection items, or `undefined` when there is no usable
  *   browser selection inside this editor.
  */
-export function readEditorDOMSelection(root: HTMLElement): EditorSelection | undefined {
+export function readEditorDOMSelection(root: HTMLElement): ReactSelection | undefined {
   const selection = root.ownerDocument.getSelection();
   if (!selection?.rangeCount) return;
   // anchorNode / focusNode are Node|null — typically Text nodes inside a
@@ -543,8 +518,7 @@ export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosi
  * reparents their DOM elements. The browser range still points at the detached
  * nodes and is commonly cleared. This helper resolves both stored endpoints
  * against the newly rendered content elements, focuses the moving endpoint,
- * and recreates the directed native selection. Supplemental cross-block
- * highlighting is repainted at the same time.
+ * and recreates the directed native selection inside that block.
  *
  * Whole-block selections have no native text range, so they return
  * false without changing focus. Missing rendered endpoints also return false;
@@ -554,7 +528,7 @@ export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosi
  * @param selection - Editor selection captured before the structural command.
  * @returns True when a text selection was resolved and restored.
  */
-export function restoreEditorDOMSelection(root: HTMLElement, selection: EditorSelection): boolean {
+export function restoreEditorDOMSelection(root: HTMLElement, selection: ReactSelection): boolean {
   const text = selection.find((item) => item.type === "text");
   if (!text) return false;
 
@@ -570,67 +544,5 @@ export function restoreEditorDOMSelection(root: HTMLElement, selection: EditorSe
     { ...anchor, content: anchorContent },
     { ...head, content: headContent },
   );
-  updateTextSelectionHighlight(root, selection);
   return true;
-}
-
-/**
- * Removes supplemental CSS Highlight ranges and fallback DOM paint markers.
- *
- * @param root - EditorView root whose highlight state should be cleared.
- */
-export function clearTextSelectionHighlight(root: HTMLElement): void {
-  if ("highlights" in CSS) CSS.highlights.delete(TEXT_SELECTION_HIGHLIGHT_NAME);
-  root.querySelectorAll<HTMLElement>(TEXT_SELECTION_FALLBACK_SELECTOR).forEach((content) => {
-    delete content.dataset.textSelectionFallback;
-  });
-}
-
-/**
- * Paints cross-contenteditable text that browsers may omit from native paint.
- *
- * Each block is its own `contenteditable`, so a native selection often only
- * highlights the focused host. This helper paints the rest:
- * - Prefer the CSS Custom Highlight API (`CSS.highlights`) with exact Ranges
- *   for partial boundary offsets.
- * - Fall back to `data-text-selection-fallback` on touched content elements
- *   for engines without Highlights. Surfaces own the visual styling.
- *
- * @param root - EditorView root that owns the content hosts.
- * @param selection - Portable selection; only cross-block text items paint.
- */
-export function updateTextSelectionHighlight(root: HTMLElement, selection: EditorSelection): void {
-  clearTextSelectionHighlight(root);
-  const text = selection.find((item) => item.type === "text");
-  if (!text || text.anchor.blockId === text.head.blockId) return;
-
-  const contents = orderedContents(root);
-  const anchorIndex = contents.findIndex((content) => blockIdForContent(content) === text.anchor.blockId);
-  const headIndex = contents.findIndex((content) => blockIdForContent(content) === text.head.blockId);
-  if (anchorIndex < 0 || headIndex < 0) return;
-
-  const forward = anchorIndex < headIndex;
-  const firstIndex = Math.min(anchorIndex, headIndex);
-  const lastIndex = Math.max(anchorIndex, headIndex);
-  const firstOffset = forward ? text.anchor.offset : text.head.offset;
-  const lastOffset = forward ? text.head.offset : text.anchor.offset;
-  const ranges: Range[] = [];
-
-  for (let index = firstIndex; index <= lastIndex; index += 1) {
-    const content = contents[index]!;
-    const start = pointAtOffset(content, index === firstIndex ? firstOffset : 0);
-    const end = pointAtOffset(content, index === lastIndex ? lastOffset : content.textContent?.length ?? 0);
-    const range = root.ownerDocument.createRange();
-    range.setStart(start.node, start.offset);
-    range.setEnd(end.node, end.offset);
-    ranges.push(range);
-  }
-
-  if ("highlights" in CSS && typeof Highlight !== "undefined") {
-    CSS.highlights.set(TEXT_SELECTION_HIGHLIGHT_NAME, new Highlight(...ranges));
-  } else {
-    contents.slice(firstIndex, lastIndex + 1).forEach((content) => {
-      content.dataset.textSelectionFallback = "true";
-    });
-  }
 }

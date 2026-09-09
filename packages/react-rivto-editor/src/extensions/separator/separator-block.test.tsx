@@ -33,7 +33,7 @@ describe("separator block extension", () => {
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
     });
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "Keep me" });
-    editor.selection.set([{
+    reactEditor.selection.set([{
       type: "text",
       anchor: { blockId: first, offset: 0 },
       head: { blockId: first, offset: 0 },
@@ -59,7 +59,7 @@ describe("separator block extension", () => {
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
     });
     const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" });
-    editor.selection.set([{
+    reactEditor.selection.set([{
       type: "text",
       anchor: { blockId: empty, offset: 0 },
       head: { blockId: empty, offset: 0 },

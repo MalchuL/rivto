@@ -1,3 +1,5 @@
+/** Portable clipboard data and explicit editing-operation inputs. */
+import type { TextRange } from "../../editor/types";
 import type { Block, DocumentElement } from "@chulane/document-model";
 
 /**
@@ -62,6 +64,8 @@ export interface BlockPastePlacement {
  * intentionally do not appear in this interface, keeping core DOM-free.
  */
 export interface ClipboardPasteInput {
+  /** Single-block editing range, independent of whole-block selection. */
+  readonly textTarget?: TextRange;
   /** Already parsed lossless Rivto data. Takes precedence over every fallback. */
   readonly bundle?: ClipboardBundle;
   /** Serialized lossless Rivto data, normally read from `RIVTO_CLIPBOARD_MIME`. */

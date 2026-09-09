@@ -117,7 +117,7 @@ Block, link и element commands регистрируются их public manager
 
 ### `clipboard.copy`
 
-- **Payload:** optional event; optional `{ clipboardData: { setData } }` compatibility transfer.
+- **Payload:** optional event; optional `{ clipboardData: { setData }, textTarget?: TextSelection }`. `textTarget` задаёт range внутри одного блока; без него копируются выбранные blocks.
 - **Возвращает:** serialized `ClipboardBundle` JSON или `""`, если selection нельзя скопировать.
 - **Исключения:** selection normalization, serialization или host `setData` errors.
 
@@ -133,8 +133,8 @@ Block, link и element commands регистрируются их public manager
 
 ### `clipboard.paste`
 
-- **Payload:** optional fields `bundle`, `structured`, `mergeText`, `preserveNewlines`, `defaultBlockType`, `text`, `placement`; либо DOM-like event.
-- **Возвращает:** `void`.
+- **Payload:** optional fields `bundle`, `structured`, `mergeText`, `preserveNewlines`, `defaultBlockType`, `text`, `placement`, `textTarget`; либо DOM-like event.
+- **Возвращает:** `EditorPosition | undefined`: caret после text insertion либо undefined для structural paste/no-op.
 - **Исключения:** invalid structured JSON/bundle, placement collision, missing block type и document operations.
 
 Priority structured source: explicit `structured`, затем custom MIME event. Explicit `text` имеет priority над event `text/plain`. Defaults: `mergeText !== false`, `preserveNewlines === false`.
