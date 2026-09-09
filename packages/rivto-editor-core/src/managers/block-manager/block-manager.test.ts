@@ -67,4 +67,23 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     expect(editor.document.getSnapshot()).toEqual(nested);
     editor.destroy();
   });
+
+  it("indents only the supplied ids even when other blocks are selected", () => {
+    const editor = createTestEditor({ mode });
+    const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" });
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId);
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    editor.selection.set([{
+      type: "block",
+      blockIds: [firstId, secondId],
+      anchorBlockId: firstId,
+      focusBlockId: secondId,
+    }]);
+    editor.blocks.indentBlock(firstId);
+    expect(editor.blocks.getBlocks()).toMatchObject([
+      { id: previousId, children: [{ id: firstId }] },
+      { id: secondId },
+    ]);
+    editor.destroy();
+  });
 });

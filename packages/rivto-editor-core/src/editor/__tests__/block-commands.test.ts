@@ -419,18 +419,10 @@ describe("EditorRuntime block commands", () => {
     const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, firstId);
     editor.blocks.indentBlock(childId);
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-    editor.execute("selection.set", {
-      selection: [{
-        type: "block",
-        blockIds: [firstId, childId, secondId],
-        anchorBlockId: firstId,
-        focusBlockId: secondId,
-      }],
-    });
 
     const documentUpdates = jest.fn();
     const unsubscribe = editor.document.subscribe(documentUpdates);
-    editor.blocks.indentBlock(firstId);
+    editor.blocks.indentBlocks([firstId, childId, secondId]);
 
     expect(documentUpdates).toHaveBeenCalledTimes(1);
     expect(editor.blocks.getBlocks()).toMatchObject([{
@@ -456,18 +448,10 @@ describe("EditorRuntime block commands", () => {
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId);
     const gapId = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, firstId);
     const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, gapId);
-    editor.execute("selection.set", {
-      selection: [{
-        type: "block",
-        blockIds: [firstId, lastId],
-        anchorBlockId: firstId,
-        focusBlockId: lastId,
-      }],
-    });
     const documentUpdates = jest.fn();
     const unsubscribe = editor.document.subscribe(documentUpdates);
 
-    editor.blocks.indentBlock(firstId);
+    editor.blocks.indentBlocks([firstId, lastId]);
 
     expect(documentUpdates).not.toHaveBeenCalled();
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([previousId, firstId, gapId, lastId]);
@@ -594,18 +578,10 @@ describe("EditorRuntime block commands", () => {
     editor.blocks.indentBlock(existingChildId);
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
     const followingId = editor.blocks.insertBlock({ type: "paragraph", content: "Following" }, secondId);
-    editor.execute("selection.set", {
-      selection: [{
-        type: "block",
-        blockIds: [firstId, existingChildId, secondId],
-        anchorBlockId: firstId,
-        focusBlockId: secondId,
-      }],
-    });
 
     const documentUpdates = jest.fn();
     const unsubscribe = editor.document.subscribe(documentUpdates);
-    editor.blocks.outdentBlock(firstId);
+    editor.blocks.outdentBlocks([firstId, existingChildId, secondId]);
 
     expect(documentUpdates).toHaveBeenCalledTimes(1);
     expect(editor.blocks.getBlocks()).toMatchObject([

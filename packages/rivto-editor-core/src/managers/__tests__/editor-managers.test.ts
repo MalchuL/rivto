@@ -21,7 +21,7 @@ describe("editor block managers", () => {
     editor.destroy();
   });
 
-  it("applies selection-aware structural commands through BlockManager", () => {
+  it("removes only the requested blocks and ignores an unrelated selection", () => {
     const editor = createRivtoEditor();
     const firstId = editor.blocks.insertBlock({ type: "paragraph" });
     const secondId = editor.blocks.insertBlock({ type: "paragraph" }, firstId);
@@ -34,6 +34,8 @@ describe("editor block managers", () => {
     }]);
     editor.blocks.removeBlock(firstId);
 
+    expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([secondId]);
+    editor.blocks.removeBlocks([secondId]);
     expect(editor.blocks.getBlocks()).toEqual([]);
     editor.destroy();
   });

@@ -31,8 +31,8 @@ export interface KeyboardSelectionTarget {
  * Resolves only the first selection item for single-target keyboard behavior.
  *
  * Enter intentionally creates one block after this target rather than creating
- * a block for every selected item. Structural commands such as indent use this
- * target only as an entry point; the runtime expands it to the full selection.
+ * a block for every selected item. Indent and outdent read the full item from
+ * this target and pass those IDs explicitly to the block manager.
  */
 export function firstKeyboardTarget(selection: ReactSelection): KeyboardSelectionTarget | undefined {
   const item = selection[0];

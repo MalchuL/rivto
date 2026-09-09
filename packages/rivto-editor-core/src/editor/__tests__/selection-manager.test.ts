@@ -168,7 +168,7 @@ describe("EditorRuntime selection", () => {
         focusBlockId: firstChildId,
       }],
     });
-    editor.blocks.outdentBlock(firstChildId);
+    editor.blocks.outdentBlocks([firstChildId, secondChildId]);
 
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([parentId, firstChildId, secondChildId]);
     expect(editor.selection.get()).toEqual([{
@@ -189,7 +189,7 @@ describe("EditorRuntime selection", () => {
       anchorBlockId: firstId, focusBlockId: secondId }];
     editor.execute("selection.set", { selection });
 
-    editor.blocks.indentBlock(firstId);
+    editor.blocks.indentBlocks([firstId, secondId]);
 
     expect(editor.blocks.getBlocks()).toMatchObject([{
       id: previousId,
@@ -211,7 +211,7 @@ describe("EditorRuntime selection", () => {
     const documentUpdates = jest.fn();
     const unsubscribe = editor.document.subscribe(documentUpdates);
 
-    editor.blocks.indentBlock(lastId);
+    editor.blocks.indentBlocks([firstId, middleId, lastId]);
 
     expect(documentUpdates).toHaveBeenCalledTimes(1);
     expect(editor.blocks.getBlocks()).toMatchObject([{
