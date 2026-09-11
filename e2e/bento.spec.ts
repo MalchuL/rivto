@@ -1,5 +1,27 @@
 /** Browser coverage for responsive Bento layout, widths, shared modal and editing. */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+const RESIZE_RIGHT = "Resize Bento tile from the right";
+const RESIZE_LEFT = "Resize Bento tile from the left";
+
+/**
+ * Drags one Bento edge handle by a horizontal pixel delta.
+ *
+ * @param page - Browser page owning the editor.
+ * @param handle - Left or right resize separator.
+ * @param dx - Horizontal movement in CSS pixels; positive is rightward.
+ * @returns After pointer release.
+ */
+async function dragResizeHandle(page: Page, handle: Locator, dx: number): Promise<void> {
+  await handle.hover();
+  const box = (await handle.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + dx, y, { steps: 8 });
+  await page.mouse.up();
+}
 
 for (const mode of ["block", "edgeless"]) {
   test(`Bento editing and layout in ${mode}`, async ({ page }) => {
@@ -15,18 +37,24 @@ for (const mode of ["block", "edgeless"]) {
     const board = page.locator('[data-block-type="bento"]');
     const tiles = board.locator(':scope > [id^="block-children-"] > [data-block-id]');
     await expect(tiles).toHaveCount(3);
+    await expect(tiles.first()).toHaveCSS("flex-grow", "0");
+    await expect(tiles.first()).toHaveCSS("flex-basis", "220px");
     await board.getByRole("button", { name: "Expand Bento", exact: true }).click();
     await expect(page.locator("dialog:modal")).toBeVisible();
-    await board.getByRole("button", { name: "Bento settings", exact: true }).click();
-    const slider = board.getByRole("slider", { name: "Width of tile 1" });
-    await slider.fill("440");
-    await expect(tiles.first()).toHaveCSS("flex-basis", "440px");
-    await board.getByRole("button", { name: "Bento settings", exact: true }).click();
-    const editable = tiles.first().getByRole("textbox").first();
+    const first = tiles.first();
+    await first.hover();
+    const rightHandle = first.getByRole("separator", { name: RESIZE_RIGHT });
+    await expect(rightHandle).toBeVisible();
+    const startWidth = await first.evaluate((element) => (element as HTMLElement).offsetWidth);
+    await dragResizeHandle(page, rightHandle, 80);
+    const committed = `${Math.max(160, Math.min(960, startWidth + 80))}px`;
+    await expect(first).toHaveCSS("flex-basis", committed);
+    const editable = first.getByRole("textbox").first();
     await editable.click();
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
     await expect(tiles).toHaveCount(4);
+    await expect(tiles.nth(1).getByRole("textbox")).toBeFocused();
     await page.keyboard.type("New tile");
     await expect(tiles.nth(1)).toContainText("New tile");
     await board.getByRole("button", { name: "Collapse Bento", exact: true }).click();
@@ -36,7 +64,7 @@ for (const mode of ["block", "edgeless"]) {
       const { editor } = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor } }).__rivtoDemo.editor;
       editor.load(editor.dump());
     });
-    await expect(tiles.first()).toHaveCSS("flex-basis", "440px");
+    await expect(first).toHaveCSS("flex-basis", committed);
     if (mode === "block") await page.setViewportSize({ width: 420, height: 800 });
     const box = (await board.boundingBox())!;
     for (const tile of await tiles.all()) expect((await tile.boundingBox())!.width).toBeLessThanOrEqual(box.width);
@@ -54,6 +82,52 @@ for (const mode of ["block", "edgeless"]) {
     await expect(tiles.first()).toContainText("First tile");
   });
 }
+
+test("Bento edge resize freezes siblings until pointer release", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    const { editor } = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor } }).__rivtoDemo.editor;
+    const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
+    editor.load({ ...editor.dump(), blocks: [board], elements: [] });
+  });
+  const board = page.locator('[data-block-type="bento"]');
+  await board.getByRole("button", { name: "Expand Bento", exact: true }).click();
+  const tiles = board.locator(':scope > [id^="block-children-"] > [data-block-id]');
+  const first = tiles.first();
+  const sibling = tiles.nth(1);
+  await first.hover();
+  const handle = first.getByRole("separator", { name: RESIZE_RIGHT });
+  await expect(handle).toBeVisible();
+  const origin = (await handle.boundingBox())!;
+  const before = (await sibling.boundingBox())!;
+  const startWidth = await first.evaluate((element) => (element as HTMLElement).offsetWidth);
+  await page.mouse.move(origin.x + origin.width / 2, origin.y + origin.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(origin.x + origin.width / 2 + 90, origin.y + origin.height / 2, { steps: 10 });
+  const mid = (await sibling.boundingBox())!;
+  expect(mid.x).toBeCloseTo(before.x, 0);
+  expect(mid.y).toBeCloseTo(before.y, 0);
+  expect(mid.width).toBeCloseTo(before.width, 0);
+  await expect(first).toHaveAttribute("data-bento-resizing", "right");
+  await page.mouse.up();
+  await expect(first).not.toHaveAttribute("data-bento-resizing");
+  await expect(first).toHaveCSS("flex-basis", `${Math.max(160, Math.min(960, startWidth + 90))}px`);
+
+  await sibling.hover();
+  const leftHandle = sibling.getByRole("separator", { name: RESIZE_LEFT });
+  await expect(leftHandle).toBeVisible();
+  const siblingBefore = (await first.boundingBox())!;
+  const siblingStart = await sibling.evaluate((element) => (element as HTMLElement).offsetWidth);
+  const leftBox = (await leftHandle.boundingBox())!;
+  await page.mouse.move(leftBox.x + leftBox.width / 2, leftBox.y + leftBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(leftBox.x + leftBox.width / 2 - 60, leftBox.y + leftBox.height / 2, { steps: 8 });
+  const firstMid = (await first.boundingBox())!;
+  expect(firstMid.x).toBeCloseTo(siblingBefore.x, 0);
+  expect(firstMid.width).toBeCloseTo(siblingBefore.width, 0);
+  await page.mouse.up();
+  await expect(sibling).toHaveCSS("flex-basis", `${Math.max(160, Math.min(960, siblingStart + 60))}px`);
+});
 
 for (const edge of ["between", "under", "inside"]) {
   test(`Bento drag placement ${edge}`, async ({ page }) => {

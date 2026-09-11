@@ -40,7 +40,9 @@ import type { ConnectorRoute, ConnectorTextRotation } from "./visuals/types";
 const ROOT_SELECTOR = "[data-edgeless-root]";
 const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
 const BLOCK_SELECTOR = "[data-block-id]";
-const CONTROL_SELECTOR = "[data-block-content], [data-edgeless-ui], button:not([data-edgeless-drag-handle]), input, textarea, select, a, [contenteditable=true]";
+// Bento edge handles are not buttons. Exclude them so card transform does not
+// steal pointerdown before the tile can preview a width.
+const CONTROL_SELECTOR = "[data-block-content], [data-edgeless-ui], button:not([data-edgeless-drag-handle]), input, textarea, select, a, [contenteditable=true], [data-bento-resize-edge]";
 const RESIZE_CORNERS = new Set<ResizeCorner>(["n", "e", "s", "w", "nw", "ne", "sw", "se"]);
 const CONNECTOR_PREVIEW_CLASS = "edgeless-connector-live-preview";
 const CONNECTOR_LABEL_CLASS = "edgeless-connector-label";

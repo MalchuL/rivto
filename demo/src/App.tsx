@@ -356,7 +356,7 @@ function createDemoEditor() {
   });
   editor.blocks.insertBlock({ ...createBentoBlockInput(), children: [
     { type: DEFAULT_WRITING_BLOCK_TYPE, content: "A small idea", props: { bentoWidth: 220 } },
-    { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Room to explore. Resize this tile from Bento settings. Heights follow your content, and tiles wrap with the editor width.", props: { bentoWidth: 400 } },
+    { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.", props: { bentoWidth: 400 } },
     { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Drag blocks between tiles, nest them inside, or move them back into the editor." },
   ] }, numberedContinueId);
   const tableId = editor.blocks.insertBlock(createTableBlockInput(), numberedContinueId);
