@@ -46,8 +46,9 @@ function dropFeedbackOwner(page: Page): Promise<string | null> {
 /**
  * Asks the browser's own hit test which block sits under a viewport point.
  *
- * This is the independent oracle for the whole suite: whatever the surface has
- * scrolled to, the drop target must agree with what the user sees.
+ * Auto-scroll stops wherever its interval left the surface, so the expected
+ * target cannot be named up front. This supplies it independently of the
+ * extension: the drop must agree with what the user sees under the cursor.
  *
  * @param page - Page to hit-test.
  * @param point - Viewport coordinates of the cursor.
@@ -63,22 +64,29 @@ function blockUnderCursor(page: Page, point: { x: number; y: number }): Promise<
 }
 
 /**
- * Arms a drag handle and holds a gesture with the cursor parked mid-viewport.
+ * Arms one block's handle and holds a gesture with the cursor mid-viewport.
  *
- * Mid-viewport is both past dnd-kit's activation distance and outside its
- * auto-scroll threshold, so tests that scroll deliberately stay in control of
+ * The handle only accepts pointer events while its row is hovered, so the row
+ * is hovered first. Mid-viewport is both past dnd-kit's activation distance
+ * and outside its auto-scroll threshold, which leaves each test in control of
  * how far the surface moves.
  *
  * @param page - Page owning the pointer.
- * @param handle - Drag handle button that starts the gesture.
+ * @param block - Block whose handle starts the gesture.
  * @returns Viewport coordinates the cursor now rests at.
  */
-async function holdDragMidViewport(page: Page, handle: Locator): Promise<{ x: number; y: number }> {
+async function holdDragMidViewport(page: Page, block: Locator): Promise<{ x: number; y: number }> {
+  const row = block.locator(":scope > .page-block-row");
+  const handle = block.locator(":scope > .page-block-row .page-drag-handle");
+  await block.hover();
   await handle.hover();
   await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
-  const box = (await handle.boundingBox())!;
-  const cursor = { x: box.x + box.width / 2, y: page.viewportSize()!.height / 2 };
-  await page.mouse.move(cursor.x, box.y + box.height / 2);
+  const handleBox = (await handle.boundingBox())!;
+  const rowBox = (await row.boundingBox())!;
+  // The handle overhangs the left gutter, which is outside every row's own
+  // rectangle. Parking over the content column keeps the cursor on a row.
+  const cursor = { x: rowBox.x + rowBox.width / 2, y: page.viewportSize()!.height / 2 };
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(cursor.x, cursor.y, { steps: 5 });
   await expect(page.locator(".page-drag-overlay")).toBeVisible();
@@ -117,7 +125,7 @@ test.describe("page drag with a scrolling window", () => {
       .locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
     const targetRow = target.locator(":scope > .page-block-row");
 
-    const cursor = await holdDragMidViewport(page, source.locator(":scope > .page-block-row .page-drag-handle"));
+    const cursor = await holdDragMidViewport(page, source);
     await scrollRowToCursor(page, targetRow, cursor.y);
 
     const afterScroll = (await targetRow.boundingBox())!;
@@ -129,27 +137,34 @@ test.describe("page drag with a scrolling window", () => {
     await expect(target.locator(blockIdSelector(sourceId))).toHaveCount(1);
   });
 
-  test("retargets the row that scrolls under a stationary cursor", async ({ page }) => {
+  test("retargets and commits for a row scrolled under a stationary cursor", async ({ page }) => {
     const editor = today(page);
     const source = editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).first();
-    const cursor = await holdDragMidViewport(page, source.locator(":scope > .page-block-row .page-drag-handle"));
-    const before = await blockUnderCursor(page, cursor);
+    const sourceId = (await source.getAttribute(BLOCK_ID_ATTRIBUTE))!;
+    const target = editor.locator("[data-block-content]")
+      .filter({ hasText: new RegExp(`^${TARGET_CONTENT}$`) })
+      .locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
+    const targetId = (await target.getAttribute(BLOCK_ID_ATTRIBUTE))!;
+    const targetRow = target.locator(":scope > .page-block-row");
 
-    // The cursor never moves again: only the content slides beneath it, which
-    // is the exact motion dnd-kit reports as extra pointer delta.
-    await page.mouse.wheel(0, 400);
-    await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(200);
+    const cursor = await holdDragMidViewport(page, source);
+    expect(await dropFeedbackOwner(page)).not.toBe(targetId);
 
-    const after = await blockUnderCursor(page, cursor);
-    expect(after).not.toBe(before);
-    await expect.poll(() => dropFeedbackOwner(page)).toBe(after);
+    // The cursor never moves again. Only the content slides beneath it, so
+    // scroll alone has to retarget the drop and the release has to honour it.
+    await scrollRowToCursor(page, targetRow, cursor.y);
+    await expect(targetRow).toHaveAttribute("data-drop-inside", "true");
+    await expect(page.locator("[data-drop-inside]")).toHaveCount(1);
+
+    await page.mouse.up();
+    await expect(target.locator(blockIdSelector(sourceId))).toHaveCount(1);
   });
 
   test("keeps the target aligned while dnd-kit auto-scrolls at the edge", async ({ page }) => {
     const editor = today(page);
     const source = editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).first();
     const viewport = page.viewportSize()!;
-    const cursor = await holdDragMidViewport(page, source.locator(":scope > .page-block-row .page-drag-handle"));
+    const cursor = await holdDragMidViewport(page, source);
 
     // Inside the bottom threshold dnd-kit scrolls the window on an interval,
     // without any further pointer movement to explain the change.
@@ -180,7 +195,7 @@ test.describe("page drag with a scrolling window", () => {
       const targetId = (await target.getAttribute(BLOCK_ID_ATTRIBUTE))!;
       const targetRow = target.locator(":scope > .page-block-row");
 
-      const cursor = await holdDragMidViewport(page, source.locator(":scope > .page-block-row .page-drag-handle"));
+      const cursor = await holdDragMidViewport(page, source);
       await scrollRowToCursor(page, targetRow, cursor.y);
 
       // Half an indent past the requested level keeps the reading clear of
@@ -222,7 +237,7 @@ test.describe("cross-document drag with a scrolling window", () => {
     expect(scrollable).toBeGreaterThan(100);
 
     const targetRow = right.locator(`${blockIdSelector("right-nested")} > .page-block-row`);
-    await holdDragMidViewport(page, left.locator(`${blockIdSelector("left-counter")} .page-drag-handle`));
+    await holdDragMidViewport(page, left.locator(blockIdSelector("left-counter")));
 
     await page.evaluate((top) => window.scrollTo({ top }), scrollable);
     await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBe(scrollable);

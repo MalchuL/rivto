@@ -11,7 +11,7 @@ import type { BlockWrapperProps } from "../../blocks";
 import type { EditorBlockInput } from "@chulane/rivto";
 import { createCaretSelection } from "@chulane/rivto";
 import { MarkdownContent } from "../../blocks/markdown";
-import { useBlockEditing, useReactEditor } from "../../hooks";
+import { useBlock, useBlockEditing, useReactEditor } from "../../hooks";
 import { focusBlock, type ReactEditorExtension } from "../../managers";
 
 import { BlockModal, BlockModalButton } from "../../blocks/block-modal";
@@ -42,15 +42,20 @@ export function createKanbanBlockInput(): EditorBlockInput {
 
 /**
  * Renders the editable board title; the shared tree renders its column children.
+ * The add-column control lives in the lane container and is omitted while collapsed.
  * @param props - Identity of the persisted board.
  * @returns Collaborative title component.
  */
 export function Kanban({ blockId }: { readonly blockId: string }) {
   const runtime = useReactEditor();
+  const { block } = useBlock(blockId);
   const title = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState<HTMLElement | null>(null);
+  const collapsed = block?.listProps.collapsed === true;
   // The shared tree owns the lane container. A portal adds chrome without
   // persisting a fake column or mounting duplicate blocks and drag targets.
+  // Collapse unmounts that container, so the button must not fall back into
+  // the title row or it would remain visible on a folded board.
   useLayoutEffect(() => {
     setColumns(title.current?.ownerDocument.getElementById(`block-children-${blockId}`) ?? null);
   });
@@ -73,12 +78,13 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
   const addButton = <button className={ADD_COLUMN_CLASS} type="button" aria-label="Add Kanban column" onClick={addColumn}>+</button>;
   return <div ref={title} data-block-sort-children="horizontal">
     <MarkdownContent blockId={blockId} />
-    {columns ? createPortal(addButton, columns) : addButton}
+    {columns && !collapsed ? createPortal(addButton, columns) : null}
   </div>;
 }
 
 /**
  * Renders an editable column title and advertises its full subtree as a drop area.
+ * The add-card control is omitted while the column is collapsed.
  * @param props - Identity of the persisted column.
  * @returns Editable title with a marker consumed by the shared drag wrapper.
  */
@@ -107,9 +113,12 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
       <span className={COLUMN_COUNT_CLASS} aria-label={`${editing.block?.children.length ?? 0} cards`}>
         {editing.block?.children.length ?? 0}
       </span>
-      <button className={ADD_CARD_CLASS} type="button" aria-label={`Add card to ${editing.block?.content ?? "column"}`} onClick={addCard}>
-        +
-      </button>
+      {editing.block?.listProps.collapsed !== true && (
+        // Collapse hides cards; keep the header compact without a dangling add control.
+        <button className={ADD_CARD_CLASS} type="button" aria-label={`Add card to ${editing.block?.content ?? "column"}`} onClick={addCard}>
+          +
+        </button>
+      )}
     </div>
   );
 }

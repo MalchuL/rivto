@@ -163,3 +163,27 @@ for (const mode of ["block", "edgeless"] as const) {
     await expect(byId(laneIds[0]!).locator(':scope > div > [data-block-type="paragraph"]')).toHaveCount(4);
   });
 }
+
+test("hides Kanban add buttons while the board or a column is collapsed", async ({ page }) => {
+  await page.goto("/");
+  const board = page.locator('[data-block-type="kanban"]').first();
+  await board.scrollIntoViewIfNeeded();
+  const addColumn = board.getByRole("button", { name: "Add Kanban column" });
+  await expect(addColumn).toBeVisible();
+  const boardToggle = board.locator(":scope > .page-block-row [data-collapse-toggle]");
+  await boardToggle.click();
+  await expect(boardToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(addColumn).toHaveCount(0);
+  await boardToggle.click();
+  await expect(addColumn).toBeVisible();
+
+  const column = board.locator('[data-block-type="kanban-column"]').first();
+  const addCard = column.getByRole("button", { name: "Add card to To do" });
+  await expect(addCard).toBeVisible();
+  const columnToggle = column.locator(":scope > .page-block-row [data-collapse-toggle]");
+  await columnToggle.click();
+  await expect(columnToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(addCard).toHaveCount(0);
+  await columnToggle.click();
+  await expect(addCard).toBeVisible();
+});
