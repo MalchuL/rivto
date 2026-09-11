@@ -1,118 +1,80 @@
 # Selection in Rivto
 
-Core selection contains whole blocks only. Native text editing inside one block
-is separate React host context; it cannot become a mixed text/block selection.
-
-## Ownership
-
-| Owner | State or operation |
-| --- | --- |
-| `editor.selection` | Whole-block IDs, anchor/focus direction, membership subscriptions |
-| `reactEditor.selection` | One single-block text range for editing and DOM restoration; routes block context to core |
-| `window.getSelection()` | Live DOM nodes and offsets |
-| Edgeless selection runtime | Canvas element/group IDs |
-| `editor.clipboard` | Whole-block copy/cut/paste and explicit single-block text copy/paste |
-
-These are local states. The document-model package owns persisted document
-invariants; the CRDT package synchronizes mutations, not local selection.
+Selection contracts live beside `SelectionManager` in core. The React manager
+is a DOM adapter over that single state. The edgeless runtime is a view over the
+same selection and stores its active flag in generic plugin data.
 
 ## Core contract
 
+Stored selection is a generic `type: "selection"` value that can contain
+blocks, element IDs, and extension-owned plugin data. Block `start` and `end`
+are absolute UTF-16 offsets from the beginning of `content` and form a
+`[start, end)` range. `end: -1` is the only sentinel and means the current end
+of the block. Therefore `{ start: 0, end: -1 }` denotes structural coverage and
+distinguishes a selected empty block from a caret at offset zero.
+
 ```ts
 editor.selection.set([{
-  type: "block",
-  blockIds: ["a", "c"],
+  type: "selection",
+  blocks: [
+    { id: "a", start: 0, end: -1 },
+    { id: "c", start: 0, end: -1 },
+  ],
+  elements: ["shape-1"],
+  pluginData: { edgelessSelection: { active: true } },
   anchorBlockId: "c",
   focusBlockId: "a",
 }]);
 ```
 
-IDs must exist; both endpoints must belong to the selected set. IDs are
-deduplicated and ordered against the document tree. Gaps stay unselected.
-`normalize()` returns `{ blocks }` or `undefined`; it never fills gaps or
-introduces character offsets. Selecting a parent copies/deletes its full subtree.
+`set()` and `get()` use this same shape. DOM adapters convert native endpoints
+with `createTextSelection` or `createCaretSelection` before publishing. Whole-block
+gestures use `createStructuralSelection`, which writes the live-end sentinel.
 
-`get()` returns a detached copy. `snapshot()` retains identity until membership
-or direction changes and must be treated as immutable. `isBlockSelected(id)`
-supports per-block chrome. Selection updates notify selection subscribers
-without increasing the editor's document revision.
+A caret is one block whose covered slice is empty: `{ start: n, end: n }`.
 
-`delete()` removes selected subtrees in one transaction/undo item and clears
-selection. Remote edits, undo, and structural moves filter missing IDs, reorder
-survivors, and repair anchor/focus direction.
+`resolveBlockSelection()` resolves stored offsets against **current document lengths** (not
+Yjs relative positions). Apart from `end: -1`, negative, reversed, out-of-range,
+or non-integer markers do not throw: copy uses `""` for that block, and
+delete/paste still run as an empty slice at a clamped caret.
 
-## Text editing and gestures
+`isBlockSelected(id)` paints chrome only for `{ start: 0, end: -1 }` members.
+Text ranges, including fully covered middle text blocks, use only native text
+highlighting. Contentless blocks inside the range use the structural sentinel
+because they have no character range to paint.
 
-`reactEditor.selection.get()` resolves either whole-block items or exactly one
-single-block text range. `set()` rejects mixed selections and cross-block text
-ranges. `readDOM()` reads current endpoints; cross-block endpoints become an
-inclusive block selection. `restoreDOM()` restores only single-block text.
-`delete()` handles the explicit text range or delegates block deletion to core.
+`get()` returns detached values. `snapshot()` keeps identity until selection
+changes. Selection is local runtime state and is never persisted or synchronized.
 
-A drag within one editable block remains native text selection. Crossing a block
-boundary selects complete blocks, including Alt-drag. Returning to the original
-block restores its local text range. Ctrl/Cmd-click toggles whole blocks;
-Shift-click extends a block range. Shift+Up/Down becomes whole-block selection
-when movement crosses blocks. There is no supplemental cross-block text highlight.
+## Browser gestures
 
-The host retains text offsets only to survive DOM replacement, and clamps them
-when resolving a shorter block. Missing blocks cannot be restored. This is not
-collaborative relative-position tracking.
+`reactEditor.selection` delegates state to core and adds `readDOM()` and
+`restoreDOM()`. Shift+Alt-click or Shift+Alt-drag keeps partial first/last
+offsets and full text ranges between them without structural chrome. A
+contentless block such as Counter receives structural coverage while surrounding
+editable blocks remain text ranges. Alt-drag and Shift-click across hosts
+select whole blocks. Ctrl/Cmd-click toggles `{ start: 0, end: -1 }` block
+ranges. Shift-click and Shift+Up/Down extend block ranges once they cross a
+host.
 
-## Clipboard cases
+## Clipboard strategies
 
-```ts
-const textTarget = {
-  type: "text" as const,
-  anchor: { blockId: "a", offset: 2 },
-  head: { blockId: "a", offset: 5 },
-};
+`ClipboardManager` builds one `PasteContext` and a separate `PastePlacement`, then
+runs every registered `PasteStrategy` whose `matches(context, placement)` is true:
 
-const bundle = editor.clipboard.copyText(textTarget);
-const caret = editor.clipboard.paste({
-  bundle,
-  textTarget,
-});
-if (caret) {
-  reactEditor.selection.set([{ type: "text", anchor: caret, head: caret }]);
-  reactEditor.selection.restoreDOM();
-}
-```
+- `TextPasteStrategy` replaces a selected range with plain text (splitting
+  newlines) or a mergeable partial structured bundle.
+- `PreserveNewlinesPasteStrategy` inserts plain text as one block when
+  `placement.preserveNewlines` is set (Ctrl/Cmd+Shift+V).
+- `BlockPasteStrategy` inserts complete remapped block forests. `placement.mergeText: false` keeps a partial-text bundle structural.
+- React registers `ElementPasteStrategy` on `editor.clipboard.pasteStrategies`
+  so canvas geometry stays in the presentation layer without a second manager
+  dispatch.
 
-- `copy()` and `cut()` operate on whole-block selection.
-- `copyText(range)` copies selected characters only, without the block's children.
-  A collapsed range returns `undefined`.
-- `paste({ textTarget })` accepts one explicit block-local range and returns the
-  resulting `EditorPosition` for text insertion, or `undefined` for structural
-  insertion/no-op. It never writes a text item into core selection.
-- Whole-block bundles stay structural at a text caret. `placement` controls
-  sibling/child insertion; selected top-level parents take precedence over
-  nested focus endpoints.
-- Partial-text bundles merge into an explicit text target. Existing version-4
-  bundles with several roots remain readable; the first root merges and the
-  suffix moves to the final root.
-- Plain text replaces the explicit range. Newlines create siblings unless
-  `preserveNewlines: true`. Without a text target, plain text creates blocks.
-- Ctrl/Cmd+Shift+V uses the browser's plain-text flavor with preserved newlines,
-  so content copied from multiple blocks can enter one editable block.
+Strategies are constructed once with the editor. Paste calls only pass context
+and placement. Text ranges are derived from the paste-time selection.
 
-The browser extension reads native endpoints immediately before clipboard
-events, writes formats before deleting cut content, and restores a returned
-caret after React commits. No general processor registry is needed for these
-specific cases; existing formatters/parsers still handle custom block formats.
-
-## Migration
-
-Replace core `selection.set([{ type: "text", ... }])` with a React editing
-context update, or pass `textTarget` directly to a headless clipboard operation.
-Mixed ranges and cross-block text selection are no longer supported.
-`ReactSelection` is host operation context, not the core `EditorSelection` type.
-
-`useEditorSelection()` and `useBlockSelection()` report whole blocks only.
-Extensions needing a caret read the React selection bridge. Keyboard operations
-use that context explicitly while block manager commands continue to consume
-core block selection.
-
-Page and edgeless card editors use the same text/block rules. Canvas selection
-remains separate. Clipboard temporarily projects selected cards into block IDs
-for placement, then restores the previous host context.
+All-`{ start: 0, end: -1 }` block coverage is structural copy/delete. Any partial range or
+caret is text-like. A collapsed valid caret copy returns
+`undefined`. Ctrl/Cmd+Shift+V still chooses plain text with preserved newlines;
+ordinary paste prefers Rivto structured data.

@@ -1,10 +1,15 @@
 /**
- * Selection contracts and browser interaction helpers. Whole-block state belongs to core; single-block text editing is explicit host context.
+ * Selection contracts and browser interaction helpers. Block coverage uses
+ * per-block start/end offsets; Ctrl/Cmd+click stores `0, -1`.
  */
-import type { ReactSelection } from "../../managers/selection/selection-manager";
 import {
-  type BlockSelectionInput as BlockSelection,
+  createStructuralSelection,
+  assertBlockRangeEndpoints,
+  hasBlockRanges,
+  isStructuralSelection,
+  getSelectedBlockIds,
   type EditorBlock as Block,
+  type Selection,
 } from "@chulane/rivto";
 
 /** One block's location in the visible outline. */
@@ -38,13 +43,14 @@ export function pageEntries(
  * Replaces selection endpoints hidden by a collapsed ancestor with that
  * ancestor. Text cannot retain a meaningful DOM range once either endpoint is
  * hidden, so it becomes a whole-block range across the remaining visible rows.
- * Returning the original array when nothing changed prevents revision loops in
+ * Returning the original value when nothing changed prevents revision loops in
  * PageCollapsePlugin's document-change reconciliation effect.
  */
 export function reconcileCollapsedSelection(
   blocks: Block[],
-  selection: ReactSelection,
-): ReactSelection {
+  selection: Selection | undefined,
+): Selection | undefined {
+  if (!selection) return undefined;
   const isCollapsed = (block: Block) => block.listProps.collapsed === true;
   const visible = pageEntries(blocks, null, false, isCollapsed).map(({ block }) => block.id);
   const visibleSet = new Set(visible);
@@ -59,34 +65,26 @@ export function reconcileCollapsedSelection(
   };
   indexHidden(blocks);
 
-  const text = selection.find((item) => item.type === "text");
-  if (text) {
-    const ancestor = hiddenBy.get(text.anchor.blockId);
-    return ancestor ? [blockSelection(blocks, ancestor)] : selection;
+  const partial = hasBlockRanges(selection) && !isStructuralSelection(selection) ? selection : undefined;
+  if (partial) {
+    const ancestor = hiddenBy.get(partial.blocks[0]?.id ?? "")
+      ?? hiddenBy.get(partial.focusBlockId);
+    return ancestor ? blockSelection(blocks, ancestor) : selection;
   }
-
-  let changed = false;
-  const mapped: BlockSelection[] = [];
-  selection.forEach((item) => {
-    if (item.type === "block") {
-      const selected = new Set(item.blockIds.map((id) => hiddenBy.get(id) ?? id));
-      const blockIds = visible.filter((id) => selected.has(id));
-      const anchorBlockId = hiddenBy.get(item.anchorBlockId) ?? item.anchorBlockId;
-      const focusBlockId = hiddenBy.get(item.focusBlockId) ?? item.focusBlockId;
-      if (!blockIds.length || !visibleSet.has(anchorBlockId) || !visibleSet.has(focusBlockId)) {
-        changed = true;
-      } else {
-        if (
-          blockIds.length !== item.blockIds.length ||
-          blockIds.some((id, index) => id !== item.blockIds[index]) ||
-          anchorBlockId !== item.anchorBlockId ||
-          focusBlockId !== item.focusBlockId
-        ) changed = true;
-        mapped.push({ ...item, blockIds, anchorBlockId, focusBlockId });
-      }
-    }
+  if (!hasBlockRanges(selection)) return selection;
+  const selected = new Map(selection.blocks.map((block) => [hiddenBy.get(block.id) ?? block.id, block]));
+  const nextBlocks = visible.flatMap((id) => {
+    const source = selected.get(id);
+    return source ? [{ id, start: source.start, end: source.end }] : [];
   });
-  return changed ? mapped : selection;
+  const anchorBlockId = hiddenBy.get(selection.anchorBlockId) ?? selection.anchorBlockId;
+  const focusBlockId = hiddenBy.get(selection.focusBlockId) ?? selection.focusBlockId;
+  if (!nextBlocks.length || !visibleSet.has(anchorBlockId) || !visibleSet.has(focusBlockId)) return undefined;
+  const changed = nextBlocks.length !== selection.blocks.length
+    || nextBlocks.some((block, index) => block.id !== selection.blocks[index]?.id)
+    || anchorBlockId !== selection.anchorBlockId
+    || focusBlockId !== selection.focusBlockId;
+  return changed ? { ...selection, blocks: nextBlocks, anchorBlockId, focusBlockId } : selection;
 }
 
 /**
@@ -101,18 +99,13 @@ export function blockSelection(
   anchorBlockId: string,
   focusBlockId = anchorBlockId,
   isCollapsed: IsCollapsedBlock = neverCollapsed,
-): BlockSelection {
+): Selection {
   const ids = pageEntries(blocks, null, false, isCollapsed).map(({ block }) => block.id);
   const anchor = ids.indexOf(anchorBlockId);
   const focus = ids.indexOf(focusBlockId);
   const first = Math.min(anchor, focus);
   const last = Math.max(anchor, focus);
-  return {
-    type: "block",
-    blockIds: ids.slice(first, last + 1),
-    anchorBlockId,
-    focusBlockId,
-  };
+  return createStructuralSelection(ids.slice(first, last + 1), anchorBlockId, focusBlockId);
 }
 
 /**
@@ -127,43 +120,44 @@ export function blockSelection(
  *   focus if still selected, else the last remaining ID.
  *
  * Example: clicks `1 → 10 → 3` yield
- * `{ blockIds: ["1","3","10"], anchorBlockId: "1", focusBlockId: "3" }`.
+ * `{ blocks: [{id:"1",start:0,end:0}, ...], anchorBlockId: "1", focusBlockId: "3" }`.
  * Clicks `3 → 10 → 1` share the same `blockIds` but
  * `anchorBlockId: "3", focusBlockId: "1"`.
  */
 export function toggleBlockSelection(
   blocks: Block[],
-  current: BlockSelection | undefined,
+  current: Selection | undefined,
   blockId: string,
   includeCollapsedDescendants = false,
   isCollapsed: IsCollapsedBlock = neverCollapsed,
-): BlockSelection | undefined {
+): Selection | undefined {
+  if (current) assertBlockRangeEndpoints(current);
   const visible = pageEntries(blocks, null, includeCollapsedDescendants, isCollapsed).map(({ block }) => block.id);
-  const selected = new Set(current?.blockIds ?? []);
+  const previous = new Map(current?.blocks.map((block) => [block.id, block]) ?? []);
+  const selected = new Set(previous.keys());
   const removing = selected.has(blockId);
   if (removing) selected.delete(blockId);
   else selected.add(blockId);
-  const blockIds = visible.filter((id) => selected.has(id));
-  if (!blockIds.length) return;
+  const ids = visible.filter((id) => selected.has(id));
+  if (!ids.length) return;
   return {
-    type: "block",
-    blockIds,
-    // Sticky gesture start while still selected; else earliest remaining ID.
-    anchorBlockId: current && selected.has(current.anchorBlockId) ? current.anchorBlockId : blockIds[0]!,
-    // Last toggled-on ID, or a surviving focus / last ID when removing.
+    type: "selection",
+    blocks: ids.map((id) => previous.get(id) ?? { id, start: 0, end: -1 }),
+    anchorBlockId: current && selected.has(current.anchorBlockId) ? current.anchorBlockId : ids[0]!,
     focusBlockId: removing && current && selected.has(current.focusBlockId)
       ? current.focusBlockId
-      : removing ? blockIds.at(-1)! : blockId,
+      : removing ? ids.at(-1)! : blockId,
   };
 }
 
 /** Grows or shrinks a contiguous block selection. */
 export function extendBlockSelection(
   blocks: Block[],
-  current: BlockSelection,
+  current: Selection,
   direction: "up" | "down",
   isCollapsed: IsCollapsedBlock = neverCollapsed,
-): BlockSelection {
+): Selection {
+  assertBlockRangeEndpoints(current);
   const ids = pageEntries(blocks, null, false, isCollapsed).map(({ block }) => block.id);
   const anchor = ids.indexOf(current.anchorBlockId);
   const focus = ids.indexOf(current.focusBlockId);
@@ -176,12 +170,12 @@ export function extendBlockSelection(
 /** Moves a whole-block selection to one adjacent visible block. */
 export function adjacentBlockSelection(
   blocks: Block[],
-  current: BlockSelection,
+  current: Selection,
   direction: "up" | "down",
   isCollapsed: IsCollapsedBlock = neverCollapsed,
-): BlockSelection {
+): Selection {
   const ids = pageEntries(blocks, null, false, isCollapsed).map(({ block }) => block.id);
-  const edgeId = direction === "up" ? current.blockIds[0] : current.blockIds.at(-1);
+  const edgeId = direction === "up" ? current.blocks[0]?.id : current.blocks.at(-1)?.id;
   const index = edgeId ? ids.indexOf(edgeId) : -1;
   const next = index < 0 ? undefined : ids[index + (direction === "up" ? -1 : 1)];
   return next ? blockSelection(blocks, next, next, isCollapsed) : current;
@@ -191,7 +185,7 @@ export function adjacentBlockSelection(
 export interface SelectedMoveRoots {
   readonly ids: string[];
   readonly grouped: boolean;
-  readonly selection?: BlockSelection;
+  readonly selection?: Selection;
 }
 
 /**
@@ -201,18 +195,18 @@ export interface SelectedMoveRoots {
  */
 export function selectedMoveRoots(
   blocks: Block[],
-  selection: readonly { type: string }[],
+  selection: Selection | undefined,
   activeId: string,
   isCollapsed: IsCollapsedBlock = neverCollapsed,
 ): SelectedMoveRoots {
-  const blockSelection = selection.find((item): item is BlockSelection => (
-    item.type === "block" && "blockIds" in item && (item as BlockSelection).blockIds.includes(activeId)
-  ));
+  const blockSelection = selection && hasBlockRanges(selection)
+    && isStructuralSelection(selection) && getSelectedBlockIds(selection).includes(activeId)
+    ? selection : undefined;
   let result: SelectedMoveRoots = { ids: [activeId], grouped: false };
   if (blockSelection) {
     const entries = pageEntries(blocks, null, false, isCollapsed);
     const byId = new Map(entries.map((entry) => [entry.block.id, entry]));
-    const selected = new Set(blockSelection.blockIds);
+    const selected = new Set(getSelectedBlockIds(blockSelection));
     const roots = entries.flatMap(({ block }) => {
       let parentId = byId.get(block.id)?.parentId;
       let ancestorSelected = false;

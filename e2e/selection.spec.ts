@@ -92,6 +92,18 @@ test("switches cross-block drag to blocks and restores text on return", async ({
   expect(await readSelection()).toEqual(expected);
 });
 
+test("Shift+Alt drag keeps partial text across blocks", async ({ page }) => {
+  const contents = textContents(page);
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("Alt");
+  await dragText(page, contents.nth(0), 2, contents.nth(2), 8);
+  await page.keyboard.up("Alt");
+  await page.keyboard.up("Shift");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(0);
+  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
+  await expect(contents.nth(2).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
+});
+
 test("Alt drag selects complete blocks", async ({ page }) => {
   const contents = textContents(page);
   await page.keyboard.down("Alt");
@@ -132,6 +144,36 @@ test("dragging onto a contentless Counter immediately extends block selection", 
     "data-block-selected",
     "true",
   );
+});
+
+test("Shift+Alt drag includes a contentless Counter without converting text to blocks", async ({ page }) => {
+  const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+  const nextContent = counter.locator("xpath=following::*[@data-block-content and normalize-space(.) != ''][2]");
+  await nextContent.scrollIntoViewIfNeeded();
+  const from = await textPoint(nextContent, 5);
+  const counterBox = await counter.boundingBox();
+  if (!counterBox) throw new Error("Expected Counter geometry");
+
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("Alt");
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(counterBox.x + counterBox.width / 2, counterBox.y + counterBox.height / 2, { steps: 8 });
+  const selected = await page.evaluate(() => (
+    window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor } }
+  ).__rivtoDemo.editor.editor.selection.get()?.blocks);
+  expect(selected).toContainEqual(expect.objectContaining({
+    id: await counter.getAttribute(BLOCK_ID_ATTRIBUTE),
+    start: 0,
+    end: -1,
+  }));
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  await page.keyboard.up("Shift");
+
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
+  await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
 });
 
 test("dragging from a contentless Counter anchors selection without incrementing it", async ({ page }) => {
@@ -232,6 +274,57 @@ test("Shift click ranges complete blocks", async ({ page }) => {
   await contents.nth(0).click();
   await contents.nth(2).click({ modifiers: ["Shift"] });
   await expect(page.locator("[data-block-selected]")).toHaveCount(3);
+});
+
+test("Shift+Alt click keeps partial text across blocks", async ({ page }) => {
+  const contents = textContents(page);
+  const start = await textPoint(contents.nth(0), 2);
+  const end = await textPoint(contents.nth(2), 8);
+  await page.mouse.click(start.x, start.y);
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("Alt");
+  await page.mouse.click(end.x, end.y);
+  await page.keyboard.up("Alt");
+  await page.keyboard.up("Shift");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(0);
+  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
+  await expect(contents.nth(2).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
+});
+
+test("bottom-up Shift+Alt drag preserves the directed native text range", async ({ page }) => {
+  const contents = textContents(page);
+  const upper = contents.nth(0);
+  const lower = contents.nth(2);
+  const upperId = await upper.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
+  const lowerId = await lower.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
+
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("Alt");
+  await dragText(page, lower, 8, upper, 2);
+  await page.keyboard.up("Alt");
+  await page.keyboard.up("Shift");
+
+  await expect(page.locator("[data-block-selected]")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(({ attribute, selector }) => {
+    const selection = getSelection();
+    const position = (node: Node | null, offset: number) => {
+      const element = node instanceof Element ? node : node?.parentElement;
+      const content = element?.closest<HTMLElement>("[data-block-content]");
+      const blockId = element?.closest<HTMLElement>(selector)?.getAttribute(attribute);
+      if (!node || !content) return { blockId };
+      const range = document.createRange();
+      range.selectNodeContents(content);
+      range.setEnd(node, offset);
+      return { blockId, offset: range.toString().length };
+    };
+    return {
+      anchor: position(selection?.anchorNode ?? null, selection?.anchorOffset ?? 0),
+      focus: position(selection?.focusNode ?? null, selection?.focusOffset ?? 0),
+    };
+  }, { attribute: BLOCK_ID_ATTRIBUTE, selector: BLOCK_ID_SELECTOR })).toEqual({
+    anchor: { blockId: lowerId, offset: 8 },
+    focus: { blockId: upperId, offset: 2 },
+  });
 });
 
 test("Ctrl click toggles blocks with a pointer cursor", async ({ page }) => {

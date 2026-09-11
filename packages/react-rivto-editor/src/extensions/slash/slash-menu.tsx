@@ -2,6 +2,7 @@
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import type { SlashCommand } from "../../managers/slash";
+import { createCaretSelection } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
@@ -223,14 +224,9 @@ export function SlashMenu() {
     if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
 
     editor.batchUpdates(() => {
-      editor.blocks.updateBlock(current.blockId, {
-        content: block.content.slice(0, current.slashOffset) + block.content.slice(caret),
-      });
-      reactEditor.selection.set([{
-        type: "text",
-        anchor: { blockId: current.blockId, offset: current.slashOffset },
-        head: { blockId: current.blockId, offset: current.slashOffset },
-      }]);
+      const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
+      editor.blocks.updateBlock(current.blockId, { content: next });
+      reactEditor.selection.set(createCaretSelection(current.blockId, current.slashOffset));
       slashCommands.execute(command.id, { blockId: current.blockId });
     });
     setSession(null);

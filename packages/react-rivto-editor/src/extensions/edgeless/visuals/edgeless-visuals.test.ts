@@ -1,3 +1,4 @@
+import { createCaretSelection } from "@chulane/rivto";
 import { createTestCoreEditor as createRivtoEditor } from "../../../test-utils";
 import { createReactEditor } from "../../../react-editor";
 import { edgelessSelectionExtension } from "../../built-ins/built-ins";
@@ -6,7 +7,7 @@ import { separatorBlockExtension } from "../../separator/separator-block";
 import { EdgelessVisualController } from "./controller";
 
 describe("edgelessVisualsExtension", () => {
-  test("keeps canvas selection separate and persists visuals as first-class elements", () => {
+  test("stores canvas selection in generic core selection and persists visuals", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Page" });
     const extension = edgelessVisualsExtension({ toolbar: false });
@@ -15,18 +16,27 @@ describe("edgelessVisualsExtension", () => {
       extension,
     ] });
 
-    reactEditor.selection.set([{ type: "text", anchor: { blockId, offset: 2 }, head: { blockId, offset: 2 } }]);
+    reactEditor.selection.set(createCaretSelection(blockId, 2));
 
     const first = extension.createRectangle({ frame: { x: 10, y: 20, width: 40, height: 30 }, rotation: 375 });
     const second = extension.createEllipse({ frame: { x: 90, y: 50, width: 20, height: 20 } });
-    expect(reactEditor.selection.get()).toEqual([{ type: "text", anchor: { blockId, offset: 2 }, head: { blockId, offset: 2 } }]);
+    expect(reactEditor.selection.get()).toMatchObject({
+      type: "selection",
+      blocks: [],
+      elements: [second],
+      pluginData: { edgelessSelection: { active: true } },
+    });
     expect(editor.blocks.getBlocks()).toHaveLength(1);
     expect(editor.dump().elements.map((element) => element.type)).toEqual(["rectangle", "ellipse"]);
     expect(editor.elements.getElement(first)?.props.rotation).toBe(15);
     editor.mode.set("block");
     editor.mode.set("edgeless");
     expect(editor.execute("edgeless.selection.get")).toMatchObject({ active: true, items: [second] });
-    expect(reactEditor.selection.get()[0]).toMatchObject({ type: "text", anchor: { blockId, offset: 2 } });
+    expect(reactEditor.selection.get()).toMatchObject({
+      type: "selection",
+      blocks: [],
+      elements: [second],
+    });
 
     extension.select([first, second]);
     const groupId = extension.group();

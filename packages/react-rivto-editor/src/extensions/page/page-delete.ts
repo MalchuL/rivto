@@ -5,6 +5,7 @@
  *
  * @module
  */
+import { createCaretSelection } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import {
   BUILTIN_KEYMAP,
@@ -42,11 +43,7 @@ export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
     const next = findNextEditableBlock(scope, block.id);
     if (!next) return false;
     const joinOffset = editor.blocks.mergeBlocks(block.id, next.blockId);
-    reactEditor.selection.set([{
-      type: "text",
-      anchor: { blockId: block.id, offset: joinOffset },
-      head: { blockId: block.id, offset: joinOffset },
-    }]);
+    reactEditor.selection.set(createCaretSelection(block.id, joinOffset));
     requestAnimationFrame(() => focusBlock(root, block.id, joinOffset));
     return true;
   });

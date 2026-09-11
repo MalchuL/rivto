@@ -3,6 +3,7 @@
  * card identities and descendants, and participate in document history.
  * @module
  */
+import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../test-utils";
 import { createReactEditor } from "../../react-editor";
 import { defaultWritingBlockExtension } from "../page/default-writing-block";
@@ -32,9 +33,7 @@ test("moves existing subtrees into, between and out of Kanban columns with undo"
   expect(editor.blocks.getBlock(card)).toEqual(original);
   editor.history.undo();
   expect(editor.blocks.getBlock(board.children[1]!.id)!.children).toEqual([original]);
-  const copied = editor.clipboard.copy([{
-    type: "block", blockIds: [board.id], anchorBlockId: board.id, focusBlockId: board.id,
-  }]);
+  const copied = editor.clipboard.copy(createStructuralSelection([board.id]));
   expect(copied?.blocks[0]?.children[1]?.children[0]?.id).toBe(card);
   const snapshot = editor.dump();
   editor.load(snapshot);

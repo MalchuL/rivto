@@ -1953,6 +1953,26 @@ test("zooms, pans, and pastes selected root subtrees with offset layouts", async
   expect(pastedPositions).toEqual(originalPositions.map(({ left, top }) => ({ left: left + 24, top: top + 24 })));
 });
 
+test("copies and pastes a standalone visual element", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const source = await createVisual(page, "Rectangle");
+  const sourceFrame = await visualFrame(source);
+  const rectangles = page.locator('[data-edgeless-visual-kind="rectangle"]');
+  const before = await rectangles.count();
+
+  await page.keyboard.press("Control+c");
+  await page.keyboard.press("Control+v");
+
+  await expect(rectangles).toHaveCount(before + 1);
+  const pasted = page.locator('[data-edgeless-visual-kind="rectangle"][data-selected="true"]');
+  await expect(pasted).toHaveCount(1);
+  await expect.poll(() => visualFrame(pasted)).toEqual({
+    ...sourceFrame,
+    x: sourceFrame.x + 24,
+    y: sourceFrame.y + 24,
+  });
+});
+
 test("uses middle mouse only for unbounded canvas panning", async ({ page }) => {
   await switchMode(page, "edgeless");
   const viewport = page.locator(".edgeless-viewport");

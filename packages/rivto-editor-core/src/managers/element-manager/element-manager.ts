@@ -31,6 +31,26 @@ export class ElementManager {
     return this.editor.commands.execute("element.insert", { input }) as string;
   }
 
+  /**
+   * Resolves source element identities for a destination import.
+   *
+   * Free IDs survive cut-and-paste, while conflicts receive identities from
+   * the destination element manager. The returned map lets extensions rewrite
+   * opaque group and connector references before insertion.
+   *
+   * @param sourceIds - Stable source element IDs in import order.
+   * @returns Source-to-destination identity mapping.
+   */
+  resolveImportIds(sourceIds: readonly string[]): ReadonlyMap<string, string> {
+    const assigned = new Set<string>();
+    return new Map(sourceIds.map((sourceId) => {
+      const reusable = !this.editor.document.elements.getElement(sourceId) && !assigned.has(sourceId);
+      const id = reusable ? sourceId : this.editor.document.elements.generateId();
+      assigned.add(id);
+      return [sourceId, id];
+    }));
+  }
+
   /** @param id - Element to patch. @param patch - Geometry, layer, or props changes. */
   updateElement(id: string, patch: EditorElementPatch): void {
     this.editor.commands.execute("element.update", { id, patch });

@@ -3,23 +3,30 @@
  */
 import {
   isStructuralSelection,
+  hasBlockRanges,
+  getSelectedBlockIds,
+  createStructuralSelection,
   RIVTO_CLIPBOARD_MIME,
   validateBlockListProps,
   validateClipboardBundle,
   type EditorBlock,
   type EditorBlockInput,
   type ClipboardBundle,
-  type BlockSelectionInput as BlockSelection,
+  type Selection,
 } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import {
   KEYBOARD_BINDING_IDS,
   matchesShortcut,
   parseShortcut,
+  resolveSelectionEndpoints,
 } from "../../managers";
 import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
 import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
-import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../surfaces/edgeless/block-elements";
+import { blockIdsOf } from "../../surfaces/edgeless/block-elements";
+import { ElementPasteStrategy } from "./element-paste-strategy";
+
+const ELEMENT_PASTE_STRATEGY_ID = "paste.elements";
 
 /** Configuration for browser clipboard integration. */
 export interface ClipboardExtensionOptions {
@@ -60,13 +67,17 @@ export interface ClipboardExtensionOptions {
  *
  * @param reactEditor - React editor whose DOM events and clipboard managers are connected.
  * @param options - Plain-text fallback and invalid-block handling configuration.
- * @returns No value.
+ * @returns Disposer that unregisters the canvas paste strategy.
  */
 export function registerClipboard(
   reactEditor: ReactEditor,
   options: ClipboardExtensionOptions = {},
-): void {
+): () => void {
   const { editor } = reactEditor;
+  const unregisterElementPaste = editor.clipboard.pasteStrategies.register(
+    ELEMENT_PASTE_STRATEGY_ID,
+    new ElementPasteStrategy(reactEditor),
+  );
   const resolveDefaultBlockType = (): string =>
     options.defaultBlockType ?? reactEditor.createDefaultBlock().type;
   // ClipboardEvent does not expose keyboard modifiers. Remember only the
@@ -83,19 +94,14 @@ export function registerClipboard(
   };
 
   /** Returns a core-compatible block selection for active canvas root objects. */
-  const canvasSelection = (): BlockSelection | undefined => {
+  const canvasSelection = (): Selection | undefined => {
     if (editor.mode.get() !== "edgeless") return undefined;
     const snapshot = findEdgelessRuntime(reactEditor)?.get();
     const blockIds = snapshot?.active ? snapshot.items.flatMap((id) => {
       const element = editor.elements.getElement(id);
       return element?.type === "block" ? blockIdsOf(element, editor.blocks.getRootIds()) : [];
     }) : [];
-    return blockIds.length ? {
-      type: "block",
-      blockIds,
-      anchorBlockId: blockIds[0]!,
-      focusBlockId: blockIds.at(-1)!,
-    } : undefined;
+    return blockIds.length ? createStructuralSelection(blockIds) : undefined;
   };
 
   /** Writes the core-produced flavors into a native clipboard event. */
@@ -227,14 +233,13 @@ export function registerClipboard(
       sourceBundle = { ...sourceBundle, blocks: sourceBundle.blocks.flatMap((block) => prepare(block) ?? []) };
       structured = JSON.stringify(sourceBundle);
     }
-    const saved = canvas ? reactEditor.selection.get() : undefined;
     // Temporarily project canvas block references into the core clipboard
-    // placement API. The preserved page selection is restored below, so the
-    // bridge affects insertion order without merging the two selection stores.
-    if (canvas) editor.selection.set([canvas]);
-    const active = reactEditor.selection.get().at(-1);
-    const activeId = active?.type === "text" ? active.head.blockId
-      : active?.type === "block" ? active.focusBlockId : undefined;
+    // placement API. Paste strategies replace it with their proposed selection.
+    if (canvas) editor.selection.set(canvas);
+    const active = reactEditor.selection.get();
+    const lengthOf = (id: string) => editor.blocks.getBlock(id)?.content.length ?? 0;
+    const ends = active ? resolveSelectionEndpoints(active, lengthOf) : undefined;
+    const activeId = ends?.head.blockId ?? active?.focusBlockId;
     const activeBlock = activeId ? editor.blocks.getBlock(activeId) : undefined;
     const expanded = reactEditor.blocks.hasListProps("collapse") && activeBlock?.listProps.collapsed !== true;
     const placement = activeBlock && sourceBundle && sourceBundle.startsWithText !== true
@@ -242,62 +247,40 @@ export function registerClipboard(
         ? { parentId: activeBlock.id, afterId: null }
         : { parentId: editor.blocks.getParentId(activeBlock.id) ?? null, afterId: activeBlock.id }
       : undefined;
-    const caret = editor.clipboard.paste({
-      textTarget: !canvas && active?.type === "text" ? active : undefined,
+    editor.clipboard.paste({
+      textTarget: !canvas && active && hasBlockRanges(active)
+        && !isStructuralSelection(active) ? active : undefined,
       defaultBlockType: resolveDefaultBlockType(),
-      preserveNewlines: plainText,
       structured,
-      mergeText: canvas ? false : undefined,
       text: event.clipboardData?.getData("text/plain"),
       bundle: sourceBundle,
-      placement,
+      placement: {
+        ...placement,
+        mergeText: canvas ? false : undefined,
+        preserveNewlines: plainText || undefined,
+      },
     });
-    if (caret && !canvas) {
-      reactEditor.selection.set([{ type: "text", anchor: caret, head: caret }]);
-    }
-    if (canvas && saved) {
-      const pasted = editor.selection.get().find((item) => item.type === "block");
-      reactEditor.selection.set(saved);
-      if (pasted) {
-        const rootMap = new Map((sourceBundle?.blocks ?? []).map((block, index) => [block.id, pasted.blockIds[index]]).filter((entry): entry is [string, string] => Boolean(entry[1])));
-        const sources = sourceBundle?.elements?.filter((element) => element.type === "block") ?? [];
-        const created: string[] = [];
-        editor.batchUpdates(() => {
-          const sourceRootIds = (sourceBundle?.blocks ?? []).map((block) => block.id);
-          const groups = sources.length ? sources.map((element) => ({ source: element, blockIds: blockIdsOf(element, sourceRootIds).flatMap((id) => rootMap.get(id) ?? []) })) : [{ source: undefined, blockIds: pasted.blockIds }];
-          const rootOrder = editor.blocks.getRootIds();
-          const first = groups[0]?.blockIds[0];
-          const before = first ? rootOrder[rootOrder.indexOf(first) - 1] : undefined;
-          if (before) insertBlockElementSeparator(reactEditor, before);
-          groups.slice(0, -1).forEach(({ blockIds }) => {
-            const last = blockIds.at(-1);
-            if (last) insertBlockElementSeparator(reactEditor, last);
-          });
-          groups.forEach(({ source, blockIds }, index) => {
-            if (!blockIds.length) return;
-            created.push(editor.elements.insertElement({
-              type: "block",
-              frame: source ? { ...source.frame, x: source.frame.x + 24, y: source.frame.y + 24 } : { x: 60 + index * 24, y: 60 + index * 24, width: 320, height: 120 },
-              zIndex: Math.max(0, ...editor.elements.getElements().map((element) => element.zIndex)) + 1,
-              props: blockRangeProps(blockIds),
-            }));
-          });
-        });
-        findEdgelessRuntime(reactEditor)?.set(created);
-      }
+    if (!canvas && isStructuralSelection(reactEditor.selection.get())) {
+      const root = reactEditor.events.getRoot();
+      // The paste event started in the old contenteditable, whose native caret
+      // would override the newly selected blocks on the next keyboard event.
+      // Move keyboard ownership to the surface, as pointer block selection does.
+      root?.ownerDocument.getSelection()?.removeAllRanges();
+      root?.focus({ preventScroll: true });
     }
     requestAnimationFrame(() => reactEditor.selection.restoreDOM());
   };
 
   /**
-   * Copies either selected whole blocks or an explicit single-block text range.
+   * Copies selected canvas elements, whole blocks, or an exact text range.
    * @returns Portable payload, or undefined for an empty range.
    */
   const copyCurrent = (): ClipboardBundle | undefined => {
     const canvas = canvasSelection();
-    const text = reactEditor.selection.get().find((item) => item.type === "text");
-    return canvas ? editor.clipboard.copy([canvas])
-      : text ? editor.clipboard.copyText(text) : editor.clipboard.copy();
+    const canvasElementIds = selectedCanvasElementIds();
+    return canvas ? editor.clipboard.copy(canvas)
+      : canvasElementIds.length ? { version: 4, blocks: [] }
+      : editor.clipboard.copy();
   };
 
   /**
@@ -332,14 +315,15 @@ export function registerClipboard(
   }, ({ raw: event }) => {
     synchronizeSelection();
     const canvas = canvasSelection();
+    const canvasElementIds = selectedCanvasElementIds();
     const payload = copyCurrent();
     if (!payload) return false;
     writeClipboard(event, payload);
-    if (!canvas) deleteCopiedSelection();
-    if (canvas) {
+    if (!canvasElementIds.length) deleteCopiedSelection();
+    if (canvasElementIds.length) {
       editor.batchUpdates(() => {
-        canvas.blockIds.forEach((id) => editor.blocks.removeBlock(id));
-        editor.elements.removeElements(selectedCanvasElementIds());
+        if (canvas) getSelectedBlockIds(canvas).forEach((id) => editor.blocks.removeBlock(id));
+        editor.elements.removeElements(canvasElementIds);
       });
       findEdgelessRuntime(reactEditor)?.clear();
     }
@@ -354,22 +338,23 @@ export function registerClipboard(
       (activeElement !== null && root.contains(activeElement));
     const current = editor.selection.get();
     const canvas = canvasSelection();
-    if (!editorHasFocus || (!canvas && (!current.length || !isStructuralSelection(current)))) return false;
+    const canvasElementIds = selectedCanvasElementIds();
+    if (!editorHasFocus || (!canvasElementIds.length && !isStructuralSelection(current))) return false;
     let handled = false;
     if (event.type === "paste") {
       pasteClipboard(event);
       handled = true;
     } else {
       const payload = canvas
-        ? editor.clipboard.copy([canvas])
+        ? editor.clipboard.copy(canvas)
         : copyCurrent();
       if (payload) {
         writeClipboard(event, payload);
-        if (!canvas && event.type === "cut") deleteCopiedSelection();
-        if (canvas && event.type === "cut") {
+        if (!canvasElementIds.length && event.type === "cut") deleteCopiedSelection();
+        if (canvasElementIds.length && event.type === "cut") {
           editor.batchUpdates(() => {
-            canvas.blockIds.forEach((id) => editor.blocks.removeBlock(id));
-            editor.elements.removeElements(selectedCanvasElementIds());
+            if (canvas) getSelectedBlockIds(canvas).forEach((id) => editor.blocks.removeBlock(id));
+            editor.elements.removeElements(canvasElementIds);
           });
           findEdgelessRuntime(reactEditor)?.clear();
         }
@@ -444,4 +429,5 @@ export function registerClipboard(
     pasteClipboard(event);
     return true;
   });
+  return unregisterElementPaste;
 }

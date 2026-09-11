@@ -4,6 +4,7 @@ import {
 } from "../../constants";
 import type { ReactEditor } from "../../types";
 import { toggleBlockSelection } from "../page/page-selection-utils";
+import { hasBlockRanges } from "@chulane/rivto";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
 
@@ -80,7 +81,8 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     const blockId = block?.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!block || !blockId || !root.contains(block)) return false;
 
-    const current = editor.selection.get().find((item) => item.type === "block");
+    const selection = editor.selection.get();
+    const current = selection && hasBlockRanges(selection) ? selection : undefined;
     const next = toggleBlockSelection(
       editor.blocks.getBlocks(),
       current,
@@ -88,8 +90,9 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
       editor.mode.get() === "edgeless",
       (candidate) => reactEditor.blocks.hasListProps("collapse") && candidate.listProps.collapsed === true,
     );
-    if (editor.mode.get() === "edgeless") findEdgelessRuntime(reactEditor)?.deactivate();
-    if (next) editor.selection.set([next]);
+    const canvas = editor.mode.get() === "edgeless" ? findEdgelessRuntime(reactEditor) : undefined;
+    if (next && canvas) canvas.setBlocks(next);
+    else if (next) editor.selection.set(next);
     else editor.selection.clear();
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });

@@ -3,6 +3,7 @@
  * clipboard and snapshot round trips rather than a separate tile store.
  * @module
  */
+import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../test-utils";
 import { createReactEditor } from "../../react-editor";
 import { defaultWritingBlockExtension } from "../page/default-writing-block";
@@ -18,7 +19,7 @@ test("Bento preserves tile identity and width through moves, undo and serializat
   editor.blocks.updateBlock(tile, { props: { bentoWidth: 600 } });
   editor.history.undo();
   expect(editor.blocks.getBlock(tile)?.props.bentoWidth).toBe(440);
-  const copy = editor.clipboard.copy([{ type: "block", blockIds: [board], anchorBlockId: board, focusBlockId: board }]);
+  const copy = editor.clipboard.copy(createStructuralSelection([board]));
   expect(copy?.blocks[0]?.children[0]?.props.bentoWidth).toBe(440);
   const snapshot = editor.dump();
   editor.load(snapshot);

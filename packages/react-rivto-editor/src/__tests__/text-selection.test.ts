@@ -1,6 +1,7 @@
 import {
-  createBlockSelection,
-  createSelectionItems,
+  createVisibleStructuralSelection,
+  createTextSelection,
+  resolveSelectionEndpoints,
 } from "../managers";
 
 const blocks = [
@@ -12,44 +13,78 @@ const blocks = [
 
 describe("cross-block selection items", () => {
   it("creates an inclusive block range while preserving reverse direction", () => {
-    expect(createBlockSelection(["a", "b", "c", "d"], "d", "b")).toEqual([{
-      type: "block",
-      blockIds: ["b", "c", "d"],
+    expect(createVisibleStructuralSelection(["a", "b", "c", "d"], "d", "b")).toEqual({
+      type: "selection",
+      blocks: [
+        { id: "b", start: 0, end: -1 },
+        { id: "c", start: 0, end: -1 },
+        { id: "d", start: 0, end: -1 },
+      ],
       anchorBlockId: "d",
       focusBlockId: "b",
-    }]);
+    });
   });
 
   it("preserves top-down direction and selects complete middle blocks", () => {
-    expect(createSelectionItems(
+    expect(createTextSelection(
       blocks,
       { blockId: "first", offset: 4 },
       { blockId: "fourth", offset: 8 },
-    )).toEqual([{
-      type: "block", blockIds: ["first", "second", "third", "fourth"],
-      anchorBlockId: "first", focusBlockId: "fourth",
-    }]);
+    )).toEqual({
+      type: "selection",
+      blocks: [
+        { id: "first", start: 4, end: 10 },
+        { id: "second", start: 0, end: 20 },
+        { id: "third", start: 0, end: 30 },
+        { id: "fourth", start: 0, end: 8 },
+      ],
+      anchorBlockId: "first",
+      focusBlockId: "fourth",
+      reversed: false,
+    });
   });
 
   it("preserves bottom-up direction while keeping block IDs ordered", () => {
-    expect(createSelectionItems(
+    const selection = createTextSelection(
       blocks,
       { blockId: "fourth", offset: 8 },
       { blockId: "first", offset: 4 },
-    )).toEqual([{
-      type: "block", blockIds: ["first", "second", "third", "fourth"],
-      anchorBlockId: "fourth", focusBlockId: "first",
-    }]);
+    )!;
+    expect(selection).toEqual({
+      type: "selection",
+      blocks: [
+        { id: "first", start: 4, end: 10 },
+        { id: "second", start: 0, end: 20 },
+        { id: "third", start: 0, end: 30 },
+        { id: "fourth", start: 0, end: 8 },
+      ],
+      anchorBlockId: "fourth",
+      focusBlockId: "first",
+      reversed: false,
+    });
+    expect(resolveSelectionEndpoints(
+      selection,
+      (id) => blocks.find((block) => block.id === id)?.length ?? 0,
+    )).toEqual({
+      anchor: { blockId: "fourth", offset: 8 },
+      head: { blockId: "first", offset: 4 },
+    });
   });
 
-  it("selects adjacent blocks completely", () => {
-    expect(createSelectionItems(
+  it("keeps exact text offsets across adjacent blocks", () => {
+    expect(createTextSelection(
       blocks,
       { blockId: "second", offset: 2 },
       { blockId: "third", offset: 3 },
-    )).toEqual([{
-      type: "block", blockIds: ["second", "third"],
-      anchorBlockId: "second", focusBlockId: "third",
-    }]);
+    )).toEqual({
+      type: "selection",
+      blocks: [
+        { id: "second", start: 2, end: 20 },
+        { id: "third", start: 0, end: 3 },
+      ],
+      anchorBlockId: "second",
+      focusBlockId: "third",
+      reversed: false,
+    });
   });
 });

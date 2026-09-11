@@ -1,4 +1,4 @@
-import { createTestEditor as createRivtoEditor } from "../../editor/test-utils";
+import { createTestEditor as createRivtoEditor, createStructuralSelection } from "../../editor/test-utils";
 
 describe("editor block managers", () => {
   it("exposes separate registry and block managers", () => {
@@ -26,12 +26,7 @@ describe("editor block managers", () => {
     const firstId = editor.blocks.insertBlock({ type: "paragraph" });
     const secondId = editor.blocks.insertBlock({ type: "paragraph" }, firstId);
 
-    editor.selection.set([{
-      type: "block",
-      blockIds: [firstId, secondId],
-      anchorBlockId: firstId,
-      focusBlockId: secondId,
-    }]);
+    editor.selection.set(createStructuralSelection([firstId, secondId], firstId, secondId));
     editor.blocks.removeBlock(firstId);
 
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([secondId]);

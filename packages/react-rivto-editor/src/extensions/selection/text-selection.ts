@@ -6,10 +6,11 @@
  *
  * @module
  */
-import type { ReactSelection } from "../../managers/selection/selection-manager";
 import type {
   EditorPosition,
+  Selection,
 } from "@chulane/rivto";
+import { isStructuralSelection } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_SELECTION_ANCHOR_SELECTOR,
@@ -18,12 +19,13 @@ import type { ReactEditor } from "../../types";
 import { isElementNode } from "../../managers/events/dom-nodes";
 import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
 import {
-  createBlockSelection,
-  createDOMSelectionItems,
+  createVisibleStructuralSelection,
+  createDOMSelection,
   orderedBlockIds,
   readBlockIdAtPoint,
   readDOMPointPosition,
   readDOMSelectionPoint,
+  resolveSelectionEndpoints,
   resolveDOMSelectionPoint,
   setNativeSelection,
   type DOMSelectionPoint,
@@ -35,6 +37,25 @@ const INTERACTIVE_STRUCTURAL_TARGET_SELECTOR =
 /** Returns whether a control inside a structural anchor keeps its native click. */
 function isInteractiveStructuralTarget(target: Element): boolean {
   return Boolean(target.closest(INTERACTIVE_STRUCTURAL_TARGET_SELECTOR));
+}
+
+/**
+ * Chooses complete blocks versus exact text endpoints for a modifier gesture.
+ *
+ * Crossing an editable host is structural by default, matching Shift-click and
+ * Alt-drag. Shift+Alt is the only cross-block path that keeps partial first and
+ * last character offsets.
+ *
+ * @param event - Pointer modifiers from the current gesture.
+ * @param crossBlock - Whether the moving endpoint left the anchor host.
+ * @returns Whether the gesture should publish an inclusive block selection.
+ */
+function wantsWholeBlocks(
+  event: Pick<PointerEvent, "altKey" | "shiftKey">,
+  crossBlock: boolean,
+): boolean {
+  if (!crossBlock) return false;
+  return !(event.shiftKey && event.altKey);
 }
 
 /** Live state retained only for the duration of one pointer selection gesture. */
@@ -56,13 +77,13 @@ interface PointerSelection {
   /** Latest moving endpoint, used to restore direction after pointer-up. */
   head?: DOMSelectionPoint;
   /** Latest portable list published to SelectionManager. */
-  selection?: ReactSelection;
+  selection?: Selection;
   /** True while the latest synthetic result selects complete blocks. */
   wholeBlocks: boolean;
 }
 
 /**
- * Keeps single-block text editing local and publishes whole-block gestures.
+ * Publishes exact text endpoints and structural block gestures to core.
  *
  * Every block owns a separate contenteditable element. Browsers handle a drag
  * inside one element natively, but Chromium may collapse or reverse a range as
@@ -70,9 +91,10 @@ interface PointerSelection {
  * pointer-down endpoint, resolves subsequent pointer coordinates itself, and
  * uses `Selection.setBaseAndExtent` to display the correct directed range.
  *
- * A drag that crosses block hosts becomes an inclusive BlockSelection.
- * Returning to the original block restores its exact local text range from
- * gesture-local endpoints. Modifier keys do not enable cross-block text.
+ * A drag between editable hosts selects complete blocks. Shift+Alt is the
+ * exception: it keeps exact text endpoints and fully covers blocks between
+ * them. Structural block renderers produce whole blocks because they have no
+ * caret.
  *
  * The extension renders no UI and assumes no surface classes. It relies only on
  * the stable data attributes provided by BlockView and useBlockEditing.
@@ -92,11 +114,6 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
   let releaseTimer: number | undefined;
   let suppressClickBlockId: string | undefined;
   let ownsCrossBlockSelection = false;
-  const unsubscribeSelection = reactEditor.selection.subscribe(() => {
-    if (editor.mode.get() === "edgeless" && reactEditor.selection.get().length) {
-      findEdgelessRuntime(reactEditor)?.deactivate();
-    }
-  });
 
   /** Publishes the synthetic endpoint chosen for a cross-host gesture. */
   const publish = (
@@ -109,11 +126,11 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       if (!root) return;
       active.crossBlock = headPosition.blockId !== active.anchorPosition.blockId;
       active.head = head;
-      active.wholeBlocks = forceWholeBlocks || active.crossBlock;
+      active.wholeBlocks = forceWholeBlocks;
       active.selection = active.wholeBlocks
-        ? createBlockSelection(orderedBlockIds(root), active.anchorPosition.blockId, headPosition.blockId)
-        : createDOMSelectionItems(root, active.anchorPosition, headPosition);
-      if (!active.selection.length) return;
+        ? createVisibleStructuralSelection(orderedBlockIds(root), active.anchorPosition.blockId, headPosition.blockId)
+        : createDOMSelection(root, active.anchorPosition, headPosition);
+      if (!active.selection) return;
 
       reactEditor.selection.set(active.selection);
       if (active.wholeBlocks) {
@@ -158,31 +175,51 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
             ? readDOMPointPosition(root, clicked)
             : blockId ? { blockId, offset: 0 } : undefined;
 
-          const current = reactEditor.selection.get();
+          // A second click can arrive before the browser dispatches the first
+          // click's selectionchange. Read its live caret before extending it.
+          const nativeSelection = event.shiftKey ? reactEditor.selection.readDOM() : undefined;
+          if (nativeSelection) reactEditor.selection.set(nativeSelection);
+          const current = nativeSelection ?? reactEditor.selection.get();
           // Shift extends the existing selection instead of replacing its anchor.
-          // A block selection has no character endpoint, so it extends as blocks.
           if (event.shiftKey && clickedPosition) {
-            const block = current.find((item) => item.type === "block");
-            if (block?.type === "block") {
+            const item = current;
+            const lengthOf = (id: string) => editor.blocks.getBlock(id)?.content.length ?? 0;
+            const ends = item ? resolveSelectionEndpoints(item, lengthOf) : undefined;
+            const originId = ends?.anchor.blockId ?? item?.anchorBlockId;
+            const wholeBlocks = originId
+              ? wantsWholeBlocks(event, originId !== clickedPosition.blockId)
+              : false;
+            if (originId && wholeBlocks) {
               ownsCrossBlockSelection = true;
               pointer = null;
-              reactEditor.selection.set(
-                createBlockSelection(orderedBlockIds(root), block.anchorBlockId, clickedPosition.blockId),
-              );
+              const next = createVisibleStructuralSelection(orderedBlockIds(root), originId, clickedPosition.blockId);
+              if (next) reactEditor.selection.set(next);
               root.ownerDocument.getSelection()?.removeAllRanges();
               root.focus({ preventScroll: true });
               releaseTimer = view?.setTimeout(() => { ownsCrossBlockSelection = false; });
               handled = true;
-            } else {
-              const text = current.find((item) => item.type === "text");
-              const anchor = text && resolveDOMSelectionPoint(root, text.anchor);
-              if (text && anchor) {
+            } else if (clicked) {
+              const ids = orderedBlockIds(root);
+              const originFromBlock = item?.anchorBlockId;
+              const originIndex = originFromBlock ? ids.indexOf(originFromBlock) : -1;
+              const clickIndex = originFromBlock ? ids.indexOf(clickedPosition.blockId) : -1;
+              const originContentLength = originFromBlock
+                ? (editor.blocks.getBlock(originFromBlock)?.content.length ?? 0)
+                : 0;
+              const anchorPosition = ends?.anchor ?? (originFromBlock
+                ? {
+                    blockId: originFromBlock,
+                    offset: originIndex > clickIndex ? originContentLength : 0,
+                  }
+                : undefined);
+              const anchor = anchorPosition && resolveDOMSelectionPoint(root, anchorPosition);
+              if (anchor && anchorPosition) {
                 ownsCrossBlockSelection = true;
                 const active: PointerSelection = {
                   startX: event.clientX,
                   startY: event.clientY,
                   anchor,
-                  anchorPosition: text.anchor,
+                  anchorPosition,
                   crossBlock: false,
                   wholeBlocks: false,
                 };
@@ -234,35 +271,42 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       if (!active || Math.hypot(event.clientX - active.startX, event.clientY - active.startY) < 3) return false;
 
       const pointedBlockId = readBlockIdAtPoint(root, event.clientX, event.clientY);
+      const head = active.anchor ? readDOMSelectionPoint(root, event.clientX, event.clientY) : undefined;
+      const headPosition = head && readDOMPointPosition(root, head);
+      // Caret hit-testing falls back to a nearby editable host over contentless
+      // blocks. Shift+Alt keeps that DOM point only for native painting and
+      // uses the actual BlockView hit as the portable selection endpoint.
+      const partialContentlessBlockId = event.shiftKey && event.altKey
+        && pointedBlockId !== headPosition?.blockId ? pointedBlockId : undefined;
+      const effectiveHeadPosition = partialContentlessBlockId
+        ? { blockId: partialContentlessBlockId, offset: 0 }
+        : headPosition;
+      const crossBlock = (effectiveHeadPosition?.blockId ?? pointedBlockId) !== active.anchorPosition.blockId;
+      const wholeBlocks = wantsWholeBlocks(event, Boolean(crossBlock));
       let handled = false;
-      if (pointedBlockId && (
+      if (wholeBlocks && pointedBlockId && pointedBlockId !== headPosition?.blockId && (
         pointedBlockId !== active.anchorPosition.blockId || !active.anchor
       )) {
-        // Normal cross-block drag selects complete blocks, so it needs only the
-        // BlockView marker. Resolving this before text caret geometry lets
-        // contentless custom blocks advance the range immediately.
         ownsCrossBlockSelection = true;
         if (!active.anchor) suppressClickBlockId = active.anchorPosition.blockId;
         publish(active, undefined, { blockId: pointedBlockId, offset: 0 }, true);
         handled = true;
-      } else {
-        const head = readDOMSelectionPoint(root, event.clientX, event.clientY);
-        const headPosition = head && readDOMPointPosition(root, head);
-        if (head && headPosition) {
-          const sameBlock = headPosition.blockId === active.anchorPosition.blockId;
-          // Native selection owns a gesture only until it first crosses an editing
-          // host. After that transition, continue publishing every move—even after
-          // returning to the anchor block—so `active.head` follows the pointer
-          // instead of freezing at the first same-block re-entry offset.
-          if (!(sameBlock && !ownsCrossBlockSelection)) {
-            // Native contenteditable selection owns same-block dragging. Once the
-            // gesture crosses hosts, preventing its default movement avoids Chromium
-            // replacing our original endpoint with a collapsed range in the new host.
-            ownsCrossBlockSelection = true;
-            publish(active, head, headPosition);
-            handled = true;
-          }
+      } else if (head && effectiveHeadPosition) {
+        const sameBlock = effectiveHeadPosition.blockId === active.anchorPosition.blockId;
+        if (!(sameBlock && !ownsCrossBlockSelection)) {
+          ownsCrossBlockSelection = true;
+          publish(active, head, effectiveHeadPosition, wholeBlocks);
+          handled = true;
         }
+      } else if (pointedBlockId && (
+        pointedBlockId !== active.anchorPosition.blockId || !active.anchor
+      )) {
+        // Contentless structural blocks have no caret geometry, so their stable
+        // BlockView marker advances a whole-block range instead.
+        ownsCrossBlockSelection = true;
+        if (!active.anchor) suppressClickBlockId = active.anchorPosition.blockId;
+        publish(active, undefined, { blockId: pointedBlockId, offset: 0 }, true);
+        handled = true;
       }
       return handled;
   });
@@ -333,7 +377,8 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       const anchor = event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);
       if (!anchor || anchor.isContentEditable || !root.contains(anchor)) return false;
 
-      reactEditor.selection.set(createBlockSelection(orderedBlockIds(root), blockId, blockId));
+      const selection = createVisibleStructuralSelection(orderedBlockIds(root), blockId, blockId);
+      if (selection) reactEditor.selection.set(selection);
       if (editor.mode.get() === "edgeless") findEdgelessRuntime(reactEditor)?.deactivate();
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });
@@ -350,11 +395,9 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       if (selection) {
         reactEditor.selection.set(selection);
       } else if (!(editor.mode.get() === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active)) {
-        // Losing the browser range clears only text items. A separate whole-block
-        // selection remains valid local state.
+        // Losing the browser range keeps a structural selection and clears carets.
         const current = reactEditor.selection.get();
-        const remaining = current.filter((item) => item.type !== "text");
-        if (remaining.length !== current.length) reactEditor.selection.set(remaining);
+        if (current && !isStructuralSelection(current)) reactEditor.selection.clear();
       }
       return false;
   });
@@ -364,7 +407,6 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
     if (releaseTimer !== undefined) {
       root?.ownerDocument.defaultView?.clearTimeout(releaseTimer);
     }
-    unsubscribeSelection();
     ownsCrossBlockSelection = false;
     suppressClickBlockId = undefined;
     pointer = null;

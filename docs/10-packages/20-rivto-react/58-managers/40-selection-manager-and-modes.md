@@ -1,22 +1,21 @@
 # ReactSelectionManager и modes
 
-Core `editor.selection` хранит только whole-block selection. Browser text ranges
-не входят в core state и никогда не смешиваются с block items.
+Core `editor.selection` хранит generic selection с block ranges, element IDs и
+plugin data. React синхронизирует native DOM endpoints с тем же core state.
 
 `reactEditor.selection` предоставляет editing context:
 
-- `get()`: block items либо один single-block text range.
-- `set(context)`: проверяет single-block offsets или передаёт block items в core.
-  Mixed и cross-block text ranges отклоняются.
-- `clear()`: очищает editing context и core block selection.
-- `subscribe(listener)`: подписка на text context и core block selection.
-- `delete()`: удаляет выделенные символы одного блока либо выбранные block subtrees.
-- `readDOM()`: читает native endpoints; несколько блоков превращаются в block range.
-- `restoreDOM(context?)`: восстанавливает single-block text range, по умолчанию из `get()`.
+- `get()`: возвращает generic core selection.
+- `set(context)`: валидирует и публикует generic selection.
+- `clear()`: очищает selection.
+- `subscribe(listener)`: подписывается на selection state.
+- `delete()`: удаляет text range, whole blocks и selected elements.
+- `readDOM()`: преобразует directed native endpoints в absolute per-block ranges.
+- `restoreDOM(context?)`: восстанавливает directed native text range.
 
-Drag через несколько блоков, включая Alt-drag, выбирает целые блоки. Возврат
-в исходный блок восстанавливает локальный text range. Cross-block text highlights
-удалены. `useEditorSelection()` и `useBlockSelection()` читают только whole blocks.
+Shift+Alt drag/click сохраняет partial cross-block text. Полностью покрытые
+editable middle blocks остаются text ranges без второго structural highlight;
+contentless blocks получают `{ start: 0, end: -1 }`. Alt-drag выбирает whole blocks.
 
 Clipboard использует `editor.clipboard.copyText(range)` и
 `editor.clipboard.paste({ textTarget: range, ... })`. Paste возвращает caret
@@ -25,9 +24,8 @@ Whole-block copy/paste остаётся структурным. Ctrl/Cmd+Shift+V
 text в один блок с сохранением переводов строк.
 
 Page и editing внутри edgeless card используют одинаковые правила. Canvas
-element/group selection остаётся в EdgelessSelectionRuntime и имеет приоритет,
-пока активна. Clipboard временно проецирует выбранные cards в core block IDs,
-затем восстанавливает предыдущий host context.
+element/group selection хранится в generic core selection через element IDs и
+extension-owned plugin data.
 
 Все selections локальны и не входят в CRDT. Persisted mutations проходят через
 core managers и отдельный document-model package.

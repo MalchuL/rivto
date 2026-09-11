@@ -5,6 +5,7 @@
  *
  * @module
  */
+import { createCaretSelection } from "@chulane/rivto";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -78,11 +79,7 @@ function insertSeparator(
       }, block.id);
     }
     writingId = reactEditor.blocks.insertBlock(createDefaultBlock(), separatorId);
-    reactEditor.selection.set([{
-      type: "text",
-      anchor: { blockId: writingId, offset: 0 },
-      head: { blockId: writingId, offset: 0 },
-    }]);
+    reactEditor.selection.set(createCaretSelection(writingId, 0));
   });
   return writingId;
 }

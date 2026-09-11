@@ -24,6 +24,14 @@ import type {
 import type { RivtoEditorApi } from "../../editor/types";
 import { commandPayload, commandString } from "../utils";
 
+/** Result of importing a detached block forest into one editor. */
+export interface ImportedBlockForest {
+  /** Inserted root IDs in source order. */
+  readonly rootIds: string[];
+  /** Source block ID to inserted destination block ID. */
+  readonly idMap: ReadonlyMap<string, string>;
+}
+
 /**
  * Owns editor block commands and typed block operations.
  *
@@ -102,6 +110,41 @@ export class BlockManager {
   insertBlock(block: EditorBlockInput, afterId?: string | null): string {
     const command = { block, afterId } satisfies { block: BlockInput; afterId?: string | null };
     return this.editor.commands.execute("block.insert", command) as string;
+  }
+
+  /**
+   * Imports a detached forest while preserving every source identity that is
+   * free in the destination.
+   *
+   * Existing IDs indicate copy-and-paste and receive destination-generated
+   * replacements. IDs removed by cut remain free and are restored. The result
+   * exposes the complete mapping so clipboard extensions can update references
+   * without inferring insertion results from selection state.
+   *
+   * @param blocks - Complete detached source roots to insert recursively.
+   * @param afterId - Existing sibling after which roots are inserted.
+   * @returns Inserted root IDs and every source-to-destination identity mapping.
+   */
+  importForest(blocks: readonly EditorBlock[], afterId?: string | null): ImportedBlockForest {
+    const idMap = new Map<string, string>();
+    const assigned = new Set<string>();
+    const prepare = (block: EditorBlock): EditorBlockInput => {
+      const reusable = !this.editor.document.blocks.hasBlock(block.id) && !assigned.has(block.id);
+      const id = reusable ? block.id : this.editor.document.blocks.generateId();
+      assigned.add(id);
+      idMap.set(block.id, id);
+      return { ...block, id, children: block.children.map(prepare) };
+    };
+    const prepared = blocks.map(prepare);
+    const rootIds: string[] = [];
+    this.editor.batchUpdates(() => {
+      let previous = afterId;
+      prepared.forEach((block) => {
+        previous = this.insertBlock(block, previous);
+        rootIds.push(previous);
+      });
+    });
+    return { rootIds, idMap };
   }
 
   /**

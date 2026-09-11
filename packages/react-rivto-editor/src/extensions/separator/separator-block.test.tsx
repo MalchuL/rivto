@@ -1,3 +1,4 @@
+import { createCaretSelection } from "@chulane/rivto";
 import { createTestCoreEditor as createRivtoEditor } from "../../test-utils";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createReactEditor } from "../../react-editor";
@@ -33,11 +34,7 @@ describe("separator block extension", () => {
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
     });
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "Keep me" });
-    reactEditor.selection.set([{
-      type: "text",
-      anchor: { blockId: first, offset: 0 },
-      head: { blockId: first, offset: 0 },
-    }]);
+    reactEditor.selection.set(createCaretSelection(first, 0));
 
     reactEditor.slashCommands.execute("block.separator.insert", { blockId: first });
 
@@ -59,11 +56,7 @@ describe("separator block extension", () => {
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
     });
     const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" });
-    reactEditor.selection.set([{
-      type: "text",
-      anchor: { blockId: empty, offset: 0 },
-      head: { blockId: empty, offset: 0 },
-    }]);
+    reactEditor.selection.set(createCaretSelection(empty, 0));
 
     reactEditor.slashCommands.execute("block.separator.insert", { blockId: empty });
 

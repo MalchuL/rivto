@@ -63,7 +63,7 @@ Standalone document command вызывает `history.stopCapturing()` до и �
 
 ### `selection.set`
 
-- **Payload:** `{ selection: EditorSelection }`.
+- **Payload:** `{ selection: Selection }`.
 - **Возвращает:** `void`.
 - **Исключения:** command payload или selection validation errors.
 
@@ -93,7 +93,7 @@ Block, link и element commands регистрируются их public manager
 - **Возвращает:** `void`.
 - **Исключения:** duplicate command registration errors.
 
-Метод устанавливает compatibility bridge между DOM-like events, legacy string payloads и typed `ClipboardManager`.
+Метод регистрирует data-only commands поверх typed `ClipboardManager`.
 
 ### Local helper `payload(value)`
 
@@ -107,25 +107,17 @@ Block, link и element commands регистрируются их public manager
 - **Возвращает:** `string | undefined`.
 - **Исключения:** отсутствуют.
 
-### Local helper `clipboardEvent(value)`
-
-- **Аргументы:** `value: unknown`, сам event или object с полем `event`.
-- **Возвращает:** structural `ClipboardEventLike | undefined`.
-- **Исключения:** Proxy/property access errors.
-
 ## Clipboard commands
 
 ### `clipboard.copy`
 
-- **Payload:** optional event; optional `{ clipboardData: { setData }, textTarget?: TextSelection }`. `textTarget` задаёт range внутри одного блока; без него копируются выбранные blocks.
+- **Payload:** optional `{ textTarget?: Selection }`. `textTarget` задаёт text range; без него используется current selection.
 - **Возвращает:** serialized `ClipboardBundle` JSON или `""`, если selection нельзя скопировать.
 - **Исключения:** selection normalization, serialization или host `setData` errors.
 
-При DOM-like event вызывает `preventDefault()` и пишет structured MIME `RIVTO_CLIPBOARD_MIME`.
-
 ### `clipboard.cut`
 
-- **Payload:** optional DOM-like clipboard event.
+- **Payload:** не используется.
 - **Возвращает:** serialized bundle JSON или `""`.
 - **Исключения:** copy/delete/serialization и host clipboard errors.
 
@@ -133,11 +125,11 @@ Block, link и element commands регистрируются их public manager
 
 ### `clipboard.paste`
 
-- **Payload:** optional fields `bundle`, `structured`, `mergeText`, `preserveNewlines`, `defaultBlockType`, `text`, `placement`, `textTarget`; либо DOM-like event.
+- **Payload:** optional fields `bundle`, `structured`, `mergeText`, `preserveNewlines`, `defaultBlockType`, `text`, `placement`, `textTarget`.
 - **Возвращает:** `EditorPosition | undefined`: caret после text insertion либо undefined для structural paste/no-op.
 - **Исключения:** invalid structured JSON/bundle, placement collision, missing block type и document operations.
 
-Priority structured source: explicit `structured`, затем custom MIME event. Explicit `text` имеет priority над event `text/plain`. Defaults: `mergeText !== false`, `preserveNewlines === false`.
+Structured input comes from `bundle` or serialized `structured`; plain input comes from `text`. Defaults: `mergeText !== false`, `preserveNewlines === false`.
 
 ```ts
 editor.execute("clipboard.paste", {
@@ -147,8 +139,6 @@ editor.execute("clipboard.paste", {
   placement: { parentId: null, afterId: null },
 });
 ```
-
-Event `preventDefault()` вызывается при наличии `clipboardData`, даже если дальше paste завершится ошибкой.
 
 ## Источники ошибок command registry
 

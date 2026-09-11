@@ -9,6 +9,7 @@
     "dev": "pnpm --filter @chulane/crdt-doc --filter @chulane/document-model --filter @chulane/rivto --parallel dev",
     "app": "pnpm --filter @chulane/rivto-app-web dev",
     "demo": "pnpm --dir demo dev",
+    "demo:run": "pnpm demo:build && pnpm --dir demo preview",
     "demo:build": "pnpm --dir demo build",
     "demo:check": "pnpm --dir demo check-types",
     "docs:dev": "pnpm --dir docs dev",

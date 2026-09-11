@@ -1,13 +1,19 @@
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
-import type { ReactSelection } from "../../managers/selection/selection-manager";
 import type {
-  BlockSelectionInput as BlockSelection,
   EditorBlock,
   RivtoEditorApi as Editor,
   EditorPosition,
-  TextRange as TextSelection,
+  Selection,
+} from "@chulane/rivto";
+import {
+  assertBlockRangeEndpoints,
+  createCaretSelection,
+  hasBlockRanges,
+  isCaretSelection,
+  isStructuralSelection,
+  createTextSelection,
 } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
@@ -25,6 +31,7 @@ import {
   findNextEditableBlock,
   findPreviousEditableBlock,
   focusBlock,
+  resolveSelectionEndpoints,
   verticalCaretPosition,
 } from "../../managers";
 import {
@@ -38,46 +45,48 @@ import {
 import { navigationDomRoot, navigationOutlineBlocks } from "./outline-scope";
 
 type VerticalDirection = "up" | "down";
-
 /** Native controls own arrow keys even when the editor retains a text selection. */
 function isNativeControl(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName);
 }
 
-function collapsed(selection: TextSelection): boolean {
-  return selection.anchor.blockId === selection.head.blockId &&
-    selection.anchor.offset === selection.head.offset;
+function collapsed(item: Selection): boolean {
+  return isCaretSelection(item);
 }
 
 function textSelectionEdge(
   reactEditor: ReactEditor,
   editor: Editor,
-  selection: TextSelection,
+  selection: Selection,
   edge: "start" | "end",
 ): EditorPosition {
+  assertBlockRangeEndpoints(selection);
+  const lengthOf = (id: string) => editor.blocks.getBlock(id)?.content.length ?? 0;
+  const ends = resolveSelectionEndpoints(selection, lengthOf);
+  if (!ends) return { blockId: selection.focusBlockId, offset: 0 };
   const ids = pageEntries(
-    navigationOutlineBlocks(editor, selection.head.blockId),
+    navigationOutlineBlocks(editor, selection.focusBlockId),
     null,
     false,
     (block) => reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true,
-  )
-    .map(({ block }) => block.id);
-  const anchorIndex = ids.indexOf(selection.anchor.blockId);
-  const headIndex = ids.indexOf(selection.head.blockId);
+  ).map(({ block }) => block.id);
+  const anchorIndex = ids.indexOf(ends.anchor.blockId);
+  const headIndex = ids.indexOf(ends.head.blockId);
   const forward = anchorIndex < headIndex || (
-    anchorIndex === headIndex && selection.anchor.offset <= selection.head.offset
+    anchorIndex === headIndex && ends.anchor.offset <= ends.head.offset
   );
-  const start = forward ? selection.anchor : selection.head;
-  const end = forward ? selection.head : selection.anchor;
-  return edge === "start" ? start : end;
+  const start = forward ? ends.anchor : ends.head;
+  const stop = forward ? ends.head : ends.anchor;
+  return edge === "start" ? start : stop;
 }
 
 function currentSelection(
   selectionManager: SelectionCapability,
-): ReactSelection {
-  const managed = selectionManager.get();
+): Selection | undefined {
   // A click followed immediately by a key can precede `selectionchange`.
-  return managed.length ? managed : selectionManager.readDOM() ?? [];
+  // Prefer its live caret over stale plugin-only state with `blocks: []`;
+  // structural selection has no DOM range and therefore still uses the store.
+  return selectionManager.readDOM() ?? selectionManager.get();
 }
 
 function setCaret(
@@ -85,7 +94,7 @@ function setCaret(
   reactEditor: ReactEditor,
   position: EditorPosition,
 ): void {
-  reactEditor.selection.set([{ type: "text", anchor: position, head: position }]);
+  reactEditor.selection.set(createCaretSelection(position.blockId, position.offset));
   focusBlock(root, position.blockId, position.offset);
 }
 
@@ -117,10 +126,8 @@ function focusBlockSelection(root: HTMLElement, blockId: string): void {
     ?.scrollIntoView({ block: "nearest" });
 }
 
-function activeBlockId(selection: ReactSelection): string | undefined {
-  const text = selection.find((item): item is TextSelection => item.type === "text");
-  const blocks = selection.find((item): item is BlockSelection => item.type === "block");
-  return text?.head.blockId ?? blocks?.focusBlockId;
+function activeBlockId(selection: Selection | undefined): string | undefined {
+  return selection?.focusBlockId;
 }
 
 /**
@@ -132,25 +139,25 @@ function activeBlockId(selection: ReactSelection): string | undefined {
  */
 export function registerCaretNavigation(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
-  const isCollapsed = (block: EditorBlock) => (
-    reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true
-  );
+  const lengthOf = (id: string) => editor.blocks.getBlock(id)?.content.length ?? 0;
   const movePlain = (root: HTMLElement, direction: "left" | "right" | VerticalDirection): boolean => {
     const selection = currentSelection(reactEditor.selection);
-    const text = selection.find((item): item is TextSelection => item.type === "text");
-    if (!text) return false;
-    const scope = navigationDomRoot(root, text.head.blockId);
+    const item = selection;
+    if (!item || !hasBlockRanges(item) || isStructuralSelection(selection)) return false;
+    const ends = resolveSelectionEndpoints(item, lengthOf);
+    if (!ends) return false;
+    const scope = navigationDomRoot(root, ends.head.blockId);
     let handled = false;
-    if (!collapsed(text)) {
+    if (!collapsed(item)) {
       const towardStart = direction === "left" || direction === "up";
-      setCaret(root, reactEditor, textSelectionEdge(reactEditor, editor, text, towardStart ? "start" : "end"));
+      setCaret(root, reactEditor, textSelectionEdge(reactEditor, editor, item, towardStart ? "start" : "end"));
       handled = true;
     } else if (direction === "left" || direction === "right") {
-      const block = editor.blocks.getBlock(text.head.blockId);
-      const adjacent = direction === "left" && text.head.offset === 0
-        ? findPreviousEditableBlock(scope, text.head.blockId)
-        : direction === "right" && text.head.offset === (block?.content.length ?? -1)
-          ? findNextEditableBlock(scope, text.head.blockId)
+      const block = editor.blocks.getBlock(ends.head.blockId);
+      const adjacent = direction === "left" && ends.head.offset === 0
+        ? findPreviousEditableBlock(scope, ends.head.blockId)
+        : direction === "right" && ends.head.offset === (block?.content.length ?? -1)
+          ? findNextEditableBlock(scope, ends.head.blockId)
           : null;
       if (adjacent) {
         setCaret(root, reactEditor, {
@@ -160,7 +167,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
         handled = true;
       }
     } else {
-      const moved = verticalCaretPosition(scope, text.head, direction);
+      const moved = verticalCaretPosition(scope, ends.head, direction);
       if (moved) {
         setCaret(root, reactEditor, moved);
         handled = true;
@@ -171,23 +178,29 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     return handled;
   };
 
+  /**
+   * Extends the active text head along visual lines, keeping per-block offsets.
+   * @param root - Surface root used to restore native endpoints.
+   * @param direction - Vertical visual-line direction.
+   * @returns Whether a new range was published.
+   */
   const extendText = (root: HTMLElement, direction: VerticalDirection): boolean => {
     const selection = currentSelection(reactEditor.selection);
-    const text = selection.find((item): item is TextSelection => item.type === "text");
-    if (!text) return false;
-    const scope = navigationDomRoot(root, text.head.blockId);
-    const outline = navigationOutlineBlocks(editor, text.head.blockId);
-    const moved = verticalCaretPosition(scope, text.head, direction);
+    const item = selection;
+    if (!item || !hasBlockRanges(item) || isStructuralSelection(selection)) return false;
+    const ends = resolveSelectionEndpoints(item, lengthOf);
+    if (!ends) return false;
+    const scope = navigationDomRoot(root, ends.head.blockId);
+    const moved = verticalCaretPosition(scope, ends.head, direction);
     if (!moved) return false;
-    if (moved.blockId !== text.anchor.blockId) {
-      const next = blockSelection(outline, text.anchor.blockId, moved.blockId, isCollapsed);
-      reactEditor.selection.set([next]);
-      focusBlockSelection(root, next.focusBlockId);
-    } else {
-      const next: ReactSelection = [{ type: "text", anchor: text.anchor, head: moved }];
-      reactEditor.selection.set(next);
-      reactEditor.selection.restoreDOM(next);
-    }
+    const outline = pageEntries(navigationOutlineBlocks(editor, ends.head.blockId)).map(({ block }) => ({
+      id: block.id,
+      length: block.content.length,
+    }));
+    const next = createTextSelection(outline, ends.anchor, moved);
+    if (!next) return false;
+    reactEditor.selection.set(next);
+    reactEditor.selection.restoreDOM();
     return true;
   };
 
@@ -220,39 +233,39 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void
     reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true
   );
   const move = (root: HTMLElement, direction: VerticalDirection, extend: boolean): boolean => {
-    const blocks = currentSelection(reactEditor.selection)
-      .find((item): item is BlockSelection => item.type === "block");
-    if (!blocks) return false;
-    const outline = navigationOutlineBlocks(editor, blocks.focusBlockId);
+    const selection = currentSelection(reactEditor.selection);
+    if (!isStructuralSelection(selection)) return false;
+    const item = selection;
+    if (!item || !hasBlockRanges(item)) return false;
+    const outline = navigationOutlineBlocks(editor, item.focusBlockId);
     const next = extend
-      ? extendBlockSelection(outline, blocks, direction, isCollapsed)
-      : adjacentBlockSelection(outline, blocks, direction, isCollapsed);
-    reactEditor.selection.set([next]);
+      ? extendBlockSelection(outline, item, direction, isCollapsed)
+      : adjacentBlockSelection(outline, item, direction, isCollapsed);
+    assertBlockRangeEndpoints(next);
+    reactEditor.selection.set(next);
     focusBlockSelection(root, next.focusBlockId);
     return true;
   };
 
   const grow = (root: HTMLElement, direction: VerticalDirection): boolean => {
     const selection = currentSelection(reactEditor.selection);
-    const blocks = selection.find((item): item is BlockSelection => item.type === "block");
-    const text = selection.find((item): item is TextSelection => item.type === "text");
-    const anchorId = blocks?.focusBlockId ?? text?.head.blockId;
-    if (!anchorId) return false;
-    const outline = navigationOutlineBlocks(editor, anchorId);
-    const next = blocks
-      ? extendBlockSelection(outline, blocks, direction, isCollapsed)
-      : text ? blockSelection(outline, text.head.blockId, text.head.blockId, isCollapsed) : undefined;
+    const item = selection;
+    if (!item || !hasBlockRanges(item)) return false;
+    const outline = navigationOutlineBlocks(editor, item.focusBlockId);
+    const next = isStructuralSelection(selection)
+      ? extendBlockSelection(outline, item, direction, isCollapsed)
+      : blockSelection(outline, item.focusBlockId, item.focusBlockId, isCollapsed);
     if (!next) return false;
-    reactEditor.selection.set([next]);
+    assertBlockRangeEndpoints(next);
+    reactEditor.selection.set(next);
     focusBlockSelection(root, next.focusBlockId);
     return true;
   };
 
   /** Enters a caret at offset 0 on the focus block. Left and right are one-way. */
   const enterText = (root: HTMLElement): boolean => {
-    const blocks = currentSelection(reactEditor.selection)
-      .find((item): item is BlockSelection => item.type === "block");
-    if (!blocks) return false;
+    const blocks = currentSelection(reactEditor.selection);
+    if (!blocks || !hasBlockRanges(blocks)) return false;
     setCaret(root, reactEditor, { blockId: blocks.focusBlockId, offset: 0 });
     return true;
   };
@@ -282,8 +295,8 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
   );
   const move = (root: HTMLElement, direction: VerticalDirection): boolean => {
     const selection = currentSelection(reactEditor.selection);
-    const text = selection.find((item): item is TextSelection => item.type === "text");
-    const blocks = selection.find((item): item is BlockSelection => item.type === "block");
+    const blocks = selection;
+    const textLike = blocks && !isStructuralSelection(selection);
     const activeId = activeBlockId(selection);
     if (!activeId) return false;
     const outline = navigationOutlineBlocks(editor, activeId);
@@ -292,12 +305,12 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
     if (!placement) return false;
     editor.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
     if (roots.grouped && roots.selection) {
-      reactEditor.selection.set([roots.selection]);
+      reactEditor.selection.set(roots.selection);
     } else if (blocks) {
-      reactEditor.selection.set([blockSelection(outline, activeId, activeId, isCollapsed)]);
+      reactEditor.selection.set(blockSelection(outline, activeId, activeId, isCollapsed));
     }
     requestAnimationFrame(() => {
-      if (text && !blocks) reactEditor.selection.restoreDOM(selection);
+      if (textLike) reactEditor.selection.restoreDOM(selection);
       else focusBlockSelection(root, activeId);
     });
     return true;

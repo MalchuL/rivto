@@ -1,200 +1,181 @@
 /**
- * Local canvas selection store kept outside core page/text selection.
+ * Projects the core generic selection into the edgeless selection API.
  *
- * Marquee and click gestures write here many times per second. `set`/`clear`
- * no-op when membership is unchanged so subscribers are not woken. Cards and
- * visuals subscribe with `useEdgelessSelected(id)`, whose boolean snapshot lets
- * React skip re-render unless that object's selected bit actually flips.
+ * Element IDs live in `Selection.elements`; the extension-owned active flag
+ * lives in `Selection.pluginData`. This adapter keeps canvas hooks small while
+ * core remains the only selection store.
  */
+import { isStructuralSelection, type Selection } from "@chulane/rivto";
 import { useSyncExternalStore } from "react";
-import { BaseSelection } from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
 import type { ReactEditor } from "../../types";
 
 /** Stable first-class element ID stored in local edgeless selection. */
 export type EdgelessSelectionRef = string;
 
-/** Detached local state for canvas-only selection. */
+/** Detached local view of the generic editor selection. */
 export interface EdgelessSelectionSnapshot {
   readonly active: boolean;
   readonly items: readonly EdgelessSelectionRef[];
 }
 
-/** React-owned selection of first-class canvas elements. */
-export class ElementSelection extends BaseSelection<"element"> implements EdgelessSelectionSnapshot {
-  /** Whether the edgeless selection currently owns interaction focus. */
-  readonly active: boolean;
-  /** Ordered unique first-class element IDs. */
-  readonly items: readonly EdgelessSelectionRef[];
+const EDGELESS_SELECTION_PLUGIN_KEY = "edgelessSelection";
 
-  /** @returns Canvas element selection discriminator. */
-  get type(): "element" {
-    return "element";
-  }
-
-  /**
-   * Creates detached canvas selection state.
-   * @param active - Whether the edgeless surface owns selection focus.
-   * @param items - Ordered selected element IDs.
-   */
-  constructor(active: boolean, items: readonly EdgelessSelectionRef[]) {
-    super();
-    this.active = active;
-    this.items = [...items];
-  }
-
-  /**
-   * Compares focus and ordered element membership.
-   * @param other - Runtime selection to compare.
-   * @returns Whether both element selections describe the same state.
-   */
-  equals(other: BaseSelection): boolean {
-    return other instanceof ElementSelection
-      && this.active === other.active
-      && sameSequence(this.items, other.items);
-  }
-
-  /**
-   * Creates a detached copy of this canvas selection.
-   * @returns Independent element selection.
-   */
-  clone(): ElementSelection {
-    return new ElementSelection(this.active, this.items);
-  }
+/**
+ * Builds a generic selection with active edgeless element state.
+ * @param current - Existing selection whose block and plugin data should survive.
+ * @param active - Whether edgeless interaction owns selection focus.
+ * @param elements - Selected first-class element IDs.
+ * @returns Complete selection suitable for the core selection manager.
+ */
+export function createEdgelessSelection(
+  current: Selection | undefined,
+  active: boolean,
+  elements: readonly string[] = [],
+): Selection {
+  return {
+    type: "selection",
+    blocks: current?.blocks ?? [],
+    anchorBlockId: current?.anchorBlockId,
+    focusBlockId: current?.focusBlockId,
+    reversed: current?.reversed,
+    elements: [...new Set(elements.filter(Boolean))],
+    pluginData: {
+      ...(current?.pluginData ?? {}),
+      [EDGELESS_SELECTION_PLUGIN_KEY]: { active },
+    },
+  };
 }
 
 /**
- * Returns whether two ordered ID lists are identical.
- *
- * @param left - First sequence.
- * @param right - Second sequence.
- * @returns True when lengths and every index match.
+ * Reads the extension-owned active bit from generic plugin data.
+ * @param selection - Generic selection that may carry edgeless metadata.
+ * @returns Whether edgeless interaction owns selection focus.
  */
-function sameSequence(left: readonly string[], right: readonly string[]): boolean {
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
+function isActive(selection: Selection | undefined): boolean {
+  const value = selection?.pluginData?.[EDGELESS_SELECTION_PLUGIN_KEY];
+  return Boolean(value && typeof value === "object" && (value as { active?: unknown }).active === true);
 }
 
-/** Small per-view store that keeps canvas selection out of core page selection. */
+/** Core-backed view used by edgeless gestures and React selection hooks. */
 export class EdgelessSelectionRuntime {
-  private value = new ElementSelection(false, []);
-  private selectedIds = new Set<string>();
-  private readonly listeners = new Set<() => void>();
+  private snapshotSource: Selection | undefined;
+  private snapshotValue: EdgelessSelectionSnapshot = { active: false, items: [] };
 
   /**
-   * @returns Detached current canvas selection.
+   * Creates an adapter over one editor's generic selection manager.
+   * @param reactEditor - Runtime whose core selection stores element state.
    */
-  get(): ElementSelection {
-    return this.value.clone();
+  constructor(private readonly reactEditor: ReactEditor) {}
+
+  /** @returns Detached current canvas selection view. */
+  get(): EdgelessSelectionSnapshot {
+    const current = this.reactEditor.editor.selection.get();
+    return { active: isActive(current), items: [...(current?.elements ?? [])] };
+  }
+
+  /** @returns Stable snapshot until the underlying core selection changes. */
+  snapshot(): EdgelessSelectionSnapshot {
+    const current = this.reactEditor.editor.selection.snapshot();
+    if (current !== this.snapshotSource) {
+      this.snapshotSource = current;
+      this.snapshotValue = { active: isActive(current), items: current?.elements ?? [] };
+    }
+    return this.snapshotValue;
   }
 
   /**
-   * @returns Stable immutable snapshot for React external-store subscriptions.
-   */
-  snapshot(): ElementSelection {
-    return this.value;
-  }
-
-  /**
-   * Reports whether one canvas object is in the active selection.
-   *
-   * @param id - First-class element ID.
-   * @returns True only while selection is active and contains `id`.
+   * Reports whether one canvas object is actively selected.
+   * @param id - Stable first-class element ID.
+   * @returns True while the edgeless selection is active and contains `id`.
    */
   isSelected(id: string): boolean {
-    return this.value.active && this.selectedIds.has(id);
+    const current = this.snapshot();
+    return current.active && current.items.includes(id);
   }
 
   /**
-   * Replaces and activates canvas selection.
-   *
-   * Unchanged membership (same ordered IDs while already active) does not
-   * notify, so marquee moves that do not add or drop objects stay off React.
-   *
-   * @param items - Ordered unique canvas object references.
+   * Replaces and activates selected elements in the generic selection.
+   * Partial text and carets are cleared; structural blocks remain for mixed
+   * Ctrl/Cmd selection with canvas elements.
+   * @param items - Ordered element IDs.
    * @returns No value.
    */
   set(items: readonly EdgelessSelectionRef[]): void {
-    const seen = new Set<string>();
-    const unique = items.filter((item) => {
-      if (!item || seen.has(item)) return false;
-      seen.add(item);
-      return true;
+    const current = this.reactEditor.editor.selection.get();
+    const keepBlocks = current && isStructuralSelection(current);
+    this.reactEditor.editor.selection.set(createEdgelessSelection(
+      keepBlocks ? current : undefined,
+      true,
+      items,
+    ));
+  }
+
+  /**
+   * Replaces block coverage while retaining an active element selection.
+   * @param blocks - Structural block selection produced by a Ctrl/Cmd gesture.
+   * @returns No value.
+   */
+  setBlocks(blocks: Selection): void {
+    const current = this.reactEditor.editor.selection.get();
+    const active = isActive(current);
+    this.reactEditor.editor.selection.set({
+      ...blocks,
+      elements: active ? current?.elements ?? [] : [],
+      pluginData: {
+        ...(current?.pluginData ?? {}),
+        ...(blocks.pluginData ?? {}),
+        [EDGELESS_SELECTION_PLUGIN_KEY]: { active },
+      },
     });
-    const next = new ElementSelection(true, unique);
-    if (this.value.equals(next)) return;
-    this.selectedIds = seen;
-    this.value = next;
-    this.notify();
   }
 
-  /**
-   * Deactivates the canvas selection while retaining it for a later return.
-   *
-   * @returns No value.
-   */
+  /** Deactivates selected elements while retaining their IDs. */
   deactivate(): void {
-    if (!this.value.active) return;
-    this.value = new ElementSelection(false, this.value.items);
-    this.notify();
+    const current = this.reactEditor.editor.selection.get();
+    if (!current || !isActive(current)) return;
+    this.reactEditor.editor.selection.set(createEdgelessSelection(current, false, current.elements));
   }
 
-  /**
-   * Clears and activates an empty canvas selection.
-   *
-   * @returns No value.
-   */
+  /** Clears selected elements and keeps edgeless selection active. */
   clear(): void {
-    if (this.value.active && this.value.items.length === 0) return;
-    this.selectedIds = new Set();
-    this.value = new ElementSelection(true, []);
-    this.notify();
+    const current = this.reactEditor.editor.selection.get();
+    this.reactEditor.editor.selection.set(createEdgelessSelection(current, true));
   }
 
   /**
+   * Subscribes to the core selection manager.
    * @param listener - Change callback.
    * @returns Subscription disposer.
    */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.reactEditor.editor.selection.subscribe(listener);
   }
 
-  /**
-   * Releases subscribers and retained selection.
-   *
-   * @returns No value.
-   */
+  /** Removes edgeless-owned data while retaining other generic selection data. */
   destroy(): void {
-    this.value = new ElementSelection(false, []);
-    this.selectedIds = new Set();
-    this.listeners.clear();
-  }
-
-  /**
-   * Invokes every subscriber after a membership or `active` change.
-   *
-   * @returns No value.
-   */
-  private notify(): void {
-    [...this.listeners].forEach((listener) => listener());
+    const current = this.reactEditor.editor.selection.get();
+    if (!current || (!(current.elements?.length) && !(EDGELESS_SELECTION_PLUGIN_KEY in (current.pluginData ?? {})))) return;
+    const pluginData = { ...current.pluginData };
+    delete pluginData[EDGELESS_SELECTION_PLUGIN_KEY];
+    if (current.blocks.length || Object.keys(pluginData).length) {
+      this.reactEditor.editor.selection.set({ ...current, elements: [], pluginData });
+    } else {
+      this.reactEditor.editor.selection.clear();
+    }
   }
 }
 
 const runtimes = new WeakMap<ReactEditor, EdgelessSelectionRuntime>();
 
 /**
- * Installs the canvas selection runtime for one React editor.
- *
+ * Installs the core-backed canvas selection adapter for one React editor.
  * @param reactEditor - Owning React editor instance.
- * @returns Disposer that destroys this runtime when it is still installed.
+ * @returns Disposer that removes the adapter.
  */
 export function installEdgelessRuntime(reactEditor: ReactEditor): () => void {
   if (runtimes.has(reactEditor)) throw new Error("Edgeless selection runtime is already installed");
-  const runtime = new EdgelessSelectionRuntime();
+  const runtime = new EdgelessSelectionRuntime(reactEditor);
   runtimes.set(reactEditor, runtime);
   return () => {
     if (runtimes.get(reactEditor) !== runtime) return;
@@ -204,9 +185,9 @@ export function installEdgelessRuntime(reactEditor: ReactEditor): () => void {
 }
 
 /**
+ * Returns the installed canvas selection adapter.
  * @param reactEditor - Owning React editor instance.
- * @returns Installed canvas runtime.
- * @throws When its foundation extension is absent.
+ * @returns Installed adapter.
  */
 export function getEdgelessRuntime(reactEditor: ReactEditor): EdgelessSelectionRuntime {
   const runtime = runtimes.get(reactEditor);
@@ -215,18 +196,15 @@ export function getEdgelessRuntime(reactEditor: ReactEditor): EdgelessSelectionR
 }
 
 /**
+ * Returns the optional installed adapter.
  * @param reactEditor - Owning React editor instance.
- * @returns Installed runtime, or undefined for editors without edgeless selection.
+ * @returns Installed adapter, or undefined.
  */
 export function findEdgelessRuntime(reactEditor: ReactEditor): EdgelessSelectionRuntime | undefined {
   return runtimes.get(reactEditor);
 }
 
-/**
- * Reactive full canvas selection for chrome that needs the ordered ID list.
- *
- * @returns Current active flag and ordered selected IDs.
- */
+/** @returns Reactive full canvas selection for ordered element consumers. */
 export function useEdgelessSelection(): EdgelessSelectionSnapshot {
   const { reactEditor } = useEditorContext();
   const runtime = getEdgelessRuntime(reactEditor);
@@ -238,13 +216,9 @@ export function useEdgelessSelection(): EdgelessSelectionSnapshot {
 }
 
 /**
- * Reactive selected bit for one canvas object.
- *
- * The snapshot is a boolean, so React skips re-render when this object's
- * membership did not change even though the store still notifies.
- *
- * @param id - First-class element ID to observe.
- * @returns True while canvas selection is active and contains `id`.
+ * Returns the reactive selected bit for one canvas object.
+ * @param id - Stable first-class element ID.
+ * @returns Whether that element is actively selected.
  */
 export function useEdgelessSelected(id: string): boolean {
   const { reactEditor } = useEditorContext();

@@ -9,6 +9,7 @@
 import {
   type EditorBlock as Block,
   type EditorBlockInput as BlockInput,
+  createStructuralSelection,
 } from "@chulane/rivto";
 import {
   BLOCK_LIST_TYPES,
@@ -439,12 +440,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
               props: { startBlockId: duplicateId, endBlockId: duplicateId },
             });
           });
-          reactEditor.selection.set([{
-            type: "block",
-            blockIds: [duplicateId],
-            anchorBlockId: duplicateId,
-            focusBlockId: duplicateId,
-          }]);
+          reactEditor.selection.set(createStructuralSelection([duplicateId]));
         },
       }),
       // Route deletion through structural selection so descendants are atomic.
@@ -455,12 +451,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         keywords: ["remove"],
         isAvailable: ({ blockId }) => Boolean(editor.blocks.getBlock(blockId)),
         execute: ({ blockId }) => {
-          reactEditor.selection.set([{
-            type: "block",
-            blockIds: [blockId],
-            anchorBlockId: blockId,
-            focusBlockId: blockId,
-          }]);
+          reactEditor.selection.set(createStructuralSelection([blockId]));
           reactEditor.selection.delete();
         },
       }),
@@ -544,18 +535,15 @@ export interface StandardPresetOptions {
  * @returns The complete built-in extension preset.
  */
 export const standardPreset = (
-  options: number | StandardPresetOptions = {},
+  options: StandardPresetOptions = {},
 ): ReactEditorExtension => {
-  const resolved: StandardPresetOptions = typeof options === "number"
-    ? { trailingBlockCount: options }
-    : options;
-  const trailingBlockCount = resolved.trailingBlockCount ?? 3;
+  const trailingBlockCount = options.trailingBlockCount ?? 3;
   const extensions = [
-    defaultWritingBlockExtension(resolved.writing),
+    defaultWritingBlockExtension(options.writing),
     errorBlockExtension(),
     separatorBlockExtension(),
     pageSurfaceExtension(),
-    edgelessSurfaceExtension(resolved.edgeless),
+    edgelessSurfaceExtension(options.edgeless),
     historyExtension(),
     textSelectionExtension(),
     slashCommandExtension(),

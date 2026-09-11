@@ -25,4 +25,27 @@ export {
 } from "./extensions/kanban/kanban";
 
 export { Bento, bentoExtension, createBentoBlockInput, BENTO_BLOCK_TYPE } from "./extensions/bento/bento";
+export {
+  Columns,
+  columnsExtension,
+  createColumnsBlockInput,
+  relocateColumnContents,
+  setColumnsCount,
+  COLUMNS_BLOCK_TYPE,
+  COLUMNS_COLUMN_BLOCK_TYPE,
+  COLUMNS_DEFAULT_COUNT,
+  COLUMNS_MIN_COUNT,
+  COLUMNS_MAX_COUNT,
+} from "./extensions/columns/columns";
+export {
+  Table,
+  tableExtension,
+  createTableBlockInput,
+  setTableColumnWidth,
+  TABLE_BLOCK_TYPE,
+  TABLE_ROW_BLOCK_TYPE,
+  TABLE_CELL_BLOCK_TYPE,
+  TABLE_DEFAULT_COLUMN_WIDTH,
+  type TableCellProps,
+} from "./extensions/table/table";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal";

@@ -1,3 +1,4 @@
 export * from "./selection-manager";
-export * from "./types";
-export * from "./utils";
+export * from "./selection";
+export * from "./resolved-selection";
+export * from "./selection-ranges";

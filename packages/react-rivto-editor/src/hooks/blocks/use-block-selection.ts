@@ -3,10 +3,10 @@
  *
  * `useBlockSelected` is a boolean snapshot so growing a block range does not
  * re-render already-selected neighbors. `useBlockSelection` reads the full
- * list and is for chrome that inspects the containing `BlockSelection`.
+ * list and is for chrome that inspects the containing block payload.
  */
 import { useCallback, useSyncExternalStore } from "react";
-import type { BlockSelectionInput as BlockSelection } from "@chulane/rivto";
+import { hasBlockRanges, type Selection } from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
 import { useEditorSelection } from "../editor/use-editor-selection";
 
@@ -17,7 +17,7 @@ import { useEditorSelection } from "../editor/use-editor-selection";
  * a caret or text range does not paint the complete block as selected.
  *
  * @param blockId - Stable ID whose whole-block membership is queried.
- * @returns True only while a block-selection item contains `blockId`.
+ * @returns True only while a structural selection contains `blockId`.
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockSelected(blockId: string): boolean {
@@ -45,9 +45,9 @@ export function useBlockSelected(blockId: string): boolean {
  * @returns The containing block selection, or null when not selected.
  * @throws If called outside an EditorView subtree.
  */
-export function useBlockSelection(blockId: string): BlockSelection | null {
+export function useBlockSelection(blockId: string): Selection | null {
   const selection = useEditorSelection();
-  return selection.find((item): item is BlockSelection => (
-    item.type === "block" && item.blockIds.includes(blockId)
-  )) ?? null;
+  return selection && hasBlockRanges(selection)
+    && selection.blocks.some((block) => block.id === blockId && block.start === 0 && block.end === -1)
+    ? selection : null;
 }

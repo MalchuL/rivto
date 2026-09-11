@@ -21,6 +21,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import type { EditorBlock as Block } from "@chulane/rivto";
+import { createStructuralSelection } from "@chulane/rivto";
 import {
   BlockElementRefProvider,
   type BlockWrapperProps,
@@ -694,12 +695,9 @@ export function PageDragProvider({
         editor.selection.clear();
         const firstId = move.ids[0]!;
         const lastId = move.ids.at(-1)!;
-        crossDocument.controller.editor.selection.set([{
-          type: "block",
-          blockIds: [...move.ids],
-          anchorBlockId: firstId,
-          focusBlockId: lastId,
-        }]);
+        crossDocument.controller.editor.selection.set(
+          createStructuralSelection([...move.ids], firstId, lastId),
+        );
         requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));
       }
     } else if (placement && move) {
@@ -707,13 +705,8 @@ export function PageDragProvider({
       editor.blocks.moveBlocks(move.ids, targetId, position);
       const selection = move.grouped && move.selection
         ? move.selection
-        : {
-            type: "block" as const,
-            blockIds: [move.ids[0]!],
-            anchorBlockId: move.ids[0]!,
-            focusBlockId: move.ids[0]!,
-      };
-      editor.selection.set([selection]);
+        : createStructuralSelection([move.ids[0]!]);
+      editor.selection.set(selection);
       requestAnimationFrame(() => root?.focus({ preventScroll: true }));
     }
   };

@@ -6,6 +6,7 @@
  */
 import { useLayoutEffect, useState } from "react";
 import type { EditorBlockInput } from "@chulane/rivto";
+import { createCaretSelection } from "@chulane/rivto";
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../blocks/block-wrapper";
 import { BlockModal, BlockModalButton } from "../../blocks/block-modal";
 import { MarkdownContent } from "../../blocks/markdown";
@@ -41,7 +42,7 @@ export function Bento({ blockId }: { readonly blockId: string }) {
     runtime.editor.batchUpdates(() => {
       id = runtime.blocks.insertBlock(runtime.createDefaultBlock(), blockId);
       runtime.editor.blocks.moveBlocks([id], blockId, "inside");
-      runtime.selection.set([{ type: "text", anchor: { blockId: id, offset: 0 }, head: { blockId: id, offset: 0 } }]);
+      runtime.selection.set(createCaretSelection(id, 0));
     });
     requestAnimationFrame(() => { const root = runtime.events.getRoot(); if (root) focusBlock(root, id, 0); });
   }}><MarkdownContent blockId={blockId} /></div>;

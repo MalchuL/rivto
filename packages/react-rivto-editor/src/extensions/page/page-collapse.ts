@@ -1,23 +1,16 @@
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
-import type { ReactSelection } from "../../managers/selection/selection-manager";
-import type {
-  BlockSelectionInput as BlockSelection,
-  TextRange as TextSelection,
-} from "@chulane/rivto";
+import { getSelectedBlockIds, type Selection } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import { reconcileCollapsedSelection } from "./page-selection-utils";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 
 /** Resolves the edited block or all blocks in the active whole-block selection. */
 function collapseTargets(
-  selection: ReactSelection,
+  selection: Selection | undefined,
 ): string[] {
-  const blocks = selection.find((item): item is BlockSelection => item.type === "block");
-  if (blocks) return blocks.blockIds;
-  const text = selection.find((item): item is TextSelection => item.type === "text");
-  return text ? [text.head.blockId] : [];
+  return selection ? getSelectedBlockIds(selection) : [];
 }
 
 /**
@@ -35,7 +28,8 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     const current = reactEditor.selection.get();
     const next = reconcileCollapsedSelection(editor.blocks.getBlocks(), current);
     if (next !== current) {
-      reactEditor.selection.set(next);
+      if (next) reactEditor.selection.set(next);
+      else reactEditor.selection.clear();
       // A native Range retains detached text nodes after React removes a
       // collapsed subtree. Clear it and focus the page's block-selection owner.
       root?.ownerDocument.getSelection()?.removeAllRanges();
@@ -50,7 +44,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     // Chromium may deliver the shortcut before its selectionchange event after
     // a click. Reading the native caret keeps the keybinding deterministic.
     const nativeSelection = reactEditor.selection.readDOM();
-    const selection = nativeSelection?.length ? nativeSelection : current;
+    const selection = nativeSelection ?? current;
     const ids = collapseTargets(selection);
     if (!ids.length) return false;
     const blocks = [...new Set(ids)].map((id) => editor.blocks.getBlock(id));

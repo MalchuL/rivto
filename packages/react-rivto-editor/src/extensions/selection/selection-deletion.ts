@@ -13,6 +13,7 @@ import {
   readKeyboardSelection,
   shouldDeleteSelection,
 } from "../../managers";
+import { isStructuralSelection } from "@chulane/rivto";
 
 /**
  * Deletes expanded text and whole-block page selections atomically.
@@ -36,7 +37,7 @@ export function registerSelectionDeletion(reactEditor: ReactEditor): void {
         : selection;
       if (!shouldDeleteSelection(current)) return false;
       const rootBlockSelection = root.ownerDocument.activeElement === root &&
-        current.some((item) => item.type === "block");
+        isStructuralSelection(current);
       return rootBlockSelection || editableEvent;
     },
   }, ({ root }) => {
@@ -46,8 +47,6 @@ export function registerSelectionDeletion(reactEditor: ReactEditor): void {
     // Cursor Browser intercepting Ctrl/Cmd+Z before the page receives it; see
     // the known-host limitation documented in the history extension.
     if (!focusSelectionCaret(root, reactEditor.selection)) root.focus({ preventScroll: true });
-    // React can replace an editable during reconciliation, so restore once more
-    // after the new document DOM has committed.
     requestAnimationFrame(() => focusSelectionCaret(root, reactEditor.selection));
     return true;
   });

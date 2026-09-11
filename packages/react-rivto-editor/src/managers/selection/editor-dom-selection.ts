@@ -48,10 +48,14 @@
  *         └── Text ("hello")   ← Selection often points here
  * ```
  */
-import type { ReactSelection } from "./selection-manager";
-
 import type {
   EditorPosition,
+  Selection,
+} from "@chulane/rivto";
+import {
+  isStructuralSelection,
+  createTextSelection,
+  createStructuralSelection,
 } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
@@ -59,6 +63,7 @@ import {
   BLOCK_ID_SELECTOR,
 } from "../../constants";
 import { isElementNode } from "../events/dom-nodes";
+import { resolveSelectionEndpoints } from "./selection-endpoints";
 
 /**
  * One live browser caret/selection endpoint inside a block's editable content.
@@ -97,8 +102,8 @@ export interface DOMSelectionPoint {
 }
 
 /**
- * Minimal visible-block snapshot used when splitting a cross-block text
- * selection into a text item plus a middle "fully selected blocks" item.
+ * Minimal visible-block snapshot used when mapping native endpoints to
+ * per-block `start`/`end` coverage.
  */
 export interface SelectionBlock {
   /** Stable block identity (`data-block-id`) in visible document order. */
@@ -131,48 +136,26 @@ function orderedContents(root: HTMLElement): HTMLElement[] {
 }
 
 /**
- * Resolves native endpoints into one local text range or complete blocks.
- * @param blocks - Visible blocks in document order.
- * @param anchor - Fixed gesture endpoint.
- * @param head - Moving gesture endpoint.
- * @returns One text item inside a block, or an inclusive whole-block range.
- */
-export function createSelectionItems(
-  blocks: readonly SelectionBlock[],
-  anchor: EditorPosition,
-  head: EditorPosition,
-): ReactSelection {
-  if (anchor.blockId === head.blockId) {
-    return [{ type: "text", anchor: { ...anchor }, head: { ...head } }];
-  }
-  return createBlockSelection(blocks.map((block) => block.id), anchor.blockId, head.blockId);
-}
-
-/**
  * Creates one inclusive whole-block range in visible order.
- *
- * Unlike a text range, both endpoint blocks are complete selections. The ID
- * array remains top-down while anchor/focus retain gesture direction.
  *
  * @param blockIds - Candidate block IDs already in visible document order.
  * @param anchorBlockId - Block where the gesture began.
  * @param focusBlockId - Block where the gesture currently ends.
  * @returns A one-item block selection, or `[]` when either ID is unknown.
  */
-export function createBlockSelection(
+export function createVisibleStructuralSelection(
   blockIds: readonly string[],
   anchorBlockId: string,
   focusBlockId: string,
-): ReactSelection {
+): Selection | undefined {
   const anchorIndex = blockIds.indexOf(anchorBlockId);
   const focusIndex = blockIds.indexOf(focusBlockId);
-  if (anchorIndex < 0 || focusIndex < 0) return [];
-  return [{
-    type: "block",
-    blockIds: blockIds.slice(Math.min(anchorIndex, focusIndex), Math.max(anchorIndex, focusIndex) + 1),
+  if (anchorIndex < 0 || focusIndex < 0) return undefined;
+  return createStructuralSelection(
+    blockIds.slice(Math.min(anchorIndex, focusIndex), Math.max(anchorIndex, focusIndex) + 1),
     anchorBlockId,
     focusBlockId,
-  }];
+  );
 }
 
 /**
@@ -274,23 +257,45 @@ export function readBlockIdAtPoint(
 }
 
 /**
- * Builds a portable {@link ReactSelection} from two editor positions, using
+ * Builds a portable {@link Selection} from two editor positions, using
  * the surface's current visible block order under `root`.
  *
  * @param root - EditorView root used to discover visible blocks / lengths.
  * @param anchor - Fixed position where the gesture began.
  * @param head - Moving position where the gesture currently ends.
+ * @returns Directed text coverage with structural markers for contentless blocks.
  */
-export function createDOMSelectionItems(
+export function createDOMSelection(
   root: HTMLElement,
   anchor: EditorPosition,
   head: EditorPosition,
-): ReactSelection {
-  const blocks = orderedContents(root).flatMap((content) => {
-    const id = blockIdForContent(content);
-    return id ? [{ id, length: content.textContent?.length ?? 0 }] : [];
+): Selection | undefined {
+  // Start from every BlockView, not only editable hosts. Otherwise a
+  // contentless renderer such as Counter disappears from a Shift+Alt range.
+  const rendered = [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
+    const id = block.getAttribute(BLOCK_ID_ATTRIBUTE);
+    if (!id) return [];
+    const content = [...block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)]
+      .find((candidate) => candidate.closest(BLOCK_ID_SELECTOR) === block);
+    return [{ id, content }];
   });
-  return createSelectionItems(blocks, anchor, head);
+  const selection = createTextSelection(
+    rendered.map(({ id, content }) => ({ id, length: content?.textContent?.length ?? 0 })),
+    anchor,
+    head,
+  );
+  if (selection) {
+    const contentless = new Set(rendered.filter(({ content }) => !content).map(({ id }) => id));
+    selection.blocks.forEach((block) => {
+      // Contentless blocks have no native character range, so the live-end
+      // sentinel makes their structural coverage explicit.
+      if (contentless.has(block.id)) {
+        block.start = 0;
+        block.end = -1;
+      }
+    });
+  }
+  return selection;
 }
 
 /**
@@ -301,17 +306,17 @@ export function createDOMSelectionItems(
  * direction of a bottom-to-top selection.
  *
  * @param root - EditorView root; both endpoints must live under it.
- * @returns Directed selection items, or `undefined` when there is no usable
+ * @returns Directed selection, or `undefined` when there is no usable
  *   browser selection inside this editor.
  */
-export function readEditorDOMSelection(root: HTMLElement): ReactSelection | undefined {
+export function readEditorDOMSelection(root: HTMLElement): Selection | undefined {
   const selection = root.ownerDocument.getSelection();
   if (!selection?.rangeCount) return;
   // anchorNode / focusNode are Node|null — typically Text nodes inside a
   // contenteditable HTMLElement, not the Element itself.
   const anchor = readPosition(root, selection.anchorNode, selection.anchorOffset);
   const head = readPosition(root, selection.focusNode, selection.focusOffset);
-  return anchor && head ? createDOMSelectionItems(root, anchor, head) : undefined;
+  return anchor && head ? createDOMSelection(root, anchor, head) : undefined;
 }
 
 /**
@@ -528,17 +533,22 @@ export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosi
  * @param selection - Editor selection captured before the structural command.
  * @returns True when a text selection was resolved and restored.
  */
-export function restoreEditorDOMSelection(root: HTMLElement, selection: ReactSelection): boolean {
-  const text = selection.find((item) => item.type === "text");
-  if (!text) return false;
-
+export function restoreEditorDOMSelection(root: HTMLElement, selection: Selection): boolean {
   const contents = orderedContents(root);
-  const anchorContent = contents.find((content) => blockIdForContent(content) === text.anchor.blockId);
-  const headContent = contents.find((content) => blockIdForContent(content) === text.head.blockId);
+  const lengthOf = (id: string): number => {
+    const content = contents.find((candidate) => blockIdForContent(candidate) === id);
+    return content?.textContent?.length ?? 0;
+  };
+  if (isStructuralSelection(selection)) return false;
+  const ends = resolveSelectionEndpoints(selection, lengthOf);
+  if (!ends) return false;
+
+  const anchorContent = contents.find((content) => blockIdForContent(content) === ends.anchor.blockId);
+  const headContent = contents.find((content) => blockIdForContent(content) === ends.head.blockId);
   if (!anchorContent || !headContent) return false;
 
-  const anchor = pointAtOffset(anchorContent, text.anchor.offset);
-  const head = pointAtOffset(headContent, text.head.offset);
+  const anchor = pointAtOffset(anchorContent, ends.anchor.offset);
+  const head = pointAtOffset(headContent, ends.head.offset);
   headContent.focus({ preventScroll: true });
   setNativeSelection(
     { ...anchor, content: anchorContent },

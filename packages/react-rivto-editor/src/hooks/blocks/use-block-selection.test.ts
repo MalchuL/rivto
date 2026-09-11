@@ -1,4 +1,4 @@
-import type { ReactSelection } from "../../managers/selection/selection-manager";
+import { createCaretSelection, createTextSelection, createStructuralSelection } from "@chulane/rivto";
 /**
  * Regression tests for per-block selection snapshots used by React chrome.
  *
@@ -15,11 +15,7 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
-    const caret: ReactSelection = [{
-      type: "text" as const,
-      anchor: { blockId: id, offset: 1 },
-      head: { blockId: id, offset: 1 },
-    }];
+    const caret = createCaretSelection(id, 1);
     reactEditor.selection.set(caret);
     const snapshot = editor.selection.snapshot();
     reactEditor.selection.set(caret);
@@ -32,13 +28,12 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
-    reactEditor.selection.set([{
-      type: "text",
-      anchor: { blockId: id, offset: 1 },
-      head: { blockId: id, offset: 1 },
-    }]);
+    reactEditor.selection.set(createCaretSelection(id, 1));
     expect(editor.selection.isBlockSelected(id)).toBe(false);
-    expect(editor.selection.snapshot()).toEqual([]);
+    expect(editor.selection.snapshot()).toMatchObject({
+      type: "selection",
+      blocks: [{ id, start: 1, end: 1 }],
+    });
     reactEditor.destroy();
     editor.destroy();
   });
@@ -48,15 +43,10 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     const reactEditor = createReactEditor({ editor });
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-    editor.selection.set([{
-      type: "block",
-      blockIds: [firstId],
-      anchorBlockId: firstId,
-      focusBlockId: firstId,
-    }]);
+    editor.selection.set(createStructuralSelection([firstId]));
     expect(editor.selection.isBlockSelected(firstId)).toBe(true);
     expect(editor.selection.isBlockSelected(secondId)).toBe(false);
-    expect(editor.selection.snapshot()).toHaveLength(1);
+    expect(editor.selection.snapshot()?.blocks).toHaveLength(1);
     reactEditor.destroy();
     editor.destroy();
   });
@@ -66,11 +56,9 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     const reactEditor = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
     const before = reactEditor.revision;
-    reactEditor.selection.set([{
-      type: "text",
-      anchor: { blockId: id, offset: 0 },
-      head: { blockId: id, offset: 2 },
-    }]);
+    reactEditor.selection.set(
+      createTextSelection([{ id, length: 4 }], { blockId: id, offset: 0 }, { blockId: id, offset: 2 })!,
+    );
     expect(reactEditor.revision).toBe(before);
     reactEditor.destroy();
     editor.destroy();

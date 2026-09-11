@@ -2,6 +2,7 @@ import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS, isHTMLElementNode } from "../../managers";
 import { getEdgelessRuntime } from "./edgeless-runtime";
 import { blockIdsOf } from "../../surfaces/edgeless/block-elements";
+import { isStructuralSelection } from "@chulane/rivto";
 
 /** Removes selected descendants whose selected ancestor already owns them. */
 function topLevelSelection(editor: ReactEditor["editor"], blockIds: readonly string[]): string[] {
@@ -26,7 +27,7 @@ export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
     mode: "edgeless",
     when: ({ selection: coreSelection, raw: event }) => {
       const hasCanvas = selection.get().active && selection.get().items.length > 0;
-      if (!hasCanvas && !coreSelection.some((item) => item.type === "block")) return false;
+      if (!hasCanvas && !isStructuralSelection(coreSelection)) return false;
       const target = event.target;
       return isHTMLElementNode(target) &&
         !target.isContentEditable &&
@@ -40,13 +41,14 @@ export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
       root.focus({ preventScroll: true });
       handled = true;
     } else {
-      const core = editor.selection.get().find((item) => item.type === "block");
+      const current = editor.selection.get();
+      const core = isStructuralSelection(current) ? current : undefined;
       const blockIds = canvas.active && canvas.items.length
         ? canvas.items.flatMap((id) => {
           const element = editor.elements.getElement(id);
           return element?.type === "block" ? blockIdsOf(element, editor.blocks.getRootIds()) : [];
         })
-        : core?.blockIds ?? [];
+        : core?.blocks.map((block) => block.id) ?? [];
       const targets = topLevelSelection(editor, blockIds);
       if (targets.length) {
         if (canvas.active && canvas.items.length) {

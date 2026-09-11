@@ -1,6 +1,7 @@
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
+import { createCaretSelection } from "@chulane/rivto";
 import { createPortal } from "react-dom";
 import { useEditor, useEditorRoot, useReactEditor } from "../../hooks";
 import { PAGE_END_SLOT_SELECTOR } from "../../constants";
@@ -40,11 +41,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
               }
             });
             if (!id) return;
-            reactEditor.selection.set([{
-              type: "text",
-              anchor: { blockId: id, offset: 0 },
-              head: { blockId: id, offset: 0 },
-            }]);
+            reactEditor.selection.set(createCaretSelection(id, 0));
             requestAnimationFrame(() => focusBlock(root, id, 0));
           }}
         >

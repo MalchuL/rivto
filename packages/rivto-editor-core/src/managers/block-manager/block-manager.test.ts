@@ -3,7 +3,7 @@
  * Exercises page and edgeless runtimes, rejected child adoption, and atomic
  * placement preflight so failed commands cannot leave partial document writes.
  */
-import { createTestEditor } from "../../editor/test-utils";
+import { createTestEditor, createStructuralSelection } from "../../editor/test-utils";
 
 describe.each(["block", "edgeless"] as const)("block feature ownership in %s mode", (mode) => {
   it("keeps feature commands off document storage and merges through the editor", () => {
@@ -73,16 +73,38 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" });
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId);
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-    editor.selection.set([{
-      type: "block",
-      blockIds: [firstId, secondId],
-      anchorBlockId: firstId,
-      focusBlockId: secondId,
-    }]);
+    editor.selection.set(createStructuralSelection([firstId, secondId], firstId, secondId));
     editor.blocks.indentBlock(firstId);
     expect(editor.blocks.getBlocks()).toMatchObject([
       { id: previousId, children: [{ id: firstId }] },
       { id: secondId },
+    ]);
+    editor.destroy();
+  });
+
+  it("imports forests and reports stable source-to-destination identities", () => {
+    const editor = createTestEditor({ mode });
+    const root = editor.blocks.insertBlock({
+      id: "source-root",
+      type: "paragraph",
+      children: [{ id: "source-child", type: "paragraph" }],
+    });
+    const source = editor.blocks.getBlock(root)!;
+    editor.blocks.removeBlock(root);
+
+    const restored = editor.blocks.importForest([source]);
+    expect([...restored.idMap]).toEqual([
+      ["source-root", "source-root"],
+      ["source-child", "source-child"],
+    ]);
+
+    let generated = 0;
+    editor.document.blocks.generateId = () => `copy-${++generated}`;
+    const copied = editor.blocks.importForest([source]);
+    expect(copied.rootIds).toEqual(["copy-1"]);
+    expect([...copied.idMap]).toEqual([
+      ["source-root", "copy-1"],
+      ["source-child", "copy-2"],
     ]);
     editor.destroy();
   });

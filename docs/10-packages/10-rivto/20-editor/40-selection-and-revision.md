@@ -10,7 +10,7 @@ Selection является local runtime state. Remote updates, undo, direct doc
 
 Алгоритм сначала materializes visible IDs depth-first и строит document order map.
 
-Core selection содержит только whole-block items. Text ranges внутри одного блока передаются явно в clipboard operations; React хранит browser editing context отдельно.
+Core selection использует один generic item для block ranges, element IDs и plugin data. Block ranges содержат absolute `[start, end)` offsets; `end: -1` означает current block end, а `{ start: 0, end: -1 }` — structural coverage.
 
 ### Block selection
 
@@ -28,7 +28,7 @@ Core selection содержит только whole-block items. Text ranges вн
 - **Возвращает:** `void`.
 - **Исключения:** command/selection normalization и block mutation errors.
 
-Исполняет built-in `selection.delete`. `SelectionManager` удаляет выбранные block subtrees одной undoable operation и очищает selection. Пропуски между выбранными IDs сохраняются; text offsets в core selection отсутствуют.
+Исполняет built-in `selection.delete`. `SelectionManager` удаляет structural block subtrees или объединяет границы cross-block text range одной undoable operation, затем очищает selection.
 
 ## Property `revision`
 
@@ -83,8 +83,12 @@ Successful arbitrary command execution обновляет state `CommandRegistry
 
 ```ts
 editor.selection.set([{
-  type: "block",
-  blockIds: ["a", "b", "c"],
+  type: "selection",
+  blocks: ["a", "b", "c"].map((id) => ({
+    id,
+    start: 0,
+    end: -1,
+  })),
   anchorBlockId: "c",
   focusBlockId: "a",
 }]);

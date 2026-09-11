@@ -9,6 +9,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { BlockWrapperProps } from "../../blocks";
 import type { EditorBlockInput } from "@chulane/rivto";
+import { createCaretSelection } from "@chulane/rivto";
 import { MarkdownContent } from "../../blocks/markdown";
 import { useBlockEditing, useReactEditor } from "../../hooks";
 import { focusBlock, type ReactEditorExtension } from "../../managers";
@@ -93,9 +94,7 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
     runtime.editor.batchUpdates(() => {
       cardId = runtime.blocks.insertBlock(runtime.createDefaultBlock(), blockId);
       runtime.editor.blocks.moveBlocks([cardId], blockId, "inside");
-      runtime.selection.set([{
-        type: "text", anchor: { blockId: cardId, offset: 0 }, head: { blockId: cardId, offset: 0 },
-      }]);
+      runtime.selection.set(createCaretSelection(cardId, 0));
     });
     requestAnimationFrame(() => {
       const root = runtime.events.getRoot();

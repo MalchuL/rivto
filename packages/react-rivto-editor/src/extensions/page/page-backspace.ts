@@ -6,6 +6,7 @@
  *
  * @module
  */
+import { createCaretSelection, createStructuralSelection } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import {
   BLOCK_CONTENT_SELECTOR,
@@ -79,12 +80,7 @@ export function removeEmptyBlockAfterStructuralPredecessor(
     const firstChildId = block.children[0]?.id;
     if (firstChildId) editor.blocks.outdentBlock(firstChildId);
     editor.blocks.removeBlock(block.id);
-    reactEditor.selection.set([{
-      type: "block",
-      blockIds: [previous.id],
-      anchorBlockId: previous.id,
-      focusBlockId: previous.id,
-    }]);
+    reactEditor.selection.set(createStructuralSelection([previous.id]));
   });
   root.ownerDocument.getSelection()?.removeAllRanges();
   root.focus({ preventScroll: true });
@@ -143,11 +139,7 @@ export function registerBackwardBlockMerge(reactEditor: ReactEditor): void {
     const previous = findPreviousEditableBlock(scope, target.blockId);
     if (!previous) return false;
     const joinOffset = editor.blocks.mergeBlocks(previous.blockId, target.blockId);
-    reactEditor.selection.set([{
-      type: "text",
-      anchor: { blockId: previous.blockId, offset: joinOffset },
-      head: { blockId: previous.blockId, offset: joinOffset },
-    }]);
+    reactEditor.selection.set(createCaretSelection(previous.blockId, joinOffset));
     requestAnimationFrame(() => focusBlock(root, previous.blockId, joinOffset));
     return true;
   });

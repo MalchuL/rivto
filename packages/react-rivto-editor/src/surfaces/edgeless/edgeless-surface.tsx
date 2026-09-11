@@ -23,6 +23,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { createCaretSelection } from "@chulane/rivto";
 import { EdgelessToolButton } from "../../extensions/edgeless/visuals/components/tool-button";
 import { EDGELESS_GRID_SIZE } from "../../extensions/edgeless/visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
@@ -273,11 +274,7 @@ export function EdgelessSurface({
         props: { startBlockId: id, endBlockId: id },
       });
     });
-    reactEditor.selection.set([{
-      type: "text",
-      anchor: { blockId: id, offset: 0 },
-      head: { blockId: id, offset: 0 },
-    }]);
+    reactEditor.selection.set(createCaretSelection(id, 0));
     requestAnimationFrame(() => focusBlock(root, id, 0));
   };
 

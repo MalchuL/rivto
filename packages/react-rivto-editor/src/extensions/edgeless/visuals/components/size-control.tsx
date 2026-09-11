@@ -51,6 +51,3 @@ export function SizeControl({
     </label>
   );
 }
-
-/** @deprecated Prefer SizeControl with an explicit preview. */
-export const CircleSizeControl = SizeControl;

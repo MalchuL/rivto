@@ -24,7 +24,7 @@ Factory концентрирует extension ordering и возвращает im
 
 ## Custom blocks
 
-Demo Slider сочетает `MarkdownContent` и validated numeric property. Counter вызывает `useBlockEditing(..., { textEdit: false })` и spread structural attributes на non-editable region. Оба регистрируются через `blockExtension()` и получают slash conversion автоматически.
+Demo Slider сочетает `MarkdownContent` и validated numeric property. Counter вызывает `useBlockEditing(..., { textEdit: false })` и spread structural attributes на non-editable region. Оба регистрируются через `blockExtension()` и получают slash conversion автоматически. Optional layout containers (`kanbanExtension`, `bentoExtension`, `tableExtension`, `columnsExtension`) регистрируются рядом в `customBlockExtensions`.
 
 Core definitions находятся отдельно от React renderers. Это позволяет snapshot и validation работать без React.
 

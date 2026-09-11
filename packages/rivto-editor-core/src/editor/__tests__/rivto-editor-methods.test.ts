@@ -7,7 +7,7 @@ describe("EditorRuntime methods", () => {
 
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.blocks.getRootIds()).toEqual([]);
-    expect(editor.selection.get()).toEqual([]);
+    expect(editor.selection.get()).toBeUndefined();
     expect(editor.dump()).toMatchObject({ version: 6, blocks: [] });
 
     editor.deleteSelection();

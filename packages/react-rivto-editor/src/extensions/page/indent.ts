@@ -8,6 +8,7 @@ import {
   isEditableKeyboardEvent,
   type KeyboardSelectionTarget,
 } from "../../managers";
+import { isStructuralSelection, getSelectedBlockIds } from "@chulane/rivto";
 
 /**
  * Applies one semantic indent or outdent binding.
@@ -31,7 +32,7 @@ export function applyIndentShortcut(
     const selection = nativeSelection ?? selectionManager.get();
     const target = firstKeyboardTarget(selection);
     if (!target) return false;
-    const blockSelectionAtRoot = event.target === root && target.item.type === "block";
+    const blockSelectionAtRoot = event.target === root && isStructuralSelection(target.item);
     if (!editable && !blockSelectionAtRoot) return false;
 
     if (outdent) editor.blocks.outdentBlocks(indentTargetIds(target));
@@ -41,7 +42,7 @@ export function applyIndentShortcut(
     // a transient empty selectionchange. Re-publish the selection captured
     // before the command, then resolve its text endpoints in the committed DOM.
     requestAnimationFrame(() => {
-      selectionManager.set(selection);
+      selectionManager.set(selection!);
       selectionManager.restoreDOM(selection);
     });
     return true;
@@ -50,9 +51,9 @@ export function applyIndentShortcut(
 /**
  * Resolves the block identifiers a Tab or Shift+Tab shortcut should move.
  *
- * @param target - First keyboard selection item that qualified the shortcut.
+ * @param target - Keyboard block target that qualified the shortcut.
  * @returns Whole-block IDs, or only the caret block for a text range.
  */
 function indentTargetIds(target: KeyboardSelectionTarget): string[] {
-  return target.item.type === "block" ? [...target.item.blockIds] : [target.blockId];
+  return getSelectedBlockIds(target.item);
 }

@@ -73,7 +73,7 @@ configuration.
 Empty documents remain empty in core. `trailingBlockExtension(N)` owns the
 page-end targets whose labels and highlights appear on hover or keyboard focus.
 `trailingBlockExtension(N)` renders N targets; activating target K creates K
-paragraphs as one undo step and focuses the last. `standardPreset(N)` includes
+paragraphs as one undo step and focuses the last. `standardPreset({ trailingBlockCount: N })` includes
 the same behavior with a default of three targets. It deliberately does not
 appear on the edgeless canvas.
 
@@ -242,7 +242,7 @@ override keys in `createReactEditor({ keymap })` without replacing behavior.
 
 There are two selection representations:
 
-- core `EditorSelection`: portable, serializable, used by commands/history;
+- core `Selection`: portable local runtime data used by commands;
 - browser `Selection`: DOM ranges used for caret painting and native editing.
 
 The text-selection extension keeps them aligned. Page and edgeless extensions

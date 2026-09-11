@@ -3,8 +3,6 @@ import {
   validateClipboardBundle,
   validateElementCollection,
   type ClipboardBundle,
-  type EditorBlock,
-  type EditorBlockInput,
   type EditorElement,
 } from "@chulane/rivto";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
@@ -664,30 +662,30 @@ export class EdgelessVisualController {
   private pasteClipboardBundle(bundle: ClipboardBundle): void {
     validateClipboardBundle(bundle);
     if (!Array.isArray(bundle.elements)) throw new Error("Invalid edgeless clipboard payload");
-    const blockMap = new Map<string, string>();
-    const remapBlock = (block: EditorBlock): EditorBlockInput => { const id = crypto.randomUUID(); blockMap.set(block.id, id); return { ...copy(block), id, children: block.children.map(remapBlock) }; };
-    const blocks = bundle.blocks.map(remapBlock);
-    const elementMap = new Map(bundle.elements.map((element) => [element.id, crypto.randomUUID()]));
+    const elementMap = this.reactEditor.editor.elements.resolveImportIds(
+      bundle.elements.map((element) => element.id),
+    );
     const sourceRootIds = bundle.blocks.map((block) => block.id);
-    const elements = bundle.elements.map((source): EditorElement => {
-      const element = this.validateElement(source);
-      const props = JSON.parse(JSON.stringify(element.props)) as Record<string, unknown>;
-      if (element.type === "block") Object.assign(props, blockRangeProps(blockIdsOf(element, sourceRootIds).flatMap((id) => blockMap.get(id) ?? [])));
-      if (element.type === "group") props.children = (Array.isArray(props.children) ? props.children : []).flatMap((id) => typeof id === "string" ? elementMap.get(id) ?? [] : []);
-      if (element.type === "connector") {
-        for (const key of ["source", "target"] as const) {
-          const endpoint = props[key];
-          if (!isRecord(endpoint)) continue;
-          const mapped = typeof endpoint.elementId === "string" ? elementMap.get(endpoint.elementId) : undefined;
-          props[key] = { ...endpoint, ...(mapped ? { elementId: mapped } : { elementId: undefined }), position: isRecord(endpoint.position) ? { x: Number(endpoint.position.x) + 24, y: Number(endpoint.position.y) + 24 } : endpoint.position };
-        }
-      }
-      return { ...element, id: elementMap.get(element.id)!, frame: { ...element.frame, x: element.frame.x + 24, y: element.frame.y + 24 }, props };
-    });
+    const sourceElements = bundle.elements.map((element) => this.validateElement(element));
     const selected = (bundle.selectedElementIds ?? []).flatMap((id) => elementMap.get(id) ?? []);
+    let elements: EditorElement[] = [];
     this.reactEditor.editor.batchUpdates(() => {
-      let afterId = this.reactEditor.editor.blocks.getBlocks().at(-1)?.id;
-      blocks.forEach((block) => { afterId = this.reactEditor.blocks.insertBlock(block, afterId); });
+      const afterId = this.reactEditor.editor.blocks.getBlocks().at(-1)?.id;
+      const blockMap = this.reactEditor.editor.blocks.importForest(bundle.blocks, afterId).idMap;
+      elements = sourceElements.map((element): EditorElement => {
+        const props = JSON.parse(JSON.stringify(element.props)) as Record<string, unknown>;
+        if (element.type === "block") Object.assign(props, blockRangeProps(blockIdsOf(element, sourceRootIds).flatMap((id) => blockMap.get(id) ?? [])));
+        if (element.type === "group") props.children = (Array.isArray(props.children) ? props.children : []).flatMap((id) => typeof id === "string" ? elementMap.get(id) ?? [] : []);
+        if (element.type === "connector") {
+          for (const key of ["source", "target"] as const) {
+            const endpoint = props[key];
+            if (!isRecord(endpoint)) continue;
+            const mapped = typeof endpoint.elementId === "string" ? elementMap.get(endpoint.elementId) : undefined;
+            props[key] = { ...endpoint, ...(mapped ? { elementId: mapped } : { elementId: undefined }), position: isRecord(endpoint.position) ? { x: Number(endpoint.position.x) + 24, y: Number(endpoint.position.y) + 24 } : endpoint.position };
+          }
+        }
+        return { ...element, id: elementMap.get(element.id)!, frame: { ...element.frame, x: element.frame.x + 24, y: element.frame.y + 24 }, props };
+      });
       const blockElements = elements.filter((element) => element.type === "block");
       const order = this.reactEditor.editor.blocks.getRootIds();
       const first = blockElements.flatMap((element) => blockIdsOf(element, order))[0];

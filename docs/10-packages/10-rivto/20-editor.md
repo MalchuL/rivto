@@ -34,8 +34,8 @@ const first = editor.blocks.insertBlock({
 });
 
 editor.selection.set([{
-  type: "block",
-  blockIds: [first],
+  type: "selection",
+  blocks: [{ id: first, start: 0, end: -1 }],
   anchorBlockId: first,
   focusBlockId: first,
 }]);

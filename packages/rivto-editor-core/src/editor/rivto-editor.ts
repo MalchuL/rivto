@@ -1,5 +1,5 @@
 /**
- * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ * Editor runtime coordinating document mutations and focused public managers.
  */
 import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
 import { YjsDoc } from "@chulane/crdt-doc";
@@ -12,45 +12,12 @@ import {
   type Snapshot,
   type SnapshotUpdate,
 } from "@chulane/document-model";
-import {
-  RIVTO_CLIPBOARD_MIME,
-  type ClipboardBundle,
-} from "../managers/clipboard-manager";
+import type { ClipboardBundle } from "../managers/clipboard-manager";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 import { commandPayload } from "../managers/utils";
-import type { CreateRivtoEditorOptions, EditorSelectionItem, RivtoEditorApi, TextRange } from "./types";
+import type { CreateRivtoEditorOptions, RivtoEditorApi } from "./types";
+import type { Selection } from "../managers/selection-manager";
 import { Listeners } from "../utils";
-
-/** Framework-neutral subset of browser or host clipboard data. */
-interface ClipboardDataLike {
-  /**
-   * Reads one MIME representation from the host clipboard.
-   *
-   * @param type - MIME type to retrieve.
-   * @returns Stored clipboard text, or an empty string when unavailable.
-   */
-  getData(type: string): string;
-  /**
-   * Writes one MIME representation to the host clipboard.
-   *
-   * @param type - MIME type assigned to the value.
-   * @param value - Serialized clipboard value to store.
-   * @returns No value.
-   */
-  setData(type: string, value: string): void;
-}
-
-/** Structural clipboard event accepted without importing DOM event types. */
-interface ClipboardEventLike {
-  /** Host clipboard transfer, or null when clipboard access is unavailable. */
-  readonly clipboardData: ClipboardDataLike | null;
-  /**
-   * Prevents the host's default clipboard behavior after Rivto handles the event.
-   *
-   * @returns No value.
-   */
-  preventDefault(): void;
-}
 
 /**
  * Coordinates editor lifecycle around focused public managers.
@@ -317,84 +284,59 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Registers clipboard commands used by view bridges and tests.
+   * Registers data-only clipboard commands used by integrations and tests.
    *
-   * ClipboardManager owns typed behavior. These handlers only preserve the
-   * existing string-command payloads used by integrations and older tests.
+   * ClipboardManager owns typed behavior; browser hosts own native events and
+   * transfer the serialized string returned by copy and cut.
    * @returns No value.
    */
   private registerClipboardCommands(): void {
-    type CopyPayload = { textTarget?: TextRange; clipboardData?: Pick<ClipboardDataLike, "setData"> };
+    type CopyPayload = { textTarget?: Selection };
     type PastePayload = {
-      textTarget?: TextRange;
+      textTarget?: Selection;
       bundle?: ClipboardBundle;
       structured?: string;
       mergeText?: boolean;
       preserveNewlines?: boolean;
       defaultBlockType?: string;
       text?: string;
-      placement?: { parentId: string | null; afterId: string | null };
+      placement?: { parentId: string | null; afterId: string | null; mergeText?: boolean; preserveNewlines?: boolean };
     };
     const payload = <Payload>(value: unknown): Partial<Payload> => value && typeof value === "object" && !Array.isArray(value)
       ? value as unknown as Partial<Payload>
       : {};
     const text = (value: unknown): string | undefined => typeof value === "string" ? value : undefined;
-    const clipboardEvent = (value: unknown): ClipboardEventLike | undefined => {
-      const candidate = payload<{ event: ClipboardEventLike }>(value).event ?? value;
-      return candidate && typeof candidate === "object" && "clipboardData" in candidate && "preventDefault" in candidate
-        ? candidate as ClipboardEventLike
-        : undefined;
-    };
     this.commands.register("clipboard.copy", (value) => {
-      const event = clipboardEvent(value);
       const data = payload<CopyPayload>(value);
       const bundle = data.textTarget ? this.clipboard.copyText(data.textTarget) : this.clipboard.copy();
-      if (!bundle) return "";
-      const structured = JSON.stringify(bundle);
-      if (event?.clipboardData) {
-        event.preventDefault();
-        event.clipboardData.setData(RIVTO_CLIPBOARD_MIME, structured);
-      }
-      if (data.clipboardData && typeof data.clipboardData.setData === "function") {
-        const transfer = data.clipboardData;
-        transfer.setData(RIVTO_CLIPBOARD_MIME, structured);
-      }
-      return structured;
+      return bundle ? JSON.stringify(bundle) : "";
     });
 
-    this.commands.register("clipboard.cut", (value) => {
-      const event = clipboardEvent(value);
+    this.commands.register("clipboard.cut", () => {
       const bundle = this.clipboard.cut();
-      if (!bundle) return "";
-      const structured = JSON.stringify(bundle);
-      if (event?.clipboardData) {
-        event.preventDefault();
-        event.clipboardData.setData(RIVTO_CLIPBOARD_MIME, structured);
-      }
-      return structured;
+      return bundle ? JSON.stringify(bundle) : "";
     });
 
     this.commands.register("clipboard.paste", (value) => {
-      const event = clipboardEvent(value);
       const data = payload<PastePayload>(value);
       const defaultBlockType = text(data.defaultBlockType);
-      const structured = text(data.structured)
-        ?? (event?.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) || undefined);
+      const structured = text(data.structured);
       const bundle = data.bundle;
-      const mergeText = data.mergeText !== false;
-      const preserveNewlines = data.preserveNewlines === true;
-      const placement = data.placement && typeof data.placement === "object" ? data.placement : undefined;
-      const explicitText = text(data.text);
-      if (event?.clipboardData) event.preventDefault();
+      const hostPlacement = data.placement && typeof data.placement === "object"
+        ? data.placement
+        : {} as NonNullable<PastePayload["placement"]>;
       return this.clipboard.paste({
         textTarget: data.textTarget,
         bundle,
         structured,
-        mergeText,
-        preserveNewlines,
         defaultBlockType,
-        text: explicitText ?? event?.clipboardData?.getData("text/plain"),
-        placement,
+        text: text(data.text),
+        placement: {
+          parentId: hostPlacement.parentId,
+          afterId: hostPlacement.afterId,
+          mergeText: data.mergeText ?? hostPlacement.mergeText,
+          preserveNewlines: data.preserveNewlines ?? hostPlacement.preserveNewlines,
+        },
       });
     });
   }
@@ -411,41 +353,50 @@ export class EditorRuntime implements RivtoEditorApi {
    */
   private reconcileSelection(): void {
     const selection = this.selection.get();
+    if (!selection) return;
     const visibleIds: string[] = [];
     const visit = (blocks: Block[]): void => blocks.forEach((block) => {
       visibleIds.push(block.id);
       visit(block.children);
     });
     visit(this.blocks.getBlocks());
-    const order = new Map(visibleIds.map((id, index) => [id, index]));
     let changed = false;
-    const valid = selection.flatMap((item): EditorSelectionItem[] => {
-      let result: EditorSelectionItem[] = [];
-      const selected = new Set(item.blockIds);
-      const blockIds = visibleIds.filter((id) => selected.has(id));
-      if (!blockIds.length) {
+    const valid = (() : Selection | undefined => {
+      const item = selection;
+      const selected = new Map(item.blocks.map((block) => [block.id, block]));
+      const blocks = visibleIds.flatMap((id) => {
+        const entry = selected.get(id);
+        return entry ? [{ id: entry.id, start: entry.start, end: entry.end }] : [];
+      });
+      const elements = (item.elements ?? []).filter((id) => Boolean(this.elements.getElement(id)));
+      const hasPluginData = Object.keys(item.pluginData ?? {}).length > 0;
+      if (!blocks.length && !elements.length && !hasPluginData) {
         changed = true;
-      } else {
-        const anchorIndex = item.blockIds.indexOf(item.anchorBlockId);
-        const focusIndex = item.blockIds.indexOf(item.focusBlockId);
-        const forward = anchorIndex <= focusIndex;
-        const anchorBlockId = selected.has(item.anchorBlockId) && order.has(item.anchorBlockId)
-          ? item.anchorBlockId
-          : forward ? blockIds[0]! : blockIds.at(-1)!;
-        const focusBlockId = selected.has(item.focusBlockId) && order.has(item.focusBlockId)
-          ? item.focusBlockId
-          : forward ? blockIds.at(-1)! : blockIds[0]!;
-        if (
-          blockIds.length !== item.blockIds.length ||
-          blockIds.some((id, index) => id !== item.blockIds[index]) ||
-          anchorBlockId !== item.anchorBlockId ||
-          focusBlockId !== item.focusBlockId
-        ) changed = true;
-        result = [{ ...item, blockIds, anchorBlockId, focusBlockId }];
+        return undefined;
       }
-      return result;
-    });
-    if (changed) this.selection.set(valid);
+      if (!blocks.length) {
+        changed ||= elements.length !== (item.elements?.length ?? 0);
+        return { ...item, blocks, elements };
+      }
+      const forward = item.blocks.findIndex((block) => block.id === item.anchorBlockId)
+        <= item.blocks.findIndex((block) => block.id === item.focusBlockId);
+      const ids = new Set(blocks.map((block) => block.id));
+      const anchorBlockId = item.anchorBlockId && ids.has(item.anchorBlockId) ? item.anchorBlockId
+        : forward ? blocks[0]!.id : blocks.at(-1)!.id;
+      const focusBlockId = item.focusBlockId && ids.has(item.focusBlockId) ? item.focusBlockId
+        : forward ? blocks.at(-1)!.id : blocks[0]!.id;
+      changed ||= blocks.length !== item.blocks.length
+        || blocks.some((block, index) => block.id !== item.blocks[index]?.id
+          || block.start !== item.blocks[index]?.start
+          || block.end !== item.blocks[index]?.end)
+        || anchorBlockId !== item.anchorBlockId || focusBlockId !== item.focusBlockId;
+      changed ||= elements.length !== (item.elements?.length ?? 0);
+      return { ...item, blocks, elements, anchorBlockId, focusBlockId };
+    })();
+    if (changed) {
+      if (valid) this.selection.set(valid);
+      else this.selection.clear();
+    }
   }
 
   /**

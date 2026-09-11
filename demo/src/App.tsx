@@ -8,6 +8,8 @@ import {
   createReactEditor,
   createKanbanBlockInput,
   createBentoBlockInput,
+  createTableBlockInput,
+  createColumnsBlockInput,
   DEFAULT_WRITING_BLOCK_TYPE,
   type MarkdownLinkClick,
   edgelessVisualsExtension,
@@ -338,13 +340,26 @@ function createDemoEditor() {
     { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Room to explore. Resize this tile from Bento settings. Heights follow your content, and tiles wrap with the editor width.", props: { bentoWidth: 400 } },
     { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Drag blocks between tiles, nest them inside, or move them back into the editor." },
   ] }, numberedContinueId);
-  const kanbanId = editor.blocks.insertBlock(createKanbanBlockInput(), numberedContinueId);
+  const tableId = editor.blocks.insertBlock(createTableBlockInput(), numberedContinueId);
+  const kanbanId = editor.blocks.insertBlock(createKanbanBlockInput(), tableId);
   const column = editor.blocks.getBlock(kanbanId)!.children[0]!;
   const cardId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Drag me between columns or back into the editor",
   }, kanbanId);
   editor.blocks.moveBlocks([cardId], column.id, "inside");
+  const columnsId = editor.blocks.insertBlock(createColumnsBlockInput(2), kanbanId);
+  const columnsBoard = editor.blocks.getBlock(columnsId)!;
+  const leftColumnId = editor.blocks.insertBlock({
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content: "Left column. Add more blocks here, or use the settings control to change the column count.",
+  }, columnsId);
+  const rightColumnId = editor.blocks.insertBlock({
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content: "Right column. Deleting a column moves its blocks into the remaining column.",
+  }, columnsId);
+  editor.blocks.moveBlocks([leftColumnId], columnsBoard.children[0]!.id, "inside");
+  editor.blocks.moveBlocks([rightColumnId], columnsBoard.children[1]!.id, "inside");
   seedEdgelessShowcase(edgelessVisuals);
   editor.history.clear();
 

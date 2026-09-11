@@ -59,6 +59,8 @@ Unmodified Enter, Backspace, and Delete ignore IME composition. Their
 | Drag across blocks | Creates an inclusive whole-block selection. Selecting a parent visually covers its complete subtree as one rectangle. |
 | `Alt+drag` across blocks | Selects complete blocks, like an ordinary cross-block drag. |
 | `Shift+click` | Extends from the current anchor. It remains text in one block and becomes whole blocks after crossing a block boundary. |
+| `Shift+Alt+click` | Extends a partial text range across blocks, keeping the original caret offset and the clicked character offset. |
+| `Shift+Alt+drag` | Same partial text range while dragging across editable hosts. |
 | `Primary+click` | Toggles one complete block in a possibly non-contiguous block selection. |
 | `Primary+Shift+click` | Same as `Primary+click`; Shift adds no second behavior while Primary is held. |
 

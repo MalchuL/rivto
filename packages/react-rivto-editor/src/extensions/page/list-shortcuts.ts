@@ -2,6 +2,7 @@
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import type { BlockListType } from "./list-properties";
+import { createCaretSelection } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import { focusBlock } from "../../managers";
 
@@ -32,11 +33,7 @@ export function registerListShortcuts(reactEditor: ReactEditor): void {
   ): void => {
     reactEditor.editor.batchUpdates(() => {
       reactEditor.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
-      reactEditor.selection.set([{
-        type: "text",
-        anchor: { blockId, offset: 0 },
-        head: { blockId, offset: 0 },
-      }]);
+      reactEditor.selection.set(createCaretSelection(blockId, 0));
     });
     requestAnimationFrame(() => focusBlock(root, blockId, 0));
   };

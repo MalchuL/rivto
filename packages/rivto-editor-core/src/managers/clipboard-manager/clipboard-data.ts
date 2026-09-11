@@ -1,5 +1,10 @@
-/** Portable clipboard data and explicit editing-operation inputs. */
-import type { TextRange } from "../../editor/types";
+/**
+ * Portable clipboard values shared by core and host integrations.
+ *
+ * This module contains data contracts only. ClipboardManager owns orchestration,
+ * while paste strategies own destination-specific mutation logic.
+ */
+import type { Selection } from "../selection-manager";
 import type { Block, DocumentElement } from "@chulane/document-model";
 
 /**
@@ -55,6 +60,16 @@ export interface BlockPastePlacement {
    * names a sibling, omit this field because that sibling determines its parent.
    */
   readonly parentId?: string | null;
+  /**
+   * Whether a `startsWithText` bundle may merge into the selected text range.
+   * Omitted or true merges; false inserts the forest as blocks.
+   */
+  readonly mergeText?: boolean;
+  /**
+   * When true, plain-text paste keeps newline characters inside one block.
+   * Selects the preserve-newlines strategy instead of splitting lines.
+   */
+  readonly preserveNewlines?: boolean;
 }
 
 /**
@@ -64,20 +79,16 @@ export interface BlockPastePlacement {
  * intentionally do not appear in this interface, keeping core DOM-free.
  */
 export interface ClipboardPasteInput {
-  /** Single-block editing range, independent of whole-block selection. */
-  readonly textTarget?: TextRange;
+  /** Optional editing range to replace; omit to use the current selection. */
+  readonly textTarget?: Selection;
   /** Already parsed lossless Rivto data. Takes precedence over every fallback. */
   readonly bundle?: ClipboardBundle;
   /** Serialized lossless Rivto data, normally read from `RIVTO_CLIPBOARD_MIME`. */
   readonly structured?: string;
   /** Universal plain-text fallback used when structured data is unavailable. */
   readonly text?: string;
-  /** Whether copied partial text may merge into an active text selection. */
-  readonly mergeText?: boolean;
-  /** Keep plain-text newline characters inside one block instead of creating siblings. */
-  readonly preserveNewlines?: boolean;
   /** Block type used for additional lines in a plain-text paste. Required when pasting plain text. */
   readonly defaultBlockType?: string;
-  /** Structural destination already resolved by the host for whole-block paste. */
+  /** Destination and merge/newline behavior already resolved by the host. */
   readonly placement?: BlockPastePlacement;
 }

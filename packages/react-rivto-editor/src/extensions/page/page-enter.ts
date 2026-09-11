@@ -2,6 +2,7 @@
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import { isNumberedListType } from "./list-properties";
+import { createCaretSelection } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import {
   focusBlock,
@@ -17,7 +18,7 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
  * Installs outline block splitting for Page and Edgeless surfaces.
  *
  * The declarative `block.create` binding decides which key invokes this action.
- * The first selection item supplies the only insertion target,
+ * The first covered block supplies the only insertion target,
  * so a multi-item selection never creates several blocks. Expanded text is
  * deleted first, a collapsed caret splits its block, and a whole-block item adds
  * one empty default writing block.
@@ -49,7 +50,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
     editor.batchUpdates(() => {
       let target = initialTarget;
       let skip = false;
-      if (target.item.type === "text" && shouldDeleteSelection(selection)) {
+      if (shouldDeleteSelection(selection)) {
         reactEditor.selection.delete();
         const collapsed = firstKeyboardTarget(reactEditor.selection.get());
         if (!collapsed?.collapsed) skip = true;
@@ -65,11 +66,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
             editor.blocks.outdentBlock(block.id);
           }
           nextBlockId = block.id;
-          reactEditor.selection.set([{
-            type: "text",
-            anchor: { blockId: nextBlockId, offset: 0 },
-            head: { blockId: nextBlockId, offset: 0 },
-          }]);
+          reactEditor.selection.set(createCaretSelection(nextBlockId, 0));
         } else {
           const listActive = reactEditor.blocks.hasListProps("list");
           const collapseActive = reactEditor.blocks.hasListProps("collapse");
@@ -77,11 +74,11 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
             reactEditor.blocks.updateBlock(block.id, { listProps: { type: "list", checked: false } });
             nextBlockId = block.id;
           } else {
-            const isTextTarget = target.item.type === "text";
-            const splitAt = isTextTarget
+            const splitAtCaret = target.collapsed;
+            const splitAt = splitAtCaret
               ? Math.min(target.offset ?? 0, block.content.length)
               : block.content.length;
-            if (isTextTarget) editor.blocks.updateBlock(block.id, { content: block.content.slice(0, splitAt) });
+            if (splitAtCaret) editor.blocks.updateBlock(block.id, { content: block.content.slice(0, splitAt) });
             nextBlockId = reactEditor.blocks.insertBlock({
               ...createDefaultBlock(),
               ...(listActive ? { listProps: {
@@ -90,7 +87,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
                   : isNumberedListType(block.listProps.type) ? "numbered_list" : "list",
                 checked: false,
               } } : {}),
-              content: isTextTarget ? block.content.slice(splitAt) : "",
+              content: splitAtCaret ? block.content.slice(splitAt) : "",
             }, block.id);
 
             if (block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true)) {
@@ -108,11 +105,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
               if (element) editor.elements.updateElement(element.id, { props: { endBlockId: nextBlockId } });
             }
 
-            reactEditor.selection.set([{
-              type: "text",
-              anchor: { blockId: nextBlockId, offset: 0 },
-              head: { blockId: nextBlockId, offset: 0 },
-            }]);
+            reactEditor.selection.set(createCaretSelection(nextBlockId, 0));
           }
         }
       }

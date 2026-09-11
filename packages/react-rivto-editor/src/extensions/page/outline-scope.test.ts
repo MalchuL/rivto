@@ -1,11 +1,8 @@
 import { createTestCoreEditor as createRivtoEditor } from "../../test-utils";
 import { createReactEditor } from "../../react-editor";
 import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../separator/separator-block";
-import {
-  adjacentBlockSelection,
-  keyboardMovePlacement,
-  pageEntries,
-} from "./page-selection-utils";
+import { adjacentBlockSelection, keyboardMovePlacement, pageEntries } from "./page-selection-utils";
+import { createStructuralSelection } from "@chulane/rivto";
 import {
   navigationOutlineBlocks,
   owningBlockElement,
@@ -60,7 +57,7 @@ describe("edgeless outline scope", () => {
   test("adjacent block selection does not leave the card", () => {
     const { editor, reactEditor, leftA, leftB } = twoCards();
     const outline = navigationOutlineBlocks(editor, leftB);
-    const current = { type: "block" as const, blockIds: [leftB], anchorBlockId: leftB, focusBlockId: leftB };
+    const current = createStructuralSelection([leftB], leftB, leftB);
     expect(adjacentBlockSelection(outline, current, "down")).toEqual(current);
     expect(adjacentBlockSelection(outline, current, "up").focusBlockId).toBe(leftA);
     reactEditor.destroy();

@@ -2,6 +2,8 @@ import {
   blockExtension,
   kanbanExtension,
   bentoExtension,
+  tableExtension,
+  columnsExtension,
   useBlockEditing,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
@@ -10,7 +12,6 @@ import { MarkdownContent } from "@chulane/rivto-react";
 import {
   COUNTER_BLOCK_TYPE,
   counterBlockDefinition,
-  SLIDER_BLOCK_TYPE,
   sliderBlockDefinition,
 } from "./custom-block-definitions";
 
@@ -78,10 +79,12 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
   );
 }
 
-/** Creation-time extensions for the demo's two custom block types. */
+/** Creation-time extensions for the demo's optional and custom block types. */
 export const customBlockExtensions: readonly ReactEditorExtension[] = [
     kanbanExtension(),
     bentoExtension(),
+    tableExtension(),
+    columnsExtension(),
     blockExtension({
       definition: sliderBlockDefinition,
       render: SliderBlock,

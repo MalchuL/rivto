@@ -84,10 +84,10 @@ export function PageDocument({
   const { data: projectPages = [] } = usePagesQuery({ projectId: page.projectId });
   const closeTab = useTabsStore((state) => state.closeTab);
   const toggleRightSidebar = useUiStore((state) => state.toggleRightSidebar);
-  const favoritePageIds = useUiStore((state) => state.favoritePageIds);
+  const pinnedPageIds = useUiStore((state) => state.pinnedPageIds);
   const togglePinnedPage = useUiStore((state) => state.togglePinnedPage);
-  const removeFromRecentAndFavorites = useUiStore(
-    (state) => state.removeFromRecentAndFavorites,
+  const removeFromRecentAndPinned = useUiStore(
+    (state) => state.removeFromRecentAndPinned,
   );
 
   const [title, setTitle] = useState(page.title);
@@ -117,7 +117,7 @@ export function PageDocument({
     }, 500);
   };
 
-  const isPinned = favoritePageIds.includes(page.id);
+  const isPinned = pinnedPageIds.includes(page.id);
   const moveTargets = projects.filter(
     (project) =>
       project.id !== page.projectId && (!project.system || project.system === "inbox"),
@@ -135,7 +135,7 @@ export function PageDocument({
 
   const handleDelete = async () => {
     await deletePage.mutateAsync(page.id);
-    removeFromRecentAndFavorites(page.id);
+    removeFromRecentAndPinned(page.id);
     const nextHref = closeTab(`page:${page.id}`);
     router.push(nextHref ?? FRONTEND_ROUTES.journal);
   };

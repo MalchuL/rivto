@@ -20,8 +20,7 @@ type UiState = {
   /** Multiple projects can be expanded at once (parent + child). */
   expandedProjectIds: string[];
   pinnedProjectIds: string[];
-  /** Persisted key kept for localStorage compat; UI calls these "pinned pages". */
-  favoritePageIds: string[];
+  pinnedPageIds: string[];
   recentPageIds: string[];
   paletteOpen: boolean;
   journalViewMode: CollectionViewMode;
@@ -38,10 +37,8 @@ type UiState = {
   toggleExpandedProject: (id: string) => void;
   togglePinnedProject: (id: string) => void;
   togglePinnedPage: (id: string) => void;
-  /** @deprecated alias — use togglePinnedPage */
-  toggleFavoritePage: (id: string) => void;
   addRecentPage: (id: string) => void;
-  removeFromRecentAndFavorites: (id: string) => void;
+  removeFromRecentAndPinned: (id: string) => void;
   setPaletteOpen: (open: boolean) => void;
   setJournalViewMode: (mode: CollectionViewMode) => void;
   setProjectViewMode: (projectId: string, mode: CollectionViewMode) => void;
@@ -53,9 +50,9 @@ export const useUiStore = create<UiState>()(
     (set) => {
       const togglePinnedPage = (id: string) =>
         set((state) => ({
-          favoritePageIds: state.favoritePageIds.includes(id)
-            ? state.favoritePageIds.filter((it) => it !== id)
-            : [...state.favoritePageIds, id],
+          pinnedPageIds: state.pinnedPageIds.includes(id)
+            ? state.pinnedPageIds.filter((it) => it !== id)
+            : [...state.pinnedPageIds, id],
         }));
 
       return {
@@ -66,7 +63,7 @@ export const useUiStore = create<UiState>()(
         rightSidebarTab: "details",
         expandedProjectIds: [],
         pinnedProjectIds: [],
-        favoritePageIds: [],
+        pinnedPageIds: [],
         recentPageIds: [],
         paletteOpen: false,
         journalViewMode: "linked",
@@ -96,7 +93,6 @@ export const useUiStore = create<UiState>()(
               : [...state.pinnedProjectIds, id],
           })),
         togglePinnedPage,
-        toggleFavoritePage: togglePinnedPage,
         addRecentPage: (id) =>
           set((state) => ({
             recentPageIds: [
@@ -104,10 +100,10 @@ export const useUiStore = create<UiState>()(
               ...state.recentPageIds.filter((it) => it !== id),
             ].slice(0, RECENT_LIMIT),
           })),
-        removeFromRecentAndFavorites: (id) =>
+        removeFromRecentAndPinned: (id) =>
           set((state) => ({
             recentPageIds: state.recentPageIds.filter((it) => it !== id),
-            favoritePageIds: state.favoritePageIds.filter((it) => it !== id),
+            pinnedPageIds: state.pinnedPageIds.filter((it) => it !== id),
           })),
         setPaletteOpen: (open) => set({ paletteOpen: open }),
         setJournalViewMode: (mode) => set({ journalViewMode: mode }),
@@ -123,20 +119,6 @@ export const useUiStore = create<UiState>()(
     },
     {
       name: "rivto-ui",
-      version: 2,
-      migrate: (persisted) => {
-        const state = persisted as Record<string, unknown>;
-        // v1 had a single expandedProjectId; lift into the multi-expand array.
-        if (state.expandedProjectIds == null && typeof state.expandedProjectId === "string") {
-          state.expandedProjectIds = [state.expandedProjectId];
-        }
-        if (state.expandedProjectIds == null) {
-          state.expandedProjectIds = [];
-        }
-        delete state.expandedProjectId;
-        if (state.projectTabs == null) state.projectTabs = {};
-        return state as never;
-      },
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarWidth: state.sidebarWidth,
@@ -145,7 +127,7 @@ export const useUiStore = create<UiState>()(
         rightSidebarTab: state.rightSidebarTab,
         expandedProjectIds: state.expandedProjectIds,
         pinnedProjectIds: state.pinnedProjectIds,
-        favoritePageIds: state.favoritePageIds,
+        pinnedPageIds: state.pinnedPageIds,
         recentPageIds: state.recentPageIds,
         journalViewMode: state.journalViewMode,
         projectViewModes: state.projectViewModes,

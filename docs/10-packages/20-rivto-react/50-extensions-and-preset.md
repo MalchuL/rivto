@@ -27,7 +27,7 @@ const analyticsExtension = (): ReactEditorExtension => ({
 
 ## `standardPreset(options?)`
 
-- **Аргументы:** `number | StandardPresetOptions`; number — legacy shorthand для `trailingBlockCount`.
+- **Аргументы:** `StandardPresetOptions`.
 - **Возвращает:** complete `ReactEditorExtension` с ID `rivto.standard`.
 - **Исключения:** invalid trailing count и ошибки setup любой вложенной extension.
 
