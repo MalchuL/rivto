@@ -1,5 +1,6 @@
 import { CRDTType, BasicType } from "./basic-types";
 import { Serializible } from "./crdt";
+import type { CRDTObserveHandler } from "./observe";
 
 /**
  * CRDTMap is a key-value store backed by a CRDT.
@@ -9,10 +10,15 @@ import { Serializible } from "./crdt";
  */
 export interface CRDTMap<Schema extends object = Record<string, CRDTType>> extends Serializible {
     /**
-     * Observe this map and its nested shared values without exposing an
-     * adapter-specific map or transaction type.
+     * Observe this map and nested shared maps, arrays, and text.
+     *
+     * Direct `set`/`delete` events use an empty `path` and put the affected
+     * keys in `keys`. Nested mutations prepend those keys onto `path`.
+     *
+     * @param handler - Receives one batch of {@link CRDTObserveEvent}s per transaction.
+     * @returns Function that removes this observer.
      */
-    observe(handler: (events: unknown, transaction: unknown) => void): () => void;
+    observe(handler: CRDTObserveHandler): () => void;
 
     /**
      * Get the value for a given key.

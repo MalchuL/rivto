@@ -46,6 +46,13 @@ export class DocumentElementManager {
    */
   generateId: GenerateId = () => crypto.randomUUID();
   private readonly storage: CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>;
+  /** Stable element snapshots invalidated by observed record changes. */
+  private readonly snapshots = new Map<IDElement, DocumentElement>();
+  /** Stable complete collection invalidated by any element change. */
+  private elementsSnapshot?: DocumentElement[];
+  private readonly listeners = new Set<() => void>();
+  private readonly membershipListeners = new Set<() => void>();
+  private readonly elementListeners = new Map<IDElement, Set<() => void>>();
 
   /**
    * Creates an element manager over existing collaborative document storage.
@@ -58,6 +65,25 @@ export class DocumentElementManager {
     this.pipe.register(ELEMENT_FRAME_PROCESSOR);
     this.pipe.register(ELEMENT_Z_INDEX_PROCESSOR);
     this.pipe.register(ELEMENT_PROPS_PROCESSOR);
+    this.storage.observe((events) => {
+      const changedIds = new Set<string>();
+      let membershipChanged = false;
+      events.forEach(({ path, keys }) => {
+        const id = path[0];
+        if (typeof id === "string") changedIds.add(id);
+        if (path.length === 0 && keys.length) {
+          membershipChanged = true;
+          keys.forEach((key) => changedIds.add(key));
+        }
+      });
+      changedIds.forEach((id) => {
+        this.snapshots.delete(id);
+        this.emit(this.elementListeners.get(id));
+      });
+      this.elementsSnapshot = undefined;
+      this.emit(this.listeners);
+      if (membershipChanged) this.emit(this.membershipListeners);
+    });
   }
 
   /**
@@ -67,8 +93,12 @@ export class DocumentElementManager {
    * @returns Detached element, or undefined when absent.
    */
   getElement(id: string): DocumentElement | undefined {
+    const cached = this.document.isTransacting ? undefined : this.snapshots.get(id);
+    if (cached) return cached;
     const value = this.storage.get(id);
-    return isCRDTMap(value) ? this.read(value) : undefined;
+    const snapshot = isCRDTMap(value) ? this.read(value) : undefined;
+    if (snapshot && !this.document.isTransacting) this.snapshots.set(id, snapshot);
+    return snapshot;
   }
 
   /**
@@ -77,7 +107,64 @@ export class DocumentElementManager {
    * @returns Every detached element in collaborative map iteration order.
    */
   getElements(): DocumentElement[] {
-    return [...this.storage.values()].flatMap((value) => isCRDTMap(value) ? [this.read(value)] : []);
+    if (this.document.isTransacting) {
+      return [...this.storage.keys()].flatMap((id) => {
+        const element = this.getElement(id);
+        return element ? [element] : [];
+      });
+    }
+    this.elementsSnapshot ??= [...this.storage.keys()].flatMap((id) => {
+      const element = this.getElement(id);
+      return element ? [element] : [];
+    });
+    return this.elementsSnapshot;
+  }
+
+  /**
+   * Subscribes to any element record or collection change.
+   *
+   * @param listener - Callback invoked after an element snapshot changes.
+   * @returns Function that removes this exact listener.
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * Subscribes to changes affecting one element snapshot.
+   *
+   * @param id - Element identifier to observe.
+   * @param listener - Callback invoked after that element changes or disappears.
+   * @returns Function that removes this exact listener.
+   */
+  subscribeElement(id: string, listener: () => void): () => void {
+    let listeners = this.elementListeners.get(id);
+    if (!listeners) {
+      listeners = new Set();
+      this.elementListeners.set(id, listeners);
+    }
+    listeners.add(listener);
+    return () => {
+      listeners!.delete(listener);
+      if (!listeners!.size) this.elementListeners.delete(id);
+    };
+  }
+
+  /**
+   * Subscribes only to element insertion and deletion.
+   *
+   * @param listener - Callback invoked when collection membership changes.
+   * @returns Function that removes this exact listener.
+   */
+  subscribeMembership(listener: () => void): () => void {
+    this.membershipListeners.add(listener);
+    return () => this.membershipListeners.delete(listener);
+  }
+
+  /** Calls a stable listener snapshot when the optional set exists. */
+  private emit(listeners: ReadonlySet<() => void> | undefined): void {
+    if (listeners) [...listeners].forEach((listener) => listener());
   }
 
   /**

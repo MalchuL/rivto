@@ -60,7 +60,7 @@ export class ReactEditorImpl implements ReactEditor {
   readonly slashCommands: ReactSlashCommandManager;
   private destroyed = false;
   private reconciliationQueued = false;
-  private unsubscribeReconciliation?: () => void;
+  private readonly reconciliationDisposers: Array<() => void> = [];
 
   /** Current revision of the framework-neutral editor. */
   get revision(): number {
@@ -93,7 +93,10 @@ export class ReactEditorImpl implements ReactEditor {
     this.surfaces = new SurfaceManager(this);
     try {
       this.extensions.initialize(options.extensions ?? []);
-      this.unsubscribeReconciliation = this.editor.subscribe(() => this.queueBlockElementReconciliation());
+      this.reconciliationDisposers.push(
+        this.editor.blocks.subscribeRootIds(() => this.queueBlockElementReconciliation()),
+        this.editor.elements.subscribe(() => this.queueBlockElementReconciliation()),
+      );
       this.queueBlockElementReconciliation();
     } catch (error) {
       this.destroy();
@@ -149,8 +152,7 @@ export class ReactEditorImpl implements ReactEditor {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.unsubscribeReconciliation?.();
-    this.unsubscribeReconciliation = undefined;
+    this.reconciliationDisposers.splice(0).forEach((dispose) => dispose());
     this.extensions.destroy();
     this.slashCommands.destroy();
     this.keyboard.destroy();

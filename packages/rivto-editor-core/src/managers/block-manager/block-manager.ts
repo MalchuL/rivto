@@ -52,6 +52,9 @@ export class BlockManager {
     this.registerRequiredCommands();
   }
 
+  /** @returns Monotonic document block revision for derived read caches. */
+  get revision(): number { return this.editor.document.blocks.revision; }
+
   /**
    * Resolves one placed block by its stable identifier.
    *
@@ -78,6 +81,37 @@ export class BlockManager {
    */
   getRootIds(): string[] {
     return this.editor.document.blocks.getRootIds();
+  }
+
+  /**
+   * Subscribes to changes affecting one recursive block snapshot.
+   *
+   * @param id - Block identifier to observe.
+   * @param listener - Callback invoked when the snapshot changes.
+   * @returns Function that removes this exact listener.
+   */
+  subscribeBlock(id: string, listener: () => void): () => void {
+    return this.editor.document.blocks.subscribeBlock(id, listener);
+  }
+
+  /**
+   * Subscribes to ordered root identifier changes.
+   *
+   * @param listener - Callback invoked after root insertion, removal, or reorder.
+   * @returns Function that removes this exact listener.
+   */
+  subscribeRootIds(listener: () => void): () => void {
+    return this.editor.document.blocks.subscribeRootIds(listener);
+  }
+
+  /**
+   * Subscribes to any root or child hierarchy change.
+   *
+   * @param listener - Callback invoked after structure changes.
+   * @returns Function that removes this exact listener.
+   */
+  subscribeStructure(listener: () => void): () => void {
+    return this.editor.document.blocks.subscribeStructure(listener);
   }
 
   /**

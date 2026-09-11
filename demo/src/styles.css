@@ -187,7 +187,8 @@ body { margin: 0; }
   cursor: pointer;
 }
 
-.keyboard-panel {
+.keyboard-panel,
+.revision-panel {
   margin: 0 24px 12px;
   padding: 8px 12px;
   border: 1px solid #eee;
@@ -196,27 +197,32 @@ body { margin: 0; }
   font-size: 13px;
 }
 
-.keyboard-panel-table-wrap {
+.keyboard-panel-table-wrap,
+.revision-panel-table-wrap {
   max-height: 320px;
   margin: 8px 0 0;
   overflow: auto;
 }
 
-.keyboard-panel-table {
+.keyboard-panel-table,
+.revision-panel-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
 }
 
 .keyboard-panel-table th,
-.keyboard-panel-table td {
+.keyboard-panel-table td,
+.revision-panel-table th,
+.revision-panel-table td {
   padding: 6px 8px;
   border-bottom: 1px solid #eee;
   text-align: left;
   vertical-align: top;
 }
 
-.keyboard-panel-table thead th {
+.keyboard-panel-table thead th,
+.revision-panel-table thead th {
   position: sticky;
   top: 0;
   background: #fafafa;
@@ -224,7 +230,8 @@ body { margin: 0; }
   font-weight: 600;
 }
 
-.keyboard-panel-table th[scope="row"] {
+.keyboard-panel-table th[scope="row"],
+.revision-panel-table th[scope="row"] {
   font-weight: 500;
 }
 
@@ -257,7 +264,8 @@ body { margin: 0; }
 }
 
 .keyboard-panel-help,
-.keyboard-panel-indent-hint {
+.keyboard-panel-indent-hint,
+.revision-panel-help {
   margin: 8px 0 0;
   color: #666;
 }

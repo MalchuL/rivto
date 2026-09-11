@@ -21,6 +21,7 @@ import {
   useEditorMode,
 } from "@chulane/rivto-react";
 import { KeyboardPanel } from "./KeyboardPanel";
+import { RevisionsPanel } from "./RevisionsPanel";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   COUNTER_BLOCK_TYPE,
@@ -57,6 +58,22 @@ const edgelessOptions = {
     { id: "mint", label: "Mint sticky", fill: "#d3f9d8", color: "#2b8a3e" },
   ],
 } as const;
+
+/**
+ * Reads `?repeat=` as extra copies of the second edgeless block card.
+ *
+ * Invalid, missing, or non-positive values are ignored so the default seed
+ * stays unchanged. Each copy is a new card because a separator is inserted
+ * before it.
+ *
+ * @returns Finite extra-copy count, or 0 when the param should be ignored.
+ */
+function demoRepeatCount(): number {
+  const raw = new URLSearchParams(window.location.search).get("repeat");
+  if (raw == null || raw === "") return 0;
+  const count = Number.parseInt(raw, 10);
+  return Number.isInteger(count) && count > 0 ? count : 0;
+}
 
 /**
  * Seeds canvas visuals that exercise edgeless features in the journal demo.
@@ -180,6 +197,8 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
  * numbered lists, custom blocks, separators, block elements, and edgeless
  * showcase — so selection, slash commands, and extensions are immediately
  * testable. Optional `?keymap=alternate` remaps indent for keymap demos.
+ * Optional `?repeat=N` clones the second edgeless card N extra times, each
+ * preceded by a separator so reconciliation mounts N additional cards.
  */
 function createDemoEditor() {
   const editor = createRivtoEditor();
@@ -360,6 +379,23 @@ function createDemoEditor() {
   }, columnsId);
   editor.blocks.moveBlocks([leftColumnId], columnsBoard.children[0]!.id, "inside");
   editor.blocks.moveBlocks([rightColumnId], columnsBoard.children[1]!.id, "inside");
+  const repeatCount = demoRepeatCount();
+  if (repeatCount > 0) {
+    const rootIds = editor.blocks.getRootIds();
+    const start = rootIds.indexOf(secondBranchId);
+    const end = rootIds.indexOf(numberedContinueId);
+    const template = rootIds.slice(start, end + 1).flatMap((id) => {
+      const block = editor.blocks.getBlock(id);
+      return block ? [block] : [];
+    });
+    editor.batchUpdates(() => {
+      let afterId = editor.blocks.getRootIds().at(-1);
+      for (let index = 0; index < repeatCount; index += 1) {
+        afterId = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, afterId);
+        afterId = editor.blocks.importForest(template, afterId).rootIds.at(-1) ?? afterId;
+      }
+    });
+  }
   seedEdgelessShowcase(edgelessVisuals);
   editor.history.clear();
 
@@ -497,6 +533,7 @@ function JournalDemoApp() {
               showBlockIds={showBlockIds}
               onShowBlockIdsChange={setShowBlockIds}
             />
+            <RevisionsPanel />
             <KeyboardPanel />
             <JournalDate date={dates.today} />
           </EditorView>
@@ -603,6 +640,7 @@ function MultiEditorPane({
       <BlockIdsVisibleProvider visible={showBlockIds}>
         <EditorView editor={runtime.reactEditor}>
           <DemoToolbar showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
+          <RevisionsPanel />
           <DocumentStateDump />
         </EditorView>
       </BlockIdsVisibleProvider>
@@ -716,6 +754,7 @@ function SyncEditorsApp() {
             <BlockIdsVisibleProvider visible={showBlockIds}>
               <EditorView editor={peers[side].reactEditor}>
                 <DemoToolbar showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
+                <RevisionsPanel />
               </EditorView>
             </BlockIdsVisibleProvider>
           </section>
@@ -731,6 +770,7 @@ function SyncEditorsApp() {
  * - default → journal stack (`JournalDemoApp`)
  * - `?editors=2` → dual editors (`MultiEditorApp`)
  * - `?sync=1` → BroadcastChannel peers (`SyncEditorsApp`)
+ * - `?repeat=N` → N extra copies of the second journal card (with separators)
  *
  * Needed so one Vite demo app can cover walkthrough, regression, and sync
  * without separate entrypoints.

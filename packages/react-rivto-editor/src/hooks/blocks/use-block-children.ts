@@ -4,6 +4,7 @@ import type {
   EditorBlockInput as BlockInput,
 } from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
+import { useBlock } from "./use-block";
 
 // Reuse one immutable-by-contract empty value so a missing/leaf block does not
 // create a new array identity on every render.
@@ -36,8 +37,8 @@ export interface UseBlockChildrenResult {
 /**
  * Resolves the direct children of one block and commands for changing them.
  *
- * Child values are detached snapshots and resolve again when EditorView receives
- * the core editor's global revision. Operations resolve the parent at call time and only accept its
+ * Child values come from the parent's focused recursive snapshot. Operations
+ * resolve the parent at call time and only accept its
  * current direct children, so stale rendered IDs cannot mutate another subtree.
  *
  * Adding to a parent with no children uses the editor's existing insert and
@@ -51,7 +52,7 @@ export interface UseBlockChildrenResult {
  */
 export function useBlockChildren(blockId: string): UseBlockChildrenResult {
   const { editor, reactEditor } = useEditorContext();
-  const parent = editor.blocks.getBlock(blockId);
+  const { block: parent } = useBlock(blockId);
 
   const operations = useMemo<BlockChildrenOperations>(() => {
     const getChildren = (): Block[] => {

@@ -26,6 +26,21 @@ export class ElementManager {
     return this.editor.document.elements.getElements() satisfies DocumentElement[];
   }
 
+  /** @param listener - Collection-change callback. @returns Its disposer. */
+  subscribe(listener: () => void): () => void {
+    return this.editor.document.elements.subscribe(listener);
+  }
+
+  /** @param id - Element to observe. @param listener - Change callback. @returns Its disposer. */
+  subscribeElement(id: string, listener: () => void): () => void {
+    return this.editor.document.elements.subscribeElement(id, listener);
+  }
+
+  /** @param listener - Membership-change callback. @returns Its disposer. */
+  subscribeMembership(listener: () => void): () => void {
+    return this.editor.document.elements.subscribeMembership(listener);
+  }
+
   /** @param input - Complete element creation data. @returns Stable new ID. */
   insertElement(input: EditorElementInput): string {
     return this.editor.commands.execute("element.insert", { input }) as string;

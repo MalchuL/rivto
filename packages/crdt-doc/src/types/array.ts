@@ -1,5 +1,6 @@
 import { Serializible } from "./crdt";
 import { CRDTType, BasicType } from "./basic-types";
+import type { CRDTObserveHandler } from "./observe";
 
 /**
  * CRDTArray is an interface for a typed CRDT-backed array-like data type.
@@ -7,6 +8,17 @@ import { CRDTType, BasicType } from "./basic-types";
  * Pass an item type such as `CRDTArray<string>` to constrain inserted values.
  */
 export interface CRDTArray<Item extends CRDTType = CRDTType> extends Serializible {
+    /**
+     * Observe this array and nested shared maps, arrays, and text.
+     *
+     * Insert/delete on this array uses `{ path: [], keys: [] }`. Nested map
+     * edits use the item index as `path[0]` and fill `keys` with map keys.
+     *
+     * @param handler - Receives one batch of {@link CRDTObserveEvent}s per transaction.
+     * @returns Function that removes this observer.
+     */
+    observe(handler: CRDTObserveHandler): () => void;
+
     /**
      * Get element at the given index.
      */

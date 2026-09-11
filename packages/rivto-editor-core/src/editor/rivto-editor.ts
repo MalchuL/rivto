@@ -81,13 +81,12 @@ export class EditorRuntime implements RivtoEditorApi {
     this.registerRuntimeCommands();
     this.registerClipboardCommands();
 
-    // Document changes cover block commands and direct/remote document edits.
-    // !!!We subscribe to document changes to get updates and reconcile the selection with the latest document.
-    const unsubscribeFromDocumentChanges = this.document.subscribe(() => {
-      this.reconcileSelection();
-      this.notifyChanges();
-    });
+    // Keep the compatibility revision broad, but reserve expensive selection
+    // reconciliation for mutations that can invalidate IDs or document order.
+    const unsubscribeFromDocumentChanges = this.document.subscribe(() => this.notifyChanges());
     this.unsubscribeFns.push(unsubscribeFromDocumentChanges);
+    this.unsubscribeFns.push(this.blocks.subscribeStructure(() => this.reconcileSelection()));
+    this.unsubscribeFns.push(this.elements.subscribeMembership(() => this.reconcileSelection()));
     // Selection is local view state. React chrome subscribes through
     // `editor.selection`; folding it into `revision` would re-render every block.
     const unsubscribeFromModeChanges = this.mode.subscribe(() => {

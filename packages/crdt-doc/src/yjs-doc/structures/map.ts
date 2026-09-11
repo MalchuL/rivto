@@ -1,4 +1,4 @@
-import { CRDTType, BasicType, CRDTMap } from "../../types";
+import { CRDTType, BasicType, CRDTMap, CRDTObserveHandler } from "../../types";
 import * as Y from 'yjs';
 import * as utils from './utils';
 import type { YJSType } from "./utils/types";
@@ -24,9 +24,20 @@ export class YjsMap<Schema extends object = Record<string, CRDTType>>
       super(yMapInstance);
     }
 
-    /** Keep native Yjs observation inside the adapter boundary. */
-    observe(handler: (events: unknown, transaction: unknown) => void): () => void {
-        const listener = (events: Y.YEvent<any>[], transaction: Y.Transaction) => handler(events, transaction);
+    /**
+     * Forwards Yjs `observeDeep` as {@link CRDTObserveEvent}s.
+     *
+     * `path` is `Y.YEvent.path` from this map. `keys` is `keysChanged` for
+     * `Y.YMapEvent`; array and text nested events pass an empty `keys` list.
+     *
+     * @param handler - Adapter-neutral observer.
+     * @returns Function that removes this exact Yjs deep observer.
+     */
+    observe(handler: CRDTObserveHandler): () => void {
+        const listener = (events: Y.YEvent<any>[], transaction: Y.Transaction) => handler(events.map((event) => ({
+            path: event.path,
+            keys: event instanceof Y.YMapEvent ? [...event.keysChanged] : [],
+        })), transaction);
         this.yjsObj.observeDeep(listener);
         return () => this.yjsObj.unobserveDeep(listener);
     }

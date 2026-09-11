@@ -117,7 +117,12 @@ test("uses the shared list and checkbox rendering in edgeless cards", async ({ p
     .filter({ hasText: new RegExp(`^${text}$`) })
     .locator("xpath=ancestor::*[@data-block-id][1]");
 
-  await expect(block("Try the interactive checkbox").locator(":scope > .page-block-row input[type=checkbox]")).not.toBeChecked();
+  const checkbox = block("Try the interactive checkbox").locator(":scope > .page-block-row input[type=checkbox]");
+  await expect(checkbox).not.toBeChecked();
+  await checkbox.evaluate((element: HTMLInputElement) => element.click());
+  await expect(checkbox).toBeChecked();
+  await page.locator('[data-editor-action="undo"]').click();
+  await expect(checkbox).not.toBeChecked();
   await expect(block("Completed checkbox item").locator(":scope > .page-block-row input[type=checkbox]")).toBeChecked();
   await expect(block("Start a numbered sequence").locator(":scope > .page-block-row .page-list-marker")).toHaveText("1.");
   await expect(block("Continue the adjacent sequence").locator(":scope > .page-block-row .page-list-marker")).toHaveText("2.");

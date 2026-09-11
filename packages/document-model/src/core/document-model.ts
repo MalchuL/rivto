@@ -33,6 +33,11 @@ export class DocumentModelImpl implements DocumentModel {
   readonly pluginData: DocumentPluginDataManager;
   /** Collaborative containers tracked by document undo managers. */
   readonly undoScopes: CRDTUndoScope[];
+  /** Nested transaction depth used to keep imperative reads ahead of observer caches. */
+  private transactionDepth = 0;
+
+  /** @returns Whether execution is currently inside this model's transaction boundary. */
+  get isTransacting(): boolean { return this.transactionDepth > 0; }
 
   /**
    * Creates a storage model over an adapter-neutral collaborative document.
@@ -95,7 +100,14 @@ export class DocumentModelImpl implements DocumentModel {
    * @returns No value.
    */
   transact(operation: () => void): void {
-    this.crdt.transact(operation, this.origin);
+    this.crdt.transact(() => {
+      this.transactionDepth += 1;
+      try {
+        operation();
+      } finally {
+        this.transactionDepth -= 1;
+      }
+    }, this.origin);
   }
 
   /**

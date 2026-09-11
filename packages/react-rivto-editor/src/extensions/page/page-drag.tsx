@@ -15,10 +15,10 @@ import {
   useDroppable,
   useSensor,
   useSensors,
-  type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
+  type CollisionDetection,
 } from "@dnd-kit/core";
 import type { EditorBlock as Block } from "@chulane/rivto";
 import { createStructuralSelection } from "@chulane/rivto";
@@ -29,11 +29,14 @@ import {
 import { useEditor, useEditorRoot, useReactEditor } from "../../hooks";
 import type { BlockSlotProps } from "../../managers";
 import {
+  useCallback,
   createContext,
   useContext,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -49,13 +52,14 @@ const MAX_PREVIEW_BLOCKS = 4;
 
 /** Visual nesting used by `.page-block-children` in the demo stylesheet. */
 const PAGE_INDENT = 24;
-const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 const EDGELESS_CARD_CONTENT_SELECTOR = "[data-edgeless-card-content]";
 const CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE = "data-rivto-cross-document-page-root";
 const CROSS_DOCUMENT_PAGE_ROOT_SELECTOR = `[${CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE}]`;
 const PAGE_DRAG_HANDLE_CLASS = "page-drag-handle";
 const PAGE_DROP_LINE_CLASS = "page-drop-line";
 const PAGE_BLOCK_ROW_CLASS = "page-block-row";
+const PAGE_BLOCK_SELECTOR = "[data-block-id]";
+const PAGE_DRAG_SURFACE_ID = "rivto-page-drag-surface";
 
 /**
  * Normalized document destination and visual feedback for the current pointer.
@@ -130,10 +134,107 @@ function findCrossDocumentPageController(
 
 /** Drag state shared with recursively rendered page blocks. */
 interface PageDragState {
-  /** Valid destination currently advertised to recursively rendered rows. */
-  readonly placement: DropPlacement | null;
-  /** Moved root IDs whose rows should share the translucent dragging state. */
-  readonly draggedIds: readonly string[];
+  /** Focused gesture store that wakes only moved and indicator rows. */
+  readonly placements: DropPlacementStore;
+}
+
+/** Per-row external store for drag placement feedback. */
+interface DropPlacementStore {
+  /** @param id - Indicator row ID. @returns Its placement, when currently targeted. */
+  get(id: string): DropPlacement | null;
+  /** @param id - Indicator row ID. @param listener - Focused change callback. @returns Its disposer. */
+  subscribe(id: string, listener: () => void): () => void;
+  /** @param id - Block row ID. @returns Whether that moved root is active. */
+  isDragged(id: string): boolean;
+  /** @param id - Block row ID. @returns Whether its handle owns dnd-kit registration. */
+  isArmed(id: string): boolean;
+  /** @param id - Hovered or focused handle ID. @returns No value. */
+  arm(id: string): void;
+  /** @param id - Armed block ID. @returns Its live dnd-kit handle registration. */
+  getDraggable(id: string): ReturnType<typeof useDraggable> | null;
+  /** @param id - Armed block ID. @param value - Live registration or null. @returns No value. */
+  setDraggable(id: string, value: ReturnType<typeof useDraggable> | null): void;
+  /** @returns Whether row drop targets are enabled for keyboard dragging. */
+  isKeyboardDragging(): boolean;
+  /** @param active - Whether keyboard collision targets must be mounted. @returns No value. */
+  setKeyboardDragging(active: boolean): void;
+  /** @param ids - Moved root IDs for the current gesture. @returns No value. */
+  setDragged(ids: readonly string[]): void;
+  /** @param placement - Latest valid placement, or null to clear feedback. @returns No value. */
+  set(placement: DropPlacement | null): void;
+}
+
+/** Tests semantic placement equality so pointer jitter inside one zone is free. */
+function sameDropPlacement(left: DropPlacement | null, right: DropPlacement | null): boolean {
+  return left === right || Boolean(left && right
+    && left.targetId === right.targetId
+    && left.position === right.position
+    && left.indicatorId === right.indicatorId
+    && left.indicatorEdge === right.indicatorEdge
+    && left.indicatorOffset === right.indicatorOffset
+    && left.indicatorAxis === right.indicatorAxis);
+}
+
+/** Creates a placement store whose updates notify only affected indicator rows. */
+function createDropPlacementStore(): DropPlacementStore {
+  let current: DropPlacement | null = null;
+  let dragged = new Set<string>();
+  let armedId: string | undefined;
+  let keyboardDragging = false;
+  const draggables = new Map<string, ReturnType<typeof useDraggable>>();
+  const listeners = new Map<string, Set<() => void>>();
+  const emit = (ids: ReadonlySet<string | undefined>): void => ids.forEach((id) => {
+    if (id) [...(listeners.get(id) ?? [])].forEach((listener) => listener());
+  });
+  return {
+    get: (id) => current?.indicatorId === id ? current : null,
+    subscribe: (id, listener) => {
+      let rowListeners = listeners.get(id);
+      if (!rowListeners) {
+        rowListeners = new Set();
+        listeners.set(id, rowListeners);
+      }
+      rowListeners.add(listener);
+      return () => {
+        rowListeners!.delete(listener);
+        if (!rowListeners!.size) listeners.delete(id);
+      };
+    },
+    isDragged: (id) => dragged.has(id),
+    isArmed: (id) => armedId === id,
+    arm: (id) => {
+      if (dragged.size || armedId === id) return;
+      const previous = armedId;
+      armedId = id;
+      emit(new Set([previous, id]));
+    },
+    getDraggable: (id) => draggables.get(id) ?? null,
+    setDraggable: (id, value) => {
+      const previous = draggables.get(id) ?? null;
+      if (previous === value) return;
+      if (value) draggables.set(id, value);
+      else draggables.delete(id);
+      emit(new Set([id]));
+    },
+    isKeyboardDragging: () => keyboardDragging,
+    setKeyboardDragging: (active) => {
+      if (keyboardDragging === active) return;
+      keyboardDragging = active;
+      emit(new Set(listeners.keys()));
+    },
+    setDragged: (ids) => {
+      const next = new Set(ids);
+      const changed = new Set<string>([...dragged, ...next].filter((id) => dragged.has(id) !== next.has(id)));
+      dragged = next;
+      emit(changed);
+    },
+    set: (placement) => {
+      if (sameDropPlacement(current, placement)) return;
+      const changedIds = new Set([current?.indicatorId, placement?.indicatorId]);
+      current = placement;
+      emit(changedIds);
+    },
+  };
 }
 
 /**
@@ -142,8 +243,23 @@ interface PageDragState {
  * A harmless empty value lets wrappers render outside PageDragPlugin during
  * tests or when a host registers the wrapper without the provider.
  */
-const PageDragStateContext = createContext<PageDragState>({ placement: null, draggedIds: [] });
-const PageDragItemContext = createContext<ReturnType<typeof useDraggable> | null>(null);
+const PageDragStateContext = createContext<PageDragState>({
+  placements: createDropPlacementStore(),
+});
+interface PageDragItemState {
+  readonly blockId: string;
+  readonly placements: DropPlacementStore;
+}
+const PageDragItemContext = createContext<PageDragItemState | null>(null);
+
+/** Uses all row rectangles for keyboard movement and one surface target for pointers. */
+const pageDragCollisionDetection: CollisionDetection = (params) => {
+  const blockTargets = params.droppableContainers.filter(({ id }) => id !== PAGE_DRAG_SURFACE_ID);
+  return closestCenter({
+    ...params,
+    droppableContainers: blockTargets.length ? blockTargets : params.droppableContainers,
+  });
+};
 
 /** Properties for the page drag-and-drop boundary. */
 export interface PageDragExtensionOptions {
@@ -158,91 +274,19 @@ export interface PageDragExtensionOptions {
 }
 
 /**
- * Tests whether an ID belongs to a block's complete persisted subtree.
+ * Adds every ID in a block's complete persisted subtree to one lookup set.
  *
  * This deliberately includes collapsed descendants: they are hidden visually
  * but remain owned by the moved root and therefore cannot be valid targets.
  *
  * @param block - Root of the subtree to inspect.
- * @param candidateId - Prospective destination ID.
- * @returns True when the root or any descendant has the candidate ID.
+ * @param ids - Mutable drag-local set receiving the subtree IDs.
+ * @returns No value.
  */
-function containsBlock(block: Block, candidateId: string): boolean {
-  return block.id === candidateId || block.children.some((child) => containsBlock(child, candidateId));
+function collectSubtreeIds(block: Block, ids: Set<string>): void {
+  ids.add(block.id);
+  block.children.forEach((child) => collectSubtreeIds(child, ids));
 }
-
-/**
- * Selects the block row under the pointer across the complete page width.
- *
- * A pointer inside a row selects its block body. A pointer in a vertical gap
- * selects the closest preceding row, making the gap an unambiguous "after"
- * insertion point across the complete page width. Keyboard dragging retains
- * dnd-kit's nearest-center fallback.
- *
- * @param params - Rectangles and pointer coordinates supplied by dnd-kit.
- * @returns At most one collision: the row whose body or preceding gap owns the
- * current pointer position.
- */
-const pageCollisionDetection: CollisionDetection = (params) => {
-  const { pointerCoordinates, droppableRects } = params;
-  // Horizontal lanes reorder only against siblings, never against their cards.
-  const droppableContainers = params.active.data.current?.sortChildren === "horizontal"
-    ? params.droppableContainers.filter(({ data }) => data.current?.sortChildren === "horizontal"
-      && data.current?.sortOwner === params.active.data.current?.sortOwner)
-    : params.droppableContainers;
-  if (!pointerCoordinates) return closestCenter({ ...params, droppableContainers });
-  const rows = droppableContainers.flatMap((container) => {
-    const rect = droppableRects.get(container.id);
-    return rect ? [{ id: container.id, rect }] : [];
-  });
-  // Prefer the smallest rectangle containing both coordinates: nested cards win
-  // over their column, and adjacent columns never compete by vertical position.
-  const contained = rows.filter(({ rect }) => (
-    pointerCoordinates.x >= rect.left && pointerCoordinates.x <= rect.right
-    && pointerCoordinates.y >= rect.top && pointerCoordinates.y <= rect.bottom
-  )).sort((left, right) => left.rect.width * left.rect.height - right.rect.width * right.rect.height)[0];
-  if (contained) return [{ id: contained.id, data: { value: 0 } }];
-  // Gaps between horizontal lanes still target the nearest lane on the X axis.
-  // Vertical distance cannot distinguish adjacent columns with matching heights.
-  if (params.active.data.current?.sortChildren === "horizontal") {
-    const nearest = rows.sort((left, right) =>
-      Math.abs(pointerCoordinates.x - (left.rect.left + left.rect.width / 2))
-      - Math.abs(pointerCoordinates.x - (right.rect.left + right.rect.width / 2)))[0];
-    return nearest ? [{ id: nearest.id, data: { value: 0 } }] : [];
-  }
-  const hovered = rows
-    .filter(({ rect }) => pointerCoordinates.y >= rect.top && pointerCoordinates.y <= rect.bottom)
-    .sort((left, right) => Math.abs(pointerCoordinates.y - (left.rect.top + left.rect.height / 2))
-      - Math.abs(pointerCoordinates.y - (right.rect.top + right.rect.height / 2)))[0];
-  const preceding = rows
-    .filter(({ rect }) => rect.bottom < pointerCoordinates.y)
-    .sort((left, right) => right.rect.bottom - left.rect.bottom)[0];
-  const following = rows.sort((left, right) => left.rect.top - right.rect.top)[0];
-  const target = hovered ?? preceding ?? following;
-  return target ? [{ id: target.id, data: { value: 0 } }] : [];
-};
-
-/**
- * Limits canvas outline collisions to the visually topmost card under the pointer.
- *
- * Rows in different cards commonly share vertical coordinates. Filtering by
- * native hit testing prevents registration order from selecting another card.
- */
-const edgelessCollisionDetection: CollisionDetection = (params) => {
-  const { pointerCoordinates, droppableContainers } = params;
-  if (!pointerCoordinates) return closestCenter(params);
-  const document = droppableContainers[0]?.node.current?.ownerDocument;
-  const card = document?.elementsFromPoint(pointerCoordinates.x, pointerCoordinates.y)
-    .map((element) => element.closest<HTMLElement>(EDGELESS_ROOT_SELECTOR))
-    .find((element): element is HTMLElement => Boolean(element));
-  if (!card) return [];
-  return pageCollisionDetection({
-    ...params,
-    droppableContainers: droppableContainers.filter(({ node }) => (
-      Boolean(node.current && card.contains(node.current))
-    )),
-  });
-};
 
 interface RowGeometry {
   readonly id: string;
@@ -446,6 +490,74 @@ function resolveDropPlacement(
   return result;
 }
 
+/**
+ * Resolves only the block beneath the pointer through native hit testing.
+ *
+ * dnd-kit otherwise measures every mounted row before a pointer drag and scans
+ * all of those rectangles on every move. The browser already maintains this
+ * hit-test index, so one target rectangle is sufficient.
+ *
+ * @param event - Current drag movement used for source data and pointer delta.
+ * @param root - Active editor surface containing eligible block rows.
+ * @param allowNearestContainer - Whether clipped page lanes may be chosen by proximity.
+ * @returns Event carrying the one live DOM target, or null over blank space.
+ */
+function withPointerDropTarget(
+  event: DragMoveEvent,
+  root: HTMLElement | null,
+  allowNearestContainer: boolean,
+): DragMoveEvent | null {
+  const pointer = eventPointer(event);
+  if (!pointer || !root) return null;
+  const candidates = new Set<HTMLElement>();
+  root.ownerDocument.elementsFromPoint(pointer.x, pointer.y).forEach((element) => {
+    let block = element.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
+    while (block && root.contains(block)) {
+      candidates.add(block);
+      block = block.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR) ?? null;
+    }
+  });
+  let blockElement = [...candidates].map((element) => ({
+    element,
+    rect: element.getBoundingClientRect(),
+  })).filter(({ rect }) => (
+    pointer.x >= rect.left && pointer.x <= rect.right
+    && pointer.y >= rect.top && pointer.y <= rect.bottom
+  )).sort((left, right) => left.rect.width * left.rect.height - right.rect.width * right.rect.height)[0]?.element;
+  if (!blockElement && allowNearestContainer) {
+    const containers = new Set([...root.querySelectorAll<HTMLElement>("[data-block-drop-container]")]
+      .flatMap((element) => element.closest<HTMLElement>(PAGE_BLOCK_SELECTOR) ?? []));
+    blockElement = [...containers].map((element) => ({ element, rect: element.getBoundingClientRect() }))
+      .sort((left, right) => Math.hypot(
+        pointer.x - left.rect.left - left.rect.width / 2,
+        pointer.y - left.rect.top - left.rect.height / 2,
+      ) - Math.hypot(
+        pointer.x - right.rect.left - right.rect.width / 2,
+        pointer.y - right.rect.top - right.rect.height / 2,
+      ))[0]?.element;
+  }
+  const id = blockElement?.dataset.blockId;
+  const row = blockElement?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`) ?? null;
+  if (!blockElement || !id || !row) return null;
+  const parentRow = blockElement.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR)
+    ?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
+  const axis = parentRow?.querySelector("[data-block-sort-children]")?.getAttribute("data-block-sort-children");
+  const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
+  const dropNode = sortable || row.querySelector("[data-block-drop-container]") ? blockElement : row;
+  return {
+    ...event,
+    over: {
+      id,
+      rect: dropNode.getBoundingClientRect(),
+      disabled: false,
+      data: { current: {
+        sortChildren: axis,
+        sortOwner: parentRow?.parentElement?.getAttribute("data-block-id"),
+      } },
+    },
+  } as DragMoveEvent;
+}
+
 /** One visible row in the height-limited, pre-order subtree preview. */
 interface PreviewEntry {
   /** Detached block snapshot whose label is displayed. */
@@ -487,8 +599,8 @@ function subtreeSize(block: Block): number {
  * Renders a non-interactive snapshot of one dragged block subtree.
  *
  * The preview uses detached block data instead of BlockTree. Reusing BlockTree
- * here would mount duplicate contenteditable elements and register a second set
- * of draggable and droppable nodes with the same IDs.
+ * here would mount duplicate contenteditable elements and register draggable
+ * nodes with the same IDs.
  *
  * @param props - Detached root snapshots participating in this gesture.
  * @returns A capped list of visible rows plus a compact omitted-block count.
@@ -553,8 +665,12 @@ export function PageDragProvider({
     controller: CrossDocumentPageRootController;
     placement: CrossDocumentBlockTransferPlacement;
   } | null>(null);
+  // ponytail: freeze hierarchy for one short gesture; add incremental remote
+  // reconciliation only if concurrent drag-time structure edits become common.
+  const dragBlocks = useRef<Block[]>([]);
+  const draggedSubtreeIds = useRef(new Set<string>());
   const [activeIds, setActiveIds] = useState<string[]>([]);
-  const [dropPlacement, setDropPlacement] = useState<DropPlacement | null>(null);
+  const placements = useMemo(createDropPlacementStore, []);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: activationDistance } }),
     useSensor(KeyboardSensor),
@@ -570,7 +686,7 @@ export function PageDragProvider({
       editor,
       root,
       setPlacement: (placement, empty = false) => {
-        setDropPlacement(placement);
+        placements.set(placement);
         if (empty) root.setAttribute("data-drop-empty", "true");
         else root.removeAttribute("data-drop-empty");
       },
@@ -592,7 +708,7 @@ export function PageDragProvider({
       root.removeAttribute(CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE);
       root.removeAttribute("data-drop-empty");
     };
-  }, [childDropIndent, editor, gapDropZone, root]);
+  }, [childDropIndent, editor, gapDropZone, placements, root]);
 
   const clearCrossDocumentTarget = () => {
     crossDocumentTarget.current?.controller.setPlacement(null);
@@ -624,27 +740,16 @@ export function PageDragProvider({
     const zoom = editor.mode.get() === "edgeless"
       ? Number(root?.dataset.edgelessZoom) || 1
       : 1;
-    const placement = resolveDropPlacement(event, editor.blocks.getBlocks(), childDropIndent * zoom, gapDropZone);
+    const blocks = dragBlocks.current.length ? dragBlocks.current : editor.blocks.getBlocks();
+    const targetedEvent = eventPointer(event)
+      ? withPointerDropTarget(event, root, editor.mode.get() === "block")
+      : event.over?.id !== PAGE_DRAG_SURFACE_ID ? event : null;
+    const placement = targetedEvent
+      ? resolveDropPlacement(targetedEvent, blocks, childDropIndent * zoom, gapDropZone)
+      : null;
     if (!placement) return null;
-    const invalid = activeMove.current?.ids.some((id) => {
-      const block = editor.blocks.getBlock(id);
-      return block ? containsBlock(block, placement.targetId) : false;
-    });
-    return invalid ? null : placement;
+    return draggedSubtreeIds.current.has(placement.targetId) ? null : placement;
   };
-  const collisionDetection: CollisionDetection = (params) => {
-    let collisions: ReturnType<CollisionDetection>;
-    if (editor.mode.get() === "edgeless") {
-      collisions = edgelessCollisionDetection(params);
-    } else {
-      const pointer = params.pointerCoordinates;
-      collisions = pointer && findCrossDocumentPageController(root, pointer)
-        ? []
-        : pageCollisionDetection(params);
-    }
-    return collisions;
-  };
-
   /**
    * Freezes the eligible move roots when activation begins.
    *
@@ -653,15 +758,26 @@ export function PageDragProvider({
    *
    * @param event - dnd-kit start event containing the handle's block ID.
    */
-  const handleDragStart = ({ active }: DragStartEvent) => {
+  const handleDragStart = ({ active, activatorEvent }: DragStartEvent) => {
     clearCrossDocumentTarget();
+    const blocks = editor.blocks.getBlocks();
     const move = selectedMoveRoots(
-      editor.blocks.getBlocks(),
+      blocks,
       editor.selection.get(),
       String(active.id),
       (block) => reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true,
     );
+    const subtreeIds = new Set<string>();
+    move.ids.forEach((id) => {
+      const block = editor.blocks.getBlock(id);
+      if (block) collectSubtreeIds(block, subtreeIds);
+    });
+    dragBlocks.current = blocks;
+    draggedSubtreeIds.current = subtreeIds;
     activeMove.current = move;
+    const KeyboardEventType = root?.ownerDocument.defaultView?.KeyboardEvent;
+    placements.setKeyboardDragging(Boolean(KeyboardEventType && activatorEvent instanceof KeyboardEventType));
+    placements.setDragged(move.ids);
     setActiveIds(move.ids);
   };
 
@@ -675,8 +791,12 @@ export function PageDragProvider({
     const crossDocument = crossDocumentTarget.current;
     const placement = crossDocument ? null : validPlacement(event);
     activeMove.current = undefined;
+    dragBlocks.current = [];
+    draggedSubtreeIds.current.clear();
+    placements.setKeyboardDragging(false);
+    placements.setDragged([]);
     setActiveIds([]);
-    setDropPlacement(null);
+    placements.set(null);
     clearCrossDocumentTarget();
     if (crossDocument && move) {
       let transferred = false;
@@ -722,26 +842,32 @@ export function PageDragProvider({
       )}
     </DragOverlay>
   );
+  const dragContext = useMemo(() => ({ placements }), [placements]);
 
   return (
-    <PageDragStateContext.Provider value={{ placement: dropPlacement, draggedIds: activeIds }}>
+    <PageDragStateContext.Provider value={dragContext}>
       <DndContext
         sensors={sensors}
-        collisionDetection={collisionDetection}
+        collisionDetection={pageDragCollisionDetection}
         autoScroll={{ canScroll: canPageDragAutoScroll }}
         onDragStart={handleDragStart}
         onDragMove={(event) => {
-          if (updateCrossDocumentTarget(event)) setDropPlacement(null);
-          else setDropPlacement(validPlacement(event));
+          if (updateCrossDocumentTarget(event)) placements.set(null);
+          else placements.set(validPlacement(event));
         }}
         onDragCancel={() => {
           activeMove.current = undefined;
+          dragBlocks.current = [];
+          draggedSubtreeIds.current.clear();
+          placements.setKeyboardDragging(false);
+          placements.setDragged([]);
           setActiveIds([]);
-          setDropPlacement(null);
+          placements.set(null);
           clearCrossDocumentTarget();
         }}
         onDragEnd={handleDragEnd}
       >
+        <PageDragSurfaceDropTarget root={root} />
         {children}
         {modalRoot ? createPortal(overlay, modalRoot) : overlay}
       </DndContext>
@@ -749,13 +875,22 @@ export function PageDragProvider({
   );
 }
 
+/** Registers one surface-sized dnd-kit target; block targeting uses native hit testing. */
+function PageDragSurfaceDropTarget({ root }: { readonly root: HTMLElement | null }) {
+  const droppable = useDroppable({ id: PAGE_DRAG_SURFACE_ID });
+  useLayoutEffect(() => {
+    droppable.setNodeRef(root);
+    return () => droppable.setNodeRef(null);
+  }, [droppable.setNodeRef, root]);
+  return null;
+}
+
 /**
  * Decorates one BlockTree-owned BlockView with structural drag behavior.
  *
- * The decorator contributes a BlockView ref through context, then attaches the
- * dnd-kit droppable directly to the existing row. Its handle and indicator are
- * portalled into that row, preserving the surface DOM contract and collision
- * geometry without rendering a second BlockView.
+ * The decorator contributes a BlockView ref through context. Its handle and
+ * indicator are portalled into that row, preserving the surface DOM contract
+ * without rendering a second BlockView.
  *
  * This component is registered through `registerBlockWrapper`; page and
  * edgeless surfaces never import it. The button alone activates the draggable
@@ -765,20 +900,80 @@ export function PageDragProvider({
  * @returns A DOM-free ref provider plus row-portalled drag controls.
  */
 export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
-  const dragState = useContext(PageDragStateContext);
   const [blockElement, setBlockElement] = useState<HTMLDivElement | null>(null);
-  const dropPlacement = dragState.placement;
-  const indicator = dropPlacement?.indicatorId === block.id ? dropPlacement : undefined;
   const row = blockElement?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`) ?? null;
   const parentRow = blockElement?.parentElement?.closest("[data-block-id]")
     ?.querySelector(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
   const axis = parentRow?.querySelector("[data-block-sort-children]")?.getAttribute("data-block-sort-children");
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
   const data = { sortChildren: axis, sortOwner: parentRow?.parentElement?.getAttribute("data-block-id") };
-  const draggable = useDraggable({ id: block.id, data });
-  const droppable = useDroppable({ id: block.id, data });
   const dropNode = sortable || row?.querySelector("[data-block-drop-container]") ? blockElement : row;
-  const dragging = draggable.isDragging || dragState.draggedIds.includes(block.id);
+
+  return (
+    <BlockElementRefProvider elementRef={setBlockElement}>
+      <PageDragBlockMechanics
+        blockId={block.id}
+        blockElement={blockElement}
+        dropNode={dropNode}
+        sortable={sortable}
+        axis={axis}
+        data={data}
+      >
+        {children}
+      </PageDragBlockMechanics>
+    </BlockElementRefProvider>
+  );
+}
+
+/**
+ * Isolates dnd-kit's broad context updates from the expensive block wrapper.
+ *
+ * @param props - Stable DOM geometry, block ID, and unchanged rendered subtree.
+ * @returns Focused drag registration and visual feedback around the block shell.
+ */
+function PageDragBlockMechanics({
+  blockId,
+  blockElement,
+  dropNode,
+  sortable,
+  axis,
+  data,
+  children,
+}: {
+  readonly blockId: string;
+  readonly blockElement: HTMLDivElement | null;
+  readonly dropNode: HTMLElement | null;
+  readonly sortable: boolean;
+  readonly axis: string | null | undefined;
+  readonly data: { readonly sortChildren: string | null | undefined; readonly sortOwner: string | null | undefined };
+  readonly children?: ReactNode;
+}) {
+  const dragState = useContext(PageDragStateContext);
+  const subscribePlacement = useCallback(
+    (listener: () => void) => dragState.placements.subscribe(blockId, listener),
+    [blockId, dragState.placements],
+  );
+  const getPlacement = useCallback(
+    () => dragState.placements.get(blockId),
+    [blockId, dragState.placements],
+  );
+  const indicator = useSyncExternalStore(subscribePlacement, getPlacement, getPlacement) ?? undefined;
+  const getDragged = useCallback(
+    () => dragState.placements.isDragged(blockId),
+    [blockId, dragState.placements],
+  );
+  const groupedDragging = useSyncExternalStore(subscribePlacement, getDragged, getDragged);
+  const getArmed = useCallback(
+    () => dragState.placements.isArmed(blockId),
+    [blockId, dragState.placements],
+  );
+  const armed = useSyncExternalStore(subscribePlacement, getArmed, getArmed);
+  const getKeyboardDragging = useCallback(
+    () => dragState.placements.isKeyboardDragging(),
+    [dragState.placements],
+  );
+  const keyboardDragging = useSyncExternalStore(subscribePlacement, getKeyboardDragging, getKeyboardDragging);
+  const itemState = useMemo(() => ({ blockId, placements: dragState.placements }), [blockId, dragState.placements]);
   const previousPosition = useRef<number | undefined>(undefined);
 
   // Animate committed sibling moves, not pointer motion or scrolling. Offsets
@@ -788,7 +983,7 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
     const position = axis === "horizontal" ? blockElement.offsetLeft : blockElement.offsetTop;
     const previous = previousPosition.current;
     previousPosition.current = position;
-    if (previous !== undefined && previous !== position && dragState.draggedIds.length === 0
+    if (previous !== undefined && previous !== position && !groupedDragging
       && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       const animation = blockElement.animate([
         { transform: `translate${axis === "horizontal" ? "X" : "Y"}(${previous - position}px)` },
@@ -796,23 +991,16 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
       ], { duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" });
       return () => animation.cancel();
     }
-  });
-
-  // dnd-kit accepts a node imperatively, allowing the decorator to reuse the
-  // surface's exact row instead of cloning or replacing its React element.
-  useLayoutEffect(() => {
-    droppable.setNodeRef(dropNode);
-    return () => droppable.setNodeRef(null);
-  }, [droppable.setNodeRef, dropNode]);
+  }, [axis, blockElement, groupedDragging, sortable]);
 
   // Dragging and inside-drop state decorate stable surface elements without
   // moving ownership of their data-block markers into this extension.
   useLayoutEffect(() => {
     if (!blockElement) return;
-    if (dragging) blockElement.setAttribute("data-dragging", "true");
+    if (groupedDragging) blockElement.setAttribute("data-dragging", "true");
     else blockElement.removeAttribute("data-dragging");
     return () => blockElement.removeAttribute("data-dragging");
-  }, [blockElement, dragging]);
+  }, [blockElement, groupedDragging]);
   useLayoutEffect(() => {
     if (!dropNode) return;
     if (indicator && !indicator.indicatorEdge) {
@@ -834,13 +1022,49 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
   ) : null;
 
   return (
-    <BlockElementRefProvider elementRef={setBlockElement}>
-      <PageDragItemContext.Provider value={draggable}>
-        {children}
-      </PageDragItemContext.Provider>
+    <PageDragItemContext.Provider value={itemState}>
+      {children}
       {indicatorPortal}
-    </BlockElementRefProvider>
+      {armed && <PageDragRegistration blockId={blockId} data={data} placements={dragState.placements} />}
+      {keyboardDragging && <PageDragKeyboardDropTarget blockId={blockId} data={data} dropNode={dropNode} />}
+    </PageDragItemContext.Provider>
   );
+}
+
+/** Mounts dnd-kit's broad-context hook for only the armed block handle. */
+function PageDragRegistration({
+  blockId,
+  data,
+  placements,
+}: {
+  readonly blockId: string;
+  readonly data: { readonly sortChildren: string | null | undefined; readonly sortOwner: string | null | undefined };
+  readonly placements: DropPlacementStore;
+}) {
+  const draggable = useDraggable({ id: blockId, data });
+  useLayoutEffect(() => {
+    placements.setDraggable(blockId, draggable);
+    return () => placements.setDraggable(blockId, null);
+  }, [blockId, draggable, placements]);
+  return null;
+}
+
+/** Registers complete row geometry only for the less frequent keyboard gesture. */
+function PageDragKeyboardDropTarget({
+  blockId,
+  data,
+  dropNode,
+}: {
+  readonly blockId: string;
+  readonly data: { readonly sortChildren: string | null | undefined; readonly sortOwner: string | null | undefined };
+  readonly dropNode: HTMLElement | null;
+}) {
+  const droppable = useDroppable({ id: blockId, data });
+  useLayoutEffect(() => {
+    droppable.setNodeRef(dropNode);
+    return () => droppable.setNodeRef(null);
+  }, [droppable.setNodeRef, dropNode]);
+  return null;
 }
 
 /**
@@ -850,17 +1074,29 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
  * @returns Drag button, or nothing when the mechanical wrapper is absent.
  */
 export function PageDragBlockSlot({ block }: BlockSlotProps) {
-  const draggable = useContext(PageDragItemContext);
-  if (!draggable) return null;
+  const item = useContext(PageDragItemContext);
+  const subscribe = useCallback(
+    (listener: () => void) => item?.placements.subscribe(block.id, listener) ?? (() => undefined),
+    [block.id, item],
+  );
+  const getDraggable = useCallback(
+    () => item?.placements.getDraggable(block.id) ?? null,
+    [block.id, item],
+  );
+  const draggable = useSyncExternalStore(subscribe, getDraggable, getDraggable);
+  const arm = useCallback(() => item?.placements.arm(block.id), [block.id, item]);
+  if (!item) return null;
   return (
     <button
-      {...draggable.attributes}
-      {...draggable.listeners}
-      ref={draggable.setNodeRef}
+      {...(draggable?.attributes ?? {})}
+      {...(draggable?.listeners ?? {})}
+      ref={draggable?.setNodeRef}
       type="button"
       className={PAGE_DRAG_HANDLE_CLASS}
       aria-label={`Move block: ${block.content || block.type}`}
       contentEditable={false}
+      onPointerEnter={arm}
+      onFocus={arm}
     >
       ⋮⋮
     </button>

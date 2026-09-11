@@ -8,7 +8,7 @@
  * `scrollHeight` cannot hitch pointermove.
  */
 import type { EditorElement } from "@chulane/rivto";
-import { useLayoutEffect, useRef, type CSSProperties } from "react";
+import { memo, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { useEdgelessSelected } from "../../extensions/edgeless/edgeless-runtime";
 import { BlockTree, ElementSlots } from "../../blocks";
 import { useReactEditor } from "../../hooks";
@@ -32,7 +32,7 @@ const MIN_CARD_HEIGHT = 100;
  * @param props.blockIds - Ordered root block IDs projected into this card.
  * @returns Positioned card host, or null when it owns no blocks.
  */
-export function EdgelessBlockElement({
+function EdgelessBlockElementView({
   element,
   blockIds,
 }: {
@@ -125,3 +125,22 @@ export function EdgelessBlockElement({
     </section>
   );
 }
+
+/**
+ * Skips unchanged cards when another element updates in the shared collection.
+ *
+ * @param previous - Previously rendered stable element and block range.
+ * @param next - Candidate element and block range.
+ * @returns Whether both inputs describe the same card render.
+ */
+function sameEdgelessBlockElement(
+  previous: { readonly element: EditorElement; readonly blockIds: readonly string[] },
+  next: { readonly element: EditorElement; readonly blockIds: readonly string[] },
+): boolean {
+  return previous.element === next.element
+    && previous.blockIds.length === next.blockIds.length
+    && previous.blockIds.every((id, index) => id === next.blockIds[index]);
+}
+
+/** Memoized positioned card woken by its own selection or changed persisted inputs. */
+export const EdgelessBlockElement = memo(EdgelessBlockElementView, sameEdgelessBlockElement);

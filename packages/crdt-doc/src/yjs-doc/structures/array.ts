@@ -1,4 +1,4 @@
-import { CRDTType, BasicType, CRDTArray } from "../../types";
+import { CRDTType, BasicType, CRDTArray, CRDTObserveHandler } from "../../types";
 import * as Y from 'yjs';
 import * as utils from './utils';
 import type { YJSType } from "./utils/types";
@@ -11,6 +11,24 @@ export class YjsArray<Item extends CRDTType = CRDTType>
     extends YjsBasic<Y.Array<any>> implements CRDTArray<Item> {
     // If the array was created from JSON, then it is not attached to a document.
     private isFromJson: boolean = false;
+
+    /**
+     * Forwards Yjs `observeDeep` as {@link CRDTObserveEvent}s.
+     *
+     * Insert/delete on this array has an empty `path` and empty `keys`. Nested
+     * map edits use the item index in `path` and `Y.YMapEvent.keysChanged`.
+     *
+     * @param handler - Adapter-neutral observer.
+     * @returns Function that removes this exact Yjs deep observer.
+     */
+    observe(handler: CRDTObserveHandler): () => void {
+        const listener = (events: Y.YEvent<any>[], transaction: Y.Transaction) => handler(events.map((event) => ({
+            path: event.path,
+            keys: event instanceof Y.YMapEvent ? [...event.keysChanged] : [],
+        })), transaction);
+        this.yjsObj.observeDeep(listener);
+        return () => this.yjsObj.unobserveDeep(listener);
+    }
 
     /**
      * Creates a new YjsArray.

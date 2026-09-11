@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { memo, useCallback, useSyncExternalStore } from "react";
+import { memo, useCallback, useSyncExternalStore, type ComponentType } from "react";
 import { useBlock, useBlockSelected, useReactEditor } from "../hooks";
 import {
   BlockElementRefBoundary,
@@ -83,18 +83,32 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
       fallback={BlockTreeShell}
       block={block}
       isSelected={selected}
-      content={<Content blockId={block.id} />}
+      content={<BlockContent renderer={Content} blockId={block.id} />}
     >
       {block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true) && (
         <div id={childrenId} className="page-block-children">
           {block.children.map((child) => (
-            <BlockTreeNode key={child.id} blockId={child.id} />
+            <MemoBlockTreeNode key={child.id} blockId={child.id} />
           ))}
         </div>
       )}
     </BlockWrapper>
   );
 }
+
+/** Keeps an unchanged renderer boundary asleep when only an ancestor snapshot changes. */
+const BlockContent = memo(function BlockContent({
+  renderer: Content,
+  blockId,
+}: {
+  readonly renderer: ComponentType<{ blockId: string }>;
+  readonly blockId: string;
+}) {
+  return <Content blockId={blockId} />;
+});
+
+/** Stable node boundary; focused stores wake only affected IDs and ancestors. */
+const MemoBlockTreeNode = memo(BlockTreeNode);
 
 /**
  * Renders ordered block roots through the same recursive policy in every mode.
@@ -107,5 +121,5 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
  * @returns Block roots and their expanded descendants without an extra DOM wrapper.
  */
 export const BlockTree = memo(function BlockTree({ blockIds }: BlockTreeProps) {
-  return <>{blockIds.map((blockId) => <BlockTreeNode key={blockId} blockId={blockId} />)}</>;
+  return <>{blockIds.map((blockId) => <MemoBlockTreeNode key={blockId} blockId={blockId} />)}</>;
 });

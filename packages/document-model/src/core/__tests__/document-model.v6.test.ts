@@ -148,7 +148,9 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     model.blocks.moveBlock("child", "target", "inside");
     const searchesBeforeRepair = findPath.mock.calls.length;
     expect(model.blocks.getParentId("child")).toBe("target");
-    expect(findPath).toHaveBeenCalledTimes(searchesBeforeRepair + 1);
+    // Parent reads use the focused hierarchy index and do not repair the
+    // independent block-location cache until a full block read needs it.
+    expect(findPath).toHaveBeenCalledTimes(searchesBeforeRepair);
     expect(model.blocks.getRootIds()).toEqual(["parent", "target"]);
     expect(model.blocks.getChildIds("target")).toEqual(["child"]);
     model.blocks.updateBlock("target", { listProps: { collapsed: true } });

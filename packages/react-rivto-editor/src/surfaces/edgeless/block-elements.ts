@@ -236,16 +236,26 @@ export function insertBlockElementSeparator(reactEditor: ReactEditor, afterId: s
  */
 export function reconcileBlockElements(reactEditor: ReactEditor): void {
   const { editor } = reactEditor;
+
+  // Build the two sides of the projection: current document roots and the
+  // persisted canvas elements that render ranges of those roots as cards.
   const roots = editor.blocks.getBlocks();
   const rootOrder = roots.map((block) => block.id);
   const rootSet = new Set(rootOrder);
   const existing = editor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
   const currentRanges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
+
+  // A moved range endpoint can temporarily make its persisted start/end pair
+  // describe the wrong run. Prefer the last known membership in that case so
+  // the same card keeps its identity and canvas geometry through the move.
   const previousState = reconciliationStates.get(reactEditor);
   const previousRanges = new Map(existing.map((element) => {
     const cached = previousState?.memberships.get(element.id);
     return [element.id, cached ? cached.filter((id) => rootSet.has(id)) : currentRanges.get(element.id) ?? []] as const;
   }));
+
+  // Root separator blocks are boundaries, not card content. Every non-empty
+  // run between them must be represented by exactly one block element.
   const segments: EditorBlock[][] = [];
   let segment: EditorBlock[] = [];
   roots.forEach((block) => {
@@ -259,6 +269,10 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
   const continuityBase = rootOrder.length + 1;
   const anchorBonus = continuityBase ** 3;
   const retentionBonus = continuityBase ** 4;
+
+  // Score every possible segment-to-card pairing. Reusing any overlapping
+  // card wins first; keeping the card that owned the first block breaks ties;
+  // overlap counts then preserve as much previous membership as possible.
   const weights = segments.map((blocks) => {
     const ids = new Set(blocks.map((block) => block.id));
     return existing.map((element) => {
@@ -276,10 +290,16 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
       return canReuse + ownsFirst + previousOverlap * continuityBase + currentOverlap;
     });
   });
+
+  // Choose assignments globally. A greedy choice can steal the only suitable
+  // card from a later segment and unnecessarily recreate that later card.
   const matches = maximumWeightMatching(weights);
   const avoidOverlap = placementSettings.get(reactEditor) !== false;
   const defaultWidth = defaultWidthSettings.get(reactEditor) ?? EDGELESS_CARD_DEFAULT_FRAME.width;
   const occupied = existing.map((element) => element.frame);
+
+  // Produce the canonical element for each segment. Matched cards retain all
+  // presentation state; only new cards receive default placement and sizing.
   const desired = segments.map((blocks, index): EditorElement => {
     const existingElement = existing[matches[index] ?? -1];
     const preferred = { ...EDGELESS_CARD_DEFAULT_FRAME, width: defaultWidth, x: 60 + index * 24, y: 60 + index * 24 };
@@ -293,6 +313,9 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
       props: { ...existingElement?.props, ...blockRangeProps(blocks.map((block) => block.id)) },
     };
   });
+
+  // Diff the desired projection against persisted elements. Updates are
+  // limited to range boundaries so reconciliation never resets card geometry.
   const desiredIds = new Set(desired.map((element) => element.id));
   const remove = existing.filter((element) => !desiredIds.has(element.id)).map((element) => element.id);
   const insert = desired.filter((element) => !editor.elements.getElement(element.id));
@@ -302,6 +325,9 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
       ? [{ id: element.id, patch: { props: element.props } }]
       : [];
   });
+
+  // Save exact membership before publishing writes; a following structural
+  // change can then match cards even when persisted endpoints are ambiguous.
   const desiredMemberships = new Map(desired.map((element, index) => [
     element.id,
     segments[index]!.map((block) => block.id),
@@ -310,6 +336,9 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
     memberships: desiredMemberships,
   });
   if (!remove.length && !insert.length && !update.length) return;
+
+  // Commit the complete repair atomically under a separate origin so these
+  // derived maintenance writes do not become user-visible undo steps.
   editor.document.crdt.transact(() => {
     if (remove.length) editor.document.elements.removeElements(remove);
     insert.forEach((element) => editor.document.elements.insertElement(element));

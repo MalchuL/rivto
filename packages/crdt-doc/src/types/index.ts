@@ -1,6 +1,7 @@
 export * from './doc';
 export * from './array';
 export * from './map';
+export * from './observe';
 export * from './text';
 export * from './basic-types';
 export * from './crdt';

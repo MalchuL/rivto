@@ -131,6 +131,8 @@ export interface DocumentModel {
   readonly origin: symbol;
   /** Collaborative containers included in local undo tracking. */
   readonly undoScopes: CRDTUndoScope[];
+  /** Whether callers are currently executing inside a document transaction. */
+  readonly isTransacting: boolean;
   /** Block records, text, hierarchy, and block snapshot operations. */
   readonly blocks: DocumentBlockManager;
   /** First-class generic canvas elements and geometry. */

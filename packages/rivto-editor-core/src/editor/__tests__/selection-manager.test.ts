@@ -1,5 +1,5 @@
 /** Core selection invariants: block membership, text offsets, stable snapshots, and undo. */
-import { createTestEditor as createRivtoEditor, createStructuralSelection, testRange } from "../test-utils";
+import { createTestEditor as createRivtoEditor, createStructuralSelection, testCaret, testRange } from "../test-utils";
 
 /** Expected stored shape for explicit whole-block coverage. */
 function whole(
@@ -19,6 +19,20 @@ function whole(
 }
 
 describe("EditorRuntime selection", () => {
+  it("does not traverse the document to reconcile selection after property-only updates", () => {
+    const editor = createRivtoEditor();
+    const selected = editor.blocks.insertBlock({ type: "paragraph", content: "Task" });
+    editor.selection.set(testCaret(selected, 0));
+    const getBlocks = jest.spyOn(editor.blocks, "getBlocks");
+
+    editor.blocks.updateBlock(selected, { listProps: { checked: true } });
+    expect(getBlocks).not.toHaveBeenCalled();
+
+    editor.blocks.insertBlock({ type: "paragraph", content: "Next" }, selected);
+    expect(getBlocks).toHaveBeenCalledTimes(1);
+    editor.destroy();
+  });
+
   it.each(["block", "edgeless"] as const)("validates block-only state in %s mode", (mode) => {
     const editor = createRivtoEditor({ mode });
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });

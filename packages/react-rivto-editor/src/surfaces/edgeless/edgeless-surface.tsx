@@ -9,8 +9,10 @@ import {
   useDOMEvent,
   useEditor,
   useEditorRoot,
+  useElements,
   useKeyboardEvent,
   useReactEditor,
+  useRootBlockIds,
 } from "../../hooks";
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
 import {
@@ -83,8 +85,8 @@ export function EdgelessSurface({
 }) {
   const editor = useEditor();
   const reactEditor = useReactEditor();
-  const rootIds = editor.blocks.getRootIds();
-  const blockElements = editor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
+  const rootIds = useRootBlockIds();
+  const blockElements = useElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
   const { ref: registerRoot } = useEditorRoot();
   const viewport = useRef<HTMLElement | null>(null);
   const spotlightOverlay = useRef<HTMLDivElement | null>(null);

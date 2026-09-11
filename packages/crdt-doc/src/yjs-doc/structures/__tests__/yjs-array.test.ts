@@ -81,6 +81,35 @@ describe('YjsArray wrapper', () => {
         expect(wrapper.length).toBe(2);
     });
 
+    test('observes one callback per transaction and unsubscribes', () => {
+        const calls: unknown[] = [];
+        const unsubscribe = wrapper.observe((events) => calls.push(events));
+
+        doc.transact(() => {
+            wrapper.push('A');
+            wrapper.push('B');
+        });
+        expect(calls).toHaveLength(1);
+
+        unsubscribe();
+        wrapper.push('C');
+        expect(calls).toHaveLength(1);
+    });
+
+    test('observes remotely applied array updates', () => {
+        const remoteDoc = new Y.Doc();
+        const remote = new YjsArray(remoteDoc.getArray('test-array'));
+        let calls = 0;
+        remote.observe(() => { calls += 1; });
+
+        wrapper.push('remote value');
+        Y.applyUpdate(remoteDoc, Y.encodeStateAsUpdate(doc));
+
+        expect(calls).toBe(1);
+        expect(remote.toArray()).toEqual(['remote value']);
+        remoteDoc.destroy();
+    });
+
     test('handles nested YjsMap inside Array', () => {
         const nestedMap = new YjsMap();
         nestedMap.set('key', 'val');
@@ -146,4 +175,3 @@ describe('YjsArray wrapper', () => {
         expect(json).toEqual(['a', 1, ['inner']]);
     });
 });
-

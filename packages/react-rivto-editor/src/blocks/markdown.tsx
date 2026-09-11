@@ -1,5 +1,6 @@
 import {
   useCallback,
+  memo,
   useMemo,
   useState,
 } from "react";
@@ -17,6 +18,32 @@ import {
   replaceMarkdownCode,
   type PositionedNode,
 } from "./markdown-code";
+
+/** Memoized expensive Markdown parser boundary keyed by source and renderer options. */
+const MarkdownPreview = memo(function MarkdownPreview({
+  components,
+  source,
+  transformUrl,
+}: {
+  readonly components: Components;
+  readonly source: string;
+  readonly transformUrl: UrlTransform;
+}) {
+  return (
+    <ReactMarkdown
+      components={components}
+      urlTransform={transformUrl}
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeCodeFenceMetadata, [rehypeHighlight, {
+        detect: true,
+        plainText: ["text", "txt", "plaintext"],
+      }]]}
+      skipHtml
+    >
+      {source}
+    </ReactMarkdown>
+  );
+});
 
 /**
  * Switches one block between raw editing and formatted Markdown presentation.
@@ -101,18 +128,7 @@ export function MarkdownContent({
         <div
           className="page-block-content markdown-preview"
         >
-          <ReactMarkdown
-            components={components}
-            urlTransform={transformUrl}
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeCodeFenceMetadata, [rehypeHighlight, {
-              detect: true,
-              plainText: ["text", "txt", "plaintext"],
-            }]]}
-            skipHtml
-          >
-            {source}
-          </ReactMarkdown>
+          <MarkdownPreview components={components} source={source} transformUrl={transformUrl} />
         </div>
       )}
     </div>

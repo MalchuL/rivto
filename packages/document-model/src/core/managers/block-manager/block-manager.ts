@@ -79,6 +79,24 @@ export class DocumentBlockManager {
     generateId: GenerateId = () => crypto.randomUUID();
     /** Cached block paths for each block. */
     private readonly blockPaths = new Map<IDBlock, readonly number[]>();
+    /** Stable detached snapshots reused until their record or a descendant changes. */
+    private readonly blockSnapshots = new Map<IDBlock, Block>();
+    /** Per-block subscribers, including recursive snapshot consumers on ancestors. */
+    private readonly blockListeners = new Map<IDBlock, Set<() => void>>();
+    /** Subscribers interested only in the ordered root identifier list. */
+    private readonly rootListeners = new Set<() => void>();
+    /** Subscribers interested in root or child ordering changes. */
+    private readonly structureListeners = new Set<() => void>();
+    /** Cached root IDs whose identity changes only when the roots array changes. */
+    private rootIdsSnapshot?: string[];
+    /** Monotonic block-data revision used by derived presentation caches. */
+    private currentRevision = 0;
+    /** Last transaction already published to hierarchy subscribers. */
+    private lastStructureTransaction?: unknown;
+    /** Current structural parent by placed block ID. */
+    private readonly blockParents = new Map<IDBlock, IDBlock | null>();
+    /** Last transaction already reflected in `blockParents`. */
+    private lastParentTransaction?: unknown;
     /** Root blocks. */
     private readonly roots: CRDTArray<IDBlock>;
     /** Block storage. */
@@ -93,7 +111,44 @@ export class DocumentBlockManager {
         this.roots = document.crdt.getArray<IDBlock>(ROOTS_KEY);
         this.storage = document.crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY);
         this.undoScopes = [this.storage, this.roots];
+        this.refreshParents();
+        // Nested maps name the owning block in `path` / `keys`. Child-list
+        // edits therefore already include the parent ID, so ancestor snapshots
+        // are dropped through `invalidateBlocks` without a parent-map diff.
+        this.storage.observe((events, transaction) => {
+            this.currentRevision += 1;
+            const changedIds = new Set<string>();
+            let structureChanged = false;
+            events.forEach(({ path, keys }) => {
+                const id = path[0];
+                if (typeof id === "string") changedIds.add(id);
+                if (path.length === 0) keys.forEach((key) => changedIds.add(key));
+                structureChanged ||= path[1] === "children"
+                    || (path.length === 1 && keys.includes("children"));
+            });
+            if (structureChanged) this.refreshParents(transaction);
+            this.invalidateBlocks(changedIds);
+            if (structureChanged) this.emitStructure(transaction);
+        });
+        // The roots array is not a field on any block, so these events have an
+        // empty path and cannot name a parent for `invalidateBlocks`.
+        this.roots.observe((_events, transaction) => {
+            this.currentRevision += 1;
+            this.rootIdsSnapshot = undefined;
+            const previousParents = new Map(this.blockParents);
+            this.refreshParents(transaction);
+            // Reordering roots does not change any block snapshot (parent stays
+            // null; snapshots omit sibling order). A root/child transfer changes
+            // only the recursive snapshots of the old and new parents, which
+            // `invalidateChangedParents` finds by diffing the parent index.
+            this.invalidateChangedParents(previousParents);
+            this.emit(this.rootListeners);
+            this.emitStructure(transaction);
+        });
     }
+
+    /** @returns Monotonic revision incremented by block data or hierarchy changes. */
+    get revision(): number { return this.currentRevision; }
 
     /**
      * Runs one semantic block mutation through the owning document transaction.
@@ -157,7 +212,54 @@ export class DocumentBlockManager {
      * @returns Root identifiers in collaborative array order.
      */
     getRootIds(): string[] {
-        return strings(this.roots);
+        if (this.document.isTransacting) return strings(this.roots);
+        this.rootIdsSnapshot ??= strings(this.roots);
+        return this.rootIdsSnapshot;
+    }
+
+    /**
+     * Subscribes to changes that can alter one recursive block snapshot.
+     *
+     * Descendant changes also notify ancestor IDs because `getBlock` includes
+     * the complete subtree. Unrelated branches retain their snapshot identity.
+     *
+     * @param id - Block identifier whose recursive value is observed.
+     * @param listener - Callback invoked after that value becomes stale.
+     * @returns Function that removes this exact listener.
+     */
+    subscribeBlock(id: string, listener: () => void): () => void {
+        let listeners = this.blockListeners.get(id);
+        if (!listeners) {
+            listeners = new Set();
+            this.blockListeners.set(id, listeners);
+        }
+        listeners.add(listener);
+        return () => {
+            listeners!.delete(listener);
+            if (!listeners!.size) this.blockListeners.delete(id);
+        };
+    }
+
+    /**
+     * Subscribes only to changes in the ordered root identifier array.
+     *
+     * @param listener - Callback invoked after roots are inserted, removed, or reordered.
+     * @returns Function that removes this exact listener.
+     */
+    subscribeRootIds(listener: () => void): () => void {
+        this.rootListeners.add(listener);
+        return () => this.rootListeners.delete(listener);
+    }
+
+    /**
+     * Subscribes to root and direct-child ordering changes.
+     *
+     * @param listener - Callback invoked after document hierarchy changes.
+     * @returns Function that removes this exact listener.
+     */
+    subscribeStructure(listener: () => void): () => void {
+        this.structureListeners.add(listener);
+        return () => this.structureListeners.delete(listener);
     }
 
     /**
@@ -179,8 +281,11 @@ export class DocumentBlockManager {
      * @returns Parent identifier, null for a root, or undefined when absent.
      */
     getParentId(id: string): string | null | undefined {
-        const found = this.findContainer(id);
-        return found ? found.parentId ?? null : undefined;
+        if (this.document.isTransacting) {
+            const found = this.findContainer(id);
+            return found ? found.parentId ?? null : undefined;
+        }
+        return this.blockParents.get(id);
     }
 
     /**
@@ -732,6 +837,8 @@ export class DocumentBlockManager {
         const value = this.storage.get(id);
         if (!isCRDTMap(value)) return undefined;
         visited.add(id);
+        const cached = this.document.isTransacting ? undefined : this.blockSnapshots.get(id);
+        if (cached) return cached;
         const props = this.requiredMap(value, "props").toObject() as Record<IDProp, unknown>;
         const pluginData = this.requiredMap(value, "pluginData").toObject() as Record<IDPlugin, unknown>;
         const content = this.requiredText(value, "content").toString();
@@ -739,7 +846,7 @@ export class DocumentBlockManager {
             const child = this.readBlock(childId, visited);
             return child ? [child] : [];
         });
-        return {
+        const snapshot = {
             id,
             type: this.requiredType(value, id),
             listProps: validateBlockListProps(this.requiredMap(value, "listProps").toObject()),
@@ -748,6 +855,89 @@ export class DocumentBlockManager {
             content,
             children,
         };
+        if (!this.document.isTransacting) this.blockSnapshots.set(id, snapshot);
+        return snapshot;
+    }
+
+    /**
+     * Invalidates changed blocks and recursive snapshots of their live ancestors.
+     *
+     * Used from storage observation, where the event already lists the mutated
+     * record or the parent whose `children` array changed.
+     */
+    private invalidateBlocks(ids: ReadonlySet<string>): void {
+        const affected = new Set<string>();
+        ids.forEach((id) => {
+            let current: string | undefined | null = id;
+            while (current != null && !affected.has(current)) {
+                affected.add(current);
+                current = this.blockParents.get(current);
+            }
+        });
+        this.invalidateSnapshotIds(affected);
+    }
+
+    /**
+     * Invalidates old and new ancestor chains after root-list membership changes.
+     *
+     * Root observation has no parent ID in the event. Nested child-list edits
+     * skip this helper: storage events already name those parents.
+     */
+    private invalidateChangedParents(previousParents: ReadonlyMap<string, string | null>): void {
+        const affected = new Set<string>();
+        const addAncestors = (start: string | null | undefined, parents: ReadonlyMap<string, string | null>): void => {
+            let current = start;
+            while (current != null && !affected.has(current)) {
+                affected.add(current);
+                current = parents.get(current);
+            }
+        };
+        const ids = new Set([...previousParents.keys(), ...this.blockParents.keys()]);
+        ids.forEach((id) => {
+            const previous = previousParents.get(id);
+            const next = this.blockParents.get(id);
+            if (previous === next) return;
+            addAncestors(previous, previousParents);
+            addAncestors(next, this.blockParents);
+        });
+        this.invalidateSnapshotIds(affected);
+    }
+
+    /** Drops and publishes the exact recursive block snapshots supplied. */
+    private invalidateSnapshotIds(ids: ReadonlySet<string>): void {
+        ids.forEach((id) => {
+            this.blockSnapshots.delete(id);
+            const listeners = this.blockListeners.get(id);
+            if (listeners) this.emit(listeners);
+        });
+    }
+
+    /** Calls a stable listener snapshot so callbacks may unsubscribe safely. */
+    private emit(listeners: ReadonlySet<() => void>): void {
+        [...listeners].forEach((listener) => listener());
+    }
+
+    /** Publishes at most one hierarchy notification for a CRDT transaction. */
+    private emitStructure(transaction: unknown): void {
+        if (this.lastStructureTransaction === transaction) return;
+        this.lastStructureTransaction = transaction;
+        this.emit(this.structureListeners);
+    }
+
+    /** Rebuilds the cheap parent index after hierarchy transactions only. */
+    private refreshParents(transaction?: unknown): void {
+        if (transaction !== undefined && this.lastParentTransaction === transaction) return;
+        this.lastParentTransaction = transaction;
+        this.blockParents.clear();
+        const visited = new Set<string>();
+        const visit = (ids: readonly string[], parentId: string | null): void => ids.forEach((id) => {
+            if (visited.has(id)) return;
+            visited.add(id);
+            this.blockParents.set(id, parentId);
+            const block = this.storage.get(id);
+            if (isCRDTMap(block)) visit(strings(this.requiredArray(block, "children")), id);
+        });
+        visit(strings(this.roots), null);
     }
 
     /**
