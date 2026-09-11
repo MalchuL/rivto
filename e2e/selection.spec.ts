@@ -339,6 +339,42 @@ test("Ctrl click toggles blocks with a pointer cursor", async ({ page }) => {
   await expect(contents.nth(1).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
 });
 
+test("bottom-up nested drag does not select a parent from the gap between children", async ({ page }) => {
+  const parent = page.locator("[data-block-content]")
+    .filter({ hasText: "Second branch level 2 child." })
+    .locator(BLOCK_ANCESTOR_XPATH);
+  const upper = page.locator("[data-block-content]")
+    .filter({ hasText: "Second branch level 3 descendant." });
+  const lower = page.locator("[data-block-content]")
+    .filter({ hasText: "Second branch level 2 sibling." });
+  const upperBlock = upper.locator(BLOCK_ANCESTOR_XPATH);
+  const lowerBlock = lower.locator(BLOCK_ANCESTOR_XPATH);
+  await lower.scrollIntoViewIfNeeded();
+  const from = await textPoint(lower, 4);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  const toUpper = await textPoint(upper, 4);
+  const upperBox = await upperBlock.boundingBox();
+  const lowerBox = await lowerBlock.boundingBox();
+  if (!upperBox || !lowerBox) throw new Error("Expected nested sibling geometry");
+
+  // Sibling BlockViews use vertical margin, so the gap between rows is the
+  // parent container. After the drag has already crossed into another nested
+  // block, parking in that gap must keep the nested range instead of lifting
+  // it to the wrapping parent.
+  const gap = {
+    x: from.x,
+    y: (upperBox.y + upperBox.height + lowerBox.y) / 2,
+  };
+  await page.mouse.move(toUpper.x, toUpper.y, { steps: 12 });
+  await page.mouse.move(gap.x, gap.y, { steps: 8 });
+
+  await expect(lowerBlock).toHaveAttribute("data-block-selected", "true");
+  await expect(parent).not.toHaveAttribute("data-block-selected", "true");
+  await page.mouse.up();
+  await expect(parent).not.toHaveAttribute("data-block-selected", "true");
+});
+
 test("selecting a parent draws one selection rectangle around its subtree", async ({ page }) => {
   const parent = page.locator(".page-block:has(> .page-block-children)").first();
   const child = parent.locator(`.page-block-children ${BLOCK_ID_SELECTOR}`).last();

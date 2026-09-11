@@ -61,6 +61,7 @@ import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
+  BLOCK_ROW_CLASS,
 } from "../../constants";
 import { isElementNode } from "../events/dom-nodes";
 import { resolveSelectionEndpoints } from "./selection-endpoints";
@@ -240,6 +241,14 @@ export function readDOMPointPosition(root: HTMLElement, point: DOMSelectionPoint
  * The closest block is used because nested surfaces render one BlockView inside
  * another. A pointer over a child control must select that child, not its parent.
  *
+ * Nested parents also wrap descendant geometry: vertical sibling margins and
+ * the indent gutter are still inside the parent BlockView. `elementFromPoint`
+ * therefore reports the parent when the pointer is only between nested rows.
+ * That hit is valid CSS, but whole-block drags would then promote the parent
+ * and cover its entire subtree. Hits outside the parent's own row snap to the
+ * nearest nested row instead, so the parent joins the range only when the
+ * pointer enters its content or chrome.
+ *
  * @param root - Active surface root that scopes valid block containers.
  * @param x - Horizontal viewport coordinate from a pointer event.
  * @param y - Vertical viewport coordinate from a pointer event.
@@ -251,9 +260,47 @@ export function readBlockIdAtPoint(
   y: number,
 ): string | undefined {
   const hit = root.ownerDocument.elementFromPoint(x, y);
-  const block = hit?.closest<HTMLElement>(BLOCK_ID_SELECTOR);
+  const block = hit instanceof Element ? hit.closest<HTMLElement>(BLOCK_ID_SELECTOR) : null;
   if (!block || !root.contains(block)) return undefined;
-  return block.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
+
+  const ownRow = ownedBlockRow(block);
+  // Keep the closest block when the pointer is in its own row, or when a
+  // custom shell has no row to distinguish wrapping descendants from chrome.
+  const nestedHit = ownRow && !ownRow.contains(hit) ? nearestNestedBlock(block, x, y) : undefined;
+  const target = nestedHit ?? block;
+  return target.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
+}
+
+/**
+ * Returns the BlockView row that belongs to `block` itself, not descendants.
+ *
+ * @param block - BlockView container that may own a `.page-block-row`.
+ * @returns The direct row element, or `null` when a custom shell omitted it.
+ */
+function ownedBlockRow(block: HTMLElement): HTMLElement | null {
+  return block.querySelector(`:scope > .${BLOCK_ROW_CLASS}`);
+}
+
+/**
+ * Finds the nested BlockView whose own row is closest to a wrapping-parent hit.
+ *
+ * Distances use each descendant's row box, not the full BlockView. Parent
+ * BlockViews include nested children in their bounding rect, so measuring the
+ * wrapper would keep selecting the same parent we are trying to skip.
+ *
+ * @param parent - Closest BlockView that wrapped the pointer without owning the hit.
+ * @param x - Horizontal viewport coordinate from a pointer event.
+ * @param y - Vertical viewport coordinate from a pointer event.
+ * @returns Nearest nested BlockView, or `undefined` when none have a row.
+ */
+function nearestNestedBlock(parent: HTMLElement, x: number, y: number): HTMLElement | undefined {
+  return [...parent.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)]
+    .map((candidate) => {
+      const row = ownedBlockRow(candidate);
+      return row ? { candidate, distance: distanceToRect(row.getBoundingClientRect(), x, y) } : undefined;
+    })
+    .filter((entry): entry is { candidate: HTMLElement; distance: number } => Boolean(entry))
+    .sort((left, right) => left.distance - right.distance)[0]?.candidate;
 }
 
 /**

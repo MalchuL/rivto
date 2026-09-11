@@ -8,6 +8,7 @@
  * @module
  */
 import { memo, useCallback, useSyncExternalStore, type ComponentType } from "react";
+import { BLOCK_ROW_CLASS } from "../constants";
 import { useBlock, useBlockSelected, useReactEditor } from "../hooks";
 import {
   BlockElementRefBoundary,
@@ -19,7 +20,6 @@ import { BlockView } from "./block-view";
 import { UnknownBlock } from "./unknown-block";
 import { BlockSlots } from "./owner-slots";
 
-const BLOCK_ROW_CLASS = "page-block-row";
 const BLOCK_CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 
 /** Root block IDs rendered by the shared recursive block tree. */

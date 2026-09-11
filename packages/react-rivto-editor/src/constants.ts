@@ -34,3 +34,12 @@ export const BLOCK_SELECTION_ANCHOR_ATTRIBUTE = "data-block-selection-anchor";
 
 /** CSS selector matching renderer regions that may begin selection gestures. */
 export const BLOCK_SELECTION_ANCHOR_SELECTOR = `[${BLOCK_SELECTION_ANCHOR_ATTRIBUTE}]`;
+
+/**
+ * CSS class for one block's own row (content and chrome).
+ *
+ * Nested descendants live outside this row, in the sibling children container.
+ * Pointer selection uses that split so a hit in a wrapping gap does not
+ * promote the parent.
+ */
+export const BLOCK_ROW_CLASS = "page-block-row";

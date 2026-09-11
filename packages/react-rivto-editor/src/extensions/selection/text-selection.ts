@@ -276,6 +276,12 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       // Caret hit-testing falls back to a nearby editable host over contentless
       // blocks. Shift+Alt keeps that DOM point only for native painting and
       // uses the actual BlockView hit as the portable selection endpoint.
+      //
+      // Nested parents wrap descendant rows, so a bottom-to-top drag can sit
+      // in the margin between children while `elementFromPoint` still reports
+      // the parent. `readBlockIdAtPoint` maps that wrapping hit to the nearest
+      // nested row. Promoting the parent here would select the whole subtree
+      // even though the pointer never entered the parent's own row.
       const partialContentlessBlockId = event.shiftKey && event.altKey
         && pointedBlockId !== headPosition?.blockId ? pointedBlockId : undefined;
       const effectiveHeadPosition = partialContentlessBlockId
