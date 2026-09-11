@@ -1,14 +1,29 @@
+/**
+ * Demo custom block renderers for Slider and Counter, plus their extension
+ * registrations. Slider previews its range locally during a pointer drag and
+ * commits once the drag finishes so each drag is one document write.
+ *
+ * @module
+ */
 import {
   blockExtension,
   kanbanExtension,
   bentoExtension,
   tableExtension,
   columnsExtension,
+  MarkdownContent,
   useBlockEditing,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
-import type { MouseEvent } from "react";
-import { MarkdownContent } from "@chulane/rivto-react";
+import {
+  useCallback,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FocusEvent,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 import {
   COUNTER_BLOCK_TYPE,
   counterBlockDefinition,
@@ -31,11 +46,83 @@ export {
   sliderBlockDefinition,
 } from "./custom-block-definitions";
 
-/** Demo block with normal collaborative text and one validated range property. */
+/**
+ * Demo block with collaborative text and one validated range property.
+ *
+ * The thumb previews locally while dragging. The document, CRDT, and undo
+ * history receive a single write when the pointer is released. Keyboard steps
+ * still commit immediately.
+ *
+ * @param blockId - Stable ID of the slider block.
+ * @returns The markdown body and range control, or null after deletion.
+ */
 function SliderBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<SliderProps>(blockId);
-  if (!editing.block) return null;
-  const value = editing.getProp("value") ?? 50;
+  const { block, getProp, setProp } = useBlockEditing<SliderProps>(blockId);
+  const draggingRef = useRef(false);
+  const [draftValue, setDraftValue] = useState<number | null>(null);
+  const committedValue = getProp("value") ?? 50;
+  const value = draftValue ?? committedValue;
+
+  /**
+   * Writes the finished range into the block, skipping no-ops and mid-drag input.
+   *
+   * @param next - Value shown by the input when the gesture completed.
+   * @returns Nothing; the document is updated through `setProp`.
+   */
+  const commitValue = useCallback((next: number) => {
+    setDraftValue(null);
+    if (next === (getProp("value") ?? 50)) return;
+    setProp("value", next);
+  }, [getProp, setProp]);
+
+  /**
+   * Marks the current pointer gesture as an in-progress drag.
+   *
+   * Keyboard steps never set this flag, so they still commit on each `input`.
+   *
+   * @returns Nothing; only the drag flag is updated.
+   */
+  const beginDrag = () => {
+    draggingRef.current = true;
+  };
+
+  /**
+   * Follows the thumb locally while dragging; keyboard changes write immediately.
+   *
+   * React `onChange` maps to the continuous `input` event, which would otherwise
+   * emit one CRDT update per pointer move.
+   *
+   * @param event - Native range `input` event.
+   * @returns Nothing; either draft state or the document property is updated.
+   */
+  const previewOrCommit = (event: ChangeEvent<HTMLInputElement>) => {
+    const next = Number(event.currentTarget.value);
+    if (draggingRef.current) setDraftValue(next);
+    else commitValue(next);
+  };
+
+  /**
+   * Persists the previewed value after pointer release or blur.
+   *
+   * @param event - Event whose current target is the range input.
+   * @returns Nothing; persistence is delegated to `commitValue`.
+   */
+  const finishDrag = (event: PointerEvent<HTMLInputElement> | FocusEvent<HTMLInputElement>) => {
+    draggingRef.current = false;
+    commitValue(Number(event.currentTarget.value));
+  };
+
+  /**
+   * Drops an in-progress preview when the browser cancels the pointer gesture.
+   *
+   * @returns Nothing; the displayed value falls back to the committed property.
+   */
+  const discardDrag = () => {
+    draggingRef.current = false;
+    setDraftValue(null);
+  };
+
+  if (!block) return null;
   return (
     <div className="custom-slider-block">
       <MarkdownContent blockId={blockId} />
@@ -47,7 +134,11 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
           max="100"
           value={value}
           aria-label="Slider value"
-          onChange={(event) => editing.setProp("value", Number(event.currentTarget.value))}
+          onPointerDown={beginDrag}
+          onChange={previewOrCommit}
+          onPointerUp={finishDrag}
+          onPointerCancel={discardDrag}
+          onBlur={finishDrag}
         />
       </label>
     </div>
