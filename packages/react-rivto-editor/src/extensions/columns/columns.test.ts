@@ -26,11 +26,24 @@ function createColumnsRuntime() {
   return { editor, runtime };
 }
 
-test("inserts equally sized columns and relocates nested blocks when a column is removed", () => {
+test("slash insert seeds a writing block in each column", () => {
   const { editor, runtime } = createColumnsRuntime();
   const before = editor.blocks.insertBlock({ type: "paragraph", content: "Before" });
   runtime.slashCommands.execute("block.columns.insert", { blockId: before });
   const board = editor.blocks.getBlocks().find((block) => block.type === COLUMNS_BLOCK_TYPE)!;
+  expect(board.children).toHaveLength(2);
+  expect(board.children.every((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE)).toBe(true);
+  const seeded = board.children.map((column) => column.children);
+  expect(seeded.every((children) => children.length === 1)).toBe(true);
+  expect(seeded.every((children) => children[0]?.type === "paragraph" && children[0]?.content === "")).toBe(true);
+  runtime.destroy();
+  editor.destroy();
+});
+
+test("inserts equally sized columns and relocates nested blocks when a column is removed", () => {
+  const { editor, runtime } = createColumnsRuntime();
+  const boardId = editor.blocks.insertBlock(createColumnsBlockInput(2));
+  const board = editor.blocks.getBlock(boardId)!;
   expect(board.children).toHaveLength(2);
   expect(board.children.every((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE)).toBe(true);
 

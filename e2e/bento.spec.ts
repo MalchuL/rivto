@@ -154,12 +154,21 @@ for (const edge of ["between", "under", "inside"]) {
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
     await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
-    await page.mouse.move(to.x + (edge === "between" ? to.width - 2 : to.width / 2),
-      to.y + (edge === "under" ? to.height - 1 : to.height / 2), { steps: 15 });
+    // Sibling drops aim at the 16px wrap gap, not a strip hugging the tile.
+    const destX = edge === "between" ? to.x + to.width + 8 : to.x + to.width / 2;
+    const destY = edge === "under" ? to.y + to.height + 8 : to.y + to.height / 2;
+    await page.mouse.move(destX, destY, { steps: 15 });
     if (edge === "inside") await expect(target).toHaveAttribute("data-drop-inside", "true");
     else {
       const lineClass = "page-drop-line";
-      await expect(target.locator(`:scope > .${lineClass}`)).toBeVisible();
+      const line = target.locator(`:scope > .${lineClass}`);
+      await expect(line).toBeVisible();
+      const lineBox = (await line.boundingBox())!;
+      const targetBox = (await target.boundingBox())!;
+      const lineMidX = lineBox.x + lineBox.width / 2;
+      const lineMidY = lineBox.y + lineBox.height / 2;
+      if (edge === "between") expect(Math.abs(lineMidX - (targetBox.x + targetBox.width + 8))).toBeLessThanOrEqual(2);
+      else expect(Math.abs(lineMidY - (targetBox.y + targetBox.height + 8))).toBeLessThanOrEqual(2);
     }
     await page.mouse.up();
     if (edge === "inside") await expect(page.locator(`[data-block-id="${targetId}"] [data-block-id="${sourceId}"]`)).toHaveCount(1);

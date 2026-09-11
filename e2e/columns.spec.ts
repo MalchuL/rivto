@@ -14,19 +14,19 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
   const lanes = board.locator(":scope > .page-block-children");
   const columns = page.locator('[data-block-type="columns-column"]');
   await expect(columns).toHaveCount(2);
-  await expect(board.getByText("Left column", { exact: false })).toBeVisible();
-  await expect(board.getByText("Right column", { exact: false })).toBeVisible();
+  await expect(board).toContainText("Left column");
+  await expect(board).toContainText("Right column");
   await expect.poll(() => lanes.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 
   await board.getByRole("button", { name: "Columns settings" }).click();
   await page.getByRole("button", { name: "Remove column" }).click();
   await expect(columns).toHaveCount(1);
-  await expect(columns.first().getByText("Left column", { exact: false })).toBeVisible();
-  await expect(columns.first().getByText("Right column", { exact: false })).toBeVisible();
+  await expect(columns.first()).toContainText("Left column");
+  await expect(columns.first()).toContainText("Right column");
   await expect.poll(() => lanes.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 
   await page.getByRole("button", { name: "Add column" }).click();
   await expect(columns).toHaveCount(2);
-  await expect(columns.first().getByText("Left column", { exact: false })).toBeVisible();
-  await expect(columns.first().getByText("Right column", { exact: false })).toBeVisible();
+  await expect(columns.first()).toContainText("Left column");
+  await expect(columns.first()).toContainText("Right column");
 });

@@ -5,7 +5,7 @@
  * deleting them. Drag, clipboard, snapshots, and undo remain owned by core.
  * @module
  */
-import { useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useCallback, useState, type KeyboardEvent, type MouseEvent } from "react";
 import {
   createCaretSelection,
   getSelectedBlockIds,
@@ -14,6 +14,7 @@ import {
   type EditorBlockInput,
 } from "@chulane/rivto";
 import { useBlock, useReactEditor } from "../../hooks";
+import { BlockElementRefProvider, type BlockWrapperProps } from "../../blocks";
 import {
   BUILTIN_KEYMAP,
   focusBlock,
@@ -37,11 +38,17 @@ const COLUMN_CLASS = "rivto-columns-column";
 const SETTINGS_CLASS = "rivto-columns-settings";
 const PANEL_CLASS = "rivto-columns-settings-panel";
 const COUNT_CLASS = "rivto-columns-count";
+const DROP_CONTAINER_ATTRIBUTE = "data-block-drop-container";
+const EMPTY_COLUMN_MIN_HEIGHT = "120px";
 
 const COLUMNS_STYLES = `
-[data-block-type="${COLUMNS_BLOCK_TYPE}"] {
+[data-block-type="${COLUMNS_BLOCK_TYPE}"],
+[data-block-type="${COLUMNS_COLUMN_BLOCK_TYPE}"] {
   min-width: 0;
   max-width: 100%;
+  /* Match root writing blocks: no extra nest indent or handle gutter. */
+  padding-left: 0;
+  padding-right: 0;
 }
 [data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-row .${COLUMNS_CLASS} {
   display: none;
@@ -59,9 +66,17 @@ const COLUMNS_STYLES = `
   flex: 1 1 0;
   min-width: 0;
   max-width: 100%;
+  overflow: visible;
+}
+[data-block-type="${COLUMNS_BLOCK_TYPE}"] .page-block-row::before {
+  /* Clip the page-wide hover slab so one lane cannot steal clicks from another. */
+  inset: 0;
+  width: auto;
 }
 [data-block-type="${COLUMNS_COLUMN_BLOCK_TYPE}"] > .page-block-children {
-  margin-left: 0;
+  margin: 0;
+  padding: 0;
+  min-height: ${EMPTY_COLUMN_MIN_HEIGHT};
 }
 [data-block-type="${COLUMNS_COLUMN_BLOCK_TYPE}"]:has(> .page-block-children) > .page-block-row {
   display: none;
@@ -72,7 +87,7 @@ const COLUMNS_STYLES = `
   transform: translateY(-50%);
 }
 .${COLUMN_CLASS} {
-  min-height: var(--rivto-default-block-height, 24px);
+  min-height: ${EMPTY_COLUMN_MIN_HEIGHT};
 }
 .${SETTINGS_CLASS} { position: relative; display: inline-flex; }
 .${SETTINGS_CLASS} > button {
@@ -128,23 +143,34 @@ function columnCount(value: number): number {
 }
 
 /**
- * Creates one empty column shell ready to receive ordinary editor blocks.
+ * Creates one column shell, optionally seeded with a writing block.
+ *
+ * @param writingBlock - Nested default writing block; omitted for an empty lane.
  * @returns Portable column input.
  */
-function createColumnInput(): EditorBlockInput {
-  return { type: COLUMNS_COLUMN_BLOCK_TYPE, content: "" };
+function createColumnInput(writingBlock?: EditorBlockInput): EditorBlockInput {
+  return {
+    type: COLUMNS_COLUMN_BLOCK_TYPE,
+    content: "",
+    children: writingBlock ? [structuredClone(writingBlock)] : [],
+  };
 }
 
 /**
- * Creates a headerless column board with equally sized empty columns.
+ * Creates a headerless column board with equally sized columns.
+ *
  * @param count - Initial column count; defaults to two.
+ * @param writingBlock - Seeded writing block cloned into every lane.
  * @returns Portable board subtree inserted through the ordinary block manager.
  */
-export function createColumnsBlockInput(count = COLUMNS_DEFAULT_COUNT): EditorBlockInput {
+export function createColumnsBlockInput(
+  count = COLUMNS_DEFAULT_COUNT,
+  writingBlock?: EditorBlockInput,
+): EditorBlockInput {
   return {
     type: COLUMNS_BLOCK_TYPE,
     content: "",
-    children: Array.from({ length: columnCount(count) }, () => createColumnInput()),
+    children: Array.from({ length: columnCount(count) }, () => createColumnInput(writingBlock)),
   };
 }
 
@@ -240,9 +266,9 @@ export function Columns(_props: { readonly blockId: string }) {
 }
 
 /**
- * Marks an empty column as a drop area; filled columns use the shared child tree.
+ * Marks an empty column as a click-to-start writing target.
  * @param props - Identity of the persisted column.
- * @returns Drop target used only while the column has no nested blocks.
+ * @returns Empty-lane control; drop and sort markers live on the column shell.
  */
 function ColumnsColumn({ blockId }: { readonly blockId: string }) {
   const runtime = useReactEditor();
@@ -263,8 +289,6 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
   return (
     <div
       className={COLUMN_CLASS}
-      data-block-drop-container=""
-      data-block-sort-children="vertical"
       tabIndex={empty ? 0 : -1}
       role={empty ? "button" : undefined}
       aria-label="Column"
@@ -272,6 +296,25 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
       onKeyDown={startWriting}
     />
   );
+}
+
+/**
+ * Places the drop-container marker on the column BlockView so it survives row hide.
+ *
+ * The lane does not set a sort axis. Children keep the page outline drop
+ * policy (gap line, indent, nest). The marker only makes an empty lane a
+ * valid drop target.
+ *
+ * @param props - Current column snapshot and remaining decorator chain.
+ * @returns Ref provider, or the unchanged subtree for other block types.
+ */
+function ColumnsColumnShell({ block, children }: BlockWrapperProps) {
+  const attach = useCallback((element: HTMLDivElement | null) => {
+    if (!element) return;
+    element.setAttribute(DROP_CONTAINER_ATTRIBUTE, "");
+  }, []);
+  if (block.type !== COLUMNS_COLUMN_BLOCK_TYPE) return children;
+  return <BlockElementRefProvider elementRef={attach}>{children}</BlockElementRefProvider>;
 }
 
 /**
@@ -365,12 +408,19 @@ export function columnsExtension(): ReactEditorExtension {
         component: ColumnsControls,
         when: ({ block }) => block.type === COLUMNS_BLOCK_TYPE,
       });
+      runtime.surfaces.registerBlockWrapper("block", ColumnsColumnShell);
+      runtime.surfaces.registerBlockWrapper("edgeless", ColumnsColumnShell);
       runtime.slashCommands.register({
         id: "block.columns.insert",
         title: "Columns",
         group: "Insert",
         keywords: ["layout", "split", "grid"],
-        execute: ({ blockId }) => { runtime.blocks.insertBlock(createColumnsBlockInput(), blockId); },
+        execute: ({ blockId }) => {
+          runtime.blocks.insertBlock(
+            createColumnsBlockInput(COLUMNS_DEFAULT_COUNT, runtime.createDefaultBlock()),
+            blockId,
+          );
+        },
       });
       registerColumnDeletion(runtime);
     },
