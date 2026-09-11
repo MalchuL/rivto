@@ -115,10 +115,45 @@ function canPageDragAutoScroll(element: Element): boolean {
     && !(element instanceof HTMLElement && element.matches(EDGELESS_CARD_CONTENT_SELECTOR));
 }
 
-function eventPointer(event: DragMoveEvent): PointerCoordinates | null {
-  const activator = event.activatorEvent as Event & { clientX?: unknown; clientY?: unknown };
-  if (typeof activator.clientX !== "number" || typeof activator.clientY !== "number") return null;
-  return { x: activator.clientX + event.delta.x, y: activator.clientY + event.delta.y };
+/** Live viewport pointer position for one drag gesture. */
+interface PointerTracker {
+  /** @returns Latest viewport coordinates reported by the pointer. */
+  get(): PointerCoordinates;
+  /** @returns No value. */
+  dispose(): void;
+}
+
+/**
+ * Follows the untranslated viewport pointer position for one gesture.
+ *
+ * dnd-kit folds the distance scrolled since activation into `event.delta`, so
+ * `activator + delta` drifts away from the cursor by the scrolled amount as
+ * soon as the surface moves. Every drop target here is resolved against
+ * viewport rectangles through `elementsFromPoint` and `getBoundingClientRect`,
+ * which makes the raw client position the only coordinate that stays aligned
+ * with those rectangles while auto-scroll or wheel scrolling runs.
+ *
+ * @param activatorEvent - Native event that started the gesture.
+ * @returns A tracker for pointer gestures, or null for keyboard activation.
+ */
+function trackGesturePointer(activatorEvent: Event): PointerTracker | null {
+  const activator = activatorEvent as Event & { clientX?: unknown; clientY?: unknown };
+  const target = activatorEvent.target;
+  const ownerDocument = target instanceof Node ? target.ownerDocument : null;
+  if (typeof activator.clientX !== "number" || typeof activator.clientY !== "number" || !ownerDocument) {
+    return null;
+  }
+  let current: PointerCoordinates = { x: activator.clientX, y: activator.clientY };
+  const update = (event: PointerEvent) => {
+    current = { x: event.clientX, y: event.clientY };
+  };
+  // Capture keeps the reading ahead of the sensor's own listener, and the
+  // pointer may leave the handle entirely once dragging is under way.
+  ownerDocument.addEventListener("pointermove", update, { capture: true, passive: true });
+  return {
+    get: () => current,
+    dispose: () => ownerDocument.removeEventListener("pointermove", update, { capture: true }),
+  };
 }
 
 function findCrossDocumentPageController(
@@ -392,6 +427,7 @@ function resolveCrossDocumentPageRootPlacement(
  * @param blocks - Latest complete document tree used to resolve ancestor depth.
  * @param childDropIndent - Horizontal pixels representing one requested depth.
  * @param gapDropZone - Vertical pixels reserved at the top and bottom of a row.
+ * @param pointer - Live viewport cursor, or null during keyboard movement.
  * @returns A valid candidate destination and indicator, or null when the
  * pointer is not over a registered row.
  */
@@ -400,19 +436,19 @@ function resolveDropPlacement(
   blocks: Block[],
   childDropIndent: number,
   gapDropZone: number,
+  pointer: PointerCoordinates | null,
 ): DropPlacement | null {
   if (!event.over) return null;
   const indicatorId = String(event.over.id);
-  const activator = event.activatorEvent as Event & { clientX?: unknown; clientY?: unknown };
+  // Keyboard movement has no cursor, so the translated draggable rect stands in
+  // for one. That rect is already free of dnd-kit's scroll adjustment.
   const activeRect = event.active.rect.current.translated ?? event.active.rect.current.initial;
-  const pointerX = typeof activator.clientX === "number" ? activator.clientX : undefined;
-  const cursorX = pointerX !== undefined
-    ? pointerX + event.delta.x
+  const cursorX = pointer
+    ? pointer.x
     : activeRect ? activeRect.left + activeRect.width / 2 : event.over.rect.left;
-  const cursorY = typeof activator.clientY === "number"
-    ? activator.clientY + event.delta.y
+  const cursorY = pointer
+    ? pointer.y
     : activeRect ? activeRect.top + activeRect.height / 2 : event.over.rect.top;
-  const hasPointerY = typeof activator.clientY === "number";
   let result: DropPlacement | null = null;
   if (event.active.data.current?.sortChildren === "horizontal"
     && event.over.data.current?.sortChildren === "horizontal") {
@@ -442,7 +478,7 @@ function resolveDropPlacement(
       indicatorEdge: edge,
       indicatorOffset: 0,
     };
-  } else if (pointerX !== undefined && hasPointerY) {
+  } else if (pointer) {
     result = resolveGeometryPlacement(
       blocks,
       { id: indicatorId, rect: event.over.rect },
@@ -452,39 +488,27 @@ function resolveDropPlacement(
       gapDropZone,
     );
   } else {
-    const edgeSize = Math.min(gapDropZone, event.over.rect.height / 3);
-    if (hasPointerY
-      && cursorY >= event.over.rect.top + edgeSize
-      && cursorY <= event.over.rect.bottom - edgeSize) {
+    // Keyboard movement carries no cursor, so the stand-in rect sits over a row
+    // center rather than inside a narrow gap. Row halves then decide the
+    // sibling edge and nesting stays at the hovered row's own depth.
+    const after = cursorY >= event.over.rect.top + event.over.rect.height / 2;
+    if (!after) {
       result = {
         targetId: indicatorId,
-        position: "inside",
+        position: "before",
         indicatorId,
+        indicatorEdge: "before",
         indicatorOffset: 0,
       };
     } else {
-      const after = hasPointerY
-        ? cursorY > event.over.rect.bottom - edgeSize
-        : cursorY >= event.over.rect.top + event.over.rect.height / 2;
-      if (!after) {
-        result = {
-          targetId: indicatorId,
-          position: "before",
-          indicatorId,
-          indicatorEdge: "before",
-          indicatorOffset: 0,
-        };
-      } else {
-        const depthOffset = 0;
-        const placement = resolveAfterDropPlacement(blocks, indicatorId, depthOffset);
-        result = placement ? {
-          targetId: placement.targetId,
-          position: placement.position,
-          indicatorId,
-          indicatorEdge: "after",
-          indicatorOffset: placement.depthOffset * PAGE_INDENT,
-        } : null;
-      }
+      const placement = resolveAfterDropPlacement(blocks, indicatorId, 0);
+      result = placement ? {
+        targetId: placement.targetId,
+        position: placement.position,
+        indicatorId,
+        indicatorEdge: "after",
+        indicatorOffset: placement.depthOffset * PAGE_INDENT,
+      } : null;
     }
   }
   return result;
@@ -497,18 +521,19 @@ function resolveDropPlacement(
  * all of those rectangles on every move. The browser already maintains this
  * hit-test index, so one target rectangle is sufficient.
  *
- * @param event - Current drag movement used for source data and pointer delta.
+ * @param event - Current drag movement used for source data.
+ * @param pointer - Live viewport cursor position driving the hit test.
  * @param root - Active editor surface containing eligible block rows.
  * @param allowNearestContainer - Whether clipped page lanes may be chosen by proximity.
  * @returns Event carrying the one live DOM target, or null over blank space.
  */
 function withPointerDropTarget(
   event: DragMoveEvent,
+  pointer: PointerCoordinates,
   root: HTMLElement | null,
   allowNearestContainer: boolean,
 ): DragMoveEvent | null {
-  const pointer = eventPointer(event);
-  if (!pointer || !root) return null;
+  if (!root) return null;
   const candidates = new Set<HTMLElement>();
   root.ownerDocument.elementsFromPoint(pointer.x, pointer.y).forEach((element) => {
     let block = element.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
@@ -669,6 +694,7 @@ export function PageDragProvider({
   // reconciliation only if concurrent drag-time structure edits become common.
   const dragBlocks = useRef<Block[]>([]);
   const draggedSubtreeIds = useRef(new Set<string>());
+  const pointerTracker = useRef<PointerTracker | null>(null);
   const [activeIds, setActiveIds] = useState<string[]>([]);
   const placements = useMemo(createDropPlacementStore, []);
   const sensors = useSensors(
@@ -710,14 +736,26 @@ export function PageDragProvider({
     };
   }, [childDropIndent, editor, gapDropZone, placements, root]);
 
+  // A gesture abandoned by unmounting still owns a document listener.
+  useLayoutEffect(() => () => {
+    pointerTracker.current?.dispose();
+    pointerTracker.current = null;
+  }, []);
+
   const clearCrossDocumentTarget = () => {
     crossDocumentTarget.current?.controller.setPlacement(null);
     crossDocumentTarget.current = null;
   };
 
-  const updateCrossDocumentTarget = (event: DragMoveEvent): boolean => {
+  /** Ends pointer tracking once the gesture no longer needs cursor coordinates. */
+  const stopPointerTracking = () => {
+    pointerTracker.current?.dispose();
+    pointerTracker.current = null;
+  };
+
+  const updateCrossDocumentTarget = (): boolean => {
     if (editor.mode.get() !== "block") return false;
-    const pointer = eventPointer(event);
+    const pointer = pointerTracker.current?.get() ?? null;
     const controller = pointer ? findCrossDocumentPageController(root, pointer) : null;
     let handled = false;
     if (!pointer || !controller) {
@@ -741,11 +779,12 @@ export function PageDragProvider({
       ? Number(root?.dataset.edgelessZoom) || 1
       : 1;
     const blocks = dragBlocks.current.length ? dragBlocks.current : editor.blocks.getBlocks();
-    const targetedEvent = eventPointer(event)
-      ? withPointerDropTarget(event, root, editor.mode.get() === "block")
+    const pointer = pointerTracker.current?.get() ?? null;
+    const targetedEvent = pointer
+      ? withPointerDropTarget(event, pointer, root, editor.mode.get() === "block")
       : event.over?.id !== PAGE_DRAG_SURFACE_ID ? event : null;
     const placement = targetedEvent
-      ? resolveDropPlacement(targetedEvent, blocks, childDropIndent * zoom, gapDropZone)
+      ? resolveDropPlacement(targetedEvent, blocks, childDropIndent * zoom, gapDropZone, pointer)
       : null;
     if (!placement) return null;
     return draggedSubtreeIds.current.has(placement.targetId) ? null : placement;
@@ -760,6 +799,8 @@ export function PageDragProvider({
    */
   const handleDragStart = ({ active, activatorEvent }: DragStartEvent) => {
     clearCrossDocumentTarget();
+    stopPointerTracking();
+    pointerTracker.current = trackGesturePointer(activatorEvent);
     const blocks = editor.blocks.getBlocks();
     const move = selectedMoveRoots(
       blocks,
@@ -790,6 +831,7 @@ export function PageDragProvider({
     const move = activeMove.current;
     const crossDocument = crossDocumentTarget.current;
     const placement = crossDocument ? null : validPlacement(event);
+    stopPointerTracking();
     activeMove.current = undefined;
     dragBlocks.current = [];
     draggedSubtreeIds.current.clear();
@@ -852,10 +894,11 @@ export function PageDragProvider({
         autoScroll={{ canScroll: canPageDragAutoScroll }}
         onDragStart={handleDragStart}
         onDragMove={(event) => {
-          if (updateCrossDocumentTarget(event)) placements.set(null);
+          if (updateCrossDocumentTarget()) placements.set(null);
           else placements.set(validPlacement(event));
         }}
         onDragCancel={() => {
+          stopPointerTracking();
           activeMove.current = undefined;
           dragBlocks.current = [];
           draggedSubtreeIds.current.clear();
