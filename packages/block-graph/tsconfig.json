@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "baseUrl": ".",
+    "paths": { "@chulane/graph-runtime": ["../graph-runtime/src/index.ts"] }
+  },
+  "include": ["src/**/*.ts"]
+}

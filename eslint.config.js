@@ -9,7 +9,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["packages/crdt-doc/src/**/*.ts", "packages/document-model/src/**/*.ts", "packages/rivto-editor-core/src/**/*.ts", "packages/rivto-editor-core/src/**/*.tsx", "packages/react-rivto-editor/src/**/*.ts", "packages/react-rivto-editor/src/**/*.tsx"],
+    files: ["packages/crdt-doc/src/**/*.ts", "packages/document-model/src/**/*.ts", "packages/graph-runtime/src/**/*.ts", "packages/block-graph/src/**/*.ts", "packages/rivto-editor-core/src/**/*.ts", "packages/rivto-editor-core/src/**/*.tsx", "packages/react-rivto-editor/src/**/*.ts", "packages/react-rivto-editor/src/**/*.tsx"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
