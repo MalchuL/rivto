@@ -3,7 +3,10 @@
  * It demonstrates host subscriptions, undirected property sync, directed value
  * flow, and independent slot flow without depending on the Rivto document model.
  */
-import { BlockGraph, blockPropertyId, type BlockPropertyAddress, type BlockValueHost, type PropagationContext } from "./index";
+import type { PropagationContext } from "@chulane/graph-runtime";
+import { blockPropertyId, type BlockPropertyAddress } from "./addresses";
+import { BlockGraph } from "./block-graph";
+import type { BlockValueHost } from "./host";
 
 /** Runs the headless block graph example and returns its final values and calls. */
 export async function runInMemoryExample(): Promise<{ title: unknown; mirror: unknown; calls: unknown[] }> {
