@@ -130,6 +130,27 @@ describe("EditorRuntime block commands", () => {
     editor.destroy();
   });
 
+  it("evaluates dynamic defaults once per creation and conversion", () => {
+    const editor = createRivtoEditor();
+    let sequence = 0;
+    editor.blocksRegistry.defineBlock({
+      type: "dynamic",
+      defaultProps: () => ({ sequence: ++sequence, repaired: sequence }),
+      propSchema: z.object({ sequence: z.number(), repaired: z.number() }),
+    });
+
+    const first = editor.blocks.insertBlock({ type: "dynamic" });
+    const second = editor.blocks.insertBlock({ type: "dynamic" });
+    const converted = editor.blocks.insertBlock({ type: "paragraph", props: { repaired: "invalid", extra: true } });
+    editor.blocks.setBlockType(converted, "dynamic");
+
+    expect(editor.blocks.getBlock(first)?.props).toEqual({ sequence: 1, repaired: 1 });
+    expect(editor.blocks.getBlock(second)?.props).toEqual({ sequence: 2, repaired: 2 });
+    expect(editor.blocks.getBlock(converted)?.props).toEqual({ sequence: 3, repaired: 3, extra: true });
+    expect(sequence).toBe(3);
+    editor.destroy();
+  });
+
   it("clears block content and descendants without losing block-owned data", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({

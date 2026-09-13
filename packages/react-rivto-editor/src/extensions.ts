@@ -12,6 +12,7 @@ export * from "./extensions/built-ins/built-ins";
 export * from "./extensions/block-drag";
 export * from "./extensions/edgeless";
 export * from "./extensions/built-ins/separator/separator-block";
+export * from "./extensions/todo-item/todo-item";
 export {
   DEFAULT_WRITING_BLOCK_TYPE,
 } from "./extensions/built-ins/page/default-writing-block";

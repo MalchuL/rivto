@@ -1,3 +1,5 @@
+@import "./todo-item.css";
+
 :root {
   --rivto-default-block-height: 1.5em;
   --rivto-block-surface-padding: 56px 64px;
@@ -228,6 +230,7 @@
 [data-block-selecting] [data-block-content] {
   cursor: pointer;
 }
+
 
 .page-drag-handle {
   position: absolute;

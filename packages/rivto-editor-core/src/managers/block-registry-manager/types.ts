@@ -14,8 +14,8 @@ export interface BlockDefinition<Props extends Record<string, unknown> = Record<
   type: string;
   /** Human-readable name used by accessible UI. */
   title?: string;
-  /** Properties merged into caller data during editor-level creation. */
-  defaultProps?: Partial<Props>;
+  /** Properties, or a per-operation property factory, merged into caller data. */
+  defaultProps?: Partial<Props> | (() => Partial<Props>);
   /** Runtime validator for the complete property object. */
   propSchema?: ZodType<Props>;
   /**
