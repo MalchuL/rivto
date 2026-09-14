@@ -10,7 +10,7 @@ import {
   createStructuralSelection,
 } from "@chulane/rivto";
 import type { ReactEditor } from "../../../types";
-import { createEdgelessSelection, findEdgelessRuntime } from "../edgeless/edgeless-runtime";
+import { createEdgelessSelection, findEdgelessRuntime } from "../selection/edgeless-runtime";
 import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../surfaces/edgeless/block-elements";
 
 /** Canvas-specific clipboard paste strategy. */

@@ -8,7 +8,7 @@
 import { Component, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createRivtoEditor } from '@chulane/rivto';
-import { createReactEditor, EditorView, standardPreset, edgelessVisualsExtension, kanbanExtension, tableExtension, columnsExtension, bentoExtension, createKanbanBlockInput, createTableBlockInput, createColumnsBlockInput, createBentoBlockInput } from '@chulane/rivto-react';
+import { createReactEditor, EditorView, standardPreset, pageDragExtension, edgelessPreset, edgelessVisualsExtension, kanbanExtension, tableExtension, columnsExtension, bentoExtension, createKanbanBlockInput, createTableBlockInput, createColumnsBlockInput, createBentoBlockInput } from '@chulane/rivto-react';
 import { parseDocument, exportMarkdown, type DocumentFile } from './documents';
 import { DEFAULT_SETTINGS, SettingsDialog, type Settings } from './settings';
 import '@chulane/rivto-react/styles.css';
@@ -42,7 +42,7 @@ function readSettings(): Settings {
 function createSession() {
   const settings = readSettings();
   const editor = createRivtoEditor();
-  const reactEditor = createReactEditor({ editor, extensions: [standardPreset(), edgelessVisualsExtension(), kanbanExtension(), tableExtension(), columnsExtension(), bentoExtension()] });
+  const reactEditor = createReactEditor({ editor, extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset(), edgelessVisualsExtension(), kanbanExtension(), tableExtension(), columnsExtension(), bentoExtension()] });
   let error = '';
   for (const [id, keys] of Object.entries(settings.keymap)) {
     try { reactEditor.keyboard.setKeymapOverride(id, keys); }

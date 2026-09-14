@@ -11,10 +11,10 @@
 import { createTestCoreEditor } from "../test-utils";
 import { createReactEditor } from "../react-editor";
 import { defaultWritingBlockExtension } from "../extensions/built-ins/built-ins";
-import { bentoExtension, createBentoBlockInput, BENTO_BLOCK_TYPE } from "../extensions/built-ins/bento/bento";
-import { kanbanExtension, createKanbanBlockInput } from "../extensions/built-ins/kanban/kanban";
-import { columnsExtension, createColumnsBlockInput } from "../extensions/built-ins/columns/columns";
-import { tableExtension, createTableBlockInput, TABLE_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE } from "../extensions/built-ins/table/table";
+import { bentoExtension, createBentoBlockInput, BENTO_BLOCK_TYPE } from "../extensions/containers/bento/bento";
+import { kanbanExtension, createKanbanBlockInput } from "../extensions/containers/kanban/kanban";
+import { columnsExtension, createColumnsBlockInput } from "../extensions/containers/columns/columns";
+import { tableExtension, createTableBlockInput, TABLE_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE } from "../extensions/containers/table/table";
 import { getBlockContainment } from "../managers/blocks/block-types";
 import { indentBlocks, outdentBlocks } from "./ops/outline-ops";
 

@@ -35,9 +35,9 @@ const analyticsExtension = (): ReactEditorExtension => ({
 
 - **`trailingBlockCount?: number`:** количество page-end add buttons; default `3`, positive integer.
 - **`writing?: DefaultWritingBlockOptions`:** custom default writing type/renderer/factory/link handler.
-- **`edgeless?: EdgelessSurfaceOptions`:** snapping store, card width и overlap policy.
+Preset устанавливает writing/error/separator blocks, page surface, history, text/block selection, slash/list/clipboard, navigation, indent/outdent, Enter/merge/delete, collapse и trailing controls.
 
-Preset устанавливает writing/error/separator blocks, обе surfaces, history, text/block selection, slash/list/clipboard, navigation, indent/outdent, Enter/merge/delete, collapse, trailing controls, drag и базовые edgeless interactions.
+Drag подключается через `pageDragExtension()`. Canvas surface и interactions подключаются через `...edgelessPreset({ surface })`.
 
 `edgelessVisualsExtension()` намеренно не входит в preset: visual shapes — opt-in product feature.
 
@@ -76,7 +76,8 @@ import {
 | Selection | `textSelectionExtension`, `blockSelectionExtension`, `selectionDeletionExtension` |
 | Navigation | `caretNavigationExtension`, `blockSelectionNavigationExtension`, `keyboardBlockMoveExtension` |
 | Writing | `blockCreationExtension`, `blockMergeExtension`, `blockOutdentExtension`, `emptyBlockResetExtension`, `indentExtension` |
-| Page UI | `trailingBlockExtension`, `collapseExtension`, `listShortcutsExtension`, `pageDragExtension`, `slashCommandExtension` |
+| Page UI | `trailingBlockExtension`, `collapseExtension`, `listShortcutsExtension`, `slashCommandExtension` |
+| Optional drag | `pageDragExtension` |
 | Edgeless | `edgelessSelectionExtension`, `edgelessTransformExtension`, `edgelessDeletionExtension`, `edgelessMovementExtension` |
 
 ## Extension ordering

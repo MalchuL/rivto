@@ -21,7 +21,7 @@ import {
   parseShortcut,
   resolveSelectionEndpoints,
 } from "../../../managers";
-import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
+import { findEdgelessRuntime } from "../selection/edgeless-runtime";
 import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
 import { blockIdsOf } from "../../../surfaces/edgeless/block-elements";
 import { ElementPasteStrategy } from "./element-paste-strategy";

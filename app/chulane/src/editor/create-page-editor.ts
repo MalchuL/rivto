@@ -14,7 +14,9 @@ import {
 } from "@chulane/rivto";
 import {
   createReactEditor,
+  edgelessPreset,
   edgelessVisualsExtension,
+  pageDragExtension,
   standardPreset,
   type MarkdownLinkClick,
   type ReactEditor,
@@ -70,6 +72,8 @@ export function createPageEditor(options: {
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      pageDragExtension(),
+      ...edgelessPreset(),
       edgelessVisualsExtension(),
     ],
   });

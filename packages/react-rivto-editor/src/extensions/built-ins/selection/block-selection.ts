@@ -6,7 +6,7 @@ import type { ReactEditor } from "../../../types";
 import { toggleBlockSelection } from "../page/navigation";
 import { hasBlockRanges } from "@chulane/rivto";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
-import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
+import { findEdgelessRuntime } from "./edgeless-runtime";
 
 /**
  * Adds explicit whole-block selection to every editor surface.

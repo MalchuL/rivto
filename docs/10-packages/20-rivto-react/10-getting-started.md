@@ -70,6 +70,7 @@ function Toolbar() {
 ## Частые ошибки
 
 - Runtime внутри каждого render теряет selection/history и создаёт listeners заново.
+- `standardPreset()` включает page surface; edgeless mode требует `...edgelessPreset()`.
 - Без `standardPreset()` нужно самостоятельно зарегистрировать surface и writing behavior.
 - Без styles layout, selection и overlays отображаются неверно.
 - Prop `EditorView.editor` принимает `ReactEditor`, а не core editor.

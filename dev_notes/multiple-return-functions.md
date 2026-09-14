@@ -39,22 +39,22 @@ Marked: 56 changed, 24 guard-only.
 - <anonymous>:286 (2 returns, guards only)
 - handleDocumentClipboard:303 (3 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/edgeless-deletion.ts
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/edgeless-deletion.ts
 - when:29 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/edgeless-movement.ts
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/edgeless-movement.ts
 - move:10 (2 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/edgeless-runtime.ts
+## [ O ] packages/react-rivto-editor/src/extensions/built-ins/selection/edgeless-runtime.ts
 - <anonymous>:37 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/edgeless-selection.tsx
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/edgeless-selection.tsx
 - <anonymous>:65 (4 returns, guards only)
 - <anonymous>:121 (3 returns, guards only)
 - <anonymous>:148 (2 returns, guards only)
 - <anonymous>:186 (3 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/edgeless-transform.ts
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/edgeless-transform.ts
 - <anonymous>:69 (2 returns, guards only)
 - previewFrame:89 (2 returns, guards only)
 - ensureOverlay:107 (2 returns, guards only)
@@ -63,22 +63,22 @@ Marked: 56 changed, 24 guard-only.
 - <anonymous>:470 (2 returns, guards only)
 - finish:503 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/components/creation-panel.tsx
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/visuals/components/creation-panel.tsx
 - (no remaining multiple returns)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/components/drawing-capture.tsx
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/visuals/components/drawing-capture.tsx
 - (no remaining multiple returns)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/components/tool-bar.tsx
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/visuals/components/tool-bar.tsx
 - <anonymous>:60 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/components/visual-element.tsx
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/visuals/components/visual-element.tsx
 - (no remaining multiple returns)
 
-## [ O ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/components/visual-properties.tsx
+## [ O ] packages/react-rivto-editor/src/extensions/edgeless/visuals/components/visual-properties.tsx
 - onPointerDown:54 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/controller.ts
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/visuals/controller.ts
 - <anonymous>:110 (3 returns, guards only)
 - <anonymous>:191 (2 returns, guards only)
 - write:523 (2 returns, guards only)
@@ -86,30 +86,30 @@ Marked: 56 changed, 24 guard-only.
 - duplicateSelection:678 (2 returns, guards only)
 - <anonymous>:685 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/hooks/use-drawing-gesture.ts
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/visuals/hooks/use-drawing-gesture.ts
 - hoverFor:119 (3 returns, guards only)
 - cancelGesture:141 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/hooks/use-preset-drag.ts
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/visuals/hooks/use-preset-drag.ts
 - movePresetDrag:89 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/utils/connector-path.ts
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/visuals/utils/connector-path.ts
 - segmentCutsInterior:144 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/utils/creation-geometry.ts
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/visuals/utils/creation-geometry.ts
 - (no remaining multiple returns)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/utils/geometry-core.ts
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/visuals/utils/geometry-core.ts
 - (no remaining multiple returns)
 
-## [ O ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/utils/geometry.test.ts
+## [ O ] packages/react-rivto-editor/src/extensions/edgeless/visuals/utils/geometry.test.ts
 - <anonymous>:57 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/utils/geometry.ts
+## [ X ] packages/react-rivto-editor/src/extensions/edgeless/visuals/utils/geometry.ts
 - unionFrames:35 (2 returns, guards only)
 - betterSnap:68 (2 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/visual-layer.tsx
+## [ O ] packages/react-rivto-editor/src/extensions/edgeless/visuals/visual-layer.tsx
 - EdgelessVisualLayer:20 (2 returns, guards only)
 - <anonymous>:76 (2 returns, guards only)
 - onContextMenu:79 (2 returns, guards only)

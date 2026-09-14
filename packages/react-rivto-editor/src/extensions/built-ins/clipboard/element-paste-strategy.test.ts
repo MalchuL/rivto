@@ -1,7 +1,7 @@
 /** Element paste recreates visual-only clipboard bundles in edgeless mode. */
 import { createReactEditor } from "../../../react-editor";
 import { createTestCoreEditor } from "../../../test-utils";
-import { findEdgelessRuntime, installEdgelessRuntime } from "../edgeless/edgeless-runtime";
+import { findEdgelessRuntime, installEdgelessRuntime } from "../selection/edgeless-runtime";
 import { ElementPasteStrategy } from "./element-paste-strategy";
 
 describe("ElementPasteStrategy", () => {

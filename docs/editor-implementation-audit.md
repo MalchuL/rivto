@@ -57,7 +57,7 @@ Selection normalization intentionally returns a one-block range for a caret ([se
 
 ### 8. Structured clipboard input is not a real trust boundary
 
-Core parses JSON directly and aborts instead of falling back to text ([clipboard-manager.ts:84](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L84)). The remapper ignores schema version, duplicate IDs, most field types, link shapes, and cycles ([clipboard.ts:150](../packages/rivto-editor-core/src/managers/clipboard-manager/utils/clipboard.ts#L150)). Reproduction accepted `version: 999`. React repeats direct parsing at [clipboard.ts:140](../packages/react-rivto-editor/src/extensions/built-ins/clipboard/clipboard.ts#L140), and the edgeless controller has another bespoke parser ([controller.ts:630](../packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/controller.ts#L630)). Centralize one complete validator, reject ambiguous IDs/cycles before mutation, and fall back to safe text when custom MIME is invalid.
+Core parses JSON directly and aborts instead of falling back to text ([clipboard-manager.ts:84](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L84)). The remapper ignores schema version, duplicate IDs, most field types, link shapes, and cycles ([clipboard.ts:150](../packages/rivto-editor-core/src/managers/clipboard-manager/utils/clipboard.ts#L150)). Reproduction accepted `version: 999`. React repeats direct parsing at [clipboard.ts:140](../packages/react-rivto-editor/src/extensions/built-ins/clipboard/clipboard.ts#L140), and the edgeless controller has another bespoke parser ([controller.ts:630](../packages/react-rivto-editor/src/extensions/edgeless/visuals/controller.ts#L630)). Centralize one complete validator, reject ambiguous IDs/cycles before mutation, and fall back to safe text when custom MIME is invalid.
 
 ### 9. The keyboard manager cannot report its installed/effective bindings
 
@@ -89,7 +89,7 @@ One semantic keydown action sets a closure boolean, while a separately configura
 
 ### 16. Cross-document DOM support is inconsistent
 
-`EventManager` correctly resolves `Element` from `root.ownerDocument.defaultView` ([event-manager.ts:253](../packages/react-rivto-editor/src/managers/events/event-manager.ts#L253)), but selection and edgeless extensions use global constructors and global `Node` constants, including [editor-dom-selection.ts:240](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L240), [text-selection.ts:141](../packages/react-rivto-editor/src/extensions/built-ins/selection/text-selection.ts#L141), and [edgeless-deletion.ts:28](../packages/react-rivto-editor/src/extensions/built-ins/edgeless/edgeless-deletion.ts#L28). An editor in an iframe/other window can fail target checks and lose selection or keyboard behavior. Consistently use the root's realm or node-type duck typing, and add a foreign-document integration test.
+`EventManager` correctly resolves `Element` from `root.ownerDocument.defaultView` ([event-manager.ts:253](../packages/react-rivto-editor/src/managers/events/event-manager.ts#L253)), but selection and edgeless extensions use global constructors and global `Node` constants, including [editor-dom-selection.ts:240](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L240), [text-selection.ts:141](../packages/react-rivto-editor/src/extensions/built-ins/selection/text-selection.ts#L141), and [edgeless-deletion.ts:28](../packages/react-rivto-editor/src/extensions/edgeless/edgeless-deletion.ts#L28). An editor in an iframe/other window can fail target checks and lose selection or keyboard behavior. Consistently use the root's realm or node-type duck typing, and add a foreign-document integration test.
 
 ## Medium-priority correctness and API findings
 
@@ -159,7 +159,7 @@ The parser splits on every `+`, drops empty pieces, and deduplicates modifiers t
 
 ### 33. Edgeless popovers listen on the global window
 
-Toolbar and properties UI use global `window`/`Node` ([tool-bar.tsx:58](../packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/components/tool-bar.tsx#L58); [visual-properties.tsx:35](../packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/components/visual-properties.tsx#L35)). Foreign-document/portal UI listens in the wrong realm. Use the panel's `ownerDocument.defaultView` or route through the event manager.
+Toolbar and properties UI use global `window`/`Node` ([tool-bar.tsx:58](../packages/react-rivto-editor/src/extensions/edgeless/visuals/components/tool-bar.tsx#L58); [visual-properties.tsx:35](../packages/react-rivto-editor/src/extensions/edgeless/visuals/components/visual-properties.tsx#L35)). Foreign-document/portal UI listens in the wrong realm. Use the panel's `ownerDocument.defaultView` or route through the event manager.
 
 ### 34. Caret geometry performs synchronous layout once per character
 

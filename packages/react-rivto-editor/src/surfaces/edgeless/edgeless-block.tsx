@@ -9,7 +9,7 @@
  */
 import type { EditorElement } from "@chulane/rivto";
 import { memo, useLayoutEffect, useRef, type CSSProperties } from "react";
-import { useEdgelessSelected } from "../../extensions/built-ins/edgeless/edgeless-runtime";
+import { useEdgelessSelected } from "../../extensions/built-ins/selection/edgeless-runtime";
 import { BlockTree, ElementSlots } from "../../blocks";
 import { useReactEditor } from "../../hooks";
 

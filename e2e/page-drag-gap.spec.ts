@@ -117,6 +117,60 @@ test("keeps a block in place from the top edge of the block below", async ({ pag
   )).toEqual(before);
 });
 
+test("drops a block after the last root container", async ({ page }) => {
+  const roots = page.locator(`.page-surface > [data-block-id]`);
+  const alpha = roots.filter({ has: page.getByText("Alpha", { exact: true }) });
+  const beta = roots.filter({ has: page.getByText("Beta", { exact: true }) });
+  const board = page.locator('[data-block-type="kanban"]');
+  const alphaId = await alpha.getAttribute("data-block-id");
+  const betaId = await beta.getAttribute("data-block-id");
+  const boardId = await board.getAttribute("data-block-id");
+  const boardBox = (await board.boundingBox())!;
+
+  await holdDragAt(page, alpha, boardBox.x + CHILD_DROP_INDENT / 2, boardBox.y + boardBox.height + 12);
+  const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
+  await expect(line).toBeVisible();
+  const lineBox = (await line.boundingBox())!;
+  expect(lineBox.y + lineBox.height / 2).toBeCloseTo(boardBox.y + boardBox.height, 0);
+  await page.mouse.up();
+
+  await expect.poll(() => roots.evaluateAll(
+    (blocks) => blocks.map((block) => block.getAttribute("data-block-id")),
+  )).toEqual([betaId, boardId, alphaId]);
+});
+
+test("drops a block before the first root container", async ({ page }) => {
+  const roots = page.locator(`.page-surface > [data-block-id]`);
+  const alpha = roots.filter({ has: page.getByText("Alpha", { exact: true }) });
+  const beta = roots.filter({ has: page.getByText("Beta", { exact: true }) });
+  const board = page.locator('[data-block-type="kanban"]');
+  const alphaId = await alpha.getAttribute("data-block-id");
+  const betaId = await beta.getAttribute("data-block-id");
+  const boardId = await board.getAttribute("data-block-id");
+  await page.evaluate(({ alphaId, betaId, boardId }) => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    editor.load({
+      ...editor.dump(),
+      blocks: [boardId, alphaId, betaId].map((id) => editor.blocks.getBlock(id!)!),
+      elements: [],
+    });
+  }, { alphaId, betaId, boardId });
+  const boardBox = (await board.boundingBox())!;
+
+  await holdDragAt(page, beta, boardBox.x + CHILD_DROP_INDENT / 2, boardBox.y - 12);
+  const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
+  await expect(line).toBeVisible();
+  const lineBox = (await line.boundingBox())!;
+  expect(lineBox.y + lineBox.height / 2).toBeCloseTo(boardBox.y, 0);
+  await page.mouse.up();
+
+  await expect.poll(() => roots.evaluateAll(
+    (blocks) => blocks.map((block) => block.getAttribute("data-block-id")),
+  )).toEqual([betaId, boardId, alphaId]);
+});
+
 test("hovering a row body still puts the drop inside that block", async ({ page }) => {
   const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
   const beta = page.locator("[data-block-id]").filter({ has: page.getByText("Beta", { exact: true }) }).first();

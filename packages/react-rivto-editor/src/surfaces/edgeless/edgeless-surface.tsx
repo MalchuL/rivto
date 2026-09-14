@@ -26,8 +26,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createCaretSelection } from "@chulane/rivto";
-import { EdgelessToolButton } from "../../extensions/built-ins/edgeless/visuals/components/tool-button";
-import { EDGELESS_GRID_SIZE } from "../../extensions/built-ins/edgeless/visuals/utils/geometry";
+import { EdgelessToolButton } from "../../extensions/edgeless/visuals/components/tool-button";
+import { EDGELESS_GRID_SIZE } from "../../extensions/edgeless/visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
 import {
   blockIdsOf,

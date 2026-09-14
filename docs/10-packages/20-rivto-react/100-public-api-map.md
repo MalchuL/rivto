@@ -7,7 +7,7 @@
 Основной entry экспортирует:
 
 - `createReactEditor`, `EditorView`, runtime types;
-- `standardPreset`, `blockExtension`, `edgelessSurfaceExtension`;
+- `standardPreset`, `blockExtension`, `pageDragExtension`, `edgelessPreset`, `edgelessSurfaceExtension`;
 - default writing, separator и error block APIs;
 - `edgelessVisualsExtension` и visual types;
 - hooks;
@@ -17,7 +17,7 @@
 
 ### `@chulane/rivto-react/extensions`
 
-Экспортирует полный catalog individual built-in extension factories плюс block/default-writing/separator/edgeless visual contracts. Используйте subpath для custom preset; для обычного editor достаточно root `standardPreset()`.
+Экспортирует полный catalog individual extension factories плюс block/default-writing/separator/edgeless visual contracts. Используйте subpath для custom preset; drag и edgeless features подключаются отдельно от `standardPreset()`.
 
 ### `@chulane/rivto-react/styles.css`
 
@@ -68,7 +68,9 @@ demo/src/
 
 | Задача | Использовать |
 | --- | --- |
-| Обычный editor | `standardPreset()` |
+| Обычный page editor | `standardPreset()` |
+| Block drag | `pageDragExtension()` |
+| Canvas editor | `standardPreset()` + `...edgelessPreset()` |
 | Custom native block | `blockExtension()` + `useBlockEditing()` |
 | Toolbar | children `EditorView` + hooks |
 | Custom keyboard behavior | `useKeyboardEvent()` или extension `keyboard.register()` |

@@ -15,12 +15,6 @@ import type { BlockListType } from "./page/list";
 import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard/clipboard";
 import { registerHistory, type HistoryExtensionOptions } from "./history/history";
 import { registerTextSelection } from "./selection/text-selection";
-import { EdgelessInteractionOverlay } from "./edgeless/edgeless-selection";
-import { installEdgelessRuntime } from "./edgeless/edgeless-runtime";
-import { registerEdgelessDeletion } from "./edgeless/edgeless-deletion";
-import { registerEdgelessMovement } from "./edgeless/edgeless-movement";
-import { registerEdgelessTransform } from "./edgeless/edgeless-transform";
-import { EdgelessElementDragSlot } from "./edgeless/edgeless-drag-handle";
 import {
   registerBlockSelectionNavigation,
   registerCaretNavigation,
@@ -31,18 +25,12 @@ import { registerBlockOutdent } from "./page/block-outdent";
 import { registerEmptyBlockReset } from "./page/empty-block-reset";
 import { registerBlockSelection } from "./selection/block-selection";
 import { registerCollapse } from "./page/collapse";
-import {
-  registerPageDrag,
-  type PageDragExtensionOptions,
-} from "./page/drag";
 import { registerBlockCreation } from "./page/block-creation";
 import { SlashMenu } from "./slash/slash-menu";
 import { registerSelectionDeletion } from "./selection/selection-deletion";
 import { registerTrailingBlock } from "./page/trailing-block";
 import { registerIndent, type IndentExtensionOptions } from "./page/indent";
 import { registerListShortcuts } from "./page/list";
-import type { EdgelessSurfaceOptions } from "../../surfaces/edgeless";
-import { registerEdgelessSurface } from "./edgeless/register";
 import { separatorBlockExtension } from "./separator/separator-block";
 import { registerDefaultWritingBlock } from "./page/default-writing-block/register";
 import type { DefaultWritingBlockOptions } from "./page/default-writing-block/types";
@@ -78,19 +66,6 @@ export const pageSurfaceExtension = (): ReactEditorExtension => ({
   setup: (reactEditor) => {
     reactEditor.surfaces.register("block", PageSurface);
   },
-});
-
-/**
- * Creates the built-in positioned-card surface extension.
- *
- * @param options - Snapping, overlap, and card-width configuration.
- * @returns The configured edgeless surface definition.
- */
-export const edgelessSurfaceExtension = (
-  options: EdgelessSurfaceOptions = {},
-): ReactEditorExtension => ({
-  id: "surface.edgeless",
-  setup: (reactEditor) => registerEdgelessSurface(reactEditor, options),
 });
 
 /**
@@ -213,61 +188,6 @@ export const collapseExtension = (): ReactEditorExtension => ({
   id: "block.collapse",
   setup: registerCollapse,
 });
-
-/** @returns Root-card click, toggle, and rectangle selection in edgeless mode. */
-export const edgelessSelectionExtension = (): ReactEditorExtension =>
-  ({
-    id: "selection.edgeless",
-    setup: (reactEditor) => {
-      const disposeRuntime = installEdgelessRuntime(reactEditor);
-      reactEditor.extensions.mount(EdgelessInteractionOverlay);
-      return disposeRuntime;
-    },
-  });
-
-/** @returns Atomic Backspace/Delete removal of selected canvas blocks. */
-export const edgelessDeletionExtension = (): ReactEditorExtension =>
-  ({ id: "selection.edgeless-delete", setup: registerEdgelessDeletion });
-
-/** @returns One- or ten-pixel keyboard movement of selected canvas roots. */
-export const edgelessMovementExtension = (): ReactEditorExtension =>
-  ({ id: "movement.edgeless", setup: registerEdgelessMovement });
-
-/** @returns Pointer drag and resize interactions for edgeless root cards. */
-export const edgelessTransformExtension = (): ReactEditorExtension => ({
-  id: "transform.edgeless",
-  setup: (reactEditor) => {
-    reactEditor.surfaces.registerElementSlot({
-      position: "left-top",
-      priority: 100,
-      component: EdgelessElementDragSlot,
-      mode: "edgeless",
-      when: ({ element, selected }) => selected && element.type !== "connector",
-    });
-    return registerEdgelessTransform(reactEditor);
-  },
-});
-
-/** Page drag configuration excluding the wrapper-owned React children slot. */
-export type PageDragOptions = Omit<PageDragExtensionOptions, "children">;
-
-/**
- * Creates structural drag-and-drop behavior for both built-in modes.
- *
- * The editor wrapper owns dnd-kit's gesture runtime and overlay. Registered
- * block wrappers connect each recursively rendered row to that boundary. Keeping
- * these registrations together guarantees that a wrapper is never installed
- * without its required editor-wide context.
- *
- * @param options - Pointer activation and page drop-zone tuning.
- * @returns Functional React editor extension installed by createReactEditor.
- */
-export const pageDragExtension = (options: PageDragOptions = {}): ReactEditorExtension => {
-  return {
-    id: "drag.page",
-    setup: (reactEditor) => registerPageDrag(reactEditor, options),
-  };
-};
 
 /**
  * Adds the inline command menu and generic structural block actions.
@@ -410,18 +330,16 @@ export interface StandardPresetOptions {
   readonly trailingBlockCount?: number;
   /** Host overrides for the default writing block extension. */
   readonly writing?: DefaultWritingBlockOptions;
-  /** Host-owned edgeless viewport settings. */
-  readonly edgeless?: EdgelessSurfaceOptions;
 }
 
 /**
- * Complete built-in editing behavior used by normal Rivto applications.
+ * Standard page editing behavior used by normal Rivto applications.
  *
  * Installs `defaultWritingBlockExtension` first so writing factories exist
  * before separator, clipboard, Enter, and related paths run.
  *
  * @param options - Trailing-block count and optional writing overrides.
- * @returns The complete built-in extension preset.
+ * @returns The standard page extension preset without optional drag or canvas features.
  */
 export const standardPreset = (
   options: StandardPresetOptions = {},
@@ -432,7 +350,6 @@ export const standardPreset = (
     errorBlockExtension(),
     separatorBlockExtension(),
     pageSurfaceExtension(),
-    edgelessSurfaceExtension(options.edgeless),
     historyExtension(),
     textSelectionExtension(),
     slashCommandExtension(),
@@ -450,11 +367,6 @@ export const standardPreset = (
     blockOutdentExtension(),
     blockMergeExtension(),
     emptyBlockResetExtension(),
-    pageDragExtension(),
-    edgelessSelectionExtension(),
-    edgelessTransformExtension(),
-    edgelessDeletionExtension(),
-    edgelessMovementExtension(),
   ];
   return {
     id: "rivto.standard",

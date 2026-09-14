@@ -20,6 +20,8 @@ import {
 } from "@chulane/rivto-react";
 import {
   blockExtension,
+  edgelessPreset,
+  pageDragExtension,
   standardPreset,
 } from "@chulane/rivto-react/extensions";
 
@@ -32,6 +34,8 @@ const reactEditor = createReactEditor({
         slashCommand: { group: "Formatting" },
       },
     }),
+    pageDragExtension(),
+    ...edgelessPreset(),
     blockExtension({
       definition: cardDefinition,
       render: CardContent,
@@ -54,10 +58,12 @@ defaults. Hosts that skip `standardPreset` must install
 `defaultWritingBlockExtension` (or call `installDefaultWriting`) before
 keyboard/clipboard paths that create writing blocks.
 
-`standardPreset()` installs the complete page and edgeless editing experience:
-surfaces, selection bridges, history, clipboard, slash commands, navigation,
-indent/outdent, creation/merge/delete, collapse, drag, canvas interactions, the
-explicit separator block, and the page's trailing paragraph-creation affordance.
+`standardPreset()` installs page editing: the page surface, selection bridges,
+history, clipboard, slash commands, navigation, indent/outdent,
+creation/merge/delete, collapse, the explicit separator block, and the page's
+trailing paragraph-creation affordance. Block drag is opt-in through
+`pageDragExtension()`; the edgeless surface and interactions are opt-in through
+`...edgelessPreset()`.
 `/Separator` or `Primary+Shift+Enter` inserts a real separator plus a focused
 paragraph below it. Root separators partition edgeless cards; nested separators
 remain ordinary rendered blocks.

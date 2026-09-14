@@ -1,15 +1,16 @@
 /**
  * Complete public extension catalog for `@chulane/rivto-react/extensions`.
  *
- * This secondary package entry point exposes individual built-in factories and
- * their supporting contracts so applications can assemble custom presets. The
- * primary package entry keeps a smaller curated surface for ordinary editor
- * setup; both entry points preserve the same underlying extension identities.
+ * This secondary package entry point exposes standard built-ins plus optional
+ * block-drag, edgeless, and container factories so applications can assemble
+ * custom presets. The primary package entry keeps a smaller curated surface;
+ * both entry points preserve the same underlying extension identities.
  *
  * @module
  */
 export * from "./extensions/built-ins/built-ins";
-export * from "./extensions/built-ins/edgeless/visuals";
+export * from "./extensions/block-drag";
+export * from "./extensions/edgeless";
 export * from "./extensions/built-ins/separator/separator-block";
 export {
   DEFAULT_WRITING_BLOCK_TYPE,
@@ -31,9 +32,9 @@ export {
   createKanbanBlockInput,
   KANBAN_BLOCK_TYPE,
   KANBAN_COLUMN_BLOCK_TYPE,
-} from "./extensions/built-ins/kanban/kanban";
+} from "./extensions/containers/kanban/kanban";
 
-export { Bento, bentoExtension, createBentoBlockInput, BENTO_BLOCK_TYPE } from "./extensions/built-ins/bento/bento";
+export { Bento, bentoExtension, createBentoBlockInput, BENTO_BLOCK_TYPE } from "./extensions/containers/bento/bento";
 export {
   Columns,
   columnsExtension,
@@ -45,7 +46,7 @@ export {
   COLUMNS_DEFAULT_COUNT,
   COLUMNS_MIN_COUNT,
   COLUMNS_MAX_COUNT,
-} from "./extensions/built-ins/columns/columns";
+} from "./extensions/containers/columns/columns";
 export {
   Table,
   tableExtension,
@@ -56,7 +57,7 @@ export {
   TABLE_CELL_BLOCK_TYPE,
   TABLE_DEFAULT_COLUMN_WIDTH,
   type TableCellProps,
-} from "./extensions/built-ins/table/table";
+} from "./extensions/containers/table/table";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal";
 export { BaseBlockView, ContainerBlockView } from "./views";
 export type {

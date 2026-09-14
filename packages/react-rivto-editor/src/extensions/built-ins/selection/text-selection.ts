@@ -17,7 +17,7 @@ import {
 } from "../../../constants";
 import type { ReactEditor } from "../../../types";
 import { isElementNode } from "../../../managers/events/dom-nodes";
-import { findEdgelessRuntime } from "../edgeless/edgeless-runtime";
+import { findEdgelessRuntime } from "./edgeless-runtime";
 import {
   createVisibleStructuralSelection,
   createDOMSelection,

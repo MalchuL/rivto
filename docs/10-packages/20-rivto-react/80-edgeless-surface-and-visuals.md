@@ -2,7 +2,13 @@
 
 ## Базовая edgeless surface
 
-`standardPreset()` уже регистрирует `edgelessSurfaceExtension()`. Mode переключается локально:
+Canvas extensions подключаются отдельно от `standardPreset()`:
+
+```ts
+extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset()]
+```
+
+Mode переключается локально:
 
 ```tsx
 const { setMode } = useEditorMode();
@@ -51,7 +57,7 @@ const visuals = edgelessVisualsExtension({
 
 const reactEditor = createReactEditor({
   editor,
-  extensions: [standardPreset(), visuals],
+  extensions: [standardPreset(), ...edgelessPreset(), visuals],
 });
 ```
 

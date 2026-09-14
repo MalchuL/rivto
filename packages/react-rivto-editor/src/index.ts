@@ -16,10 +16,16 @@ export * from "./hooks";
 export {
   blockExtension,
   defaultWritingBlockExtension,
-  edgelessSurfaceExtension,
   standardPreset,
 } from "./extensions/built-ins/built-ins";
 export type { StandardPresetOptions } from "./extensions/built-ins/built-ins";
+export { pageDragExtension } from "./extensions/block-drag";
+export type { PageDragOptions } from "./extensions/block-drag";
+export {
+  edgelessPreset,
+  edgelessSurfaceExtension,
+} from "./extensions/edgeless";
+export type { EdgelessPresetOptions } from "./extensions/edgeless";
 export {
   DEFAULT_WRITING_BLOCK_TYPE,
 } from "./extensions/built-ins/page/default-writing-block";
@@ -66,7 +72,7 @@ export { type BlockElementProps } from "./surfaces/edgeless";
 export {
   EdgelessSnappingStore,
 } from "./surfaces/edgeless";
-export type { EdgelessSelectionSnapshot } from "./extensions/built-ins/edgeless/edgeless-runtime";
+export type { EdgelessSelectionSnapshot } from "./extensions/built-ins/selection/edgeless-runtime";
 export type {
   EdgelessSnappingSnapshot,
   EdgelessSurfaceOptions,
@@ -74,7 +80,7 @@ export type {
 export {
   EdgelessVisualsExtension,
   edgelessVisualsExtension,
-} from "./extensions/built-ins/edgeless/visuals";
+} from "./extensions/edgeless";
 export type {
   CreateVisualPayload,
   ConnectorEndpoint,
@@ -97,7 +103,7 @@ export type {
   UpdateVisualPayload,
   VisualFrame,
   VisualGroup,
-} from "./extensions/built-ins/edgeless/visuals";
+} from "./extensions/edgeless/visuals";
 export {
   readEditorDOMSelection,
   restoreEditorDOMSelection,
@@ -146,9 +152,9 @@ export {
   createKanbanBlockInput,
   KANBAN_BLOCK_TYPE,
   KANBAN_COLUMN_BLOCK_TYPE,
-} from "./extensions/built-ins/kanban/kanban";
+} from "./extensions/containers/kanban/kanban";
 
-export { Bento, bentoExtension, createBentoBlockInput, BENTO_BLOCK_TYPE } from "./extensions/built-ins/bento/bento";
+export { Bento, bentoExtension, createBentoBlockInput, BENTO_BLOCK_TYPE } from "./extensions/containers/bento/bento";
 export {
   Columns,
   columnsExtension,
@@ -160,7 +166,7 @@ export {
   COLUMNS_DEFAULT_COUNT,
   COLUMNS_MIN_COUNT,
   COLUMNS_MAX_COUNT,
-} from "./extensions/built-ins/columns/columns";
+} from "./extensions/containers/columns/columns";
 export {
   Table,
   tableExtension,
@@ -171,7 +177,7 @@ export {
   TABLE_CELL_BLOCK_TYPE,
   TABLE_DEFAULT_COLUMN_WIDTH,
   type TableCellProps,
-} from "./extensions/built-ins/table/table";
+} from "./extensions/containers/table/table";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal";
 export { BaseBlockView, ContainerBlockView } from "./views";
 export type {

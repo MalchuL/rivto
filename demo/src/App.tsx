@@ -12,9 +12,11 @@ import {
   createColumnsBlockInput,
   DEFAULT_WRITING_BLOCK_TYPE,
   type MarkdownLinkClick,
+  edgelessPreset,
   edgelessVisualsExtension,
   EditorView,
   KEYBOARD_BINDING_IDS,
+  pageDragExtension,
   SEPARATOR_BLOCK_TYPE,
   standardPreset,
   useEditor,
@@ -215,6 +217,8 @@ function createDemoEditor() {
     keymap: alternateKeymap,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      pageDragExtension(),
+      ...edgelessPreset(),
       edgelessVisuals,
       blockIdExtension(),
       ...customBlockExtensions,
@@ -414,6 +418,8 @@ function createEmptyDemoEditor() {
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      pageDragExtension(),
+      ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
@@ -565,6 +571,8 @@ function createMultiEditor(
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      pageDragExtension(),
+      ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
@@ -688,6 +696,8 @@ function createSyncedPeer(side: "left" | "right", roomId: string) {
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      pageDragExtension(),
+      ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
