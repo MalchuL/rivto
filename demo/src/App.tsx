@@ -5,6 +5,7 @@ import {
   YjsDoc,
 } from "@chulane/rivto";
 import {
+  commentsExtension,
   createReactEditor,
   DEFAULT_WRITING_BLOCK_TYPE,
   type MarkdownLinkClick,
@@ -26,6 +27,11 @@ import {
   blockIdExtension,
   BlockIdsVisibleProvider,
 } from "./extensions/block-id";
+
+/** Creates one comments instance with demo attribution for each editor runtime. */
+const demoCommentsExtension = () => commentsExtension({
+  author: { id: "demo-user", name: "Demo User" },
+});
 
 /**
  * Intercepts custom Markdown link protocols (`rivto:` / `chulane:`).
@@ -193,6 +199,7 @@ function createDemoEditor() {
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       edgelessVisuals,
       blockIdExtension(),
+      demoCommentsExtension(),
       ...customBlockExtensions,
     ],
   });
@@ -344,6 +351,7 @@ function createEmptyDemoEditor() {
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
+      demoCommentsExtension(),
       ...customBlockExtensions,
     ],
   });
@@ -493,6 +501,7 @@ function createMultiEditor(
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
+      demoCommentsExtension(),
       ...customBlockExtensions,
     ],
   });
@@ -635,6 +644,7 @@ function createSyncedPeer(side: "left" | "right", roomId: string) {
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
+      demoCommentsExtension(),
       ...customBlockExtensions,
     ],
   });
