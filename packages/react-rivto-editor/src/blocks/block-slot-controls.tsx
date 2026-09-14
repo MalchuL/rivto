@@ -7,59 +7,21 @@
  *
  * @module
  */
-import { resolveBlockListNumbers } from "../extensions/built-ins/page/list";
-import { useBlock, useReactEditor } from "../hooks";
+import { useBlock } from "../hooks";
 import type { BlockSlotProps } from "../managers";
-import type { ReactEditor } from "../types";
 
 const LIST_CHECKBOX_CLASS = "page-list-checkbox";
 const LIST_MARKER_CLASS = "page-list-marker";
 const COLLAPSE_TOGGLE_CLASS = "page-collapse-toggle";
 
-interface NumberCache {
-  revision: number;
-  groups: Map<string | null, ReadonlyMap<string, number>>;
-}
-
-const numberCaches = new WeakMap<object, NumberCache>();
-
-/** Resolves one sibling group's list numbers at most once per block revision. */
-function resolveListNumber(
-  reactEditor: ReactEditor,
-  blockId: string,
-): number | undefined {
-  const revision = reactEditor.editor.blocks.revision;
-  let cache = numberCaches.get(reactEditor);
-  if (!cache || cache.revision !== revision) {
-    cache = { revision, groups: new Map() };
-    numberCaches.set(reactEditor, cache);
-  }
-  const parentId = reactEditor.editor.blocks.getParentId(blockId);
-  if (parentId === undefined) return undefined;
-  let numbers = cache.groups.get(parentId);
-  if (!numbers) {
-    const siblingIds = parentId === null
-      ? reactEditor.editor.blocks.getRootIds()
-      : parentId === undefined ? [] : reactEditor.editor.blocks.getChildIds(parentId);
-    const siblings = siblingIds.flatMap((id) => {
-      const sibling = reactEditor.editor.blocks.getBlock(id);
-      return sibling ? [sibling] : [];
-    });
-    numbers = resolveBlockListNumbers(siblings);
-    cache.groups.set(parentId, numbers);
-  }
-  return numbers.get(blockId);
-}
-
 /**
- * Renders a checkbox or resolved number for one list-decorated block.
+ * Renders a checkbox or CSS-counter marker for one list-decorated block.
  *
  * @param props - Current block-slot context.
  * @returns Interactive checkbox, numeric marker, or nothing for ordinary lists.
  */
 export function BlockListSlot({ block }: BlockSlotProps) {
   const { operations } = useBlock(block.id);
-  const reactEditor = useReactEditor();
 
   if (block.listProps.type === "checkbox") {
     return (
@@ -73,11 +35,12 @@ export function BlockListSlot({ block }: BlockSlotProps) {
       />
     );
   }
-  const listNumber = resolveListNumber(reactEditor, block.id);
-  return listNumber === undefined ? null : (
-    <span className={LIST_MARKER_CLASS} aria-hidden="true">
-      {listNumber}.
-    </span>
+  return (
+    <span
+      className={LIST_MARKER_CLASS}
+      data-list-type={String(block.listProps.type)}
+      aria-hidden="true"
+    />
   );
 }
 

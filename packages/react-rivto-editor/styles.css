@@ -291,6 +291,31 @@
   text-align: right;
 }
 
+/* Numbering is a sibling-layout concern. Native counters follow DOM moves and
+   list-mode changes without waking otherwise unchanged block components. */
+.page-surface,
+.edgeless-card-content,
+.page-block-children {
+  counter-reset: rivto-list-number;
+}
+
+.page-list-marker {
+  counter-increment: rivto-list-number;
+}
+
+.page-list-marker[data-list-type="start_numbered_list"],
+.page-block:not(:has(> .page-block-row .page-list-marker))
+  + .page-block
+  > .page-block-row
+  .page-list-marker[data-list-type="numbered_list"] {
+  counter-set: rivto-list-number 1;
+  counter-increment: none;
+}
+
+.page-list-marker::before {
+  content: counter(rivto-list-number) ".";
+}
+
 .rivto-slot[data-slot-owner="block"][data-slot-position="start"] > .page-list-checkbox {
   margin-inline-end: 4px;
 }

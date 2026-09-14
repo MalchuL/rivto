@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { BLOCK_ID_SELECTOR } from "./dom-markers";
+import { BLOCK_ID_SELECTOR, blockIdSelector } from "./dom-markers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -16,9 +16,19 @@ test("shows checkbox and numbered-list examples in the demo", async ({ page }) =
   });
   await expect(root("Try the interactive checkbox").locator(":scope > .page-block-row input[type=checkbox]")).not.toBeChecked();
   await expect(root("Completed checkbox item").locator(":scope > .page-block-row input[type=checkbox]")).toBeChecked();
-  await expect(root("Start a numbered sequence").locator(":scope > .page-block-row .page-list-marker")).toHaveText("1.");
-  await expect(root("Continue the adjacent sequence").locator(":scope > .page-block-row .page-list-marker")).toHaveText("2.");
-  await expect(root("Continue numbering across the ordinary block").locator(":scope > .page-block-row .page-list-marker")).toHaveText("3.");
+  const oneMarker = root("Start a numbered sequence").locator(":scope > .page-block-row .page-list-marker");
+  const twoMarker = root("Continue the adjacent sequence").locator(":scope > .page-block-row .page-list-marker");
+  const threeMarker = root("Continue numbering across the ordinary block").locator(":scope > .page-block-row .page-list-marker");
+  await expect(oneMarker).toHaveAttribute("data-list-type", "start_numbered_list");
+  await expect(twoMarker).toHaveAttribute("data-list-type", "numbered_list");
+  await expect(threeMarker).toHaveAttribute("data-list-type", "continue_numbered_list");
+  const [oneImage, twoImage, threeImage] = await Promise.all([
+    oneMarker.screenshot(),
+    twoMarker.screenshot(),
+    threeMarker.screenshot(),
+  ]);
+  expect(twoImage).not.toEqual(oneImage);
+  expect(threeImage).not.toEqual(twoImage);
 
   const checkboxBlock = root("Try the interactive checkbox");
   const startSlot = checkboxBlock.locator(':scope > .page-block-row > .rivto-slot[data-slot-owner="block"][data-slot-position="start"]');
@@ -79,6 +89,7 @@ test("creates interactive checkboxes from a shortcut and inherits them with Ente
   await expect(roots).toHaveCount(beforeEnter + 1);
   const inherited = roots.nth(1);
   await expect(inherited.locator(":scope > .page-block-row .page-list-checkbox")).not.toBeChecked();
+  await expect(inherited.locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
 
   await page.keyboard.press("Enter");
   await expect(roots).toHaveCount(beforeEnter + 1);
@@ -94,21 +105,123 @@ test("numbers adjacent blocks and resumes through a list gap from slash commands
   await replaceContent(page, "1. ");
   await page.keyboard.type("One");
   await page.keyboard.press("Enter");
+  await expect(roots.nth(1).locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
   await page.keyboard.type("Two");
   await page.keyboard.press("Enter");
+  await expect(roots.nth(2).locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
 
-  await expect(roots.nth(0).locator(":scope > .page-block-row .page-list-marker")).toHaveText("1.");
-  await expect(roots.nth(1).locator(":scope > .page-block-row .page-list-marker")).toHaveText("2.");
+  const oneImage = await roots.nth(0).locator(":scope > .page-block-row .page-list-marker").screenshot();
+  const twoImage = await roots.nth(1).locator(":scope > .page-block-row .page-list-marker").screenshot();
+  expect(twoImage).not.toEqual(oneImage);
 
   await page.keyboard.type("/list");
   await page.locator('[data-slash-command="list.list"]').click();
   await page.keyboard.type("Gap");
   await page.keyboard.press("Enter");
+  await expect(roots.nth(3).locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
   await page.keyboard.type("/continue");
   await page.locator('[data-slash-command="list.continue_numbered_list"]').click();
 
   await expect(roots.nth(2).locator(":scope > .page-block-row .page-list-marker")).toHaveCount(0);
-  await expect(roots.nth(3).locator(":scope > .page-block-row .page-list-marker")).toHaveText("3.");
+  const threeImage = await roots.nth(3).locator(":scope > .page-block-row .page-list-marker").screenshot();
+  expect(threeImage).not.toEqual(twoImage);
+});
+
+test("renumbers unchanged blocks after root and nested hierarchy moves", async ({ page }) => {
+  const root = (text: string) => page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).filter({
+    has: page.getByText(text, { exact: true }),
+  });
+  const start = root("Start a numbered sequence");
+  const next = root("Continue the adjacent sequence");
+  const gap = root("Ordinary content between numbered items");
+  const continued = root("Continue numbering across the ordinary block");
+  const oneImage = await start.locator(":scope > .page-block-row .page-list-marker").screenshot();
+  const twoImage = await next.locator(":scope > .page-block-row .page-list-marker").screenshot();
+  const threeImage = await continued
+    .locator(":scope > .page-block-row .page-list-marker")
+    .screenshot();
+  const [startId, nextId, gapId] = await Promise.all([
+    start.getAttribute("data-block-id"),
+    next.getAttribute("data-block-id"),
+    gap.getAttribute("data-block-id"),
+  ]);
+  if (!startId || !nextId || !gapId) throw new Error("Expected numbered root IDs");
+
+  await page.evaluate(({ movingId, targetId }) => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    editor.blocks.moveBlock(movingId, targetId, "before");
+  }, { movingId: nextId, targetId: startId });
+  await expect.poll(() => start.evaluate((element) => element.previousElementSibling?.getAttribute("data-block-id")))
+    .toBe(nextId);
+  expect(await next.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(oneImage);
+  expect(await continued.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(twoImage);
+
+  await page.evaluate((blockId) => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    editor.blocks.updateBlock(blockId, { listProps: { type: "numbered_list" } });
+  }, gapId);
+  await expect(gap.locator(":scope > .page-block-row .page-list-marker"))
+    .toHaveAttribute("data-list-type", "numbered_list");
+  expect(await continued.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(threeImage);
+
+  const nested = await page.evaluate(() => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    const leftParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered left parent" });
+    const leftStart = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Nested left one",
+      listProps: { type: "start_numbered_list" },
+    }, leftParent);
+    editor.blocks.indentBlock(leftStart);
+    const leftNext = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Nested left two",
+      listProps: { type: "numbered_list" },
+    }, leftStart);
+    const rightParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered right parent" });
+    const rightStart = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Nested right one",
+      listProps: { type: "start_numbered_list" },
+    }, rightParent);
+    editor.blocks.indentBlock(rightStart);
+    const rightNext = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Nested right two",
+      listProps: { type: "numbered_list" },
+    }, rightStart);
+    return { leftParent, leftStart, leftNext, rightParent, rightNext };
+  });
+  const nestedNext = page.locator(blockIdSelector(nested.leftNext));
+  expect(await nestedNext.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(twoImage);
+
+  await page.evaluate(({ movingId, targetId }) => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    editor.blocks.moveBlock(movingId, targetId, "before");
+  }, { movingId: nested.leftNext, targetId: nested.leftStart });
+  await expect.poll(() => page.locator(blockIdSelector(nested.leftStart)).evaluate(
+    (element) => element.previousElementSibling?.getAttribute("data-block-id"),
+  )).toBe(nested.leftNext);
+  expect(await nestedNext.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(oneImage);
+
+  await page.evaluate(({ movingId, parentId }) => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    editor.blocks.moveBlock(movingId, parentId, "inside");
+  }, { movingId: nested.leftNext, parentId: nested.rightParent });
+  await expect.poll(() => page.locator(blockIdSelector(nested.rightNext)).evaluate(
+    (element) => element.nextElementSibling?.getAttribute("data-block-id"),
+  )).toBe(nested.leftNext);
+  expect(await nestedNext.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(threeImage);
 });
 
 test("uses the shared list and checkbox rendering in edgeless cards", async ({ page }) => {
@@ -124,7 +237,9 @@ test("uses the shared list and checkbox rendering in edgeless cards", async ({ p
   await page.locator('[data-editor-action="undo"]').click();
   await expect(checkbox).not.toBeChecked();
   await expect(block("Completed checkbox item").locator(":scope > .page-block-row input[type=checkbox]")).toBeChecked();
-  await expect(block("Start a numbered sequence").locator(":scope > .page-block-row .page-list-marker")).toHaveText("1.");
-  await expect(block("Continue the adjacent sequence").locator(":scope > .page-block-row .page-list-marker")).toHaveText("2.");
-  await expect(block("Continue numbering across the ordinary block").locator(":scope > .page-block-row .page-list-marker")).toHaveText("3.");
+  const oneImage = await block("Start a numbered sequence").locator(":scope > .page-block-row .page-list-marker").screenshot();
+  const twoImage = await block("Continue the adjacent sequence").locator(":scope > .page-block-row .page-list-marker").screenshot();
+  const threeImage = await block("Continue numbering across the ordinary block").locator(":scope > .page-block-row .page-list-marker").screenshot();
+  expect(twoImage).not.toEqual(oneImage);
+  expect(threeImage).not.toEqual(twoImage);
 });
