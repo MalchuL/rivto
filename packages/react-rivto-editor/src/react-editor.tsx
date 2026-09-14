@@ -13,6 +13,7 @@ import {
   ClipboardManager,
   EventManager,
   ExtensionManager,
+  FileManager,
   KeyboardManager,
   ReactSelectionManager,
   ReactSlashCommandManager,
@@ -49,6 +50,8 @@ export class ReactEditorImpl implements ReactEditor {
   readonly blocks: BlockManager;
   /** React-owned portable clipboard formatter and parser registry. */
   readonly clipboard: ClipboardManager;
+  /** Host-configurable file upload and logical-URI resolution pipeline. */
+  readonly files: FileManager;
   /** Root surfaces and their ordered block/editor wrappers. */
   readonly surfaces: SurfaceManager;
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
@@ -94,6 +97,7 @@ export class ReactEditorImpl implements ReactEditor {
     this.views = new ViewManager(this);
     this.blocks = new BlockManager(this);
     this.clipboard = new ClipboardManager(this);
+    this.files = new FileManager(this, options.files);
     this.surfaces = new SurfaceManager(this);
     try {
       this.extensions.initialize(options.extensions ?? []);

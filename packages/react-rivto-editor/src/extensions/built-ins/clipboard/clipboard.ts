@@ -121,6 +121,7 @@ export function registerClipboard(
       structured,
       text: portable.plain,
     };
+    reactEditor.clipboard.writeProcessed(bundle, portable);
   };
 
   /** Recovers custom data only when the event still represents our last copy. */

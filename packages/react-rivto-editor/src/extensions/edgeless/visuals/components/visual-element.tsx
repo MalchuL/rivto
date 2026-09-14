@@ -15,6 +15,7 @@ import type { EdgelessVisualController } from "../controller";
 import type { ConnectorEndpoint, EdgelessVisual } from "../types";
 import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from "../utils/geometry";
 import { shapeStrokePad } from "../utils/shape-stroke";
+import { ImageView } from "../../../image/image-view";
 
 const LABEL_KINDS = new Set(["text", "sticker", "rectangle", "ellipse", "connector"]);
 const VISUAL_RESIZE_CLASS = "edgeless-visual-resize";
@@ -107,6 +108,34 @@ export function VisualElement({
           />
         </svg>
       );
+    }
+    if (visual.kind === "image") {
+      return <ImageView
+        kind="element"
+        uri={visual.uri}
+        alt={visual.alt}
+        name={visual.name}
+        mimeType={visual.mimeType}
+        onChange={(patch) => {
+          if (patch.reset) {
+            const scale = Math.min(1, 640 / visual.intrinsicWidth, 480 / visual.intrinsicHeight);
+            controller.reactEditor.editor.elements.updateElement(visual.id, {
+              frame: {
+                width: Math.max(24, Math.round(visual.intrinsicWidth * scale)),
+                height: Math.max(24, Math.round(visual.intrinsicHeight * scale)),
+              },
+            });
+          } else if (patch.width !== undefined && patch.height !== undefined) {
+            controller.update({ id: visual.id, patch: { frame: { width: patch.width, height: patch.height } } as never });
+          } else if (patch.alt !== undefined) {
+            controller.update({ id: visual.id, patch: { alt: patch.alt } as never });
+          }
+        }}
+      />;
+    }
+    if (visual.kind === "file-handler") {
+      const View = controller.reactEditor.files.getElementView(visual.elementType);
+      return View ? <View id={visual.id} props={visual.props} /> : null;
     }
     if (visual.kind === "connector" && source && target) {
       const sourceBound = source.elementId ? controller.getBounds(source.elementId) : undefined;
@@ -268,7 +297,7 @@ export function VisualElement({
       className="edgeless-visual"
       data-edgeless-object-kind="visual"
       data-edgeless-object-id={visual.id}
-      data-edgeless-visual-kind={visual.kind}
+      data-edgeless-visual-kind={visual.kind === "file-handler" ? visual.elementType : visual.kind}
       data-edgeless-connector-route={visual.kind === "connector" ? visual.route : undefined}
       data-selected={selected || undefined}
       data-editing={editing || undefined}
@@ -283,7 +312,7 @@ export function VisualElement({
     >
       {content}
       {element && <ElementSlots element={element} selected={selected} />}
-      {selected && visual.kind !== "connector" && RESIZE_HANDLES.map((corner) => (
+      {(selected || visual.kind === "image") && visual.kind !== "connector" && (visual.kind === "image" ? ["se"] as const : RESIZE_HANDLES).map((corner) => (
         <button
           key={corner}
           className={VISUAL_RESIZE_CLASS}
@@ -292,7 +321,7 @@ export function VisualElement({
           aria-label={`Resize ${corner}`}
         />
       ))}
-      {selected && visual.kind !== "connector" && (
+      {selected && visual.kind !== "connector" && visual.kind !== "image" && (
         <button
           className={VISUAL_ROTATION_CLASS}
           data-edgeless-rotation-handle="true"

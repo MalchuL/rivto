@@ -7,6 +7,33 @@ import { separatorBlockExtension } from "../../built-ins/separator/separator-blo
 import { EdgelessVisualController } from "./controller";
 
 describe("edgelessVisualsExtension", () => {
+  test("creates and validates first-class image visuals", () => {
+    const editor = createRivtoEditor({ mode: "edgeless" });
+    const extension = edgelessVisualsExtension({ toolbar: false });
+    const reactEditor = createReactEditor({ editor, extensions: [edgelessSelectionExtension(), extension] });
+
+    const image = extension.createImage({
+      uri: "../assets/photo.png",
+      alt: "Photo",
+      intrinsicWidth: 800,
+      intrinsicHeight: 600,
+      frame: { x: 10, y: 20, width: 400, height: 300 },
+    });
+
+    expect(editor.elements.getElement(image)).toMatchObject({
+      type: "image",
+      frame: { x: 10, y: 20, width: 400, height: 300 },
+      props: { uri: "../assets/photo.png", alt: "Photo", intrinsicWidth: 800, intrinsicHeight: 600 },
+    });
+    expect(() => extension.createImage({
+      uri: "",
+      intrinsicWidth: 0,
+      intrinsicHeight: 0,
+    })).toThrow(/positive intrinsic dimensions/);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
   test("stores canvas selection in generic core selection and persists visuals", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Page" });
