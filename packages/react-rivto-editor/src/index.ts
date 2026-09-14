@@ -66,6 +66,19 @@ export {
   EdgelessVisualsExtension,
   edgelessVisualsExtension,
 } from "./extensions/edgeless/visuals";
+export {
+  COMMENTS_PLUGIN_ID,
+  CommentsExtension,
+  commentsExtension,
+} from "./extensions/comments";
+export type {
+  CommentAnchor,
+  CommentAuthor,
+  CommentDraft,
+  CommentMessage,
+  CommentsExtensionOptions,
+  CommentThread,
+} from "./extensions/comments";
 export type {
   CreateVisualPayload,
   ConnectorEndpoint,

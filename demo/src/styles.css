@@ -98,6 +98,13 @@ body { margin: 0; }
   box-shadow: none;
 }
 
+/* The extension sidebar is a sibling of the paper, so the demo widens without
+   moving comment controls into selectable block rows. */
+.journal-stack:has(.rivto-comments-sidebar) {
+  width: min(1020px, calc(100% - 32px));
+  overflow: visible;
+}
+
 .journal-document:has(.edgeless-viewport) .journal-date {
   display: none;
 }
