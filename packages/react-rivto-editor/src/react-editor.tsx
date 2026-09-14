@@ -22,7 +22,7 @@ import {
 } from "./managers";
 import type { CreateReactEditorOptions, ReactEditor } from "./types";
 import { reconcileBlockElements } from "./surfaces/edgeless/block-elements";
-import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/page/default-writing-block";
+import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/built-ins/page/default-writing-block";
 
 export type { CreateReactEditorOptions, ReactEditor } from "./types";
 

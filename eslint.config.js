@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import jsdoc from "eslint-plugin-jsdoc";
 import tseslint from "typescript-eslint";
+import noBuiltInExtensionImports from "./eslint-rules/no-built-in-extension-imports.js";
 
 export default tseslint.config(
   {
@@ -13,6 +14,19 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    },
+  },
+  {
+    files: ["packages/react-rivto-editor/src/extensions/built-ins/**/*.ts", "packages/react-rivto-editor/src/extensions/built-ins/**/*.tsx"],
+    plugins: {
+      "rivto-boundaries": {
+        rules: {
+          "no-built-in-extension-imports": noBuiltInExtensionImports,
+        },
+      },
+    },
+    rules: {
+      "rivto-boundaries/no-built-in-extension-imports": "error",
     },
   },
   {

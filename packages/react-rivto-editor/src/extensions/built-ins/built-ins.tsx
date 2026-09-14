@@ -11,43 +11,43 @@ import {
   type EditorBlockInput as BlockInput,
   createStructuralSelection,
 } from "@chulane/rivto";
-import type { BlockListType } from "../page/list";
-import { registerClipboard, type ClipboardExtensionOptions } from "../clipboard/clipboard";
-import { registerHistory, type HistoryExtensionOptions } from "../history/history";
-import { registerTextSelection } from "../selection/text-selection";
-import { EdgelessInteractionOverlay } from "../edgeless/edgeless-selection";
-import { installEdgelessRuntime } from "../edgeless/edgeless-runtime";
-import { registerEdgelessDeletion } from "../edgeless/edgeless-deletion";
-import { registerEdgelessMovement } from "../edgeless/edgeless-movement";
-import { registerEdgelessTransform } from "../edgeless/edgeless-transform";
-import { EdgelessElementDragSlot } from "../edgeless/edgeless-drag-handle";
+import type { BlockListType } from "./page/list";
+import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard/clipboard";
+import { registerHistory, type HistoryExtensionOptions } from "./history/history";
+import { registerTextSelection } from "./selection/text-selection";
+import { EdgelessInteractionOverlay } from "./edgeless/edgeless-selection";
+import { installEdgelessRuntime } from "./edgeless/edgeless-runtime";
+import { registerEdgelessDeletion } from "./edgeless/edgeless-deletion";
+import { registerEdgelessMovement } from "./edgeless/edgeless-movement";
+import { registerEdgelessTransform } from "./edgeless/edgeless-transform";
+import { EdgelessElementDragSlot } from "./edgeless/edgeless-drag-handle";
 import {
   registerBlockSelectionNavigation,
   registerCaretNavigation,
   registerKeyboardBlockMove,
-} from "../page/navigation";
-import { registerBlockMerge } from "../page/block-merge";
-import { registerBlockOutdent } from "../page/block-outdent";
-import { registerEmptyBlockReset } from "../page/empty-block-reset";
-import { registerBlockSelection } from "../selection/block-selection";
-import { registerCollapse } from "../page/collapse";
+} from "./page/navigation";
+import { registerBlockMerge } from "./page/block-merge";
+import { registerBlockOutdent } from "./page/block-outdent";
+import { registerEmptyBlockReset } from "./page/empty-block-reset";
+import { registerBlockSelection } from "./selection/block-selection";
+import { registerCollapse } from "./page/collapse";
 import {
   registerPageDrag,
   type PageDragExtensionOptions,
-} from "../page/drag";
-import { registerBlockCreation } from "../page/block-creation";
-import { SlashMenu } from "../slash/slash-menu";
-import { registerSelectionDeletion } from "../selection/selection-deletion";
-import { registerTrailingBlock } from "../page/trailing-block";
-import { registerIndent, type IndentExtensionOptions } from "../page/indent";
-import { registerListShortcuts } from "../page/list";
+} from "./page/drag";
+import { registerBlockCreation } from "./page/block-creation";
+import { SlashMenu } from "./slash/slash-menu";
+import { registerSelectionDeletion } from "./selection/selection-deletion";
+import { registerTrailingBlock } from "./page/trailing-block";
+import { registerIndent, type IndentExtensionOptions } from "./page/indent";
+import { registerListShortcuts } from "./page/list";
 import {
   EdgelessSnappingStore,
   EdgelessSurface,
   type EdgelessSurfaceOptions,
 } from "../../surfaces/edgeless";
-import { separatorBlockExtension } from "../separator/separator-block";
-import { defaultWritingBlockExtension, type DefaultWritingBlockOptions } from "../page/default-writing-block";
+import { separatorBlockExtension } from "./separator/separator-block";
+import { defaultWritingBlockExtension, type DefaultWritingBlockOptions } from "./page/default-writing-block";
 import {
   blockIdsOf,
   EDGELESS_CARD_DEFAULT_FRAME,
@@ -55,7 +55,7 @@ import {
   setBlockElementDefaultWidth,
   setBlockElementOverlapAvoidance,
 } from "../../surfaces/edgeless/block-elements";
-import { createErrorBlockInput, errorBlockExtension } from "../error/error-block";
+import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
 import { PageSurface } from "../../surfaces/page";
 import {
   type ReactBlockRegistration,
@@ -180,7 +180,7 @@ export const listShortcutsExtension = (): ReactEditorExtension => ({
 });
 
 /** Shortcut configuration for structural indentation. */
-export type { IndentExtensionOptions } from "../page/indent";
+export type { IndentExtensionOptions } from "./page/indent";
 
 /**
  * Installs configurable indent and outdent keyboard actions.

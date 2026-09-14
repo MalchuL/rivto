@@ -1,6 +1,6 @@
 import { createTestCoreEditor as createRivtoEditor } from "../../test-utils";
 import { createReactEditor } from "../../react-editor";
-import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../../extensions/separator/separator-block";
+import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../../extensions/built-ins/separator/separator-block";
 import {
   blockIdsOf,
   blockFramesOverlap,

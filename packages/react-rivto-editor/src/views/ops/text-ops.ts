@@ -8,7 +8,7 @@
  * @module
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
-import { isNumberedListType } from "../../extensions/page/list";
+import { isNumberedListType } from "../../extensions/built-ins/page/list";
 import type { ReactEditor } from "../../types";
 
 /**

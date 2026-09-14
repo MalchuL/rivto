@@ -18,6 +18,7 @@
     "docs:preview": "pnpm --dir docs preview",
     "docs:test": "pnpm --dir docs test",
     "lint": "eslint packages/crdt-doc/src packages/document-model/src packages/graph-runtime/src packages/block-graph/src packages/rivto-editor-core/src packages/react-rivto-editor/src --max-warnings=0",
+    "test:eslint-rules": "node --test eslint-rules/*.test.js",
     "test": "pnpm --filter @chulane/crdt-doc test && pnpm --filter @chulane/document-model test && pnpm --filter @chulane/graph-runtime test && pnpm --filter @chulane/block-graph test && pnpm --filter @chulane/rivto test",
     "test:e2e": "pnpm demo:build && playwright test --project=chromium --project=firefox",
     "check-types:core": "pnpm --filter @chulane/crdt-doc build && pnpm --filter @chulane/crdt-doc check-types && pnpm --filter @chulane/document-model check-types && pnpm --filter @chulane/graph-runtime check-types && pnpm --filter @chulane/block-graph check-types && pnpm --filter @chulane/rivto check-types",

@@ -1,5 +1,5 @@
 import { createRivtoEditor, type CreateRivtoEditorOptions, type RivtoEditorApi } from "@chulane/rivto";
-import { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/page/default-writing-block";
+import { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-writing-block";
 
 /**
  * Core editor for React package tests with a local writing type registered.

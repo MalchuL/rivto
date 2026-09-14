@@ -57,7 +57,7 @@ Selection normalization intentionally returns a one-block range for a caret ([se
 
 ### 8. Structured clipboard input is not a real trust boundary
 
-Core parses JSON directly and aborts instead of falling back to text ([clipboard-manager.ts:84](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L84)). The remapper ignores schema version, duplicate IDs, most field types, link shapes, and cycles ([clipboard.ts:150](../packages/rivto-editor-core/src/managers/clipboard-manager/utils/clipboard.ts#L150)). Reproduction accepted `version: 999`. React repeats direct parsing at [clipboard.ts:140](../packages/react-rivto-editor/src/extensions/clipboard/clipboard.ts#L140), and the edgeless controller has another bespoke parser ([controller.ts:630](../packages/react-rivto-editor/src/extensions/edgeless/visuals/controller.ts#L630)). Centralize one complete validator, reject ambiguous IDs/cycles before mutation, and fall back to safe text when custom MIME is invalid.
+Core parses JSON directly and aborts instead of falling back to text ([clipboard-manager.ts:84](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L84)). The remapper ignores schema version, duplicate IDs, most field types, link shapes, and cycles ([clipboard.ts:150](../packages/rivto-editor-core/src/managers/clipboard-manager/utils/clipboard.ts#L150)). Reproduction accepted `version: 999`. React repeats direct parsing at [clipboard.ts:140](../packages/react-rivto-editor/src/extensions/built-ins/clipboard/clipboard.ts#L140), and the edgeless controller has another bespoke parser ([controller.ts:630](../packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/controller.ts#L630)). Centralize one complete validator, reject ambiguous IDs/cycles before mutation, and fall back to safe text when custom MIME is invalid.
 
 ### 9. The keyboard manager cannot report its installed/effective bindings
 
@@ -65,7 +65,7 @@ The public capability exposes mutation but no list, revision, or subscription ([
 
 ### 10. The central keymap is not the runtime source of truth
 
-The static catalog owns IDs/defaults ([keymap.ts:1](../packages/react-rivto-editor/src/managers/events/keymap.ts#L1)), but each extension repeats its ID and reads defaults back from it; extension options can change declared defaults ([history.ts:76](../packages/react-rivto-editor/src/extensions/history/history.ts#L76)), and third-party actions never appear in the catalog. Move each ID/default beside its registration and derive the complete list from installed registrations. This matches BlockSuite's extension-owned keymap pattern ([BlockSuite keymap extension](../blocksuite/packages/framework/std/src/extension/keymap.ts#L37); [paragraph keymap](../blocksuite/packages/affine/blocks/paragraph/src/paragraph-keymap.ts#L31)).
+The static catalog owns IDs/defaults ([keymap.ts:1](../packages/react-rivto-editor/src/managers/events/keymap.ts#L1)), but each extension repeats its ID and reads defaults back from it; extension options can change declared defaults ([history.ts:76](../packages/react-rivto-editor/src/extensions/built-ins/history/history.ts#L76)), and third-party actions never appear in the catalog. Move each ID/default beside its registration and derive the complete list from installed registrations. This matches BlockSuite's extension-owned keymap pattern ([BlockSuite keymap extension](../blocksuite/packages/framework/std/src/extension/keymap.ts#L37); [paragraph keymap](../blocksuite/packages/affine/blocks/paragraph/src/paragraph-keymap.ts#L31)).
 
 ### 11. Runtime remapping can silently shadow unrelated actions
 
@@ -77,11 +77,11 @@ Matching treats either exclusive modifier as `Primary` ([shortcut.ts:64](../pack
 
 ### 13. Paste-as-plain-text mode can become stuck
 
-One semantic keydown action sets a closure boolean, while a separately configurable keyup action clears it ([clipboard.ts:362](../packages/react-rivto-editor/src/extensions/clipboard/clipboard.ts#L362)). Remapping only the public start action, or losing keyup on blur, leaves later normal pastes in plain-text mode. Treat release as internal transport tied to the effective start binding and clear state on window keyup/blur; it should not be a separate user preference.
+One semantic keydown action sets a closure boolean, while a separately configurable keyup action clears it ([clipboard.ts:362](../packages/react-rivto-editor/src/extensions/built-ins/clipboard/clipboard.ts#L362)). Remapping only the public start action, or losing keyup on blur, leaves later normal pastes in plain-text mode. Treat release as internal transport tied to the effective start binding and clear state on window keyup/blur; it should not be a separate user preference.
 
 ### 14. Standard preset installation is not rollback-safe
 
-`standardPreset` calls child `setup` methods in a loop and returns their cleanups only after all succeed ([built-ins.tsx:583](../packages/react-rivto-editor/src/extensions/built-ins/built-ins.tsx#L583)). If a late child throws, earlier non-manager resources such as collapse subscriptions ([page-collapse.ts:28](../packages/react-rivto-editor/src/extensions/page/page-collapse.ts#L28)) never receive their returned cleanup. Wrap child setup in a local rollback stack and dispose it on failure.
+`standardPreset` calls child `setup` methods in a loop and returns their cleanups only after all succeed ([built-ins.tsx:583](../packages/react-rivto-editor/src/extensions/built-ins/built-ins.tsx#L583)). If a late child throws, earlier non-manager resources such as collapse subscriptions ([page-collapse.ts:28](../packages/react-rivto-editor/src/extensions/built-ins/page/page-collapse.ts#L28)) never receive their returned cleanup. Wrap child setup in a local rollback stack and dispose it on failure.
 
 ### 15. Extension cleanup exceptions abort the rest of teardown
 
@@ -89,7 +89,7 @@ One semantic keydown action sets a closure boolean, while a separately configura
 
 ### 16. Cross-document DOM support is inconsistent
 
-`EventManager` correctly resolves `Element` from `root.ownerDocument.defaultView` ([event-manager.ts:253](../packages/react-rivto-editor/src/managers/events/event-manager.ts#L253)), but selection and edgeless extensions use global constructors and global `Node` constants, including [editor-dom-selection.ts:240](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L240), [text-selection.ts:141](../packages/react-rivto-editor/src/extensions/selection/text-selection.ts#L141), and [edgeless-deletion.ts:28](../packages/react-rivto-editor/src/extensions/edgeless/edgeless-deletion.ts#L28). An editor in an iframe/other window can fail target checks and lose selection or keyboard behavior. Consistently use the root's realm or node-type duck typing, and add a foreign-document integration test.
+`EventManager` correctly resolves `Element` from `root.ownerDocument.defaultView` ([event-manager.ts:253](../packages/react-rivto-editor/src/managers/events/event-manager.ts#L253)), but selection and edgeless extensions use global constructors and global `Node` constants, including [editor-dom-selection.ts:240](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L240), [text-selection.ts:141](../packages/react-rivto-editor/src/extensions/built-ins/selection/text-selection.ts#L141), and [edgeless-deletion.ts:28](../packages/react-rivto-editor/src/extensions/built-ins/edgeless/edgeless-deletion.ts#L28). An editor in an iframe/other window can fail target checks and lose selection or keyboard behavior. Consistently use the root's realm or node-type duck typing, and add a foreign-document integration test.
 
 ## Medium-priority correctness and API findings
 
@@ -159,7 +159,7 @@ The parser splits on every `+`, drops empty pieces, and deduplicates modifiers t
 
 ### 33. Edgeless popovers listen on the global window
 
-Toolbar and properties UI use global `window`/`Node` ([tool-bar.tsx:58](../packages/react-rivto-editor/src/extensions/edgeless/visuals/components/tool-bar.tsx#L58); [visual-properties.tsx:35](../packages/react-rivto-editor/src/extensions/edgeless/visuals/components/visual-properties.tsx#L35)). Foreign-document/portal UI listens in the wrong realm. Use the panel's `ownerDocument.defaultView` or route through the event manager.
+Toolbar and properties UI use global `window`/`Node` ([tool-bar.tsx:58](../packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/components/tool-bar.tsx#L58); [visual-properties.tsx:35](../packages/react-rivto-editor/src/extensions/built-ins/edgeless/visuals/components/visual-properties.tsx#L35)). Foreign-document/portal UI listens in the wrong realm. Use the panel's `ownerDocument.defaultView` or route through the event manager.
 
 ### 34. Caret geometry performs synchronous layout once per character
 
@@ -179,7 +179,7 @@ Every registration/disposal calls `reconnect`, which detaches and recreates all 
 
 ### 38. Dynamic uninstall would leave stale default-writing callbacks
 
-`defaultWritingBlockExtension` installs global factories but its cleanup only unregisters the block contribution ([default-writing-block.tsx:75](../packages/react-rivto-editor/src/extensions/page/default-writing-block.tsx#L75)); `installDefaultWriting` has no disposer or ownership stack ([react-editor.tsx:104](../packages/react-rivto-editor/src/react-editor.tsx#L104)). Once extensions become dynamic, uninstall leaves callbacks for an unavailable type. Make default-writing installation an owned, reversible registration.
+`defaultWritingBlockExtension` installs global factories but its cleanup only unregisters the block contribution ([default-writing-block.tsx:75](../packages/react-rivto-editor/src/extensions/built-ins/page/default-writing-block.tsx#L75)); `installDefaultWriting` has no disposer or ownership stack ([react-editor.tsx:104](../packages/react-rivto-editor/src/react-editor.tsx#L104)). Once extensions become dynamic, uninstall leaves callbacks for an unavailable type. Make default-writing installation an owned, reversible registration.
 
 ### 39. `EditorView` has one hard-coded layout bucket
 

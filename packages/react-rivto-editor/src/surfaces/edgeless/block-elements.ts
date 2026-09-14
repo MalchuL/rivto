@@ -1,6 +1,6 @@
 import type { EditorBlock, EditorElement } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
-import { EDGELESS_GRID_SIZE } from "../../extensions/edgeless/visuals/utils/geometry";
+import { EDGELESS_GRID_SIZE } from "../../extensions/built-ins/edgeless/visuals/utils/geometry";
 
 export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
 export const EDGELESS_BLOCK_ELEMENT_ID_PREFIX = "rivto:block-element:";

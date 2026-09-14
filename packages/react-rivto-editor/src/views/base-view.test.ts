@@ -5,7 +5,7 @@
  */
 import { createTestCoreEditor } from "../test-utils";
 import { createReactEditor } from "../react-editor";
-import { defaultWritingBlockExtension } from "../extensions/page/default-writing-block";
+import { defaultWritingBlockExtension } from "../extensions/built-ins/page/default-writing-block";
 import { BaseBlockView } from "./base-view";
 import type { BlockViewDropContext } from "./types";
 

@@ -87,7 +87,7 @@ Visual toolbar/controller = separate extension.
 
 - `surfaces/page/`
 - `blocks/` — `BlockTree`, block view, markdown
-- `extensions/page/` — enter, backspace, indent, navigation, collapse
+- `extensions/built-ins/page/` — enter, backspace, indent, navigation, collapse
 - `docs/use-block-editing.md`, `docs/markdown-rendering.md`
 
 **Attention**
@@ -109,10 +109,10 @@ Visual toolbar/controller = separate extension.
 - `surfaces/edgeless/edgeless-surface.tsx` — pan/zoom/snap/align, plane transform
 - `surfaces/edgeless/edgeless-block.tsx` — card chrome + resize handles
 - `surfaces/edgeless/block-elements.ts` — card range from `startBlockId`/`endBlockId`, separators
-- `extensions/edgeless/edgeless-runtime.ts` — canvas selection store
-- `extensions/edgeless/edgeless-selection.tsx` — click + marquee
-- `extensions/edgeless/edgeless-transform.ts` — move/resize + progressive groups
-- `extensions/edgeless/edgeless-deletion.ts`, `edgeless-movement.ts`
+- `extensions/built-ins/edgeless/edgeless-runtime.ts` — canvas selection store
+- `extensions/built-ins/edgeless/edgeless-selection.tsx` — click + marquee
+- `extensions/built-ins/edgeless/edgeless-transform.ts` — move/resize + progressive groups
+- `extensions/built-ins/edgeless/edgeless-deletion.ts`, `edgeless-movement.ts`
 
 **Attention**
 
@@ -130,7 +130,7 @@ Visual toolbar/controller = separate extension.
 
 **Read in order**
 
-1. `extensions/edgeless/visuals/index.ts` — mounts controller + layer
+1. `extensions/built-ins/edgeless/visuals/index.ts` — mounts controller + layer
 2. `controller.ts` — create/update/group/clipboard/tool/defaults/commands
 3. `types.ts` — payloads + `EdgelessVisualCommandMap`
 4. `visual-layer.tsx` — orchestration, portals

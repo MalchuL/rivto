@@ -17,7 +17,7 @@ import type {
   ViewsCapability,
 } from "./capabilities";
 import type { MouseEvent } from "react";
-import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/page/default-writing-block";
+import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/built-ins/page/default-writing-block";
 
 /** Context supplied when a rendered Markdown link is activated. */
 export interface MarkdownLinkClick {

@@ -68,7 +68,7 @@ Disposer idempotent и удаляет только соответствующу�
 - **Возвращает:** `void`.
 - **Исключения:** custom extension cleanup errors.
 
-Повторный вызов безопасен. Уничтожаются React subscriptions/extensions/slash/keyboard/events, но не core editor.
+Повторный вызов безопасен. Уничтожаются React subscriptions/extensions/built-ins/slash/keyboard/events, но не core editor.
 
 ## Автоматическая reconciliation
 

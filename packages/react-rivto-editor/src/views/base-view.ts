@@ -2,7 +2,7 @@
  * Generic outline behavior shared by every unregistered or unconstrained block.
  *
  * This class holds the page Enter/Tab/Backspace/Delete semantics previously
- * registered by the focused modules under `extensions/page`. Container views override individual methods
+ * registered by the focused modules under `extensions/built-ins/page`. Container views override individual methods
  * and return `"default"` to reuse this implementation. The DOM shell component
  * `blocks/block-view.tsx` is unrelated presentation.
  *
@@ -15,8 +15,8 @@ import {
   findRenderedBlock,
 } from "../managers";
 import type { KeyboardSelectionTarget } from "../managers";
-import { navigationDomRoot } from "../extensions/page/navigation/utils/scope";
-import { removeEmptyBlockAfterStructuralPredecessor } from "../extensions/page/block-merge/utils";
+import { navigationDomRoot } from "../extensions/built-ins/page/navigation/utils/scope";
+import { removeEmptyBlockAfterStructuralPredecessor } from "../extensions/built-ins/page/block-merge/utils";
 import { focusBlockLater, focusCaret } from "./ops/focus-ops";
 import { indentBlocks, outdentBlocks, outdentUntilBoundary } from "./ops/outline-ops";
 import { convertEmptyToList, mergeBlocks, resetToWritingType, splitBlockAt } from "./ops/text-ops";
