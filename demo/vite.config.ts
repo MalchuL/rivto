@@ -1,3 +1,4 @@
+import { localFileBridgePlugin } from "./local-file-bridge";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
@@ -33,6 +34,7 @@ export default defineConfig({
       },
     },
     tailwindcss(),
+    localFileBridgePlugin(),
     reviewReportFilesPlugin(fileURLToPath(new URL("../reports/", import.meta.url))),
   ],
   resolve: {

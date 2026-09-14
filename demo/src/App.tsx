@@ -33,6 +33,9 @@ import {
   pageDragExtension,
   PageSurface,
   standardPreset,
+  fileExtension,
+  imageExtension,
+  type ReactEditorExtension,
   TABLE_BLOCK_TYPE,
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
@@ -59,6 +62,98 @@ import {
 } from "./extensions/reports/review-report";
 import { KeyboardPanel } from "./KeyboardPanel";
 import { RevisionsPanel } from "./RevisionsPanel";
+
+const DEMO_LOCAL_FILE_ROUTE = "/__rivto_demo_local_file";
+const DEMO_CLIPBOARD_FILE_ROUTE = "/__rivto_demo_clipboard_file";
+const DEMO_OPEN_FILE_ROUTE = "/__rivto_demo_open_file";
+
+/** Returns whether the demo server can resolve one pasted filesystem path. */
+function isDemoLocalFileUri(uri: string): boolean {
+  return /^file:\/\//i.test(uri) || /^\//.test(uri) || /^[a-z]:[\\/]/i.test(uri);
+}
+
+/**
+ * Stores browser-owned bytes in the demo server so a native app can address them.
+ *
+ * @param data - File or resolved blob to persist temporarily.
+ * @param name - Portable filename retained for native-app selection.
+ * @param mimeType - Persisted MIME type used when the blob has none.
+ * @param signal - Cancellation signal from the file operation.
+ * @returns Absolute temporary file path returned by the demo server.
+ */
+async function storeDemoFile(
+  data: Blob,
+  name: string,
+  mimeType: string,
+  signal: AbortSignal,
+): Promise<string> {
+  const response = await fetch(`${DEMO_CLIPBOARD_FILE_ROUTE}?name=${encodeURIComponent(name)}`, {
+    body: data,
+    headers: { "Content-Type": data.type || mimeType || "application/octet-stream" },
+    method: "POST",
+    signal,
+  });
+  if (!response.ok) {
+throw new Error("The demo server could not store the file");
+}
+  const result = await response.json() as { readonly uri?: unknown };
+  if (typeof result.uri !== "string") {
+throw new TypeError("The demo server returned an invalid file URI");
+}
+  return result.uri;
+}
+
+/** Demo-only adapter that reads pasted absolute paths through localhost Vite middleware. */
+const demoLocalFileExtension: ReactEditorExtension = {
+  id: "demo.local-files",
+  setup: (editor) => {
+    editor.files.registerUploadHandler({
+      id: "demo.clipboard-files",
+      upload: async (file, context) => {
+        if (context.source !== "clipboard") {
+return undefined;
+}
+        return storeDemoFile(file, file.name, file.type, context.signal);
+      },
+    });
+    editor.files.registerOpenHandler({
+      id: "demo.native-files",
+      open: async (reference, context) => {
+        const uri = isDemoLocalFileUri(reference.uri)
+          ? reference.uri
+          : await storeDemoFile(
+              await editor.files.read(reference.uri, reference.mimeType, context),
+              reference.name,
+              reference.mimeType,
+              context.signal,
+            );
+        const response = await fetch(`${DEMO_OPEN_FILE_ROUTE}?uri=${encodeURIComponent(uri)}`, {
+          method: "POST",
+          signal: context.signal,
+        });
+        if (!response.ok) {
+throw new Error("The demo server could not open the file with its native app");
+}
+      },
+    });
+    editor.files.registerUriResolver({
+      id: "demo.local-files",
+      resolve: async (uri, context) => {
+        if (!isDemoLocalFileUri(uri)) {
+return undefined;
+}
+        const response = await fetch(`${DEMO_LOCAL_FILE_ROUTE}?uri=${encodeURIComponent(uri)}`, {
+          signal: context.signal,
+        });
+        if (!response.ok) {
+throw new Error("The pasted local file is unavailable to the demo server");
+}
+        return response.blob();
+      },
+    });
+  },
+};
+
 
 const DEMO_BLOCK_ID_TOGGLE_CLASS = "demo-block-id-toggle";
 const DEMO_BLOCK_IDS_TOOLTIP =
@@ -399,6 +494,9 @@ async function createDemoEditor() {
         editor: documentEditor,
         keymap: alternateKeymap,
         extensions: [
+          fileExtension(),
+          demoLocalFileExtension,
+          imageExtension(),
           standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
           todoItemExtension({ prompts: { todo: ["task"] } }),
           pageDragExtension(),
@@ -796,6 +894,9 @@ async function createEmptyDemoEditor() {
   const reactEditor = createReactEditor({
     editor,
     extensions: [
+      fileExtension(),
+      demoLocalFileExtension,
+      imageExtension(),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
@@ -1203,6 +1304,9 @@ async function createMultiEditor(
   const reactEditor = createReactEditor({
     editor,
     extensions: [
+      fileExtension(),
+      demoLocalFileExtension,
+      imageExtension(),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
@@ -1455,6 +1559,9 @@ async function createSyncedPeer(
   const reactEditor = createReactEditor({
     editor,
     extensions: [
+      fileExtension(),
+      demoLocalFileExtension,
+      imageExtension(),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),

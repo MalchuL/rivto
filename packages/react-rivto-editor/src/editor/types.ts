@@ -23,6 +23,7 @@ import type { RenderersApi } from "../managers/blocks/renderers-api";
 import type { PanelRegistry } from "../panels/panel-registry";
 import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { ExtensionsApi } from "../managers/extensions/api";
+import type { FilesCapability, FileManagerOptions } from "../managers/files";
 import type { SurfacesApi } from "../managers/surfaces/api";
 
 /** Creation options for the React presentation runtime. */
@@ -33,6 +34,8 @@ export interface CreateReactEditorOptions {
   readonly extensions?: readonly ReactEditorExtension[];
   /** Stable binding-ID overrides; empty arrays disable matching bindings. */
   readonly keymap?: KeymapOverrides;
+  /** File upload and URI resolution settings. */
+  readonly files?: FileManagerOptions;
   /** Renderer used for persisted block types unknown to this React runtime. */
   readonly unknownBlockRenderer?: BlockRenderer;
 }
@@ -130,6 +133,8 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   readonly blockListProps: BlockListPropsApi;
   /** React-owned portable clipboard formatter and parser registry. */
   readonly clipboardFormats: ClipboardFormatRegistry;
+  /** File upload, resolution and presentation registrations. */
+  readonly files: FilesCapability;
   /** Structured document operations; view-dependent paste receives its destination explicitly. */
   readonly clipboard: ClipboardManager;
   /** Core paste strategies extended by React clipboard integrations. */
