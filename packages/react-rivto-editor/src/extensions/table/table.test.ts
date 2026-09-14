@@ -23,10 +23,13 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", () => 
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],
   });
-  const before = editor.blocks.insertBlock({ type: "paragraph", content: "Before" });
+  const before = editor.blocks.insertBlock({ type: "paragraph", content: "" });
   runtime.slashCommands.execute("block.table.insert", { blockId: before });
-  const table = editor.blocks.getBlocks().find((block) => block.type === TABLE_BLOCK_TYPE)!;
+  const table = editor.blocks.getBlock(before)!;
 
+  expect(table.id).toBe(before);
+  expect(table.type).toBe(TABLE_BLOCK_TYPE);
+  expect(table.content).toBe("");
   expect(table.children).toHaveLength(3);
   expect(table.children.every((row) => row.type === TABLE_ROW_BLOCK_TYPE && row.children.length === 3)).toBe(true);
   expect(table.children.flatMap((row) => row.children).every((cell) => cell.type === TABLE_CELL_BLOCK_TYPE)).toBe(true);
@@ -56,4 +59,5 @@ test("validates requested table dimensions", () => {
   expect(() => createTableBlockInput(0, 3)).toThrow("Table row count must be a positive integer");
   expect(() => createTableBlockInput(3, 1.5)).toThrow("Table column count must be a positive integer");
   expect(createTableBlockInput(1, 1, 320).children?.[0]?.children?.[0]?.props?.tableColumnWidth).toBe(320);
+  expect(createTableBlockInput().content).toBe("");
 });

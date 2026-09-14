@@ -13,7 +13,9 @@ import {
   readKeyboardSelection,
   shouldDeleteSelection,
 } from "../../managers";
-import { isStructuralSelection } from "@chulane/rivto";
+import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
+import { createBlockViewContext } from "../../views/context";
+import type { BlockViewBehavior } from "../../views/types";
 
 /**
  * Deletes expanded text and whole-block page selections atomically.
@@ -41,7 +43,27 @@ export function registerSelectionDeletion(reactEditor: ReactEditor): void {
       return rootBlockSelection || editableEvent;
     },
   }, ({ root }) => {
-    reactEditor.selection.delete();
+    const current = reactEditor.selection.get();
+    editor.batchUpdates(() => {
+      if (current && isStructuralSelection(current)) {
+        const ids = getSelectedBlockIds(current);
+        const seen = new Set<BlockViewBehavior>();
+        // A non-default outcome claims the whole selection and skips generic deletion.
+        let claimed = false;
+        for (const id of ids) {
+          const view = reactEditor.views.resolve(id);
+          if (seen.has(view)) continue;
+          seen.add(view);
+          const context = createBlockViewContext(reactEditor, id, root, current);
+          if (context && view.onStructuralDelete(context, ids) !== "default") {
+            claimed = true;
+            break;
+          }
+        }
+        if (claimed) return;
+      }
+      reactEditor.selection.delete();
+    });
     // Keep keyboard ownership inside Rivto immediately when a normal browser
     // briefly focuses a block deletion just removed. This does not address
     // Cursor Browser intercepting Ctrl/Cmd+Z before the page receives it; see

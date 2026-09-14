@@ -33,12 +33,12 @@ export type {
 export {
   createIsEmptyDefaultBlock,
   resolveIsEmptyBlock,
-} from "./extensions/page/empty-block";
+} from "./extensions/page/default-writing-block";
 export type {
   CreateDefaultBlock,
   EmptyBlockCandidate,
   IsEmptyBlock,
-} from "./extensions/page/empty-block";
+} from "./extensions/page/default-writing-block";
 export { MarkdownContent } from "./blocks/markdown";
 export {
   ERROR_BLOCK_TYPE,
@@ -52,7 +52,7 @@ export {
   isNumberedListType,
   resolveBlockListNumbers,
   type BlockListType,
-} from "./extensions/page/list-properties";
+} from "./extensions/page/list";
 export { type BlockElementProps } from "./surfaces/edgeless";
 export {
   EdgelessSnappingStore,
@@ -117,6 +117,9 @@ export type {
   KeyboardEventDefinition,
   KeyboardShortcut,
   ReactBlockRegistration,
+  ReactBlockDefinition,
+  ReactBlockDefinitionMetadata,
+  BlockContainment,
   ReactBlockSlashCommand,
   ReactEditorExtension,
   ElementSlotProps,
@@ -161,3 +164,12 @@ export {
   type TableCellProps,
 } from "./extensions/table/table";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal";
+export { BaseBlockView, ContainerBlockView } from "./views";
+export type {
+  BlockViewBehavior,
+  BlockDropPlacementOptions,
+  BlockViewContext,
+  BlockViewDropContext,
+  BlockViewOutcome,
+  DropAxis,
+} from "./views";

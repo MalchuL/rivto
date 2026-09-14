@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const ROW_CLASS = "page-block-row";
 const HANDLE_CLASS = "page-drag-handle";
+const DROP_INDICATOR_CLASS = "page-drop-indicator";
 
 /**
  * Moves a block through the pointer sensor to a target's interior.
@@ -26,20 +27,20 @@ async function move(page: Page, source: Locator, target: Locator, fraction = 0.5
   await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
   await page.mouse.move(to.x + to.width * (axis === "horizontal" ? fraction : 0.5), to.y + to.height * (axis === "vertical" ? fraction : 0.5), { steps: 15 });
   if (axis === "horizontal") {
-    const indicator = target.locator(':scope > [data-axis="horizontal"]');
+    const indicator = page.locator(`.${DROP_INDICATOR_CLASS}[data-axis="vertical"]`);
     await expect(indicator).toBeVisible();
     const line = (await indicator.boundingBox())!;
     const column = (await target.boundingBox())!;
     expect(Math.abs(line.height - column.height)).toBeLessThanOrEqual(1);
     expect(line.width).toBe(4);
-    if (fraction < 0.5) expect(line.x).toBeCloseTo(column.x - 10, 0);
-    else expect(line.x).toBeCloseTo(column.x + column.width + 6, 0);
+    if (fraction < 0.5) expect(line.x + line.width / 2).toBeCloseTo(column.x, 0);
+    else expect(line.x + line.width / 2).toBeCloseTo(column.x + column.width, 0);
     await expect(target).not.toHaveCSS("background-color", "rgb(220, 234, 255)");
     await expect(source).toHaveCSS("outline-style", "dashed");
   }
   await page.mouse.up();
   if (axis === "horizontal") {
-    await expect(target.locator(':scope > [data-axis="horizontal"]')).toHaveCount(0);
+    await expect(page.locator(`.${DROP_INDICATOR_CLASS}`)).toHaveCount(0);
     await expect(source).not.toHaveAttribute("data-dragging", "true");
   }
 }

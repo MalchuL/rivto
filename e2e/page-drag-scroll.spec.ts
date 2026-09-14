@@ -37,7 +37,7 @@ function rootIds(editor: Locator): Promise<string[]> {
  */
 function dropFeedbackOwner(page: Page): Promise<string | null> {
   return page.evaluate(() => {
-    const decorated = document.querySelector(".page-drop-line") ?? document.querySelector("[data-drop-inside]");
+    const decorated = document.querySelector(".page-drop-indicator") ?? document.querySelector("[data-drop-inside]");
     const block = decorated?.closest<HTMLElement>("[data-block-id]");
     return block?.dataset.blockId ?? null;
   });
@@ -207,8 +207,8 @@ test.describe("page drag with a scrolling window", () => {
         { steps: 5 },
       );
 
-      const line = targetRow.locator(".page-drop-line");
-      await expect(line).toHaveAttribute("data-edge", "after");
+      const line = page.locator(".page-drop-indicator[data-kind='between']");
+      await expect(line).toBeVisible();
       await expect(line).toHaveCSS("left", `${depth * CHILD_DROP_INDENT}px`);
 
       await page.mouse.up();

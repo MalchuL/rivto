@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@chulane/crdt-doc": ["../../packages/crdt-doc/src/index.ts"],
+      "@chulane/document-model": ["../../packages/document-model/src/index.ts"],
+      "@chulane/rivto": ["../../packages/rivto-editor-core/src/index.ts"],
+      "@chulane/rivto-react": ["../../packages/react-rivto-editor/src/index.ts"],
+      "react": ["../../packages/react-rivto-editor/node_modules/@types/react/index.d.ts"],
+      "react/jsx-runtime": ["../../packages/react-rivto-editor/node_modules/@types/react/jsx-runtime.d.ts"],
+      "react-dom": ["../../packages/react-rivto-editor/node_modules/@types/react-dom/index.d.ts"],
+      "react-dom/*": ["../../packages/react-rivto-editor/node_modules/@types/react-dom/*"]
+    },
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "types": ["vite/client"]
+  },
+  "include": ["renderer"]
+}

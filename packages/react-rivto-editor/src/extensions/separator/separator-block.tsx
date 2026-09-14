@@ -15,7 +15,7 @@ import {
   type ReactEditorExtension,
 } from "../../managers";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../constants";
-import type { CreateDefaultBlock } from "../page/empty-block";
+import type { CreateDefaultBlock } from "../page/default-writing-block";
 import type { ReactEditor } from "../../types";
 
 /** Persisted native type installed by the built-in separator extension. */

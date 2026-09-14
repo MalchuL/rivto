@@ -49,3 +49,12 @@ export {
   type TableCellProps,
 } from "./extensions/table/table";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal";
+export { BaseBlockView, ContainerBlockView } from "./views";
+export type {
+  BlockDropPlacementOptions,
+  BlockViewBehavior,
+  BlockViewContext,
+  BlockViewDropContext,
+  BlockViewOutcome,
+  DropAxis,
+} from "./views";

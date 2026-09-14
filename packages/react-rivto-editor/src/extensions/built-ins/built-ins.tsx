@@ -11,13 +11,7 @@ import {
   type EditorBlockInput as BlockInput,
   createStructuralSelection,
 } from "@chulane/rivto";
-import {
-  BLOCK_LIST_TYPES,
-  isNumberedListType,
-  resolveBlockListNumbers,
-  type BlockListType,
-} from "../page/list-properties";
-import type { ComponentType, ReactNode } from "react";
+import type { BlockListType } from "../page/list";
 import { registerClipboard, type ClipboardExtensionOptions } from "../clipboard/clipboard";
 import { registerHistory, type HistoryExtensionOptions } from "../history/history";
 import { registerTextSelection } from "../selection/text-selection";
@@ -31,28 +25,22 @@ import {
   registerBlockSelectionNavigation,
   registerCaretNavigation,
   registerKeyboardBlockMove,
-} from "../page/page-navigation";
-import {
-  registerBackwardBlockMerge,
-  registerBlockOutdent,
-  registerEmptyBlockReset,
-} from "../page/page-backspace";
+} from "../page/navigation";
+import { registerBlockMerge } from "../page/block-merge";
+import { registerBlockOutdent } from "../page/block-outdent";
+import { registerEmptyBlockReset } from "../page/empty-block-reset";
 import { registerBlockSelection } from "../selection/block-selection";
-import { registerCollapse } from "../page/page-collapse";
-import { registerForwardBlockMerge } from "../page/page-delete";
+import { registerCollapse } from "../page/collapse";
 import {
-  PageDragBlockWrapper,
-  PageDragBlockSlot,
-  PageDragProvider,
+  registerPageDrag,
   type PageDragExtensionOptions,
-} from "../page/page-drag";
-import { BlockCollapseSlot, BlockListSlot } from "../../blocks/block-slot-controls";
-import { registerBlockCreation } from "../page/page-enter";
+} from "../page/drag";
+import { registerBlockCreation } from "../page/block-creation";
 import { SlashMenu } from "../slash/slash-menu";
 import { registerSelectionDeletion } from "../selection/selection-deletion";
-import { TrailingBlock } from "../page/trailing-block";
-import { applyIndentShortcut } from "../page/indent";
-import { registerListShortcuts } from "../page/list-shortcuts";
+import { registerTrailingBlock } from "../page/trailing-block";
+import { registerIndent, type IndentExtensionOptions } from "../page/indent";
+import { registerListShortcuts } from "../page/list";
 import {
   EdgelessSnappingStore,
   EdgelessSurface,
@@ -70,30 +58,9 @@ import {
 import { createErrorBlockInput, errorBlockExtension } from "../error/error-block";
 import { PageSurface } from "../../surfaces/page";
 import {
-  KEYBOARD_BINDING_IDS,
   type ReactBlockRegistration,
   type ReactEditorExtension,
 } from "../../managers";
-
-/**
- * Adapts a React component to the functional extension lifecycle.
- *
- * Components remain useful for behavior implemented with React hooks, while
- * callers configure the editor exclusively through extension functions.
- *
- * @param id - Stable extension identity used for duplicate detection.
- * @param component - Headless or visual component mounted by EditorView.
- * @returns A creation-time React editor extension.
- */
-const componentExtension = (
-  id: string,
-  component: ComponentType,
-): ReactEditorExtension => ({
-  id,
-  setup: (reactEditor) => {
-    reactEditor.extensions.mount(component);
-  },
-});
 
 /** @returns The built-in recursive outline surface for block mode. */
 export const pageSurfaceExtension = (): ReactEditorExtension => ({
@@ -174,10 +141,7 @@ export const blockCreationExtension = (): ReactEditorExtension => ({
 export const blockMergeExtension = (): ReactEditorExtension => {
   return {
     id: "block.merge",
-    setup: (reactEditor) => {
-      registerBackwardBlockMerge(reactEditor);
-      registerForwardBlockMerge(reactEditor);
-    },
+    setup: registerBlockMerge,
   };
 };
 
@@ -195,7 +159,10 @@ export const trailingBlockExtension = (count: number): ReactEditorExtension => {
   if (!Number.isInteger(count) || count < 1) {
     throw new Error("Trailing block count must be a positive integer");
   }
-  return componentExtension("block.trailing-create", () => <TrailingBlock count={count} />);
+  return {
+    id: "block.trailing-create",
+    setup: (reactEditor) => registerTrailingBlock(reactEditor, count),
+  };
 };
 
 /** @returns Backspace-at-start outdent behavior for nested blocks. */
@@ -207,53 +174,13 @@ export const emptyBlockResetExtension = (): ReactEditorExtension =>
   ({ id: "block.reset-empty", setup: registerEmptyBlockReset });
 
 /** @returns Markdown-style whole-content shortcuts for built-in list modes. */
-export const listShortcutsExtension = (): ReactEditorExtension =>
-  ({
-    id: "list.shortcuts",
-    setup: (reactEditor) => {
-      reactEditor.blocks.registerListProps({
-        id: "list",
-        defaults: { type: "list", checked: false },
-        validate: (candidate) =>
-          BLOCK_LIST_TYPES.includes(candidate.type as BlockListType) &&
-          typeof candidate.checked === "boolean",
-      });
-      reactEditor.surfaces.registerBlockSlot({
-        position: "start",
-        priority: 300,
-        component: BlockListSlot,
-        when: ({ block }) =>
-          block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type),
-      });
-      reactEditor.clipboard.registerFormatter({
-        id: "list",
-        matches: ({ block }) =>
-          block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type),
-        format: ({ block, siblings, depth }, current) => {
-          const type = block.listProps.type;
-          const number = resolveBlockListNumbers(siblings).get(block.id);
-          const marker = type === "checkbox"
-            ? `- [${block.listProps.checked === true ? "x" : " "}] `
-            : `${number ?? 1}. `;
-          const indent = "  ".repeat(depth);
-          const plain = `${indent}${marker}${current.plain.slice(indent.length)}`;
-          const html = type === "checkbox"
-            ? `<ul><li><input type="checkbox" disabled${block.listProps.checked === true ? " checked" : ""}>${current.html}</li></ul>`
-            : `<ol start="${number ?? 1}"><li value="${number ?? 1}">${current.html}</li></ol>`;
-          return { plain, markdown: plain, html };
-        },
-      });
-      registerListShortcuts(reactEditor);
-    },
-  });
+export const listShortcutsExtension = (): ReactEditorExtension => ({
+  id: "list.shortcuts",
+  setup: registerListShortcuts,
+});
 
 /** Shortcut configuration for structural indentation. */
-export interface IndentExtensionOptions {
-  /** Bindings that indent the active block or eligible sibling selection. */
-  readonly indentKeys?: readonly string[];
-  /** Bindings that outdent while preserving the selected subtree structure. */
-  readonly outdentKeys?: readonly string[];
-}
+export type { IndentExtensionOptions } from "../page/indent";
 
 /**
  * Installs configurable indent and outdent keyboard actions.
@@ -265,52 +192,16 @@ export interface IndentExtensionOptions {
  * @returns A functional extension with two stable keyboard binding IDs.
  */
 export const indentExtension = (options: IndentExtensionOptions = {}): ReactEditorExtension => {
-  const indentKeys = options.indentKeys ?? ["Tab"];
-  const outdentKeys = options.outdentKeys ?? ["Shift+Tab"];
   return {
     id: "block.indent",
-    setup: (reactEditor) => {
-      reactEditor.keyboard.register({
-        id: KEYBOARD_BINDING_IDS.blockIndent,
-        keys: indentKeys,
-      }, ({ editor, root, raw: event }) => applyIndentShortcut(
-        editor,
-        reactEditor.selection,
-        root,
-        event,
-        false,
-      ));
-      reactEditor.keyboard.register({
-        id: KEYBOARD_BINDING_IDS.blockOutdent,
-        keys: outdentKeys,
-      }, ({ editor, root, raw: event }) => applyIndentShortcut(
-        editor,
-        reactEditor.selection,
-        root,
-        event,
-        true,
-      ));
-    },
+    setup: (reactEditor) => registerIndent(reactEditor, options),
   };
 };
 
 /** @returns Shared persisted collapse controls and keyboard actions. */
 export const collapseExtension = (): ReactEditorExtension => ({
   id: "block.collapse",
-  setup: (reactEditor) => {
-    reactEditor.blocks.registerListProps({
-      id: "collapse",
-      defaults: { collapsed: false },
-      validate: (candidate) => typeof candidate.collapsed === "boolean",
-    });
-    reactEditor.surfaces.registerBlockSlot({
-      position: "left-top",
-      priority: 100,
-      component: BlockCollapseSlot,
-      when: ({ block }) => block.children.length > 0,
-    });
-    return registerCollapse(reactEditor);
-  },
+  setup: registerCollapse,
 });
 
 /** @returns Root-card click, toggle, and rectangle selection in edgeless mode. */
@@ -362,21 +253,9 @@ export type PageDragOptions = Omit<PageDragExtensionOptions, "children">;
  * @returns Functional React editor extension installed by createReactEditor.
  */
 export const pageDragExtension = (options: PageDragOptions = {}): ReactEditorExtension => {
-  const DragBoundary = ({ children }: { readonly children?: ReactNode }) => (
-    <PageDragProvider {...options}>{children}</PageDragProvider>
-  );
   return {
     id: "drag.page",
-    setup: (reactEditor) => {
-      reactEditor.surfaces.registerEditorWrapper(DragBoundary);
-      reactEditor.surfaces.registerBlockWrapper("block", PageDragBlockWrapper);
-      reactEditor.surfaces.registerBlockWrapper("edgeless", PageDragBlockWrapper);
-      reactEditor.surfaces.registerBlockSlot({
-        position: "left-top",
-        priority: 200,
-        component: PageDragBlockSlot,
-      });
-    },
+    setup: (reactEditor) => registerPageDrag(reactEditor, options),
   };
 };
 

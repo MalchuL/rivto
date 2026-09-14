@@ -5,7 +5,7 @@
  * snapshots, and undo behavior remain owned by the existing editor managers.
  * @module
  */
-import { createCaretSelection, type EditorBlock, type EditorBlockInput } from "@chulane/rivto";
+import { type EditorBlock, type EditorBlockInput } from "@chulane/rivto";
 import { createPortal } from "react-dom";
 import {
   useLayoutEffect,
@@ -18,9 +18,11 @@ import {
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../blocks/block-wrapper";
 import { BlockModal, BlockModalButton } from "../../blocks/block-modal";
 import { MarkdownContent } from "../../blocks/markdown";
-import { useReactEditor } from "../../hooks";
-import { focusBlock, type ReactEditorExtension } from "../../managers";
+import { useBlockEditing, useReactEditor } from "../../hooks";
+import { type ReactEditorExtension } from "../../managers";
 import type { ReactEditor } from "../../types";
+import { tableCellView, tableRowView, tableView } from "./table-view";
+import { convertLeafToContainer } from "../../views/ops/outline-ops";
 
 export const TABLE_BLOCK_TYPE = "table";
 export const TABLE_ROW_BLOCK_TYPE = "table-row";
@@ -28,6 +30,7 @@ export const TABLE_CELL_BLOCK_TYPE = "table-cell";
 export const TABLE_DEFAULT_COLUMN_WIDTH = 180;
 
 const TABLE_CLASS = "rivto-table";
+const TABLE_SUMMARY_CLASS = "rivto-table-summary";
 const ROW_CLASS = "rivto-table-row";
 const CELL_CLASS = "rivto-table-cell";
 const ADD_ROW_CLASS = "rivto-table-add-row";
@@ -45,8 +48,14 @@ export interface TableCellProps {
 
 const TABLE_STYLES = `
 [data-block-type="${TABLE_BLOCK_TYPE}"] > .page-block-children {
-  margin: 8px 0 16px;
+  margin: 0;
   overflow-x: auto;
+  border: 1px solid #dcdfe4;
+  border-radius: 10px;
+}
+[data-block-type="${TABLE_BLOCK_TYPE}"]:not(:has(> .page-block-children)):has(.${TABLE_SUMMARY_CLASS}:empty) {
+  box-sizing: border-box;
+  min-height: 96px;
   border: 1px solid #dcdfe4;
   border-radius: 10px;
 }
@@ -76,18 +85,23 @@ const TABLE_STYLES = `
   border-left: 1px solid #dcdfe4;
 }
 [data-block-type="${TABLE_CELL_BLOCK_TYPE}"] > .page-block-children { margin: 8px 0 0 16px; }
-[data-block-type="${TABLE_CELL_BLOCK_TYPE}"][data-drop-inside="true"] {
-  outline: 2px solid var(--rivto-accent, #6c5ce7);
-  outline-offset: -2px;
-}
 [data-block-type="${TABLE_BLOCK_TYPE}"] .page-block-row::before { inset: 0; width: auto; }
-[data-block-type="${TABLE_BLOCK_TYPE}"] .rivto-slot[data-slot-position="left-top"] {
+[data-block-type="${TABLE_BLOCK_TYPE}"] > .page-block-children .rivto-slot[data-slot-position="left-top"] {
   position: relative;
   inset: auto;
   transform: none;
   order: -1;
 }
-.${ROW_CLASS}, .${TABLE_CLASS} { min-height: 1px; }
+.${ROW_CLASS} { min-height: 1px; }
+.${TABLE_SUMMARY_CLASS} {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.${TABLE_SUMMARY_CLASS}:not(:empty) {
+  min-height: var(--rivto-default-block-height);
+}
+.${TABLE_SUMMARY_CLASS} span { color: #626f86; font-size: 12px; font-variant-numeric: tabular-nums; }
 .${ADD_ROW_CLASS}, .${ADD_COLUMN_CLASS} {
   position: absolute;
   z-index: 5;
@@ -189,7 +203,7 @@ export function createTableBlockInput(
   const widths = Array.from({ length: tableDimension(columns, "column count") }, () => columnWidth(width));
   return {
     type: TABLE_BLOCK_TYPE,
-    content: "Table",
+    content: "",
     children: Array.from(
       { length: tableDimension(rows, "row count") },
       () => createTableRowInput(widths),
@@ -353,12 +367,22 @@ function TableDialog({ block, children }: BlockWrapperProps) {
 }
 
 /**
- * Renders the editable table title and vertical row-sort marker.
+ * Renders a structural selection region with table dimensions when collapsed.
  * @param props - Stable table identity.
- * @returns Editable title content.
+ * @returns Contentless table header; the shared tree renders its rows.
  */
 export function Table({ blockId }: { readonly blockId: string }) {
-  return <div className={TABLE_CLASS} data-block-sort-children="vertical"><MarkdownContent blockId={blockId} /></div>;
+  const editing = useBlockEditing(blockId, { textEdit: false });
+  const block = editing.block;
+  if (!block) return null;
+  const rows = block.children.length;
+  const columns = block.children.reduce((count, row) => Math.max(count, row.children.length), 0);
+  return <div {...editing.attributes} className={`${TABLE_CLASS} ${TABLE_SUMMARY_CLASS}`}>
+    {block.listProps.collapsed === true && <>
+      <strong>Table</strong>
+      <span>{rows} × {columns}</span>
+    </>}
+  </div>;
 }
 
 /**
@@ -370,7 +394,7 @@ function TableRow({ blockId }: { readonly blockId: string }) {
   const runtime = useReactEditor();
   const { marker, host } = useBlockHost();
   return <>
-    <div ref={marker} className={ROW_CLASS} data-block-sort-children="horizontal" />
+    <div ref={marker} className={ROW_CLASS} />
     {host && createPortal(<button className={ADD_ROW_CLASS} type="button" aria-label="Add table row below"
       onClick={() => insertTableRow(runtime, blockId)}>+</button>, host)}
   </>;
@@ -485,25 +509,8 @@ function TableCell({ blockId }: { readonly blockId: string }) {
    * @param event - Keyboard event captured from this cell's own editor.
    * @returns Nothing; accepted Enter events are handled synchronously.
    */
-  const addBlock = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey
-      || event.nativeEvent.isComposing) return;
-    event.preventDefault();
-    event.stopPropagation();
-    let childId = "";
-    runtime.editor.batchUpdates(() => {
-      runtime.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
-      childId = runtime.blocks.insertBlock(runtime.createDefaultBlock());
-      runtime.editor.blocks.moveBlocks([childId], blockId, "inside");
-      runtime.selection.set(createCaretSelection(childId, 0));
-    });
-    requestAnimationFrame(() => {
-      const root = runtime.events.getRoot();
-      if (root) focusBlock(root, childId, 0);
-    });
-  };
   return <>
-    <div ref={marker} className={CELL_CLASS} data-block-drop-container="" onKeyDownCapture={addBlock}>
+    <div ref={marker} className={CELL_CLASS}>
       <MarkdownContent blockId={blockId} />
     </div>
     {host && createPortal(<button className={ADD_COLUMN_CLASS} type="button" aria-label="Add table column to the right"
@@ -528,16 +535,33 @@ export function tableExtension(): ReactEditorExtension {
     setup: (runtime) => {
       runtime.extensions.mount(TableStyles);
       runtime.blocks.register({
-        definition: { type: TABLE_BLOCK_TYPE, title: "Table" },
+        definition: {
+          type: TABLE_BLOCK_TYPE,
+          title: "Table",
+          metadata: { containment: { childOutline: "fixed" } },
+        },
         render: Table,
+        view: tableView,
       });
       runtime.blocks.register({
-        definition: { type: TABLE_ROW_BLOCK_TYPE, title: "Table row", allowedParents: [TABLE_BLOCK_TYPE] },
+        definition: {
+          type: TABLE_ROW_BLOCK_TYPE,
+          title: "Table row",
+          allowedParents: [TABLE_BLOCK_TYPE],
+          metadata: { containment: { childOutline: "fixed" } },
+        },
         render: TableRow,
+        view: tableRowView,
       });
       runtime.blocks.register({
-        definition: { type: TABLE_CELL_BLOCK_TYPE, title: "Table cell", allowedParents: [TABLE_ROW_BLOCK_TYPE] },
+        definition: {
+          type: TABLE_CELL_BLOCK_TYPE,
+          title: "Table cell",
+          allowedParents: [TABLE_ROW_BLOCK_TYPE],
+          metadata: { containment: { childOutline: "free", outlineFloor: true } },
+        },
         render: TableCell,
+        view: tableCellView,
       });
       runtime.surfaces.registerBlockWrapper("block", TableCellWidthWrapper);
       runtime.surfaces.registerBlockWrapper("edgeless", TableCellWidthWrapper);
@@ -551,9 +575,10 @@ export function tableExtension(): ReactEditorExtension {
       runtime.slashCommands.register({
         id: "block.table.insert",
         title: "Table",
-        group: "Insert",
+        group: "Turn into",
         keywords: ["grid", "rows", "columns", "cells"],
-        execute: ({ blockId }) => { runtime.blocks.insertBlock(createTableBlockInput(), blockId); },
+        isAvailable: ({ blockId }) => runtime.editor.blocks.getBlock(blockId)?.children.length === 0,
+        execute: ({ blockId }) => { convertLeafToContainer(runtime, blockId, createTableBlockInput()); },
       });
     },
   };

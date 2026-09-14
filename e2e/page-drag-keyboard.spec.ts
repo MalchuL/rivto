@@ -48,12 +48,13 @@ test.beforeEach(async ({ page }) => {
 test("moves a block to a later sibling position with the keyboard", async ({ page }) => {
   const editor = today(page);
   const before = await pickUpFirstRoot(page, editor, 2);
-  const second = editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).nth(1);
 
   // Without a cursor the stand-in rectangle sits over a row body, and the
   // cursor-free branch must still choose a gap rather than nesting the block.
-  const line = second.locator(":scope > .page-block-row > .page-drop-line");
-  await expect(line).toHaveAttribute("data-edge", "after");
+  const line = page.locator(".page-drop-indicator[data-kind='between']");
+  await expect(line).toBeVisible();
+  await expect(line).toHaveAttribute("data-axis", "horizontal");
+  await expect(line).toHaveCSS("height", "4px");
   await expect(page.locator("[data-drop-inside]")).toHaveCount(0);
 
   await page.keyboard.press("Space");
@@ -69,7 +70,7 @@ test("leaves the document unchanged when a keyboard drag is cancelled", async ({
 
   await page.keyboard.press("Escape");
   await expect(page.locator(".page-drag-overlay")).toHaveCount(0);
-  await expect(page.locator(".page-drop-line")).toHaveCount(0);
+  await expect(page.locator(".page-drop-indicator")).toHaveCount(0);
   expect(await rootIds(editor)).toEqual(before);
 });
 

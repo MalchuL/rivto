@@ -136,6 +136,7 @@ describe("clipboard commands", () => {
     const source = createRivtoEditor();
     source.blocksRegistry.defineBlock({ type: "heading2" });
     const target = createRivtoEditor();
+    target.blocksRegistry.defineBlock({ type: "heading2" });
     const copied = source.blocks.insertBlock({ type: "heading2", content: "Copied heading" });
     source.execute("selection.set", {
       selection: createStructuralSelection([copied], copied, copied),
@@ -178,6 +179,7 @@ describe("clipboard commands", () => {
     clipboard.set(RIVTO_CLIPBOARD_MIME, source.execute("clipboard.copy") as string);
 
     const target = createRivtoEditor();
+    target.blocksRegistry.defineBlock({ type: "heading2" });
     const empty = target.blocks.insertBlock({ type: "paragraph", content: "" });
     const oldChild = target.blocks.insertBlock({ type: "paragraph", content: "Old child" }, empty);
     target.blocks.indentBlock(oldChild);

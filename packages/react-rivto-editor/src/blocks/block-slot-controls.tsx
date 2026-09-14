@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { resolveBlockListNumbers } from "../extensions/page/list-properties";
+import { resolveBlockListNumbers } from "../extensions/page/list";
 import { useBlock, useReactEditor } from "../hooks";
 import type { BlockSlotProps } from "../managers";
 import type { ReactEditor } from "../types";

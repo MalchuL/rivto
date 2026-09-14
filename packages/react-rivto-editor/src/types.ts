@@ -14,9 +14,10 @@ import type {
   SelectionCapability,
   SlashCommandsCapability,
   SurfacesCapability,
+  ViewsCapability,
 } from "./capabilities";
 import type { MouseEvent } from "react";
-import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/page/empty-block";
+import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/page/default-writing-block";
 
 /** Context supplied when a rendered Markdown link is activated. */
 export interface MarkdownLinkClick {
@@ -44,7 +45,7 @@ export interface CreateReactEditorOptions {
  * Coordinates React presentation managers around one core editor.
  *
  * Managers are public extension boundaries. Extensions register directly through
- * `blocks`, `renderers`, `surfaces`, `extensions`, `events`, `keyboard`,
+ * `blocks`, `renderers`, `views`, `surfaces`, `extensions`, `events`, `keyboard`,
  * `selection`, and `slashCommands`; ReactEditor deliberately exposes no
  * forwarding registry methods or mutable collections.
  *
@@ -77,6 +78,8 @@ export interface ReactEditor {
     isEmptyBlock: IsEmptyBlock;
   }): () => void;
   readonly renderers: RenderersCapability;
+  /** Per-type outline and drop behavior resolved by page dispatchers. */
+  readonly views: ViewsCapability;
   readonly blocks: BlocksCapability;
   /** React-owned portable clipboard formatter and parser registry. */
   readonly clipboard: ClipboardCapability;

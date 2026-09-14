@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rivto Containers"
+  short_description: "Build native Rivto layout containers correctly"
+  default_prompt: "Use $rivto-containers to implement a container block in this repository."

@@ -903,10 +903,19 @@ export class DocumentBlockManager {
         this.invalidateSnapshotIds(affected);
     }
 
-    /** Drops and publishes the exact recursive block snapshots supplied. */
+    /**
+     * Drops and publishes the exact recursive block snapshots supplied.
+     *
+     * Every snapshot is dropped before any listener runs. Notification is
+     * synchronous and a listener typically re-reads its block, which re-caches
+     * the whole ancestor chain. Interleaving deletion with notification would
+     * therefore rebuild an ancestor from a descendant snapshot still waiting
+     * its turn in this same set, re-caching the pre-mutation subtree and
+     * leaving the block reachable by ID but absent from the materialized tree.
+     */
     private invalidateSnapshotIds(ids: ReadonlySet<string>): void {
+        ids.forEach((id) => this.blockSnapshots.delete(id));
         ids.forEach((id) => {
-            this.blockSnapshots.delete(id);
             const listeners = this.blockListeners.get(id);
             if (listeners) this.emit(listeners);
         });

@@ -293,7 +293,7 @@ export class BlockManager {
   }
 
   /**
-   * Nests one block under its previous sibling when the outline allows it.
+   * Nests one block under its previous sibling.
    *
    * @param id - Block identifier to indent.
    * @returns No value.
@@ -452,11 +452,10 @@ export class BlockManager {
         position?: "before" | "after" | "inside";
       };
       const rawTarget = "targetId" in data ? data.targetId : data.afterId;
-      this.editor.document.blocks.moveBlock(
-        commandString(data.id, "id"),
-        rawTarget === null ? null : commandString(rawTarget, "targetId"),
-        data.position === "before" || data.position === "inside" ? data.position : "after",
-      );
+      const id = commandString(data.id, "id");
+      const targetId = rawTarget === null ? null : commandString(rawTarget, "targetId");
+      const position = data.position === "before" || data.position === "inside" ? data.position : "after";
+      this.editor.document.blocks.moveBlock(id, targetId, position);
     }));
     register("block.move-many", documentCommand((value) => {
       const data = commandPayload(value) as unknown as {

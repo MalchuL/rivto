@@ -26,16 +26,17 @@ function createColumnsRuntime() {
   return { editor, runtime };
 }
 
-test("slash insert seeds a writing block in each column", () => {
+test("slash insert creates empty columns", () => {
   const { editor, runtime } = createColumnsRuntime();
-  const before = editor.blocks.insertBlock({ type: "paragraph", content: "Before" });
+  const before = editor.blocks.insertBlock({ type: "paragraph", content: "" });
   runtime.slashCommands.execute("block.columns.insert", { blockId: before });
-  const board = editor.blocks.getBlocks().find((block) => block.type === COLUMNS_BLOCK_TYPE)!;
+  const board = editor.blocks.getBlock(before)!;
+  expect(board.id).toBe(before);
+  expect(board.type).toBe(COLUMNS_BLOCK_TYPE);
+  expect(board.content).toBe("");
   expect(board.children).toHaveLength(2);
   expect(board.children.every((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE)).toBe(true);
-  const seeded = board.children.map((column) => column.children);
-  expect(seeded.every((children) => children.length === 1)).toBe(true);
-  expect(seeded.every((children) => children[0]?.type === "paragraph" && children[0]?.content === "")).toBe(true);
+  expect(board.children.every((column) => column.children.length === 0)).toBe(true);
   runtime.destroy();
   editor.destroy();
 });
@@ -72,6 +73,7 @@ test("inserts equally sized columns and relocates nested blocks when a column is
 
   expect(setColumnsCount(runtime, board.id, 3)).toBe(true);
   expect(editor.blocks.getBlock(board.id)?.children).toHaveLength(3);
+  expect(editor.blocks.getBlock(board.id)?.children[2]?.children).toHaveLength(0);
 
   const snapshot = editor.dump();
   editor.load(snapshot);

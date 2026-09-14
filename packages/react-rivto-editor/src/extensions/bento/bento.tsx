@@ -16,13 +16,12 @@ import {
   type PointerEvent,
 } from "react";
 import type { EditorBlockInput } from "@chulane/rivto";
-import { createCaretSelection } from "@chulane/rivto";
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../blocks/block-wrapper";
 import { BlockModal, BlockModalButton } from "../../blocks/block-modal";
-import { MarkdownContent } from "../../blocks/markdown";
 import { BLOCK_ID_ATTRIBUTE } from "../../constants";
-import { useReactEditor } from "../../hooks";
-import { focusBlock, type ReactEditorExtension } from "../../managers";
+import { useBlockEditing, useReactEditor } from "../../hooks";
+import type { ReactEditorExtension } from "../../managers";
+import { bentoView } from "./bento-view";
 import type { ReactEditor } from "../../types";
 
 export const BENTO_BLOCK_TYPE = "bento";
@@ -31,6 +30,7 @@ const RESIZE_HANDLE_CLASS = "rivto-bento-resize";
 const RESIZE_EDGE_ATTRIBUTE = "data-bento-resize-edge";
 const RESIZING_TILE_ATTRIBUTE = "data-bento-resizing";
 const RESIZING_HANDLE_ATTRIBUTE = "data-resizing";
+const SUMMARY_CLASS = "rivto-bento-summary";
 const MIN_TILE_WIDTH = 160;
 const MAX_TILE_WIDTH = 960;
 const DEFAULT_TILE_WIDTH = 280;
@@ -154,31 +154,29 @@ function commitBentoTileWidth(runtime: ReactEditor, blockId: string, width: numb
  * @returns Portable block input.
  */
 export function createBentoBlockInput(): EditorBlockInput {
-  return { type: BENTO_BLOCK_TYPE, content: "Bento" };
+  return { type: BENTO_BLOCK_TYPE, content: "" };
 }
 
 /**
- * Renders the editable title and identifies the grid's drop geometry.
+ * Renders a structural selection region with a compact collapsed summary.
  *
  * @param props - Container identity.
  * @param props.blockId - Stable ID of the Bento board.
- * @returns Editable title; the shared tree renders its tiles.
+ * @returns Contentless board header; the shared tree renders its tiles.
  */
 export function Bento({ blockId }: { readonly blockId: string }) {
-  const runtime = useReactEditor();
-  return <div data-block-drop-container="" data-block-sort-children="grid" onKeyDownCapture={(event) => {
-    if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing
-      || runtime.editor.blocks.getBlock(blockId)?.children.length) return;
-    event.preventDefault();
-    event.stopPropagation();
-    let id = "";
-    runtime.editor.batchUpdates(() => {
-      id = runtime.blocks.insertBlock(runtime.createDefaultBlock(), blockId);
-      runtime.editor.blocks.moveBlocks([id], blockId, "inside");
-      runtime.selection.set(createCaretSelection(id, 0));
-    });
-    requestAnimationFrame(() => { const root = runtime.events.getRoot(); if (root) focusBlock(root, id, 0); });
-  }}><MarkdownContent blockId={blockId} /></div>;
+  const editing = useBlockEditing(blockId, { textEdit: false });
+  const block = editing.block;
+  if (!block) return null;
+  const tileCount = block.children.length;
+  return (
+    <div {...editing.attributes} className={SUMMARY_CLASS}>
+      {block.listProps.collapsed === true && <>
+        <strong>Bento</strong>
+        <span>{tileCount} {tileCount === 1 ? "tile" : "tiles"}</span>
+      </>}
+    </div>
+  );
 }
 
 /**
@@ -356,20 +354,27 @@ export function bentoExtension(): ReactEditorExtension {
     id: "block.bento",
     setup: (runtime) => {
       const disposers = [
-        runtime.blocks.register({ definition: { type: BENTO_BLOCK_TYPE, title: "Bento" }, render: Bento }),
+        runtime.blocks.register({
+          definition: {
+            type: BENTO_BLOCK_TYPE,
+            title: "Bento",
+            metadata: { containment: { childOutline: "fixed", outlineFloor: true } },
+          },
+          render: Bento,
+          view: bentoView,
+          slashCommand: {
+            id: "block.bento.insert",
+            title: "Bento",
+            group: "Turn into",
+            keywords: ["grid", "tiles"],
+          },
+        }),
         runtime.surfaces.registerBlockWrapper("block", BentoWrapper),
         runtime.surfaces.registerBlockWrapper("edgeless", BentoWrapper),
         runtime.surfaces.registerBlockSlot({
           position: "right",
           component: BlockModalButton,
           when: ({ block }) => block.type === BENTO_BLOCK_TYPE,
-        }),
-        runtime.slashCommands.register({
-          id: "block.bento.insert",
-          title: "Bento",
-          group: "Insert",
-          keywords: ["grid", "tiles"],
-          execute: ({ blockId }) => { runtime.blocks.insertBlock(createBentoBlockInput(), blockId); },
         }),
       ];
       return () => disposers.reverse().forEach((dispose) => dispose());

@@ -5,30 +5,29 @@
  * deleting them. Drag, clipboard, snapshots, and undo remain owned by core.
  * @module
  */
-import { useCallback, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useState, type KeyboardEvent, type MouseEvent } from "react";
+import { type EditorBlockInput } from "@chulane/rivto";
+import { useBlock, useBlockEditing, useReactEditor } from "../../hooks";
 import {
-  createCaretSelection,
-  getSelectedBlockIds,
-  isStructuralSelection,
-  type RivtoEditorApi,
-  type EditorBlockInput,
-} from "@chulane/rivto";
-import { useBlock, useReactEditor } from "../../hooks";
-import { BlockElementRefProvider, type BlockWrapperProps } from "../../blocks";
-import {
-  BUILTIN_KEYMAP,
-  focusBlock,
-  isEditableKeyboardEvent,
-  KEYBOARD_BINDING_IDS,
-  readKeyboardSelection,
-  shouldDeleteSelection,
   type BlockSlotProps,
   type ReactEditorExtension,
 } from "../../managers";
 import type { ReactEditor } from "../../types";
+import { createBlockViewContext } from "../../views/context";
+import {
+  COLUMNS_BLOCK_TYPE,
+  COLUMNS_COLUMN_BLOCK_TYPE,
+  columnsColumnView,
+  columnsView,
+  relocateColumnContents,
+} from "./columns-view";
+import { convertLeafToContainer } from "../../views/ops/outline-ops";
 
-export const COLUMNS_BLOCK_TYPE = "columns";
-export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
+export {
+  COLUMNS_BLOCK_TYPE,
+  COLUMNS_COLUMN_BLOCK_TYPE,
+  relocateColumnContents,
+} from "./columns-view";
 export const COLUMNS_DEFAULT_COUNT = 2;
 export const COLUMNS_MIN_COUNT = 1;
 export const COLUMNS_MAX_COUNT = 6;
@@ -38,21 +37,29 @@ const COLUMN_CLASS = "rivto-columns-column";
 const SETTINGS_CLASS = "rivto-columns-settings";
 const PANEL_CLASS = "rivto-columns-settings-panel";
 const COUNT_CLASS = "rivto-columns-count";
-const DROP_CONTAINER_ATTRIBUTE = "data-block-drop-container";
 const EMPTY_COLUMN_MIN_HEIGHT = "120px";
 
 const COLUMNS_STYLES = `
-[data-block-type="${COLUMNS_BLOCK_TYPE}"],
+[data-block-type="${COLUMNS_BLOCK_TYPE}"] {
+  min-width: 0;
+  max-width: 100%;
+}
 [data-block-type="${COLUMNS_COLUMN_BLOCK_TYPE}"] {
   min-width: 0;
   max-width: 100%;
-  /* Match root writing blocks: no extra nest indent or handle gutter. */
+  /* Internal lanes are layout shells rather than indented writing blocks. */
   padding-left: 0;
   padding-right: 0;
 }
-[data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-row .${COLUMNS_CLASS} {
-  display: none;
+.${COLUMNS_CLASS} {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+.${COLUMNS_CLASS}:not(:empty) {
+  min-height: var(--rivto-default-block-height);
+}
+.${COLUMNS_CLASS} span { color: #626f86; font-size: 12px; font-variant-numeric: tabular-nums; }
 [data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-children {
   display: flex;
   align-items: flex-start;
@@ -60,13 +67,24 @@ const COLUMNS_STYLES = `
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  margin: 4px 0;
+  margin: 0;
 }
 [data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-children > .page-block {
+  position: relative;
   flex: 1 1 0;
   min-width: 0;
   max-width: 100%;
   overflow: visible;
+}
+[data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-children > .page-block + .page-block::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: -12px;
+  width: 1px;
+  background: #dcdfe4;
+  pointer-events: none;
 }
 [data-block-type="${COLUMNS_BLOCK_TYPE}"] .page-block-row::before {
   /* Clip the page-wide hover slab so one lane cannot steal clicks from another. */
@@ -76,7 +94,6 @@ const COLUMNS_STYLES = `
 [data-block-type="${COLUMNS_COLUMN_BLOCK_TYPE}"] > .page-block-children {
   margin: 0;
   padding: 0;
-  min-height: ${EMPTY_COLUMN_MIN_HEIGHT};
 }
 [data-block-type="${COLUMNS_COLUMN_BLOCK_TYPE}"]:has(> .page-block-children) > .page-block-row {
   display: none;
@@ -175,31 +192,6 @@ export function createColumnsBlockInput(
 }
 
 /**
- * Moves nested blocks out of columns that are about to disappear.
- *
- * Remaining sibling columns receive the children, appended in source order.
- * When every column of a board is removed, children are placed after the board
- * so they stay in the document instead of being deleted with the shells.
- *
- * @param editor - Core editor owning the block tree.
- * @param columnIds - Column identifiers whose children must survive.
- * @returns Nothing; callers delete the empty shells afterwards.
- */
-export function relocateColumnContents(editor: RivtoEditorApi, columnIds: readonly string[]): void {
-  const unique = [...new Set(columnIds)].filter((id) => editor.blocks.getBlock(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE);
-  unique.forEach((id) => {
-    const parentId = editor.blocks.getParentId(id);
-    const parent = parentId ? editor.blocks.getBlock(parentId) : undefined;
-    if (!parentId || parent?.type !== COLUMNS_BLOCK_TYPE) return;
-    const keep = parent.children.filter((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE && !unique.includes(child.id));
-    const childIds = editor.blocks.getBlock(id)?.children.map((child) => child.id) ?? [];
-    if (!childIds.length) return;
-    if (keep.length) editor.blocks.moveBlocks(childIds, keep.at(-1)!.id, "inside");
-    else editor.blocks.moveBlocks(childIds, parentId, "after");
-  });
-}
-
-/**
  * Changes how many column shells a board owns, relocating nested blocks first.
  * @param runtime - Active React editor runtime.
  * @param blockId - Columns board identifier.
@@ -220,9 +212,8 @@ export function setColumnsCount(runtime: ReactEditor, blockId: string, count: nu
         const insertedId = runtime.blocks.insertBlock({
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           content: "",
-          children: [runtime.createDefaultBlock()],
-        }, afterId);
-        if (!columns.length && index === columns.length) {
+        }, afterId === board.id ? undefined : afterId);
+        if (afterId === board.id) {
           runtime.editor.blocks.moveBlocks([insertedId], board.id, "inside");
         }
         afterId = insertedId;
@@ -237,32 +228,21 @@ export function setColumnsCount(runtime: ReactEditor, blockId: string, count: nu
 }
 
 /**
- * Inserts a default writing block into an empty column and focuses it.
- * @param runtime - Active React editor runtime.
- * @param columnId - Empty column that should receive the new block.
- * @returns Nothing; the shared tree mounts the writing block.
+ * Occupies the board content slot and summarizes hidden columns when collapsed.
+ * @param props - Identity of the persisted board; content is intentionally empty.
+ * @returns Structural selection region and a compact collapsed summary.
  */
-function insertWritingBlock(runtime: ReactEditor, columnId: string): void {
-  let blockId = "";
-  runtime.editor.batchUpdates(() => {
-    runtime.blocks.updateBlock(columnId, { listProps: { collapsed: false } });
-    blockId = runtime.blocks.insertBlock(runtime.createDefaultBlock(), columnId);
-    runtime.editor.blocks.moveBlocks([blockId], columnId, "inside");
-    runtime.selection.set(createCaretSelection(blockId, 0));
-  });
-  requestAnimationFrame(() => {
-    const root = runtime.events.getRoot();
-    if (root) focusBlock(root, blockId, 0);
-  });
-}
-
-/**
- * Occupies the board content slot without a title or other header chrome.
- * @param _props - Identity of the persisted board; content is intentionally empty.
- * @returns Hidden marker so the shared tree can still mount a content slot.
- */
-export function Columns(_props: { readonly blockId: string }) {
-  return <div className={COLUMNS_CLASS} />;
+export function Columns({ blockId }: { readonly blockId: string }) {
+  const editing = useBlockEditing(blockId, { textEdit: false });
+  const block = editing.block;
+  if (!block) return null;
+  const count = block.children.length;
+  return <div {...editing.attributes} className={COLUMNS_CLASS}>
+    {block.listProps.collapsed === true && <>
+      <strong>Columns</strong>
+      <span>{count} {count === 1 ? "column" : "columns"}</span>
+    </>}
+  </div>;
 }
 
 /**
@@ -284,7 +264,9 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    insertWritingBlock(runtime, blockId);
+    const root = runtime.events.getRoot();
+    const context = root ? createBlockViewContext(runtime, blockId, root) : undefined;
+    if (context) columnsColumnView.insertFirstChild(context);
   };
   return (
     <div
@@ -296,25 +278,6 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
       onKeyDown={startWriting}
     />
   );
-}
-
-/**
- * Places the drop-container marker on the column BlockView so it survives row hide.
- *
- * The lane does not set a sort axis. Children keep the page outline drop
- * policy (gap line, indent, nest). The marker only makes an empty lane a
- * valid drop target.
- *
- * @param props - Current column snapshot and remaining decorator chain.
- * @returns Ref provider, or the unchanged subtree for other block types.
- */
-function ColumnsColumnShell({ block, children }: BlockWrapperProps) {
-  const attach = useCallback((element: HTMLDivElement | null) => {
-    if (!element) return;
-    element.setAttribute(DROP_CONTAINER_ATTRIBUTE, "");
-  }, []);
-  if (block.type !== COLUMNS_COLUMN_BLOCK_TYPE) return children;
-  return <BlockElementRefProvider elementRef={attach}>{children}</BlockElementRefProvider>;
 }
 
 /**
@@ -354,39 +317,6 @@ function ColumnsStyles() {
 }
 
 /**
- * Relocates nested blocks before a structural delete removes column shells.
- * @param reactEditor - Runtime whose selection deletion must preserve column contents.
- * @returns Nothing; the binding is owned by the extension lifecycle.
- */
-function registerColumnDeletion(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
-  reactEditor.keyboard.register({
-    id: "block.columns.relocate-on-delete",
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
-    priority: 20,
-    when: ({ selection, raw: event, blockId }) => {
-      const root = reactEditor.events.getRoot();
-      if (!root) return false;
-      const editableEvent = isEditableKeyboardEvent(event);
-      const current = editableEvent
-        ? readKeyboardSelection(reactEditor.selection, editor, blockId)
-        : selection;
-      if (!shouldDeleteSelection(current) || !current || !isStructuralSelection(current)) return false;
-      return getSelectedBlockIds(current).some((id) => editor.blocks.getBlock(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE);
-    },
-  }, () => {
-    const current = reactEditor.selection.get();
-    if (!current) return false;
-    const columnIds = getSelectedBlockIds(current).filter((id) => editor.blocks.getBlock(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE);
-    editor.batchUpdates(() => {
-      relocateColumnContents(editor, columnIds);
-      reactEditor.selection.delete();
-    });
-    return true;
-  });
-}
-
-/**
  * Registers headerless columns presentation and a slash insertion action.
  * @returns Extension whose registrations are removed with the runtime.
  */
@@ -396,33 +326,39 @@ export function columnsExtension(): ReactEditorExtension {
     setup: (runtime) => {
       runtime.extensions.mount(ColumnsStyles);
       runtime.blocks.register({
-        definition: { type: COLUMNS_BLOCK_TYPE, title: "Columns" },
+        definition: {
+          type: COLUMNS_BLOCK_TYPE,
+          title: "Columns",
+          metadata: { containment: { childOutline: "fixed" } },
+        },
         render: Columns,
+        view: columnsView,
       });
       runtime.blocks.register({
-        definition: { type: COLUMNS_COLUMN_BLOCK_TYPE, title: "Column", allowedParents: [COLUMNS_BLOCK_TYPE] },
+        definition: {
+          type: COLUMNS_COLUMN_BLOCK_TYPE,
+          title: "Column",
+          allowedParents: [COLUMNS_BLOCK_TYPE],
+          metadata: { containment: { childOutline: "free", outlineFloor: true } },
+        },
         render: ColumnsColumn,
+        view: columnsColumnView,
       });
       runtime.surfaces.registerBlockSlot({
         position: "right",
         component: ColumnsControls,
         when: ({ block }) => block.type === COLUMNS_BLOCK_TYPE,
       });
-      runtime.surfaces.registerBlockWrapper("block", ColumnsColumnShell);
-      runtime.surfaces.registerBlockWrapper("edgeless", ColumnsColumnShell);
       runtime.slashCommands.register({
         id: "block.columns.insert",
         title: "Columns",
-        group: "Insert",
+        group: "Turn into",
         keywords: ["layout", "split", "grid"],
+        isAvailable: ({ blockId }) => runtime.editor.blocks.getBlock(blockId)?.children.length === 0,
         execute: ({ blockId }) => {
-          runtime.blocks.insertBlock(
-            createColumnsBlockInput(COLUMNS_DEFAULT_COUNT, runtime.createDefaultBlock()),
-            blockId,
-          );
+          convertLeafToContainer(runtime, blockId, createColumnsBlockInput());
         },
       });
-      registerColumnDeletion(runtime);
     },
   };
 }

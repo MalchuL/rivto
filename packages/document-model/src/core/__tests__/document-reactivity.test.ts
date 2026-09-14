@@ -82,6 +82,41 @@ describe("document reactivity", () => {
     void doc.destroy();
   });
 
+  test("keeps the materialized tree consistent when a listener reads mid-invalidation", () => {
+    const doc = new YjsDoc("nested-move-reactivity");
+    const model = new DocumentModelImpl(doc);
+    // Two siblings nested inside a container, matching a card indented under
+    // its predecessor within a kanban lane or a table cell.
+    model.blocks.insertBlock({
+      id: "container",
+      type: "paragraph",
+      children: [
+        { id: "first", type: "paragraph", content: "first" },
+        { id: "second", type: "paragraph", content: "second" },
+      ],
+    });
+    // A rendered document has every snapshot cached, so the pre-move value of
+    // the destination parent is what an early re-read would splice back in.
+    model.blocks.getBlocks();
+    // React's external-store subscribers read synchronously from notification.
+    // Subscribing to the shallower ancestor makes it re-cache its subtree while
+    // the deeper new parent is still queued for invalidation.
+    const disposers = [
+      model.blocks.subscribeBlock("container", () => { model.blocks.getBlocks(); }),
+      model.blocks.subscribeBlock("first", () => { model.blocks.getBlocks(); }),
+    ];
+
+    model.blocks.moveBlock("second", "first", "inside");
+
+    const reachable = model.blocks.getBlocks().flatMap(function walk(block): string[] {
+      return [block.id, ...block.children.flatMap(walk)];
+    });
+    expect(reachable).toContain("second");
+    expect(model.blocks.getBlock("first")?.children.map(({ id }) => id)).toEqual(["second"]);
+    disposers.forEach((dispose) => dispose());
+    void doc.destroy();
+  });
+
   test("keeps element collection snapshots stable across block-only updates", () => {
     const doc = new YjsDoc("element-reactivity");
     const model = new DocumentModelImpl(doc);

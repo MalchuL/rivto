@@ -447,6 +447,43 @@ test("Left and Right enter a caret at offset 0 from a block selection", async ({
   })).toBe(0);
 });
 
+test("Left and Right preserve native caret movement inside text", async ({ page }) => {
+  const content = textContents(page).first();
+  await content.click();
+  // Start away from a block boundary so both keys must remain native browser
+  // movement instead of invoking Rivto's cross-block navigation.
+  await content.evaluate((element) => {
+    const text = element.firstChild;
+    if (!text) throw new Error("Expected editable text");
+    const range = document.createRange();
+    range.setStart(text, 4);
+    range.collapse(true);
+    const selection = getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => content.evaluate((element) => {
+    const selection = getSelection();
+    if (!selection?.focusNode || !element.contains(selection.focusNode)) return -1;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.setEnd(selection.focusNode, selection.focusOffset);
+    return range.toString().length;
+  })).toBe(5);
+
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(() => content.evaluate((element) => {
+    const selection = getSelection();
+    if (!selection?.focusNode || !element.contains(selection.focusNode)) return -1;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.setEnd(selection.focusNode, selection.focusOffset);
+    return range.toString().length;
+  })).toBe(4);
+});
+
 test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => {
   const parent = page.locator(".page-block:has(> .page-block-children)").first();
   const siblings = parent.locator(`:scope > .page-block-children > ${BLOCK_ID_SELECTOR}`);

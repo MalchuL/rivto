@@ -241,7 +241,10 @@ export function SlashMenu() {
   const currentResults = useCallback(() => {
     const current = sessionRef.current;
     return current
-      ? rankSlashCommands(slashCommands.getAll({ blockId: current.blockId }), current.query)
+      ? groupCommands(rankSlashCommands(
+        slashCommands.getAll({ blockId: current.blockId }),
+        current.query,
+      ).map(({ command }) => command)).flatMap(({ commands }) => commands)
       : [];
   }, [slashCommands]);
 
@@ -288,7 +291,7 @@ export function SlashMenu() {
     const current = sessionRef.current;
     if (!current) return false;
     const results = currentResults();
-    const command = results[current.activeIndex]?.command ?? results[0]?.command;
+    const command = results[current.activeIndex] ?? results[0];
     if (!command) return false;
     execute(command);
     return true;

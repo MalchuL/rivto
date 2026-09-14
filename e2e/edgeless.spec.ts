@@ -1642,7 +1642,7 @@ test("does not choose a structural drop target over blank canvas", async ({ page
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(viewportBox.x + viewportBox.width - 30, viewportBox.y + viewportBox.height - 30, { steps: 8 });
-  await expect(page.locator("[data-drop-inside], .page-drop-line")).toHaveCount(0);
+  await expect(page.locator("[data-drop-inside], .page-drop-indicator")).toHaveCount(0);
   await page.mouse.up();
 
   await expect(cardChild(card, sourceId)).toHaveCount(1);

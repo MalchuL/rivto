@@ -1,6 +1,6 @@
 import type { ReactEditorImpl } from "../../react-editor";
 import type { BlocksCapability } from "../../capabilities";
-import type { ReactBlockRegistration } from "./block-types";
+import { getBlockContainment, type ReactBlockRegistration } from "./block-types";
 import type {
   BlockListProps,
   EditorBlockInput,
@@ -39,7 +39,7 @@ export class BlockManager implements BlocksCapability {
   register(registration: ReactBlockRegistration): () => void {
     const { editor, extensions, renderers, slashCommands } = this.reactEditor;
     extensions.assertActive();
-    const { definition, render, slashCommand } = registration;
+    const { definition, render, slashCommand, view } = registration;
     if (renderers.has(definition.type)) {
       throw new Error(`Block renderer ${definition.type} is already registered`);
     }
@@ -47,7 +47,16 @@ export class BlockManager implements BlocksCapability {
     const disposers: Array<() => void> = [];
     try {
       const existing = editor.blocksRegistry.get(definition.type);
-      if (!existing) {
+      if (existing) {
+        const containment = getBlockContainment(definition);
+        const existingContainment = getBlockContainment(existing);
+        if (containment && (
+          existingContainment?.childOutline !== containment.childOutline
+          || existingContainment?.outlineFloor !== containment.outlineFloor
+        )) {
+          throw new Error(`Block containment ${definition.type} does not match its existing definition`);
+        }
+      } else {
         disposers.push(extensions.own(editor.blocksRegistry.defineBlock(definition)));
       }
       // When the type is already defined (host or test helper), reuse it and only
@@ -55,6 +64,9 @@ export class BlockManager implements BlocksCapability {
       // core no longer ships a shared default-writing definition reference.
 
       disposers.push(renderers.register(definition.type, render));
+      if (view) {
+        disposers.push(this.reactEditor.views.register(definition.type, view));
+      }
       if (registration.separatesBlockElements) {
         this.blockElementSeparatorTypes.add(definition.type);
         disposers.push(() => this.blockElementSeparatorTypes.delete(definition.type));

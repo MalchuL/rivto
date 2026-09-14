@@ -18,10 +18,11 @@ import {
   ReactSlashCommandManager,
   RendererManager,
   SurfaceManager,
+  ViewManager,
 } from "./managers";
 import type { CreateReactEditorOptions, ReactEditor } from "./types";
 import { reconcileBlockElements } from "./surfaces/edgeless/block-elements";
-import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/page/empty-block";
+import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/page/default-writing-block";
 
 export type { CreateReactEditorOptions, ReactEditor } from "./types";
 
@@ -42,6 +43,8 @@ export class ReactEditorImpl implements ReactEditor {
   };
   /** Content renderers indexed by persisted block type. */
   readonly renderers: RendererManager;
+  /** Per-type outline and drop behavior resolved by page dispatchers. */
+  readonly views: ViewManager;
   /** Atomic definition, renderer, and type-conversion registration. */
   readonly blocks: BlockManager;
   /** React-owned portable clipboard formatter and parser registry. */
@@ -88,6 +91,7 @@ export class ReactEditorImpl implements ReactEditor {
     this.selection = new ReactSelectionManager(this);
     this.slashCommands = new ReactSlashCommandManager(this);
     this.renderers = new RendererManager(this, options.unknownBlockRenderer);
+    this.views = new ViewManager(this);
     this.blocks = new BlockManager(this);
     this.clipboard = new ClipboardManager(this);
     this.surfaces = new SurfaceManager(this);
