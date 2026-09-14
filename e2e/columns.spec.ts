@@ -51,3 +51,37 @@ test("creates a writing block on empty-column click and then wraps its content",
   await expect(first.locator(":scope > .page-block-children > .page-block")).toHaveCount(1);
   expect((await first.boundingBox())!.height).toBeLessThan((await second.boundingBox())!.height);
 });
+
+test("aligns the inside-drop highlight with an empty column", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    const { editor } = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor } }).__rivtoDemo.editor;
+    const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
+    editor.blocks.removeBlocks(board.children[0]!.children.map((child) => child.id));
+  });
+
+  const board = page.locator('[data-block-type="columns"]').first();
+  await board.scrollIntoViewIfNeeded();
+  const columns = board.locator('[data-block-type="columns-column"]');
+  const source = columns.nth(1).locator('[data-block-type="paragraph"]').first();
+  const sourceRow = source.locator(":scope > .page-block-row");
+  const handle = sourceRow.locator(".page-drag-handle");
+  const target = columns.first();
+  await sourceRow.hover();
+  await handle.hover();
+  const from = (await handle.boundingBox())!;
+  const to = (await target.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
+
+  await expect(target).toHaveAttribute("data-drop-inside");
+  const highlight = target.locator(":scope > .page-drop-indicator");
+  const highlightBox = (await highlight.boundingBox())!;
+  expect(highlightBox.x).toBeCloseTo(to.x, 0);
+  expect(highlightBox.y).toBeCloseTo(to.y, 0);
+  expect(highlightBox.width).toBeCloseTo(to.width, 0);
+  expect(highlightBox.height).toBeCloseTo(to.height, 0);
+  await page.mouse.up();
+});

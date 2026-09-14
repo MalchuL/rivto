@@ -86,14 +86,23 @@ const COLUMNS_STYLES = `
   background: #dcdfe4;
   pointer-events: none;
 }
-[data-block-type="${COLUMNS_BLOCK_TYPE}"] .page-block-row::before {
+[data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-children .page-block-row::before {
   /* Clip the page-wide hover slab so one lane cannot steal clicks from another. */
   inset: 0;
   width: auto;
 }
+[data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-children
+  .rivto-slot[data-slot-owner="block"][data-slot-position="left-top"] {
+  position: relative;
+  inset: auto;
+  transform: none;
+  order: -1;
+  flex-shrink: 0;
+}
 [data-block-type="${COLUMNS_COLUMN_BLOCK_TYPE}"] > .page-block-children {
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 24px;
+  box-sizing: border-box;
 }
 [data-block-type="${COLUMNS_COLUMN_BLOCK_TYPE}"]:has(> .page-block-children) > .page-block-row {
   display: none;

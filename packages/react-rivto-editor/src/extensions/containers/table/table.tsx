@@ -85,7 +85,7 @@ const TABLE_STYLES = `
   border-left: 1px solid #dcdfe4;
 }
 [data-block-type="${TABLE_CELL_BLOCK_TYPE}"] > .page-block-children { margin: 8px 0 0 16px; }
-[data-block-type="${TABLE_BLOCK_TYPE}"] .page-block-row::before { inset: 0; width: auto; }
+[data-block-type="${TABLE_BLOCK_TYPE}"] > .page-block-children .page-block-row::before { inset: 0; width: auto; }
 [data-block-type="${TABLE_BLOCK_TYPE}"] > .page-block-children .rivto-slot[data-slot-position="left-top"] {
   position: relative;
   inset: auto;

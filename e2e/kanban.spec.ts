@@ -57,6 +57,7 @@ test("moves cards between columns, back to the outline, and into an empty column
   await expect(columns.nth(1).locator(`[data-block-id="${id}"]`)).toHaveCount(1);
   // The board title is at the outline level; its top edge inserts before it.
   const handle = stableCard.locator(`:scope > .${ROW_CLASS} .${HANDLE_CLASS}`);
+  await stableCard.locator(`:scope > .${ROW_CLASS}`).hover();
   await handle.hover();
   const from = (await handle.boundingBox())!;
   const to = (await board.locator(`:scope > .${ROW_CLASS}`).boundingBox())!;

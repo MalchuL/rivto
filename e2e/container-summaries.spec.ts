@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 const ROW_CLASS = "page-block-row";
 const CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 const PAGE_SURFACE_CLASS = "page-surface";
+const DRAG_HANDLE_CLASS = "page-drag-handle";
 
 test("slash converts the current root to each structural container", async ({ page }) => {
   for (const [query, command, type] of [
@@ -119,5 +120,64 @@ test("renders aligned contentless container summaries from reactive block snapsh
     const block = page.locator(`[data-block-type="${type}"]`).first();
     await expect(block.locator(":scope > .page-block-children")).toHaveCount(0);
     expect((await block.boundingBox())!.height, `${type} empty height`).toBeGreaterThanOrEqual(minimumHeight);
+  }
+});
+
+test("reveals root container handles only while hovering their body", async ({ page }) => {
+  await page.goto("/");
+
+  for (const type of ["bento", "table", "columns", "kanban"] as const) {
+    const block = page.locator(`[data-block-type="${type}"]`).first();
+    await block.scrollIntoViewIfNeeded();
+    const body = block.locator(":scope > .page-block-children");
+    const handle = block.locator(`:scope > .${ROW_CLASS} .${DRAG_HANDLE_CLASS}`);
+    const handleBox = (await handle.boundingBox())!;
+
+    await page.mouse.move(0, 0);
+    await expect(handle, `${type} hidden root handle`).toHaveCSS("opacity", "0");
+    await expect(handle, `${type} recoverable root handle`).toHaveCSS("pointer-events", "auto");
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await expect(handle, `${type} directly hovered root handle`).toHaveCSS("opacity", "1");
+    await page.mouse.move(0, 0);
+    const bodyBox = (await body.boundingBox())!;
+    const bodyPoint = { x: bodyBox.x + bodyBox.width / 2, y: bodyBox.y + bodyBox.height / 2 };
+    const handlePoint = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 };
+    await page.mouse.move(bodyPoint.x, bodyPoint.y);
+    await expect(handle, `${type} root handle`).toHaveCSS("opacity", "1");
+    await expect(handle, `${type} root handle`).toHaveCSS("pointer-events", "auto");
+    await page.mouse.move(handlePoint.x, handlePoint.y, {
+      steps: Math.ceil(Math.hypot(handlePoint.x - bodyPoint.x, handlePoint.y - bodyPoint.y)),
+    });
+    const hitLabel = await page.evaluate(({ x, y }) => (
+      document.elementFromPoint(x, y)?.getAttribute("aria-label")
+    ), {
+      x: handleBox.x + handleBox.width / 2,
+      y: handleBox.y + handleBox.height / 2,
+    });
+    expect(hitLabel, `${type} handle hit target`).toBe(await handle.getAttribute("aria-label"));
+    expect(await handle.evaluate((element) => element.matches(":hover")), `${type} hovered root handle`).toBe(true);
+    await expect(handle, `${type} armed root handle`).toHaveAttribute("aria-roledescription", "draggable");
+
+    if (type === "columns") {
+      const child = block.locator(`[data-block-type="paragraph"]`).first();
+      const childRow = child.locator(`:scope > .${ROW_CLASS}`);
+      const childHandle = childRow.locator(`.${DRAG_HANDLE_CLASS}`);
+      const childRowBox = (await childRow.boundingBox())!;
+      await page.mouse.move(childRowBox.x + childRowBox.width / 2, childRowBox.y + childRowBox.height / 2);
+      await expect(childHandle, "columns visible child handle").toHaveCSS("opacity", "1");
+      const childBox = (await childHandle.boundingBox())!;
+      expect(childBox.x, "columns handles do not overlap").toBeGreaterThanOrEqual(
+        handleBox.x + handleBox.width,
+      );
+      await page.mouse.move(childBox.x + childBox.width / 2, childBox.y + childBox.height / 2, { steps: 20 });
+      const childHitLabel = await page.evaluate(({ x, y }) => (
+        document.elementFromPoint(x, y)?.getAttribute("aria-label")
+      ), {
+        x: childBox.x + childBox.width / 2,
+        y: childBox.y + childBox.height / 2,
+      });
+      expect(childHitLabel, "columns child handle hit target").toBe(await childHandle.getAttribute("aria-label"));
+      await expect(childHandle, "columns armed child handle").toHaveAttribute("aria-roledescription", "draggable");
+    }
   }
 });

@@ -245,8 +245,17 @@ Check these geometry rules:
   `:has(> .rivto-block-content-flow > [data-block-selection-anchor]:empty)` rule
   already overlays its 24px hit target.
 - Keep top and bottom selection insets visually balanced.
-- Clip the page-wide `.page-block-row::before` hover slab inside adjacent lanes
-  or cells so one column cannot steal another's pointer events.
+- Clip the page-wide `.page-block-row::before` hover slab only below the layout
+  root (for example `> .page-block-children .page-block-row::before`). A broad
+  descendant selector also clips the root row and breaks its handle hover area.
+- Keep root drag handles visually hidden at rest like ordinary blocks. Expanded
+  contentless roots may reveal only their direct handle on root hover and keep
+  only that handle's small hitbox pointer-active while transparent, so entering
+  or re-entering the handle can recover hover without a fast mouse movement.
+- Keep descendant handles hover-only. When a root handle overlaps the first
+  descendant, put descendant `left-top` slots in their lane's row flow, following
+  the Kanban/Bento pattern; do not translate or raise the root handle to win the
+  overlap.
 - Anchor absolute insertion indicators to the intended lane or tile with a
   positioned child shell.
 - Keep horizontal overflow on the layout owner, not the page.
@@ -284,6 +293,15 @@ Use Playwright only for browser/cross-layer behavior:
   slots, or modal behavior;
 - page and edgeless parity when the feature supports both.
 
+For drag-handle regressions, test interaction rather than computed visibility
+alone. Start outside the container, verify the root handle is transparent but
+its hitbox is recoverable, enter the hitbox directly, then hover the body and
+move to the handle in roughly one-pixel steps. Use `elementFromPoint` to prove
+the intended accessible handle receives the pointer. Also verify the first
+descendant handle remains separately reachable and its rectangle does not
+overlap the root handle. Build the demo and use a fresh or isolated preview;
+`reuseExistingServer` can otherwise serve stale CSS and produce a false result.
+
 Run the narrowest relevant tests first, then React type checking, lint for touched
 files, the affected build, and focused E2E. Check `git diff --check` and preserve
 the dirty worktree; never rewrite unrelated changes.
@@ -296,6 +314,11 @@ the dirty worktree; never rewrite unrelated changes.
 - Inserting a new container after the slash target.
 - Creating blank paragraph children for spacing.
 - Encoding structural policy only in CSS or only in drag checks.
+- Making every container handle permanently visible to mask a broken hover path.
+- Moving or stacking a root handle over a descendant instead of separating their
+  owning slot geometry.
+- Treating a coarse synthetic pointer jump or an opacity assertion as proof that
+  a real mouse can reach the correct handle.
 - Calling document-model internals from React.
 - Adding container-specific keyboard or drag type switches to shared page code
   when a block view can express the behavior.
