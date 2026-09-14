@@ -1,5 +1,7 @@
 export * from "./extensions/built-ins/built-ins";
 export * from "./extensions/edgeless/visuals";
+export * from "./extensions/file";
+export * from "./extensions/image";
 export * from "./extensions/separator/separator-block";
 export {
   DEFAULT_WRITING_BLOCK_TYPE,

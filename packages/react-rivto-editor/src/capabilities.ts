@@ -3,6 +3,7 @@
  */
 import type {
   BlockListProps,
+  ClipboardBundle,
   EditorBlock,
   EditorBlockInput,
   EditorBlockPatch,
@@ -32,7 +33,10 @@ import type {
   ListPropsRegistration,
   BlockMutationResult,
   ClipboardFormatter,
+  ClipboardBinaryRepresentation,
+  ClipboardPostprocessor,
   ClipboardParser,
+  ClipboardWriter,
   SlashCommand,
   SlashCommandContext,
   SurfaceComponent,
@@ -43,6 +47,8 @@ import type {
   ElementSlotRegistration,
   SlotPosition,
 } from "./managers";
+
+export type { FilesCapability } from "./managers";
 
 export interface BlocksCapability {
   register(registration: ReactBlockRegistration): () => void;
@@ -77,6 +83,11 @@ export interface ClipboardCapability {
   registerFormatter(formatter: ClipboardFormatter): () => void;
   /** Registers a first-match parser and returns its lifecycle-owned disposer. */
   registerParser(parser: ClipboardParser): () => void;
+  registerPostprocessor(postprocessor: ClipboardPostprocessor): () => void;
+  registerWriter(writer: ClipboardWriter): () => void;
+  writeProcessed(bundle: ClipboardBundle, formats: PortableBlockFormats): void;
+  canWriteBinary(mimeType: string): boolean;
+  writeBinary(binary: ClipboardBinaryRepresentation, formats?: PortableBlockFormats): Promise<boolean>;
   /** Returns composed plain-text, Markdown, and HTML formats for a block forest. */
   format(blocks: readonly EditorBlock[]): PortableBlockFormats;
   /** Returns the first parsed block-input forest, or undefined when no parser matches. */

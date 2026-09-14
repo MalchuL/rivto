@@ -53,6 +53,10 @@ export class EdgelessVisualsExtension implements ReactEditorExtension {
   createText(payload: VisualPayload<"text"> = {}): string {
     return this.create({ kind: "text", ...payload });
   }
+  /** Creates a canvas image backed by one logical URI. */
+  createImage(payload: VisualPayload<"image">): string {
+    return this.create({ kind: "image", ...payload });
+  }
   createDrawing(payload: VisualPayload<"drawing">): string {
     return this.create({ kind: "drawing", ...payload });
   }

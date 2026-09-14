@@ -3,10 +3,12 @@ import type {
   BlockRenderer,
   KeymapOverrides,
   ReactEditorExtension,
+  FileManagerOptions,
 } from "./managers";
 import type {
   BlocksCapability,
   ClipboardCapability,
+  FilesCapability,
   EventsCapability,
   ExtensionsCapability,
   KeyboardCapability,
@@ -38,6 +40,8 @@ export interface CreateReactEditorOptions {
   readonly keymap?: KeymapOverrides;
   /** Renderer used for persisted block types unknown to this React runtime. */
   readonly unknownBlockRenderer?: BlockRenderer;
+  /** Browser-safe upload fallback and relative logical-URI settings. */
+  readonly files?: FileManagerOptions;
 }
 
 /**
@@ -80,6 +84,8 @@ export interface ReactEditor {
   readonly blocks: BlocksCapability;
   /** React-owned portable clipboard formatter and parser registry. */
   readonly clipboard: ClipboardCapability;
+  /** Generic host upload, URI postprocessing, and logical-URI resolution pipeline. */
+  readonly files: FilesCapability;
   readonly surfaces: SurfacesCapability;
   readonly extensions: ExtensionsCapability;
   /** Delegated native DOM event registration. */

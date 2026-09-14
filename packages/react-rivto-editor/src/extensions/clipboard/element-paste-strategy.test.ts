@@ -110,7 +110,8 @@ describe("ElementPasteStrategy", () => {
       selection: undefined,
     }, {});
 
-    const elementId = created?.proposedSelection.elements?.[0]!;
+    const elementId = created?.proposedSelection.elements?.[0] ?? "";
+    expect(elementId).not.toBe("");
     expect(editor.elements.getElement(elementId)?.props).toMatchObject({
       startBlockId: destinationId,
       endBlockId: destinationId,

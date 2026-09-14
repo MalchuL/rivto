@@ -1,4 +1,4 @@
-import type { EditorBlock, EditorBlockInput } from "@chulane/rivto";
+import type { ClipboardBundle, EditorBlock, EditorBlockInput } from "@chulane/rivto";
 import type { ReactEditorImpl } from "../../react-editor";
 
 /** Portable text representations produced for one block forest. */
@@ -43,14 +43,61 @@ export interface ClipboardParser {
   readonly parse: (data: { readonly html: string; readonly text: string }) => EditorBlockInput[] | undefined;
 }
 
+/** One binary representation contributed for a single copied attachment. */
+export interface ClipboardBinaryRepresentation {
+  readonly name: string;
+  readonly mimeType: string;
+  readonly data: Blob | Promise<Blob>;
+}
+
+/** Context supplied while refining the final clipboard payload. */
+export interface ClipboardPostprocessContext {
+  readonly bundle: ClipboardBundle;
+  readonly formats: PortableBlockFormats;
+}
+
+/** Ordered extension hook that may contribute single-object binary data. */
+export interface ClipboardPostprocessor {
+  readonly id: string;
+  readonly process: (context: ClipboardPostprocessContext) => ClipboardBinaryRepresentation | undefined;
+}
+
+/** Host bridge for MIME formats unavailable through the browser clipboard. */
+export interface ClipboardWriter {
+  readonly id: string;
+  readonly supports: (mimeType: string) => boolean;
+  readonly write: (input: ClipboardBinaryRepresentation & PortableBlockFormats) => void | Promise<void>;
+}
+
 const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
 })[character]!);
+
+/**
+ * Returns the exact or generic binary MIME type accepted by a browser clipboard.
+ *
+ * Browsers predating `ClipboardItem.supports` are allowed to attempt the exact
+ * type; the eventual write remains the authoritative capability check.
+ *
+ * @param view - Window owning the editor surface.
+ * @param mimeType - Exact binary MIME type requested by the extension.
+ * @returns Accepted browser MIME type, or undefined when binary writing is unavailable.
+ */
+function browserClipboardType(view: (Window & typeof globalThis) | null | undefined, mimeType: string): string | undefined {
+  const ClipboardItemConstructor = view?.ClipboardItem;
+  const clipboard = view?.navigator.clipboard;
+  if (!ClipboardItemConstructor || !clipboard?.write) return undefined;
+  if (!ClipboardItemConstructor.supports) return mimeType;
+  if (ClipboardItemConstructor.supports(mimeType)) return mimeType;
+  return ClipboardItemConstructor.supports("application/octet-stream") ? "application/octet-stream" : undefined;
+}
 
 /** Ordered React-owned portable clipboard contributions. */
 export class ClipboardManager {
   private readonly formatters: ClipboardFormatter[] = [];
   private readonly parsers: ClipboardParser[] = [];
+  private readonly postprocessors: ClipboardPostprocessor[] = [];
+  private writer?: ClipboardWriter;
 
   /**
    * Creates the React-owned formatter and parser registry.
@@ -58,6 +105,103 @@ export class ClipboardManager {
    * @param reactEditor - Owning React editor used for extension lifecycle cleanup.
    */
   constructor(private readonly reactEditor: ReactEditorImpl) {}
+
+  /**
+   * Registers one ordered final clipboard refinement.
+   * @param postprocessor - Single-object binary contribution hook.
+   * @returns Lifecycle-owned disposer.
+   */
+  registerPostprocessor(postprocessor: ClipboardPostprocessor): () => void {
+    this.reactEditor.extensions.assertActive();
+    if (!postprocessor.id.trim() || this.postprocessors.some(({ id }) => id === postprocessor.id)) {
+      throw new Error(`Clipboard postprocessor ${postprocessor.id || "<empty>"} is already registered`);
+    }
+    this.postprocessors.push(postprocessor);
+    return this.reactEditor.extensions.own(() => {
+      const index = this.postprocessors.indexOf(postprocessor);
+      if (index >= 0) this.postprocessors.splice(index, 1);
+    });
+  }
+
+  /**
+   * Registers the single host binary writer used before the browser fallback.
+   * @param writer - Privileged host clipboard bridge.
+   * @returns Lifecycle-owned disposer.
+   */
+  registerWriter(writer: ClipboardWriter): () => void {
+    this.reactEditor.extensions.assertActive();
+    if (!writer.id.trim()) throw new Error("Clipboard writer ID is required");
+    if (this.writer) throw new Error(`Clipboard writer ${this.writer.id} is already registered`);
+    this.writer = writer;
+    return this.reactEditor.extensions.own(() => {
+      if (this.writer === writer) this.writer = undefined;
+    });
+  }
+
+  /**
+   * Reports whether a registered host or the current browser can attempt a binary write.
+   *
+   * @param mimeType - Exact file MIME type proposed for copying.
+   * @returns Whether the custom copy menu should handle this type.
+   */
+  canWriteBinary(mimeType: string): boolean {
+    const writer = this.writer;
+    if (writer?.supports(mimeType) || writer?.supports("application/octet-stream")) return true;
+    const view = this.reactEditor.events.getRoot()?.ownerDocument.defaultView;
+    return browserClipboardType(view, mimeType) !== undefined;
+  }
+
+  /**
+   * Runs postprocessors and starts a binary write without delaying the copy event.
+   * @param bundle - Structured selected objects.
+   * @param formats - Synchronous portable clipboard formats.
+   * @returns Nothing.
+   */
+  writeProcessed(bundle: ClipboardBundle, formats: PortableBlockFormats): void {
+    try {
+      const binary = this.postprocessors.map((processor) => processor.process({ bundle, formats })).find(Boolean);
+      if (binary) void this.writeBinary(binary, formats).catch(() => undefined);
+    } catch {
+      // The synchronous event already contains portable formats; refinement is optional.
+    }
+  }
+
+  /**
+   * Writes exact MIME bytes, falling back to application/octet-stream.
+   * @param binary - Named attachment bytes and original MIME type.
+   * @param formats - Portable representations included beside binary data.
+   * @returns Whether a host or browser writer accepted the payload.
+   */
+  async writeBinary(
+    binary: ClipboardBinaryRepresentation,
+    formats: PortableBlockFormats = { plain: binary.name, markdown: binary.name, html: binary.name },
+  ): Promise<boolean> {
+    const fallbackType = "application/octet-stream";
+    const writer = this.writer;
+    const hostType = writer?.supports(binary.mimeType)
+      ? binary.mimeType
+      : writer?.supports(fallbackType) ? fallbackType : undefined;
+    if (writer && hostType) {
+      try {
+        await writer.write({ ...binary, ...formats, mimeType: hostType });
+        return true;
+      } catch {
+        // A failed host bridge may still be recoverable through ClipboardItem.
+      }
+    }
+    const view = this.reactEditor.events.getRoot()?.ownerDocument.defaultView;
+    const ClipboardItemConstructor = view?.ClipboardItem;
+    const clipboard = view?.navigator.clipboard;
+    const browserType = browserClipboardType(view, binary.mimeType);
+    if (!ClipboardItemConstructor || !clipboard?.write || !browserType) return false;
+    const data = Promise.resolve(binary.data).then((blob) => new Blob([blob], { type: browserType }));
+    await clipboard.write([new ClipboardItemConstructor({
+      [browserType]: data,
+      "text/plain": new Blob([formats.plain], { type: "text/plain" }),
+      "text/html": new Blob([formats.html], { type: "text/html" }),
+    }, { presentationStyle: "attachment" })]);
+    return true;
+  }
 
   /**
    * Appends a formatter to the ordered, composable formatting pipeline.

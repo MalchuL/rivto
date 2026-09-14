@@ -90,6 +90,25 @@ export interface TextVisual extends RotatableVisualBase {
   verticalAlign: TextVerticalAlign;
 }
 
+/** Resolved image reference displayed inside its complete canvas frame. */
+export interface ImageVisual extends RotatableVisualBase {
+  readonly kind: "image";
+  uri: string;
+  alt: string;
+  intrinsicWidth: number;
+  intrinsicHeight: number;
+  name: string;
+  mimeType: string;
+  size?: number;
+}
+
+/** Canvas attachment rendered by a registered file-type handler. */
+export interface FileHandlerVisual extends RotatableVisualBase {
+  readonly kind: "file-handler";
+  readonly elementType: string;
+  readonly props: Record<string, unknown>;
+}
+
 /** Arrow whose endpoints can remain attached to first-class canvas elements. */
 export interface ConnectorVisual extends VisualBase {
   readonly kind: "connector";
@@ -112,7 +131,7 @@ export interface ConnectorVisual extends VisualBase {
 }
 
 /** React visual view materialized from a first-class document element. */
-export type EdgelessVisual = StickerVisual | DrawingVisual | ShapeVisual | TextVisual | ConnectorVisual;
+export type EdgelessVisual = StickerVisual | DrawingVisual | ShapeVisual | TextVisual | ImageVisual | FileHandlerVisual | ConnectorVisual;
 
 /** Persisted logical group element; children are first-class element IDs. */
 export interface VisualGroup { readonly id: string; title: string; children: EdgelessSelectionRef[] }
@@ -142,6 +161,7 @@ export interface EdgelessVisualsOptions {
 
 /** Payload accepted by `edgeless.visual.create`. */
 export type CreateVisualPayload =
+  | { kind: "image"; frame?: Partial<VisualFrame>; rotation?: number; uri: string; alt?: string; intrinsicWidth: number; intrinsicHeight: number; name?: string; mimeType?: string; size?: number }
   | { kind: "sticker"; frame?: Partial<VisualFrame>; rotation?: number; text?: string; fill?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
   | { kind: "drawing"; frame: VisualFrame; rotation?: number; points: DrawingVisual["points"]; brush?: EdgelessBrush; stroke?: string; strokeWidth?: number; opacity?: number }
   | { kind: "connector"; frame?: Partial<VisualFrame>; source: ConnectorEndpoint; target: ConnectorEndpoint; route?: ConnectorRoute; stroke?: string; strokeWidth?: number; opacity?: number; lineStyle?: ConnectorLineStyle; startStyle?: ConnectorEndpointStyle; endStyle?: ConnectorEndpointStyle; text?: string; textRotation?: ConnectorTextRotation; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign }
@@ -149,7 +169,7 @@ export type CreateVisualPayload =
   | { kind: "text"; frame?: Partial<VisualFrame>; rotation?: number; text?: string; color?: string; fontFamily?: string; fontSize?: number; align?: TextHorizontalAlign; verticalAlign?: TextVerticalAlign };
 
 /** Click/drag presets from the create toolbar (not drawing or connector tools). */
-export type PresetPayload = Exclude<CreateVisualPayload, { kind: "drawing" | "connector" }>;
+export type PresetPayload = Exclude<CreateVisualPayload, { kind: "drawing" | "connector" | "image" }>;
 
 /** Openable create-toolbar category. */
 export type ToolCategory = "shapes" | "drawing" | "text" | "stickers" | "connectors";

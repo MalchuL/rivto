@@ -4,6 +4,23 @@ export * from "./components";
 export * from "./constants";
 export * from "./editor-view";
 export * from "./hooks";
+export { DEFAULT_FILE_MAX_BYTES } from "./managers/files";
+export type {
+  FileElementViewProps,
+  FileInlineViewProps,
+  FileManagerOptions,
+  FileOpenContext,
+  FileOpenHandler,
+  FileOperationContext,
+  FilePasteCandidate,
+  FilePasteDestination,
+  FilePasteHandler,
+  FileReference,
+  FileUploadHandler,
+  FileUriPostprocessor,
+  FileUriResolver,
+  PreparedFilePaste,
+} from "./managers/files";
 export {
   blockExtension,
   edgelessSurfaceExtension,
@@ -47,6 +64,42 @@ export {
   errorBlockExtension,
 } from "./extensions/error/error-block";
 export {
+  FILE_BLOCK_TYPE,
+  FILE_ELEMENT_TYPE,
+  FileBlock,
+  FileView,
+  fileExtension,
+  fileReference,
+  parseFileMacros,
+  remarkFileMacros,
+  serializeFileMacro,
+  type FileExtensionOptions,
+  type ParsedFileMacro,
+} from "./extensions/file";
+export {
+  IMAGE_BLOCK_TYPE,
+  DefaultImageHoverMenu,
+  ImageBlock,
+  ImageView,
+  imageExtension,
+  createLocalFileBridge,
+  isImageBlock,
+  parseImageMacros,
+  replaceImageMacro,
+  serializeImageMacro,
+  type ImageExtensionOptions,
+  type ImageHoverMenuProps,
+  type ImageProps,
+  type ImageResizeMode,
+  type LocalFileBridgeOptions,
+  type ImageReference,
+  type ParsedImageMacro,
+  type ImageViewCustomization,
+  type ImageViewCustomizations,
+  type ImageViewKind,
+  type ImageViewProps,
+} from "./extensions/image";
+export {
   BLOCK_LIST_TYPES,
   DEFAULT_BLOCK_LIST_PROPS,
   isNumberedListType,
@@ -79,6 +132,7 @@ export type {
   EdgelessFontOption,
   EdgelessReorder,
   EdgelessStickerOption,
+  ImageVisual,
   EdgelessSelectionRef,
   EdgelessVisual,
   EdgelessVisualCommandMap,
@@ -104,7 +158,11 @@ export type {
   BlockSlotRegistration,
   ClipboardFormatContext,
   ClipboardFormatter,
+  ClipboardBinaryRepresentation,
+  ClipboardPostprocessContext,
+  ClipboardPostprocessor,
   ClipboardParser,
+  ClipboardWriter,
   PortableBlockFormats,
   DOMEventDefinition,
   DOMEventName,
