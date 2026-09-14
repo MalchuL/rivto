@@ -81,7 +81,7 @@ One semantic keydown action sets a closure boolean, while a separately configura
 
 ### 14. Standard preset installation is not rollback-safe
 
-`standardPreset` calls child `setup` methods in a loop and returns their cleanups only after all succeed ([built-ins.tsx:583](../packages/react-rivto-editor/src/extensions/built-ins/built-ins.tsx#L583)). If a late child throws, earlier non-manager resources such as collapse subscriptions ([page-collapse.ts:28](../packages/react-rivto-editor/src/extensions/built-ins/page/page-collapse.ts#L28)) never receive their returned cleanup. Wrap child setup in a local rollback stack and dispose it on failure.
+`standardPreset` calls child `setup` methods in a loop and returns their cleanups only after all succeed ([built-ins.ts:583](../packages/react-rivto-editor/src/extensions/built-ins/built-ins.ts#L583)). If a late child throws, earlier non-manager resources such as collapse subscriptions ([page-collapse.ts:28](../packages/react-rivto-editor/src/extensions/built-ins/page/page-collapse.ts#L28)) never receive their returned cleanup. Wrap child setup in a local rollback stack and dispose it on failure.
 
 ### 15. Extension cleanup exceptions abort the rest of teardown
 

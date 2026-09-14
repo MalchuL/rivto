@@ -2,7 +2,7 @@ import { createCaretSelection } from "@chulane/rivto";
 import { createTestCoreEditor as createRivtoEditor } from "../../../test-utils";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createReactEditor } from "../../../react-editor";
-import { defaultWritingBlockExtension } from "../page/default-writing-block";
+import { defaultWritingBlockExtension } from "../built-ins";
 import {
   SEPARATOR_BLOCK_TYPE,
   SeparatorBlock,

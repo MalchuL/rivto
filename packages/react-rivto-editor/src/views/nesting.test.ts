@@ -10,7 +10,7 @@
  */
 import { createTestCoreEditor } from "../test-utils";
 import { createReactEditor } from "../react-editor";
-import { defaultWritingBlockExtension } from "../extensions/built-ins/page/default-writing-block";
+import { defaultWritingBlockExtension } from "../extensions/built-ins/built-ins";
 import { bentoExtension, createBentoBlockInput, BENTO_BLOCK_TYPE } from "../extensions/built-ins/bento/bento";
 import { kanbanExtension, createKanbanBlockInput } from "../extensions/built-ins/kanban/kanban";
 import { columnsExtension, createColumnsBlockInput } from "../extensions/built-ins/columns/columns";

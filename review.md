@@ -42,7 +42,7 @@ demo App                  wires presets, seeds data, custom blocks
 2. `demo/src/App.tsx` — `createDemoEditor`, `createEmptyDemoEditor`, `createFixtureEditor`, `seedEdgelessShowcase`
 3. `packages/react-rivto-editor/src/react-editor.tsx` — `createReactEditor`
 4. `packages/react-rivto-editor/src/editor-view.tsx` — mounts UI
-5. `extensions/built-ins/built-ins.tsx` — `standardPreset()` composition list
+5. `extensions/built-ins/built-ins.ts` — `standardPreset()` composition list
 
 **Attention**
 

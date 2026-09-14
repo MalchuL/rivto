@@ -6,7 +6,7 @@
 import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../../test-utils";
 import { createReactEditor } from "../../../react-editor";
-import { defaultWritingBlockExtension } from "../page/default-writing-block";
+import { defaultWritingBlockExtension } from "../built-ins";
 import { bentoExtension, createBentoBlockInput } from "./bento";
 import { indentBlocks } from "../../../views/ops/outline-ops";
 

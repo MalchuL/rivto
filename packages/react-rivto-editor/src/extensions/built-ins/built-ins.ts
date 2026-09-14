@@ -41,19 +41,14 @@ import { registerSelectionDeletion } from "./selection/selection-deletion";
 import { registerTrailingBlock } from "./page/trailing-block";
 import { registerIndent, type IndentExtensionOptions } from "./page/indent";
 import { registerListShortcuts } from "./page/list";
-import {
-  EdgelessSnappingStore,
-  EdgelessSurface,
-  type EdgelessSurfaceOptions,
-} from "../../surfaces/edgeless";
+import type { EdgelessSurfaceOptions } from "../../surfaces/edgeless";
+import { registerEdgelessSurface } from "./edgeless/register";
 import { separatorBlockExtension } from "./separator/separator-block";
-import { defaultWritingBlockExtension, type DefaultWritingBlockOptions } from "./page/default-writing-block";
+import { registerDefaultWritingBlock } from "./page/default-writing-block/register";
+import type { DefaultWritingBlockOptions } from "./page/default-writing-block/types";
 import {
   blockIdsOf,
-  EDGELESS_CARD_DEFAULT_FRAME,
   insertBlockElementSeparator,
-  setBlockElementDefaultWidth,
-  setBlockElementOverlapAvoidance,
 } from "../../surfaces/edgeless/block-elements";
 import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
 import { PageSurface } from "../../surfaces/page";
@@ -61,6 +56,21 @@ import {
   type ReactBlockRegistration,
   type ReactEditorExtension,
 } from "../../managers";
+
+/**
+ * Registers the host writing block, its renderer, and shared writing policy.
+ *
+ * @param options - Optional writing-block type, renderer, and factories.
+ * @returns The configurable built-in writing extension.
+ */
+export function defaultWritingBlockExtension(
+  options: DefaultWritingBlockOptions = {},
+): ReactEditorExtension {
+  return {
+    id: "block.default-writing",
+    setup: (reactEditor) => registerDefaultWritingBlock(reactEditor, options),
+  };
+}
 
 /** @returns The built-in recursive outline surface for block mode. */
 export const pageSurfaceExtension = (): ReactEditorExtension => ({
@@ -70,18 +80,18 @@ export const pageSurfaceExtension = (): ReactEditorExtension => ({
   },
 });
 
-/** @returns The built-in positioned-card surface for edgeless mode. */
-export const edgelessSurfaceExtension = (options: EdgelessSurfaceOptions = {}): ReactEditorExtension => {
-  const snapping = options.snapping ?? new EdgelessSnappingStore();
-  return {
-    id: "surface.edgeless",
-  setup: (reactEditor) => {
-      setBlockElementOverlapAvoidance(reactEditor, options.avoidBlockElementOverlap !== false);
-      setBlockElementDefaultWidth(reactEditor, options.blockElementWidth ?? EDGELESS_CARD_DEFAULT_FRAME.width);
-      reactEditor.surfaces.register("edgeless", () => <EdgelessSurface snapping={snapping} avoidBlockElementOverlap={options.avoidBlockElementOverlap !== false} blockElementWidth={options.blockElementWidth} />);
-    },
-  };
-};
+/**
+ * Creates the built-in positioned-card surface extension.
+ *
+ * @param options - Snapping, overlap, and card-width configuration.
+ * @returns The configured edgeless surface definition.
+ */
+export const edgelessSurfaceExtension = (
+  options: EdgelessSurfaceOptions = {},
+): ReactEditorExtension => ({
+  id: "surface.edgeless",
+  setup: (reactEditor) => registerEdgelessSurface(reactEditor, options),
+});
 
 /**
  * Installs CRDT-backed undo/redo and native contenteditable history suppression.

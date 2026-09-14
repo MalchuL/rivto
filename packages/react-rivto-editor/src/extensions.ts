@@ -1,9 +1,18 @@
+/**
+ * Complete public extension catalog for `@chulane/rivto-react/extensions`.
+ *
+ * This secondary package entry point exposes individual built-in factories and
+ * their supporting contracts so applications can assemble custom presets. The
+ * primary package entry keeps a smaller curated surface for ordinary editor
+ * setup; both entry points preserve the same underlying extension identities.
+ *
+ * @module
+ */
 export * from "./extensions/built-ins/built-ins";
 export * from "./extensions/built-ins/edgeless/visuals";
 export * from "./extensions/built-ins/separator/separator-block";
 export {
   DEFAULT_WRITING_BLOCK_TYPE,
-  defaultWritingBlockExtension,
 } from "./extensions/built-ins/page/default-writing-block";
 export type {
   DefaultWritingBlockOptions,

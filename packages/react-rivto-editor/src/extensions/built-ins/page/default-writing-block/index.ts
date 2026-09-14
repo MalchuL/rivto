@@ -1,9 +1,8 @@
 /** Public entry point for default writing-block registration and policy. */
 export {
   DEFAULT_WRITING_BLOCK_TYPE,
-  defaultWritingBlockExtension,
-  type DefaultWritingBlockOptions,
-} from "./extension";
+} from "./constants";
+export type { DefaultWritingBlockOptions } from "./types";
 export {
   createIsEmptyDefaultBlock,
   resolveIsEmptyBlock,

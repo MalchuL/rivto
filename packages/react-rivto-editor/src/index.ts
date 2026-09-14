@@ -1,3 +1,12 @@
+/**
+ * Primary public API for `@chulane/rivto-react`.
+ *
+ * This entry point exposes normal editor setup, rendering, hooks, and selected
+ * built-ins. Applications assembling a custom preset can import the complete
+ * individual extension catalog from `@chulane/rivto-react/extensions`.
+ *
+ * @module
+ */
 export * from "./blocks";
 export * from "./capabilities";
 export * from "./components";
@@ -6,13 +15,13 @@ export * from "./editor-view";
 export * from "./hooks";
 export {
   blockExtension,
+  defaultWritingBlockExtension,
   edgelessSurfaceExtension,
   standardPreset,
 } from "./extensions/built-ins/built-ins";
 export type { StandardPresetOptions } from "./extensions/built-ins/built-ins";
 export {
   DEFAULT_WRITING_BLOCK_TYPE,
-  defaultWritingBlockExtension,
 } from "./extensions/built-ins/page/default-writing-block";
 export type {
   DefaultWritingBlockOptions,
