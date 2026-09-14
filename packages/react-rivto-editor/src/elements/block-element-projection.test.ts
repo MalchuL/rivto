@@ -1,6 +1,6 @@
-import { createTestCoreEditor as createRivtoEditor } from "../../test-utils";
-import { createReactEditor } from "../../react-editor";
-import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../../extensions/built-ins/separator/separator-block";
+import { createTestCoreEditor as createRivtoEditor } from "../test-utils";
+import { createReactEditor } from "../react-editor";
+import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../extensions/built-ins/separator/separator-block";
 import {
   blockIdsOf,
   blockFramesOverlap,
@@ -11,7 +11,7 @@ import {
   reconcileBlockElements,
   setBlockElementDefaultWidth,
   setBlockElementOverlapAvoidance,
-} from "./block-elements";
+} from "./block-element-projection";
 
 describe("edgeless block element reconciliation", () => {
   const createRuntime = (editor: ReturnType<typeof createRivtoEditor>) => createReactEditor({

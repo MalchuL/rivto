@@ -11,7 +11,7 @@ import {
 } from "@chulane/rivto";
 import type { ReactEditor } from "../../../types";
 import { createEdgelessSelection, findEdgelessRuntime } from "../selection/edgeless-runtime";
-import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../surfaces/edgeless/block-elements";
+import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../elements/block-element-projection";
 
 /** Canvas-specific clipboard paste strategy. */
 export class ElementPasteStrategy implements PasteStrategy {

@@ -264,13 +264,13 @@ Marked: 56 changed, 24 guard-only.
 - delete:71 (2 returns, guards only)
 - <anonymous>:104 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/surfaces/edgeless/block-elements.ts
+## [ X ] packages/react-rivto-editor/src/elements/block-element-projection.ts
 - maximumWeightMatching:29 (2 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/surfaces/edgeless/edgeless-block.tsx
+## [ O ] packages/react-rivto-editor/src/extensions/edgeless/surface/edgeless-block.tsx
 - EdgelessBlockElement:14 (2 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/surfaces/edgeless/edgeless-surface.tsx
+## [ O ] packages/react-rivto-editor/src/extensions/edgeless/surface/edgeless-surface.tsx
 - <anonymous>:110 (3 returns, guards only)
 - createBlockAt:129 (3 returns, guards only)
 - <anonymous>:169 (2 returns, guards only)

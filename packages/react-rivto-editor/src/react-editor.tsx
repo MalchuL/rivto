@@ -21,7 +21,7 @@ import {
   ViewManager,
 } from "./managers";
 import type { CreateReactEditorOptions, ReactEditor } from "./types";
-import { reconcileBlockElements } from "./surfaces/edgeless/block-elements";
+import { reconcileBlockElements } from "./elements/block-element-projection";
 import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/built-ins/page/default-writing-block";
 
 export type { CreateReactEditorOptions, ReactEditor } from "./types";

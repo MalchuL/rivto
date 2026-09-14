@@ -1,11 +1,19 @@
+/**
+ * Generic projection between ordered root blocks and persisted block elements.
+ *
+ * The React runtime maintains this document relationship independently of any
+ * installed surface. Optional edgeless UI consumes the resulting elements but
+ * does not own their persistence, reconciliation, or range semantics.
+ *
+ * @module
+ */
 import type { EditorBlock, EditorElement } from "@chulane/rivto";
-import type { ReactEditor } from "../../types";
-import { EDGELESS_GRID_SIZE } from "../../extensions/edgeless/visuals/utils/geometry";
+import type { ReactEditor } from "../types";
 
 export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
 export const EDGELESS_BLOCK_ELEMENT_ID_PREFIX = "rivto:block-element:";
 export const EDGELESS_CARD_DEFAULT_FRAME = { x: 60, y: 60, width: 720, height: 120 } as const;
-export const EDGELESS_BLOCK_PLACEMENT_STEP = EDGELESS_GRID_SIZE;
+export const EDGELESS_BLOCK_PLACEMENT_STEP = 20;
 const RECONCILE_ORIGIN = Symbol("rivto-react-block-elements");
 const placementSettings = new WeakMap<ReactEditor, boolean>();
 const defaultWidthSettings = new WeakMap<ReactEditor, number>();

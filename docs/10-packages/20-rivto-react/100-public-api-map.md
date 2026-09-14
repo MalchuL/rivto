@@ -58,7 +58,10 @@ src/extensions/
   optional interaction behavior
 
 src/surfaces/
-  page and edgeless layout
+  standard page layout
+
+src/elements/ + src/extensions/edgeless/surface/
+  generic element projection + optional canvas layout
 
 demo/src/
   product-level integration examples

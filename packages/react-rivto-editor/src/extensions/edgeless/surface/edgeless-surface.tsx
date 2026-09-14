@@ -13,8 +13,8 @@ import {
   useKeyboardEvent,
   useReactEditor,
   useRootBlockIds,
-} from "../../hooks";
-import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
+} from "../../../hooks";
+import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
 import {
   useCallback,
   useEffect,
@@ -26,8 +26,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createCaretSelection } from "@chulane/rivto";
-import { EdgelessToolButton } from "../../extensions/edgeless/visuals/components/tool-button";
-import { EDGELESS_GRID_SIZE } from "../../extensions/edgeless/visuals/utils/geometry";
+import { EdgelessToolButton } from "../visuals/components/tool-button";
+import { EDGELESS_GRID_SIZE } from "../visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
 import {
   blockIdsOf,
@@ -35,7 +35,7 @@ import {
   EDGELESS_CARD_DEFAULT_FRAME,
   insertBlockElementSeparator,
   nonOverlappingBlockFrame,
-} from "./block-elements";
+} from "../../../elements/block-element-projection";
 import { EdgelessSnappingStore } from "./snapping-store";
 
 const MIN_ZOOM = 0.5;

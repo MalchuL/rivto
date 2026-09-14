@@ -37,7 +37,7 @@ import type { DefaultWritingBlockOptions } from "./page/default-writing-block/ty
 import {
   blockIdsOf,
   insertBlockElementSeparator,
-} from "../../surfaces/edgeless/block-elements";
+} from "../../elements/block-element-projection";
 import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
 import { PageSurface } from "../../surfaces/page";
 import {

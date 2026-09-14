@@ -1,7 +1,7 @@
 import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS, isHTMLElementNode } from "../../managers";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
-import { blockIdsOf } from "../../surfaces/edgeless/block-elements";
+import { blockIdsOf } from "../../elements/block-element-projection";
 import { isStructuralSelection } from "@chulane/rivto";
 
 /** Removes selected descendants whose selected ancestor already owns them. */

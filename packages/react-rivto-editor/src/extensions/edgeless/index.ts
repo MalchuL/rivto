@@ -9,7 +9,7 @@
  * @module
  */
 import type { ReactEditorExtension } from "../../managers";
-import type { EdgelessSurfaceOptions } from "../../surfaces/edgeless";
+import type { EdgelessSurfaceOptions } from "./surface";
 import { registerEdgelessDeletion } from "./edgeless-deletion";
 import { EdgelessElementDragSlot } from "./edgeless-drag-handle";
 import { registerEdgelessMovement } from "./edgeless-movement";

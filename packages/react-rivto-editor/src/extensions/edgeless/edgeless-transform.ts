@@ -15,7 +15,7 @@ import {
   type ConnectorPreviewTarget,
 } from "./edgeless-transform-connectors";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
-import { elementContainsBlock } from "../../surfaces/edgeless/block-elements";
+import { elementContainsBlock } from "../../elements/block-element-projection";
 import {
   applyRotatedResize,
   connectorLabelCssDegrees,

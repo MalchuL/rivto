@@ -23,7 +23,7 @@ import {
 } from "../../../managers";
 import { findEdgelessRuntime } from "../selection/edgeless-runtime";
 import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
-import { blockIdsOf } from "../../../surfaces/edgeless/block-elements";
+import { blockIdsOf } from "../../../elements/block-element-projection";
 import { ElementPasteStrategy } from "./element-paste-strategy";
 
 const ELEMENT_PASTE_STRATEGY_ID = "paste.elements";

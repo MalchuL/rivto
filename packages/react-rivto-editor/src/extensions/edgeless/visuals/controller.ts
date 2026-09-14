@@ -8,7 +8,7 @@ import {
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
 import type { ReactEditor } from "../../../types";
 import { isNonBlockEditableClipboardEvent } from "../../built-ins/clipboard/clipboard-target";
-import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../surfaces/edgeless/block-elements";
+import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../elements/block-element-projection";
 import { getEdgelessRuntime, type EdgelessSelectionRef } from "../../built-ins/selection/edgeless-runtime";
 import type {
   ConnectorEndpoint,

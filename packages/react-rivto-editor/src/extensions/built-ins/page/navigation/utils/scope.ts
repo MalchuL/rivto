@@ -11,7 +11,7 @@ import type {
   RivtoEditorApi as Editor,
 } from "@chulane/rivto";
 import { findRenderedBlock } from "../../../../../managers";
-import { blockIdsOf } from "../../../../../surfaces/edgeless/block-elements";
+import { blockIdsOf } from "../../../../../elements/block-element-projection";
 
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 

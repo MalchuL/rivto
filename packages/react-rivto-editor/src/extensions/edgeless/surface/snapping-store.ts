@@ -1,3 +1,11 @@
+/**
+ * Host-owned snapping preferences for the optional edgeless surface.
+ *
+ * The store remains outside persisted document state and exposes the stable
+ * subscription contract consumed by React's external-store hook.
+ *
+ * @module
+ */
 /** Host-configurable edgeless snapping preferences. */
 export interface EdgelessSnappingSnapshot {
   readonly snapToGrid: boolean;

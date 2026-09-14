@@ -68,15 +68,15 @@ export {
   resolveBlockListNumbers,
   type BlockListType,
 } from "./extensions/built-ins/page/list";
-export { type BlockElementProps } from "./surfaces/edgeless";
+export { type BlockElementProps } from "./elements/block-element-projection";
 export {
   EdgelessSnappingStore,
-} from "./surfaces/edgeless";
+} from "./extensions/edgeless/surface";
 export type { EdgelessSelectionSnapshot } from "./extensions/built-ins/selection/edgeless-runtime";
 export type {
   EdgelessSnappingSnapshot,
   EdgelessSurfaceOptions,
-} from "./surfaces/edgeless";
+} from "./extensions/edgeless/surface";
 export {
   EdgelessVisualsExtension,
   edgelessVisualsExtension,

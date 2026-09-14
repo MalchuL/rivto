@@ -9,9 +9,9 @@
  */
 import type { EditorElement } from "@chulane/rivto";
 import { memo, useLayoutEffect, useRef, type CSSProperties } from "react";
-import { useEdgelessSelected } from "../../extensions/built-ins/selection/edgeless-runtime";
-import { BlockTree, ElementSlots } from "../../blocks";
-import { useReactEditor } from "../../hooks";
+import { useEdgelessSelected } from "../../built-ins/selection/edgeless-runtime";
+import { BlockTree, ElementSlots } from "../../../blocks";
+import { useReactEditor } from "../../../hooks";
 
 const AUTO_HEIGHT_ORIGIN = Symbol("rivto-react-block-element-auto-height");
 const CARD_CLASS = "edgeless-card";

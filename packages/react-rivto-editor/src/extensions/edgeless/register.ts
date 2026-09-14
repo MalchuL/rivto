@@ -12,12 +12,12 @@ import {
   EdgelessSnappingStore,
   EdgelessSurface,
   type EdgelessSurfaceOptions,
-} from "../../surfaces/edgeless";
+} from "./surface";
 import {
   EDGELESS_CARD_DEFAULT_FRAME,
   setBlockElementDefaultWidth,
   setBlockElementOverlapAvoidance,
-} from "../../surfaces/edgeless/block-elements";
+} from "../../elements/block-element-projection";
 import type { ReactEditor } from "../../types";
 
 /**
