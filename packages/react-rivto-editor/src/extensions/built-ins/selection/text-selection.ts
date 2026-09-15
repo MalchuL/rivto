@@ -156,10 +156,11 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
         pointer = null;
         ownsCrossBlockSelection = false;
       } else if (event.button === 0) {
-        const selectionAnchor = isElementNode(event.target)
-          ? event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR)
-          : null;
-        if (selectionAnchor && root.contains(selectionAnchor)) {
+        const target = isElementNode(event.target) ? event.target : null;
+        const selectionAnchor = target?.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);
+        if (target && selectionAnchor && root.contains(selectionAnchor) && (
+          selectionAnchor.isContentEditable || !isInteractiveStructuralTarget(target)
+        )) {
           if (releaseTimer !== undefined) view?.clearTimeout(releaseTimer);
           ownsCrossBlockSelection = false;
 

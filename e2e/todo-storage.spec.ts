@@ -165,6 +165,7 @@ test("animates and persists sortable status drag and drop", async ({ page }) => 
   await expect(source).toHaveAttribute("data-dragging", "true");
   await expect(target).toHaveAttribute("style", /transform: translate3d/);
   await page.mouse.up();
+  await expect(storage).not.toHaveAttribute("data-block-selected", "true");
   await expect.poll(() => page.evaluate((parentId) => {
     const block = (window as unknown as {
       __rivtoDemo: { editor: { editor: { blocks: { getBlock(id: string): {
@@ -253,6 +254,7 @@ test("creates a TODO storage from the slash menu", async ({ page }) => {
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(dropBox.x + dropBox.width / 2, dropBox.y + dropBox.height / 2, { steps: 12 });
+  await expect(emptyStorage).toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
   await expect(emptyStorage.locator(`[data-block-id="${sourceId}"]`)).toBeVisible();
   await expect(dropField).toHaveCount(0);
@@ -266,7 +268,14 @@ test("starts writing in an empty TODO storage from the keyboard", async ({ page 
     return editor.blocks.insertBlock({ type: "todo-storage", content: "" });
   });
   const storage = page.locator(`[data-block-id="${storageId}"]`);
-  await storage.getByRole("button", { name: "Drop blocks into TODO storage" }).press("Enter");
+  const dropField = storage.getByRole("button", { name: "Drop blocks into TODO storage" });
+  const storageBox = await storage.boundingBox();
+  const dropBox = await dropField.boundingBox();
+  if (!storageBox || !dropBox) throw new Error("Expected empty-storage geometry");
+  expect(dropBox.x).toBeGreaterThanOrEqual(storageBox.x);
+  expect(dropBox.x + dropBox.width).toBeLessThanOrEqual(storageBox.x + storageBox.width);
+  expect(dropBox.y + dropBox.height).toBeLessThanOrEqual(storageBox.y + storageBox.height);
+  await dropField.press("Enter");
   await expect(storage.locator(':scope > .page-block-children > [data-block-type="paragraph"]')).toHaveCount(1);
   await expect(storage.locator("[data-block-content]")).toBeFocused();
 });

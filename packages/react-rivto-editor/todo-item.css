@@ -33,10 +33,13 @@
 }
 
 [data-block-type="todo-storage"]:not(:has(> .page-block-children)):has(.rivto-todo-storage-content) {
-  min-height: 88px;
+  /* Keep the empty field outside fixed-outline title-row hit testing while
+     enclosing its positioned height inside the storage BlockView. */
+  min-height: 100px;
 }
 
 .rivto-todo-storage-drop-field {
+  box-sizing: border-box;
   position: absolute;
   top: 34px;
   right: 0;
