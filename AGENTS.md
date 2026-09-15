@@ -30,7 +30,7 @@ Slash commands belong to React. IDs remain stable except when creating entities 
 
 ## Solving Changes Safely
 
-1. Reproduce with the narrowest existing test.
+1. For every user-reported problem, write the narrowest test that reproduces it and confirm it fails before changing the implementation.
 2. Find the symbol and every caller with `rg`.
 3. Trace the complete path before editing: storage → public operation → React consumer → integration test.
 4. Fix the shared owner rather than individual callers.
