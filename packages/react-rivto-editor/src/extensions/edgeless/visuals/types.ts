@@ -1,5 +1,5 @@
-import type { EdgelessSelectionRef } from "../edgeless-runtime";
-export type { EdgelessSelectionRef } from "../edgeless-runtime";
+import type { EdgelessSelectionRef } from "../../built-ins/selection/edgeless-runtime";
+export type { EdgelessSelectionRef } from "../../built-ins/selection/edgeless-runtime";
 
 /** Axis-aligned canvas geometry shared by every visual leaf. */
 export interface VisualFrame { x: number; y: number; width: number; height: number }

@@ -27,7 +27,7 @@ Mode локален и не входит в snapshot.
 ### `useEditorSelection()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** detached `EditorSelection`.
+- **Возвращает:** detached `Selection | undefined`.
 - **Исключения:** provider/selection errors.
 
 ### `useEditorRoot()`
@@ -73,7 +73,7 @@ Detached `block` обновляется по revision. Operations привяза
 ### `useBlockSelection(blockId)`
 
 - **Аргументы:** `blockId`.
-- **Возвращает:** containing `BlockSelection | null`.
+- **Возвращает:** containing `Selection | null`.
 - **Исключения:** provider/selection errors.
 
 Text selection намеренно возвращает `null`.

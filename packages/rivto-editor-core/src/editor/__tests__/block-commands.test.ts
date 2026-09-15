@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { z } from "zod";
-import { YjsDoc } from "../../store/crdt-doc";
+import { YjsDoc } from "@chulane/crdt-doc";
 import { createTestEditor as createRivtoEditor } from "../test-utils";
 
 describe("EditorRuntime block commands", () => {
@@ -130,6 +130,27 @@ describe("EditorRuntime block commands", () => {
     editor.destroy();
   });
 
+  it("evaluates dynamic defaults once per creation and conversion", () => {
+    const editor = createRivtoEditor();
+    let sequence = 0;
+    editor.blocksRegistry.defineBlock({
+      type: "dynamic",
+      defaultProps: () => ({ sequence: ++sequence, repaired: sequence }),
+      propSchema: z.object({ sequence: z.number(), repaired: z.number() }),
+    });
+
+    const first = editor.blocks.insertBlock({ type: "dynamic" });
+    const second = editor.blocks.insertBlock({ type: "dynamic" });
+    const converted = editor.blocks.insertBlock({ type: "paragraph", props: { repaired: "invalid", extra: true } });
+    editor.blocks.setBlockType(converted, "dynamic");
+
+    expect(editor.blocks.getBlock(first)?.props).toEqual({ sequence: 1, repaired: 1 });
+    expect(editor.blocks.getBlock(second)?.props).toEqual({ sequence: 2, repaired: 2 });
+    expect(editor.blocks.getBlock(converted)?.props).toEqual({ sequence: 3, repaired: 3, extra: true });
+    expect(sequence).toBe(3);
+    editor.destroy();
+  });
+
   it("clears block content and descendants without losing block-owned data", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({
@@ -146,7 +167,6 @@ describe("EditorRuntime block commands", () => {
     });
     const childId = editor.blocks.getChildIds(id)[0]!;
     const outsideId = editor.blocks.insertBlock({ type: "paragraph", content: "Outside" }, id);
-    editor.links.createLink({ id: "child-outside", from: { blockId: childId }, to: { blockId: outsideId } });
     editor.history.clear();
 
     expectOneUpdate(editor, () => editor.blocks.clearBlock(id));
@@ -161,14 +181,13 @@ describe("EditorRuntime block commands", () => {
       children: [],
     });
     expect(editor.blocks.getBlock(childId)).toBeUndefined();
-    expect(editor.links.getLinks()).toEqual([]);
+    expect(editor.blocks.getBlock(outsideId)?.content).toBe("Outside");
 
     editor.undo();
     expect(editor.blocks.getBlock(id)).toMatchObject({
       content: "Parent",
       children: [{ id: childId, children: [{ content: "Grandchild" }] }],
     });
-    expect(editor.links.getLinks()).toMatchObject([{ id: "child-outside" }]);
     editor.redo();
     expect(editor.blocks.getBlock(id)).toMatchObject({ content: "", children: [] });
     editor.destroy();
@@ -421,18 +440,10 @@ describe("EditorRuntime block commands", () => {
     const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, firstId);
     editor.blocks.indentBlock(childId);
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-    editor.execute("selection.set", {
-      selection: [{
-        type: "block",
-        blockIds: [firstId, childId, secondId],
-        anchorBlockId: firstId,
-        focusBlockId: secondId,
-      }],
-    });
 
     const documentUpdates = jest.fn();
     const unsubscribe = editor.document.subscribe(documentUpdates);
-    editor.blocks.indentBlock(firstId);
+    editor.blocks.indentBlocks([firstId, childId, secondId]);
 
     expect(documentUpdates).toHaveBeenCalledTimes(1);
     expect(editor.blocks.getBlocks()).toMatchObject([{
@@ -458,18 +469,10 @@ describe("EditorRuntime block commands", () => {
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId);
     const gapId = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, firstId);
     const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, gapId);
-    editor.execute("selection.set", {
-      selection: [{
-        type: "block",
-        blockIds: [firstId, lastId],
-        anchorBlockId: firstId,
-        focusBlockId: lastId,
-      }],
-    });
     const documentUpdates = jest.fn();
     const unsubscribe = editor.document.subscribe(documentUpdates);
 
-    editor.blocks.indentBlock(firstId);
+    editor.blocks.indentBlocks([firstId, lastId]);
 
     expect(documentUpdates).not.toHaveBeenCalled();
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([previousId, firstId, gapId, lastId]);
@@ -596,18 +599,10 @@ describe("EditorRuntime block commands", () => {
     editor.blocks.indentBlock(existingChildId);
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
     const followingId = editor.blocks.insertBlock({ type: "paragraph", content: "Following" }, secondId);
-    editor.execute("selection.set", {
-      selection: [{
-        type: "block",
-        blockIds: [firstId, existingChildId, secondId],
-        anchorBlockId: firstId,
-        focusBlockId: secondId,
-      }],
-    });
 
     const documentUpdates = jest.fn();
     const unsubscribe = editor.document.subscribe(documentUpdates);
-    editor.blocks.outdentBlock(firstId);
+    editor.blocks.outdentBlocks([firstId, existingChildId, secondId]);
 
     expect(documentUpdates).toHaveBeenCalledTimes(1);
     expect(editor.blocks.getBlocks()).toMatchObject([
@@ -684,21 +679,15 @@ describe("EditorRuntime block commands", () => {
     editor.destroy();
   });
 
-  it("creates links and loads/dumps snapshots through editor methods", () => {
+  it("loads and dumps snapshots through editor methods", () => {
     const editor = createRivtoEditor();
     const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Source" });
     const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, sourceId);
 
-    editor.links.createLink({ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } });
-
     expect(editor.dump()).toMatchObject({
       version: 6,
       blocks: [{ id: sourceId }, { id: targetId }],
-      links: [{ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } }],
     });
-
-    editor.links.removeLink("source-target");
-    expect(editor.dump().links).toEqual([]);
 
     editor.load({
       version: 6,
@@ -711,12 +700,11 @@ describe("EditorRuntime block commands", () => {
         content: "Loaded",
         children: [],
       }],
-      links: [],
     });
 
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     expect(() => editor.execute("document.load", {
-      snapshot: { version: 3, blocks: [], links: [] },
+      snapshot: { version: 3, blocks: [] },
     })).toThrow("Unsupported Rivto document snapshot version: 3");
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     expect(() => editor.execute("document.load", {
@@ -730,7 +718,6 @@ describe("EditorRuntime block commands", () => {
           content: "",
           children: [],
         }],
-        links: [],
       },
     })).toThrow("block.listProps must be an object");
     editor.destroy();

@@ -26,7 +26,7 @@ import {
 import {
   getEdgelessRuntime,
   type EdgelessSelectionRef,
-} from "./edgeless-runtime";
+} from "../built-ins/selection/edgeless-runtime";
 
 interface RectangleGesture {
   readonly x: number;

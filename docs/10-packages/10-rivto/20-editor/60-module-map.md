@@ -23,7 +23,7 @@ Public barrel экспортирует model/types, clipboard-manager API и run
 ## Tests
 
 - `block-commands.test.ts` — runtime command delegation, props validation и hierarchy operations.
-- `clipboard-commands.test.ts` — event/string compatibility bridge.
+- `clipboard-commands.test.ts` — data-only clipboard command integration.
 - `element-commands.test.ts` — first-class element commands.
 - `rivto-editor-methods.test.ts` — public convenience API, snapshots и subscriptions.
 - `selection-manager.test.ts` — direction, ordering, reconciliation и heterogeneous ranges.

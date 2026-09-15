@@ -2,12 +2,14 @@
 
 ## Structure and Ownership
 
-The pnpm workspace has two editor packages:
+The pnpm workspace has four editor packages:
 
-- `packages/rivto-editor-core/` owns canonical document state and framework-neutral behavior: CRDT storage, blocks, links, elements, commands, selection, clipboard, snapshots, mode, and undo.
+- `packages/crdt-doc/` owns adapter-neutral CRDT contracts and the Yjs adapter (`YjsDoc`, providers, wrappers). Keep native `yjs` imports inside `packages/crdt-doc/src/yjs-doc/`.
+- `packages/document-model/` owns canonical persisted document invariants: blocks, elements, plugin data, snapshots, and hierarchy.
+- `packages/rivto-editor-core/` owns framework-neutral editor behavior: commands, selection, clipboard, snapshots, mode, and undo.
 - `packages/react-rivto-editor/` owns presentation and browser behavior: renderers, hooks, DOM events/selection, page and edgeless surfaces, keyboard handling, slash commands, and extensions.
 
-Use `demo/` for integration, `e2e/` for Playwright, and `docs/` or `dev_notes/` for guidance. Keep native `yjs` imports inside core `src/store/crdt-doc/yjs-doc/`.
+Use `demo/` for integration, `e2e/` for Playwright, and `docs/` or `dev_notes/` for guidance.
 
 ## Choosing Where to Change Code
 
@@ -19,7 +21,7 @@ browser interaction → React extension → React manager/surface
 cross-layer behavior → demo → E2E
 ```
 
-- Change persisted shapes, validation, hierarchy, or transactions in core `src/store/document-model/core/`.
+- Change persisted shapes, validation, hierarchy, or transactions in `packages/document-model/src/core/`.
 - Expose user operations through the focused core manager in `src/managers/`; avoid editor forwarding methods.
 - Put optional interaction behavior in React `src/extensions/`.
 - Put registries and lifecycle ownership in React `src/managers/`, block presentation in `src/blocks/` and `src/hooks/`, and layout containers in `src/surfaces/`.

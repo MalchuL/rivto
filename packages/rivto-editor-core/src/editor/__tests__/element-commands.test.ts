@@ -46,18 +46,35 @@ describe("EditorRuntime element commands", () => {
     const editor = createRivtoEditor();
     expect(() => editor.elements.insertElement({ ...input, frame: { ...input.frame, width: 0 } })).toThrow();
     editor.elements.insertElement(input);
-    expect(() => editor.load({ version: 4, blocks: [], links: [] } as never)).toThrow(
+    expect(() => editor.load({ version: 4, blocks: [] } as never)).toThrow(
       "Unsupported Rivto document snapshot version: 4",
     );
     expect(editor.elements.getElement("shape")).toBeDefined();
     editor.destroy();
   });
 
-  it("does not cascade core element deletion into blocks, links, or opaque references", () => {
+  it("runs registered element processors before insert and update", () => {
+    const editor = createRivtoEditor();
+    const dispose = editor.document.elements.pipe.register({
+      id: "test.element.tag",
+      priority: 30,
+      processor: (element) => ({
+        ...element,
+        props: { ...element.props, tagged: true },
+      }),
+    });
+    editor.elements.insertElement({ ...input, id: "processed" });
+    expect(editor.elements.getElement("processed")?.props).toMatchObject({ fill: "red", tagged: true });
+    editor.elements.updateElement("processed", { props: { stroke: "blue" } });
+    expect(editor.elements.getElement("processed")?.props).toMatchObject({ stroke: "blue", tagged: true });
+    dispose();
+    editor.destroy();
+  });
+
+  it("does not cascade core element deletion into blocks or opaque references", () => {
     const editor = createRivtoEditor();
     editor.blocks.insertBlock({ id: "from", type: "paragraph" });
     editor.blocks.insertBlock({ id: "to", type: "paragraph" });
-    editor.links.createLink({ id: "link", from: { blockId: "from" }, to: { blockId: "to" } });
     editor.elements.insertElement(input);
     editor.elements.insertElement({
       id: "opaque-group",
@@ -70,7 +87,6 @@ describe("EditorRuntime element commands", () => {
     editor.elements.removeElement("shape");
 
     expect(editor.blocks.getRootIds()).toEqual(["from", "to"]);
-    expect(editor.links.getLink("link")).toBeDefined();
     expect(editor.elements.getElement("opaque-group")?.props).toEqual({ children: ["shape"] });
     editor.destroy();
   });

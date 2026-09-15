@@ -7,8 +7,7 @@
  *
  * @module
  */
-import { resolveBlockListNumbers } from "../extensions/page/list-properties";
-import { useBlock, useReactEditor } from "../hooks";
+import { useBlock } from "../hooks";
 import type { BlockSlotProps } from "../managers";
 
 const LIST_CHECKBOX_CLASS = "page-list-checkbox";
@@ -16,23 +15,13 @@ const LIST_MARKER_CLASS = "page-list-marker";
 const COLLAPSE_TOGGLE_CLASS = "page-collapse-toggle";
 
 /**
- * Renders a checkbox or resolved number for one list-decorated block.
+ * Renders a checkbox or CSS-counter marker for one list-decorated block.
  *
  * @param props - Current block-slot context.
  * @returns Interactive checkbox, numeric marker, or nothing for ordinary lists.
  */
 export function BlockListSlot({ block }: BlockSlotProps) {
   const { operations } = useBlock(block.id);
-  const reactEditor = useReactEditor();
-  const parentId = reactEditor.editor.blocks.getParentId(block.id);
-  const siblingIds = parentId === null
-    ? reactEditor.editor.blocks.getRootIds()
-    : parentId === undefined ? [] : reactEditor.editor.blocks.getChildIds(parentId);
-  const siblings = siblingIds.flatMap((id) => {
-    const sibling = reactEditor.editor.blocks.getBlock(id);
-    return sibling ? [sibling] : [];
-  });
-  const listNumber = resolveBlockListNumbers(siblings).get(block.id);
 
   if (block.listProps.type === "checkbox") {
     return (
@@ -46,10 +35,12 @@ export function BlockListSlot({ block }: BlockSlotProps) {
       />
     );
   }
-  return listNumber === undefined ? null : (
-    <span className={LIST_MARKER_CLASS} aria-hidden="true">
-      {listNumber}.
-    </span>
+  return (
+    <span
+      className={LIST_MARKER_CLASS}
+      data-list-type={String(block.listProps.type)}
+      aria-hidden="true"
+    />
   );
 }
 

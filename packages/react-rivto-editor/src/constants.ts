@@ -1,3 +1,10 @@
+/**
+ * Defines stable DOM attributes, selectors, and classes shared by React block
+ * renderers and delegated browser extensions. Attribute/selector pairs remain
+ * centralized so producers and consumers cannot silently drift apart.
+ *
+ * @module
+ */
 /** Stable DOM attribute placed on every BlockView container. */
 export const BLOCK_ID_ATTRIBUTE = "data-block-id";
 
@@ -36,10 +43,25 @@ export const BLOCK_SELECTION_ANCHOR_ATTRIBUTE = "data-block-selection-anchor";
 export const BLOCK_SELECTION_ANCHOR_SELECTOR = `[${BLOCK_SELECTION_ANCHOR_ATTRIBUTE}]`;
 
 /**
- * Logic-owned selector for cross-block text selection fallback highlighting.
+ * Opt-in marker for an interactive child that owns its pointer interaction.
  *
- * Selection cleanup queries this marker after it is written on engines without
- * CSS Custom Highlight. Text offsets remain in editor selection state and are
- * never derived from the marker.
+ * `useBlockEditing` places this marker alongside a pointer handler that prevents
+ * an ancestor preview from entering raw-text mode. Delegated extensions cannot
+ * depend on React propagation alone—especially for capture-phase clicks—so the
+ * marker also lets structural selection exclude the same region without knowing
+ * component-specific classes. It does not disable the marked element's own text
+ * editing; it prevents that interaction from activating the parent block.
  */
-export const TEXT_SELECTION_FALLBACK_SELECTOR = "[data-text-selection-fallback]";
+export const PREVENT_TEXT_EDITING_ATTRIBUTE = "data-prevent-text-editing";
+
+/** CSS selector matching regions that own interaction instead of their parent block. */
+export const PREVENT_TEXT_EDITING_SELECTOR = `[${PREVENT_TEXT_EDITING_ATTRIBUTE}]`;
+
+/**
+ * CSS class for one block's own row (content and chrome).
+ *
+ * Nested descendants live outside this row, in the sibling children container.
+ * Pointer selection uses that split so a hit in a wrapping gap does not
+ * promote the parent.
+ */
+export const BLOCK_ROW_CLASS = "page-block-row";

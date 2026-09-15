@@ -108,7 +108,7 @@ Handler errors передаются native dispatch caller. Higher `priority` в
 
 ## `selection`
 
-- `readDOM()` → `EditorSelection | undefined`; DOM resolution errors возможны для malformed host tree.
+- `readDOM()` → `Selection | undefined`; DOM resolution errors возможны для malformed host tree.
 - `restoreDOM(selection?)` → `boolean`; `false`, если endpoints нельзя отобразить в active root.
 - `clearDOMHighlight()` → `void`.
 - `updateDOMHighlight(selection?)` → `void`.

@@ -1,3 +1,4 @@
+import { createCaretSelection, createTextSelection, createStructuralSelection } from "@chulane/rivto";
 /**
  * Regression tests for per-block selection snapshots used by React chrome.
  *
@@ -12,58 +13,52 @@ import { createReactEditor } from "../../react-editor";
 describe("useBlockSelected / useEditorSelection store contract", () => {
   test("snapshot identity is stable until set actually changes", () => {
     const editor = createEditor();
+    const reactEditor = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
-    const caret = [{
-      type: "text" as const,
-      anchor: { blockId: id, offset: 1 },
-      head: { blockId: id, offset: 1 },
-    }];
-    editor.selection.set(caret);
+    const caret = createCaretSelection(id, 1);
+    reactEditor.selection.set(caret);
     const snapshot = editor.selection.snapshot();
-    editor.selection.set(caret);
+    reactEditor.selection.set(caret);
     expect(editor.selection.snapshot()).toBe(snapshot);
+    reactEditor.destroy();
     editor.destroy();
   });
 
   test("caret selection does not mark the block selected", () => {
     const editor = createEditor();
+    const reactEditor = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
-    editor.selection.set([{
-      type: "text",
-      anchor: { blockId: id, offset: 1 },
-      head: { blockId: id, offset: 1 },
-    }]);
+    reactEditor.selection.set(createCaretSelection(id, 1));
     expect(editor.selection.isBlockSelected(id)).toBe(false);
-    expect(editor.selection.snapshot()[0]?.type).toBe("text");
+    expect(editor.selection.snapshot()).toMatchObject({
+      type: "selection",
+      blocks: [{ id, start: 1, end: 1 }],
+    });
+    reactEditor.destroy();
     editor.destroy();
   });
 
   test("whole-block selection marks only member ids", () => {
     const editor = createEditor();
+    const reactEditor = createReactEditor({ editor });
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-    editor.selection.set([{
-      type: "block",
-      blockIds: [firstId],
-      anchorBlockId: firstId,
-      focusBlockId: firstId,
-    }]);
+    editor.selection.set(createStructuralSelection([firstId]));
     expect(editor.selection.isBlockSelected(firstId)).toBe(true);
     expect(editor.selection.isBlockSelected(secondId)).toBe(false);
-    expect(editor.selection.snapshot()).toHaveLength(1);
+    expect(editor.selection.snapshot()?.blocks).toHaveLength(1);
+    reactEditor.destroy();
     editor.destroy();
   });
 
   test("selection set does not bump the React editor revision", () => {
     const editor = createEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
     const reactEditor = createReactEditor({ editor });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
     const before = reactEditor.revision;
-    editor.selection.set([{
-      type: "text",
-      anchor: { blockId: id, offset: 0 },
-      head: { blockId: id, offset: 2 },
-    }]);
+    reactEditor.selection.set(
+      createTextSelection([{ id, length: 4 }], { blockId: id, offset: 0 }, { blockId: id, offset: 2 })!,
+    );
     expect(reactEditor.revision).toBe(before);
     reactEditor.destroy();
     editor.destroy();

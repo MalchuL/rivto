@@ -58,7 +58,7 @@ React DOM selection       browser nodes/ranges/highlights текущей surface
 
 `reactEditor.selection` methods:
 
-- `readDOM()` возвращает `EditorSelection | undefined`;
+- `readDOM()` возвращает `Selection | undefined`;
 - `restoreDOM(selection?)` возвращает `boolean` success;
 - `clearDOMHighlight()` возвращает `void`;
 - `updateDOMHighlight(selection?)` возвращает `void`.

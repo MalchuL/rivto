@@ -1,4 +1,5 @@
 export * from "./clipboard-manager";
+export * from "./clipboard-data";
+export * from "./strategies";
 export * from "./constants";
-export * from "./types";
 export { CLIPBOARD_BUNDLE_VERSION, validateClipboardBundle } from "./utils";

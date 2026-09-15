@@ -6,17 +6,27 @@ import {
 } from "@chulane/rivto";
 import {
   createReactEditor,
+  createKanbanBlockInput,
+  createBentoBlockInput,
+  createTableBlockInput,
+  createColumnsBlockInput,
   DEFAULT_WRITING_BLOCK_TYPE,
   type MarkdownLinkClick,
+  edgelessPreset,
   edgelessVisualsExtension,
   EditorView,
   KEYBOARD_BINDING_IDS,
+  pageDragExtension,
   SEPARATOR_BLOCK_TYPE,
   standardPreset,
+  TODO_ITEM_BLOCK_TYPE,
+  TODO_STORAGE_BLOCK_TYPE,
+  todoItemExtension,
   useEditor,
   useEditorMode,
 } from "@chulane/rivto-react";
 import { KeyboardPanel } from "./KeyboardPanel";
+import { RevisionsPanel } from "./RevisionsPanel";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   COUNTER_BLOCK_TYPE,
@@ -53,6 +63,22 @@ const edgelessOptions = {
     { id: "mint", label: "Mint sticky", fill: "#d3f9d8", color: "#2b8a3e" },
   ],
 } as const;
+
+/**
+ * Reads `?repeat=` as extra copies of the second edgeless block card.
+ *
+ * Invalid, missing, or non-positive values are ignored so the default seed
+ * stays unchanged. Each copy is a new card because a separator is inserted
+ * before it.
+ *
+ * @returns Finite extra-copy count, or 0 when the param should be ignored.
+ */
+function demoRepeatCount(): number {
+  const raw = new URLSearchParams(window.location.search).get("repeat");
+  if (raw == null || raw === "") return 0;
+  const count = Number.parseInt(raw, 10);
+  return Number.isInteger(count) && count > 0 ? count : 0;
+}
 
 /**
  * Seeds canvas visuals that exercise edgeless features in the journal demo.
@@ -176,6 +202,8 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
  * numbered lists, custom blocks, separators, block elements, and edgeless
  * showcase — so selection, slash commands, and extensions are immediately
  * testable. Optional `?keymap=alternate` remaps indent for keymap demos.
+ * Optional `?repeat=N` clones the second edgeless card N extra times, each
+ * preceded by a separator so reconciliation mounts N additional cards.
  */
 function createDemoEditor() {
   const editor = createRivtoEditor();
@@ -192,6 +220,9 @@ function createDemoEditor() {
     keymap: alternateKeymap,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      todoItemExtension({ prompts: { todo: ["task"] } }),
+      pageDragExtension(),
+      ...edgelessPreset(),
       edgelessVisuals,
       blockIdExtension(),
       ...customBlockExtensions,
@@ -331,6 +362,83 @@ function createDemoEditor() {
     zIndex: 1,
     props: { startBlockId: secondBranchId, endBlockId: numberedContinueId },
   });
+  editor.blocks.insertBlock({ ...createBentoBlockInput(), children: [
+    { type: DEFAULT_WRITING_BLOCK_TYPE, content: "A small idea", props: { bentoWidth: 220 } },
+    { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.", props: { bentoWidth: 400 } },
+    { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Drag blocks between tiles, nest them inside, or move them back into the editor." },
+  ] }, numberedContinueId);
+  const tableId = editor.blocks.insertBlock(createTableBlockInput(), numberedContinueId);
+  const kanbanId = editor.blocks.insertBlock(createKanbanBlockInput(), tableId);
+  const column = editor.blocks.getBlock(kanbanId)!.children[0]!;
+  const cardId = editor.blocks.insertBlock({
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content: "Drag me between columns or back into the editor",
+  }, kanbanId);
+  editor.blocks.moveBlocks([cardId], column.id, "inside");
+  const columnsId = editor.blocks.insertBlock(createColumnsBlockInput(2), kanbanId);
+  const columnsBoard = editor.blocks.getBlock(columnsId)!;
+  const leftColumnId = editor.blocks.insertBlock({
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content: "Left column. Add more blocks here, or use the settings control to change the column count.",
+  }, columnsId);
+  const rightColumnId = editor.blocks.insertBlock({
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content: "Right column. Deleting a column moves its blocks into the remaining column.",
+  }, columnsId);
+  editor.blocks.moveBlocks([leftColumnId], columnsBoard.children[0]!.id, "inside");
+  editor.blocks.moveBlocks([rightColumnId], columnsBoard.children[1]!.id, "inside");
+  const repeatCount = demoRepeatCount();
+  if (repeatCount > 0) {
+    const rootIds = editor.blocks.getRootIds();
+    const start = rootIds.indexOf(secondBranchId);
+    const end = rootIds.indexOf(numberedContinueId);
+    const template = rootIds.slice(start, end + 1).flatMap((id) => {
+      const block = editor.blocks.getBlock(id);
+      return block ? [block] : [];
+    });
+    editor.batchUpdates(() => {
+      let afterId = editor.blocks.getRootIds().at(-1);
+      for (let index = 0; index < repeatCount; index += 1) {
+        afterId = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, afterId);
+        afterId = editor.blocks.importForest(template, afterId).rootIds.at(-1) ?? afterId;
+      }
+    });
+  }
+  const todoStorageId = editor.blocks.insertBlock({
+    type: TODO_STORAGE_BLOCK_TYPE,
+    content: "",
+  });
+  const todoId = editor.blocks.insertBlock({
+    type: TODO_ITEM_BLOCK_TYPE,
+    content: "Review the project brief",
+    props: {
+      status: "todo",
+      description: "Confirm scope and acceptance criteria.",
+      priority: 2,
+      project: "Planning",
+    },
+  }, todoStorageId);
+  editor.blocks.indentBlock(todoId);
+  const doingId = editor.blocks.insertBlock({
+    type: TODO_ITEM_BLOCK_TYPE,
+    content: "Build the editor extension",
+    props: {
+      status: "doing",
+      description: "Prompt conversion and task properties are in progress.",
+      priority: 1,
+      project: "Rivto",
+    },
+  }, todoId);
+  editor.blocks.insertBlock({
+    type: TODO_ITEM_BLOCK_TYPE,
+    content: "Set up the workspace",
+    props: {
+      status: "done",
+      description: "Core packages and demo are ready.",
+      priority: 3,
+      project: "Rivto",
+    },
+  }, doingId);
   seedEdgelessShowcase(edgelessVisuals);
   editor.history.clear();
 
@@ -349,6 +457,8 @@ function createEmptyDemoEditor() {
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      pageDragExtension(),
+      ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
@@ -468,6 +578,7 @@ function JournalDemoApp() {
               showBlockIds={showBlockIds}
               onShowBlockIdsChange={setShowBlockIds}
             />
+            <RevisionsPanel />
             <KeyboardPanel />
             <JournalDate date={dates.today} />
           </EditorView>
@@ -492,13 +603,15 @@ function JournalDemoApp() {
  */
 function createMultiEditor(
   side: "left" | "right",
-  options: { readonly empty?: boolean; readonly conflict?: "block" | "link" } = {},
+  options: { readonly empty?: boolean; readonly conflict?: "block" } = {},
 ) {
   const editor = createRivtoEditor();
   const reactEditor = createReactEditor({
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      pageDragExtension(),
+      ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
@@ -529,18 +642,6 @@ function createMultiEditor(
       props: { count: 7 },
     });
     editor.blocks.insertBlock({ id: "left-stay", type: DEFAULT_WRITING_BLOCK_TYPE, content: "Stays in the source" });
-    // Internal link moves with the subtree; external link should drop when its
-    // endpoint leaves the source document.
-    editor.links.createLink({
-      id: "left-internal-link",
-      from: { blockId: "left-parent" },
-      to: { blockId: "left-child" },
-    });
-    editor.links.createLink({
-      id: "left-external-link",
-      from: { blockId: "left-child" },
-      to: { blockId: "left-stay" },
-    });
   } else if (!options.empty) {
     editor.blocks.insertBlock({
       id: "right-target",
@@ -555,20 +656,12 @@ function createMultiEditor(
       ],
     });
     editor.blocks.insertBlock({ id: "right-counter", type: COUNTER_BLOCK_TYPE, props: { count: 20 } });
-    if (options.conflict === "link") {
-      // Used by e2e + manual `?conflict=link`: duplicate link id must reject the drop.
-      editor.links.createLink({
-        id: "left-internal-link",
-        from: { blockId: "right-target" },
-        to: { blockId: "right-nested" },
-      });
-    }
   }
   editor.history.clear();
   return { editor, reactEditor };
 }
 
-/** Used by e2e: hidden `editor.dump()` for asserting links / structure not shown in the UI. */
+/** Used by e2e: hidden `editor.dump()` for asserting structure not shown in the UI. */
 function DocumentStateDump() {
   const editor = useEditor();
   const snapshot = useSyncExternalStore(
@@ -594,6 +687,7 @@ function MultiEditorPane({
       <BlockIdsVisibleProvider visible={showBlockIds}>
         <EditorView editor={runtime.reactEditor}>
           <DemoToolbar showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
+          <RevisionsPanel />
           <DocumentStateDump />
         </EditorView>
       </BlockIdsVisibleProvider>
@@ -604,13 +698,13 @@ function MultiEditorPane({
 /**
  * Side-by-side editors for manual cross-document practice (`?editors=2`).
  *
- * Query extras (also used by e2e): `emptyDestination=1`, `conflict=block|link`.
+ * Query extras (also used by e2e): `emptyDestination=1`, `conflict=block`.
  */
 function MultiEditorApp() {
   const params = new URLSearchParams(window.location.search);
   const emptyDestination = params.get("emptyDestination") === "1";
   const conflictParam = params.get("conflict");
-  const conflict = conflictParam === "block" || conflictParam === "link" ? conflictParam : undefined;
+  const conflict = conflictParam === "block" ? conflictParam : undefined;
   const [left] = useState(() => createMultiEditor("left"));
   const [right] = useState(() => createMultiEditor("right", { empty: emptyDestination, conflict }));
   useEffect(() => () => {
@@ -641,6 +735,8 @@ function createSyncedPeer(side: "left" | "right", roomId: string) {
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      pageDragExtension(),
+      ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
@@ -707,6 +803,7 @@ function SyncEditorsApp() {
             <BlockIdsVisibleProvider visible={showBlockIds}>
               <EditorView editor={peers[side].reactEditor}>
                 <DemoToolbar showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
+                <RevisionsPanel />
               </EditorView>
             </BlockIdsVisibleProvider>
           </section>
@@ -722,6 +819,7 @@ function SyncEditorsApp() {
  * - default → journal stack (`JournalDemoApp`)
  * - `?editors=2` → dual editors (`MultiEditorApp`)
  * - `?sync=1` → BroadcastChannel peers (`SyncEditorsApp`)
+ * - `?repeat=N` → N extra copies of the second journal card (with separators)
  *
  * Needed so one Vite demo app can cover walkthrough, regression, and sync
  * without separate entrypoints.

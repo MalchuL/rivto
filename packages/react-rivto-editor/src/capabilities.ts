@@ -1,3 +1,6 @@
+/**
+ * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ */
 import type {
   BlockListProps,
   EditorBlock,
@@ -5,7 +8,7 @@ import type {
   EditorBlockPatch,
   EditorBlockUpdate,
   EditorMode,
-  EditorSelection,
+  Selection,
 } from "@chulane/rivto";
 import type { ComponentType, ReactNode } from "react";
 import type { BlockWrapperComponent } from "./blocks";
@@ -40,6 +43,7 @@ import type {
   ElementSlotRegistration,
   SlotPosition,
 } from "./managers";
+import type { BlockViewBehavior } from "./views/types";
 
 export interface BlocksCapability {
   register(registration: ReactBlockRegistration): () => void;
@@ -87,6 +91,24 @@ export interface RenderersCapability {
   has(type: string): boolean;
   readonly revision: number;
   subscribe(listener: () => void): () => void;
+}
+
+/** Per-type outline, split, and drop behavior resolved by page dispatchers. */
+export interface ViewsCapability {
+  /** Registers one behavior object for a persisted block type. */
+  register(type: string, view: BlockViewBehavior): () => void;
+  /** Removes the view registered for a persisted block type. */
+  delete(type: string): boolean;
+  /** Returns the registered view, or `undefined` when the type is generic. */
+  get(type: string): BlockViewBehavior | undefined;
+  /** Reports whether a specialized view is registered for the type. */
+  has(type: string): boolean;
+  /** Resolves the view for a placed block, falling back to the generic view. */
+  resolve(blockId: string): BlockViewBehavior;
+  /** Asks the target view whether it accepts the dragged roots. */
+  acceptsDrop(targetId: string, sourceIds: readonly string[]): boolean;
+  /** Shared generic view used when a type registers no specialization. */
+  readonly fallback: BlockViewBehavior;
 }
 
 export interface EventsCapability {
@@ -155,10 +177,13 @@ export interface SurfacesCapability {
 }
 
 export interface SelectionCapability {
-  readDOM(): EditorSelection | undefined;
-  restoreDOM(selection?: EditorSelection): boolean;
-  clearDOMHighlight(): void;
-  updateDOMHighlight(selection?: EditorSelection): void;
+  get(): Selection | undefined;
+  set(selection: Selection): void;
+  clear(): void;
+  subscribe(listener: () => void): () => void;
+  delete(): void;
+  readDOM(): Selection | undefined;
+  restoreDOM(selection?: Selection): boolean;
 }
 
 export interface SlashCommandsCapability {

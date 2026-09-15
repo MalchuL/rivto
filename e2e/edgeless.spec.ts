@@ -627,7 +627,6 @@ test("keeps Enter newlines in connector labels", async ({ page }) => {
 const visualClipboardBundle = JSON.stringify({
   version: 4,
   blocks: [],
-  links: [],
   elements: [{
     id: "copied-visual",
     type: "text",
@@ -650,7 +649,6 @@ const blockClipboardBundle = JSON.stringify({
     pluginData: {},
     children: [],
   }],
-  links: [],
 });
 
 const pasteIntoLabel = async (
@@ -1644,7 +1642,7 @@ test("does not choose a structural drop target over blank canvas", async ({ page
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(viewportBox.x + viewportBox.width - 30, viewportBox.y + viewportBox.height - 30, { steps: 8 });
-  await expect(page.locator("[data-drop-inside], .page-drop-line")).toHaveCount(0);
+  await expect(page.locator("[data-drop-inside], .page-drop-indicator")).toHaveCount(0);
   await page.mouse.up();
 
   await expect(cardChild(card, sourceId)).toHaveCount(1);
@@ -1953,6 +1951,26 @@ test("zooms, pans, and pastes selected root subtrees with offset layouts", async
     top: Number.parseFloat((element as HTMLElement).style.top),
   }))));
   expect(pastedPositions).toEqual(originalPositions.map(({ left, top }) => ({ left: left + 24, top: top + 24 })));
+});
+
+test("copies and pastes a standalone visual element", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const source = await createVisual(page, "Rectangle");
+  const sourceFrame = await visualFrame(source);
+  const rectangles = page.locator('[data-edgeless-visual-kind="rectangle"]');
+  const before = await rectangles.count();
+
+  await page.keyboard.press("Control+c");
+  await page.keyboard.press("Control+v");
+
+  await expect(rectangles).toHaveCount(before + 1);
+  const pasted = page.locator('[data-edgeless-visual-kind="rectangle"][data-selected="true"]');
+  await expect(pasted).toHaveCount(1);
+  await expect.poll(() => visualFrame(pasted)).toEqual({
+    ...sourceFrame,
+    x: sourceFrame.x + 24,
+    y: sourceFrame.y + 24,
+  });
 });
 
 test("uses middle mouse only for unbounded canvas panning", async ({ page }) => {

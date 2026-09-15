@@ -64,7 +64,7 @@ const visuals = edgelessVisualsExtension({
 
 const reactEditor = createReactEditor({
   editor,
-  extensions: [standardPreset(), visuals],
+  extensions: [standardPreset(), ...edgelessPreset(), visuals],
 });
 
 const rectangle = visuals.createRectangle({
@@ -90,8 +90,8 @@ snapping.subscribe(() => {
   localStorage.setItem("canvas-snapping", JSON.stringify(snapping.getSnapshot()));
 });
 
-standardPreset({
-  edgeless: {
+edgelessPreset({
+  surface: {
     snapping,
     avoidBlockElementOverlap: true,
     blockElementWidth: 720,

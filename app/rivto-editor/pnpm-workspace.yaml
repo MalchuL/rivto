@@ -1,0 +1,9 @@
+packages:
+  - .
+  - ../../packages/*
+
+storeDir: ../../.pnpm-store
+
+allowBuilds:
+  electron: true
+  esbuild: true

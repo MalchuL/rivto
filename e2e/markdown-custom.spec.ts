@@ -157,6 +157,26 @@ test("filters typo queries, converts in place, and undoes query removal with con
   await expect(converted.locator("[data-block-content]")).toHaveText(`${initial}/sloder`);
 });
 
+test("executes the highlighted command after grouped slash navigation", async ({ page }) => {
+  const editor = page.locator("[data-block-content]").last();
+  const block = editor.locator(BLOCK_ANCESTOR_XPATH);
+  const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!id) throw new Error("Expected block ID");
+  const kanbanCount = await page.locator(blockTypeSelector("kanban")).count();
+
+  await editor.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("/c");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator("[data-active]")).toHaveAttribute("data-slash-command", "block.delete");
+  await page.keyboard.press("Enter");
+
+  await expect(page.locator(blockIdSelector(id))).toHaveCount(0);
+  await expect(page.locator(blockTypeSelector("kanban"))).toHaveCount(kanbanCount);
+});
+
 test("Escape preserves slash text and custom controls update or select their block", async ({ page }) => {
   const editor = page.locator("[data-block-content]").last();
   await editor.click();
@@ -219,4 +239,22 @@ test("Slider property changes use editor history", async ({ page }) => {
   await expect(slider).toHaveValue("35");
   await page.keyboard.press("Control+Shift+z");
   await expect(slider).toHaveValue("36");
+});
+
+test("Slider commits a drag as one history step", async ({ page }) => {
+  const slider = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.slider")} input[type="range"]`);
+  await expect(slider).toHaveValue("35");
+  await slider.scrollIntoViewIfNeeded();
+  const box = await slider.boundingBox();
+  if (!box) throw new Error("Expected the slider to be visible");
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width * 0.35, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.8, y, { steps: 12 });
+  const dragged = Number(await slider.inputValue());
+  expect(dragged).toBeGreaterThan(35);
+  await page.mouse.up();
+  await expect(slider).toHaveValue(String(dragged));
+  await page.keyboard.press("Control+z");
+  await expect(slider).toHaveValue("35");
 });

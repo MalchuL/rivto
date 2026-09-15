@@ -48,18 +48,23 @@
  *         └── Text ("hello")   ← Selection often points here
  * ```
  */
-
 import type {
   EditorPosition,
-  EditorSelection,
+  Selection,
+} from "@chulane/rivto";
+import {
+  isStructuralSelection,
+  createTextSelection,
+  createStructuralSelection,
 } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-  TEXT_SELECTION_FALLBACK_SELECTOR,
+  BLOCK_ROW_CLASS,
 } from "../../constants";
 import { isElementNode } from "../events/dom-nodes";
+import { resolveSelectionEndpoints } from "./selection-endpoints";
 
 /**
  * One live browser caret/selection endpoint inside a block's editable content.
@@ -98,8 +103,8 @@ export interface DOMSelectionPoint {
 }
 
 /**
- * Minimal visible-block snapshot used when splitting a cross-block text
- * selection into a text item plus a middle "fully selected blocks" item.
+ * Minimal visible-block snapshot used when mapping native endpoints to
+ * per-block `start`/`end` coverage.
  */
 export interface SelectionBlock {
   /** Stable block identity (`data-block-id`) in visible document order. */
@@ -108,8 +113,6 @@ export interface SelectionBlock {
   readonly length: number;
 }
 
-/** Name used by surfaces that style the supplemental CSS Highlight range. */
-export const TEXT_SELECTION_HIGHLIGHT_NAME = "rivto-text-selection";
 
 /**
  * Reads the stable block ID that owns one editable content element.
@@ -134,70 +137,26 @@ function orderedContents(root: HTMLElement): HTMLElement[] {
 }
 
 /**
- * Builds portable selection items from two directed editor positions.
- *
- * The text item retains the real pointer direction and exact boundary offsets.
- * Blocks strictly between those endpoints are fully covered, so a second block
- * item records them explicitly. `blockIds` stay in document order while its
- * anchor/focus preserve whether the gesture moved top-down or bottom-up.
- *
- * @param blocks - Visible editable blocks in document order.
- * @param anchor - Fixed position where the gesture began.
- * @param head - Moving position where the gesture currently ends.
- * @returns One directed text item and, when needed, one middle-block item.
- */
-export function createSelectionItems(
-  blocks: readonly SelectionBlock[],
-  anchor: EditorPosition,
-  head: EditorPosition,
-): EditorSelection {
-  const text = { type: "text", anchor: { ...anchor }, head: { ...head } } as const;
-  const anchorIndex = blocks.findIndex((block) => block.id === anchor.blockId);
-  const headIndex = blocks.findIndex((block) => block.id === head.blockId);
-  if (anchorIndex < 0 || headIndex < 0 || anchorIndex === headIndex) return [text];
-
-  const first = Math.min(anchorIndex, headIndex) + 1;
-  const last = Math.max(anchorIndex, headIndex);
-  const blockIds = blocks.slice(first, last).map((block) => block.id);
-  if (!blockIds.length) return [text];
-
-  const forward = anchorIndex < headIndex;
-  return [
-    text,
-    {
-      type: "block",
-      blockIds,
-      anchorBlockId: forward ? blockIds[0]! : blockIds.at(-1)!,
-      focusBlockId: forward ? blockIds.at(-1)! : blockIds[0]!,
-    },
-  ];
-}
-
-/**
  * Creates one inclusive whole-block range in visible order.
- *
- * Unlike a text range, both endpoint blocks are complete selections. The ID
- * array remains top-down while anchor/focus retain gesture direction.
  *
  * @param blockIds - Candidate block IDs already in visible document order.
  * @param anchorBlockId - Block where the gesture began.
  * @param focusBlockId - Block where the gesture currently ends.
  * @returns A one-item block selection, or `[]` when either ID is unknown.
  */
-export function createBlockSelection(
+export function createVisibleStructuralSelection(
   blockIds: readonly string[],
   anchorBlockId: string,
   focusBlockId: string,
-): EditorSelection {
+): Selection | undefined {
   const anchorIndex = blockIds.indexOf(anchorBlockId);
   const focusIndex = blockIds.indexOf(focusBlockId);
-  if (anchorIndex < 0 || focusIndex < 0) return [];
-  return [{
-    type: "block",
-    blockIds: blockIds.slice(Math.min(anchorIndex, focusIndex), Math.max(anchorIndex, focusIndex) + 1),
+  if (anchorIndex < 0 || focusIndex < 0) return undefined;
+  return createStructuralSelection(
+    blockIds.slice(Math.min(anchorIndex, focusIndex), Math.max(anchorIndex, focusIndex) + 1),
     anchorBlockId,
     focusBlockId,
-  }];
+  );
 }
 
 /**
@@ -282,6 +241,14 @@ export function readDOMPointPosition(root: HTMLElement, point: DOMSelectionPoint
  * The closest block is used because nested surfaces render one BlockView inside
  * another. A pointer over a child control must select that child, not its parent.
  *
+ * Nested parents also wrap descendant geometry: vertical sibling margins and
+ * the indent gutter are still inside the parent BlockView. `elementFromPoint`
+ * therefore reports the parent when the pointer is only between nested rows.
+ * That hit is valid CSS, but whole-block drags would then promote the parent
+ * and cover its entire subtree. Hits outside the parent's own row snap to the
+ * nearest nested row instead, so the parent joins the range only when the
+ * pointer enters its content or chrome.
+ *
  * @param root - Active surface root that scopes valid block containers.
  * @param x - Horizontal viewport coordinate from a pointer event.
  * @param y - Vertical viewport coordinate from a pointer event.
@@ -293,29 +260,89 @@ export function readBlockIdAtPoint(
   y: number,
 ): string | undefined {
   const hit = root.ownerDocument.elementFromPoint(x, y);
-  const block = hit?.closest<HTMLElement>(BLOCK_ID_SELECTOR);
+  const block = hit instanceof Element ? hit.closest<HTMLElement>(BLOCK_ID_SELECTOR) : null;
   if (!block || !root.contains(block)) return undefined;
-  return block.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
+
+  const ownRow = ownedBlockRow(block);
+  // Keep the closest block when the pointer is in its own row, or when a
+  // custom shell has no row to distinguish wrapping descendants from chrome.
+  const nestedHit = ownRow && !ownRow.contains(hit) ? nearestNestedBlock(block, x, y) : undefined;
+  const target = nestedHit ?? block;
+  return target.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
 }
 
 /**
- * Builds a portable {@link EditorSelection} from two editor positions, using
+ * Returns the BlockView row that belongs to `block` itself, not descendants.
+ *
+ * @param block - BlockView container that may own a `.page-block-row`.
+ * @returns The direct row element, or `null` when a custom shell omitted it.
+ */
+function ownedBlockRow(block: HTMLElement): HTMLElement | null {
+  return block.querySelector(`:scope > .${BLOCK_ROW_CLASS}`);
+}
+
+/**
+ * Finds the nested BlockView whose own row is closest to a wrapping-parent hit.
+ *
+ * Distances use each descendant's row box, not the full BlockView. Parent
+ * BlockViews include nested children in their bounding rect, so measuring the
+ * wrapper would keep selecting the same parent we are trying to skip.
+ *
+ * @param parent - Closest BlockView that wrapped the pointer without owning the hit.
+ * @param x - Horizontal viewport coordinate from a pointer event.
+ * @param y - Vertical viewport coordinate from a pointer event.
+ * @returns Nearest nested BlockView, or `undefined` when none have a row.
+ */
+function nearestNestedBlock(parent: HTMLElement, x: number, y: number): HTMLElement | undefined {
+  return [...parent.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)]
+    .map((candidate) => {
+      const row = ownedBlockRow(candidate);
+      return row ? { candidate, distance: distanceToRect(row.getBoundingClientRect(), x, y) } : undefined;
+    })
+    .filter((entry): entry is { candidate: HTMLElement; distance: number } => Boolean(entry))
+    .sort((left, right) => left.distance - right.distance)[0]?.candidate;
+}
+
+/**
+ * Builds a portable {@link Selection} from two editor positions, using
  * the surface's current visible block order under `root`.
  *
  * @param root - EditorView root used to discover visible blocks / lengths.
  * @param anchor - Fixed position where the gesture began.
  * @param head - Moving position where the gesture currently ends.
+ * @returns Directed text coverage with structural markers for contentless blocks.
  */
-export function createDOMSelectionItems(
+export function createDOMSelection(
   root: HTMLElement,
   anchor: EditorPosition,
   head: EditorPosition,
-): EditorSelection {
-  const blocks = orderedContents(root).flatMap((content) => {
-    const id = blockIdForContent(content);
-    return id ? [{ id, length: content.textContent?.length ?? 0 }] : [];
+): Selection | undefined {
+  // Start from every BlockView, not only editable hosts. Otherwise a
+  // contentless renderer such as Counter disappears from a Shift+Alt range.
+  const rendered = [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
+    const id = block.getAttribute(BLOCK_ID_ATTRIBUTE);
+    if (!id) return [];
+    const content = [...block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)]
+      .find((candidate) => candidate.closest(BLOCK_ID_SELECTOR) === block);
+    return [{ id, content }];
   });
-  return createSelectionItems(blocks, anchor, head);
+  const selection = createTextSelection(
+    rendered.map(({ id, content }) => ({ id, length: content?.textContent?.length ?? 0 })),
+    anchor,
+    head,
+  );
+  if (selection) {
+    const contentless = new Set(rendered.filter(({ content }) => !content).map(({ id }) => id));
+    selection.blocks.forEach((block) => {
+      // Contentless blocks have no native character range, so the live-end
+      // sentinel makes their structural coverage explicit.
+      if (contentless.has(block.id)) {
+        block.start = 0;
+        block.end = -1;
+      }
+    });
+  }
+  return selection;
 }
 
 /**
@@ -326,17 +353,17 @@ export function createDOMSelectionItems(
  * direction of a bottom-to-top selection.
  *
  * @param root - EditorView root; both endpoints must live under it.
- * @returns Directed selection items, or `undefined` when there is no usable
+ * @returns Directed selection, or `undefined` when there is no usable
  *   browser selection inside this editor.
  */
-export function readEditorDOMSelection(root: HTMLElement): EditorSelection | undefined {
+export function readEditorDOMSelection(root: HTMLElement): Selection | undefined {
   const selection = root.ownerDocument.getSelection();
   if (!selection?.rangeCount) return;
   // anchorNode / focusNode are Node|null — typically Text nodes inside a
   // contenteditable HTMLElement, not the Element itself.
   const anchor = readPosition(root, selection.anchorNode, selection.anchorOffset);
   const head = readPosition(root, selection.focusNode, selection.focusOffset);
-  return anchor && head ? createDOMSelectionItems(root, anchor, head) : undefined;
+  return anchor && head ? createDOMSelection(root, anchor, head) : undefined;
 }
 
 /**
@@ -543,8 +570,7 @@ export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosi
  * reparents their DOM elements. The browser range still points at the detached
  * nodes and is commonly cleared. This helper resolves both stored endpoints
  * against the newly rendered content elements, focuses the moving endpoint,
- * and recreates the directed native selection. Supplemental cross-block
- * highlighting is repainted at the same time.
+ * and recreates the directed native selection inside that block.
  *
  * Whole-block selections have no native text range, so they return
  * false without changing focus. Missing rendered endpoints also return false;
@@ -554,83 +580,26 @@ export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosi
  * @param selection - Editor selection captured before the structural command.
  * @returns True when a text selection was resolved and restored.
  */
-export function restoreEditorDOMSelection(root: HTMLElement, selection: EditorSelection): boolean {
-  const text = selection.find((item) => item.type === "text");
-  if (!text) return false;
-
+export function restoreEditorDOMSelection(root: HTMLElement, selection: Selection): boolean {
   const contents = orderedContents(root);
-  const anchorContent = contents.find((content) => blockIdForContent(content) === text.anchor.blockId);
-  const headContent = contents.find((content) => blockIdForContent(content) === text.head.blockId);
+  const lengthOf = (id: string): number => {
+    const content = contents.find((candidate) => blockIdForContent(candidate) === id);
+    return content?.textContent?.length ?? 0;
+  };
+  if (isStructuralSelection(selection)) return false;
+  const ends = resolveSelectionEndpoints(selection, lengthOf);
+  if (!ends) return false;
+
+  const anchorContent = contents.find((content) => blockIdForContent(content) === ends.anchor.blockId);
+  const headContent = contents.find((content) => blockIdForContent(content) === ends.head.blockId);
   if (!anchorContent || !headContent) return false;
 
-  const anchor = pointAtOffset(anchorContent, text.anchor.offset);
-  const head = pointAtOffset(headContent, text.head.offset);
+  const anchor = pointAtOffset(anchorContent, ends.anchor.offset);
+  const head = pointAtOffset(headContent, ends.head.offset);
   headContent.focus({ preventScroll: true });
   setNativeSelection(
     { ...anchor, content: anchorContent },
     { ...head, content: headContent },
   );
-  updateTextSelectionHighlight(root, selection);
   return true;
-}
-
-/**
- * Removes supplemental CSS Highlight ranges and fallback DOM paint markers.
- *
- * @param root - EditorView root whose highlight state should be cleared.
- */
-export function clearTextSelectionHighlight(root: HTMLElement): void {
-  if ("highlights" in CSS) CSS.highlights.delete(TEXT_SELECTION_HIGHLIGHT_NAME);
-  root.querySelectorAll<HTMLElement>(TEXT_SELECTION_FALLBACK_SELECTOR).forEach((content) => {
-    delete content.dataset.textSelectionFallback;
-  });
-}
-
-/**
- * Paints cross-contenteditable text that browsers may omit from native paint.
- *
- * Each block is its own `contenteditable`, so a native selection often only
- * highlights the focused host. This helper paints the rest:
- * - Prefer the CSS Custom Highlight API (`CSS.highlights`) with exact Ranges
- *   for partial boundary offsets.
- * - Fall back to `data-text-selection-fallback` on touched content elements
- *   for engines without Highlights. Surfaces own the visual styling.
- *
- * @param root - EditorView root that owns the content hosts.
- * @param selection - Portable selection; only cross-block text items paint.
- */
-export function updateTextSelectionHighlight(root: HTMLElement, selection: EditorSelection): void {
-  clearTextSelectionHighlight(root);
-  const text = selection.find((item) => item.type === "text");
-  if (!text || text.anchor.blockId === text.head.blockId) return;
-
-  const contents = orderedContents(root);
-  const anchorIndex = contents.findIndex((content) => blockIdForContent(content) === text.anchor.blockId);
-  const headIndex = contents.findIndex((content) => blockIdForContent(content) === text.head.blockId);
-  if (anchorIndex < 0 || headIndex < 0) return;
-
-  const forward = anchorIndex < headIndex;
-  const firstIndex = Math.min(anchorIndex, headIndex);
-  const lastIndex = Math.max(anchorIndex, headIndex);
-  const firstOffset = forward ? text.anchor.offset : text.head.offset;
-  const lastOffset = forward ? text.head.offset : text.anchor.offset;
-  const ranges: Range[] = [];
-
-  for (let index = firstIndex; index <= lastIndex; index += 1) {
-    const content = contents[index]!;
-    const start = pointAtOffset(content, index === firstIndex ? firstOffset : 0);
-    const end = pointAtOffset(content, index === lastIndex ? lastOffset : content.textContent?.length ?? 0);
-    const range = root.ownerDocument.createRange();
-    range.setStart(start.node, start.offset);
-    range.setEnd(end.node, end.offset);
-    ranges.push(range);
-  }
-
-  if ("highlights" in CSS && typeof Highlight !== "undefined") {
-    CSS.highlights.set(TEXT_SELECTION_HIGHLIGHT_NAME, new Highlight(...ranges));
-  } else {
-    contents.slice(firstIndex, lastIndex + 1).forEach((content) => {
-      content.dataset.textSelectionFallback = "true";
-    });
-  }
 }

@@ -35,7 +35,8 @@
     "yjs": "^13.0.0"
   },
   "dependencies": {
-    "y-webrtc": "^10.3.0",
+    "@chulane/crdt-doc": "workspace:*",
+    "@chulane/document-model": "workspace:*",
     "zod": "^4.1.13"
   }
 }

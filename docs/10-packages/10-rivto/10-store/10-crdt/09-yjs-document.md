@@ -2,7 +2,7 @@
 
 `YjsDoc` — встроенная реализация `CRDTDoc`. Класс владеет нативным `Y.Doc`, предоставляет его через независимые от адаптера wrapper-объекты и выбирается редактором как стандартное Yjs-хранилище.
 
-Исходник: `packages/rivto-editor-core/src/store/crdt-doc/yjs-doc/yjs-doc.ts`.
+Исходник: `packages/crdt-doc/src/yjs-doc/yjs-doc.ts`.
 
 ## Создание и свойства
 

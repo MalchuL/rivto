@@ -1,6 +1,12 @@
+@import "./todo-item.css";
+
 :root {
   --rivto-default-block-height: 1.5em;
   --rivto-block-surface-padding: 56px 64px;
+  --rivto-drop-indicator-thickness: 4px;
+  --rivto-drop-indicator-color: var(--rivto-accent, #6c5ce7);
+  --rivto-drop-indicator-radius: 4px;
+  --rivto-drop-inside-background: color-mix(in srgb, var(--rivto-drop-indicator-color) 8%, transparent);
 }
 
 .page-surface {
@@ -24,6 +30,10 @@
 .page-block {
   margin: 4px 0;
   padding: 2px 8px;
+}
+
+.page-block:has(> .page-drop-indicator) {
+  position: relative;
 }
 
 [data-page-end-slot] {
@@ -121,6 +131,13 @@
   flex: 1 1 auto;
 }
 
+/* Expanded structural containers keep a first-line drag target and slot host,
+   but overlay it instead of reserving empty space above their real content. */
+.page-block-row:has(> .rivto-block-content-flow > [data-block-selection-anchor]:empty) {
+  min-height: var(--rivto-default-block-height);
+  margin-bottom: calc(-1 * var(--rivto-default-block-height));
+}
+
 /* Built-in controls historically positioned themselves against their owner.
    Slot ownership now supplies that geometry. */
 .rivto-slot > .page-drag-handle,
@@ -214,6 +231,7 @@
   cursor: pointer;
 }
 
+
 .page-drag-handle {
   position: absolute;
   top: 0;
@@ -242,6 +260,41 @@
 .page-drag-handle:focus-visible {
   opacity: 1;
   pointer-events: auto;
+}
+
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])
+  > .page-block-row > .rivto-slot > .page-drag-handle {
+  pointer-events: auto;
+}
+
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"]) {
+  position: relative;
+}
+
+/* Root rows are only one line tall; side strips extend their hover behavior
+   beside the full container without covering its interactive body. */
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::before,
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::after {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  width: 100vw;
+  background: transparent;
+  content: "";
+}
+
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::before {
+  right: 100%;
+}
+
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::after {
+  left: 100%;
+}
+
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"]):hover
+  > .page-block-row > .rivto-slot > .page-drag-handle {
+  opacity: 1;
 }
 
 .page-drag-handle:active {
@@ -276,6 +329,31 @@
   text-align: right;
 }
 
+/* Numbering is a sibling-layout concern. Native counters follow DOM moves and
+   list-mode changes without waking otherwise unchanged block components. */
+.page-surface,
+.edgeless-card-content,
+.page-block-children {
+  counter-reset: rivto-list-number;
+}
+
+.page-list-marker {
+  counter-increment: rivto-list-number;
+}
+
+.page-list-marker[data-list-type="start_numbered_list"],
+.page-block:not(:has(> .page-block-row .page-list-marker))
+  + .page-block
+  > .page-block-row
+  .page-list-marker[data-list-type="numbered_list"] {
+  counter-set: rivto-list-number 1;
+  counter-increment: none;
+}
+
+.page-list-marker::before {
+  content: counter(rivto-list-number) ".";
+}
+
 .rivto-slot[data-slot-owner="block"][data-slot-position="start"] > .page-list-checkbox {
   margin-inline-end: 4px;
 }
@@ -303,25 +381,30 @@
   opacity: 0.45;
 }
 
-[data-drop-inside] {
-  background: #eeeaff;
-}
-
-.page-drop-line {
+.page-drop-indicator {
   position: absolute;
   z-index: 2;
-  right: 0;
-  height: 2px;
-  background: var(--rivto-accent, #6c5ce7);
+  border-radius: var(--rivto-drop-indicator-radius);
+  background: var(--rivto-drop-indicator-color);
   pointer-events: none;
 }
 
-.page-drop-line[data-edge="before"] {
-  top: -2px;
+.page-drop-indicator[data-kind="between"][data-axis="horizontal"] {
+  height: var(--rivto-drop-indicator-thickness);
+  transform: translateY(-50%);
 }
 
-.page-drop-line[data-edge="after"] {
-  bottom: -2px;
+.page-drop-indicator[data-kind="between"][data-axis="vertical"] {
+  width: var(--rivto-drop-indicator-thickness);
+  transform: translateX(-50%);
+}
+
+.page-drop-indicator[data-kind="inside"] {
+  inset: 0;
+  box-sizing: border-box;
+  background: var(--rivto-drop-inside-background);
+  outline: var(--rivto-drop-indicator-thickness) solid var(--rivto-drop-indicator-color);
+  outline-offset: calc(-1 * var(--rivto-drop-indicator-thickness));
 }
 
 .page-drag-overlay {
@@ -380,16 +463,6 @@
 .rivto-separator-arrow {
   font-size: 9px;
   line-height: 10px;
-}
-
-/* TextSelectionPlugin uses an exact CSS range when the browser supports it. */
-::highlight(rivto-text-selection) {
-  background: #cfc4ff;
-}
-
-/* Older browsers receive a whole-content fallback marker instead. */
-[data-text-selection-fallback] {
-  background: #e5dfff;
 }
 
 /* A page block owns its recursively rendered children, so decorating the
@@ -751,10 +824,17 @@
   min-height: 0;
   box-sizing: border-box;
   padding: var(--rivto-block-surface-padding);
-  overflow-x: hidden;
+  /* clip, not hidden: hidden still accepts programmatic scrollLeft. */
+  overflow-x: clip;
   overflow-y: auto;
   overscroll-behavior: contain;
   cursor: grab;
+}
+
+/* Wide min-content (Kanban lanes) must not inflate the card's scrollport. */
+.edgeless-card-content > .page-block {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .edgeless-card[data-auto-height="true"] .edgeless-card-content {
@@ -1757,4 +1837,292 @@
   .page-surface {
     padding: 32px 24px;
   }
+}
+
+/* Kanban uses the same recursive block tree and controls as the outline. */
+[data-block-type="kanban"] {
+  min-width: 0;
+  max-width: 100%;
+}
+[data-block-type="kanban"] > .page-block-children {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow-x: auto;
+  padding: 16px;
+  border-radius: 14px;
+  background: linear-gradient(125deg, #e9eefc, #e8f4f5);
+  scrollbar-width: thin;
+}
+[data-block-type="kanban"]:not(:has(> .page-block-children)):has(.rivto-kanban-summary:empty) {
+  box-sizing: border-box;
+  min-height: 192px;
+  border-radius: 14px;
+  background: linear-gradient(125deg, #e9eefc, #e8f4f5);
+}
+[data-block-type="kanban"] > .page-block-children > .page-block {
+  /* Anchor the absolute insertion line to this lane, not the outer surface. */
+  position: relative;
+  flex: 1 0 240px;
+  min-width: 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: #f1f2f4;
+  min-height: 160px;
+  box-shadow: 0 1px 2px rgb(9 30 66 / 16%);
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+[data-block-type="kanban-column"] > .page-block-children {
+  margin: 10px 0 0;
+}
+[data-block-type="kanban-column"] > .page-block-children > .page-block {
+  margin: 10px 0;
+  padding: 12px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: white;
+  position: relative;
+  color: #172b4d;
+  box-shadow: 0 1px 2px rgb(9 30 66 / 24%);
+  transition: box-shadow 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+.edgeless-card [data-block-type="kanban"] .page-block-row::before,
+[data-block-type="kanban"] .page-block-row::before {
+  /* Beat the edgeless 100vw hover slab so lane overflow matches the columns. */
+  inset: 0;
+  width: auto;
+}
+/* Keep controls within columns instead of overlapping neighboring cards. */
+[data-block-type="kanban"] > .page-block-children .rivto-slot[data-slot-owner="block"][data-slot-position="left-top"] {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  flex-shrink: 0;
+}
+[data-block-type="kanban"] .page-drag-handle {
+  color: #8590a2;
+  border-radius: 5px;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.rivto-kanban-column-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: #172b4d;
+}
+.rivto-kanban-column-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  border-radius: 4px;
+}
+.rivto-kanban-column-count {
+  color: #626f86;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.rivto-kanban-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rivto-kanban-summary:not(:empty) {
+  box-sizing: border-box;
+  width: fit-content;
+  min-height: var(--rivto-default-block-height);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: linear-gradient(125deg, #e9eefc, #e8f4f5);
+}
+.rivto-kanban-summary span { color: #626f86; font-size: 12px; font-variant-numeric: tabular-nums; }
+.rivto-kanban-add-card {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  color: #44546f;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.rivto-kanban-add-card:hover { background: #dcdfe4; }
+.rivto-kanban-add-card:focus-visible,
+.rivto-kanban-column-title:focus-visible { outline: 2px solid #0c66e4; outline-offset: 2px; }
+
+[data-block-type="kanban-column"] > .page-block-children > .page-block:hover {
+  border-color: #85b8ff;
+  box-shadow: 0 3px 8px rgb(9 30 66 / 14%);
+}
+[data-block-type="kanban-column"] > .page-block-children > [data-dragging="true"] {
+  opacity: 0.3;
+  background: #dce6f5;
+  box-shadow: none;
+}
+
+[data-block-type="kanban"] .page-drag-handle:hover {
+  color: #0c66e4;
+  background: #dce6f5;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-block-type="kanban"] *,
+  [data-block-type="kanban"] *::before { transition: none !important; }
+}
+
+.rivto-kanban-dialog {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  max-height: none;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  overflow: visible;
+}
+.page-surface > .rivto-kanban-dialog:not(:modal) > .page-block {
+  /* Correct the native dialog's inline centering so root controls align. */
+  position: relative;
+}
+.rivto-kanban-dialog:modal {
+  position: fixed;
+  inset: 3vh 3vw;
+  width: 94vw;
+  height: 94vh;
+  padding: 24px;
+  border-radius: 16px;
+  background: #fff;
+  overflow: auto;
+  box-shadow: 0 24px 80px rgb(9 30 66 / 30%);
+}
+.rivto-kanban-dialog::backdrop { background: rgb(9 30 66 / 55%); }
+/* The right slot owns placement; offsets leave room for the board edge. */
+.rivto-kanban-expand {
+  width: 30px;
+  height: 30px;
+  margin-left: var(--rivto-kanban-control-offset-x, 8px);
+  translate: 0 var(--rivto-kanban-control-offset-y, 0px);
+  border: 1px solid #dcdfe4;
+  border-radius: 6px;
+  background: white;
+  color: #44546f;
+  cursor: pointer;
+  font-size: 20px;
+}
+.rivto-kanban-expand:focus-visible { outline: 2px solid #0c66e4; outline-offset: 2px; }
+.rivto-kanban-dialog:modal { padding-right: 64px; }
+[data-block-type="kanban"] > .page-block-children .rivto-slot[data-slot-position="left-top"] { order: -1; right: auto; }
+.rivto-kanban-add-column {
+  order: 1;
+  flex: 0 0 240px;
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border: 2px dashed #b6c5db;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 45%);
+  color: #626f86;
+  font-size: 40px;
+  cursor: pointer;
+}
+.rivto-kanban-add-column:hover { background: #fff; color: #0c66e4; }
+.rivto-kanban-add-column:focus-visible { outline: 2px solid #0c66e4; outline-offset: 2px; }
+
+[data-block-type="kanban"] > .page-block-children > [data-block-type="kanban-column"][data-dragging="true"] {
+  opacity: 0.4;
+  outline: 2px dashed #8590a2;
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* Bento widths are fixed: tiles keep their preferred size and wrap instead of growing. */
+[data-block-type="bento"] > .page-block-children {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  margin-left: 0;
+  background: #f4f5f7;
+  border-radius: 14px;
+  min-height: 96px;
+}
+[data-block-type="bento"]:not(:has(> .page-block-children)):has(.rivto-bento-summary:empty) {
+  box-sizing: border-box;
+  min-height: 128px;
+  border-radius: 14px;
+  background: #f4f5f7;
+}
+[data-block-type="bento"] > .page-block-children > .page-block {
+  position: relative;
+  flex: 0 0 var(--rivto-bento-width, 280px);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  background: white;
+  border: 1px solid #dcdfe4;
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgb(9 30 66 / 8%);
+  overflow: visible;
+}
+[data-block-type="bento"] > .page-block-children .rivto-slot[data-slot-position="left-top"] {
+  position: relative;
+  inset: auto;
+  transform: none;
+  order: -1;
+}
+.rivto-bento-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rivto-bento-summary:not(:empty) {
+  box-sizing: border-box;
+  width: fit-content;
+  min-height: var(--rivto-default-block-height);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #f4f5f7;
+}
+.rivto-bento-summary span { color: #626f86; font-size: 12px; font-variant-numeric: tabular-nums; }
+[data-block-type="bento"] > .page-block-children .page-block-row::before { display: none; }
+.rivto-bento-resize {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  pointer-events: auto;
+  outline: none;
+}
+.rivto-bento-resize[data-bento-resize-edge="left"] { left: 0; }
+.rivto-bento-resize[data-bento-resize-edge="right"] { right: 0; }
+.rivto-bento-resize:focus,
+.rivto-bento-resize:focus-visible { outline: none; }
+[data-block-type="bento"] > .page-block-children > .page-block[data-bento-resizing],
+[data-block-type="bento"] > .page-block-children > .page-block[data-bento-resizing][data-block-selected] {
+  z-index: 8;
+  overflow: visible;
+  transition: none;
+  background: white;
+  outline: none;
 }

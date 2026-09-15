@@ -20,6 +20,8 @@ import {
 } from "@chulane/rivto-react";
 import {
   blockExtension,
+  edgelessPreset,
+  pageDragExtension,
   standardPreset,
 } from "@chulane/rivto-react/extensions";
 
@@ -32,6 +34,8 @@ const reactEditor = createReactEditor({
         slashCommand: { group: "Formatting" },
       },
     }),
+    pageDragExtension(),
+    ...edgelessPreset(),
     blockExtension({
       definition: cardDefinition,
       render: CardContent,
@@ -54,10 +58,12 @@ defaults. Hosts that skip `standardPreset` must install
 `defaultWritingBlockExtension` (or call `installDefaultWriting`) before
 keyboard/clipboard paths that create writing blocks.
 
-`standardPreset()` installs the complete page and edgeless editing experience:
-surfaces, selection bridges, history, clipboard, slash commands, navigation,
-indent/outdent, creation/merge/delete, collapse, drag, canvas interactions, the
-explicit separator block, and the page's trailing paragraph-creation affordance.
+`standardPreset()` installs page editing: the page surface, selection bridges,
+history, clipboard, slash commands, navigation, indent/outdent,
+creation/merge/delete, collapse, the explicit separator block, and the page's
+trailing paragraph-creation affordance. Block drag is opt-in through
+`pageDragExtension()`; the edgeless surface and interactions are opt-in through
+`...edgelessPreset()`.
 `/Separator` or `Primary+Shift+Enter` inserts a real separator plus a focused
 paragraph below it. Root separators partition edgeless cards; nested separators
 remain ordinary rendered blocks.
@@ -73,7 +79,7 @@ configuration.
 Empty documents remain empty in core. `trailingBlockExtension(N)` owns the
 page-end targets whose labels and highlights appear on hover or keyboard focus.
 `trailingBlockExtension(N)` renders N targets; activating target K creates K
-paragraphs as one undo step and focuses the last. `standardPreset(N)` includes
+paragraphs as one undo step and focuses the last. `standardPreset({ trailingBlockCount: N })` includes
 the same behavior with a default of three targets. It deliberately does not
 appear on the edgeless canvas.
 
@@ -242,7 +248,7 @@ override keys in `createReactEditor({ keymap })` without replacing behavior.
 
 There are two selection representations:
 
-- core `EditorSelection`: portable, serializable, used by commands/history;
+- core `Selection`: portable local runtime data used by commands;
 - browser `Selection`: DOM ranges used for caret painting and native editing.
 
 The text-selection extension keeps them aligned. Page and edgeless extensions
@@ -278,7 +284,7 @@ Recommended reading order:
 
 1. `demo/src/App.tsx`
 2. `src/react-editor.tsx`
-3. `src/extensions/built-ins/built-ins.tsx`
+3. `src/extensions/built-ins/built-ins.ts`
 4. `src/editor-view.tsx`
 5. `src/hooks/blocks/use-block.ts`
 6. `src/surfaces/page/page-block.tsx`

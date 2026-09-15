@@ -1,5 +1,5 @@
 export { RIVTO_VERSION } from './version';
 export * from './managers';
-export * from './store/crdt-doc';
-export * from './store/document-model';
+export * from '@chulane/crdt-doc';
+export * from '@chulane/document-model';
 export * from './editor';

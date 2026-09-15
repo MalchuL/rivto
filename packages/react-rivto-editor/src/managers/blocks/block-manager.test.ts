@@ -1,6 +1,7 @@
 import { createTestCoreEditor as createEditor } from "../../test-utils";
 import type { ComponentType } from "react";
 import { createReactEditor } from "../../react-editor";
+import { BaseBlockView } from "../../views";
 
 const Renderer: ComponentType<{ blockId: string }> = () => null;
 
@@ -10,7 +11,7 @@ describe("BlockManager", () => {
     const reactEditor = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph" });
     const dispose = reactEditor.blocks.register({
-      definition: { type: "test.manager-block" },
+      definition: { type: "test.manager-block", metadata: { owner: "test" } },
       render: Renderer,
       slashCommand: { title: "Manager block" },
       separatesBlockElements: true,
@@ -21,6 +22,7 @@ describe("BlockManager", () => {
     expect(reactEditor.renderers.get("test.manager-block")).toBe(Renderer);
     expect(reactEditor.blocks.separatesBlockElements("test.manager-block")).toBe(true);
     expect(reactEditor.blocks.getDefaultBlockElementSeparatorType()).toBe("test.manager-block");
+    expect(editor.blocksRegistry.get("test.manager-block")?.metadata).toEqual({ owner: "test" });
 
     expect(reactEditor.blocks.delete("test.manager-block")).toBe(true);
     expect(reactEditor.blocks.delete("test.manager-block")).toBe(false);
@@ -28,6 +30,25 @@ describe("BlockManager", () => {
     expect(editor.blocksRegistry.has("test.manager-block")).toBe(false);
     expect(reactEditor.renderers.has("test.manager-block")).toBe(false);
     expect(reactEditor.blocks.separatesBlockElements("test.manager-block")).toBe(false);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("rejects containment that disagrees with an existing core definition", () => {
+    const editor = createEditor();
+    editor.blocksRegistry.defineBlock({
+      type: "test.existing",
+      metadata: { containment: { childOutline: "fixed" } },
+    });
+    const reactEditor = createReactEditor({ editor });
+
+    expect(() => reactEditor.blocks.register({
+      definition: { type: "test.existing", metadata: { containment: { childOutline: "free" } } },
+      render: Renderer,
+      view: new BaseBlockView(),
+    })).toThrow(/containment.*does not match/);
+    expect(reactEditor.renderers.has("test.existing")).toBe(false);
+
     reactEditor.destroy();
     editor.destroy();
   });

@@ -8,6 +8,7 @@
   "files": [
     "dist/esm",
     "styles.css",
+    "todo-item.css",
     "docs"
   ],
   "exports": {
@@ -21,7 +22,8 @@
       "types": "./dist/esm/extensions.d.ts",
       "default": "./dist/esm/extensions.js"
     },
-    "./styles.css": "./styles.css"
+    "./styles.css": "./styles.css",
+    "./todo-item.css": "./todo-item.css"
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
@@ -34,10 +36,13 @@
   "dependencies": {
     "@chulane/rivto": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "lucide-react": "^1.28.0",
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.1.13"
   },
   "peerDependencies": {
     "react": ">=18 <20",

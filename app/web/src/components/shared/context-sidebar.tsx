@@ -39,9 +39,9 @@ function formatDate(iso: string): string {
 
 function PageDetails({ page }: { page: Page }) {
   const { data: project } = useProjectQuery(page.projectId);
-  const favoritePageIds = useUiStore((state) => state.favoritePageIds);
+  const pinnedPageIds = useUiStore((state) => state.pinnedPageIds);
   const togglePinnedPage = useUiStore((state) => state.togglePinnedPage);
-  const isPinned = favoritePageIds.includes(page.id);
+  const isPinned = pinnedPageIds.includes(page.id);
 
   return (
     <div className="flex flex-col px-4 py-2">

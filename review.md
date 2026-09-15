@@ -42,13 +42,13 @@ demo App                  wires presets, seeds data, custom blocks
 2. `demo/src/App.tsx` — `createDemoEditor`, `createEmptyDemoEditor`, `createFixtureEditor`, `seedEdgelessShowcase`
 3. `packages/react-rivto-editor/src/react-editor.tsx` — `createReactEditor`
 4. `packages/react-rivto-editor/src/editor-view.tsx` — mounts UI
-5. `extensions/built-ins/built-ins.tsx` — `standardPreset()` composition list
+5. `extensions/built-ins/built-ins.ts` — `standardPreset()` composition list
 
 **Attention**
 
 - Three factories in App; only some use `edgelessVisualsExtension`.
 - Seed uses `editor.execute("edgeless.visual.*")` and `editor.elements.insertElement` for cards — different APIs, different layers.
-- `standardPreset` = page + edgeless surface + selection/transform/history/slash/…  
+- `standardPreset` = page + selection/history/slash/…; drag and edgeless are opt-in
 Visual toolbar/controller = separate extension.
 - Ask: what dies if you remove each extension from the array?
 
@@ -87,7 +87,7 @@ Visual toolbar/controller = separate extension.
 
 - `surfaces/page/`
 - `blocks/` — `BlockTree`, block view, markdown
-- `extensions/page/` — enter, backspace, indent, navigation, collapse
+- `extensions/built-ins/page/` — enter, backspace, indent, navigation, collapse
 - `docs/use-block-editing.md`, `docs/markdown-rendering.md`
 
 **Attention**
@@ -106,10 +106,10 @@ Visual toolbar/controller = separate extension.
 
 **Read**
 
-- `surfaces/edgeless/edgeless-surface.tsx` — pan/zoom/snap/align, plane transform
-- `surfaces/edgeless/edgeless-block.tsx` — card chrome + resize handles
-- `surfaces/edgeless/block-elements.ts` — card range from `startBlockId`/`endBlockId`, separators
-- `extensions/edgeless/edgeless-runtime.ts` — canvas selection store
+- `extensions/edgeless/surface/edgeless-surface.tsx` — pan/zoom/snap/align, plane transform
+- `extensions/edgeless/surface/edgeless-block.tsx` — card chrome + resize handles
+- `elements/block-element-projection.ts` — card range from `startBlockId`/`endBlockId`, separators
+- `extensions/built-ins/selection/edgeless-runtime.ts` — canvas selection store
 - `extensions/edgeless/edgeless-selection.tsx` — click + marquee
 - `extensions/edgeless/edgeless-transform.ts` — move/resize + progressive groups
 - `extensions/edgeless/edgeless-deletion.ts`, `edgeless-movement.ts`

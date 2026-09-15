@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useEditorMode, useEditorRoot } from "../../../hooks";
-import { useEdgelessSelected, useEdgelessSelection } from "../edgeless-runtime";
+import { useEdgelessSelected, useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
 import { ElementSlots } from "../../../blocks";
 import { DrawingCapture } from "./components/drawing-capture";
 import { BlockProperties } from "./components/block-properties";

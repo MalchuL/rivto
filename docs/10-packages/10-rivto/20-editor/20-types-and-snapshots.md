@@ -22,28 +22,27 @@ Union `"block" | "edgeless"`. Mode локален, не сохраняется �
 - **`blockId: string`:** stable block с text position.
 - **`offset: number`:** UTF-16 offset, совместимый с DOM Range APIs.
 
-`SelectionManager` проверяет существование block и bounds offset при `set()`.
+`SelectionManager` проверяет существование block при `set()`. Invalid offsets
+не бросают exception и нормализуются в empty slice при copy/delete/paste.
 
-### `TextSelection`
+### `Selection`
 
-- **`type: "text"`:** discriminator.
-- **`anchor: EditorPosition`:** endpoint начала gesture.
-- **`head: EditorPosition`:** active endpoint; может предшествовать anchor.
+- **`type: "selection"`:** единый generic selection value.
+- **`blocks`:** selected blocks с absolute UTF-16 `[start, end)` offsets;
+  `end: -1` означает current block end, а `{ start: 0, end: -1 }` — structural coverage.
+- **`elements`:** selected first-class element IDs.
+- **`pluginData`:** extension-owned ephemeral metadata.
+- **`anchorBlockId` / `focusBlockId`:** directed block endpoints, когда selection
+  содержит blocks.
 
-Direction сохраняется. Для caret anchor и head совпадают.
+Caret — один block, у которого `start === end`. Multi-line text selection
+хранится одним value: boundary blocks partial, middle blocks fully covered.
+Anchor/focus описывают direction, а не порядок `blocks`.
 
-### `BlockSelection`
+### `Selection`
 
-- **`type: "block"`:** discriminator.
-- **`blockIds: string[]`:** selected IDs в visible document order; gaps разрешены.
-- **`anchorBlockId: string`:** начало gesture, обязательно входит в `blockIds`.
-- **`focusBlockId: string`:** active endpoint, обязательно входит в `blockIds`.
-
-Anchor/focus описывают direction, а не порядок массива.
-
-### `EditorSelectionItem` и `EditorSelection`
-
-`EditorSelectionItem = TextSelection | BlockSelection`. `EditorSelection = EditorSelectionItem[]` — ordered heterogeneous local state. Несколько text items при normalization объединяются в один continuous range; это не multi-cursor model.
+`Selection` содержит runtime
+`Selection` instances. Это не multi-cursor model.
 
 ## Element types
 
@@ -112,31 +111,3 @@ Aliases намеренно используют canonical document-model records
 Имеет обязательный **`version: 6`** и optional **`blocks`**, **`links`**, **`elements`**, **`pluginData`**. `load()` заменяет только supplied sections. Selection, mode, commands, revision и history не входят ни в один snapshot.
 
 `version: 6` — compile-time public contract и значение, которое создаёт `dump()`. `DocumentModelImpl.loadSnapshot()` также проверяет это значение на runtime и отклоняет другую версию до mutations.
-
-## Clipboard bridge types
-
-### `ClipboardDataLike`
-
-Внутренний structural interface позволяет принимать DOM-like clipboard без зависимости core от browser types.
-
-#### `getData(type)`
-
-- **Аргументы:** MIME `type: string`.
-- **Возвращает:** `string`, пустую строку при отсутствии по browser convention.
-- **Исключения:** определяются host clipboard implementation.
-
-#### `setData(type, value)`
-
-- **Аргументы:** MIME `type: string`; serialized `value: string`.
-- **Возвращает:** `void`.
-- **Исключения:** определяются host clipboard implementation.
-
-### `ClipboardEventLike`
-
-- **`clipboardData: ClipboardDataLike | null`:** readonly host transfer.
-
-#### `preventDefault()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** определяются host event implementation.

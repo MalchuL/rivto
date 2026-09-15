@@ -118,28 +118,11 @@ describe("EditorRuntime undo manager", () => {
         content: "Loaded",
         children: [],
       }],
-      links: [],
     });
 
     editor.undo();
 
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
-    editor.destroy();
-  });
-
-  it("tracks link commands in the same local history", () => {
-    const editor = createRivtoEditor();
-    const sourceId = editor.blocks.insertBlock({ type: "paragraph" });
-    const targetId = editor.blocks.insertBlock({ type: "paragraph" }, sourceId);
-
-    editor.links.createLink({ id: "source-target", from: { blockId: sourceId }, to: { blockId: targetId } });
-    expect(editor.dump().links).toHaveLength(1);
-
-    editor.undo();
-    expect(editor.dump().links).toEqual([]);
-
-    editor.redo();
-    expect(editor.dump().links).toMatchObject([{ id: "source-target" }]);
     editor.destroy();
   });
 });

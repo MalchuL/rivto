@@ -1,6 +1,6 @@
 import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
-import { getEdgelessRuntime } from "./edgeless-runtime";
+import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 
 /** Moves selected canvas roots through eight exact arrow-key bindings. */
 export function registerEdgelessMovement(reactEditor: ReactEditor): void {

@@ -18,10 +18,11 @@ import {
   ReactSlashCommandManager,
   RendererManager,
   SurfaceManager,
+  ViewManager,
 } from "./managers";
 import type { CreateReactEditorOptions, ReactEditor } from "./types";
-import { reconcileBlockElements } from "./surfaces/edgeless/block-elements";
-import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/page/empty-block";
+import { reconcileBlockElements } from "./elements/block-element-projection";
+import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/built-ins/page/default-writing-block";
 
 export type { CreateReactEditorOptions, ReactEditor } from "./types";
 
@@ -42,6 +43,8 @@ export class ReactEditorImpl implements ReactEditor {
   };
   /** Content renderers indexed by persisted block type. */
   readonly renderers: RendererManager;
+  /** Per-type outline and drop behavior resolved by page dispatchers. */
+  readonly views: ViewManager;
   /** Atomic definition, renderer, and type-conversion registration. */
   readonly blocks: BlockManager;
   /** React-owned portable clipboard formatter and parser registry. */
@@ -60,7 +63,7 @@ export class ReactEditorImpl implements ReactEditor {
   readonly slashCommands: ReactSlashCommandManager;
   private destroyed = false;
   private reconciliationQueued = false;
-  private unsubscribeReconciliation?: () => void;
+  private readonly reconciliationDisposers: Array<() => void> = [];
 
   /** Current revision of the framework-neutral editor. */
   get revision(): number {
@@ -88,12 +91,16 @@ export class ReactEditorImpl implements ReactEditor {
     this.selection = new ReactSelectionManager(this);
     this.slashCommands = new ReactSlashCommandManager(this);
     this.renderers = new RendererManager(this, options.unknownBlockRenderer);
+    this.views = new ViewManager(this);
     this.blocks = new BlockManager(this);
     this.clipboard = new ClipboardManager(this);
     this.surfaces = new SurfaceManager(this);
     try {
       this.extensions.initialize(options.extensions ?? []);
-      this.unsubscribeReconciliation = this.editor.subscribe(() => this.queueBlockElementReconciliation());
+      this.reconciliationDisposers.push(
+        this.editor.blocks.subscribeRootIds(() => this.queueBlockElementReconciliation()),
+        this.editor.elements.subscribe(() => this.queueBlockElementReconciliation()),
+      );
       this.queueBlockElementReconciliation();
     } catch (error) {
       this.destroy();
@@ -149,12 +156,12 @@ export class ReactEditorImpl implements ReactEditor {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.unsubscribeReconciliation?.();
-    this.unsubscribeReconciliation = undefined;
+    this.reconciliationDisposers.splice(0).forEach((dispose) => dispose());
     this.extensions.destroy();
     this.slashCommands.destroy();
     this.keyboard.destroy();
     this.events.destroy();
+    this.selection.destroy();
   }
 }
 

@@ -49,7 +49,7 @@ The tree is normalized once in `DocumentModelImpl` construction, not after remot
 
 ### 6. `YjsDoc.fromJSON` manipulates Yjs root internals instead of collaborative content
 
-`fromJSON` deletes entries directly from `doc.share`, then recreates roots ([yjs-doc.ts:196](../packages/rivto-editor-core/src/store/crdt-doc/yjs-doc/yjs-doc.ts#L196)). Deleting the JavaScript root registry is not a CRDT deletion that peers observe, root-type replacement is unsafe, and conversion can throw after local clearing. Remove generic in-place whole-doc replacement: validate into a fresh `Y.Doc` and swap at a lifecycle boundary, or clear the contents of known typed roots after preflight.
+`fromJSON` deletes entries directly from `doc.share`, then recreates roots ([yjs-doc.ts:196](../packages/crdt-doc/src/yjs-doc/yjs-doc.ts#L196)). Deleting the JavaScript root registry is not a CRDT deletion that peers observe, root-type replacement is unsafe, and conversion can throw after local clearing. Remove generic in-place whole-doc replacement: validate into a fresh `Y.Doc` and swap at a lifecycle boundary, or clear the contents of known typed roots after preflight.
 
 ### 7. Collapsed-caret copy/cut claims the clipboard with an empty structured block
 
@@ -57,7 +57,7 @@ Selection normalization intentionally returns a one-block range for a caret ([se
 
 ### 8. Structured clipboard input is not a real trust boundary
 
-Core parses JSON directly and aborts instead of falling back to text ([clipboard-manager.ts:84](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L84)). The remapper ignores schema version, duplicate IDs, most field types, link shapes, and cycles ([clipboard.ts:150](../packages/rivto-editor-core/src/managers/clipboard-manager/utils/clipboard.ts#L150)). Reproduction accepted `version: 999`. React repeats direct parsing at [clipboard.ts:140](../packages/react-rivto-editor/src/extensions/clipboard/clipboard.ts#L140), and the edgeless controller has another bespoke parser ([controller.ts:630](../packages/react-rivto-editor/src/extensions/edgeless/visuals/controller.ts#L630)). Centralize one complete validator, reject ambiguous IDs/cycles before mutation, and fall back to safe text when custom MIME is invalid.
+Core parses JSON directly and aborts instead of falling back to text ([clipboard-manager.ts:84](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L84)). The remapper ignores schema version, duplicate IDs, most field types, link shapes, and cycles ([clipboard.ts:150](../packages/rivto-editor-core/src/managers/clipboard-manager/utils/clipboard.ts#L150)). Reproduction accepted `version: 999`. React repeats direct parsing at [clipboard.ts:140](../packages/react-rivto-editor/src/extensions/built-ins/clipboard/clipboard.ts#L140), and the edgeless controller has another bespoke parser ([controller.ts:630](../packages/react-rivto-editor/src/extensions/edgeless/visuals/controller.ts#L630)). Centralize one complete validator, reject ambiguous IDs/cycles before mutation, and fall back to safe text when custom MIME is invalid.
 
 ### 9. The keyboard manager cannot report its installed/effective bindings
 
@@ -65,7 +65,7 @@ The public capability exposes mutation but no list, revision, or subscription ([
 
 ### 10. The central keymap is not the runtime source of truth
 
-The static catalog owns IDs/defaults ([keymap.ts:1](../packages/react-rivto-editor/src/managers/events/keymap.ts#L1)), but each extension repeats its ID and reads defaults back from it; extension options can change declared defaults ([history.ts:76](../packages/react-rivto-editor/src/extensions/history/history.ts#L76)), and third-party actions never appear in the catalog. Move each ID/default beside its registration and derive the complete list from installed registrations. This matches BlockSuite's extension-owned keymap pattern ([BlockSuite keymap extension](../blocksuite/packages/framework/std/src/extension/keymap.ts#L37); [paragraph keymap](../blocksuite/packages/affine/blocks/paragraph/src/paragraph-keymap.ts#L31)).
+The static catalog owns IDs/defaults ([keymap.ts:1](../packages/react-rivto-editor/src/managers/events/keymap.ts#L1)), but each extension repeats its ID and reads defaults back from it; extension options can change declared defaults ([history.ts:76](../packages/react-rivto-editor/src/extensions/built-ins/history/history.ts#L76)), and third-party actions never appear in the catalog. Move each ID/default beside its registration and derive the complete list from installed registrations. This matches BlockSuite's extension-owned keymap pattern ([BlockSuite keymap extension](../blocksuite/packages/framework/std/src/extension/keymap.ts#L37); [paragraph keymap](../blocksuite/packages/affine/blocks/paragraph/src/paragraph-keymap.ts#L31)).
 
 ### 11. Runtime remapping can silently shadow unrelated actions
 
@@ -77,11 +77,11 @@ Matching treats either exclusive modifier as `Primary` ([shortcut.ts:64](../pack
 
 ### 13. Paste-as-plain-text mode can become stuck
 
-One semantic keydown action sets a closure boolean, while a separately configurable keyup action clears it ([clipboard.ts:362](../packages/react-rivto-editor/src/extensions/clipboard/clipboard.ts#L362)). Remapping only the public start action, or losing keyup on blur, leaves later normal pastes in plain-text mode. Treat release as internal transport tied to the effective start binding and clear state on window keyup/blur; it should not be a separate user preference.
+One semantic keydown action sets a closure boolean, while a separately configurable keyup action clears it ([clipboard.ts:362](../packages/react-rivto-editor/src/extensions/built-ins/clipboard/clipboard.ts#L362)). Remapping only the public start action, or losing keyup on blur, leaves later normal pastes in plain-text mode. Treat release as internal transport tied to the effective start binding and clear state on window keyup/blur; it should not be a separate user preference.
 
 ### 14. Standard preset installation is not rollback-safe
 
-`standardPreset` calls child `setup` methods in a loop and returns their cleanups only after all succeed ([built-ins.tsx:583](../packages/react-rivto-editor/src/extensions/built-ins/built-ins.tsx#L583)). If a late child throws, earlier non-manager resources such as collapse subscriptions ([page-collapse.ts:28](../packages/react-rivto-editor/src/extensions/page/page-collapse.ts#L28)) never receive their returned cleanup. Wrap child setup in a local rollback stack and dispose it on failure.
+`standardPreset` calls child `setup` methods in a loop and returns their cleanups only after all succeed ([built-ins.ts:583](../packages/react-rivto-editor/src/extensions/built-ins/built-ins.ts#L583)). If a late child throws, earlier non-manager resources such as collapse subscriptions ([page-collapse.ts:28](../packages/react-rivto-editor/src/extensions/built-ins/page/page-collapse.ts#L28)) never receive their returned cleanup. Wrap child setup in a local rollback stack and dispose it on failure.
 
 ### 15. Extension cleanup exceptions abort the rest of teardown
 
@@ -89,7 +89,7 @@ One semantic keydown action sets a closure boolean, while a separately configura
 
 ### 16. Cross-document DOM support is inconsistent
 
-`EventManager` correctly resolves `Element` from `root.ownerDocument.defaultView` ([event-manager.ts:253](../packages/react-rivto-editor/src/managers/events/event-manager.ts#L253)), but selection and edgeless extensions use global constructors and global `Node` constants, including [editor-dom-selection.ts:240](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L240), [text-selection.ts:141](../packages/react-rivto-editor/src/extensions/selection/text-selection.ts#L141), and [edgeless-deletion.ts:28](../packages/react-rivto-editor/src/extensions/edgeless/edgeless-deletion.ts#L28). An editor in an iframe/other window can fail target checks and lose selection or keyboard behavior. Consistently use the root's realm or node-type duck typing, and add a foreign-document integration test.
+`EventManager` correctly resolves `Element` from `root.ownerDocument.defaultView` ([event-manager.ts:253](../packages/react-rivto-editor/src/managers/events/event-manager.ts#L253)), but selection and edgeless extensions use global constructors and global `Node` constants, including [editor-dom-selection.ts:240](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L240), [text-selection.ts:141](../packages/react-rivto-editor/src/extensions/built-ins/selection/text-selection.ts#L141), and [edgeless-deletion.ts:28](../packages/react-rivto-editor/src/extensions/edgeless/edgeless-deletion.ts#L28). An editor in an iframe/other window can fail target checks and lose selection or keyboard behavior. Consistently use the root's realm or node-type duck typing, and add a foreign-document integration test.
 
 ## Medium-priority correctness and API findings
 
@@ -107,7 +107,7 @@ Core inserts via `document.blocks.insertBlock` ([clipboard-manager.ts:255](../pa
 
 ### 20. “Portable” property typing and cloning accept values they corrupt
 
-`BasicType` includes arbitrary `object` ([basic-types.ts:12](../packages/rivto-editor-core/src/store/crdt-doc/types/basic-types.ts#L12)), while clone turns every object into an enumerable record ([clone.ts:7](../packages/rivto-editor-core/src/store/document-model/core/utils/clone.ts#L7)). Dates, Maps, typed arrays, class instances, and an own `__proto__` key do not round-trip safely. Define recursive primitives/arrays/plain records, validate all props/plugin data/link meta/element props with one utility, then clone safely.
+`BasicType` includes arbitrary `object` ([basic-types.ts:12](../packages/crdt-doc/src/types/basic-types.ts#L12)), while clone turns every object into an enumerable record ([clone.ts:7](../packages/rivto-editor-core/src/store/document-model/core/utils/clone.ts#L7)). Dates, Maps, typed arrays, class instances, and an own `__proto__` key do not round-trip safely. Define recursive primitives/arrays/plain records, validate all props/plugin data/link meta/element props with one utility, then clone safely.
 
 ### 21. Link ID and malformed-record handling is inconsistent
 
@@ -119,7 +119,7 @@ Normalization merges heterogeneous selection items by document order, but copy u
 
 ### 23. The CRDT event contract advertises unsupported events
 
-`CRDTDoc.on` advertises `update | sync | snapshot` ([doc.ts:68](../packages/rivto-editor-core/src/store/crdt-doc/types/doc.ts#L68)), while `YjsDoc.on` only forwards `update | sync` to `Y.Doc` ([yjs-doc.ts:125](../packages/rivto-editor-core/src/store/crdt-doc/yjs-doc/yjs-doc.ts#L125)); snapshot is never emitted and provider sync does not belong to `Y.Doc`. Narrow the interface to real document events or implement provider-owned status aggregation separately.
+`CRDTDoc.on` advertises `update | sync | snapshot` ([doc.ts:68](../packages/crdt-doc/src/types/doc.ts#L68)), while `YjsDoc.on` only forwards `update | sync` to `Y.Doc` ([yjs-doc.ts:125](../packages/crdt-doc/src/yjs-doc/yjs-doc.ts#L125)); snapshot is never emitted and provider sync does not belong to `Y.Doc`. Narrow the interface to real document events or implement provider-owned status aggregation separately.
 
 ### 24. Move/merge can attach visible content under an unreachable orphan
 
@@ -143,7 +143,7 @@ Element updates call `assignMap(..., false)` ([element-manager.ts:68](../package
 
 ### 29. Provider identity prevents two same-kind providers on one document
 
-Broadcast and WebRTC provider IDs are hardcoded by kind ([broadcast.ts:25](../packages/rivto-editor-core/src/store/crdt-doc/yjs-doc/providers/broadcast.ts#L25); [webrtc.ts:6](../packages/rivto-editor-core/src/store/crdt-doc/yjs-doc/providers/webrtc.ts#L6)), while the document rejects duplicate provider IDs ([yjs-doc.ts:32](../packages/rivto-editor-core/src/store/crdt-doc/yjs-doc/yjs-doc.ts#L32)). Use room/instance-qualified IDs or explicitly document singleton semantics.
+Broadcast and WebRTC provider IDs are hardcoded by kind ([broadcast.ts:25](../packages/crdt-doc/src/yjs-doc/providers/broadcast.ts#L25); [webrtc.ts:6](../packages/crdt-doc/src/yjs-doc/providers/webrtc.ts#L6)), while the document rejects duplicate provider IDs ([yjs-doc.ts:32](../packages/crdt-doc/src/yjs-doc/yjs-doc.ts#L32)). Use room/instance-qualified IDs or explicitly document singleton semantics.
 
 ### 30. `useKeyboardEvent` freezes most binding metadata after mount
 
@@ -179,7 +179,7 @@ Every registration/disposal calls `reconnect`, which detaches and recreates all 
 
 ### 38. Dynamic uninstall would leave stale default-writing callbacks
 
-`defaultWritingBlockExtension` installs global factories but its cleanup only unregisters the block contribution ([default-writing-block.tsx:75](../packages/react-rivto-editor/src/extensions/page/default-writing-block.tsx#L75)); `installDefaultWriting` has no disposer or ownership stack ([react-editor.tsx:104](../packages/react-rivto-editor/src/react-editor.tsx#L104)). Once extensions become dynamic, uninstall leaves callbacks for an unavailable type. Make default-writing installation an owned, reversible registration.
+`defaultWritingBlockExtension` installs global factories but its cleanup only unregisters the block contribution ([default-writing-block.tsx:75](../packages/react-rivto-editor/src/extensions/built-ins/page/default-writing-block.tsx#L75)); `installDefaultWriting` has no disposer or ownership stack ([react-editor.tsx:104](../packages/react-rivto-editor/src/react-editor.tsx#L104)). Once extensions become dynamic, uninstall leaves callbacks for an unavailable type. Make default-writing installation an owned, reversible registration.
 
 ### 39. `EditorView` has one hard-coded layout bucket
 

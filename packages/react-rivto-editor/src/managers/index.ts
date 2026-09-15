@@ -5,3 +5,4 @@ export * from "./extensions";
 export * from "./selection";
 export * from "./slash";
 export * from "./surfaces";
+export * from "./views";

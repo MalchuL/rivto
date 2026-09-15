@@ -26,6 +26,8 @@ import {
   standardPreset,
   trailingBlockExtension,
 } from "../extensions/built-ins/built-ins";
+import { pageDragExtension } from "../extensions/block-drag";
+import { edgelessPreset } from "../extensions/edgeless";
 
 const Empty: ComponentType<{ blockId: string }> = () => null;
 const EmptyComponent: ComponentType = () => null;
@@ -330,7 +332,7 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("standardPreset installs both surfaces and only mounts real UI boundaries", () => {
+  test("standardPreset excludes optional edgeless and drag extensions", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({
       editor,
@@ -338,13 +340,28 @@ describe("ReactEditor", () => {
     });
 
     expect(reactEditor.surfaces.get("block")).toBeDefined();
+    expect(reactEditor.surfaces.get("edgeless")).toBeUndefined();
+    expect(reactEditor.surfaces.getEditorWrappers("block")).toHaveLength(0);
+    expect(reactEditor.surfaces.getBlockWrappers("block")).toHaveLength(0);
+    expect(reactEditor.surfaces.getBlockWrappers("edgeless")).toHaveLength(0);
+    // Slash menu and trailing block controls are the standard preset's UI.
+    expect(reactEditor.extensions.getComponents()).toHaveLength(2);
+
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("installs optional edgeless and block drag extensions explicitly", () => {
+    const editor = createEditor();
+    const reactEditor = createReactEditor({
+      editor,
+      extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset()],
+    });
+
     expect(reactEditor.surfaces.get("edgeless")).toBeDefined();
     expect(reactEditor.surfaces.getEditorWrappers("block")).toHaveLength(1);
     expect(reactEditor.surfaces.getBlockWrappers("block")).toHaveLength(1);
     expect(reactEditor.surfaces.getBlockWrappers("edgeless")).toHaveLength(1);
-    // Slash menu, the trailing block controls, and edgeless selection overlay
-    // render UI. Event-only behavior registers directly during setup.
-    expect(reactEditor.extensions.getComponents()).toHaveLength(3);
 
     reactEditor.destroy();
     editor.destroy();

@@ -10,7 +10,7 @@ import {
   type EditableLabelFocusPoint,
 } from "../../../../components";
 import { ElementSlots } from "../../../../blocks";
-import { useEdgelessSelected } from "../../edgeless-runtime";
+import { useEdgelessSelected } from "../../../built-ins/selection/edgeless-runtime";
 import type { EdgelessVisualController } from "../controller";
 import type { ConnectorEndpoint, EdgelessVisual } from "../types";
 import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from "../utils/geometry";

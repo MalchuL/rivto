@@ -41,7 +41,6 @@ const structuredBundle = JSON.stringify({
     pluginData: {},
     children: [],
   }],
-  links: [],
 });
 
 async function paste(page: import("@playwright/test").Page, asPlainText: boolean): Promise<void> {
@@ -68,6 +67,45 @@ async function paste(page: import("@playwright/test").Page, asPlainText: boolean
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`cuts and pastes partial text inside one block in ${mode} mode`, async ({ page }) => {
+    await page.locator(`[data-editor-mode="${mode}"]`).click();
+    const content = page.locator("[data-block-content]").first();
+    await content.click();
+    const original = (await content.textContent())!;
+    const blockCount = await page.locator(BLOCK_ID_SELECTOR).count();
+    const copied = await content.evaluate((element) => {
+      const node = element.firstChild!;
+      const selection = element.ownerDocument.getSelection()!;
+      selection.setBaseAndExtent(node, 1, node, 4);
+      const data = new DataTransfer();
+      const event = new ClipboardEvent("cut", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", { value: data });
+      element.dispatchEvent(event);
+      return { structured: data.getData("application/x-rivto+json"), text: data.getData("text/plain") };
+    });
+    expect(copied.text).toBe(original.slice(1, 4));
+    expect(JSON.parse(copied.structured)).toMatchObject({ startsWithText: true, blocks: [{ content: original.slice(1, 4), children: [] }] });
+    await expect(content).toHaveText(original.slice(0, 1) + original.slice(4));
+    await expect.poll(() => caretOffset(content)).toBe(1);
+    await content.evaluate((element, copied) => {
+      const data = new DataTransfer();
+      data.setData("application/x-rivto+json", copied.structured);
+      data.setData("text/plain", copied.text);
+      const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", { value: data });
+      element.dispatchEvent(event);
+    }, copied);
+    await expect(content).toHaveText(original);
+    await expect.poll(() => caretOffset(content)).toBe(4);
+    await expect(page.locator(BLOCK_ID_SELECTOR)).toHaveCount(blockCount);
+    await page.keyboard.press("Control+z");
+    await expect(content).toHaveText(original.slice(0, 1) + original.slice(4));
+    await page.keyboard.press("Control+z");
+    await expect(content).toHaveText(original);
+  });
+}
 
 test("normal structured text paste merges into the target", async ({ page }) => {
   const content = page.locator("[data-block-content]").first();
@@ -185,7 +223,6 @@ test("replaces invalid structured block properties with an Error block", async (
         pluginData: {},
         children: [],
       }],
-      links: [],
     }));
     const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "clipboardData", { value: data });
@@ -238,6 +275,45 @@ test("copies and pastes a mouse-dragged multi-block selection", async ({ page })
   await page.keyboard.press("Control+v");
 
   await expect(page.locator(BLOCK_ID_SELECTOR)).toHaveCount(before + 3);
+  await expect(page.locator("[data-block-selected]")).toHaveCount(3);
+  await page.keyboard.press("Tab");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(3);
+  await page.keyboard.press("Delete");
+  await expect(page.locator(BLOCK_ID_SELECTOR)).toHaveCount(before);
+});
+
+test("copies and pastes partial text across blocks with Shift+Alt", async ({ page }) => {
+  const contents = page.locator("[data-block-content]");
+  const before = await page.locator(BLOCK_ID_SELECTOR).count();
+  const selectedText = `${(await contents.nth(0).textContent())?.slice(2)}\n${await contents.nth(1).textContent()}\n${(await contents.nth(2).textContent())?.slice(0, 8)}`;
+  const start = await textPoint(contents.nth(0), 2);
+  const end = await textPoint(contents.nth(2), 8);
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("Alt");
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 10 });
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  await page.keyboard.up("Shift");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(0);
+
+  await page.evaluate(() => {
+    document.addEventListener("copy", (event) => {
+      (window as typeof window & { crossBlockCopy?: string }).crossBlockCopy =
+        event.clipboardData?.getData("text/plain") ?? "";
+    }, { once: true });
+  });
+
+  await page.keyboard.press("Control+c");
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { crossBlockCopy?: string }
+  ).crossBlockCopy)).toBe(selectedText);
+  await contents.nth(3).click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Control+v");
+
+  await expect(page.locator(BLOCK_ID_SELECTOR)).toHaveCount(before + 2);
 });
 
 test("drags selected sibling roots together", async ({ page }) => {

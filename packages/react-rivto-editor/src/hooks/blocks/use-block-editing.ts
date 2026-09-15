@@ -10,6 +10,7 @@ import {
 import {
   BLOCK_CONTENT_ATTRIBUTE,
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
+  PREVENT_TEXT_EDITING_ATTRIBUTE,
 } from "../../constants";
 import { useEditorContext } from "../../editor-context";
 import {
@@ -72,7 +73,7 @@ export interface BlockSelectionAnchorAttributes {
  * way to recognize the same opt-out without depending on component classes.
  */
 export interface PreventTextEditingAttributes {
-  readonly "data-prevent-text-editing": "";
+  readonly [PREVENT_TEXT_EDITING_ATTRIBUTE]: "";
   readonly onPointerDown: NonNullable<HTMLAttributes<HTMLElement>["onPointerDown"]>;
 }
 
@@ -294,7 +295,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
     }
     : { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
   const preventTextEditingAttributes = useMemo<PreventTextEditingAttributes>(() => ({
-    "data-prevent-text-editing": "",
+    [PREVENT_TEXT_EDITING_ATTRIBUTE]: "",
     onPointerDown: preventTextEditingPointerDown,
   }), [preventTextEditingPointerDown]);
 

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type {
   EditorBlock as Block,
   EditorBlockPatch as BlockPatch,
@@ -17,7 +17,7 @@ export interface BlockOperations {
   setProp(key: string, value: unknown): void;
   /** Sets or removes data owned by one plugin namespace. */
   setPluginData(pluginId: string, value: unknown): void;
-  /** Removes the block subtree and links touching removed descendants. */
+  /** Removes the block subtree. */
   remove(): void;
   /** Appends this block's content and children into a target, then removes it. */
   mergeInto(targetId: string): number;
@@ -44,8 +44,8 @@ export interface UseBlockResult {
 /**
  * Resolves one block and its bound operations from the current editor.
  *
- * `block` is a detached snapshot, not a live or mutable CRDT object. EditorView's
- * global revision subscription resolves it again after core changes. Deletion
+ * `block` is a stable detached snapshot, not a live or mutable CRDT object.
+ * Only changes to this block or its descendants replace its identity. Deletion
  * changes it to undefined. `operations` remains stable until either the editor
  * instance or block ID changes.
  *
@@ -55,7 +55,12 @@ export interface UseBlockResult {
  */
 export function useBlock(blockId: string): UseBlockResult {
   const { editor, reactEditor } = useEditorContext();
-  const block = editor.blocks.getBlock(blockId);
+  const subscribe = useCallback(
+    (listener: () => void) => editor.blocks.subscribeBlock(blockId, listener),
+    [blockId, editor],
+  );
+  const getSnapshot = useCallback(() => editor.blocks.getBlock(blockId), [blockId, editor]);
+  const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   // Commands target the ID rather than the detached snapshot, so they always
   // operate on the latest document state. Memoization keeps their references
   // stable for consumers that pass them into memoized child components.

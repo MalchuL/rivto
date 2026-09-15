@@ -406,7 +406,7 @@ export function LeftSidebar() {
     toggleExpandedProject,
     pinnedProjectIds,
     togglePinnedProject,
-    favoritePageIds,
+    pinnedPageIds,
     recentPageIds,
     setPaletteOpen,
     togglePinnedPage,
@@ -436,7 +436,7 @@ export function LeftSidebar() {
   }, [projects, pinnedProjectIds]);
 
   const pageById = useMemo(() => new Map(pages.map((page) => [page.id, page])), [pages]);
-  const pinnedPages = favoritePageIds
+  const pinnedPages = pinnedPageIds
     .map((id) => pageById.get(id))
     .filter((page): page is Page => Boolean(page));
   const recentPages = recentPageIds
@@ -549,7 +549,7 @@ export function LeftSidebar() {
                   page={page}
                   depth={0}
                   active={pathname === FRONTEND_ROUTES.page(page.id)}
-                  pinned={favoritePageIds.includes(page.id)}
+                  pinned={pinnedPageIds.includes(page.id)}
                   onTogglePin={() => togglePinnedPage(page.id)}
                 />
               ))}
@@ -567,7 +567,7 @@ export function LeftSidebar() {
                 pathname={pathname}
                 expanded={expandedProjectIds.includes(project.id)}
                 pinned={pinnedProjectIds.includes(project.id)}
-                pinnedPageIds={favoritePageIds}
+                pinnedPageIds={pinnedPageIds}
                 pinnedProjectIds={pinnedProjectIds}
                 expandedProjectIds={expandedProjectIds}
                 onToggleExpand={() => toggleExpandedProject(project.id)}

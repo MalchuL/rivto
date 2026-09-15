@@ -4,6 +4,8 @@
     "rootDir": "../..",
     "baseUrl": ".",
     "paths": {
+      "@chulane/crdt-doc": ["../crdt-doc/src/index.ts"],
+      "@chulane/document-model": ["../document-model/src/index.ts"],
       "@chulane/rivto": ["../rivto-editor-core/src/index.ts"]
     },
     "jsx": "react-jsx"

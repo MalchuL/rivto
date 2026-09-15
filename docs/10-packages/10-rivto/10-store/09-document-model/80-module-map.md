@@ -47,7 +47,7 @@ React extension / demo / host application
 - Mutations используют `document.transact()` и стабильный `origin`.
 - Snapshot validation выполняется до destructive writes, поскольку CRDT transaction не гарантирует rollback.
 - Blocks и elements остаются отдельными entity families.
-- Native Yjs imports запрещены за пределами `store/crdt-doc/yjs-doc`.
+- Native Yjs imports запрещены за пределами `packages/crdt-doc/src/yjs-doc`.
 
 ## Основные consumers
 

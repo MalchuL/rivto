@@ -32,7 +32,7 @@ Marked: 56 changed, 24 guard-only.
 ## [ X ] packages/react-rivto-editor/src/components/place-caret-at-point.ts
 - placeCaretAtPoint:13 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/clipboard/clipboard.ts
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/clipboard/clipboard.ts
 - canvasSelection:77 (2 returns, guards only)
 - fallbackStructuredClipboard:112 (2 returns, guards only)
 - <anonymous>:274 (2 returns, guards only)
@@ -45,7 +45,7 @@ Marked: 56 changed, 24 guard-only.
 ## [ X ] packages/react-rivto-editor/src/extensions/edgeless/edgeless-movement.ts
 - move:10 (2 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/extensions/edgeless/edgeless-runtime.ts
+## [ O ] packages/react-rivto-editor/src/extensions/built-ins/selection/edgeless-runtime.ts
 - <anonymous>:37 (2 returns, guards only)
 
 ## [ X ] packages/react-rivto-editor/src/extensions/edgeless/edgeless-selection.tsx
@@ -115,37 +115,37 @@ Marked: 56 changed, 24 guard-only.
 - onContextMenu:79 (2 returns, guards only)
 - onPointerDown:86 (3 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/extensions/error/error-block.tsx
+## [ O ] packages/react-rivto-editor/src/extensions/built-ins/error/error-block.tsx
 - ErrorBlock:18 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/history/history.ts
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/history/history.ts
 - <anonymous>:100 (2 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/extensions/page/indent.ts
+## [ O ] packages/react-rivto-editor/src/extensions/built-ins/page/indent.ts
 - applyIndentShortcut:18 (3 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/extensions/page/list-shortcuts.ts
+## [ O ] packages/react-rivto-editor/src/extensions/built-ins/page/list-shortcuts.ts
 - <anonymous>:45 (3 returns, guards only)
 - <anonymous>:59 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/page/outline-scope.ts
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/page/outline-scope.ts
 - (no remaining multiple returns)
 
-## [ O ] packages/react-rivto-editor/src/extensions/page/page-backspace.ts
+## [ O ] packages/react-rivto-editor/src/extensions/built-ins/page/page-backspace.ts
 - <anonymous>:30 (3 returns, guards only)
 - <anonymous>:55 (4 returns, guards only)
 - <anonymous>:82 (4 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/page/page-collapse.ts
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/page/page-collapse.ts
 - setCollapsed:47 (3 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/extensions/page/page-delete.ts
+## [ O ] packages/react-rivto-editor/src/extensions/built-ins/page/page-delete.ts
 - <anonymous>:23 (4 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/page/page-drag-placement.ts
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/page/page-drag-placement.ts
 - resolveAfterDropPlacement:44 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/page/page-drag.tsx
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/page/page-drag.tsx
 - eventPointer:91 (2 returns, guards only)
 - pageCollisionDetection:162 (2 returns, guards only)
 - edgelessCollisionDetection:187 (3 returns, guards only)
@@ -156,10 +156,10 @@ Marked: 56 changed, 24 guard-only.
 - <anonymous>:715 (2 returns, guards only)
 - <anonymous>:721 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/page/page-enter.ts
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/page/page-enter.ts
 - <anonymous>:32 (3 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/page/page-navigation.ts
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/page/page-navigation.ts
 - focusAdjacentEditor:91 (2 returns, guards only)
 - movePlain:136 (2 returns, guards only)
 - extendText:172 (3 returns, guards only)
@@ -168,37 +168,37 @@ Marked: 56 changed, 24 guard-only.
 - enterText:250 (2 returns, guards only)
 - move:281 (3 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/page/page-selection-utils.ts
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/page/page-selection-utils.ts
 - toggleBlockSelection:134 (2 returns, guards only)
 - extendBlockSelection:161 (2 returns, guards only)
 - keyboardMovePlacement:243 (2 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/extensions/page/trailing-block.tsx
+## [ O ] packages/react-rivto-editor/src/extensions/built-ins/page/trailing-block.tsx
 - TrailingBlock:13 (2 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/extensions/selection/block-selection.ts
+## [ O ] packages/react-rivto-editor/src/extensions/built-ins/selection/block-selection.ts
 - <anonymous>:74 (4 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/extensions/selection/selection-deletion.ts
+## [ O ] packages/react-rivto-editor/src/extensions/built-ins/selection/selection-deletion.ts
 - when:22 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/selection/text-selection.ts
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/selection/text-selection.ts
 - <anonymous>:223 (2 returns, guards only)
 - <anonymous>:312 (2 returns, guards only)
 - <anonymous>:325 (2 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/extensions/separator/separator-block.tsx
+## [ O ] packages/react-rivto-editor/src/extensions/built-ins/separator/separator-block.tsx
 - insertSeparator:42 (2 returns, guards only)
 - <anonymous>:122 (3 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/slash/slash-menu.tsx
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/slash/slash-menu.tsx
 - findSlash:41 (2 returns, guards only)
 - caretOffset:67 (2 returns, guards only)
 - SlashMenu:101 (2 returns, guards only)
 - <anonymous>:245 (2 returns, guards only)
 - <anonymous>:284 (3 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/extensions/slash/slash-search.ts
+## [ X ] packages/react-rivto-editor/src/extensions/built-ins/slash/slash-search.ts
 - (no remaining multiple returns)
 
 ## [ X ] packages/react-rivto-editor/src/hooks/blocks/use-block-children.ts
@@ -264,13 +264,13 @@ Marked: 56 changed, 24 guard-only.
 - delete:71 (2 returns, guards only)
 - <anonymous>:104 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/surfaces/edgeless/block-elements.ts
+## [ X ] packages/react-rivto-editor/src/elements/block-element-projection.ts
 - maximumWeightMatching:29 (2 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/surfaces/edgeless/edgeless-block.tsx
+## [ O ] packages/react-rivto-editor/src/extensions/edgeless/surface/edgeless-block.tsx
 - EdgelessBlockElement:14 (2 returns, guards only)
 
-## [ O ] packages/react-rivto-editor/src/surfaces/edgeless/edgeless-surface.tsx
+## [ O ] packages/react-rivto-editor/src/extensions/edgeless/surface/edgeless-surface.tsx
 - <anonymous>:110 (3 returns, guards only)
 - createBlockAt:129 (3 returns, guards only)
 - <anonymous>:169 (2 returns, guards only)

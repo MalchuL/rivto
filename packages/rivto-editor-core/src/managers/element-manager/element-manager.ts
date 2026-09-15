@@ -4,7 +4,7 @@ import type {
   EditorElementPatch,
   EditorElementUpdate,
 } from "../../editor/model";
-import type { DocumentElement, ElementInput, ElementPatch, ElementUpdate } from "../../store/document-model";
+import type { DocumentElement, ElementInput, ElementPatch, ElementUpdate } from "@chulane/document-model";
 import type { RivtoEditorApi } from "../../editor/types";
 import type { CommandHandler, RegisteredCommand } from "../command-registry";
 import { commandPayload, commandString } from "../utils";
@@ -26,9 +26,44 @@ export class ElementManager {
     return this.editor.document.elements.getElements() satisfies DocumentElement[];
   }
 
+  /** @param listener - Collection-change callback. @returns Its disposer. */
+  subscribe(listener: () => void): () => void {
+    return this.editor.document.elements.subscribe(listener);
+  }
+
+  /** @param id - Element to observe. @param listener - Change callback. @returns Its disposer. */
+  subscribeElement(id: string, listener: () => void): () => void {
+    return this.editor.document.elements.subscribeElement(id, listener);
+  }
+
+  /** @param listener - Membership-change callback. @returns Its disposer. */
+  subscribeMembership(listener: () => void): () => void {
+    return this.editor.document.elements.subscribeMembership(listener);
+  }
+
   /** @param input - Complete element creation data. @returns Stable new ID. */
   insertElement(input: EditorElementInput): string {
     return this.editor.commands.execute("element.insert", { input }) as string;
+  }
+
+  /**
+   * Resolves source element identities for a destination import.
+   *
+   * Free IDs survive cut-and-paste, while conflicts receive identities from
+   * the destination element manager. The returned map lets extensions rewrite
+   * opaque group and connector references before insertion.
+   *
+   * @param sourceIds - Stable source element IDs in import order.
+   * @returns Source-to-destination identity mapping.
+   */
+  resolveImportIds(sourceIds: readonly string[]): ReadonlyMap<string, string> {
+    const assigned = new Set<string>();
+    return new Map(sourceIds.map((sourceId) => {
+      const reusable = !this.editor.document.elements.getElement(sourceId) && !assigned.has(sourceId);
+      const id = reusable ? sourceId : this.editor.document.elements.generateId();
+      assigned.add(id);
+      return [sourceId, id];
+    }));
   }
 
   /** @param id - Element to patch. @param patch - Geometry, layer, or props changes. */

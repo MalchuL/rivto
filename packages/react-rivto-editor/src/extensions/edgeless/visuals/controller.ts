@@ -1,16 +1,15 @@
 import {
   RIVTO_CLIPBOARD_MIME,
   validateClipboardBundle,
+  validateElementCollection,
   type ClipboardBundle,
-  type EditorBlock,
-  type EditorBlockInput,
   type EditorElement,
 } from "@chulane/rivto";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
 import type { ReactEditor } from "../../../types";
-import { isNonBlockEditableClipboardEvent } from "../../clipboard/clipboard-target";
-import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../surfaces/edgeless/block-elements";
-import { getEdgelessRuntime, type EdgelessSelectionRef } from "../edgeless-runtime";
+import { isNonBlockEditableClipboardEvent } from "../../built-ins/clipboard/clipboard-target";
+import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../elements/block-element-projection";
+import { getEdgelessRuntime, type EdgelessSelectionRef } from "../../built-ins/selection/edgeless-runtime";
 import type {
   ConnectorEndpoint,
   CreateVisualPayload,
@@ -652,13 +651,9 @@ export class EdgelessVisualController {
     const rootIds = this.reactEditor.editor.blocks.getRootIds();
     const blockIds = new Set(leaves.flatMap((id) => { const element = this.element(id); return element?.type === "block" ? blockIdsOf(element, rootIds) : []; }));
     const blocks = this.reactEditor.editor.blocks.getBlocks().filter((block) => blockIds.has(block.id)).map(copy);
-    const allBlockIds = new Set<string>();
-    const visit = (block: EditorBlock): void => { allBlockIds.add(block.id); block.children.forEach(visit); };
-    blocks.forEach(visit);
     return {
       version: 4,
       blocks,
-      links: this.reactEditor.editor.links.getLinks().filter((link) => allBlockIds.has(link.from.blockId) && allBlockIds.has(link.to.blockId)),
       elements: this.reactEditor.editor.elements.getElements().filter((element) => included.has(element.id)).map(copy),
       selectedElementIds: [...items],
     };
@@ -667,30 +662,30 @@ export class EdgelessVisualController {
   private pasteClipboardBundle(bundle: ClipboardBundle): void {
     validateClipboardBundle(bundle);
     if (!Array.isArray(bundle.elements)) throw new Error("Invalid edgeless clipboard payload");
-    const blockMap = new Map<string, string>();
-    const remapBlock = (block: EditorBlock): EditorBlockInput => { const id = crypto.randomUUID(); blockMap.set(block.id, id); return { ...copy(block), id, children: block.children.map(remapBlock) }; };
-    const blocks = bundle.blocks.map(remapBlock);
-    const elementMap = new Map(bundle.elements.map((element) => [element.id, crypto.randomUUID()]));
+    const elementMap = this.reactEditor.editor.elements.resolveImportIds(
+      bundle.elements.map((element) => element.id),
+    );
     const sourceRootIds = bundle.blocks.map((block) => block.id);
-    const elements = bundle.elements.map((source): EditorElement => {
-      const element = this.validateElement(source);
-      const props = JSON.parse(JSON.stringify(element.props)) as Record<string, unknown>;
-      if (element.type === "block") Object.assign(props, blockRangeProps(blockIdsOf(element, sourceRootIds).flatMap((id) => blockMap.get(id) ?? [])));
-      if (element.type === "group") props.children = (Array.isArray(props.children) ? props.children : []).flatMap((id) => typeof id === "string" ? elementMap.get(id) ?? [] : []);
-      if (element.type === "connector") {
-        for (const key of ["source", "target"] as const) {
-          const endpoint = props[key];
-          if (!isRecord(endpoint)) continue;
-          const mapped = typeof endpoint.elementId === "string" ? elementMap.get(endpoint.elementId) : undefined;
-          props[key] = { ...endpoint, ...(mapped ? { elementId: mapped } : { elementId: undefined }), position: isRecord(endpoint.position) ? { x: Number(endpoint.position.x) + 24, y: Number(endpoint.position.y) + 24 } : endpoint.position };
-        }
-      }
-      return { ...element, id: elementMap.get(element.id)!, frame: { ...element.frame, x: element.frame.x + 24, y: element.frame.y + 24 }, props };
-    });
+    const sourceElements = bundle.elements.map((element) => this.validateElement(element));
     const selected = (bundle.selectedElementIds ?? []).flatMap((id) => elementMap.get(id) ?? []);
+    let elements: EditorElement[] = [];
     this.reactEditor.editor.batchUpdates(() => {
-      let afterId = this.reactEditor.editor.blocks.getBlocks().at(-1)?.id;
-      blocks.forEach((block) => { afterId = this.reactEditor.blocks.insertBlock(block, afterId); });
+      const afterId = this.reactEditor.editor.blocks.getBlocks().at(-1)?.id;
+      const blockMap = this.reactEditor.editor.blocks.importForest(bundle.blocks, afterId).idMap;
+      elements = sourceElements.map((element): EditorElement => {
+        const props = JSON.parse(JSON.stringify(element.props)) as Record<string, unknown>;
+        if (element.type === "block") Object.assign(props, blockRangeProps(blockIdsOf(element, sourceRootIds).flatMap((id) => blockMap.get(id) ?? [])));
+        if (element.type === "group") props.children = (Array.isArray(props.children) ? props.children : []).flatMap((id) => typeof id === "string" ? elementMap.get(id) ?? [] : []);
+        if (element.type === "connector") {
+          for (const key of ["source", "target"] as const) {
+            const endpoint = props[key];
+            if (!isRecord(endpoint)) continue;
+            const mapped = typeof endpoint.elementId === "string" ? elementMap.get(endpoint.elementId) : undefined;
+            props[key] = { ...endpoint, ...(mapped ? { elementId: mapped } : { elementId: undefined }), position: isRecord(endpoint.position) ? { x: Number(endpoint.position.x) + 24, y: Number(endpoint.position.y) + 24 } : endpoint.position };
+          }
+        }
+        return { ...element, id: elementMap.get(element.id)!, frame: { ...element.frame, x: element.frame.x + 24, y: element.frame.y + 24 }, props };
+      });
       const blockElements = elements.filter((element) => element.type === "block");
       const order = this.reactEditor.editor.blocks.getRootIds();
       const first = blockElements.flatMap((element) => blockIdsOf(element, order))[0];
@@ -700,7 +695,6 @@ export class EdgelessVisualController {
         const last = blockIdsOf(element, order).at(-1);
         if (last) insertBlockElementSeparator(this.reactEditor, last);
       });
-      bundle.links.forEach((link) => { const from = blockMap.get(link.from.blockId); const to = blockMap.get(link.to.blockId); if (from && to) this.reactEditor.editor.links.createLink({ ...copy(link), id: crypto.randomUUID(), from: { ...link.from, blockId: from }, to: { ...link.to, blockId: to } }); });
       elements.forEach((element) => {
         try {
           this.reactEditor.editor.elements.insertElement(element);
@@ -907,8 +901,8 @@ export class EdgelessVisualController {
   }
 
   private validateElement(value: unknown): EditorElement {
-    if (!isRecord(value) || typeof value.id !== "string" || typeof value.type !== "string" || !isRecord(value.frame) || !isRecord(value.props) || typeof value.zIndex !== "number" || !Number.isFinite(value.zIndex)) throw new Error("Invalid edgeless clipboard element");
-    this.frame(value.frame as unknown as VisualFrame);
+    if (!isRecord(value)) throw new Error("Invalid edgeless clipboard element");
+    validateElementCollection([value as unknown as EditorElement]);
     return copy(value) as unknown as EditorElement;
   }
 }

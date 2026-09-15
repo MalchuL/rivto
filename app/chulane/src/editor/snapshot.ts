@@ -16,7 +16,6 @@ const WRITING_BLOCK_TYPE = "paragraph";
 export const EMPTY_EDITOR_SNAPSHOT: EditorSnapshot = {
   version: 6,
   blocks: [],
-  links: [],
   elements: [],
 };
 
@@ -94,7 +93,6 @@ export function serializeSeedSnapshot(blocks: readonly SeedWritingBlock[]): stri
   const snapshot: EditorSnapshot = {
     version: 6,
     blocks: blocks.map(seedBlock),
-    links: [],
     elements: [],
   };
   return JSON.stringify(snapshot);
@@ -127,7 +125,6 @@ export function parseEditorSnapshot(content: string): EditorSnapshot | null {
     return {
       version: 6,
       blocks: record.blocks ?? [],
-      links: record.links ?? [],
       elements: record.elements ?? [],
       ...(record.pluginData ? { pluginData: record.pluginData } : {}),
     };

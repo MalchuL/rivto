@@ -1,61 +1,76 @@
-import type {
-  EditorSelection,
-} from "@chulane/rivto";
+/**
+ * Bridges core selection state to browser DOM selection.
+ *
+ * Core owns block selection with per-block offsets. React only reads native
+ * endpoints and restores them after rendering.
+ */
+import type { Selection } from "@chulane/rivto";
 import type { SelectionCapability } from "../../capabilities";
 import type { ReactEditorImpl } from "../../react-editor";
-import {
-  clearTextSelectionHighlight,
-  readEditorDOMSelection,
-  restoreEditorDOMSelection,
-  updateTextSelectionHighlight,
-} from "./editor-dom-selection";
+import { readEditorDOMSelection, restoreEditorDOMSelection } from "./editor-dom-selection";
 
-/**
- * Bridges core structured selection with the active React surface DOM.
- *
- * Structured selection storage, validation, subscriptions, and mutations belong
- * to the core editor. This manager owns only browser-DOM conversion, restoration,
- * and supplemental cross-block highlighting for the active React surface.
- */
+export { createCaretSelection, createTextSelection } from "@chulane/rivto";
+
+/** DOM adapter over the core selection manager. */
 export class ReactSelectionManager implements SelectionCapability {
   /**
-   * Creates a DOM-aware facade over the core selection manager.
-   *
-   * @param reactEditor - Complete owning runtime. Core selection and the active
-   * DOM root are resolved lazily from it.
+   * Creates a bridge scoped to one React runtime.
+   * @param reactEditor - Runtime providing core selection and the DOM root.
    */
   constructor(private readonly reactEditor: ReactEditorImpl) {}
 
-  /** @returns Portable native selection, or undefined without valid root endpoints. */
-  readDOM(): EditorSelection | undefined {
+  /** @returns Detached current selection. */
+  get(): Selection | undefined {
+    return this.reactEditor.editor.selection.get();
+  }
+
+  /**
+   * Publishes block selection through core.
+   * @param selection - Local selection values.
+   * @returns No value.
+   */
+  set(selection: Selection): void {
+    this.reactEditor.editor.selection.set(selection);
+  }
+
+  /** Clears local selection. */
+  clear(): void {
+    this.reactEditor.editor.selection.clear();
+  }
+
+  /**
+   * Subscribes to local selection changes.
+   * @param listener - Callback invoked after an effective change.
+   * @returns Function that removes the listener.
+   */
+  subscribe(listener: () => void): () => void {
+    return this.reactEditor.editor.selection.subscribe(listener);
+  }
+
+  /** Releases no resources because core owns the only subscription store. */
+  destroy(): void {}
+
+  /** Deletes the current selection through core. */
+  delete(): void {
+    this.reactEditor.editor.selection.delete();
+  }
+
+  /**
+   * Reads current native endpoints.
+   * @returns Browser selection, or undefined outside this editor.
+   */
+  readDOM(): Selection | undefined {
     const root = this.reactEditor.events.getRoot();
     return root ? readEditorDOMSelection(root) : undefined;
   }
 
   /**
-   * Restores a structured text selection into the current surface DOM.
-   *
-   * @param selection - Selection to restore; defaults to current core state.
-   * @returns True when visible text endpoints were resolved.
+   * Restores a non-structural range after DOM reconciliation.
+   * @param selection - Selection to restore, defaulting to current state.
+   * @returns Whether both text endpoints could be restored.
    */
-  restoreDOM(selection: EditorSelection = this.reactEditor.editor.selection.get()): boolean {
+  restoreDOM(selection: Selection | undefined = this.get()): boolean {
     const root = this.reactEditor.events.getRoot();
-    return root ? restoreEditorDOMSelection(root, selection) : false;
-  }
-
-  /** Removes supplemental cross-block highlighting from the current root. */
-  clearDOMHighlight(): void {
-    const root = this.reactEditor.events.getRoot();
-    if (root) clearTextSelectionHighlight(root);
-  }
-
-  /**
-   * Repaints supplemental highlighting from structured selection state.
-   *
-   * @param selection - Selection to paint; defaults to current core state.
-   */
-  updateDOMHighlight(selection: EditorSelection = this.reactEditor.editor.selection.get()): void {
-    const root = this.reactEditor.events.getRoot();
-    if (root) updateTextSelectionHighlight(root, selection);
+    return root && selection ? restoreEditorDOMSelection(root, selection) : false;
   }
 }
