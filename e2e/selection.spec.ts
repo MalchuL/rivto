@@ -339,6 +339,25 @@ test("Ctrl click toggles blocks with a pointer cursor", async ({ page }) => {
   await expect(contents.nth(1).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
 });
 
+test("keeps Ctrl-click block selection after returning from another tab", async ({ context, page }) => {
+  const other = await context.newPage();
+  await other.bringToFront();
+  await page.bringToFront();
+
+  const contents = textContents(page);
+  await contents.nth(0).click();
+  const target = contents.nth(1).locator(BLOCK_ANCESTOR_XPATH);
+  await contents.nth(1).click({ modifiers: ["Control"] });
+  await expect(target).toHaveAttribute("data-block-selected", "true");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
+
+  // Chromium may deliver the caret's selectionchange after the modifier click.
+  await page.waitForTimeout(100);
+  await expect(target).toHaveAttribute("data-block-selected", "true");
+  expect(await page.evaluate(() => getSelection()?.rangeCount ?? 0)).toBe(0);
+  await other.close();
+});
+
 test("bottom-up nested drag does not select a parent from the gap between children", async ({ page }) => {
   const parent = page.locator("[data-block-content]")
     .filter({ hasText: "Second branch level 2 child." })
