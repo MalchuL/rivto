@@ -35,6 +35,18 @@ test("highlights a prompt and converts it when editing leaves the block", async 
   await page.keyboard.press("Backspace");
   await expect(content.locator(".rivto-todo-prompt")).toHaveText("task");
 
+  await content.evaluate(async (element) => {
+    const hasFocus = document.hasFocus;
+    Object.defineProperty(document, "hasFocus", { configurable: true, value: () => false });
+    document.getSelection()?.removeAllRanges();
+    document.dispatchEvent(new Event("selectionchange"));
+    element.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
+    await new Promise((resolve) => setTimeout(resolve));
+    Object.defineProperty(document, "hasFocus", { configurable: true, value: hasFocus });
+  });
+  await expect(document.locator(`[${BLOCK_ID_ATTRIBUTE}="${id}"]`))
+    .toHaveAttribute("data-block-type", "paragraph");
+
   await document.locator("[data-block-content]").first().click();
   const converted = document.locator(`[${BLOCK_ID_ATTRIBUTE}="${id}"]`);
   await expect(converted).toHaveAttribute("data-block-type", "todo-item");

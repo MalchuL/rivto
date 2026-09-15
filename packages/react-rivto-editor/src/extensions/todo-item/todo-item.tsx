@@ -587,7 +587,9 @@ export function todoItemExtension(
           id: "todo-item.focus-out",
           type: "focusout",
           scope: "content",
-        }, ({ raw: event, blockId, blockElement }) => {
+        }, ({ raw: event, root, blockId, blockElement }) => {
+          // OS overlays such as Win+Space can transiently blur the document.
+          if (!root.ownerDocument.hasFocus()) return false;
           if (candidate?.blockId !== blockId) return false;
           const next = event.relatedTarget;
           if (!(next instanceof Node) || !blockElement?.contains(next)) convertCandidate();
@@ -606,7 +608,9 @@ export function todoItemExtension(
           id: "todo-item.selection-change",
           type: "selectionchange",
           target: "document",
-        }, () => {
+        }, ({ root }) => {
+          // A lost browser range is not an editor navigation while the OS owns focus.
+          if (!root.ownerDocument.hasFocus()) return false;
           const activeBlockId = reactEditor.selection.readDOM()?.focusBlockId;
           if (candidate && activeBlockId !== candidate.blockId) convertCandidate();
           return false;
