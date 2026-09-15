@@ -4,7 +4,7 @@ import {
 } from "../../../constants";
 import type { ReactEditor } from "../../../types";
 import { toggleBlockSelection } from "../page/navigation";
-import { hasBlockRanges } from "@chulane/rivto";
+import { isStructuralSelection } from "@chulane/rivto";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
 import { findEdgelessRuntime } from "./edgeless-runtime";
 
@@ -82,7 +82,9 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     if (!block || !blockId || !root.contains(block)) return false;
 
     const selection = editor.selection.get();
-    const current = selection && hasBlockRanges(selection) ? selection : undefined;
+    // A caret starts a new block selection; carrying its partial range forward
+    // creates a mixed selection that the next native selectionchange clears.
+    const current = isStructuralSelection(selection) ? selection : undefined;
     const next = toggleBlockSelection(
       editor.blocks.getBlocks(),
       current,
