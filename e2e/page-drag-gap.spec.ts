@@ -177,6 +177,66 @@ test("drops a block before the first root container", async ({ page }) => {
   })).toEqual([betaId, boardId, alphaId]);
 });
 
+const ROOT_CONTAINER_INPUTS = [
+  { type: "bento", children: [{ type: "paragraph", content: "Tile" }] },
+  { type: "table", children: [{ type: "table-row", children: [{ type: "table-cell" }] }] },
+  { type: "columns", children: [{ type: "columns-column" }] },
+  { type: "kanban", content: "Board", children: [{ type: "kanban-column" }] },
+] as const;
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const container of ROOT_CONTAINER_INPUTS) {
+    test(`centers the ${container.type} root gap like an ordinary block in ${mode}`, async ({ page }) => {
+      const ids = await page.evaluate(({ input, nextMode }) => {
+        const { editor } = (window as unknown as {
+          __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+        }).__rivtoDemo.editor;
+        const roots = [
+          editor.blocks.insertBlock({ id: "gap-source", type: "paragraph", content: "Gap source" }),
+          editor.blocks.insertBlock({ id: "gap-markdown", type: "paragraph", content: "Markdown" }),
+          editor.blocks.insertBlock({ id: "gap-slider", type: "demo.slider", props: { value: 25 } }),
+          editor.blocks.insertBlock({ id: "gap-counter", type: "demo.counter", props: { count: 2 } }),
+          editor.blocks.insertBlock({ id: "gap-container", ...input }),
+          editor.blocks.insertBlock({ id: "gap-after", type: "paragraph", content: "After container" }),
+        ];
+        editor.load({ ...editor.dump(), blocks: roots.map((id) => editor.blocks.getBlock(id)!), elements: [] });
+        if (nextMode === "edgeless") {
+          editor.elements.insertElement({
+            type: "block",
+            zIndex: 0,
+            frame: { x: 20, y: 20, width: 900, height: 1200 },
+            props: { startBlockId: roots[0]!, endBlockId: roots.at(-1)! },
+          });
+        }
+        return roots;
+      }, { input: container, nextMode: mode });
+      if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
+
+      const source = page.locator(`[data-block-id="${ids[0]}"]`).first();
+      const previous = page.locator(`[data-block-id="${ids[3]}"]`).first();
+      const next = page.locator(`[data-block-id="${ids[4]}"]`).first();
+      const previousBox = (await previous.boundingBox())!;
+      const nextBox = (await next.boundingBox())!;
+      const gapY = (previousBox.y + previousBox.height + nextBox.y) / 2;
+      await holdDragAt(page, source, previousBox.x + CHILD_DROP_INDENT / 2, gapY);
+
+      const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
+      await expect(line).toHaveAttribute("data-axis", "horizontal");
+      const lineBox = (await line.boundingBox())!;
+      expect(lineBox.y + lineBox.height / 2).toBeCloseTo(gapY, 0);
+      expect(lineBox.x).toBeCloseTo(previousBox.x, 0);
+      expect(lineBox.width).toBeCloseTo(previousBox.width, 0);
+      await page.mouse.up();
+      await expect.poll(() => page.evaluate(() => {
+        const { editor } = (window as unknown as {
+          __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+        }).__rivtoDemo.editor;
+        return editor.blocks.getRootIds();
+      })).toEqual([ids[1], ids[2], ids[3], ids[0], ids[4], ids[5]]);
+    });
+  }
+}
+
 test("hovering a row body still puts the drop inside that block", async ({ page }) => {
   const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
   const beta = page.locator("[data-block-id]").filter({ has: page.getByText("Beta", { exact: true }) }).first();

@@ -132,6 +132,7 @@ test("reveals root container handles across their body and lateral whitespace", 
     await block.scrollIntoViewIfNeeded();
     const body = block.locator(":scope > .page-block-children");
     const handle = block.locator(`:scope > .${ROW_CLASS} .${DRAG_HANDLE_CLASS}`);
+    await expect(handle, `${type} optional drag extension handle`).toHaveCount(1);
     const handleBox = (await handle.boundingBox())!;
 
     await page.mouse.move(0, 0);

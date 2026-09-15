@@ -301,6 +301,13 @@ Use Playwright only for browser/cross-layer behavior:
   slots, or modal behavior;
 - page and edgeless parity when the feature supports both.
 
+Block dragging is an optional React extension, but its container integration is
+still mandatory browser coverage. Exercise every layout-root type in a realistic
+runtime that explicitly installs `pageDragExtension()`. A host that intentionally
+omits the extension should render no handle; that does not replace the installed
+integration test. Add each new container root to the shared full-height lateral
+hover implementation and the parameterized root-handle test in the same change.
+
 For drag-handle regressions, test interaction rather than computed visibility
 alone. Start outside the container, verify the root handle is transparent but
 its hitbox is recoverable, enter the hitbox directly, then hover the body and

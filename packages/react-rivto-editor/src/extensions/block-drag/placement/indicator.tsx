@@ -48,7 +48,6 @@ function betweenIndicatorStyle(
   const previousRect = previous?.getBoundingClientRect();
   const nextRect = next?.getBoundingClientRect();
   const hostRect = host.getBoundingClientRect();
-  const adjacentInDom = Boolean(previous && next && previous.nextElementSibling === next);
   const sameGridRow = Boolean(previousRect && nextRect
     && Math.max(previousRect.top, nextRect.top) < Math.min(previousRect.bottom, nextRect.bottom));
   const boundaryRect = previousRect ?? nextRect;
@@ -64,8 +63,10 @@ function betweenIndicatorStyle(
     ? "vertical"
     : "horizontal";
   let style: CSSProperties;
+  // Canonical neighbors may have transparent DOM wrappers such as BlockModal;
+  // their measured gap, not nextElementSibling, defines visual adjacency.
   if (axis === "vertical") {
-    const adjacent = adjacentInDom && Boolean(previousRect && nextRect
+    const adjacent = Boolean(previousRect && nextRect
       && nextRect.left - previousRect.right <= placement.childDropIndent);
     const preferPrevious = placement.gapPointer
       ? Math.abs(placement.gapPointer.x - (previousRect?.right ?? Number.NEGATIVE_INFINITY))
@@ -78,7 +79,7 @@ function betweenIndicatorStyle(
       : nextRect?.left ?? previousRect?.right ?? hostRect.left;
     style = { left: x - hostRect.left, top: 0, bottom: 0 };
   } else {
-    const adjacent = adjacentInDom && Boolean(previousRect && nextRect
+    const adjacent = Boolean(previousRect && nextRect
       && nextRect.top - previousRect.bottom <= placement.childDropIndent);
     const preferPrevious = placement.gapPointer
       ? Math.abs(placement.gapPointer.y - (previousRect?.bottom ?? Number.NEGATIVE_INFINITY))
