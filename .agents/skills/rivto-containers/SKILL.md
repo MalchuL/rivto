@@ -248,14 +248,22 @@ Check these geometry rules:
 - Clip the page-wide `.page-block-row::before` hover slab only below the layout
   root (for example `> .page-block-children .page-block-row::before`). A broad
   descendant selector also clips the root row and breaks its handle hover area.
+- Treat full-height lateral hover as an invariant of every layout root. Its
+  ordinary root row is only 24px tall, so add transparent left and right hit
+  regions beside the rendered container body in the shared container selector.
+  Keep the regions outside the container border so they reveal the direct root
+  handle without covering nested content or controls, and let the surface clip
+  their page-wide extent.
 - Keep root drag handles visually hidden at rest like ordinary blocks. Expanded
   contentless roots may reveal only their direct handle on root hover and keep
   only that handle's small hitbox pointer-active while transparent, so entering
   or re-entering the handle can recover hover without a fast mouse movement.
 - Keep descendant handles hover-only. When a root handle overlaps the first
-  descendant, put descendant `left-top` slots in their lane's row flow, following
-  the Kanban/Bento pattern; do not translate or raise the root handle to win the
-  overlap.
+  descendant, prefer a lane gutter that preserves the ordinary absolute
+  `left-top` slot. Put the slot in row flow only when the layout genuinely needs
+  it, and verify that an optional collapse toggle neither shifts sibling handles
+  nor inserts control-width space before block content. Do not translate or
+  raise the root handle to win the overlap.
 - Anchor absolute insertion indicators to the intended lane or tile with a
   positioned child shell.
 - Keep horizontal overflow on the layout owner, not the page.
@@ -296,11 +304,16 @@ Use Playwright only for browser/cross-layer behavior:
 For drag-handle regressions, test interaction rather than computed visibility
 alone. Start outside the container, verify the root handle is transparent but
 its hitbox is recoverable, enter the hitbox directly, then hover the body and
-move to the handle in roughly one-pixel steps. Use `elementFromPoint` to prove
-the intended accessible handle receives the pointer. Also verify the first
-descendant handle remains separately reachable and its rectangle does not
-overlap the root handle. Build the demo and use a fresh or isolated preview;
-`reuseExistingServer` can otherwise serve stale CSS and produce a false result.
+move to the handle in roughly one-pixel steps. At the body's vertical midpoint,
+enter from both the left and right surface whitespace and require the root
+handle to appear; checking only the 24px root-row Y coordinate misses the
+full-height regression. Use `elementFromPoint` to prove the intended accessible
+handle receives the pointer. Also verify the first descendant handle remains
+separately reachable and its rectangle does not overlap the root handle. For
+lane layouts, pair a collapsed block with a plain sibling and assert equal
+handle X positions plus no control-width content offset. Build the demo and use
+a fresh or isolated preview; `reuseExistingServer` can otherwise serve stale CSS
+and produce a false result.
 
 Run the narrowest relevant tests first, then React type checking, lint for touched
 files, the affected build, and focused E2E. Check `git diff --check` and preserve

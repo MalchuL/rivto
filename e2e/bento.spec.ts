@@ -165,8 +165,7 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
       : to.y + to.height / 2;
     await page.mouse.move(destX, destY, { steps: 15 });
     if (edge === "inside") {
-      // Fixed grid: the tile center is a sibling half-split, not a nest highlight.
-      await expect(target).not.toHaveAttribute("data-drop-inside", "true");
+      await expect(target).toHaveAttribute("data-drop-inside", "true");
     } else {
       const lineClass = "page-drop-indicator";
       const line = page.locator(`.${lineClass}`);
@@ -198,8 +197,12 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
       }
     }
     await page.mouse.up();
-    await expect(page.locator(`[data-block-id="${targetId}"] [data-block-id="${sourceId}"]`)).toHaveCount(0);
-    await expect(end ? tiles.last() : tiles.nth(1)).toHaveAttribute("data-block-id", sourceId!);
+    if (edge === "inside") {
+      await expect(page.locator(`[data-block-id="${targetId}"] [data-block-id="${sourceId}"]`)).toHaveCount(1);
+    } else {
+      await expect(page.locator(`[data-block-id="${targetId}"] [data-block-id="${sourceId}"]`)).toHaveCount(0);
+      await expect(end ? tiles.last() : tiles.nth(1)).toHaveAttribute("data-block-id", sourceId!);
+    }
   });
 }
 
@@ -237,7 +240,7 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
   await page.mouse.down();
   await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
   // Left rim of the tile: sibling insert into the board, not nest-inside the tile.
-  await page.mouse.move(to.x + 8, to.y + to.height / 2, { steps: 15 });
+  await page.mouse.move(to.x + 4, to.y + to.height / 2, { steps: 15 });
   await page.mouse.up();
   await expect(tiles).toHaveCount(3);
 

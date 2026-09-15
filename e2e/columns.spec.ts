@@ -85,3 +85,42 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
   expect(highlightBox.height).toBeCloseTo(to.height, 0);
   await page.mouse.up();
 });
+
+test("aligns sibling drag handles when only one block has a collapse toggle", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
+    const column = board.children[0]!;
+    editor.blocks.removeBlocks(column.children.map((child) => child.id));
+    const parent = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Collapsible",
+      children: [{ type: "paragraph", content: "Nested" }],
+    });
+    const sibling = editor.blocks.insertBlock({ type: "paragraph", content: "Sibling" });
+    editor.blocks.moveBlocks([parent, sibling], column.id, "inside");
+    editor.blocks.updateBlock(parent, { listProps: { collapsed: true } });
+    editor.load({ ...editor.dump(), blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
+  });
+
+  const column = page.locator('[data-block-type="columns-column"]').first();
+  const children = column.locator(":scope > .page-block-children > .page-block");
+  const collapsibleHandle = children.nth(0).locator(":scope > .page-block-row .page-drag-handle");
+  const siblingHandle = children.nth(1).locator(":scope > .page-block-row .page-drag-handle");
+  const collapsibleBox = (await collapsibleHandle.boundingBox())!;
+  const siblingBox = (await siblingHandle.boundingBox())!;
+  const siblingRowBox = (await children.nth(1).locator(":scope > .page-block-row").boundingBox())!;
+  const siblingContentBox = (await children.nth(1).locator(":scope > .page-block-row > .rivto-block-content-flow").boundingBox())!;
+  expect(siblingBox.x).toBeCloseTo(collapsibleBox.x, 0);
+  expect(siblingContentBox.x - siblingRowBox.x).toBeCloseTo(0, 0);
+
+  const siblingBlockBox = (await children.nth(1).boundingBox())!;
+  for (const x of [siblingBlockBox.x + 1, siblingBlockBox.x + siblingBlockBox.width - 1]) {
+    await page.mouse.move(0, 0);
+    await page.mouse.move(x, siblingRowBox.y + siblingRowBox.height / 2);
+    await expect(siblingHandle).toHaveCSS("opacity", "1");
+  }
+});

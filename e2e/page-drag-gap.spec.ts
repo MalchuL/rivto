@@ -2,8 +2,8 @@
  * Browser coverage for outline-gap drag targeting.
  *
  * A pointer in the space between two blocks must highlight the nearest
- * sibling, not the nearest kanban or table. Putting a block inside another
- * still requires hovering that block's row, or an empty lane body.
+ * sibling, not the nearest fixed layout. Putting a block inside another still
+ * requires hovering that block's row, or an empty accepting body.
  *
  * @module
  */
@@ -134,9 +134,12 @@ test("drops a block after the last root container", async ({ page }) => {
   expect(lineBox.y + lineBox.height / 2).toBeCloseTo(boardBox.y + boardBox.height, 0);
   await page.mouse.up();
 
-  await expect.poll(() => roots.evaluateAll(
-    (blocks) => blocks.map((block) => block.getAttribute("data-block-id")),
-  )).toEqual([betaId, boardId, alphaId]);
+  await expect.poll(() => page.evaluate(() => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getBlocks().map((block) => block.id);
+  })).toEqual([betaId, boardId, alphaId]);
 });
 
 test("drops a block before the first root container", async ({ page }) => {
@@ -166,9 +169,12 @@ test("drops a block before the first root container", async ({ page }) => {
   expect(lineBox.y + lineBox.height / 2).toBeCloseTo(boardBox.y, 0);
   await page.mouse.up();
 
-  await expect.poll(() => roots.evaluateAll(
-    (blocks) => blocks.map((block) => block.getAttribute("data-block-id")),
-  )).toEqual([betaId, boardId, alphaId]);
+  await expect.poll(() => page.evaluate(() => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getBlocks().map((block) => block.id);
+  })).toEqual([betaId, boardId, alphaId]);
 });
 
 test("hovering a row body still puts the drop inside that block", async ({ page }) => {
@@ -182,6 +188,34 @@ test("hovering a row body still puts the drop inside that block", async ({ page 
   await expect(indicator).toHaveCSS("outline-width", "4px");
   await expect(page.locator('[data-block-type="kanban"]')).not.toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
+});
+
+test("hovering a block in a free container nests inside that block", async ({ page }) => {
+  const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
+  const beta = page.locator("[data-block-id]").filter({ has: page.getByText("Beta", { exact: true }) }).first();
+  const alphaId = await alpha.getAttribute("data-block-id");
+  const betaId = await beta.getAttribute("data-block-id");
+  const columnId = await page.locator('[data-block-type="kanban-column"]').first().getAttribute("data-block-id");
+  await page.evaluate(({ alphaId, betaId, columnId }) => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    editor.blocks.moveBlocks([alphaId!, betaId!], columnId!, "inside");
+  }, { alphaId, betaId, columnId });
+
+  const nestedAlpha = page.locator(`[data-block-id="${alphaId}"]`);
+  const nestedBeta = page.locator(`[data-block-id="${betaId}"]`);
+  const betaRow = nestedBeta.locator(`:scope > .${ROW_CLASS}`);
+  const box = (await betaRow.boundingBox())!;
+  await holdDragAt(page, nestedAlpha, box.x + box.width / 2, box.y + box.height / 2);
+  await expect(betaRow).toHaveAttribute("data-drop-inside", "true");
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate(({ sourceId }) => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getParentId(sourceId!);
+  }, { sourceId: alphaId })).toBe(betaId);
 });
 
 test("an empty kanban column still accepts an inside drop on its body", async ({ page }) => {
@@ -218,3 +252,103 @@ test("dragging onto a kanban title does not insert a column or paint a board-siz
   await expect(page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }))
     .not.toHaveAttribute("data-block-type", "kanban-column");
 });
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`appends after final nested subtrees in ordinary and free container outlines in ${mode}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    const ids = await page.evaluate((nextMode) => {
+      const { editor } = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+      }).__rivtoDemo.editor;
+      const inputs = [
+        { type: "paragraph", content: "Ordinary source" },
+        {
+          type: "paragraph",
+          content: "Ordinary final",
+          children: [{ type: "paragraph", content: "Ordinary nested" }],
+        },
+        { type: "paragraph", content: "Kanban source" },
+        {
+          type: "kanban",
+          content: "End-gap kanban",
+          children: [{
+            type: "kanban-column",
+            content: "End-gap lane",
+            children: [{
+              type: "paragraph",
+              content: "Kanban final",
+              children: [{ type: "paragraph", content: "Kanban nested" }],
+            }],
+          }],
+        },
+        { type: "paragraph", content: "Columns source" },
+        {
+          type: "columns",
+          children: [{
+            type: "columns-column",
+            children: [{
+              type: "paragraph",
+              content: "Columns final",
+              children: [{ type: "paragraph", content: "Columns nested" }],
+            }],
+          }],
+        },
+      ];
+      const roots = inputs.map((input) => editor.blocks.insertBlock(input));
+      editor.load({
+        ...editor.dump(),
+        blocks: roots.map((id) => editor.blocks.getBlock(id)!),
+        elements: [],
+      });
+      if (nextMode === "edgeless") {
+        editor.elements.insertElement({
+          type: "block",
+          zIndex: 0,
+          frame: { x: 20, y: 20, width: 1100, height: 850 },
+          props: { startBlockId: roots[0]!, endBlockId: roots.at(-1)! },
+        });
+      }
+      const all = editor.blocks.getBlocks().flatMap(function walk(block): typeof block[] {
+        return [block, ...block.children.flatMap(walk)];
+      });
+      const id = (content: string) => all.find((block) => block.content === content)!.id;
+      return {
+        ordinarySource: id("Ordinary source"),
+        ordinaryNested: id("Ordinary nested"),
+        kanbanSource: id("Kanban source"),
+        kanbanNested: id("Kanban nested"),
+        kanbanLane: id("End-gap lane"),
+        columnsSource: id("Columns source"),
+        columnsNested: id("Columns nested"),
+        columnsLane: all.find((block) => block.type === "columns-column")!.id,
+      };
+    }, mode);
+    if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
+
+    const cases = [
+      { source: ids.ordinarySource, nested: ids.ordinaryNested, expectedParent: null },
+      { source: ids.kanbanSource, nested: ids.kanbanNested, expectedParent: ids.kanbanLane },
+      { source: ids.columnsSource, nested: ids.columnsNested, expectedParent: ids.columnsLane },
+    ];
+    for (const dragCase of cases) {
+      const source = page.locator(`[data-block-id="${dragCase.source}"]`).first();
+      const nestedRow = page.locator(`[data-block-id="${dragCase.nested}"] > .${ROW_CLASS}`).first();
+      await nestedRow.scrollIntoViewIfNeeded();
+      const box = (await nestedRow.boundingBox())!;
+      await holdDragAt(
+        page,
+        source,
+        box.x - CHILD_DROP_INDENT / 2,
+        box.y + box.height - 2,
+      );
+      await expect(page.locator(`.${LINE_CLASS}[data-kind="between"]`)).toBeVisible();
+      await page.mouse.up();
+      await expect.poll(() => page.evaluate((sourceId) => {
+        const { editor } = (window as unknown as {
+          __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+        }).__rivtoDemo.editor;
+        return editor.blocks.getParentId(sourceId);
+      }, dragCase.source)).toBe(dragCase.expectedParent);
+    }
+  });
+}

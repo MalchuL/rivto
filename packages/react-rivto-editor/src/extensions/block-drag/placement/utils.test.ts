@@ -13,6 +13,7 @@ import {
   resolveSiblingAfterDropPlacement,
   type DropBlock,
 } from "./utils";
+import { resolveGeometryPlacement } from "./geometry";
 
 const blocks: DropBlock[] = [
   {
@@ -96,6 +97,25 @@ test("offers every structurally available depth after a final nested leaf", () =
     kind: "between", parentId: "B", previousId: "C", nextId: null, depth: 2,
   });
   expect(resolveAfterDropPlacement(document, "C", 1)).toEqual({
+    kind: "between", parentId: "C", previousId: null, nextId: null, depth: 3,
+  });
+});
+
+test("fractional left bands after a final nested row outdent with floor semantics", () => {
+  const document: DropBlock[] = [{
+    id: "A",
+    children: [{ id: "B", children: [{ id: "C", children: [] }] }],
+  }];
+  const row = { id: "C", rect: { top: 0, bottom: 30, left: 48, height: 30 } };
+  const options = { allowChildPlacement: true, childDropIndent: 24, gapDropZone: 8 };
+
+  expect(resolveGeometryPlacement(document, row, 36, 28, options)).toMatchObject({
+    kind: "between", parentId: "A", previousId: "B", nextId: null, depth: 1,
+  });
+  expect(resolveGeometryPlacement(document, row, 12, 28, options)).toMatchObject({
+    kind: "between", parentId: null, previousId: "A", nextId: null, depth: 0,
+  });
+  expect(resolveGeometryPlacement(document, row, 72, 28, options)).toMatchObject({
     kind: "between", parentId: "C", previousId: null, nextId: null, depth: 3,
   });
 });

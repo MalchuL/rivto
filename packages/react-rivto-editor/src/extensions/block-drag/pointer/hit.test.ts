@@ -254,17 +254,13 @@ test("a writing block over a column or empty board enters the field instead of i
   expect(hitDropIntent({ reason: "row" })).toBe("geometry");
 });
 
-test("a page block over a bento tile uses the grid axis instead of nesting inside the tile", () => {
+test("a page block over a bento tile uses grid edges and may nest in its center", () => {
   expect(hitDropIntent({ reason: "row", parentAxis: "grid" })).toBe("axis-grid");
   expect(hitDropIntent({ reason: "nearby-row", parentAxis: "grid" })).toBe("axis-grid");
 });
 
-test("a fixed grid never nests on the tile center so page drops become sibling tiles", () => {
+test("a fixed grid keeps sibling edges while allowing a center nest", () => {
   const tile = rect(0, 80, 0, 180);
-  expect(resolveGridPlacement("tile", tile, 90, 40, 8, false)).toEqual({
-    targetId: "tile",
-    position: "after",
-  });
   expect(resolveGridPlacement("tile", tile, 90, 40, 8, true).position).toBe("inside");
-  expect(resolveGridPlacement("tile", tile, 4, 40, 8, false).position).toBe("before");
+  expect(resolveGridPlacement("tile", tile, 4, 40, 8, true).position).toBe("before");
 });

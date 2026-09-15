@@ -75,11 +75,11 @@ export function resolveDropPlacement(
     targetAcceptsDrop: data?.targetAcceptsDrop === true,
   });
   if (intent === "sibling-edge") {
-    // Container chrome and document edges are outline before/after, never inside.
+    // Fixed-outline chrome and document edges are before/after, never inside.
     const edge = resolveChromePlacement(indicatorId, event.over.rect, cursorY).position;
     result = resolveSiblingEdgePlacement(blocks, indicatorId, edge, undefined, parentOptions.childDropIndent);
   } else if (intent === "inside-field") {
-    // Empty lane, column, cell, or empty board: enter that field.
+    // An explicitly accepting body receives the drop as a child.
     result = targetOptions.allowChildPlacement
       ? withDropIndicator(resolveInsideDropPlacement(indicatorId), undefined, targetOptions.childDropIndent)
       : null;
@@ -93,7 +93,7 @@ export function resolveDropPlacement(
       cursorX,
       cursorY,
       parentOptions.gapDropZone,
-      parentAllowsChildren,
+      targetOptions.allowChildPlacement,
     );
     result = placement.position === "inside"
       ? withDropIndicator(resolveInsideDropPlacement(indicatorId), "grid", targetOptions.childDropIndent)
@@ -105,8 +105,7 @@ export function resolveDropPlacement(
         parentOptions.childDropIndent,
       );
   } else if (intent === "axis-vertical") {
-    // List cards are siblings, even when they own descendants. Splitting the
-    // complete card in half makes reordering forgiving without nesting cards.
+    // Fixed vertical layouts sort complete items, including their descendants.
     const edge = cursorY < event.over.rect.top + event.over.rect.height / 2 ? "before" : "after";
     result = resolveSiblingEdgePlacement(blocks, indicatorId, edge, "vertical", parentOptions.childDropIndent);
   } else if (pointer) {

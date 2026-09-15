@@ -2,17 +2,15 @@
  * Pointer hit-testing for page-surface block drops.
  *
  * A gap between rows must resolve to the nearest block, not the nearest
- * kanban, table, or other drop container. "Inside" uses the same rule: the
+ * accepting ancestor. "Inside" uses the same rule: the
  * pointer has to sit on that block's row, or on an empty container body when
  * no descendant row is nearby. First and last nested rows still participate
  * through ordinary nearest-row distance, so a gap above the first child or
  * below the last child does not jump to a parent board.
  *
- * Layout shells (kanban, bento, table) are different: their title row is
- * outline chrome, not a drop field. Hovering that title, or the strip just
- * below it, must not resolve as "inside" the board — that appends a sibling
- * of the columns/tiles/rows (a new column) and paints the indicator on the
- * full BlockView, which stretches across the board.
+ * Fixed child outlines are different: their title row is outline chrome, not
+ * a drop field. Hovering that title or its adjacent strip must resolve through
+ * the declared child axis or accepting descendants.
  *
  * @module
  */
@@ -92,15 +90,11 @@ function smallest<T>(items: readonly T[], areaOf: (item: T) => number): T | unde
  * Chooses the drop target for a viewport pointer.
  *
  * A pointer on a writing row targets that block so "inside" stays on the same
- * line as the row. A pointer on a layout shell's title is chrome (outline
- * before/after). A pointer in a gap targets the nearest row. A filled kanban,
- * bento, or table never wins as an inside container — the nearest descendant
- * field wins, even when it is farther than {@link NEARBY_ROW_DROP_PX}, so the
- * strip under the title does not append a new column or paint the full board.
- * Empty lanes and unused Bento grid space use the container body as an
- * inside target. Small grid gaps still resolve against adjacent tiles so
- * precise reordering remains available. Space outside the first or last root
- * targets that root's outer edge instead of its nearest nested field.
+ * line as the row. A fixed outline's title is chrome (outline before/after).
+ * A pointer in a gap targets the nearest row. Filled fixed layouts prefer a
+ * descendant field, while empty accepting layouts remain full-body targets.
+ * Grid space remains an accepting body outside nearby item gaps. Space outside
+ * the first or last root targets that root's outer edge.
  *
  * @param candidates - Measured blocks in the active surface.
  * @param pointer - Viewport cursor.
@@ -137,9 +131,8 @@ export function pickPointerDropTarget(
     // Prefer a nearby descendant row so a gap between cards or nested outline
     // blocks does not become "inside" the parent lane. An empty lane body has
     // no nearby descendant and keeps the container so inside still works.
-    // Filled layout shells skip the distance cap: the strip under a kanban
-    // title is still "inside" the board rect, and using the board as a
-    // container would create a new column and highlight the whole board.
+    // Fixed layouts skip the distance cap so chrome-adjacent space resolves to
+    // a declared field instead of appending an accidental structural child.
     // Page padding and end controls sit outside every BlockView. Resolve that
     // space against the root boundary, not the visually nearest nested lane.
     if (firstRoot && y < firstRoot.block.top) {

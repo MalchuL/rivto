@@ -123,8 +123,9 @@ test("renders aligned contentless container summaries from reactive block snapsh
   }
 });
 
-test("reveals root container handles only while hovering their body", async ({ page }) => {
+test("reveals root container handles across their body and lateral whitespace", async ({ page }) => {
   await page.goto("/");
+  const surfaceBox = (await page.locator(`.${PAGE_SURFACE_CLASS}`).first().boundingBox())!;
 
   for (const type of ["bento", "table", "columns", "kanban"] as const) {
     const block = page.locator(`[data-block-type="${type}"]`).first();
@@ -140,6 +141,12 @@ test("reveals root container handles only while hovering their body", async ({ p
     await expect(handle, `${type} directly hovered root handle`).toHaveCSS("opacity", "1");
     await page.mouse.move(0, 0);
     const bodyBox = (await body.boundingBox())!;
+    for (const x of [surfaceBox.x + 8, surfaceBox.x + surfaceBox.width - 8]) {
+      await page.mouse.move(0, 0);
+      await page.mouse.move(x, bodyBox.y + bodyBox.height / 2);
+      await expect(handle, `${type} root handle beside its body`).toHaveCSS("opacity", "1");
+    }
+    await page.mouse.move(0, 0);
     const bodyPoint = { x: bodyBox.x + bodyBox.width / 2, y: bodyBox.y + bodyBox.height / 2 };
     const handlePoint = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 };
     await page.mouse.move(bodyPoint.x, bodyPoint.y);

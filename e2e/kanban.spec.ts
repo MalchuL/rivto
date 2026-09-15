@@ -12,9 +12,17 @@ const DROP_INDICATOR_CLASS = "page-drop-indicator";
  * @param target - Destination rectangle.
  * @param fraction - Vertical fraction of the target used for before/after placement.
  * @param axis - Direction used to choose the destination half.
+ * @param crossOffset - Optional horizontal outline-depth offset for vertical drops.
  * @returns Completion of the drag gesture.
  */
-async function move(page: Page, source: Locator, target: Locator, fraction = 0.5, axis: "vertical" | "horizontal" = "vertical") {
+async function move(
+  page: Page,
+  source: Locator,
+  target: Locator,
+  fraction = 0.5,
+  axis: "vertical" | "horizontal" = "vertical",
+  crossOffset?: number,
+) {
   await expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0);
   await source.scrollIntoViewIfNeeded();
   const handle = source.locator(`:scope > .${ROW_CLASS} .${HANDLE_CLASS}`);
@@ -25,7 +33,11 @@ async function move(page: Page, source: Locator, target: Locator, fraction = 0.5
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
-  await page.mouse.move(to.x + to.width * (axis === "horizontal" ? fraction : 0.5), to.y + to.height * (axis === "vertical" ? fraction : 0.5), { steps: 15 });
+  await page.mouse.move(
+    to.x + (axis === "horizontal" ? to.width * fraction : crossOffset ?? to.width / 2),
+    to.y + to.height * (axis === "vertical" ? fraction : 0.5),
+    { steps: 15 },
+  );
   if (axis === "horizontal") {
     const indicator = page.locator(`.${DROP_INDICATOR_CLASS}[data-axis="vertical"]`);
     await expect(indicator).toBeVisible();
@@ -102,7 +114,7 @@ test("moves Kanban cards in edgeless mode", async ({ page }) => {
 
 
 for (const mode of ["block", "edgeless"] as const) {
-  test(`reorders sibling cards in ${mode} mode without nesting`, async ({ page }) => {
+  test(`reorders sibling cards from their outline edges in ${mode} mode`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto("/");
     await page.evaluate((mode) => {
@@ -125,10 +137,11 @@ for (const mode of ["block", "edgeless"] as const) {
     const cards = column.locator(':scope > div > [data-block-type="paragraph"]');
     const ids = await cards.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-block-id")));
     const byId = (id: string | null) => page.locator(`[data-block-id="${id}"]`);
-    await move(page, byId(ids[2]!), byId(ids[0]!), 0.25);
+    const rowById = (id: string | null) => byId(id).locator(`:scope > .${ROW_CLASS}`).first();
+    await move(page, byId(ids[2]!), rowById(ids[0]!), 0.01);
     await expect(cards).toHaveCount(3);
     await expect(cards.first()).toHaveAttribute("data-block-id", ids[2]!);
-    await move(page, byId(ids[2]!), byId(ids[1]!), 0.75);
+    await move(page, byId(ids[2]!), rowById(ids[1]!), 0.99, "vertical", 12);
     await expect(cards.last()).toHaveAttribute("data-block-id", ids[2]!);
     await expect(cards).toHaveCount(3);
     // Wait for the visible reorder transition before beginning a new action.
@@ -144,7 +157,7 @@ for (const mode of ["block", "edgeless"] as const) {
     const progress = modal.locator('[data-block-type="kanban-column"]').nth(1);
     await move(page, byId(ids[0]!), progress);
     await expect(progress.locator(`[data-block-id="${ids[0]}"]`)).toHaveCount(1);
-    await move(page, byId(ids[0]!), byId(ids[1]!), 0.25);
+    await move(page, byId(ids[0]!), rowById(ids[1]!), 0.01);
     await expect(cards.first()).toHaveAttribute("data-block-id", ids[0]!);
     const lanes = modal.locator('[data-block-type="kanban"] > div > [data-block-type="kanban-column"]');
     const laneIds = await lanes.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-block-id")));

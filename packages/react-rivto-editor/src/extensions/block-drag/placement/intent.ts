@@ -3,11 +3,10 @@ import type { DropAxis } from "../../../views/types";
 import type { HitDropIntent, HitRect, PointerDropReason } from "../pointer/types";
 
 /**
- * Reports whether a block is a layout shell whose children are fields.
+ * Reports whether a block owns a fixed child outline.
  *
- * Kanban, bento, and table freeze their child list. Dropping "inside" them
- * creates a new column, tile, or row. Their title is outline chrome; the
- * real drop fields are the descendant lanes, tiles, or cells.
+ * Its title is outline chrome; its descendants provide the sortable items or
+ * accepting fields. The spatial axis is independent metadata and may be absent.
  *
  * @param candidate - Measured block to classify.
  * @returns `true` when inside-append would create a sibling shell.
@@ -16,7 +15,7 @@ export function isStructuralLayout(candidate: {
   readonly dropAxis?: DropAxis;
   readonly childOutline?: "free" | "fixed";
 }): boolean {
-  return Boolean(candidate.dropAxis && candidate.childOutline === "fixed");
+  return candidate.childOutline === "fixed";
 }
 
 /**
@@ -25,11 +24,9 @@ export function isStructuralLayout(candidate: {
  * Chrome (a filled board's title) and the page's outer root edges are
  * before/after that block in the outline, never inside as a new column. A
  * field (empty lane, column, cell, empty board) takes the writing block
- * inside. Same-axis drags keep the existing
- * horizontal/grid/vertical half-splits. A content child of a grid or
- * horizontal parent — a bento tile, not a column shell — uses that parent's
- * axis so a page block becomes a sibling tile rather than nesting inside the
- * hovered tile.
+ * inside. Fixed structural layouts retain axis-specific sibling sorting, while
+ * free outline lanes use ordinary row geometry so a row center can nest.
+ * Grid edges remain sortable while their center can support nesting.
  *
  * @param input - Hit reason, parent/source axes, and whether the target is a field.
  * @returns Placement rule consumed by the drop resolver.
@@ -90,10 +87,8 @@ export function resolveChromePlacement(
 /**
  * Places a drop among grid children (bento tiles).
  *
- * Outer rims insert siblings in reading order. The center of a free-outline
- * tile nests into that tile. A fixed child outline is a flat list, so the
- * center uses the closer half instead of nesting — otherwise a page block
- * dropped on a tile would indent under it rather than become a sibling tile.
+ * Outer rims insert siblings in reading order. The center nests into the tile
+ * when the target allows children.
  *
  * @param targetId - Hovered grid child.
  * @param rect - Rectangle used for rim and half-split tests.

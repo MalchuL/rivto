@@ -44,7 +44,7 @@ export function relocateColumnContents(editor: RivtoEditorApi, columnIds: readon
  * Behavior registered for the `columns` board type.
  */
 export class ColumnsView extends ContainerBlockView {
-  override readonly dropAxis: DropAxis | undefined = undefined;
+  override readonly dropAxis: DropAxis = "horizontal";
   override readonly acceptsDropContainer: boolean = false;
 }
 

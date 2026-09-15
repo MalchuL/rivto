@@ -43,7 +43,7 @@ export function resolveGeometryPlacement(
       "before",
     );
   } else {
-    const depthOffset = Math.trunc((cursorX - row.rect.left) / options.childDropIndent);
+    const depthOffset = Math.floor((cursorX - row.rect.left) / options.childDropIndent);
     const placement = resolveAfterDropPlacement(blocks, row.id, depthOffset);
     result = withDropIndicator(placement, undefined, options.childDropIndent, "after");
   }

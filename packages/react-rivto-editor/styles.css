@@ -264,6 +264,31 @@
   pointer-events: auto;
 }
 
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"]) {
+  position: relative;
+}
+
+/* Root rows are only one line tall; side strips extend their hover behavior
+   beside the full container without covering its interactive body. */
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"])::before,
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"])::after {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  width: 100vw;
+  background: transparent;
+  content: "";
+}
+
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"])::before {
+  right: 100%;
+}
+
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"])::after {
+  left: 100%;
+}
+
 :is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"]):hover
   > .page-block-row > .rivto-slot > .page-drag-handle {
   opacity: 1;

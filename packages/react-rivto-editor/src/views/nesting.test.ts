@@ -120,6 +120,7 @@ test("columns inside a kanban column allow indent under the lane only", () => {
   expect(editor.blocks.getParentId(nested)).toBe(lane.id);
   expect(getBlockContainment(editor.blocksRegistry.get("columns"))?.childOutline).toBe("fixed");
   expect(getBlockContainment(editor.blocksRegistry.get("columns-column"))?.outlineFloor).toBe(true);
+  expect(runtime.views.resolve(columns).dropAxis).toBe("horizontal");
   runtime.destroy();
   editor.destroy();
 });

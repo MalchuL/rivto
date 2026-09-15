@@ -36,7 +36,7 @@ function ancestorBlockIds(element: HTMLElement, root: HTMLElement): string[] {
  * Measures every block row on the surface for gap and empty-lane targeting.
  *
  * Each candidate keeps both the title-row rect (nearest-block / inside-on-the-
- * same-line) and the full BlockView rect (empty kanban/table/column bodies).
+ * same-line) and the full BlockView rect (empty accepting layout fields).
  * Ancestor IDs let a gap between children win over "inside parent container".
  *
  * @param root - Active editor surface containing eligible block rows.
@@ -72,11 +72,9 @@ function collectPointerDropCandidates(
  * Builds the dnd-kit movement event for one resolved drop block.
  *
  * The over rectangle is what `resolveDropPlacement` treats as the row body
- * versus its before/after edges. A kanban or table BlockView includes every
- * child, so feeding that huge rect made a pointer in a sibling gap look like
- * "inside" the board. Outline hits therefore use the title row. Empty-lane
- * hits (`useFullBlock`) keep the full BlockView so the lane body stays an
- * inside target. Sortable cards still use the complete card for half-splits.
+ * versus its before/after edges. A BlockView includes its whole subtree, so
+ * free-outline targets use only their title row. Explicit body hits and fixed
+ * layouts keep the full BlockView for containment or spatial half-splits.
  *
  * @param event - Current drag movement used for source data.
  * @param blockElement - BlockView that owns the resolved target.
@@ -98,7 +96,8 @@ function pointerDropEvent(
   const parentId = blockElement.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR)?.dataset.blockId;
   const targetView = reactEditor.views.resolve(id);
   const parentView = parentId ? reactEditor.views.resolve(parentId) : undefined;
-  const axis = parentView?.dropAxis;
+  const parentOutline = parentId ? blockContainment(reactEditor, parentId)?.childOutline : undefined;
+  const axis = parentOutline === "fixed" ? parentView?.dropAxis : undefined;
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
   const dropNode = useFullBlock || sortable ? blockElement : row;
   return {
@@ -111,7 +110,7 @@ function pointerDropEvent(
         sortChildren: axis,
         hitReason,
         targetAcceptsDrop: Boolean(targetView.acceptsDropContainer),
-        parentChildOutline: parentId ? blockContainment(reactEditor, parentId)?.childOutline : undefined,
+        parentChildOutline: parentOutline,
         targetDropPlacement: targetView.dropPlacement,
         parentDropPlacement: parentView?.dropPlacement,
       } },
@@ -122,7 +121,7 @@ function pointerDropEvent(
 /**
  * Resolves the block beneath the pointer through native hit testing.
  *
- * Gaps used to snap to the nearest drop container (kanban, table, lane) by
+ * Gaps used to snap to the nearest accepting ancestor by
  * distance to that container's center. The pointer was not over the board;
  * the board was merely the closest `acceptsDropContainer` on the page, and
  * its tall BlockView then resolved as "inside". The same miss happened when
@@ -153,7 +152,7 @@ export function withPointerDropTarget(
 ): DragMoveEvent | null {
   if (!root) return null;
 
-  // Ignore the full BlockView: a parent kanban/table includes `.page-block-children`,
+  // Ignore the full BlockView: a parent includes `.page-block-children`,
   // so a gap between siblings still sits inside the parent rect. Only a row
   // under the cursor is an "inside" hit; otherwise the gap picker runs.
   const hovered = new Set<HTMLElement>();
@@ -185,9 +184,8 @@ export function withPointerDropTarget(
   }
 
   // No row under the cursor: pick the nearest sibling row, not the nearest
-  // board. Filled layout shells snap to a descendant field so the strip under
-  // a kanban title does not become a new column. `reason === "container"` is
-  // reserved for empty lanes.
+  // accepting ancestor. Filled fixed layouts snap to a descendant field.
+  // `reason === "container"` is reserved for accepting body space.
   const { elements, candidates } = collectPointerDropCandidates(root, reactEditor);
   const hit = pickPointerDropTarget(
     candidates.filter(({ id }) => !excludedIds.has(id)),

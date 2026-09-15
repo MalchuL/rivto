@@ -21,6 +21,7 @@ import { createPortal } from "react-dom";
 import { PageDropIndicator } from "../placement/indicator";
 import type { DropPlacementStore, PageDragData } from "../types";
 import { PageDragItemContext, PageDragStateContext } from "../state";
+import { blockContainment } from "../utils/containment";
 
 const PAGE_BLOCK_ROW_CLASS = "page-block-row";
 const PAGE_BLOCK_SELECTOR = "[data-block-id]";
@@ -46,7 +47,8 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
   const parentId = blockElement?.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR)?.dataset.blockId;
   const targetView = reactEditor.views.resolve(block.id);
   const parentView = parentId ? reactEditor.views.resolve(parentId) : undefined;
-  const axis = parentView?.dropAxis;
+  const parentOutline = parentId ? blockContainment(reactEditor, parentId)?.childOutline : undefined;
+  const axis = parentOutline === "fixed" ? parentView?.dropAxis : undefined;
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
   const data: PageDragData = {
     sortChildren: axis,
