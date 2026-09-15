@@ -13,6 +13,48 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
+test("keeps the storage surface inside its selection and aligns root controls", async ({ page }) => {
+  const storage = page.locator('[data-journal-document="today"] [data-block-type="todo-storage"]');
+  const storageId = await storage.getAttribute("data-block-id");
+  if (!storageId) throw new Error("Expected seeded TODO storage ID");
+  await page.evaluate((id) => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    editor.selection.set({
+      type: "selection",
+      blocks: [{ id, start: 0, end: -1 }],
+      anchorBlockId: id,
+      focusBlockId: id,
+    });
+  }, storageId);
+
+  await expect(storage).toHaveAttribute("data-block-selected", "true");
+  const wrapper = storage.locator("xpath=parent::*");
+  expect(await wrapper.boundingBox()).toEqual(await storage.boundingBox());
+  const todoChildren = storage.locator(":scope > .page-block-children");
+  const columnChildren = page.locator(
+    '[data-block-type="columns-column"] > .page-block-children',
+  ).first();
+  expect(await todoChildren.evaluate((element) => getComputedStyle(element).paddingLeft))
+    .toBe(await columnChildren.evaluate((element) => getComputedStyle(element).paddingLeft));
+
+  const referenceRow = page.locator(
+    '[data-block-type="paragraph"] > .page-block-row:has([data-collapse-toggle])',
+  ).first();
+  const [referenceHandle, referenceToggle, storageHandle, storageToggle] = await Promise.all([
+    referenceRow.locator(".page-drag-handle").boundingBox(),
+    referenceRow.locator("[data-collapse-toggle]").boundingBox(),
+    storage.locator(":scope > .page-block-row .page-drag-handle").boundingBox(),
+    storage.locator(":scope > .page-block-row [data-collapse-toggle]").boundingBox(),
+  ]);
+  if (!referenceHandle || !referenceToggle || !storageHandle || !storageToggle) {
+    throw new Error("Expected root control geometry");
+  }
+  expect(storageHandle.x).toBeCloseTo(referenceHandle.x, 0);
+  expect(storageToggle.x).toBeCloseTo(referenceToggle.x, 0);
+});
+
 test("searches and filters only direct TODO children without persisting UI state", async ({ page }) => {
   const document = page.locator('[data-journal-document="today"]');
   const storage = document.locator('[data-block-type="todo-storage"]');

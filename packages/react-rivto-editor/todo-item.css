@@ -5,7 +5,11 @@
 
 .rivto-todo-storage {
   margin: 8px 0;
-  padding: 8px;
+}
+
+.rivto-todo-storage > .page-block {
+  margin: 0;
+  padding: 8px 7px;
   border: 1px solid #dee2e6;
   border-radius: 10px;
   background: #f8f9fa;
@@ -70,7 +74,7 @@
   box-shadow: 0 2px 8px rgb(25 113 194 / 12%);
 }
 
-.rivto-todo-storage:has(.page-drop-indicator) {
+.rivto-todo-storage > .page-block:has(.page-drop-indicator) {
   border-color: #74c0fc;
   box-shadow: 0 0 0 2px rgb(25 113 194 / 10%);
 }
@@ -101,9 +105,11 @@
 }
 
 .rivto-todo-storage > .page-block > .page-block-children {
+  box-sizing: border-box;
   position: relative;
   z-index: 0;
   margin: 8px 0 0;
+  padding-left: 24px;
 }
 
 .rivto-todo-storage > .page-block > .page-block-children .page-block-row::before {

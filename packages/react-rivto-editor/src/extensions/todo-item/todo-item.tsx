@@ -536,7 +536,7 @@ export function todoItemExtension(
             title: "TODO storage",
             defaultProps: createTodoStorageProps,
             propSchema: todoStoragePropsSchema,
-            metadata: { containment: { childOutline: "fixed", outlineFloor: true } },
+            metadata: { containment: { childOutline: "free", outlineFloor: true } },
           },
           render: TodoStorage,
           view: todoStorageView,

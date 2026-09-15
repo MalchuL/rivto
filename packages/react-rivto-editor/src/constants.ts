@@ -1,3 +1,10 @@
+/**
+ * Defines stable DOM attributes, selectors, and classes shared by React block
+ * renderers and delegated browser extensions. Attribute/selector pairs remain
+ * centralized so producers and consumers cannot silently drift apart.
+ *
+ * @module
+ */
 /** Stable DOM attribute placed on every BlockView container. */
 export const BLOCK_ID_ATTRIBUTE = "data-block-id";
 
@@ -34,6 +41,21 @@ export const BLOCK_SELECTION_ANCHOR_ATTRIBUTE = "data-block-selection-anchor";
 
 /** CSS selector matching renderer regions that may begin selection gestures. */
 export const BLOCK_SELECTION_ANCHOR_SELECTOR = `[${BLOCK_SELECTION_ANCHOR_ATTRIBUTE}]`;
+
+/**
+ * Opt-in marker for an interactive child that owns its pointer interaction.
+ *
+ * `useBlockEditing` places this marker alongside a pointer handler that prevents
+ * an ancestor preview from entering raw-text mode. Delegated extensions cannot
+ * depend on React propagation alone—especially for capture-phase clicks—so the
+ * marker also lets structural selection exclude the same region without knowing
+ * component-specific classes. It does not disable the marked element's own text
+ * editing; it prevents that interaction from activating the parent block.
+ */
+export const PREVENT_TEXT_EDITING_ATTRIBUTE = "data-prevent-text-editing";
+
+/** CSS selector matching regions that own interaction instead of their parent block. */
+export const PREVENT_TEXT_EDITING_SELECTOR = `[${PREVENT_TEXT_EDITING_ATTRIBUTE}]`;
 
 /**
  * CSS class for one block's own row (content and chrome).

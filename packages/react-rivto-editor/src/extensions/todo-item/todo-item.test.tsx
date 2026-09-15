@@ -8,6 +8,7 @@
 import type { ReactElement } from "react";
 import { createReactEditor } from "../../react-editor";
 import { createTestCoreEditor as createRivtoEditor } from "../../test-utils";
+import { indentBlocks } from "../../views";
 import {
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
@@ -73,8 +74,14 @@ describe("todoItemExtension", () => {
     ]);
     expect(reactEditor.views.resolve(empty).dropAxis).toBe("vertical");
     expect(editor.blocksRegistry.get(TODO_STORAGE_BLOCK_TYPE)?.metadata).toEqual({
-      containment: { childOutline: "fixed", outlineFloor: true },
+      containment: { childOutline: "free", outlineFloor: true },
     });
+
+    const firstTodo = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "First" });
+    const nestedTodo = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "Nested" }, firstTodo);
+    editor.blocks.moveBlocks([firstTodo, nestedTodo], empty, "inside");
+    indentBlocks(reactEditor, [nestedTodo]);
+    expect(editor.blocks.getParentId(nestedTodo)).toBe(firstTodo);
 
     reactEditor.destroy();
     editor.destroy();
