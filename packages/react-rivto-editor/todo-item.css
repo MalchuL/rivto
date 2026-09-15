@@ -28,10 +28,19 @@
 }
 
 .rivto-todo-storage-content {
+  position: relative;
   width: 100%;
 }
 
+[data-block-type="todo-storage"]:not(:has(> .page-block-children)):has(.rivto-todo-storage-content) {
+  min-height: 88px;
+}
+
 .rivto-todo-storage-drop-field {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  left: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -43,8 +52,13 @@
   background: #fff;
   box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
   color: #495057;
-  pointer-events: none;
+  cursor: text;
   transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.rivto-todo-storage-drop-field:focus-visible {
+  outline: 2px solid var(--rivto-accent, #6c5ce7);
+  outline-offset: 2px;
 }
 
 .rivto-todo-storage:has(> .page-block > .page-block-row:hover) .rivto-todo-storage-drop-field,
@@ -53,7 +67,7 @@
   box-shadow: 0 2px 8px rgb(25 113 194 / 12%);
 }
 
-.rivto-todo-storage:has(.page-drop-line) {
+.rivto-todo-storage:has(.page-drop-indicator) {
   border-color: #74c0fc;
   box-shadow: 0 0 0 2px rgb(25 113 194 / 10%);
 }
@@ -86,6 +100,24 @@
 .rivto-todo-storage > .page-block > .page-block-children {
   position: relative;
   z-index: 0;
+  margin: 8px 0 0;
+}
+
+.rivto-todo-storage > .page-block > .page-block-children .page-block-row::before {
+  inset: 0 -8px 0 -28px;
+  width: auto;
+}
+
+.rivto-todo-storage-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rivto-todo-storage-summary span {
+  color: #626f86;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .rivto-todo-storage-search {

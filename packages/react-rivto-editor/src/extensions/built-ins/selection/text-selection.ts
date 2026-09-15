@@ -32,7 +32,7 @@ import {
 } from "../../../managers";
 
 const INTERACTIVE_STRUCTURAL_TARGET_SELECTOR =
-  `${BLOCK_CONTENT_SELECTOR}, input, textarea, select, button, a`;
+  `${BLOCK_CONTENT_SELECTOR}, [data-prevent-text-editing], input, textarea, select, button, a`;
 
 /** Returns whether a control inside a structural anchor keeps its native click. */
 function isInteractiveStructuralTarget(target: Element): boolean {

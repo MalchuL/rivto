@@ -26,6 +26,7 @@ export const TODO_MODAL_TIMESTAMPS_CLASS = "rivto-todo-modal-timestamps";
 export const TODO_MODAL_CLOSE_CLASS = "rivto-todo-modal-close";
 export const TODO_STORAGE_CLASS = "rivto-todo-storage";
 export const TODO_STORAGE_CONTENT_CLASS = "rivto-todo-storage-content";
+export const TODO_STORAGE_SUMMARY_CLASS = "rivto-todo-storage-summary";
 export const TODO_STORAGE_TOOLBAR_CLASS = "rivto-todo-storage-toolbar";
 export const TODO_STORAGE_DROP_FIELD_CLASS = "rivto-todo-storage-drop-field";
 export const TODO_STORAGE_DROP_ICON_CLASS = "rivto-todo-storage-drop-icon";

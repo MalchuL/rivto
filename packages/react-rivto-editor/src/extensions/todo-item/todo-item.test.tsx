@@ -48,7 +48,7 @@ describe("todoItemExtension", () => {
     expect(() => todoItemExtension({ prompts: { todo: ["task", "task"] } })).not.toThrow();
   });
 
-  test("converts an empty leaf to storage and inserts after populated blocks", () => {
+  test("converts a leaf to storage in place and rejects populated containers", () => {
     const editor = createRivtoEditor();
     const reactEditor = createReactEditor({ editor, extensions: [todoItemExtension()] });
     const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" });
@@ -60,7 +60,8 @@ describe("todoItemExtension", () => {
       content: "Keep me",
       children: [{ type: "paragraph", content: "Keep child" }],
     }, empty);
-    reactEditor.slashCommands.execute("type.todo-storage", { blockId: populated });
+    expect(() => reactEditor.slashCommands.execute("type.todo-storage", { blockId: populated }))
+      .toThrow(/unavailable/);
     expect(editor.blocks.getBlock(populated)).toMatchObject({
       type: "paragraph",
       content: "Keep me",
@@ -69,8 +70,11 @@ describe("todoItemExtension", () => {
     expect(editor.blocks.getRootIds().map((id) => editor.blocks.getBlock(id)?.type)).toEqual([
       TODO_STORAGE_BLOCK_TYPE,
       "paragraph",
-      TODO_STORAGE_BLOCK_TYPE,
     ]);
+    expect(reactEditor.views.resolve(empty).dropAxis).toBe("vertical");
+    expect(editor.blocksRegistry.get(TODO_STORAGE_BLOCK_TYPE)?.metadata).toEqual({
+      containment: { childOutline: "fixed", outlineFloor: true },
+    });
 
     reactEditor.destroy();
     editor.destroy();

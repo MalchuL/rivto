@@ -14,12 +14,16 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 import type { EditorBlock } from "@chulane/rivto";
 import { z } from "zod";
-import { useBlock, useReactEditor } from "../../hooks";
+import { useBlockEditing, useReactEditor } from "../../hooks";
 import type { BlockWrapperProps } from "../../blocks";
+import { ContainerBlockView } from "../../views";
+import { createBlockViewContext } from "../../views/context";
 import type { TodoItemProps, TodoItemStatus } from "./todo-item";
 import { TODO_ITEM_BLOCK_TYPE } from "./todo-item";
 import {
@@ -33,6 +37,7 @@ import {
   TODO_STORAGE_MENU_CLASS,
   TODO_STORAGE_MENU_PANEL_CLASS,
   TODO_STORAGE_SEARCH_CLASS,
+  TODO_STORAGE_SUMMARY_CLASS,
   TODO_STORAGE_TOOLBAR_CLASS,
 } from "./todo-item-classes";
 import { TODO_STATUS_LABELS, TodoStatusOrder } from "./todo-status-order";
@@ -84,6 +89,9 @@ interface TodoStorageContextValue {
 }
 
 const TodoStorageContext = createContext<TodoStorageContextValue | undefined>(undefined);
+
+/** Shared vertical-container behavior used by keyboard and drag dispatchers. */
+export const todoStorageView = new ContainerBlockView();
 
 /** Creates persisted defaults without sharing the mutable status-order array. */
 export function createTodoStorageProps(): TodoStorageProps {
@@ -148,7 +156,7 @@ function toggleFilter<T>(current: ReadonlySet<T>, value: T): ReadonlySet<T> {
   return next;
 }
 
-/** Supplies local storage state and a card boundary around the complete subtree. */
+/** Supplies local storage state and a card boundary around the shared subtree. */
 function TodoStorageState({ block, children }: BlockWrapperProps) {
   const reactEditor = useReactEditor();
   const [query, setQuery] = useState("");
@@ -208,7 +216,8 @@ export function TodoStorageBlockWrapper({ block, children }: BlockWrapperProps) 
 /** Renders search, native filter menus, and persisted status-order controls. */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   const reactEditor = useReactEditor();
-  const { block } = useBlock(blockId);
+  const editing = useBlockEditing<TodoStorageProps>(blockId, { textEdit: false });
+  const block = editing.block;
   const context = useContext(TodoStorageContext);
   const filterMenu = useRef<HTMLDetailsElement>(null);
   const orderMenu = useRef<HTMLDetailsElement>(null);
@@ -249,13 +258,30 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
     projects: new Set(),
   });
 
+  /** Inserts the first writing block through the registered container view. */
+  const startWriting = (event: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>): void => {
+    if (block.children.length || event.defaultPrevented) return;
+    if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const root = reactEditor.events.getRoot();
+    const viewContext = root ? createBlockViewContext(reactEditor, blockId, root) : undefined;
+    if (viewContext) todoStorageView.insertFirstChild(viewContext);
+  };
+
+  if (block.listProps.collapsed === true) {
+    const itemCount = block.children.length;
+    return (
+      <div {...editing.attributes} className={TODO_STORAGE_SUMMARY_CLASS}>
+        <strong>TODO storage</strong>
+        <span>{itemCount} {itemCount === 1 ? "item" : "items"}</span>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={TODO_STORAGE_CONTENT_CLASS}
-      data-block-drop-container=""
-      data-block-sort-children="vertical"
-    >
-      <div className={TODO_STORAGE_TOOLBAR_CLASS}>
+    <div {...editing.attributes} className={TODO_STORAGE_CONTENT_CLASS}>
+      <div {...editing.preventTextEditingAttributes} className={TODO_STORAGE_TOOLBAR_CLASS}>
         <input
           className={TODO_STORAGE_SEARCH_CLASS}
           type="search"
@@ -316,7 +342,15 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
         </details>
       </div>
       {block.children.length === 0 && (
-        <div className={TODO_STORAGE_DROP_FIELD_CLASS} aria-label="Drop blocks into TODO storage">
+        <div
+          {...editing.preventTextEditingAttributes}
+          className={TODO_STORAGE_DROP_FIELD_CLASS}
+          role="button"
+          tabIndex={0}
+          aria-label="Drop blocks into TODO storage"
+          onClick={startWriting}
+          onKeyDown={startWriting}
+        >
           <span className={TODO_STORAGE_DROP_ICON_CLASS} aria-hidden="true">↓</span>
           <span className={TODO_STORAGE_DROP_COPY_CLASS}>
             <strong>Drag a task here</strong>

@@ -50,6 +50,7 @@ import {
   TodoStorageBlockWrapper,
   TodoStorageVisibility,
   createTodoStorageProps,
+  todoStorageView,
   todoStoragePropsSchema,
 } from "./todo-storage";
 
@@ -535,8 +536,19 @@ export function todoItemExtension(
             title: "TODO storage",
             defaultProps: createTodoStorageProps,
             propSchema: todoStoragePropsSchema,
+            metadata: { containment: { childOutline: "fixed", outlineFloor: true } },
           },
           render: TodoStorage,
+          view: todoStorageView,
+          slashCommand: {
+            id: "type.todo-storage",
+            title: "TODO storage",
+            group: "Turn into",
+            keywords: ["tasks", "todos"],
+            isAvailable: ({ blockId }) => (
+              reactEditor.editor.blocks.getBlock(blockId)?.children.length === 0
+            ),
+          },
         }),
         reactEditor.blocks.register({
           definition: {
@@ -546,22 +558,6 @@ export function todoItemExtension(
             propSchema: todoItemPropsSchema,
           },
           render: ({ blockId }) => <TodoItem blockId={blockId} propertiesModal={PropertiesModal} />,
-        }),
-        reactEditor.slashCommands.register({
-          id: "type.todo-storage",
-          title: "TODO storage",
-          group: "Blocks",
-          keywords: ["tasks", "todos"],
-          isAvailable: ({ blockId }) => reactEditor.editor.blocks.getBlock(blockId)?.type !== TODO_STORAGE_BLOCK_TYPE,
-          execute: ({ blockId }) => {
-            const block = reactEditor.editor.blocks.getBlock(blockId);
-            if (!block) return;
-            if (!block.content && block.children.length === 0) {
-              reactEditor.editor.blocks.setBlockType(blockId, TODO_STORAGE_BLOCK_TYPE);
-            } else {
-              reactEditor.blocks.insertBlock({ type: TODO_STORAGE_BLOCK_TYPE, content: "" }, blockId);
-            }
-          },
         }),
         reactEditor.surfaces.registerBlockWrapper("block", TodoStorageVisibility),
         reactEditor.surfaces.registerBlockWrapper("edgeless", TodoStorageVisibility),

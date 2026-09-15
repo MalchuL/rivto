@@ -7,6 +7,8 @@
  */
 import { expect, test } from "@playwright/test";
 
+const DROP_INDICATOR_CLASS = "page-drop-indicator";
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
@@ -198,16 +200,23 @@ test("reorders visible tasks while a filter is active in Manual mode", async ({ 
   await storage.getByLabel("Status", { exact: true }).uncheck();
   await storage.getByText("Filter", { exact: true }).click();
   await storage.getByLabel("Rivto", { exact: true }).check();
+  await storage.getByText("Filter", { exact: true }).click();
 
   const source = storage.locator('[data-block-type="todo-item"]').filter({ hasText: "Set up the workspace" });
   const target = storage.locator('[data-block-type="todo-item"]').filter({ hasText: "Build the editor extension" });
-  const handleBox = await source.locator(".page-drag-handle").boundingBox();
+  const sourceRow = source.locator(":scope > .page-block-row");
+  const handle = source.locator(".page-drag-handle");
+  await sourceRow.hover();
+  await handle.hover();
+  const handleBox = await handle.boundingBox();
   const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
   if (!handleBox || !targetBox) throw new Error("Expected filtered TODO drag geometry");
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
+  await page.mouse.move(handleBox.x + 8, handleBox.y + 8, { steps: 3 });
   await page.mouse.move(targetBox.x + 2, targetBox.y + 1, { steps: 12 });
-  await expect(storage.locator(".page-drop-line")).toBeVisible();
+  await expect(source).toHaveAttribute("data-dragging", "true");
+  await expect(storage.locator(`.${DROP_INDICATOR_CLASS}`)).toBeVisible();
   await page.mouse.up();
 
   await expect.poll(() => page.evaluate((parentId) => (
@@ -247,4 +256,17 @@ test("creates a TODO storage from the slash menu", async ({ page }) => {
   await page.mouse.up();
   await expect(emptyStorage.locator(`[data-block-id="${sourceId}"]`)).toBeVisible();
   await expect(dropField).toHaveCount(0);
+});
+
+test("starts writing in an empty TODO storage from the keyboard", async ({ page }) => {
+  const storageId = await page.evaluate(() => {
+    const { editor } = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    }).__rivtoDemo.editor;
+    return editor.blocks.insertBlock({ type: "todo-storage", content: "" });
+  });
+  const storage = page.locator(`[data-block-id="${storageId}"]`);
+  await storage.getByRole("button", { name: "Drop blocks into TODO storage" }).press("Enter");
+  await expect(storage.locator(':scope > .page-block-children > [data-block-type="paragraph"]')).toHaveCount(1);
+  await expect(storage.locator("[data-block-content]")).toBeFocused();
 });

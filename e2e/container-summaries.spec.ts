@@ -123,11 +123,21 @@ test("renders aligned contentless container summaries from reactive block snapsh
   }
 });
 
+test("renders a compact TODO storage summary while collapsed", async ({ page }) => {
+  await page.goto("/");
+  const storage = page.locator('[data-block-type="todo-storage"]');
+  await storage.locator(`:scope > .${ROW_CLASS} [data-collapse-toggle]`).click();
+  await expect(storage.getByText("TODO storage", { exact: true })).toBeVisible();
+  await expect(storage.getByText("3 items", { exact: true })).toBeVisible();
+  await expect(storage.locator(":scope > .page-block-children")).toHaveCount(0);
+  expect((await storage.boundingBox())!.height).toBeLessThan(88);
+});
+
 test("reveals root container handles across their body and lateral whitespace", async ({ page }) => {
   await page.goto("/");
   const surfaceBox = (await page.locator(`.${PAGE_SURFACE_CLASS}`).first().boundingBox())!;
 
-  for (const type of ["bento", "table", "columns", "kanban"] as const) {
+  for (const type of ["bento", "table", "columns", "kanban", "todo-storage"] as const) {
     const block = page.locator(`[data-block-type="${type}"]`).first();
     await block.scrollIntoViewIfNeeded();
     const body = block.locator(":scope > .page-block-children");
