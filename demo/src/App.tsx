@@ -19,6 +19,9 @@ import {
   pageDragExtension,
   SEPARATOR_BLOCK_TYPE,
   standardPreset,
+  TODO_ITEM_BLOCK_TYPE,
+  TODO_STORAGE_BLOCK_TYPE,
+  todoItemExtension,
   useEditor,
   useEditorMode,
 } from "@chulane/rivto-react";
@@ -217,6 +220,7 @@ function createDemoEditor() {
     keymap: alternateKeymap,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      todoItemExtension({ prompts: { todo: ["task"] } }),
       pageDragExtension(),
       ...edgelessPreset(),
       edgelessVisuals,
@@ -400,6 +404,41 @@ function createDemoEditor() {
       }
     });
   }
+  const todoStorageId = editor.blocks.insertBlock({
+    type: TODO_STORAGE_BLOCK_TYPE,
+    content: "",
+  });
+  const todoId = editor.blocks.insertBlock({
+    type: TODO_ITEM_BLOCK_TYPE,
+    content: "Review the project brief",
+    props: {
+      status: "todo",
+      description: "Confirm scope and acceptance criteria.",
+      priority: 2,
+      project: "Planning",
+    },
+  }, todoStorageId);
+  editor.blocks.indentBlock(todoId);
+  const doingId = editor.blocks.insertBlock({
+    type: TODO_ITEM_BLOCK_TYPE,
+    content: "Build the editor extension",
+    props: {
+      status: "doing",
+      description: "Prompt conversion and task properties are in progress.",
+      priority: 1,
+      project: "Rivto",
+    },
+  }, todoId);
+  editor.blocks.insertBlock({
+    type: TODO_ITEM_BLOCK_TYPE,
+    content: "Set up the workspace",
+    props: {
+      status: "done",
+      description: "Core packages and demo are ready.",
+      priority: 3,
+      project: "Rivto",
+    },
+  }, doingId);
   seedEdgelessShowcase(edgelessVisuals);
   editor.history.clear();
 

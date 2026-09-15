@@ -42,6 +42,19 @@ const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unk
 };
 
 /**
+ * Resolves one detached set of defaults for a creation or conversion.
+ *
+ * @param definition - Registered definition owning static or dynamic defaults.
+ * @returns Defaults evaluated exactly once for the current operation.
+ */
+const resolveDefaultProps = (definition: BlockDefinition): Record<string, unknown> => {
+  const defaults = typeof definition.defaultProps === "function"
+    ? definition.defaultProps()
+    : definition.defaultProps;
+  return defaults ?? {};
+};
+
+/**
  * Validates complete block properties when a definition supplies a schema.
  *
  * Object schemas validate their declared fields while preserving additional
@@ -148,7 +161,7 @@ export class BlockRegistryManager {
    */
   prepare(input: EditorBlockInput): EditorBlockInput {
     const definition = this.require(input.type);
-    const props = mergeProps(definition.defaultProps ?? {}, input.props ?? {});
+    const props = mergeProps(resolveDefaultProps(definition), input.props ?? {});
     return { ...input, props: validateProps(definition, props) };
   }
 
@@ -167,7 +180,7 @@ export class BlockRegistryManager {
    */
   prepareTypeChange(type: string, current: Record<string, unknown>): Record<string, unknown> {
     const definition = this.require(type);
-    const defaults = definition.defaultProps ?? {};
+    const defaults = resolveDefaultProps(definition);
     const props = mergeProps(defaults, current);
     const shape = (definition.propSchema as { shape?: Record<string, ZodType> } | undefined)?.shape;
     if (shape) {

@@ -38,6 +38,26 @@ export {
   separatorBlockExtension,
 } from "./extensions/built-ins/separator/separator-block";
 export {
+  TODO_ITEM_BLOCK_TYPE,
+  TODO_STORAGE_BLOCK_TYPE,
+  DefaultTodoItemPropertiesModal,
+  TodoItem,
+  TodoStorage,
+  todoItemExtension,
+} from "./extensions/todo-item/todo-item";
+export type {
+  TodoItemBlock,
+  TodoItemComponentProps,
+  TodoItemExtensionOptions,
+  TodoItemPropertiesModalProps,
+  TodoItemPropertiesPatch,
+  TodoItemProps,
+  TodoItemStatus,
+  TodoStorageComponentProps,
+  TodoStorageOrderMode,
+  TodoStorageProps,
+} from "./extensions/todo-item/todo-item";
+export {
   createReactEditor,
 } from "./react-editor";
 export type {

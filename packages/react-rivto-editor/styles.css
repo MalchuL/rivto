@@ -1,3 +1,5 @@
+@import "./todo-item.css";
+
 :root {
   --rivto-default-block-height: 1.5em;
   --rivto-block-surface-padding: 56px 64px;
@@ -229,6 +231,7 @@
   cursor: pointer;
 }
 
+
 .page-drag-handle {
   position: absolute;
   top: 0;
@@ -259,19 +262,19 @@
   pointer-events: auto;
 }
 
-:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"])
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])
   > .page-block-row > .rivto-slot > .page-drag-handle {
   pointer-events: auto;
 }
 
-:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"]) {
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"]) {
   position: relative;
 }
 
 /* Root rows are only one line tall; side strips extend their hover behavior
    beside the full container without covering its interactive body. */
-:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"])::before,
-:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"])::after {
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::before,
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::after {
   position: absolute;
   z-index: 0;
   top: 0;
@@ -281,15 +284,15 @@
   content: "";
 }
 
-:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"])::before {
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::before {
   right: 100%;
 }
 
-:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"])::after {
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::after {
   left: 100%;
 }
 
-:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"]):hover
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"]):hover
   > .page-block-row > .rivto-slot > .page-drag-handle {
   opacity: 1;
 }

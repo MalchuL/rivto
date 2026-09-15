@@ -14,6 +14,7 @@ import { isStructuralSelection } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_SELECTION_ANCHOR_SELECTOR,
+  PREVENT_TEXT_EDITING_SELECTOR,
 } from "../../../constants";
 import type { ReactEditor } from "../../../types";
 import { isElementNode } from "../../../managers/events/dom-nodes";
@@ -31,12 +32,29 @@ import {
   type DOMSelectionPoint,
 } from "../../../managers";
 
-const INTERACTIVE_STRUCTURAL_TARGET_SELECTOR =
-  `${BLOCK_CONTENT_SELECTOR}, input, textarea, select, button, a`;
+/**
+ * Matches targets that must be excluded from whole-block structural selection.
+ *
+ * This is an exclusion list, not a list of places where selection may start.
+ * Plain structural-anchor space starts block selection; native controls keep
+ * their browser behavior instead. Accessible custom controls such as an empty
+ * container's `div[role="button"]` use the explicit marker supplied by
+ * `preventTextEditingAttributes`, avoiding component-specific selectors here.
+ * Editable block content is also excluded from the plain-click structural path,
+ * while the pointer-start path handles its native text selection separately.
+ */
+const STRUCTURAL_SELECTION_EXCLUDED_TARGET_SELECTOR =
+  `${BLOCK_CONTENT_SELECTOR}, ${PREVENT_TEXT_EDITING_SELECTOR}, input, textarea, select, button, a`;
 
-/** Returns whether a control inside a structural anchor keeps its native click. */
-function isInteractiveStructuralTarget(target: Element): boolean {
-  return Boolean(target.closest(INTERACTIVE_STRUCTURAL_TARGET_SELECTOR));
+/**
+ * Reports whether a target must retain native interaction instead of starting
+ * whole-block structural selection.
+ *
+ * @param target - Deepest DOM element reached by the pointer or click event.
+ * @returns Whether the target or one of its ancestors is explicitly excluded.
+ */
+function isExcludedFromStructuralSelection(target: Element): boolean {
+  return Boolean(target.closest(STRUCTURAL_SELECTION_EXCLUDED_TARGET_SELECTOR));
 }
 
 /**
@@ -156,10 +174,17 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
         pointer = null;
         ownsCrossBlockSelection = false;
       } else if (event.button === 0) {
-        const selectionAnchor = isElementNode(event.target)
-          ? event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR)
-          : null;
-        if (selectionAnchor && root.contains(selectionAnchor)) {
+        // Keep the original event target, not only its owning anchor. Any nested
+        // pointer-driven control and structural selection receive the same
+        // pointerdown; checking only the anchor would start both gestures. For
+        // example, dragging a sortable row could also select its container.
+        // Editable anchors still enter the text-selection path, while structural
+        // anchors start only from non-interactive surface space.
+        const target = isElementNode(event.target) ? event.target : null;
+        const selectionAnchor = target?.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);
+        if (target && selectionAnchor && root.contains(selectionAnchor) && (
+          selectionAnchor.isContentEditable || !isExcludedFromStructuralSelection(target)
+        )) {
           if (releaseTimer !== undefined) view?.clearTimeout(releaseTimer);
           ownsCrossBlockSelection = false;
 
@@ -378,7 +403,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
         event.metaKey ||
         event.shiftKey ||
         !isElementNode(event.target) ||
-        isInteractiveStructuralTarget(event.target)
+        isExcludedFromStructuralSelection(event.target)
       ) return false;
       const anchor = event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);
       if (!anchor || anchor.isContentEditable || !root.contains(anchor)) return false;
