@@ -11,6 +11,8 @@
 export * from "./extensions/built-ins/built-ins";
 export * from "./extensions/block-drag";
 export * from "./extensions/edgeless";
+export * from "./extensions/file";
+export * from "./extensions/image";
 export * from "./extensions/built-ins/separator/separator-block";
 export {
   DEFAULT_WRITING_BLOCK_TYPE,

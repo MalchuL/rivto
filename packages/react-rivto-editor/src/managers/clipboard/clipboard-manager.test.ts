@@ -23,4 +23,40 @@ describe("ClipboardManager", () => {
     reactEditor.destroy();
     editor.destroy();
   });
+
+  test("uses the host writer with an octet-stream fallback", async () => {
+    const editor = createTestCoreEditor();
+    const writes: string[] = [];
+    const reactEditor = createReactEditor({
+      editor,
+      extensions: [{
+        id: "clipboard.writer",
+        setup: (runtime) => runtime.clipboard.registerWriter({
+          id: "host",
+          supports: (type) => type === "application/octet-stream",
+          write: (input) => { writes.push(input.mimeType); },
+        }),
+      }],
+    });
+
+    expect(reactEditor.clipboard.canWriteBinary("application/pdf")).toBe(true);
+    await expect(reactEditor.clipboard.writeBinary({
+      name: "report.pdf",
+      mimeType: "application/pdf",
+      data: new Blob(["pdf"], { type: "application/pdf" }),
+    })).resolves.toBe(true);
+    expect(writes).toEqual(["application/octet-stream"]);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("does not claim an unavailable browser binary clipboard", () => {
+    const editor = createTestCoreEditor();
+    const reactEditor = createReactEditor({ editor });
+
+    expect(reactEditor.clipboard.canWriteBinary("image/jpeg")).toBe(false);
+
+    reactEditor.destroy();
+    editor.destroy();
+  });
 });

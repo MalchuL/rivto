@@ -18,6 +18,13 @@ import {
   replaceMarkdownCode,
   type PositionedNode,
 } from "./markdown-code";
+import { ImageView } from "../extensions/image/image-view";
+import {
+  remarkImageMacros,
+  replaceImageMacro,
+} from "../extensions/image/image-macro";
+import { remarkFileMacros } from "../extensions/file/file-macro";
+import { RegisteredFileView } from "../extensions/file/file-view";
 
 /** Memoized expensive Markdown parser boundary keyed by source and renderer options. */
 const MarkdownPreview = memo(function MarkdownPreview({
@@ -33,7 +40,7 @@ const MarkdownPreview = memo(function MarkdownPreview({
     <ReactMarkdown
       components={components}
       urlTransform={transformUrl}
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkImageMacros, remarkFileMacros]}
       rehypePlugins={[rehypeCodeFenceMetadata, [rehypeHighlight, {
         detect: true,
         plainText: ["text", "txt", "plaintext"],
@@ -84,14 +91,23 @@ export function MarkdownContent({
     return /^(?!javascript:|vbscript:|data:)[a-z][a-z\d+.-]*:/i.test(url) ? url : safe;
   }, [onLinkClick]);
   const components = useMemo<Components>(() => ({
-    a: ({ node: _node, href = "", ...props }) => (
-      <a
-        {...props}
-        href={href}
-        tabIndex={-1}
-        onClick={(event) => onLinkClick?.({ blockId, href, event })}
-      />
-    ),
+    a: ({ node, href = "", ...props }) => {
+      const properties = node?.properties ?? {};
+      const uri = properties["data-rivto-file-uri"];
+      const name = properties["data-rivto-file-name"];
+      const mimeType = properties["data-rivto-file-type"];
+      const rawSize = properties["data-rivto-file-size"];
+      if (typeof uri === "string" && typeof name === "string" && typeof mimeType === "string") {
+        const size = rawSize === undefined ? undefined : Number(rawSize);
+        return <RegisteredFileView reference={{ uri, name, mimeType, size: Number.isSafeInteger(size) ? size : undefined }} />;
+      }
+      return <a
+          {...props}
+          href={href}
+          tabIndex={-1}
+          onClick={(event) => onLinkClick?.({ blockId, href, event })}
+        />;
+    },
     pre: (props) => (
       <MarkdownCodeBlock
         {...props}
@@ -99,6 +115,40 @@ export function MarkdownContent({
         preventTextEditingAttributes={editing.preventTextEditingAttributes}
       />
     ),
+    img: ({ node, alt = "", width, height, ...props }) => {
+      const properties = node?.properties ?? {};
+      const macroUri = properties["data-rivto-image-uri"];
+      const uri = typeof macroUri === "string" ? macroUri : props.src;
+      const start = Number(properties["data-rivto-image-start"] ?? node?.position?.start.offset);
+      const end = Number(properties["data-rivto-image-end"] ?? node?.position?.end.offset);
+      if (typeof uri !== "string" || !Number.isSafeInteger(start) || !Number.isSafeInteger(end)) {
+        return <img {...props} alt={alt} width={width} height={height} />;
+      }
+      return <ImageView
+        kind="inline"
+        uri={uri}
+        alt={alt}
+        width={typeof width === "number" ? width : Number(width) || undefined}
+        height={typeof height === "number" ? height : Number(height) || undefined}
+        onChange={(patch) => {
+          if (patch.reset && typeof macroUri !== "string") return;
+          const current = editor.blocks.getBlock(blockId)?.content ?? "";
+          const next = patch.reset
+            ? { uri, alt }
+            : {
+                uri,
+                alt: patch.alt ?? alt,
+                width: patch.width ?? (Number(width) || undefined),
+                height: patch.height ?? (Number(height) || undefined),
+              };
+          editor.blocks.updateBlock(blockId, {
+            content: replaceImageMacro(current, { start, end }, {
+              ...next,
+            }),
+          });
+        }}
+      />;
+    },
   }), [blockId, editing.preventTextEditingAttributes, onLinkClick, updateCode]);
 
   return (

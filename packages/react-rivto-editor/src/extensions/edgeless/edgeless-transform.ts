@@ -16,6 +16,7 @@ import {
 } from "./edgeless-transform-connectors";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 import { elementContainsBlock } from "../../elements/block-element-projection";
+import { imageResizeMode } from "../image/image-view";
 import {
   applyRotatedResize,
   connectorLabelCssDegrees,
@@ -75,6 +76,7 @@ interface TransformStart {
   guides: readonly SnapGuide[];
   snapDisabled: boolean;
   rotationSnapped: boolean;
+  freeResize: boolean;
   previewRotation?: number;
 }
 
@@ -138,7 +140,14 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     if (active.kind === "move") return { ...base, x: base.x + dx, y: base.y + dy };
     if (active.kind === "rotate") return base;
     const min = minSize(id);
-    return applyRotatedResize(base, dx, dy, active.corner ?? "se", min.width, min.height, rotation(id));
+    const resized = applyRotatedResize(base, dx, dy, active.corner ?? "se", min.width, min.height, rotation(id));
+    if (
+      editor.elements.getElement(id)?.type !== "image"
+      || imageResizeMode(reactEditor, "element") === "stretch"
+      || active.freeResize
+    ) return resized;
+    const width = Math.max(min.width, resized.width);
+    return { ...resized, width, height: Math.max(min.height, width * base.height / base.width) };
   };
   const targetId = (target: HTMLElement): string => target.dataset.edgelessRoot ?? target.dataset.edgelessObjectId ?? target.dataset.edgelessGroupBoundId ?? "";
   const rotationAt = (root: HTMLElement, active: TransformStart, clientX: number, clientY: number, shiftKey = false): number => {
@@ -573,6 +582,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       guides: [],
       snapDisabled: event.altKey,
       rotationSnapped: event.shiftKey,
+      freeResize: event.shiftKey,
       previewRotation: rotating ? rotation(id) : undefined,
     };
     root.dataset.transforming = start.kind;
@@ -601,6 +611,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     }
     const zoom = Number(root.dataset.edgelessZoom) || 1;
     active.snapDisabled = event.altKey;
+    active.freeResize = event.shiftKey;
     const result = snappedDelta(root, active, canvasDelta(event.clientX - active.x, zoom), canvasDelta(event.clientY - active.y, zoom), active.snapDisabled);
     if (!active.moved && Math.hypot(result.dx, result.dy) < 2) return false;
     active.moved = true;

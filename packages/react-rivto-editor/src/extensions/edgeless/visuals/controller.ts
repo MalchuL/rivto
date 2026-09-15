@@ -32,7 +32,7 @@ import { DEFAULT_PLACE_SIZE } from "./utils/creation-geometry";
 
 const DEFAULT_FRAME: VisualFrame = { x: 120, y: 120, width: 160, height: 120 };
 type VisualCommandPayload<Name extends keyof EdgelessVisualCommandMap> = EdgelessVisualCommandMap[Name]["payload"];
-const VISUAL_TYPES = new Set(["sticker", "drawing", "rectangle", "ellipse", "text", "connector"]);
+const VISUAL_TYPES = new Set(["sticker", "drawing", "rectangle", "ellipse", "text", "image", "connector"]);
 const copy = <Value>(value: Value): Value => structuredClone(value);
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const isHorizontalAlign = (value: unknown): value is "left" | "center" | "right" => value === "left" || value === "center" || value === "right";
@@ -111,13 +111,36 @@ export class EdgelessVisualController {
   /** @returns Detached visual views backed by first-class elements. */
   getVisuals(): EdgelessVisual[] {
     return this.reactEditor.editor.elements.getElements().flatMap((element) => {
-      if (!VISUAL_TYPES.has(element.type)) return [];
+      if (!VISUAL_TYPES.has(element.type)) {
+        if (!this.reactEditor.files.getElementView(element.type)) return [];
+        const rotation = normalizeRotation(typeof element.props.rotation === "number" ? element.props.rotation : 0);
+        return [{
+          id: element.id,
+          kind: "file-handler",
+          elementType: element.type,
+          frame: { ...element.frame },
+          zIndex: element.zIndex,
+          rotation,
+          props: { ...element.props, rotation },
+        }];
+      }
       if (element.type === "sticker" && typeof element.props.text !== "string") return [];
+      if (element.type === "image" && (
+        typeof element.props.uri !== "string"
+        || typeof element.props.alt !== "string"
+        || typeof element.props.intrinsicWidth !== "number"
+        || typeof element.props.intrinsicHeight !== "number"
+      )) return [];
       const preview = this.propertyPreview.get(element.id);
       const props = { ...element.props, ...preview };
       if (element.type !== "connector") props.rotation = normalizeRotation(typeof props.rotation === "number" ? props.rotation : 0);
       // Older documents may lack label fields on shapes/connectors; fill session defaults.
-      if (element.type === "rectangle" || element.type === "ellipse") {
+      if (element.type === "image") {
+        Object.assign(props, {
+          name: typeof props.name === "string" && props.name ? props.name : props.alt || "image",
+          mimeType: typeof props.mimeType === "string" && props.mimeType ? props.mimeType : "application/octet-stream",
+        });
+      } else if (element.type === "rectangle" || element.type === "ellipse") {
         Object.assign(props, {
           text: typeof props.text === "string" ? props.text : this.defaults.shape.text,
           color: typeof props.color === "string" ? props.color : this.defaults.shape.color,
@@ -270,7 +293,22 @@ export class EdgelessVisualController {
     let frame = this.frame({ ...DEFAULT_FRAME, ...payload.frame });
     const zIndex = Math.max(0, ...this.reactEditor.editor.elements.getElements().map((element) => element.zIndex)) + 1;
     let props: Record<string, unknown>;
-    if (payload.kind === "sticker") {
+    if (payload.kind === "image") {
+      if (!payload.uri || !Number.isFinite(payload.intrinsicWidth) || !Number.isFinite(payload.intrinsicHeight)
+        || payload.intrinsicWidth <= 0 || payload.intrinsicHeight <= 0) {
+        throw new TypeError("Image requires a URI and positive intrinsic dimensions");
+      }
+      props = {
+        rotation: normalizeRotation(payload.rotation ?? 0),
+        uri: payload.uri,
+        alt: payload.alt ?? "",
+        intrinsicWidth: payload.intrinsicWidth,
+        intrinsicHeight: payload.intrinsicHeight,
+        name: payload.name ?? payload.alt ?? "image",
+        mimeType: payload.mimeType ?? "application/octet-stream",
+        ...(payload.size === undefined ? {} : { size: payload.size }),
+      };
+    } else if (payload.kind === "sticker") {
       props = { ...this.defaults.sticker, rotation: normalizeRotation(payload.rotation ?? 0), text: payload.text ?? "Sticky note", fill: payload.fill ?? this.defaults.sticker.fill, color: payload.color ?? this.defaults.sticker.color, fontFamily: payload.fontFamily ?? this.defaults.sticker.fontFamily, fontSize: payload.fontSize ?? this.defaults.sticker.fontSize, align: payload.align ?? this.defaults.sticker.align, verticalAlign: payload.verticalAlign ?? this.defaults.sticker.verticalAlign };
     } else if (payload.kind === "drawing") {
       if (!Array.isArray(payload.points) || payload.points.length < 2) throw new Error("Drawing requires at least two points");
@@ -709,6 +747,10 @@ export class EdgelessVisualController {
   private clipboardText(bundle: ClipboardBundle): string {
     const blockText = bundle.blocks.map((block) => block.content).filter(Boolean);
     const visualText = (bundle.elements ?? []).flatMap((element) => {
+      if (element.type === "image" && typeof element.props.uri === "string") {
+        const alt = typeof element.props.alt === "string" ? element.props.alt : "";
+        return [`{{image path=${JSON.stringify(element.props.uri)} alt=${JSON.stringify(alt)}}}`];
+      }
       if ((element.type === "text" || element.type === "sticker" || element.type === "rectangle" || element.type === "ellipse" || element.type === "connector") && typeof element.props.text === "string" && element.props.text) {
         return [element.props.text];
       }
