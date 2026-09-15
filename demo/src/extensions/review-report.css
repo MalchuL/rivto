@@ -1,0 +1,213 @@
+/**
+ * Extension-local presentation for Review report blocks and canvas elements.
+ *
+ * All selectors are scoped to the extension's named classes so the optional
+ * demo feature does not alter built-in editor controls or document content.
+ */
+
+.review-report-block,
+.review-report-element {
+  --review-accent: #6d4aff;
+  --review-accent-deep: #4f2bd4;
+  --review-border: #ddd6fe;
+  --review-ink: #241b45;
+  --review-muted: #71678b;
+  display: grid;
+  gap: 12px;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid var(--review-border);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 100% 0, rgb(109 74 255 / 10%), transparent 42%),
+    linear-gradient(145deg, #fff 0%, #faf8ff 100%);
+  box-shadow: 0 8px 28px rgb(46 28 105 / 9%);
+  color: var(--review-ink);
+}
+
+.review-report-block::before,
+.review-report-element::before {
+  content: "Review report";
+  width: max-content;
+  padding: 4px 8px;
+  border: 1px solid rgb(109 74 255 / 18%);
+  border-radius: 999px;
+  background: rgb(109 74 255 / 9%);
+  color: var(--review-accent-deep);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.review-report-element-layer { display: contents; }
+
+.review-report-element {
+  position: absolute;
+  overflow: auto;
+  cursor: move;
+  pointer-events: auto;
+}
+
+.review-report-element[data-selected] {
+  border-color: var(--review-accent);
+  box-shadow: 0 0 0 3px rgb(109 74 255 / 18%), 0 12px 32px rgb(46 28 105 / 18%);
+}
+
+.review-report-problem {
+  min-height: 72px;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid #e6e1f2;
+  border-radius: 10px;
+  outline: none;
+  background: rgb(255 255 255 / 82%);
+  color: var(--review-ink);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+.review-report-problem:hover { background: #fff; }
+
+.review-report-problem:focus {
+  border-color: var(--review-accent);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgb(109 74 255 / 12%);
+}
+
+.review-report-problem:empty::before {
+  color: #978daa;
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+.review-report-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-report-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--review-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.review-report-controls input[type="number"] {
+  width: 58px;
+  box-sizing: border-box;
+  padding: 6px 7px;
+  border: 1px solid #ddd6e9;
+  border-radius: 8px;
+  outline: none;
+  background: #fff;
+  color: var(--review-ink);
+  font: inherit;
+}
+
+.review-report-controls input[type="number"]:focus {
+  border-color: var(--review-accent);
+  box-shadow: 0 0 0 2px rgb(109 74 255 / 12%);
+}
+
+.review-report-include {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgb(109 74 255 / 7%);
+  cursor: pointer;
+}
+
+.review-report-include input {
+  margin: 0;
+  accent-color: var(--review-accent);
+}
+
+.review-report-controls button {
+  padding: 7px 11px;
+  border: 1px solid #d5ccef;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--review-accent-deep);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: transform 100ms ease, border-color 100ms ease, box-shadow 100ms ease;
+}
+
+.review-report-controls button:first-of-type {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--review-accent), var(--review-accent-deep));
+  box-shadow: 0 5px 12px rgb(79 43 212 / 22%);
+  color: #fff;
+}
+
+.review-report-controls button:hover:not(:disabled) {
+  border-color: var(--review-accent);
+  box-shadow: 0 4px 10px rgb(79 43 212 / 16%);
+  transform: translateY(-1px);
+}
+
+.review-report-controls button:focus-visible {
+  outline: 3px solid rgb(109 74 255 / 22%);
+  outline-offset: 2px;
+}
+
+.review-report-controls button:disabled {
+  cursor: wait;
+  opacity: .58;
+}
+
+.review-report-controls [role="alert"] {
+  width: 100%;
+  color: #b42318;
+  font-size: 12px;
+}
+
+.review-report-status {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #eef9f2;
+  color: #247a48;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.review-report-preview {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #e4deef;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 64%);
+}
+
+.review-report-preview summary {
+  padding: 8px 10px;
+  color: var(--review-muted);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.review-report-preview pre {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  padding: 11px;
+  background: #221d30;
+  color: #f4f0ff;
+  font: 11px/1.5 ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-report-problem,
+  .review-report-controls button { transition: none; }
+}
