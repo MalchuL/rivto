@@ -400,6 +400,7 @@ export function PageDragProvider({
    * pass and re-reads the live operation; the pointer path already has the
    * cursor and resolves immediately.
    *
+   * @param _event - Move event; ignored because it snapshots the stale position.
    * @param manager - Manager owning the live operation.
    */
   const handleDragMove = (_event: unknown, manager: DragDropManager) => {
