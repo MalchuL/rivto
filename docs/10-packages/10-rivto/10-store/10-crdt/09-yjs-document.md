@@ -11,7 +11,7 @@
 - **Аргументы:** `id: string`; необязательный `doc: Y.Doc`.
 - **Создаёт:** новый `YjsDoc`, использующий переданный `Y.Doc` или новый нативный документ.
 
-Создаёт адаптер с логическим идентификатором `id`. Переданный `Y.Doc` будет обёрнут; без него создаётся новый документ. Конструктор также создаёт `YjsInstantiator` и реестр провайдеров.
+Создаёт адаптер с логическим идентификатором `id`. Переданный `Y.Doc` будет обёрнут; без него создаётся новый документ. Конструктор также создаёт реестр провайдеров.
 
 ```ts
 const fresh = new YjsDoc("fresh-document");
@@ -34,13 +34,13 @@ const wrapped = new YjsDoc("imported-document", existingYDoc);
 
 Возвращает логический ID из конструктора. Если пользователь не передал документ, `EditorRuntime` создаёт ID с префиксом `rivto-`.
 
-### `instantiator`
+### `createDetachedArray()`, `createDetachedMap()`, `createDetachedText()`
 
-- **Тип:** `CRDTInstantiator`, публичное `readonly`-свойство.
-- **Значение:** один экземпляр `YjsInstantiator` на `YjsDoc`.
-- **Исключения при чтении:** отсутствуют.
+- **Аргументы:** отсутствуют; generic-параметры ограничивают item или schema.
+- **Возвращают:** неприсоединённый wrapper соответствующего Yjs-типа.
+- **Исключения:** собственных проверок нет; чтение результата до attachment выбрасывает `YjsNotAttachedError`.
 
-Возвращает `YjsInstantiator` через общий контракт `CRDTInstantiator`. Менеджеры блоков, элементов, связей и плагинов создают через него вложенные shared-типы.
+Создают вложенные shared-типы, совместимые с этим адаптером. Методы не создают именованный root: сначала получите parent через `getMap()` или `getArray()`, затем вставьте detached-значение через `set()`, `push()` или `insert()`.
 
 ## Жизненный цикл провайдера
 
@@ -114,7 +114,7 @@ Rivto собирает области хранения в `DocumentModelImpl`. �
 ```ts
 const document = new YjsDoc("article");
 const article = document.getMap("article");
-const body = document.instantiator.createText();
+const body = document.createDetachedText();
 article.set("body", body); // Сначала присоединяем вложенный scope.
 
 const origin = Symbol("article-editor");

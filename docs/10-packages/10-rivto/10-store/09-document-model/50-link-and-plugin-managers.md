@@ -30,7 +30,7 @@ rivto.editor.links: CRDTMap<linkId, CRDTMap<LinkStorage>>
     meta -> Record<string, BasicType>       (plain object, атомарное поле)
 ```
 
-**CRDT objects:** root `links` и map отдельной связи. Link record создаётся через `document.crdt.instantiator.createMap<LinkStorage>()` и присоединяется к root по `link.id`.
+**CRDT objects:** root `links` и map отдельной связи. Link record создаётся через `document.crdt.createDetachedMap<LinkStorage>()` и присоединяется к root по `link.id`.
 
 **Base/plain values:** `id` — base string; `from`, `to` и `meta` — cloned portable plain objects. Они не являются вложенными `CRDTMap`. Поэтому замена `from` является одной операцией для всего endpoint, а изменение отдельного `meta` key текущим manager API потребовало бы создать link заново и заменить whole record. Одновременные изменения разных полей outer link map теоретически имеют отдельную CRDT-гранулярность, но public API предоставляет только `createLink()` с полной записью.
 
@@ -110,9 +110,9 @@ Top-level values, которые не являются CRDT maps, пропуск
 
 - **Аргументы:** полный `link: Link`.
 - **Возвращает:** `void`.
-- **Исключения:** `Error("Link endpoints must reference existing blocks")`, если `from.blockId` или `to.blockId` отсутствует; также clone/instantiator/CRDT errors.
+- **Исключения:** `Error("Link endpoints must reference existing blocks")`, если `from.blockId` или `to.blockId` отсутствует; также clone/CRDT errors.
 
-Создаёт `LinkStorage` через instantiator. Существующий record с тем же link ID заменяется; отдельной duplicate validation нет. Endpoints и meta сохраняются как cloned атомарные values.
+Создаёт `LinkStorage` через `createDetachedMap()`. Существующий record с тем же link ID заменяется; отдельной duplicate validation нет. Endpoints и meta сохраняются как cloned атомарные values.
 
 Проверка `hasBlock()` смотрит наличие payload в block storage, а не placement в tree; это позволяет не отклонять endpoint во время промежуточного concurrent move. В transaction создаётся новая outer map, в неё записываются четыре plain поля, затем root key `link.id` указывает на новую map. При совпадающем ID старая record и её identity заменяются целиком.
 
@@ -184,7 +184,7 @@ rivto.editor.plugins: CRDTMap<pluginId, CRDTType>
 | `getMap(pluginId)` впервые | новая attached `CRDTMap` под root key | создание/promotion namespace создаёт update root map |
 | `namespace.set(key, value)` | отдельный key live namespace map | property `key` меняется независимо от соседних keys |
 | `namespace.delete(key)` | удаление одного shared key | отдельная map operation для key |
-| nested map/array/text из instantiator | attached CRDT object внутри namespace | его keys, позиции или text ranges получают собственные CRDT operations |
+| nested map/array/text из `createDetached*()` | attached CRDT object внутри namespace | его keys, позиции или text ranges получают собственные CRDT operations |
 | `get()`/`getAll()` | detached materialized value | mutation результата не создаёт update |
 
 ### Как изменять отдельные свойства plugin namespace
@@ -210,10 +210,10 @@ document.transact(() => {
 });
 ```
 
-`display` является shared key, но `display.color` и `display.compact` — части одного plain value. Чтобы сделать их independently collaborative, создайте nested map тем же document instantiator и присоедините её один раз:
+`display` является shared key, но `display.color` и `display.compact` — части одного plain value. Чтобы сделать их independently collaborative, создайте nested map через тот же `CRDTDoc` и присоедините её один раз:
 
 ```ts
-const display = document.crdt.instantiator.createMap<{
+const display = document.crdt.createDetachedMap<{
   color: string;
   compact: boolean;
 }>();
@@ -225,14 +225,14 @@ document.transact(() => {
 });
 ```
 
-После attachment `display.set("color", "blue")` меняет только `color`. Shared object нельзя переиспользовать в двух parents или создавать adapter-specific `Y.Map` напрямую; нужно использовать `document.crdt.instantiator`. Подробный lifecycle описан на странице `CRDT instantiator usage`.
+После attachment `display.set("color", "blue")` меняет только `color`. Shared object нельзя переиспользовать в двух parents; adapter-neutral код должен использовать `document.crdt.createDetached*()`. Подробный lifecycle описан на странице создания detached CRDT-объектов.
 
 Итого: `set()` подходит для небольшого namespace, который всегда заменяется целиком. `getMap()` нужен, когда свойства plugin-а изменяются независимо. Nested `CRDTMap`/`CRDTArray`/`CRDTText` нужны только при необходимой granular collaboration ещё на один уровень глубже.
 
 ### Свойство `document`
 
 - **Тип:** `DocumentModel`, приватное `readonly`.
-- **Значение:** owning model для transactions и instantiator.
+- **Значение:** owning model для transactions и detached construction.
 - **Исключения при чтении:** отсутствуют.
 
 ### Свойство `root`

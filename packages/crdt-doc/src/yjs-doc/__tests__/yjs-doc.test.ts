@@ -2,7 +2,6 @@ import { YjsDoc } from '../yjs-doc';
 import * as Y from 'yjs';
 import { Provider } from '../../types';
 import { YjsArray, YjsMap, YjsText } from '../structures';
-import { YjsInstantiator } from '../utils/instantiator';
 
 describe('YjsDoc', () => {
   let yjsDoc: YjsDoc;
@@ -19,10 +18,6 @@ describe('YjsDoc', () => {
 
   it('should initialize with correct ID', () => {
     expect(yjsDoc.id).toBe(docId);
-  });
-
-  it('should expose instantiator', () => {
-    expect(yjsDoc.instantiator).toBeInstanceOf(YjsInstantiator);
   });
 
   it('should use provided Y.Doc if passed in constructor', () => {
@@ -224,7 +219,7 @@ describe('YjsDoc', () => {
       root.set('title', 'Hello');
       root.set('count', 2);
 
-      const items = yjsDoc.instantiator.createArray();
+      const items = yjsDoc.createDetachedArray();
       items.push('first');
       root.set('items', items);
 
@@ -285,7 +280,7 @@ describe('YjsDoc', () => {
     });
   });
 
-  describe('Nested structures via CRDTInstantiator', () => {
+  describe('Nested detached structures', () => {
     let rootMap: YjsMap;
 
     beforeEach(() => {
@@ -293,16 +288,16 @@ describe('YjsDoc', () => {
     });
 
     it('should support Map inside Map', () => {
-      const nestedMap = yjsDoc.instantiator.createMap();
+      const nestedMap = yjsDoc.createDetachedMap();
       rootMap.set('nested', nestedMap);
 
       // Verify via retrieval
       const retrieved = rootMap.get('nested') as YjsMap;
       expect(retrieved).toBeInstanceOf(YjsMap);
 
-      const crdtmap = yjsDoc.instantiator.createMap();
-      const crdtarray = yjsDoc.instantiator.createArray();
-      const crdttext = yjsDoc.instantiator.createText();
+      const crdtmap = yjsDoc.createDetachedMap();
+      const crdtarray = yjsDoc.createDetachedArray();
+      const crdttext = yjsDoc.createDetachedText();
       const text = 'hello';
       const number = 1;
       const boolean = true;
@@ -347,7 +342,7 @@ describe('YjsDoc', () => {
     });
 
     it('should support Array inside Map', () => {
-      const nestedArray = yjsDoc.instantiator.createArray();
+      const nestedArray = yjsDoc.createDetachedArray();
       rootMap.set('list', nestedArray);
 
       const retrieved = rootMap.get('list');
@@ -358,7 +353,7 @@ describe('YjsDoc', () => {
     });
 
     it('should support Text inside Map', () => {
-      const nestedText = yjsDoc.instantiator.createText();
+      const nestedText = yjsDoc.createDetachedText();
       rootMap.set('content', nestedText);
 
       const retrieved = rootMap.get('content');
@@ -370,13 +365,13 @@ describe('YjsDoc', () => {
 
     it('should support complex nesting', () => {
       // Map -> Array -> Map -> Text
-      const array = yjsDoc.instantiator.createArray();
+      const array = yjsDoc.createDetachedArray();
       rootMap.set('array', array);
 
-      const mapInArray = yjsDoc.instantiator.createMap();
+      const mapInArray = yjsDoc.createDetachedMap();
       (array as YjsArray).push(mapInArray);
 
-      const textInMap = yjsDoc.instantiator.createText();
+      const textInMap = yjsDoc.createDetachedText();
       (mapInArray as YjsMap).set('text', textInMap);
 
       // Verify structure
@@ -390,7 +385,7 @@ describe('YjsDoc', () => {
     });
 
     it('should support setting pre-populated structures', () => {
-      const array = yjsDoc.instantiator.createArray();
+      const array = yjsDoc.createDetachedArray();
       array.push('pre-existing');
       
       rootMap.set('populated-array', array);
@@ -401,13 +396,13 @@ describe('YjsDoc', () => {
     });
 
     it('should handle overwriting existing keys with new instances', () => {
-      const map1 = yjsDoc.instantiator.createMap();
+      const map1 = yjsDoc.createDetachedMap();
       map1.set('id', '1');
       rootMap.set('child', map1);
 
       expect((rootMap.get('child') as YjsMap).get('id')).toBe('1');
 
-      const map2 = yjsDoc.instantiator.createMap();
+      const map2 = yjsDoc.createDetachedMap();
       map2.set('id', '2');
       rootMap.set('child', map2);
 

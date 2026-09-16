@@ -179,9 +179,9 @@ export class DocumentElementManager {
     if (this.storage.has(id)) throw new Error(`Element ${id} already exists`);
     const validated = this.processElement({ ...input, id });
     this.document.transact(() => {
-      const model = this.document.crdt.instantiator.createMap<ElementStorage>();
-      const frameMap = this.document.crdt.instantiator.createMap<ElementFrameStorage>();
-      const props = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
+      const model = this.document.crdt.createDetachedMap<ElementStorage>();
+      const frameMap = this.document.crdt.createDetachedMap<ElementFrameStorage>();
+      const props = this.document.crdt.createDetachedMap<Record<string, CRDTType>>();
       model.set("id", id);
       model.set("type", validated.type);
       model.set("frame", frameMap);

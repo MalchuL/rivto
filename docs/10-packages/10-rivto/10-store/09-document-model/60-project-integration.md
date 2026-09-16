@@ -63,7 +63,7 @@ Scope — это сам живой CRDT-контейнер, а не его им�
 - `children` как `CRDTArray<string>`;
 - `props`, `listProps` и `pluginData` как `CRDTMap`.
 
-Block manager создаёт вложенные значения через `crdt.instantiator`, присоединяет их к карте блока и изменяет через focused contracts.
+Block manager создаёт вложенные значения через `crdt.createDetached*()`, присоединяет их к карте блока и изменяет через focused contracts.
 
 ### `elements`: `CRDTMap<ElementStorage>`
 
@@ -81,7 +81,7 @@ Namespaced-данные плагинов. Plugin-data manager выделяет �
 
 ### Block manager
 
-Использует `getArray("roots")`, `getMap("blocks")` и instantiator. Поддерживает связи parent/child, стабильные ID, content, props и порядок. Изменение иерархии обновляет все затронутые массивы одной транзакцией.
+Использует `getArray("roots")`, `getMap("blocks")` и `createDetached*()`. Поддерживает связи parent/child, стабильные ID, content, props и порядок. Изменение иерархии обновляет все затронутые массивы одной транзакцией.
 
 ### Element manager
 
@@ -113,7 +113,7 @@ Helpers модели обновляют существующие shared-знач
 
 1. Определите смысл и проверку в `store/document-model/core`.
 2. Выберите атомарное значение или shared map/array/text согласно ожидаемым конкурирующим изменениям.
-3. Создавайте shared-значения через `document.crdt.instantiator`.
+3. Создавайте shared-значения через `document.crdt.createDetached*()`.
 4. Изменяйте их через владеющий manager и `DocumentModelImpl.transact()`.
 5. Добавьте контейнер в undo scopes, если изменение должно отменяться.
 6. Обновите dump/load snapshot, clipboard и rendering consumers.

@@ -2,7 +2,6 @@ import { Serializible } from "./crdt";
 import { CRDTArray } from "./array";
 import { CRDTMap } from "./map";
 import { CRDTText } from "./text";
-import { CRDTInstantiator } from "./utils";
 import { CRDTUndoManager, CRDTUndoScope } from "./undo";
 import { CRDTType } from "./basic-types";
 import type { Provider, ProviderCleanup } from "./provider";
@@ -24,9 +23,39 @@ export interface CRDTDoc extends Serializible {
     get id(): string;
 
     /**
-     * The instantiator for creating detached CRDT structures.
+     * Creates a detached CRDT array for insertion into an attached CRDT
+     * container.
+     *
+     * This method does not create a named document root. First obtain an attached
+     * parent with `getMap()` or `getArray()`, then attach the returned array with
+     * `map.set()` or `array.insert()`. Most read operations throw until attachment.
+     *
+     * @returns A detached array compatible with this document adapter.
      */
-    get instantiator(): CRDTInstantiator;
+    createDetachedArray<Item extends CRDTType = CRDTType>(): CRDTArray<Item>;
+
+    /**
+     * Creates a detached CRDT map for insertion into an attached CRDT container.
+     *
+     * This method does not create a named document root. First obtain an attached
+     * parent with `getMap()` or `getArray()`, then attach the returned map with
+     * `map.set()` or `array.insert()`. Most read operations throw until attachment.
+     *
+     * @returns A detached map compatible with this document adapter.
+     */
+    createDetachedMap<Schema extends object = Record<string, CRDTType>>(): CRDTMap<Schema>;
+
+    /**
+     * Creates detached collaborative text for insertion into an attached CRDT
+     * container.
+     *
+     * This method does not create a named document root. First obtain an attached
+     * parent with `getMap()` or `getArray()`, then attach the returned text with
+     * `map.set()` or `array.insert()`. Read operations throw until attachment.
+     *
+     * @returns Detached collaborative text compatible with this document adapter.
+     */
+    createDetachedText(): CRDTText;
 
     /**
      * Attach a real-time provider (e.g. WebSocket) for syncing updates.

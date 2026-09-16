@@ -73,7 +73,7 @@ export class DocumentPluginDataManager {
     if (current !== undefined && (!current || typeof current !== "object" || Array.isArray(current))) {
       throw new Error(`Plugin data ${id} is not an object namespace`);
     }
-    const map = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
+    const map = this.document.crdt.createDetachedMap<Record<string, CRDTType>>();
     if (current) assignMap(map, current as Record<string, unknown>);
     this.document.transact(() => this.root.set(id, map));
     return map;

@@ -37,7 +37,7 @@ EditorRuntime
 - `rivto.editor.links` — first-class связи;
 - `rivto.editor.plugins` — document-level namespaces плагинов.
 
-Менеджеры получают эти контейнеры через `CRDTDoc`, создают вложения через `document.crdt.instantiator` и не импортируют Yjs.
+Менеджеры получают эти контейнеры через `CRDTDoc`, создают вложения через `document.crdt.createDetached*()` и не импортируют Yjs.
 
 ## Пример использования
 

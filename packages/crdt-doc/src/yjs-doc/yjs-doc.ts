@@ -1,8 +1,8 @@
-import { CRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, ProviderCleanup, CRDTInstantiator, WrapBasicTypeToCRDTOptions } from "../types";
+import { CRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, ProviderCleanup, WrapBasicTypeToCRDTOptions } from "../types";
 import * as utils from "./structures/utils";
 import * as Y from 'yjs';
 import { Storage } from "../utils";
-import { YjsInstantiator } from "./utils/instantiator";
+import { YjsArray, YjsMap, YjsText } from "./structures";
 
 export class YjsDoc implements CRDTDoc {
     public readonly doc: Y.Doc;
@@ -11,17 +11,51 @@ export class YjsDoc implements CRDTDoc {
      */
     private providersStorage: Storage<Provider> = new Storage<Provider>();
     /**
-     * The instantiator of the YjsDoc.
-     */
-    public readonly instantiator: CRDTInstantiator = new YjsInstantiator();
-
-    /**
      * Creates a new YjsDoc.
      * @param id - The id of the YjsDoc.
      * @param doc - The Y.Doc to wrap.
      */
     constructor(private readonly _id: string, doc?: Y.Doc) {
         this.doc = doc || new Y.Doc();
+    }
+
+    /**
+     * Creates a detached Yjs array for insertion into an attached CRDT container.
+     *
+     * This does not create a named root. Attach the result to a parent obtained
+     * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
+     * Most reads throw until attachment.
+     *
+     * @returns A detached array compatible with this Yjs document.
+     */
+    createDetachedArray<Item extends CRDTType = CRDTType>(): CRDTArray<Item> {
+        return new YjsArray<Item>();
+    }
+
+    /**
+     * Creates a detached Yjs map for insertion into an attached CRDT container.
+     *
+     * This does not create a named root. Attach the result to a parent obtained
+     * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
+     * Most reads throw until attachment.
+     *
+     * @returns A detached map compatible with this Yjs document.
+     */
+    createDetachedMap<Schema extends object = Record<string, CRDTType>>(): CRDTMap<Schema> {
+        return new YjsMap<Schema>();
+    }
+
+    /**
+     * Creates detached Yjs text for insertion into an attached CRDT container.
+     *
+     * This does not create a named root. Attach the result to a parent obtained
+     * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
+     * Reads throw until attachment.
+     *
+     * @returns Detached text compatible with this Yjs document.
+     */
+    createDetachedText(): CRDTText {
+        return new YjsText();
     }
 
     /**

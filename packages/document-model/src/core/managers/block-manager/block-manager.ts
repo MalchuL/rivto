@@ -743,12 +743,12 @@ export class DocumentBlockManager {
         const id = requireNonemptyId(validated.id ?? this.generateId(), "Block");
         if (this.storage.has(id)) throw new Error(`Block ${id} already exists`);
         const index = this.placementIndex(container, afterId);
-        const model = this.document.crdt.instantiator.createMap<BlockStorage>();
-        const props = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
-        const content = this.document.crdt.instantiator.createText();
-        const children = this.document.crdt.instantiator.createArray<string>();
-        const listPropsStorage = this.document.crdt.instantiator.createMap<BlockListPropsStorage>();
-        const pluginData = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
+        const model = this.document.crdt.createDetachedMap<BlockStorage>();
+        const props = this.document.crdt.createDetachedMap<Record<string, CRDTType>>();
+        const content = this.document.crdt.createDetachedText();
+        const children = this.document.crdt.createDetachedArray<string>();
+        const listPropsStorage = this.document.crdt.createDetachedMap<BlockListPropsStorage>();
+        const pluginData = this.document.crdt.createDetachedMap<Record<string, CRDTType>>();
         model.set("id", id);
         model.set("type", validated.type);
         model.set("listProps", listPropsStorage);

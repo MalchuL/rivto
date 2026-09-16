@@ -33,7 +33,7 @@ rivto.editor.elements: CRDTMap<elementId, CRDTMap<ElementStorage>>
     props   -> CRDTMap<key, portable value>
 ```
 
-**CRDT objects:** root `elements`, map отдельного element, вложенная `frame` map и вложенная `props` map. Все четыре создаются/получаются через CRDT API; новые nested maps создаёт `document.crdt.instantiator`. Изменение `frame.x` не заменяет `frame`, а изменение одного `props` key не заменяет соседние keys.
+**CRDT objects:** root `elements`, map отдельного element, вложенная `frame` map и вложенная `props` map. Все четыре создаются/получаются через CRDT API; новые nested maps создаёт `document.crdt.createDetachedMap()`. Изменение `frame.x` не заменяет `frame`, а изменение одного `props` key не заменяет соседние keys.
 
 **Base/plain values:** `id`, `type`, `zIndex`, четыре числа geometry и значения отдельных props. Plain record/array внутри одного prop сериализуется как одно portable значение: его внутренние поля не являются отдельными CRDT objects. Например, `props.style = { color, opacity }` записывается под одним shared key `style`; независимо collaborative являются `props.style` и `props.title`, но не обязательно `style.color` и `style.opacity`.
 
@@ -126,11 +126,11 @@ Manager читает record непосредственно по ID, затем `
 
 - **Аргументы:** `input: ElementInput` с type, полным frame, zIndex и optional props/ID.
 - **Возвращает:** stable `string` ID, supplied или `crypto.randomUUID()`.
-- **Исключения:** пустой type; duplicate ID; invalid frame, zIndex или props; instantiator/CRDT errors.
+- **Исключения:** пустой type; duplicate ID; invalid frame, zIndex или props; CRDT errors.
 
 До транзакции валидирует envelope. Внутри создаёт `ElementStorage`, nested `frame`/`props` maps, присоединяет record и заполняет maps.
 
-Порядок важен: type, props envelope, geometry и z-index проверяются до shared writes. В transaction manager создаёт record/frame/props через instantiator, кладёт nested maps в record, присоединяет record к root и только затем заполняет child maps. Supplied `input` не сохраняется по ссылке; значения props clone-ятся helper-ом `assignMap()`.
+Порядок важен: type, props envelope, geometry и z-index проверяются до shared writes. В transaction manager создаёт record/frame/props через `createDetachedMap()`, кладёт nested maps в record, присоединяет record к root и только затем заполняет child maps. Supplied `input` не сохраняется по ссылке; значения props clone-ятся helper-ом `assignMap()`.
 
 **Примечание об assignment:** `assignMap(frameMap, frame)` создаёт отдельные shared number keys `x`, `y`, `width`, `height`. `assignMap(props, input.props)` создаёт отдельный shared key для каждого top-level prop, но object/array под этим key clone-ится как plain value. Его внутренние properties не генерируют CRDT updates.
 
