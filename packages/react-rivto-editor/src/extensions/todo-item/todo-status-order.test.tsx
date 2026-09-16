@@ -22,12 +22,21 @@ describe("TodoStatusOrder", () => {
     expect(markup.indexOf("↕ Done")).toBeLessThan(markup.indexOf("↕ Todo"));
   });
 
-  test("moves the active status to the sortable target without mutating input", () => {
+  test("moves the source status to its final sortable index without mutating input", () => {
     const order = ["todo", "doing", "done"] as const;
 
-    expect(reorderTodoStatuses(order, "done", "todo")).toEqual(["done", "todo", "doing"]);
+    expect(reorderTodoStatuses(order, 2, 0)).toEqual(["done", "todo", "doing"]);
+    expect(reorderTodoStatuses(order, 0, 2)).toEqual(["doing", "done", "todo"]);
+    expect(reorderTodoStatuses(order, 2, 1)).toEqual(["todo", "done", "doing"]);
     expect(order).toEqual(["todo", "doing", "done"]);
-    expect(reorderTodoStatuses(order, "doing", "doing")).toBe(order);
-    expect(reorderTodoStatuses(order, "done", "done", -30)).toEqual(["todo", "done", "doing"]);
+  });
+
+  test("returns the same sequence for no-op or invalid indexes", () => {
+    const order = ["todo", "doing", "done"] as const;
+
+    expect(reorderTodoStatuses(order, 1, 1)).toBe(order);
+    expect(reorderTodoStatuses(order, -1, 1)).toBe(order);
+    expect(reorderTodoStatuses(order, 0, 3)).toBe(order);
+    expect(reorderTodoStatuses(order, 0, 1.5)).toBe(order);
   });
 });
