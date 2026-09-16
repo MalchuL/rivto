@@ -24,7 +24,14 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/react";
-import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
+import {
+  Accessibility,
+  AutoScroller,
+  Feedback,
+  KeyboardSensor,
+  PointerActivationConstraints,
+  PointerSensor,
+} from "@dnd-kit/dom";
 import { createStructuralSelection } from "@chulane/rivto";
 import { useEditor, useEditorRoot, useReactEditor } from "../../hooks";
 import {
@@ -74,9 +81,15 @@ import {
 } from "./cross-document/target";
 import { trackGesturePointer } from "./pointer/tracker";
 import { collectSubtreeIds } from "./utils/subtree";
-import { PageDragAutoScrollPolicy } from "./surface/auto-scroll";
+import { PageDragManagerPolicy } from "./surface/manager-policy";
 
 const PAGE_DRAG_OVERLAY_CLASS = "page-drag-overlay";
+/**
+ * dnd-kit keeps its overlay host mounted between gestures. The host must stay
+ * out of the surface flow, otherwise its promotion to a fixed top-layer
+ * popover at activation invalidates the layout of every mounted block.
+ */
+const PAGE_DRAG_OVERLAY_HOST_CLASS = "page-drag-overlay-host";
 
 /**
  * Viewport pixels one arrow press moves the keyboard stand-in rectangle.
@@ -84,6 +97,17 @@ const PAGE_DRAG_OVERLAY_CLASS = "page-drag-overlay";
  * expectations keep resolving to the same siblings.
  */
 const KEYBOARD_STEP = 25;
+
+/**
+ * Plugins mounted for block dragging.
+ *
+ * The default preset also ships `Cursor` and `PreventSelection`, which inject
+ * universal `*` style rules at drag start and force a full style recalculation
+ * of every mounted block. Rivto's stylesheet already owns the handle cursor
+ * and selection suppression, so those two plugins are left out to keep the
+ * large-document activation budget.
+ */
+const PAGE_DRAG_PLUGINS = [Accessibility, AutoScroller, Feedback];
 
 /** Live or snapshotted dnd-kit operation state consumed by placement. */
 type PageDragOperation = DragStartEvent["operation"];
@@ -445,7 +469,7 @@ export function PageDragProvider({
   // Native modal dialogs occupy the top layer; previews must join that layer.
   const modalRoot = root?.querySelector("dialog:modal");
   const overlay = (
-    <DragOverlay dropAnimation={null}>
+    <DragOverlay className={PAGE_DRAG_OVERLAY_HOST_CLASS} dropAnimation={null}>
       {activeBlocks.length > 0 && (
         <div className={PAGE_DRAG_OVERLAY_CLASS} aria-hidden="true">
           <PageDragPreview blocks={activeBlocks} collapseActive={reactEditor.blocks.hasListProps("collapse")} />
@@ -458,12 +482,13 @@ export function PageDragProvider({
   return (
     <PageDragStateContext.Provider value={dragContext}>
       <DragDropProvider
+        plugins={PAGE_DRAG_PLUGINS}
         sensors={sensors}
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
       >
-        <PageDragAutoScrollPolicy />
+        <PageDragManagerPolicy />
         {children}
         {modalRoot ? createPortal(overlay, modalRoot) : overlay}
       </DragDropProvider>

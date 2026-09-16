@@ -407,6 +407,56 @@
   outline-offset: calc(-1 * var(--rivto-drop-indicator-thickness));
 }
 
+/* dnd-kit overlay host. The block drag provider disables dnd-kit's per-gesture
+   stylesheet injection (its @layer rule forces a full-document layout on every
+   insert and removal), so these rules mirror the @dnd-kit/dom 0.5.0 feedback
+   stylesheet for Rivto's own host element. The host stays mounted between
+   gestures and must never join the surface flow. */
+.page-drag-overlay-host {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.page-drag-overlay-host:not([data-dnd-dragging]),
+.page-drag-overlay-host::backdrop {
+  display: none;
+  visibility: hidden;
+}
+
+.page-drag-overlay-host[data-dnd-dragging] {
+  position: fixed !important;
+  z-index: calc(infinity);
+  top: var(--dnd-top, 0px) !important;
+  left: var(--dnd-left, 0px) !important;
+  right: unset !important;
+  bottom: unset !important;
+  width: var(--dnd-width, auto);
+  max-width: var(--dnd-width, auto);
+  height: var(--dnd-height, auto);
+  max-height: var(--dnd-height, auto);
+  overflow: visible;
+  margin: unset;
+  padding: unset;
+  border: unset;
+  color: inherit;
+  background: unset;
+  transform: var(--dnd-transform, none) !important;
+  transition: var(--dnd-transition) !important;
+  will-change: translate;
+  pointer-events: none !important;
+  touch-action: none;
+}
+
+.page-drag-overlay-host[data-dnd-dragging] * {
+  pointer-events: none !important;
+}
+
+.page-drag-overlay-host[data-dnd-dragging]:not([data-dnd-dropping]) {
+  translate: var(--dnd-translate) !important;
+}
+
 .page-drag-overlay {
   width: min(520px, 70vw);
   max-width: 520px;
