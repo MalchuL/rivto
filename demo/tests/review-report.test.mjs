@@ -2,14 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   REVIEW_REPORT_TYPE,
-  captureBlockReviewSnapshot,
+  captureBlockReview,
   captureElementReviewSnapshot,
   createReviewBlockInput,
   createReviewElementInput,
-  getReviewBlockPlacement,
   reviewBlockPropsSchema,
   reviewElementPropsSchema,
-} from "../src/extensions/review-report-model.ts";
+} from "../src/extensions/reports/review-report-model.ts";
 
 /** Creates the manager reads needed by pure capture functions. */
 function createEditor({ roots, parents = {}, elements = [] }) {
@@ -103,7 +102,7 @@ test("nested block Review captures an exact root slice and strips recursive repo
     }],
   });
 
-  const snapshot = captureBlockReviewSnapshot(editor, "review", 1, 1, true);
+  const { snapshot, ...placement } = captureBlockReview(editor, "review", 1, 1, true);
   assert.deepEqual(snapshot.blocks.map(({ id }) => id), ["a", "container", "c"]);
   const nested = snapshot.blocks[1].children[1];
   assert.equal(nested.type, REVIEW_REPORT_TYPE);
@@ -114,19 +113,18 @@ test("nested block Review captures an exact root slice and strips recursive repo
     endBlockId: "c",
   });
   assert.deepEqual(Object.keys(snapshot), ["version", "blocks", "elements", "pluginData"]);
-  assert.deepEqual(getReviewBlockPlacement(editor, "review"), {
+  assert.deepEqual(placement, {
     previousReportSiblingId: "before-review",
     nextReportSiblingId: "after-review",
     parentReportId: "container",
   });
 
-  const withoutReport = captureBlockReviewSnapshot(editor, "review", 1, 1);
+  const withoutReport = captureBlockReview(editor, "review", 1, 1).snapshot;
   assert.deepEqual(
     withoutReport.blocks[1].children.map(({ id }) => id),
     ["before-review", "after-review"],
   );
   assert.deepEqual(Object.keys(withoutReport), ["version", "blocks", "elements", "pluginData"]);
-
 });
 
 test("root Review placement uses null boundaries and can omit its root", () => {
@@ -146,18 +144,19 @@ test("root Review placement uses null boundaries and can omit its root", () => {
     listProps: {},
     children: [],
   };
-  const snapshot = captureBlockReviewSnapshot(
+  const capture = captureBlockReview(
     createEditor({ roots: [review, next] }),
     "review",
     0,
     0,
   );
 
-  assert.deepEqual(snapshot.blocks, []);
-  assert.deepEqual(getReviewBlockPlacement(
-    createEditor({ roots: [review, next] }),
-    "review",
-  ), {
+  assert.deepEqual(capture.snapshot.blocks, []);
+  assert.deepEqual({
+    previousReportSiblingId: capture.previousReportSiblingId,
+    nextReportSiblingId: capture.nextReportSiblingId,
+    parentReportId: capture.parentReportId,
+  }, {
     previousReportSiblingId: null,
     nextReportSiblingId: "next",
     parentReportId: null,

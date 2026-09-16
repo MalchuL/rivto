@@ -41,7 +41,7 @@ import {
   createReviewElementInput,
   reviewReportExtensions,
   type ReviewReport,
-} from "./extensions/review-report";
+} from "./extensions/reports/review-report";
 
 /**
  * Persists one Review envelope through the demo-only Vite server adapter.

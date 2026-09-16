@@ -47,7 +47,7 @@ export interface ReviewElementProps extends Record<string, unknown> {
 }
 
 /** Placement details stored in the JSON report rather than its native snapshot. */
-export interface ReviewBlockPlacement {
+interface ReviewBlockPlacement {
   previousReportSiblingId: string | null;
   nextReportSiblingId: string | null;
   parentReportId: string | null;
@@ -61,12 +61,12 @@ interface ReviewReportBase {
 }
 
 /** Block report sent to the host persistence callback. */
-export interface ReviewBlockReport extends ReviewReportBase, ReviewBlockPlacement {
+interface ReviewBlockReport extends ReviewReportBase, ReviewBlockPlacement {
   kind: "block";
 }
 
 /** Canvas-element report sent to the host persistence callback. */
-export interface ReviewElementReport extends ReviewReportBase {
+interface ReviewElementReport extends ReviewReportBase {
   kind: "element";
 }
 
@@ -213,59 +213,37 @@ function copyElementForReport(element: EditorElement): EditorElement {
 }
 
 /**
- * Reads the Review block's exact structural placement from live document state.
- *
- * @param editor - Live editor containing the report block.
- * @param reviewId - Review block whose sibling and parent IDs are requested.
- * @returns Placement details for the persisted `reportBlock` section.
- */
-export function getReviewBlockPlacement(
-  editor: RivtoEditorApi,
-  reviewId: string,
-): ReviewBlockPlacement {
-  const review = editor.blocks.getBlock(reviewId);
-  if (!review) throw new Error(`Review block ${reviewId} is not in the document`);
-  const parentReportId = editor.blocks.getParentId(reviewId) ?? null;
-  const siblingIds = parentReportId === null
-    ? editor.blocks.getRootIds()
-    : editor.blocks.getBlock(parentReportId)?.children.map(({ id }) => id) ?? [];
-  const siblingIndex = siblingIds.indexOf(reviewId);
-  return {
-    previousReportSiblingId: siblingIndex > 0 ? siblingIds[siblingIndex - 1]! : null,
-    nextReportSiblingId: siblingIndex >= 0 && siblingIndex + 1 < siblingIds.length
-      ? siblingIds[siblingIndex + 1]!
-      : null,
-    parentReportId,
-  };
-}
-
-/**
- * Captures the root-block window around a Review block.
+ * Captures the root-block window and source placement around a Review block.
  *
  * @param editor - Live editor whose managers supply current state.
  * @param reviewId - Review block acting as the capture anchor.
  * @param blocksAbove - Maximum preceding root count.
  * @param blocksBelow - Maximum following root count.
  * @param includeReportBlock - Whether the copied forest retains the source Review block.
- * @returns Detached loadable schema-v6 snapshot.
+ * @returns Detached snapshot plus report placement from the same live read.
  */
-export function captureBlockReviewSnapshot(
+export function captureBlockReview(
   editor: RivtoEditorApi,
   reviewId: string,
   blocksAbove: number,
   blocksBelow: number,
   includeReportBlock = false,
-): EditorSnapshot {
+): { snapshot: EditorSnapshot } & ReviewBlockPlacement {
   if (!editor.blocks.getBlock(reviewId)) {
     throw new Error(`Review block ${reviewId} is not in the document`);
   }
+  const parentReportId = editor.blocks.getParentId(reviewId) ?? null;
   let anchorRootId = reviewId;
-  let parentId = editor.blocks.getParentId(reviewId) ?? null;
+  let parentId = parentReportId;
   while (parentId) {
     anchorRootId = parentId;
     parentId = editor.blocks.getParentId(anchorRootId) ?? null;
   }
   const rootIds = editor.blocks.getRootIds();
+  const siblingIds = parentReportId === null
+    ? rootIds
+    : editor.blocks.getBlock(parentReportId)?.children.map(({ id }) => id) ?? [];
+  const siblingIndex = siblingIds.indexOf(reviewId);
   const anchorIndex = rootIds.indexOf(anchorRootId);
   if (anchorIndex < 0) throw new Error(`Review block ${reviewId} is not in the document`);
   const selectedIds = rootIds.slice(
@@ -291,7 +269,14 @@ export function captureBlockReviewSnapshot(
     };
     return [copy];
   });
-  return { version: 6, blocks, elements, pluginData: {} };
+  return {
+    snapshot: { version: 6, blocks, elements, pluginData: {} },
+    previousReportSiblingId: siblingIndex > 0 ? siblingIds[siblingIndex - 1]! : null,
+    nextReportSiblingId: siblingIndex >= 0 && siblingIndex + 1 < siblingIds.length
+      ? siblingIds[siblingIndex + 1]!
+      : null,
+    parentReportId,
+  };
 }
 
 /**

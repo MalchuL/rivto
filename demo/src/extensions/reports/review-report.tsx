@@ -26,9 +26,8 @@ import {
 } from "react";
 import {
   REVIEW_REPORT_TYPE,
-  captureBlockReviewSnapshot,
+  captureBlockReview,
   captureElementReviewSnapshot,
-  getReviewBlockPlacement,
   reviewBlockDefinition,
   reviewBlockPropsSchema,
   reviewElementPropsSchema,
@@ -166,24 +165,22 @@ function ReviewBlock({
       const live = editor.blocks.getBlock(blockId);
       if (!live) throw new Error("Review block no longer exists");
       const liveProps = reviewBlockPropsSchema.parse(live.props);
-      const snapshot = captureBlockReviewSnapshot(
+      const capture = captureBlockReview(
         editor,
         blockId,
         liveProps.blocksAbove,
         liveProps.blocksBelow,
         liveProps.includeReportBlock,
       );
-      const placement = getReviewBlockPlacement(editor, blockId);
       const savedAt = new Date().toISOString();
       await saveReport({
         kind: "block",
         reportId: blockId,
         problem: live.content,
         savedAt,
-        snapshot,
-        ...placement,
+        ...capture,
       });
-      editor.blocks.updateBlock(blockId, { props: { snapshot, savedAt } });
+      editor.blocks.updateBlock(blockId, { props: { snapshot: capture.snapshot, savedAt } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save report");
     } finally {

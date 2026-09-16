@@ -11,7 +11,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
-import type { ReviewReport } from "./src/extensions/review-report-model";
+import type { ReviewReport } from "./src/extensions/reports/review-report-model";
 
 /** HTTP endpoint consumed by the demo Review extension callback. */
 export const REVIEW_REPORT_ENDPOINT = "/__review-reports";
