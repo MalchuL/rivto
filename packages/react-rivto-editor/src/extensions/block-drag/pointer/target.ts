@@ -1,5 +1,12 @@
-/** Native DOM target collection for page pointer drag gestures. */
-import type { DragMoveEvent } from "@dnd-kit/core";
+/**
+ * Native DOM target collection for page pointer drag gestures.
+ *
+ * Pointer dragging never relies on library collision detection: Rivto
+ * hit-tests block rows itself and adapts the winning block into a
+ * library-independent {@link DropPlacementInput} for the placement resolver.
+ *
+ * @module
+ */
 import type { ReactEditor } from "../../../types";
 import { blockContainment } from "../utils/containment";
 import {
@@ -9,6 +16,7 @@ import {
   type PointerDropReason,
 } from "./hit";
 import { isStructuralLayout } from "../placement/intent";
+import type { DropPlacementInput, DropPlacementSource } from "../placement/types";
 import type { PointerCoordinates } from "../types";
 
 const PAGE_BLOCK_ROW_CLASS = "page-block-row";
@@ -69,27 +77,27 @@ function collectPointerDropCandidates(
 }
 
 /**
- * Builds the dnd-kit movement event for one resolved drop block.
+ * Builds the placement input for one resolved drop block.
  *
- * The over rectangle is what `resolveDropPlacement` treats as the row body
+ * The target rectangle is what `resolveDropPlacement` treats as the row body
  * versus its before/after edges. A BlockView includes its whole subtree, so
  * free-outline targets use only their title row. Explicit body hits and fixed
  * layouts keep the full BlockView for containment or spatial half-splits.
  *
- * @param event - Current drag movement used for source data.
+ * @param source - Dragged block identity, layout data, and cursor stand-in.
  * @param blockElement - BlockView that owns the resolved target.
- * @param useFullBlock - Whether the complete block, not just its row, is the over rect.
+ * @param useFullBlock - Whether the complete block, not just its row, is the target rect.
  * @param reactEditor - Runtime used to resolve views and canonical containment.
  * @param hitReason - Why this block was chosen; chrome titles skip inside-append.
- * @returns Event carrying the one live DOM target, or null when the row is missing.
+ * @returns Input carrying the one live DOM target, or null when the row is missing.
  */
-function pointerDropEvent(
-  event: DragMoveEvent,
+function pointerDropInput(
+  source: DropPlacementSource,
   blockElement: HTMLElement,
   useFullBlock: boolean,
   reactEditor: ReactEditor,
   hitReason: PointerDropReason,
-): DragMoveEvent | null {
+): DropPlacementInput | null {
   const id = blockElement.dataset.blockId;
   const row = blockElement.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
   if (!id || !row) return null;
@@ -101,21 +109,20 @@ function pointerDropEvent(
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
   const dropNode = useFullBlock || sortable ? blockElement : row;
   return {
-    ...event,
-    over: {
+    source,
+    target: {
       id,
       rect: dropNode.getBoundingClientRect(),
-      disabled: false,
-      data: { current: {
+      data: {
         sortChildren: axis,
         hitReason,
         targetAcceptsDrop: Boolean(targetView.acceptsDropContainer),
         parentChildOutline: parentOutline,
         targetDropPlacement: targetView.dropPlacement,
         parentDropPlacement: parentView?.dropPlacement,
-      } },
+      },
     },
-  } as DragMoveEvent;
+  };
 }
 
 /**
@@ -136,20 +143,20 @@ function pointerDropEvent(
  * children) and only keeps a container when the pointer is over an empty
  * lane body with no nearby descendant row.
  *
- * @param event - Current drag movement used for source data.
+ * @param source - Dragged block identity and layout data.
  * @param pointer - Live viewport cursor position driving the hit test.
  * @param root - Active editor surface containing eligible block rows.
  * @param reactEditor - Runtime used to resolve views and canonical containment.
  * @param excludedIds - Dragged subtree IDs that cannot become targets.
- * @returns Event carrying the one live DOM target, or null over blank space.
+ * @returns Input carrying the one live DOM target, or null over blank space.
  */
 export function withPointerDropTarget(
-  event: DragMoveEvent,
+  source: DropPlacementSource,
   pointer: PointerCoordinates,
   root: HTMLElement | null,
   reactEditor: ReactEditor,
   excludedIds: ReadonlySet<string>,
-): DragMoveEvent | null {
+): DropPlacementInput | null {
   if (!root) return null;
 
   // Ignore the full BlockView: a parent includes `.page-block-children`,
@@ -180,7 +187,7 @@ export function withPointerDropTarget(
       dropAxis: view.dropAxis,
       childOutline: id ? blockContainment(reactEditor, id)?.childOutline : undefined,
     }) ? "chrome" : "row";
-    return pointerDropEvent(event, rowHit.element, false, reactEditor, reason);
+    return pointerDropInput(source, rowHit.element, false, reactEditor, reason);
   }
 
   // No row under the cursor: pick the nearest sibling row, not the nearest
@@ -194,6 +201,6 @@ export function withPointerDropTarget(
   );
   const blockElement = hit ? elements.get(hit.id) : undefined;
   return blockElement
-    ? pointerDropEvent(event, blockElement, hit?.reason === "container", reactEditor, hit!.reason)
+    ? pointerDropInput(source, blockElement, hit?.reason === "container", reactEditor, hit!.reason)
     : null;
 }
