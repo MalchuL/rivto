@@ -1,4 +1,13 @@
-/** Accessible drag-handle slot for one page block row. */
+/**
+ * Accessible drag-handle slot for one page block row.
+ *
+ * The button is the only sensor activator. dnd-kit binds pointer and keyboard
+ * listeners through the handle ref supplied by the armed registration, and its
+ * accessibility plugin decorates the same element with role description,
+ * description, and pressed state, so no legacy attribute spreading remains.
+ *
+ * @module
+ */
 import { useCallback, useContext, useSyncExternalStore } from "react";
 import type { BlockSlotProps } from "../../../managers";
 import { PageDragItemContext } from "../state";
@@ -26,9 +35,7 @@ export function PageDragBlockSlot({ block }: BlockSlotProps) {
   if (!item) return null;
   return (
     <button
-      {...(draggable?.attributes ?? {})}
-      {...(draggable?.listeners ?? {})}
-      ref={draggable?.setNodeRef}
+      ref={draggable?.handleRef}
       type="button"
       className={PAGE_DRAG_HANDLE_CLASS}
       aria-label={`Move block: ${block.content || block.type}`}
