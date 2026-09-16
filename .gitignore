@@ -7,4 +7,5 @@ node_modules/
 .eslintcache
 playwright-report/
 test-results/
+/reports/
 .pnpm-store/

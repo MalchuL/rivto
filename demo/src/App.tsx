@@ -27,7 +27,7 @@ import {
 } from "@chulane/rivto-react";
 import { KeyboardPanel } from "./KeyboardPanel";
 import { RevisionsPanel } from "./RevisionsPanel";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import {
   COUNTER_BLOCK_TYPE,
   customBlockExtensions,
@@ -37,6 +37,29 @@ import {
   blockIdExtension,
   BlockIdsVisibleProvider,
 } from "./extensions/block-id";
+import {
+  createReviewElementInput,
+  reviewReportExtensions,
+  type ReviewReport,
+} from "./extensions/reports/review-report";
+
+/**
+ * Persists one Review envelope through the demo-only Vite server adapter.
+ *
+ * @param report - Detached report produced by the standalone extension.
+ * @returns Nothing after the JSON file has been written successfully.
+ */
+async function saveDemoReviewReport(report: ReviewReport): Promise<void> {
+  const response = await fetch("/__review-reports", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(report),
+  });
+  if (!response.ok) throw new Error((await response.text()) || "Failed to write Review report");
+}
+
+/** @returns A fresh Review extension for one independently owned editor. */
+const demoReviewReports = () => reviewReportExtensions({ saveReport: saveDemoReviewReport });
 
 /**
  * Intercepts custom Markdown link protocols (`rivto:` / `chulane:`).
@@ -226,6 +249,7 @@ function createDemoEditor() {
       edgelessVisuals,
       blockIdExtension(),
       ...customBlockExtensions,
+      ...demoReviewReports(),
     ],
   });
   // Playwright and host scripts locate this demo instance through window, not React refs.
@@ -440,6 +464,12 @@ function createDemoEditor() {
     },
   }, doingId);
   seedEdgelessShowcase(edgelessVisuals);
+  editor.elements.insertElement(createReviewElementInput({
+    id: "demo-review-element",
+    frame: { x: 920, y: 730, width: 420, height: 260 },
+    zIndex: Math.max(0, ...editor.elements.getElements().map(({ zIndex }) => zIndex)) + 1,
+    problem: "Ошибка структуры на холсте",
+  }));
   editor.history.clear();
 
   return { editor, reactEditor };
@@ -462,6 +492,7 @@ function createEmptyDemoEditor() {
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
+      ...demoReviewReports(),
     ],
   });
   return { editor, reactEditor };
@@ -511,10 +542,28 @@ function DemoToolbar({
 }) {
   const editor = useEditor();
   const { mode, setMode } = useEditorMode();
+  const [reportError, setReportError] = useState<string | null>(null);
   /** No-ops when already in `next` so repeated clicks do not thrash mode. */
   const switchMode = (next: "block" | "edgeless") => {
     if (next === mode) return;
     setMode(next);
+  };
+
+  /** Loads the snapshot from a user-selected Review report envelope. */
+  const restoreReport = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    setReportError(null);
+    try {
+      const report = JSON.parse(await file.text()) as Partial<ReviewReport>;
+      if (!report.snapshot || report.snapshot.version !== 6) {
+        throw new Error("Selected file is not a Review report");
+      }
+      editor.load(report.snapshot);
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Failed to restore Review report");
+    }
   };
 
   return (
@@ -536,6 +585,16 @@ function DemoToolbar({
         </div>
         <button type="button" data-editor-action="delete" onClick={() => editor.deleteSelection()}>Delete</button>
         <button type="button" data-editor-action="undo" onClick={() => editor.undo()}>Undo</button>
+        <label>
+          Restore report
+          <input
+            type="file"
+            accept=".json,application/json"
+            aria-label="Restore Review report"
+            onChange={(event) => void restoreReport(event)}
+          />
+        </label>
+        {reportError && <span role="alert">{reportError}</span>}
       </div>
     </header>
   );
@@ -615,6 +674,7 @@ function createMultiEditor(
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
+      ...demoReviewReports(),
     ],
   });
   if (side === "left") {
@@ -740,6 +800,7 @@ function createSyncedPeer(side: "left" | "right", roomId: string) {
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
+      ...demoReviewReports(),
     ],
   });
   if (side === "left") {

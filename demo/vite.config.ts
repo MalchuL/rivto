@@ -1,7 +1,11 @@
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
+import { reviewReportFilesPlugin } from "./review-report-files";
 
 export default defineConfig({
+  plugins: [
+    reviewReportFilesPlugin(fileURLToPath(new URL("../reports/", import.meta.url))),
+  ],
   resolve: {
     // The demo is a workspace development consumer. Resolve package entry
     // points directly to source so editing core or React code never requires a
