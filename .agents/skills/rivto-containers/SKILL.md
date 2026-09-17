@@ -172,6 +172,16 @@ inputs as every block: its 24px title row, its full BlockView rect, and its
 `childOutline` / `dropAxis` / `acceptsDropContainer` metadata. Do not add
 per-type branches there; express the layout through that metadata.
 
+Containers own no dnd-kit entities. The `block-drag` extension registers the
+only draggables, and its droppables exist solely for the keyboard gesture;
+pointer drags resolve against live viewport rects through the resolver above,
+not through dnd-kit collision. Do not add `useDroppable`, `useSortable`,
+`accept`, or `collisionPriority` to a lane, cell, tile, or layout root to
+influence where a block lands — it would be ignored by pointer drags and would
+fork placement between the two input paths. For dnd-kit mechanics themselves
+(sensors, feedback, auto-scroll, overlays) use the generic `dnd-kit-react`
+skill; this skill governs only Rivto's placement rules.
+
 The rules that make stacked layouts usable:
 
 - A fixed outline (`childOutline: "fixed"`) chosen without a direct row hit —
@@ -389,6 +399,9 @@ the dirty worktree; never rewrite unrelated changes.
 - Encoding structural policy only in CSS or only in drag checks.
 - Letting a fixed layout's title or padding resolve as a nearby row so an
   accepting layout swallows drops aimed at the gap before or after it.
+- Registering a container or shell as its own dnd-kit droppable or sortable to
+  steer drops instead of expressing the rule through block metadata and the
+  shared pointer resolver.
 - Proving drop targeting with one hover on a title row or an empty body instead
   of sweeping the boundary zones between stacked layouts.
 - Making every container handle permanently visible to mask a broken hover path.
