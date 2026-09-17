@@ -220,6 +220,144 @@ test("a filled table title is chrome; the strip under it snaps to the nearest ce
     .toEqual({ id: "cell", reason: "nearby-row" });
 });
 
+/**
+ * Two root boards separated by a 4px outline gap. Each board's lanes stop
+ * 22px above the board's bottom edge, leaving the board's own padding.
+ */
+function stackedBoards(): PointerDropCandidate[] {
+  const board = (id: string, top: number, lanes: readonly string[]): PointerDropCandidate[] => [
+    candidate(id, rect(top + 2, 24, 0, 600), {
+      block: rect(top, 230, 0, 600),
+      acceptsDropContainer: true,
+      dropAxis: "horizontal",
+      childOutline: "fixed",
+    }),
+    ...lanes.map((lane, index) => candidate(lane, rect(top + 34, 32, 24 + index * 280, 264), {
+      block: rect(top + 22, 186, 24 + index * 280, 264),
+      acceptsDropContainer: true,
+      ancestorIds: [id],
+      dropAxis: "vertical",
+      childOutline: "free",
+    })),
+  ];
+  return [
+    ...board("board-a", 0, ["lane-a1", "lane-a2"]),
+    ...board("board-b", 234, ["lane-b1", "lane-b2"]),
+    candidate("after", rect(470, 24, 0, 600)),
+  ];
+}
+
+test("the gap between two stacked containers is the next container's edge, not its field", () => {
+  const boards = stackedBoards();
+  // Board A ends at 230, board B starts at 234: the gap is nearest B's header.
+  expect(pickPointerDropTarget(boards, { x: 300, y: 232 })).toEqual({ id: "board-b", reason: "chrome" });
+  // The top border strip above B's header row is also B's edge.
+  expect(pickPointerDropTarget(boards, { x: 300, y: 235 })).toEqual({ id: "board-b", reason: "chrome" });
+});
+
+test("a structural container's own trailing padding is its after edge, not the nearest lane", () => {
+  const boards = stackedBoards();
+  // Lanes end at 208; the board keeps 22px of padding down to 230.
+  expect(pickPointerDropTarget(boards, { x: 300, y: 220 })).toEqual({ id: "board-a", reason: "chrome" });
+  // Between lanes above their bottom edge, the padding belongs to the lanes.
+  expect(pickPointerDropTarget(boards, { x: 292, y: 150 })).toEqual({ id: "lane-a1", reason: "nearby-row" });
+  // A field-owning lane keeps its own body; the band applies only to fixed outlines.
+  expect(pickPointerDropTarget(boards, { x: 100, y: 200 })).toEqual({ id: "lane-a1", reason: "container" });
+});
+
+test("a gap beside a structural root in the page margin resolves to that root's edge", () => {
+  const boards = stackedBoards();
+  expect(pickPointerDropTarget(boards, { x: -20, y: 10 })).toEqual({ id: "board-a", reason: "chrome" });
+});
+
+test("the trailing padding of an unaccepting fixed layout still ends at its after edge", () => {
+  const columns = candidate("columns", rect(2, 24, 0, 600), {
+    block: rect(0, 136, 0, 600),
+    acceptsDropContainer: false,
+    dropAxis: "horizontal",
+    childOutline: "fixed",
+  });
+  // A filled column hides its own row; only its writing child has one.
+  const column = candidate("column", rect(6, 0, 8, 0), {
+    block: rect(6, 40, 8, 276),
+    acceptsDropContainer: true,
+    ancestorIds: ["columns"],
+    childOutline: "free",
+  });
+  const writing = candidate("writing", rect(12, 24, 32, 252), {
+    block: rect(12, 28, 32, 252),
+    ancestorIds: ["column", "columns"],
+  });
+  const table = candidate("table", rect(142, 24, 0, 600), {
+    block: rect(140, 134, 0, 600),
+    acceptsDropContainer: true,
+    dropAxis: "vertical",
+    childOutline: "fixed",
+  });
+  expect(pickPointerDropTarget([columns, column, writing, table], { x: 300, y: 133 }))
+    .toEqual({ id: "columns", reason: "chrome" });
+  expect(pickPointerDropTarget([columns, column, writing, table], { x: 300, y: 138 }))
+    .toEqual({ id: "table", reason: "chrome" });
+});
+
+test("a grid's wrap gap under a tile stays that tile's gap; only the far padding is the board edge", () => {
+  const bento = candidate("bento", rect(2, 24, 0, 600), {
+    block: rect(0, 166, 0, 600),
+    acceptsDropContainer: true,
+    dropAxis: "grid",
+    childOutline: "fixed",
+  });
+  const tile = candidate("tile", rect(35, 96, 24, 400), {
+    block: rect(22, 122, 24, 400),
+    ancestorIds: ["bento"],
+  });
+  // 8px under the tile is within the nearby-row distance of its row.
+  expect(pickPointerDropTarget([bento, tile], { x: 200, y: 152 }))
+    .toEqual({ id: "tile", reason: "nearby-row" });
+  // Farther than that, the board's padding is its own after edge.
+  expect(pickPointerDropTarget([bento, tile], { x: 200, y: 160 }))
+    .toEqual({ id: "bento", reason: "chrome" });
+});
+
+test("an empty fixed layout keeps its whole body as the field, including the bottom band", () => {
+  const bento = candidate("bento", rect(2, 24, 0, 600), {
+    block: rect(0, 128, 0, 600),
+    acceptsDropContainer: true,
+    dropAxis: "grid",
+    childOutline: "fixed",
+  });
+  expect(pickPointerDropTarget([bento], { x: 300, y: 108 }))
+    .toEqual({ id: "bento", reason: "container" });
+});
+
+test("a fixed shell nested in another fixed outline keeps its descendant fields", () => {
+  const table = candidate("table", rect(2, 24, 0, 600), {
+    block: rect(0, 134, 0, 600),
+    acceptsDropContainer: true,
+    dropAxis: "vertical",
+    childOutline: "fixed",
+  });
+  const row = candidate("row", rect(8, 24, 9, 590), {
+    block: rect(8, 120, 9, 590),
+    acceptsDropContainer: true,
+    ancestorIds: ["table"],
+    dropAxis: "horizontal",
+    childOutline: "fixed",
+  });
+  const cell = candidate("cell", rect(46, 24, 17, 180), {
+    block: rect(36, 84, 17, 180),
+    acceptsDropContainer: true,
+    ancestorIds: ["row", "table"],
+    childOutline: "free",
+  });
+  // The 8px strip under the cells belongs to the row, whose parent outline is fixed.
+  expect(pickPointerDropTarget([table, row, cell], { x: 100, y: 124 }))
+    .toEqual({ id: "cell", reason: "nearby-row" });
+  // The table's own padding below its rows is the table's after edge.
+  expect(pickPointerDropTarget([table, row, cell], { x: 100, y: 131 }))
+    .toEqual({ id: "table", reason: "chrome" });
+});
+
 test("chrome placement is before/after the board, never inside as a new column", () => {
   const row = rect(0, 32, 0, 600);
   expect(resolveChromePlacement("kanban", row, 8)).toEqual({

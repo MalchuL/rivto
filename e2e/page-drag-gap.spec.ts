@@ -237,6 +237,127 @@ for (const mode of ["block", "edgeless"] as const) {
   }
 }
 
+/**
+ * Every root layout the demo ships, filled and empty, stacked between two
+ * writing blocks. Each adjacent pair is one boundary a user must be able to
+ * drop into from either side.
+ */
+const STACKED_ROOTS = [
+  { id: "stack-top", type: "paragraph", content: "Top" },
+  {
+    id: "stack-kanban",
+    type: "kanban",
+    content: "Filled board",
+    children: [
+      { type: "kanban-column", content: "Lane", children: [
+        { type: "paragraph", content: "Card 1" },
+        { type: "paragraph", content: "Card 2" },
+      ] },
+      { type: "kanban-column", content: "Other" },
+    ],
+  },
+  {
+    id: "stack-kanban-empty",
+    type: "kanban",
+    content: "Empty board",
+    children: [{ type: "kanban-column", content: "Empty lane" }, { type: "kanban-column", content: "Also empty" }],
+  },
+  { id: "stack-bento", type: "bento", children: [
+    { type: "paragraph", content: "Tile 1" },
+    { type: "paragraph", content: "Tile 2" },
+  ] },
+  { id: "stack-bento-empty", type: "bento" },
+  { id: "stack-columns", type: "columns", children: [
+    { type: "columns-column", children: [{ type: "paragraph", content: "Column text" }] },
+    { type: "columns-column" },
+  ] },
+  { id: "stack-table", type: "table", children: [{ type: "table-row", children: [
+    { type: "table-cell", children: [{ type: "paragraph", content: "Cell" }] },
+    { type: "table-cell" },
+  ] }] },
+  { id: "stack-bottom", type: "paragraph", content: "Bottom" },
+] as const;
+
+/** Fixed layouts whose own padding below their children is their after edge. */
+const PADDED_LAYOUTS = new Set(["stack-kanban", "stack-kanban-empty", "stack-bento", "stack-columns", "stack-table"]);
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (let index = 0; index < STACKED_ROOTS.length - 1; index += 1) {
+    const upper = STACKED_ROOTS[index]!;
+    const lower = STACKED_ROOTS[index + 1]!;
+    test(`drops between ${upper.id} and ${lower.id} from the padding, gap, and border in ${mode}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 1800 });
+      await page.evaluate(({ roots, nextMode }) => {
+        const { editor } = (window as unknown as {
+          __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+        }).__rivtoDemo.editor;
+        const ids = [
+          ...roots.map((root) => editor.blocks.insertBlock(root as never)),
+          editor.blocks.insertBlock({ id: "stack-source", type: "paragraph", content: "Source" }),
+        ];
+        editor.load({ ...editor.dump(), blocks: ids.map((id) => editor.blocks.getBlock(id)!), elements: [] });
+        if (nextMode === "edgeless") {
+          editor.elements.insertElement({
+            type: "block",
+            zIndex: 0,
+            frame: { x: 20, y: 20, width: 900, height: 1500 },
+            props: { startBlockId: ids[0]!, endBlockId: ids.at(-1)! },
+          });
+        }
+      }, { roots: STACKED_ROOTS, nextMode: mode });
+      if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
+
+      const source = page.locator('[data-block-id="stack-source"]').first();
+      const upperBlock = page.locator(`[data-block-id="${upper.id}"]`).first();
+      const lowerBlock = page.locator(`[data-block-id="${lower.id}"]`).first();
+      const upperBox = (await upperBlock.boundingBox())!;
+      const lowerBox = (await lowerBlock.boundingBox())!;
+      const boundaryY = (upperBox.y + upperBox.height + lowerBox.y) / 2;
+      // Below a writing block the pointer's X requests outline depth, so that
+      // pair stays at root depth; below a layout the whole width is its edge.
+      const xs = PADDED_LAYOUTS.has(upper.id)
+        ? [upperBox.x + CHILD_DROP_INDENT / 2, upperBox.x + upperBox.width / 2]
+        : [upperBox.x + CHILD_DROP_INDENT / 2];
+      // Approach the boundary from the upper layout's own bottom padding, the
+      // outline gap itself, and the top of the lower block.
+      const ys: Array<[string, number]> = [
+        ["gap", boundaryY],
+        ["lower top", lowerBox.y + 3],
+        ...(PADDED_LAYOUTS.has(upper.id) ? [["upper padding", upperBox.y + upperBox.height - 4] as [string, number]] : []),
+      ];
+      const approaches = xs.flatMap((x) => ys.map(([label, y]) => [`${label} @x=${Math.round(x)}`, x, y] as const));
+      const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
+      const handle = source.locator(`:scope > .${ROW_CLASS} .${HANDLE_CLASS}`);
+      await source.locator(`:scope > .${ROW_CLASS}`).hover();
+      await handle.hover();
+      const from = (await handle.boundingBox())!;
+      await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
+      for (const [label, x, y] of approaches) {
+        await page.mouse.move(x, y, { steps: 10 });
+        await expect(page.locator("[data-drop-inside]"), `${label}: no inside target`).toHaveCount(0);
+        await expect(line, `${label}: one between line`).toHaveCount(1);
+        await expect(line).toHaveAttribute("data-axis", "horizontal");
+        const lineBox = (await line.boundingBox())!;
+        expect(Math.abs(lineBox.y + lineBox.height / 2 - boundaryY), `${label}: line at the boundary`).toBeLessThanOrEqual(2);
+      }
+      await page.mouse.up();
+
+      await expect.poll(() => page.evaluate(() => {
+        const { editor } = (window as unknown as {
+          __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+        }).__rivtoDemo.editor;
+        return editor.blocks.getRootIds();
+      })).toEqual([
+        ...STACKED_ROOTS.slice(0, index + 1).map((root) => root.id),
+        "stack-source",
+        ...STACKED_ROOTS.slice(index + 1).map((root) => root.id),
+      ]);
+    });
+  }
+}
+
 test("hovering a row body still puts the drop inside that block", async ({ page }) => {
   const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
   const beta = page.locator("[data-block-id]").filter({ has: page.getByText("Beta", { exact: true }) }).first();

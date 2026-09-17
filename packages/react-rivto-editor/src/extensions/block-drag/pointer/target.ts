@@ -81,8 +81,9 @@ function collectPointerDropCandidates(
  *
  * The target rectangle is what `resolveDropPlacement` treats as the row body
  * versus its before/after edges. A BlockView includes its whole subtree, so
- * free-outline targets use only their title row. Explicit body hits and fixed
- * layouts keep the full BlockView for containment or spatial half-splits.
+ * free-outline targets use only their title row. Explicit body hits, fixed
+ * layouts, and chrome approached from outside keep the full BlockView for
+ * containment or spatial half-splits.
  *
  * @param source - Dragged block identity, layout data, and cursor stand-in.
  * @param blockElement - BlockView that owns the resolved target.
@@ -192,7 +193,10 @@ export function withPointerDropTarget(
 
   // No row under the cursor: pick the nearest sibling row, not the nearest
   // accepting ancestor. Filled fixed layouts snap to a descendant field.
-  // `reason === "container"` is reserved for accepting body space.
+  // `reason === "container"` is reserved for accepting body space. Chrome
+  // reached here was approached from a gap, margin, or the layout's own
+  // padding, so the whole layout rect decides before/after: its title row
+  // sits at the top and would call almost every such point "after".
   const { elements, candidates } = collectPointerDropCandidates(root, reactEditor);
   const hit = pickPointerDropTarget(
     candidates.filter(({ id }) => !excludedIds.has(id)),
@@ -200,7 +204,8 @@ export function withPointerDropTarget(
     NEARBY_ROW_DROP_PX,
   );
   const blockElement = hit ? elements.get(hit.id) : undefined;
+  const useFullBlock = hit?.reason === "container" || hit?.reason === "chrome";
   return blockElement
-    ? pointerDropInput(source, blockElement, hit?.reason === "container", reactEditor, hit!.reason)
+    ? pointerDropInput(source, blockElement, useFullBlock, reactEditor, hit!.reason)
     : null;
 }

@@ -162,6 +162,38 @@ Containment metadata governs outline interactions. `allowedParents` governs
 model validity. They solve different problems and fixed structures commonly
 need both.
 
+## Keep layout edges droppable
+
+Pointer targeting for page drags lives in
+`extensions/block-drag/pointer/hit.ts` (`pickPointerDropTarget`), is adapted
+in `pointer/target.ts`, and is turned into a placement rule by
+`placement/intent.ts`. A layout root participates through the same three
+inputs as every block: its 24px title row, its full BlockView rect, and its
+`childOutline` / `dropAxis` / `acceptsDropContainer` metadata. Do not add
+per-type branches there; express the layout through that metadata.
+
+The rules that make stacked layouts usable:
+
+- A fixed outline (`childOutline: "fixed"`) chosen without a direct row hit —
+  from the 4px root gap, the page margin beside it, or its own padding above
+  the first or below the last direct child — is that layout's outer edge and
+  resolves before/after using the whole layout rect. It must never become an
+  "inside" field just because the layout `acceptsDropContainer`; that turns the
+  only reachable between zone into the upper half of a title row.
+- An empty layout keeps its whole body as the field a user fills first.
+- A descendant row within `NEARBY_ROW_DROP_PX` still wins inside the padding
+  band, so a grid's wrap gap under a tile stays that tile's sibling gap.
+- A shell whose parent outline is fixed (a table row) keeps resolving its
+  strip under the cells to a cell field; only roots and shells in free outlines
+  own an edge band.
+- Lanes, cells, and columns are free-outline fields: their body is "inside",
+  their padding belongs to them, and a nearby card row wins over the lane.
+
+Keep root layout padding modest (about 22px) and give every direct child a
+measurable rect; the edge band is measured from the layout rect and the
+children's span, so a layout that hides its children behind a wrapper without
+`data-block-id` loses its edge.
+
 ## Create and convert correctly
 
 Insertion factories are also used by APIs, tests, and demo seed data. Slash
@@ -308,6 +340,27 @@ omits the extension should render no handle; that does not replace the installed
 integration test. Add each new container root to the shared full-height lateral
 hover implementation and the parameterized root-handle test in the same change.
 
+Also add the new root, filled and empty, to `STACKED_ROOTS` in
+`e2e/page-drag-gap.spec.ts`. That test stacks every layout between two writing
+blocks and, for each adjacent pair, requires one between line at the boundary
+and no `[data-drop-inside]` when approached from the upper layout's bottom
+padding, the gap itself, and the top of the lower block, at both the root-depth
+X and the layout's horizontal center, in page and edgeless modes, and then
+commits the drop. Boundary behavior is not covered by hovering a title row or
+an empty body: those points worked while the gap and padding around them
+dropped into the next layout.
+
+When pointer placement misbehaves, do not reason from single points. Build the
+demo, start a drag, sweep the pointer in 2px steps down a column of X positions
+(page margin, root-depth X, center), and log each change of the indicator
+owner, kind, axis, and Y together with the `[data-drop-inside]` owner. The
+transition log shows every zone's real extent; compare it against the measured
+`block` and `row` rects of each candidate. Then add a Jest fixture to
+`pointer/hit.test.ts` with realistic geometry — a 24px title row at the top of
+the layout rect, children starting under it, about 22px of bottom padding, a
+4px root gap — because a fixture with a title far from its children hides
+padding and gap regressions.
+
 For drag-handle regressions, test interaction rather than computed visibility
 alone. Start outside the container, verify the root handle is transparent but
 its hitbox is recoverable, enter the hitbox directly, then hover the body and
@@ -334,6 +387,10 @@ the dirty worktree; never rewrite unrelated changes.
 - Inserting a new container after the slash target.
 - Creating blank paragraph children for spacing.
 - Encoding structural policy only in CSS or only in drag checks.
+- Letting a fixed layout's title or padding resolve as a nearby row so an
+  accepting layout swallows drops aimed at the gap before or after it.
+- Proving drop targeting with one hover on a title row or an empty body instead
+  of sweeping the boundary zones between stacked layouts.
 - Making every container handle permanently visible to mask a broken hover path.
 - Moving or stacking a root handle over a descendant instead of separating their
   owning slot geometry.
