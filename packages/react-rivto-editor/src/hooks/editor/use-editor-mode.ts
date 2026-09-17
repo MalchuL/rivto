@@ -34,7 +34,7 @@ export interface UseEditorModeResult {
  * @throws If called outside an EditorView subtree.
  */
 export function useEditorMode(): UseEditorModeResult {
-  const { editor } = useEditorContext();
+  const { reactEditor: editor } = useEditorContext();
   const subscribe = useCallback(
     (listener: () => void) => editor.mode.subscribe(listener),
     [editor],

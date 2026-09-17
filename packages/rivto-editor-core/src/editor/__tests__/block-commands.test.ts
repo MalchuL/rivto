@@ -311,7 +311,7 @@ describe("EditorRuntime block commands", () => {
       children: [{ type: "paragraph", content: "Second child" }],
     }, leaf);
     const updates = jest.fn();
-    const unsubscribe = editor.document.subscribe(updates);
+    const unsubscribe = editor.subscribe(updates);
 
     editor.blocks.updateBlocks([
       { id: first, patch: { listProps: { collapsed: true }, props: { order: "first" } } },
@@ -442,7 +442,7 @@ describe("EditorRuntime block commands", () => {
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
 
     const documentUpdates = jest.fn();
-    const unsubscribe = editor.document.subscribe(documentUpdates);
+    const unsubscribe = editor.subscribe(documentUpdates);
     editor.blocks.indentBlocks([firstId, childId, secondId]);
 
     expect(documentUpdates).toHaveBeenCalledTimes(1);
@@ -470,7 +470,7 @@ describe("EditorRuntime block commands", () => {
     const gapId = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, firstId);
     const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, gapId);
     const documentUpdates = jest.fn();
-    const unsubscribe = editor.document.subscribe(documentUpdates);
+    const unsubscribe = editor.subscribe(documentUpdates);
 
     editor.blocks.indentBlocks([firstId, lastId]);
 
@@ -501,7 +501,7 @@ describe("EditorRuntime block commands", () => {
     editor.blocks.indentBlock(childId);
     const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, parentId);
     const documentUpdates = jest.fn();
-    const unsubscribe = editor.document.subscribe(documentUpdates);
+    const unsubscribe = editor.subscribe(documentUpdates);
 
     editor.blocks.moveBlock(parentId, targetId);
 
@@ -528,7 +528,7 @@ describe("EditorRuntime block commands", () => {
     const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, firstId);
     editor.blocks.indentBlock(childId);
     const documentUpdates = jest.fn();
-    const unsubscribe = editor.document.subscribe(documentUpdates);
+    const unsubscribe = editor.subscribe(documentUpdates);
 
     editor.blocks.moveBlocks([secondId, childId, firstId], targetId, "after");
 
@@ -601,7 +601,7 @@ describe("EditorRuntime block commands", () => {
     const followingId = editor.blocks.insertBlock({ type: "paragraph", content: "Following" }, secondId);
 
     const documentUpdates = jest.fn();
-    const unsubscribe = editor.document.subscribe(documentUpdates);
+    const unsubscribe = editor.subscribe(documentUpdates);
     editor.blocks.outdentBlocks([firstId, existingChildId, secondId]);
 
     expect(documentUpdates).toHaveBeenCalledTimes(1);

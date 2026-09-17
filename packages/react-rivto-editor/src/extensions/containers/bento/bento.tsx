@@ -142,7 +142,7 @@ function clearBentoResizeStyles(tiles: readonly HTMLElement[]): void {
  * @returns Nothing; no-ops when the block is gone or the value is unchanged.
  */
 function commitBentoTileWidth(runtime: ReactEditor, blockId: string, width: number): void {
-  const block = runtime.editor.blocks.getBlock(blockId);
+  const block = runtime.blocks.getBlock(blockId);
   const next = tileWidth(width);
   if (!block || tileWidth(block.props.bentoWidth) === next) return;
   runtime.blocks.updateBlock(blockId, { props: { ...block.props, bentoWidth: next } });
@@ -190,7 +190,7 @@ export function Bento({ blockId }: { readonly blockId: string }) {
 function BentoResizeHandles({ blockId, tile }: { readonly blockId: string; readonly tile: HTMLElement }) {
   const runtime = useReactEditor();
   const gesture = useRef<TileResizeGesture | null>(null);
-  const width = tileWidth(runtime.editor.blocks.getBlock(blockId)?.props.bentoWidth);
+  const width = tileWidth(runtime.blocks.getBlock(blockId)?.props.bentoWidth);
 
   useLayoutEffect(() => () => {
     const active = gesture.current;
@@ -319,11 +319,11 @@ function BentoResizeHandles({ blockId, tile }: { readonly blockId: string; reado
 function BentoWrapper({ block, children }: BlockWrapperProps) {
   const runtime = useReactEditor();
   const [element, setElement] = useState<HTMLDivElement | null>(null);
-  const parentId = runtime.editor.blocks.getParentId(block.id);
+  const parentId = runtime.blocks.getParentId(block.id);
   const isBoard = block.type === BENTO_BLOCK_TYPE;
   const isTile = !isBoard
     && typeof parentId === "string"
-    && runtime.editor.blocks.getBlock(parentId)?.type === BENTO_BLOCK_TYPE;
+    && runtime.blocks.getBlock(parentId)?.type === BENTO_BLOCK_TYPE;
   const width = tileWidth(block.props.bentoWidth);
 
   useLayoutEffect(() => {

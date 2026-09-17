@@ -43,7 +43,7 @@ React extension / demo / host application
 
 - Domain invariants и persisted shape меняются в `store/document-model/core`.
 - Public user operations проходят через focused core managers, а не через forwarding methods editor.
-- Managers создают shared values только через `document.crdt.createDetached*()`.
+- Managers создают shared values только через `crdt.createDetached*()`.
 - Mutations используют `document.transact()` и стабильный `origin`.
 - Snapshot validation выполняется до destructive writes, поскольку CRDT transaction не гарантирует rollback.
 - Blocks и elements остаются отдельными entity families.

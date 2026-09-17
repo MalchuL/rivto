@@ -33,7 +33,7 @@ rivto.editor.elements: CRDTMap<elementId, CRDTMap<ElementStorage>>
     props   -> CRDTMap<key, portable value>
 ```
 
-**CRDT objects:** root `elements`, map отдельного element, вложенная `frame` map и вложенная `props` map. Все четыре создаются/получаются через CRDT API; новые nested maps создаёт `document.crdt.createDetachedMap()`. Изменение `frame.x` не заменяет `frame`, а изменение одного `props` key не заменяет соседние keys.
+**CRDT objects:** root `elements`, map отдельного element, вложенная `frame` map и вложенная `props` map. Все четыре создаются/получаются через CRDT API; новые nested maps создаёт `crdt.createDetachedMap()`. Изменение `frame.x` не заменяет `frame`, а изменение одного `props` key не заменяет соседние keys.
 
 **Base/plain values:** `id`, `type`, `zIndex`, четыре числа geometry и значения отдельных props. Plain record/array внутри одного prop сериализуется как одно portable значение: его внутренние поля не являются отдельными CRDT objects. Например, `props.style = { color, opacity }` записывается под одним shared key `style`; независимо collaborative являются `props.style` и `props.title`, но не обязательно `style.color` и `style.opacity`.
 
@@ -88,9 +88,8 @@ document.elements.updateElement("shape-1", {
 
 ### `undoScopes`
 
-- **Тип:** readonly tuple `[storage]`, публичное свойство.
-- **Значение:** element root, включённый в document undo history.
-- **Исключения при чтении:** отсутствуют.
+- **Тип:** `readonly CRDTUndoScope[]`.
+- **Значение:** element root, который модель включает в общую историю.
 
 ## Создание
 

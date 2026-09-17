@@ -20,13 +20,13 @@ test("saves a slash-created Review report and reproduces it with native load", a
     const runtimeState = await page.evaluate((id) => {
       const reactEditor = (
         window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+        __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditor };
       }
-      ).__rivtoDemo.editor;
+      ).__rivtoDemo.reactEditor;
       return {
         commands: reactEditor.slashCommands.getAll({ blockId: id }).map(({ id: commandId }) => commandId),
-        definition: reactEditor.editor.blocksRegistry.get("demo.review")?.type,
-        element: reactEditor.editor.elements.getElement("demo-review-element")?.type,
+        definition: reactEditor.blocks.getDefinition("demo.review")?.type,
+        element: reactEditor.elements.getElement("demo-review-element")?.type,
       };
     }, blockId);
     expect(runtimeState).toMatchObject({
@@ -73,8 +73,8 @@ test("saves a slash-created Review report and reproduces it with native load", a
 
     await page.evaluate((id) => {
       const core = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
-      }).__rivtoDemo.editor.editor;
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      }).__rivtoDemo.editor;
       core.undo();
       const props = core.blocks.getBlock(id)?.props;
       if (props?.snapshot !== null || props.savedAt !== null) {
@@ -85,8 +85,8 @@ test("saves a slash-created Review report and reproduces it with native load", a
     await page.getByLabel("Restore Review report").setInputFiles(reportPath);
     const reproduced = await page.evaluate(() => {
       const core = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
-      }).__rivtoDemo.editor.editor;
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      }).__rivtoDemo.editor;
       return core.dump();
     });
     expect(reproduced).toEqual(report.snapshot);

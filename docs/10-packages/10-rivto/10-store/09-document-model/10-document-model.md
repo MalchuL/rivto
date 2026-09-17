@@ -12,23 +12,7 @@
 - **Значение:** описательный ID модели; не управляет персистентностью или provider room.
 - **Исключения при чтении:** отсутствуют.
 
-### `crdt`
-
-- **Тип:** `CRDTDoc`, публичное `readonly`-свойство.
-- **Значение:** adapter-neutral каноническое shared storage.
-- **Исключения при чтении:** отсутствуют.
-
-### `origin`
-
-- **Тип:** `symbol`, публичное `readonly`-свойство.
-- **Значение:** один `Symbol("rivto-document")` для локальных транзакций этой модели.
-- **Исключения при чтении:** отсутствуют.
-
-### `undoScopes`
-
-- **Тип:** `CRDTUndoScope[]`, публичное `readonly`-свойство.
-- **Значение:** объединённые scopes `blocks`, `elements`, `links` и `pluginData`.
-- **Исключения при чтении:** отсутствуют.
+CRDT document и transaction origin являются приватными деталями реализации. Каждый focused storage manager объявляет собственные `undoScopes`; модель объединяет их только при создании `history`.
 
 ### `blocks`
 
@@ -62,13 +46,7 @@
 - **Создаёт:** модель с `id === crdt.id`.
 - **Исключения:** ошибки получения CRDT roots и нормализации дерева передаются.
 
-### `constructor(id, crdt)`
-
-- **Аргументы:** `id: string`; `crdt: CRDTDoc`.
-- **Создаёт:** модель с явно заданным описательным ID.
-- **Исключения:** `Error("DocumentModelImpl requires a CRDTDoc")`, если второй аргумент отсутствует; также передаются ошибки CRDT initialization.
-
-Обе overload-формы создают managers в порядке `blocks`, `elements`, `links`, `pluginData`, собирают их `undoScopes`, затем вызывают `blocks.normalize()`.
+Конструктор создаёт managers, приватно собирает их undo scopes и вызывает `blocks.normalize()`.
 
 ## Методы
 
@@ -92,9 +70,14 @@ Listener не получает snapshot или описание patch: это о
 - **Возвращает:** `void`.
 - **Исключения:** передаёт исходное исключение `operation` и ошибки `CRDTDoc.transact`; rollback не гарантируется.
 
-Выполняет callback через `crdt.transact(operation, origin)`. Все managers используют эту границу вместо собственных адаптер-specific транзакций.
+Выполняет callback через `crdt.transact(operation)`. Adapter сам назначает приватный local origin.
 
-`operation` выполняется синхронно и ничего не возвращает через API модели. Stable `origin` позволяет undo manager отслеживать именно локальные изменения Rivto. Вложенные manager transactions остаются частью adapter transaction, если adapter поддерживает nesting. Atomic delivery означает один согласованный update для observers, но не rollback: исключение callback-а передаётся caller-у, а уже выполненные CRDT writes могут сохраниться.
+`operation` выполняется синхронно и ничего не возвращает через API модели. Вложенные manager transactions остаются частью adapter transaction, если adapter поддерживает nesting. Atomic delivery означает один согласованный update для observers, но не rollback: исключение callback-а передаётся caller-у, а уже выполненные CRDT writes могут сохраниться.
+
+### `history`
+
+- **Тип:** `DocumentUndoManager`, публичное `readonly`-свойство.
+- **Значение:** focused undo/redo manager, уже настроенный на приватные scopes всех storage managers.
 
 ### `getSnapshot()`
 
@@ -129,12 +112,11 @@ document.loadSnapshot({
 
 ## Использование в проекте
 
-`EditorRuntime` создаёт модель так:
+Host создаёт модель и передаёт её в editor так:
 
 ```ts
-this.document = new DocumentModelImpl(
-  options.document ?? new YjsDoc(`rivto-${crypto.randomUUID()}`),
-);
+const document = new DocumentModelImpl(new YjsDoc("document-id"));
+const editor = createRivtoEditor({ document });
 ```
 
-Затем public editor managers делегируют focused operations в `document.blocks`, `document.links` и `document.elements`. `UndoManager` использует `document.undoScopes` и `[document.origin]`, а persistence API вызывает `getSnapshot()` и `loadSnapshot()`.
+Затем public editor managers делегируют focused operations в document managers. `EditorRuntime` повторно использует `document.history`, а persistence API вызывает `getSnapshot()` и `loadSnapshot()`.

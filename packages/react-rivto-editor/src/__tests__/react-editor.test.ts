@@ -28,6 +28,7 @@ import {
 } from "../extensions/built-ins/built-ins";
 import { pageDragExtension } from "../extensions/block-drag";
 import { edgelessPreset } from "../extensions/edgeless";
+import { isReactEditor, isRivtoEditor } from "../utils";
 
 const Empty: ComponentType<{ blockId: string }> = () => null;
 const EmptyComponent: ComponentType = () => null;
@@ -39,6 +40,19 @@ const EmptyEditorWrapper: ComponentType<{ readonly children?: ReactNode }> = ({
 }) => children;
 
 describe("ReactEditor", () => {
+  test("distinguishes React and core editor runtimes", () => {
+    const editor = createEditor();
+    const reactEditor = createReactEditor({ editor });
+
+    expect(isReactEditor(reactEditor)).toBe(true);
+    expect(isRivtoEditor(reactEditor)).toBe(false);
+    expect(isReactEditor(editor)).toBe(false);
+    expect(isRivtoEditor(editor)).toBe(true);
+
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
   test("passes the complete ReactEditor runtime directly to extension setup", () => {
     const editor = createEditor();
     let received: ReactEditor | undefined;
@@ -53,7 +67,8 @@ describe("ReactEditor", () => {
     });
 
     expect(received).toBe(reactEditor);
-    expect(received?.editor).toBe(editor);
+    const exposesCore: "editor" extends keyof typeof reactEditor ? true : false = false;
+    expect(exposesCore).toBe(false);
     expect(received?.events).toBe(reactEditor.events);
     reactEditor.destroy();
     editor.destroy();
@@ -904,15 +919,16 @@ describe("delegated events", () => {
 
   test("constructs exported editor event values directly", () => {
     const editor = createEditor();
+    const reactEditor = createReactEditor({ editor });
     const { root } = realm();
     const surface = root as unknown as HTMLElement;
     const raw = keyboardEvent(root, "Enter");
-    const selection = editor.selection.get();
+    const selection = reactEditor.selection.get();
     const base = {
       raw,
-      editor,
+      editor: reactEditor,
       root: surface,
-      mode: editor.mode.get(),
+      mode: reactEditor.mode.get(),
       selection,
       eventTarget: "surface" as const,
       insideRoot: true,
@@ -931,6 +947,7 @@ describe("delegated events", () => {
     expect(event.selection).toBe(selection);
     expect(keyboardEventValue).toBeInstanceOf(EditorEvent);
     expect(keyboardEventValue.shortcut).toBe("Enter");
+    reactEditor.destroy();
     editor.destroy();
   });
 

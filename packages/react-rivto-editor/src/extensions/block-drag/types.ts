@@ -21,7 +21,6 @@ export interface PointerTracker {
 
 /** Live destination surface operations used by a source drag provider. */
 export interface CrossDocumentPageRootController {
-  editor: ReactEditor["editor"];
   reactEditor: ReactEditor;
   root: HTMLElement;
   setPlacement: (placement: DropPlacement | null, empty?: boolean) => void;

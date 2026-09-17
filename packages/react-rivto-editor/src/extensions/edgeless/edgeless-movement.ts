@@ -4,14 +4,14 @@ import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 
 /** Moves selected canvas roots through eight exact arrow-key bindings. */
 export function registerEdgelessMovement(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   const selection = getEdgelessRuntime(reactEditor);
 
   const move = (dx: number, dy: number): boolean => {
     const items = selection.get().items;
     if (!items.length) return false;
     if (editor.commands.has("edgeless.selection.move")) {
-      editor.execute("edgeless.selection.move", { dx, dy });
+      editor.commands.execute("edgeless.selection.move", { dx, dy });
     } else {
       const updates = items.flatMap((id) => {
         const element = editor.elements.getElement(id);

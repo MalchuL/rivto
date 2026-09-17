@@ -21,7 +21,7 @@ import { useEditorSelection } from "../editor/use-editor-selection";
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockSelected(blockId: string): boolean {
-  const { editor } = useEditorContext();
+  const { reactEditor: editor } = useEditorContext();
   const subscribe = useCallback(
     (listener: () => void) => editor.selection.subscribe(listener),
     [editor],

@@ -59,7 +59,7 @@ function insertSeparator(
   separatorType: string,
   createDefaultBlock: CreateDefaultBlock,
 ): string | undefined {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   const block = editor.blocks.getBlock(blockId);
   if (!block) return undefined;
   let separatorId = "";

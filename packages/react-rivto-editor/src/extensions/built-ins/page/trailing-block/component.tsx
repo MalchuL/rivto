@@ -3,7 +3,7 @@
  */
 import { createCaretSelection } from "@chulane/rivto";
 import { createPortal } from "react-dom";
-import { useEditor, useEditorRoot, useReactEditor } from "../../../../hooks";
+import { useEditorRoot, useReactEditor } from "../../../../hooks";
 import { PAGE_END_SLOT_SELECTOR } from "../../../../constants";
 import { focusBlock } from "../../../../managers";
 import type { TrailingBlockProps } from "./types";
@@ -14,7 +14,7 @@ const TRAILING_BLOCK_CLASS = "page-trailing-block";
 
 /** Page-end controls that create every writing block up to the activated row. */
 export function TrailingBlock({ count }: TrailingBlockProps) {
-  const editor = useEditor();
+  const editor = useReactEditor();
   const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
   const slot = root?.querySelector<HTMLElement>(PAGE_END_SLOT_SELECTOR);

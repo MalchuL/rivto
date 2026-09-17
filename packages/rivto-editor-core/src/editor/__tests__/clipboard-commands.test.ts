@@ -147,7 +147,7 @@ describe("clipboard commands", () => {
     const destination = target.blocks.insertBlock({ type: "paragraph", content: "Destination" });
     const targetTextTarget = testRange(target, { blockId: destination, offset: 4 }, { blockId: destination, offset: 4 });
     const documentUpdates = jest.fn();
-    const unsubscribe = target.document.subscribe(documentUpdates);
+    const unsubscribe = target.subscribe(documentUpdates);
     target.execute("clipboard.paste", { textTarget: targetTextTarget,
       structured: clipboard.get(RIVTO_CLIPBOARD_MIME),
       placement: { parentId: null, afterId: destination },
@@ -212,7 +212,7 @@ describe("clipboard commands", () => {
     target.blocks.indentBlock(oldChild);
     const targetTextTarget = testRange(target, { blockId: parent, offset: 3 }, { blockId: parent, offset: 3 });
     const updates = jest.fn();
-    const unsubscribe = target.document.subscribe(updates);
+    const unsubscribe = target.subscribe(updates);
 
     target.execute("clipboard.paste", { textTarget: targetTextTarget,
       structured: clipboard.get(RIVTO_CLIPBOARD_MIME),
@@ -252,7 +252,7 @@ describe("clipboard commands", () => {
     const destination = target.blocks.insertBlock({ type: "paragraph", content: "Destination" });
     const targetTextTarget = testRange(target, { blockId: destination, offset: 4 }, { blockId: destination, offset: 4 });
     const updates = jest.fn();
-    const unsubscribe = target.document.subscribe(updates);
+    const unsubscribe = target.subscribe(updates);
 
     const caret = target.execute("clipboard.paste", { textTarget: targetTextTarget, structured: clipboard.get(RIVTO_CLIPBOARD_MIME) });
 
@@ -295,7 +295,7 @@ describe("clipboard commands", () => {
       selection: createStructuralSelection([first, second], first, second),
     });
     const documentUpdates = jest.fn();
-    const unsubscribe = editor.document.subscribe(documentUpdates);
+    const unsubscribe = editor.subscribe(documentUpdates);
 
     editor.deleteSelection();
 

@@ -3,6 +3,13 @@ import type { CreateRivtoEditorOptions } from "./types";
 import type { EditorPosition } from "../managers/selection-manager";
 import { createCaretSelection, createTextSelection, createStructuralSelection } from "../managers/selection-manager";
 import type { Block } from "@chulane/document-model";
+import { DocumentModelImpl } from "@chulane/document-model";
+import { YjsDoc, type CRDTDoc } from "@chulane/crdt-doc";
+
+type CreateTestEditorOptions = Omit<CreateRivtoEditorOptions, "document"> & {
+  /** Optional CRDT adapter wrapped in a document model for focused tests. */
+  document?: CRDTDoc;
+};
 
 /**
  * Core test editor with a local writing block registered.
@@ -10,8 +17,9 @@ import type { Block } from "@chulane/document-model";
  * Production hosts / React extensions own writing types; core no longer
  * auto-installs `paragraph`.
  */
-export function createTestEditor(options: CreateRivtoEditorOptions = {}): EditorRuntime {
-  const editor = createRivtoEditor(options);
+export function createTestEditor(options: CreateTestEditorOptions = {}): EditorRuntime {
+  const document = new DocumentModelImpl(options.document ?? new YjsDoc(`rivto-test-${crypto.randomUUID()}`));
+  const editor = createRivtoEditor({ ...options, document });
   editor.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
   return editor;
 }

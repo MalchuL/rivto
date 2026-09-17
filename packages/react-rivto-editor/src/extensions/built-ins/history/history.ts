@@ -58,11 +58,11 @@ export function registerHistory(
   reactEditor: ReactEditor,
   options: HistoryExtensionOptions = {},
 ): void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   /** Executes one history step and restores focus after React renders it. */
   const run = (root: HTMLElement, action: HistoryAction): void => {
     if (!root) return;
-    editor[action]();
+    editor.history[action]();
     requestAnimationFrame(() => {
       if (reactEditor.selection.restoreDOM()) return;
       root.ownerDocument.getSelection()?.removeAllRanges();

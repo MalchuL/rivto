@@ -11,6 +11,7 @@
 import { ContainerBlockView } from "../../../views/container-view";
 import type { RivtoEditorApi } from "@chulane/rivto";
 import type { BlockViewContext, BlockViewOutcome, DropAxis } from "../../../views/types";
+import type { ReactEditor } from "../../../types";
 
 export const COLUMNS_BLOCK_TYPE = "columns";
 export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
@@ -26,7 +27,7 @@ export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
  * @param columnIds - Column identifiers whose children must survive.
  * @returns Nothing; callers delete the empty shells afterwards.
  */
-export function relocateColumnContents(editor: RivtoEditorApi, columnIds: readonly string[]): void {
+export function relocateColumnContents(editor: ReactEditor | RivtoEditorApi, columnIds: readonly string[]): void {
   const unique = [...new Set(columnIds)].filter((id) => editor.blocks.getBlock(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE);
   unique.forEach((id) => {
     const parentId = editor.blocks.getParentId(id);
@@ -63,9 +64,9 @@ export class ColumnsColumnView extends ContainerBlockView {
    */
   override onStructuralDelete(context: BlockViewContext, ids: readonly string[]): BlockViewOutcome {
     const columnIds = ids.filter((id) => (
-      context.reactEditor.editor.blocks.getBlock(id)?.type === context.block.type
+      context.reactEditor.blocks.getBlock(id)?.type === context.block.type
     ));
-    if (columnIds.length) relocateColumnContents(context.reactEditor.editor, columnIds);
+    if (columnIds.length) relocateColumnContents(context.reactEditor, columnIds);
     return "default";
   }
 }

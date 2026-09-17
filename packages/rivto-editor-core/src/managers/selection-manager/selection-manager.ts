@@ -7,8 +7,8 @@
  * delete as an empty slice.
  */
 import type { Block } from "@chulane/document-model";
-import type { EditorRuntime } from "../../editor/rivto-editor";
 import { Listeners } from "../../utils";
+import type { RivtoEditorApi } from "../../editor/types";
 import type { Selection } from "./selection";
 import type { ResolvedSelection } from "./resolved-selection";
 import {
@@ -28,9 +28,14 @@ export class SelectionManager {
 
   /**
    * Creates a manager for one runtime.
-   * @param editor - Runtime providing current blocks and mutations.
+   * @param editor - Owning editor providing block, element, and batch capabilities.
    */
-  constructor(private readonly editor: EditorRuntime) {}
+  constructor(private readonly editor: RivtoEditorApi) {}
+
+  /** Runs one selection mutation inside the shared transaction boundary. */
+  private batchUpdates<Result>(operation: () => Result): Result {
+    return this.editor.batchUpdates(operation);
+  }
 
   /** @returns Detached current selection. */
   get(): Selection | undefined {
@@ -162,9 +167,9 @@ export class SelectionManager {
     // those entities rather than splice characters. Element IDs travel with
     // either branch so mixed canvas+page selections stay one undo step.
     if (!range || isStructuralSelection(current)) {
-      this.editor.batchUpdates(() => {
-        range?.blocks.forEach((block) => this.editor.document.blocks.removeBlock(block.id));
-        this.editor.document.elements.removeElements(elementIds);
+      this.batchUpdates(() => {
+        range?.blocks.forEach((block) => this.editor.blocks.removeBlock(block.id));
+        this.editor.elements.removeElements(elementIds);
         this.clear();
       });
     } else {
@@ -175,10 +180,10 @@ export class SelectionManager {
       const last = range.ranges.at(-1)!;
       const prefix = first.block.content.slice(0, first.startOffset);
       const suffix = last.block.content.slice(last.endOffset);
-      this.editor.batchUpdates(() => {
-        range.blocks.slice(1).forEach((block) => this.editor.document.blocks.removeBlock(block.id));
-        this.editor.document.blocks.setBlockText(first.block.id, prefix + suffix);
-        this.editor.document.elements.removeElements(elementIds);
+      this.batchUpdates(() => {
+        range.blocks.slice(1).forEach((block) => this.editor.blocks.removeBlock(block.id));
+        this.editor.blocks.updateBlock(first.block.id, { content: prefix + suffix });
+        this.editor.elements.removeElements(elementIds);
         this.collapse(first.block.id, prefix.length);
       });
     }

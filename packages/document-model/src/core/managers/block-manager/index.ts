@@ -1,3 +1,8 @@
+/**
+ * Publishes block storage, validation, and processor contracts from one module.
+ * Consumers use this boundary instead of depending on the manager's internal
+ * CRDT storage helpers.
+ */
 export { DocumentBlockManager } from "./block-manager";
 export type { BlockPipe, BlockPipeContext, BlockProcessor } from "./block-pipe";
 export {

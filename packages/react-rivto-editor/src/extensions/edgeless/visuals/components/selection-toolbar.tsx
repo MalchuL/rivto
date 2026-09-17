@@ -18,11 +18,11 @@ export function SelectionToolbar({
   controller: EdgelessVisualController;
   items: readonly string[];
 }) {
-  const execute = (name: string, payload?: unknown) => controller.reactEditor.editor.execute(name, payload);
+  const execute = (name: string, payload?: unknown) => controller.reactEditor.commands.execute(name, payload);
   return (
     <div className="edgeless-selection-toolbar" data-edgeless-ui="true" role="toolbar" aria-label="Selected objects">
       {items.length > 1 && <EdgelessToolButton label="Group" icon="group" onClick={() => execute("edgeless.selection.group")} />}
-      {items.some((id) => controller.reactEditor.editor.elements.getElement(id)?.type === "group") && (
+      {items.some((id) => controller.reactEditor.elements.getElement(id)?.type === "group") && (
         <EdgelessToolButton label="Ungroup" icon="ungroup" onClick={() => execute("edgeless.selection.ungroup")} />
       )}
       {items.length > 1 && alignments.map(([alignment, label, icon]) => (

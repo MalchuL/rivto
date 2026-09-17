@@ -5,12 +5,10 @@
  *
  * @module
  */
-import type {
-  RivtoEditorApi as Editor,
-  Selection,
-} from "@chulane/rivto";
+import type { Selection } from "@chulane/rivto";
 import { createCaretSelection, isCaretSelection } from "@chulane/rivto";
 import type { SelectionCapability } from "../../capabilities";
+import type { ReactEditor } from "../../types";
 import {
   findBlockFromEvent,
   focusBlock,
@@ -72,7 +70,7 @@ export function shouldDeleteSelection(
  */
 export function readKeyboardSelection(
   selectionManager: SelectionCapability,
-  editor: Editor,
+  editor: Pick<ReactEditor, "blocks">,
   emptyBlockId?: string,
 ): Selection | undefined {
   const nativeSelection = selectionManager.readDOM();

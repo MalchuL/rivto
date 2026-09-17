@@ -5,10 +5,12 @@
  * this layer supplies generic storage operations and snapshot validation.
  */
 import {
+    CRDTDoc,
     CRDTType,
     CRDTArray,
     CRDTMap,
     CRDTText,
+    CRDTUndoScope,
 } from "@chulane/crdt-doc";
 import type {
     Block,
@@ -16,7 +18,6 @@ import type {
     BlockListProps,
     BlockPatch,
     BlockUpdate,
-    DocumentModel,
     GenerateId,
 } from "../../types";
 import type {
@@ -65,9 +66,6 @@ interface LocatedBlock {
  * writes.
  */
 export class DocumentBlockManager {
-    /** Collaborative containers tracked by the owning document's undo manager. */
-    readonly undoScopes: readonly [CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>, CRDTArray<IDBlock>];
-
     /** Priority-ordered processors applied to portable blocks before writes. */
     readonly pipe = new Pipe<BlockInput, BlockPipeContext>();
     /**
@@ -101,15 +99,17 @@ export class DocumentBlockManager {
     private readonly roots: CRDTArray<IDBlock>;
     /** Block storage. */
     private readonly storage: CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>;
+    /** Collaborative roots owned by this manager and tracked by document history. */
+    readonly undoScopes: readonly CRDTUndoScope[];
 
     /**
      * Creates a block manager over existing collaborative document storage.
      *
-     * @param document - Owning document model providing CRDT and transaction boundaries.
+     * @param crdt - Collaborative storage adapter.
      */
-    constructor(private readonly document: DocumentModel) {
-        this.roots = document.crdt.getArray<IDBlock>(ROOTS_KEY);
-        this.storage = document.crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY);
+    constructor(private readonly crdt: CRDTDoc) {
+        this.roots = crdt.getArray<IDBlock>(ROOTS_KEY);
+        this.storage = crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY);
         this.undoScopes = [this.storage, this.roots];
         this.refreshParents();
         // Nested maps name the owning block in `path` / `keys`. Child-list
@@ -157,7 +157,7 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     private transact(operation: () => void): void {
-        this.document.transact(operation);
+        this.crdt.transact(operation);
     }
 
     /**
@@ -212,7 +212,7 @@ export class DocumentBlockManager {
      * @returns Root identifiers in collaborative array order.
      */
     getRootIds(): string[] {
-        if (this.document.isTransacting) return strings(this.roots);
+        if (this.crdt.isTransacting) return strings(this.roots);
         this.rootIdsSnapshot ??= strings(this.roots);
         return this.rootIdsSnapshot;
     }
@@ -281,7 +281,7 @@ export class DocumentBlockManager {
      * @returns Parent identifier, null for a root, or undefined when absent.
      */
     getParentId(id: string): string | null | undefined {
-        if (this.document.isTransacting) {
+        if (this.crdt.isTransacting) {
             const found = this.findContainer(id);
             return found ? found.parentId ?? null : undefined;
         }
@@ -743,12 +743,12 @@ export class DocumentBlockManager {
         const id = requireNonemptyId(validated.id ?? this.generateId(), "Block");
         if (this.storage.has(id)) throw new Error(`Block ${id} already exists`);
         const index = this.placementIndex(container, afterId);
-        const model = this.document.crdt.createDetachedMap<BlockStorage>();
-        const props = this.document.crdt.createDetachedMap<Record<string, CRDTType>>();
-        const content = this.document.crdt.createDetachedText();
-        const children = this.document.crdt.createDetachedArray<string>();
-        const listPropsStorage = this.document.crdt.createDetachedMap<BlockListPropsStorage>();
-        const pluginData = this.document.crdt.createDetachedMap<Record<string, CRDTType>>();
+        const model = this.crdt.createDetachedMap<BlockStorage>();
+        const props = this.crdt.createDetachedMap<Record<string, CRDTType>>();
+        const content = this.crdt.createDetachedText();
+        const children = this.crdt.createDetachedArray<string>();
+        const listPropsStorage = this.crdt.createDetachedMap<BlockListPropsStorage>();
+        const pluginData = this.crdt.createDetachedMap<Record<string, CRDTType>>();
         model.set("id", id);
         model.set("type", validated.type);
         model.set("listProps", listPropsStorage);
@@ -837,7 +837,7 @@ export class DocumentBlockManager {
         const value = this.storage.get(id);
         if (!isCRDTMap(value)) return undefined;
         visited.add(id);
-        const cached = this.document.isTransacting ? undefined : this.blockSnapshots.get(id);
+        const cached = this.crdt.isTransacting ? undefined : this.blockSnapshots.get(id);
         if (cached) return cached;
         const props = this.requiredMap(value, "props").toObject() as Record<IDProp, unknown>;
         const pluginData = this.requiredMap(value, "pluginData").toObject() as Record<IDPlugin, unknown>;
@@ -855,7 +855,7 @@ export class DocumentBlockManager {
             content,
             children,
         };
-        if (!this.document.isTransacting) this.blockSnapshots.set(id, snapshot);
+        if (!this.crdt.isTransacting) this.blockSnapshots.set(id, snapshot);
         return snapshot;
     }
 
@@ -864,6 +864,9 @@ export class DocumentBlockManager {
      *
      * Used from storage observation, where the event already lists the mutated
      * record or the parent whose `children` array changed.
+     *
+     * @param ids - Changed block IDs whose cached ancestor chains are stale.
+     * @returns No value.
      */
     private invalidateBlocks(ids: ReadonlySet<string>): void {
         const affected = new Set<string>();
@@ -882,6 +885,9 @@ export class DocumentBlockManager {
      *
      * Root observation has no parent ID in the event. Nested child-list edits
      * skip this helper: storage events already name those parents.
+     *
+     * @param previousParents - Parent index captured before the hierarchy changed.
+     * @returns No value.
      */
     private invalidateChangedParents(previousParents: ReadonlyMap<string, string | null>): void {
         const affected = new Set<string>();
@@ -912,6 +918,9 @@ export class DocumentBlockManager {
      * therefore rebuild an ancestor from a descendant snapshot still waiting
      * its turn in this same set, re-caching the pre-mutation subtree and
      * leaving the block reachable by ID but absent from the materialized tree.
+     *
+     * @param ids - Exact block snapshots to evict and notify.
+     * @returns No value.
      */
     private invalidateSnapshotIds(ids: ReadonlySet<string>): void {
         ids.forEach((id) => this.blockSnapshots.delete(id));
@@ -921,19 +930,34 @@ export class DocumentBlockManager {
         });
     }
 
-    /** Calls a stable listener snapshot so callbacks may unsubscribe safely. */
+    /**
+     * Calls a stable listener snapshot so callbacks may unsubscribe safely.
+     *
+     * @param listeners - Callbacks to invoke once.
+     * @returns No value.
+     */
     private emit(listeners: ReadonlySet<() => void>): void {
         [...listeners].forEach((listener) => listener());
     }
 
-    /** Publishes at most one hierarchy notification for a CRDT transaction. */
+    /**
+     * Publishes at most one hierarchy notification for a CRDT transaction.
+     *
+     * @param transaction - Adapter transaction identity used for deduplication.
+     * @returns No value.
+     */
     private emitStructure(transaction: unknown): void {
         if (this.lastStructureTransaction === transaction) return;
         this.lastStructureTransaction = transaction;
         this.emit(this.structureListeners);
     }
 
-    /** Rebuilds the cheap parent index after hierarchy transactions only. */
+    /**
+     * Rebuilds the cheap parent index after hierarchy transactions only.
+     *
+     * @param transaction - Optional adapter transaction identity used to skip repeated work.
+     * @returns No value.
+     */
     private refreshParents(transaction?: unknown): void {
         if (transaction !== undefined && this.lastParentTransaction === transaction) return;
         this.lastParentTransaction = transaction;

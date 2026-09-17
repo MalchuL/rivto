@@ -161,6 +161,33 @@ describe('YjsDoc', () => {
       // YJS emits one update event per transaction
       expect(eventCount).toBe(1);
     });
+
+    it('reports transaction state through nested work and update publication', () => {
+      const observed: boolean[] = [];
+      yjsDoc.on('update', () => observed.push(yjsDoc.isTransacting));
+
+      expect(yjsDoc.isTransacting).toBe(false);
+      yjsDoc.transact(() => {
+        expect(yjsDoc.isTransacting).toBe(true);
+        yjsDoc.transact(() => yjsDoc.getMap('map').set('nested', true));
+        expect(yjsDoc.isTransacting).toBe(true);
+      });
+
+      expect(observed).toEqual([true]);
+      expect(yjsDoc.isTransacting).toBe(false);
+    });
+
+    it('tracks default local transactions without exposing an origin token', () => {
+      const map = yjsDoc.getMap('undo-map');
+      const history = yjsDoc.createUndoManager([map]);
+
+      yjsDoc.transact(() => map.set('value', 1));
+      history.stopCapturing();
+      history.undo();
+
+      expect(map.has('value')).toBe(false);
+      history.destroy();
+    });
   });
 
   describe('Events', () => {

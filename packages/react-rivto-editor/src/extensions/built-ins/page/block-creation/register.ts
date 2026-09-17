@@ -24,7 +24,7 @@ import { createBlockViewContext, dispatchViewAction } from "../../../../views";
  * @returns Nothing; the binding is owned by the extension lifecycle.
  */
 export function registerBlockCreation(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockCreate,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,

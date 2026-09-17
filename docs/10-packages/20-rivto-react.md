@@ -20,7 +20,7 @@ React-пакет не создаёт и не уничтожает core editor а
 ## Минимальная интеграция
 
 ```tsx
-import { createRivtoEditor } from "@chulane/rivto";
+import { createRivtoEditor, DocumentModelImpl, YjsDoc } from "@chulane/rivto";
 import {
   createReactEditor,
   EditorView,
@@ -28,7 +28,8 @@ import {
 } from "@chulane/rivto-react";
 import "@chulane/rivto-react/styles.css";
 
-const editor = createRivtoEditor();
+const document = new DocumentModelImpl(new YjsDoc("document-id"));
+const editor = createRivtoEditor({ document });
 const reactEditor = createReactEditor({
   editor,
   extensions: [standardPreset()],

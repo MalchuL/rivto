@@ -5,215 +5,37 @@
  * object. Each strategy decides whether it applies via {@link PasteStrategy.matches}
  * and owns insertion for that case. Ranges come from {@link PasteContext.selection}.
  */
-import type { Block } from "@chulane/document-model";
-import type { EditorRuntime } from "../../../editor/rivto-editor";
-import type { EditorPosition, Selection } from "../../selection-manager";
+import type { RivtoEditorApi } from "../../../editor/types";
 import {
   createCaretSelection,
   createStructuralSelection,
-  isStructuralSelection,
 } from "../../selection-manager";
-import type { BlockPastePlacement, ClipboardBundle } from "../clipboard-data";
+import type { EditorPosition } from "../../selection-manager";
+import type { ClipboardBundle } from "../clipboard-data";
 import { cloneSelectedTopLevelSubtrees } from "../utils";
-
-/** Shared clipboard payload supplied to every strategy. */
-export interface PasteContext {
-  /** Valid structured clipboard, when present. */
-  readonly bundle?: ClipboardBundle;
-  /** Plain-text fallback used when no structured merge applies. */
-  readonly text?: string;
-  /** Block type for additional lines created from plain text. */
-  readonly defaultBlockType?: string;
-  /** Selection observed when paste started. */
-  readonly selection?: Selection;
-  /** Block identities produced by an earlier strategy in this paste pipeline. */
-  readonly blockIdMap?: ReadonlyMap<string, string>;
-  /** Element identities produced by an earlier strategy in this paste pipeline. */
-  readonly elementIdMap?: ReadonlyMap<string, string>;
-}
-
-/**
- * Destination for inserted content, independent from clipboard payload.
- *
- * Hosts may supply a sibling or parent anchor. Merge and newline flags live on
- * {@link BlockPastePlacement} so strategies can match without extra context.
- */
-export type PastePlacement = BlockPastePlacement;
-
-/** Selection a strategy proposes after writing. */
-export interface PasteResult {
-  /** Complete local selection the clipboard manager should publish. */
-  readonly proposedSelection: Selection;
-  /** Block identities made available to later paste strategies. */
-  readonly blockIdMap?: ReadonlyMap<string, string>;
-  /** Element identities made available to later paste strategies. */
-  readonly elementIdMap?: ReadonlyMap<string, string>;
-}
-
-/** Valid text replacement range in document order. */
-export interface TextPasteTarget {
-  /** Selected blocks from first boundary to last boundary. */
-  readonly blocks: Block[];
-  /** UTF-16 offset in the first block. */
-  readonly startOffset: number;
-  /** UTF-16 offset in the last block. */
-  readonly endOffset: number;
-}
-
-/**
- * Clipboard paste algorithm that accepts or ignores a shared context.
- */
-export interface PasteStrategy {
-  /**
-   * Reports whether this algorithm should run for the clipboard and destination.
-   * @param context - Shared clipboard payload.
-   * @param placement - Host or derived insertion destination.
-   * @returns True when {@link paste} should run.
-   */
-  matches(context: PasteContext, placement: PastePlacement): boolean;
-  /**
-   * Applies this strategy's insertion path.
-   * @param context - Shared clipboard payload.
-   * @param placement - Host or derived insertion destination.
-   * @returns Proposed selection after a successful mutation.
-   */
-  paste(context: PasteContext, placement: PastePlacement): PasteResult | undefined;
-}
-
-/**
- * Resolves a live replacement range from the paste-time selection.
- * @param editor - Runtime whose selection normalizer and block lengths are used.
- * @param selection - Selection observed when paste started.
- * @returns Range including empty overlap slices, or undefined for structural/empty selection.
- */
-export function textRangeFromSelection(
-  editor: EditorRuntime,
-  selection: Selection | undefined,
-): TextPasteTarget | undefined {
-  if (!selection) return undefined;
-  if (isStructuralSelection(selection)) return undefined;
-  const range = editor.selection.resolveBlockSelection(selection);
-  if (!range) return undefined;
-  return {
-    blocks: range.blocks,
-    startOffset: range.ranges[0]!.startOffset,
-    endOffset: range.ranges.at(-1)!.endOffset,
-  };
-}
-
-/**
- * Reports whether plain text should stay in one block.
- * @param context - Shared clipboard payload.
- * @param placement - Host destination, including the preserve-newlines signal.
- * @returns True when {@link PreserveNewlinesPasteStrategy} should run.
- */
-export function isPreserveNewlinesPaste(context: PasteContext, placement: PastePlacement): boolean {
-  return placement.preserveNewlines === true && Boolean(context.text) && !context.bundle?.blocks.length;
-}
-
-/**
- * Reports whether the splitting text strategy should own this paste.
- * @param context - Shared clipboard payload.
- * @param placement - Host destination, including merge behavior.
- * @param range - Replacement range derived from selection.
- * @returns True for split plain text or a mergeable partial bundle.
- */
-export function isTextPasteContext(
-  context: PasteContext,
-  placement: PastePlacement,
-  range: TextPasteTarget | undefined,
-): boolean {
-  if (isPreserveNewlinesPaste(context, placement)) return false;
-  if (context.bundle?.blocks.length) {
-    return Boolean(range && context.bundle.startsWithText === true && placement.mergeText !== false);
-  }
-  return Boolean(context.text);
-}
-
-/**
- * Reports whether the block strategy should insert a structured forest.
- * @param context - Shared clipboard payload.
- * @param placement - Host destination, including merge behavior.
- * @param range - Replacement range derived from selection.
- * @returns True when a block forest should be inserted as blocks.
- */
-export function isBlockPasteContext(
-  context: PasteContext,
-  placement: PastePlacement,
-  range: TextPasteTarget | undefined,
-): boolean {
-  if (!context.bundle?.blocks.length) return false;
-  return !isTextPasteContext(context, placement, range);
-}
-
-/**
- * Inserts plain text into a range or as sibling blocks.
- * @param editor - Runtime receiving content.
- * @param value - Plain clipboard text.
- * @param defaultBlockType - Registered type for newly created lines.
- * @param splitNewlines - When true, each line becomes a sibling block.
- * @param range - Optional replacement range from selection.
- * @param afterId - Sibling insertion anchor without a text range.
- * @returns Resulting caret, or undefined for empty input.
- */
-function insertPlainText(
-  editor: EditorRuntime,
-  value: string,
-  defaultBlockType: string,
-  splitNewlines: boolean,
-  range: TextPasteTarget | undefined,
-  afterId: string | undefined,
-): EditorPosition | undefined {
-  if (!value) return undefined;
-  const prepared = editor.blocksRegistry.prepare({ type: defaultBlockType });
-  const lines = splitNewlines ? value.split(/\r\n?|\n/) : [value];
-  const destination = range?.blocks[0];
-  const suffixBlock = range?.blocks.at(-1);
-  const prefix = destination ? destination.content.slice(0, range!.startOffset) : "";
-  const suffix = suffixBlock ? suffixBlock.content.slice(range!.endOffset) : "";
-  if (range) range.blocks.slice(1).forEach((block) => editor.blocks.removeBlock(block.id));
-  let previous = destination?.id ?? afterId;
-  let caret: EditorPosition | undefined;
-  lines.forEach((line, index) => {
-    const last = index === lines.length - 1;
-    let offset = line.length;
-    if (destination && index === 0) {
-      editor.blocks.updateBlock(destination.id, { content: prefix + line + (last ? suffix : "") });
-      offset += prefix.length;
-    } else {
-      previous = editor.blocks.insertBlock({ ...prepared,
-        content: line + (last ? suffix : ""),
-      }, previous);
-    }
-    caret = { blockId: previous!, offset };
-  });
-  return caret;
-}
-
-/**
- * Sibling insertion anchor when plain text is not replacing a range.
- * @param context - Shared clipboard payload.
- * @param placement - Host destination.
- * @param range - Replacement range derived from selection.
- * @returns Existing block id to insert after, when known.
- */
-function textAfterId(
-  context: PasteContext,
-  placement: PastePlacement,
-  range: TextPasteTarget | undefined,
-): string | undefined {
-  if (typeof placement.afterId === "string") return placement.afterId;
-  if (range) return undefined;
-  return context.selection?.focusBlockId;
-}
+import type {
+  PasteContext,
+  PastePlacement,
+  PasteResult,
+  PasteStrategy,
+  TextPasteTarget,
+} from "./types";
+import {
+  insertPlainText,
+  isBlockPasteContext,
+  isPreserveNewlinesPaste,
+  isTextPasteContext,
+  textAfterId,
+  textRangeFromSelection,
+} from "./utils";
 
 /** Replaces selected text with partial structured data or newline-split plain text. */
 export class TextPasteStrategy implements PasteStrategy {
   /**
    * Creates the text strategy.
-   * @param editor - Runtime receiving clipboard content.
+   * @param editor - Editor providing block and selection operations.
    */
-  constructor(private readonly editor: EditorRuntime) {}
+  constructor(private readonly editor: RivtoEditorApi) {}
 
   /**
    * Accepts split plain text or a mergeable partial bundle.
@@ -290,7 +112,12 @@ export class TextPasteStrategy implements PasteStrategy {
     if (!context.text) return undefined;
     if (!context.defaultBlockType) throw new Error("clipboard.paste requires defaultBlockType for plain-text paste");
     return insertPlainText(
-      this.editor, context.text, context.defaultBlockType, true, range, textAfterId(context, placement, range),
+      this.editor,
+      context.text,
+      context.defaultBlockType,
+      true,
+      range,
+      textAfterId(context, placement, range),
     );
   }
 }
@@ -299,9 +126,9 @@ export class TextPasteStrategy implements PasteStrategy {
 export class PreserveNewlinesPasteStrategy implements PasteStrategy {
   /**
    * Creates the preserve-newlines text strategy.
-   * @param editor - Runtime receiving clipboard content.
+   * @param editor - Editor providing block and selection operations.
    */
-  constructor(private readonly editor: EditorRuntime) {}
+  constructor(private readonly editor: RivtoEditorApi) {}
 
   /**
    * Accepts plain text when the host asked to keep newlines in one block.
@@ -324,7 +151,12 @@ export class PreserveNewlinesPasteStrategy implements PasteStrategy {
     if (!context.defaultBlockType) throw new Error("clipboard.paste requires defaultBlockType for plain-text paste");
     const range = textRangeFromSelection(this.editor, context.selection);
     const caret = insertPlainText(
-      this.editor, context.text, context.defaultBlockType, false, range, textAfterId(context, placement, range),
+      this.editor,
+      context.text,
+      context.defaultBlockType,
+      false,
+      range,
+      textAfterId(context, placement, range),
     );
     return caret ? { proposedSelection: createCaretSelection(caret.blockId, caret.offset) } : undefined;
   }
@@ -334,9 +166,9 @@ export class PreserveNewlinesPasteStrategy implements PasteStrategy {
 export class BlockPasteStrategy implements PasteStrategy {
   /**
    * Creates the block strategy.
-   * @param editor - Runtime receiving clipboard content.
+   * @param editor - Editor providing block and selection operations.
    */
-  constructor(private readonly editor: EditorRuntime) {}
+  constructor(private readonly editor: RivtoEditorApi) {}
 
   /**
    * Accepts a block forest that should remain structural.

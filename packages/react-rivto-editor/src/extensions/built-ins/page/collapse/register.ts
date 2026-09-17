@@ -19,7 +19,7 @@ import { collapseTargets } from "./utils";
  * @returns Cleanup for document and selection reconciliation subscriptions.
  */
 export function registerCollapse(reactEditor: ReactEditor): () => void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   reactEditor.blocks.registerListProps({
     id: "collapse",
     defaults: { collapsed: false },
@@ -44,7 +44,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
       root?.focus({ preventScroll: true });
     }
   };
-  const unsubscribeDocument = editor.document.subscribe(reconcile);
+  const unsubscribeDocument = editor.subscribe(reconcile);
   const unsubscribeSelection = reactEditor.selection.subscribe(reconcile);
 
   const setCollapsed = (value: boolean | "toggle"): boolean => {

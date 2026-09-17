@@ -3,6 +3,7 @@ import {
   DocumentBlockManager,
   DocumentElementManager,
   DocumentPluginDataManager,
+  DocumentUndoManager,
 } from "./managers";
 import type {
   DocumentModel,
@@ -22,63 +23,54 @@ export class DocumentModelImpl implements DocumentModel {
   /** Descriptive model identifier; persistence remains controlled by the CRDT document. */
   readonly id: string;
   /** Adapter-neutral collaborative document containing canonical shared state. */
-  readonly crdt: CRDTDoc;
-  /** Stable local transaction origin used to scope undo history. */
-  readonly origin = Symbol("rivto-document");
+  private readonly crdt: CRDTDoc;
   /** Block records, text, hierarchy, and block snapshot behavior. */
   readonly blocks: DocumentBlockManager;
   /** Generic first-class canvas elements and their geometry. */
   readonly elements: DocumentElementManager;
   /** Generic namespaced collaborative document plugin data. */
   readonly pluginData: DocumentPluginDataManager;
-  /** Collaborative containers tracked by document undo managers. */
-  readonly undoScopes: CRDTUndoScope[];
-  /** Nested transaction depth used to keep imperative reads ahead of observer caches. */
-  private transactionDepth = 0;
-
-  /** @returns Whether execution is currently inside this model's transaction boundary. */
-  get isTransacting(): boolean { return this.transactionDepth > 0; }
-
-  /**
-   * Creates a storage model over an adapter-neutral collaborative document.
-   *
-   * @param crdt - Collaborative document that owns the shared state.
-   */
-  constructor(crdt: CRDTDoc);
-  /**
-   * Creates a named storage model over a collaborative document.
-   *
-   * @param id - Descriptive model identifier; it does not control persistence.
-   * @param crdt - Collaborative document that owns the shared state.
-   */
-  constructor(id: string, crdt: CRDTDoc);
+  /** Local undo/redo history configured from every document manager's roots. */
+  readonly history: DocumentUndoManager;
+  /** Nesting depth for the active undoable document batch. */
+  private batchDepth = 0;
+  /** Transaction origin excluded from this document's user undo history. */
+  private readonly withoutHistoryOrigin = Symbol("rivto-without-history");
+  /** Removes the foreign-update normalization listener during destruction. */
+  private readonly unsubscribeFromUpdates: Unsubscribe;
   /**
    * Initializes document-level storage and focused managers.
    *
-   * Managers retain this DocumentModel interface and resolve sibling managers
-   * lazily, so constructor ordering does not create a dependency cycle.
+   * Managers receive the CRDT adapter and private undo-scope accumulator
+   * directly; none retain the coordinating document model.
    *
-   * @param idOrCrdt - Descriptive identifier or the collaborative document.
-   * @param maybeCrdt - Collaborative document when an identifier is supplied.
-   * @throws {Error} When the named constructor form omits its document.
+   * After the initial tree repair, updates not marked local by the CRDT adapter
+   * re-run `blocks.normalize()`. Local APIs already keep parent/child
+   * lists consistent; foreign writes (providers, `applyUpdate`, undo, peers)
+   * can merge into duplicate ids, missing refs, or orphans.
+   *
+   * @param crdt - Collaborative document owning identity and local transactions.
    */
-  constructor(idOrCrdt: string | CRDTDoc, maybeCrdt?: CRDTDoc) {
-    const crdt = typeof idOrCrdt === "string" ? maybeCrdt : idOrCrdt;
-    if (!crdt) throw new Error("DocumentModelImpl requires a CRDTDoc");
-
+  constructor(crdt: CRDTDoc) {
     this.crdt = crdt;
-    this.id = typeof idOrCrdt === "string" ? idOrCrdt : crdt.id;
-    this.blocks = new DocumentBlockManager(this);
-    this.elements = new DocumentElementManager(this);
-    this.pluginData = new DocumentPluginDataManager(this);
-    this.undoScopes = [
+    this.id = crdt.id;
+    this.blocks = new DocumentBlockManager(crdt);
+    this.elements = new DocumentElementManager(crdt);
+    this.pluginData = new DocumentPluginDataManager(crdt);
+    this.blocks.normalize();
+    const undoScopes: CRDTUndoScope[] = [
       ...this.blocks.undoScopes,
       ...this.elements.undoScopes,
       ...this.pluginData.undoScopes,
     ];
-    this.blocks.normalize();
-    this.crdt.on("update", (_update: unknown, origin?: unknown) => {
-      if (origin === this.origin) return;
+    this.history = new DocumentUndoManager(crdt, undoScopes);
+    // Yjs `"update"` carries the transaction origin: the adapter's local token,
+    // a provider instance, undo, or `null`/`undefined` from `applyUpdate`.
+    // Skip local origin so we do not open a
+    // second normalize transaction after every local write (redundant work and
+    // extra undo stacks). Repair only foreign merges.
+    this.unsubscribeFromUpdates = this.crdt.on("update", (_update: unknown, updateOrigin?: unknown) => {
+      if (this.crdt.isLocalOrigin(updateOrigin)) return;
       this.blocks.normalize();
     });
   }
@@ -94,20 +86,37 @@ export class DocumentModelImpl implements DocumentModel {
   }
 
   /**
-   * Executes one synchronous mutation under the model's local undo origin.
+   * Groups synchronous mutations into one transaction and undo item.
    *
-   * @param operation - Mutation to execute atomically.
-   * @returns No value.
+   * Nested calls reuse the active transaction and history boundary.
+   *
+   * @param operation - Synchronous document work to execute atomically.
+   * @returns Value returned by the operation.
    */
-  transact(operation: () => void): void {
-    this.crdt.transact(() => {
-      this.transactionDepth += 1;
-      try {
-        operation();
-      } finally {
-        this.transactionDepth -= 1;
-      }
-    }, this.origin);
+  batchUpdates<Result>(operation: () => Result): Result {
+    if (this.batchDepth > 0) return operation();
+    this.history.stopCapturing();
+    this.batchDepth += 1;
+    let result!: Result;
+    try {
+      this.crdt.transact(() => { result = operation(); });
+      return result;
+    } finally {
+      this.batchDepth -= 1;
+      this.history.stopCapturing();
+    }
+  }
+
+  /**
+   * Groups synchronous mutations into one transaction excluded from undo history.
+   *
+   * @param operation - Synchronous document work to execute without an undo item.
+   * @returns Value returned by the operation.
+   */
+  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result {
+    let result!: Result;
+    this.crdt.transact(() => { result = operation(); }, this.withoutHistoryOrigin);
+    return result;
   }
 
   /**
@@ -151,10 +160,38 @@ export class DocumentModelImpl implements DocumentModel {
     if (snapshot.elements) this.elements.validateElements(snapshot.elements);
     if (snapshot.pluginData) assertPortableRecord(snapshot.pluginData, "pluginData");
 
-    this.transact(() => {
+    this.crdt.transact(() => {
       if (snapshot.blocks) this.blocks.loadBlocks(snapshot.blocks);
       if (snapshot.elements) this.elements.loadElements(snapshot.elements);
       if (snapshot.pluginData) this.pluginData.load(snapshot.pluginData);
     });
+  }
+
+  /**
+   * Releases document-owned history, subscriptions, and collaborative storage.
+   *
+   * Cleanup continues after individual failures so CRDT providers are not leaked.
+   *
+   * @returns Promise resolved after asynchronous CRDT cleanup.
+   */
+  async destroy(): Promise<void> {
+    const errors: unknown[] = [];
+    try {
+      this.unsubscribeFromUpdates();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      this.history.destroy();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await this.crdt.destroy();
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) throw new AggregateError(errors, "Document teardown failed");
   }
 }

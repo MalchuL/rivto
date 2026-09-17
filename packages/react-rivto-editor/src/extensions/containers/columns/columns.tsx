@@ -200,12 +200,12 @@ export function createColumnsBlockInput(
  * @returns Whether the board existed and the count could be applied.
  */
 export function setColumnsCount(runtime: ReactEditor, blockId: string, count: number): boolean {
-  const board = runtime.editor.blocks.getBlock(blockId);
+  const board = runtime.blocks.getBlock(blockId);
   if (board?.type !== COLUMNS_BLOCK_TYPE || !Number.isFinite(count)) return false;
   const next = Math.max(COLUMNS_MIN_COUNT, Math.min(COLUMNS_MAX_COUNT, Math.round(count)));
   const columns = board.children.filter((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE);
   if (next === columns.length) return true;
-  runtime.editor.batchUpdates(() => {
+  runtime.batchUpdates(() => {
     runtime.blocks.updateBlock(board.id, { listProps: { collapsed: false } });
     if (next > columns.length) {
       let afterId = columns.at(-1)?.id ?? board.id;
@@ -215,15 +215,15 @@ export function setColumnsCount(runtime: ReactEditor, blockId: string, count: nu
           content: "",
         }, afterId === board.id ? undefined : afterId);
         if (afterId === board.id) {
-          runtime.editor.blocks.moveBlocks([insertedId], board.id, "inside");
+          runtime.blocks.moveBlocks([insertedId], board.id, "inside");
         }
         afterId = insertedId;
       }
       return;
     }
     const removed = columns.slice(next);
-    relocateColumnContents(runtime.editor, removed.map((column) => column.id));
-    runtime.editor.blocks.removeBlocks(removed.map((column) => column.id));
+    relocateColumnContents(runtime, removed.map((column) => column.id));
+    runtime.blocks.removeBlocks(removed.map((column) => column.id));
   });
   return true;
 }
@@ -355,7 +355,7 @@ export function columnsExtension(): ReactEditorExtension {
         title: "Columns",
         group: "Turn into",
         keywords: ["layout", "split", "grid"],
-        isAvailable: ({ blockId }) => runtime.editor.blocks.getBlock(blockId)?.children.length === 0,
+        isAvailable: ({ blockId }) => runtime.blocks.getBlock(blockId)?.children.length === 0,
         execute: ({ blockId }) => {
           convertLeafToContainer(runtime, blockId, createColumnsBlockInput());
         },

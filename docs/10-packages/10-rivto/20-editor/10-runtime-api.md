@@ -100,13 +100,13 @@
 
 ## Создание
 
-### `constructor(options = {})`
+### `constructor(options)`
 
-- **Аргументы:** `options: CreateRivtoEditorOptions` с optional `document` и `mode`.
+- **Аргументы:** `options: CreateRivtoEditorOptions` с required `document` и optional `mode`.
 - **Создаёт:** полностью связанный `EditorRuntime`.
-- **Исключения:** передаёт ошибки создания `YjsDoc`, `DocumentModelImpl`, managers, duplicate built-in commands и subscriptions.
+- **Исключения:** передаёт ошибки managers, duplicate built-in commands и subscriptions.
 
-Без document создаётся `YjsDoc("rivto-" + crypto.randomUUID())`. Default mode — `"block"`. Constructor создаёт managers, устанавливает block props validator, регистрирует runtime/clipboard commands и подписывает revision на document, registry, selection и mode changes.
+Host заранее создаёт `DocumentModel`. Default mode — `"block"`. Constructor создаёт managers, устанавливает block props validator, регистрирует runtime/clipboard commands и подписывает revision на document, registry, selection и mode changes.
 
 ## Публичные методы
 
@@ -222,13 +222,13 @@ Successful execution обновляет `commands.lastExecuted` и уведом�
 - **Возвращает:** `Promise<void>`, завершённый после runtime cleanup, отключения всех providers и уничтожения CRDT document.
 - **Исключения:** передаёт ошибку runtime cleanup, provider disconnect или CRDT destroy; subsequent manager cleanup после синхронной ошибки не гарантирован, но CRDT destroy выполняется через `finally`.
 
-Удаляет owned subscriptions, затем уничтожает links, elements, blocks, block registry и history, очищает commands и listeners и ожидает `document.crdt.destroy()`.
+Удаляет owned subscriptions, затем уничтожает links, elements, blocks, block registry и history, очищает commands и listeners и ожидает `crdt.destroy()`.
 
 ## Factory
 
-### `createRivtoEditor(options = {})`
+### `createRivtoEditor(options)`
 
-- **Аргументы:** optional `CreateRivtoEditorOptions`.
+- **Аргументы:** required `CreateRivtoEditorOptions`.
 - **Возвращает:** новый `EditorRuntime`.
 - **Исключения:** те же, что у constructor.
 

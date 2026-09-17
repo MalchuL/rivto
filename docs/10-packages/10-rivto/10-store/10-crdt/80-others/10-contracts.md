@@ -56,7 +56,7 @@
 - **Возвращает:** `void`.
 - **Исключения:** исключение из `operation` или CRDT-адаптера передаётся вызывающему коду.
 
-Выполняет связанные изменения как одну CRDT-транзакцию. `DocumentModelImpl.transact()` использует метод для всех публичных мутаций и передаёт стабильный локальный origin для undo.
+Выполняет связанные изменения как одну CRDT-транзакцию. Без явного origin adapter использует свой приватный стабильный local origin для undo.
 
 ### `createUndoManager(scopes, trackedOrigins?)`
 
@@ -64,7 +64,7 @@
 - **Возвращает:** `CRDTUndoManager`.
 - **Исключения:** контракт не задаёт; адаптер может отклонить несовместимую или detached-область.
 
-Создаёт undo manager для переданных карт, массивов и текстов. Rivto передаёт собранные области документа и локальный origin, чтобы удалённые updates не считались локальной историей.
+Создаёт undo manager для переданных карт, массивов и текстов. Без `trackedOrigins` adapter отслеживает свой приватный local origin, поэтому удалённые updates не считаются локальной историей.
 
 `scopes` — это не строки путей и не snapshot-данные. Это массив живых экземпляров `CRDTMap`, `CRDTArray` или `CRDTText`, изменения которых должен отслеживать manager. Обычно передаются корневые контейнеры функциональной области: вложенные shared-типы под таким корнем также относятся к ней. Все scopes должны быть созданы тем же CRDT-адаптером, принадлежать тому же документу и уже быть присоединены к нему.
 
@@ -72,32 +72,27 @@
 const document = new YjsDoc("manual-undo");
 const blocks = document.getMap("blocks");
 const roots = document.getArray<string>("roots");
-const localOrigin = Symbol("local-edit");
-
-const history = document.createUndoManager(
-  [blocks, roots], // CRDTUndoScope[]
-  [localOrigin],   // транзакции только с этим origin
-);
+const history = document.createUndoManager([blocks, roots]);
 
 document.transact(() => {
   blocks.set("first", { type: "paragraph" });
   roots.push("first");
-}, localOrigin);
+});
 
 history.undo();
 history.redo();
 history.destroy();
 ```
 
-Если передан `trackedOrigins`, undo записывает только транзакции с одним из этих origin. Один и тот же объект origin нужно передать и в `createUndoManager`, и в `transact`: новый `Symbol()` при каждом вызове не совпадёт с предыдущим.
+Если передан `trackedOrigins`, undo записывает только транзакции с одним из этих origin. Один и тот же объект нужно передать и в `createUndoManager`, и в `transact`.
 
-При обычной работе через Rivto вручную собирать scopes не нужно. `DocumentModelImpl` объединяет `undoScopes` менеджеров блоков, элементов, связей и plugin data, а публичный `UndoManager` вызывает:
+При обычной работе через Rivto вручную собирать scopes не нужно. `DocumentModelImpl` передаёт их своему focused history manager и открывает готовую историю:
 
 ```ts
-document.crdt.createUndoManager(document.undoScopes, [document.origin]);
+document.history;
 ```
 
-Новый manager persisted-состояния должен предоставить свои корневые shared-контейнеры в `undoScopes`, после чего `DocumentModelImpl` добавляет их в общий массив. Не добавляйте один корень несколько раз и не передавайте plain object, snapshot или wrapper из другого документа.
+Новый manager persisted-состояния добавляет корневые shared-контейнеры во внутренний accumulator, переданный моделью. Не добавляйте один корень несколько раз и не передавайте plain object, snapshot или wrapper из другого документа.
 
 ### `getArray(path)`
 

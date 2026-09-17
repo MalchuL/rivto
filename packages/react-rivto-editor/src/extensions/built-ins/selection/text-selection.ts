@@ -127,7 +127,7 @@ interface PointerSelection {
  * ```
  */
 export function registerTextSelection(reactEditor: ReactEditor): () => void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   let pointer: PointerSelection | null = null;
   let releaseTimer: number | undefined;
   let suppressClickBlockId: string | undefined;
@@ -174,16 +174,15 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
         pointer = null;
         ownsCrossBlockSelection = false;
       } else if (event.button === 0) {
-        // Keep the original event target, not only its owning anchor. Any nested
-        // pointer-driven control and structural selection receive the same
-        // pointerdown; checking only the anchor would start both gestures. For
-        // example, dragging a sortable row could also select its container.
+        // Keep the original event target, not only its owning anchor. Buttons
+        // may seed a drag because no structural selection is published before
+        // the movement threshold; other pointer controls retain their gesture.
         // Editable anchors still enter the text-selection path, while structural
         // anchors start only from non-interactive surface space.
         const target = isElementNode(event.target) ? event.target : null;
         const selectionAnchor = target?.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);
         if (target && selectionAnchor && root.contains(selectionAnchor) && (
-          selectionAnchor.isContentEditable || !isExcludedFromStructuralSelection(target)
+          selectionAnchor.isContentEditable || target.matches("button") || !isExcludedFromStructuralSelection(target)
         )) {
           if (releaseTimer !== undefined) view?.clearTimeout(releaseTimer);
           ownsCrossBlockSelection = false;

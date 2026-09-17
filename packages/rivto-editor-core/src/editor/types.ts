@@ -2,7 +2,6 @@
  * Editor coordinator contracts. Selection and clipboard types live with their owning managers.
  */
 import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, ElementManager, RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
-import type { CRDTDoc } from "@chulane/crdt-doc";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
@@ -10,7 +9,8 @@ import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 export type EditorMode = "block" | "edgeless";
 
 export interface CreateRivtoEditorOptions {
-  document?: CRDTDoc;
+  /** Existing document model owned and destroyed by the editor runtime. */
+  document: DocumentModel;
   mode?: EditorMode;
 }
 
@@ -22,8 +22,6 @@ export interface CreateRivtoEditorOptions {
  * commands, batching, selection, history, mode, snapshots, and subscriptions.
  */
 export interface RivtoEditorApi {
-  /** Canonical collaborative document and persistence boundary. */
-  readonly document: DocumentModel;
   /** Block commands and typed block operations. */
   readonly blocks: BlockManager;
   /** Native block definitions, defaults, and property validation. */
@@ -58,6 +56,14 @@ export interface RivtoEditorApi {
    * @returns Value returned by the operation.
    */
   batchUpdates<Result>(operation: () => Result): Result;
+
+  /**
+   * Groups synchronous mutations into one transaction excluded from undo history.
+   *
+   * @param operation - Synchronous editor work to execute without an undo item.
+   * @returns Value returned by the operation.
+   */
+  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result;
 
   /**
    * Registers one named runtime command.

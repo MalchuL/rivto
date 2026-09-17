@@ -60,12 +60,12 @@ describe("block parent constraints", () => {
       .toThrow(/cannot be placed under paragraph/);
     expect(editor.blocks.getParentId("indent-me")).toBe(nestedNoteId);
 
-    const before = editor.document.getSnapshot();
-    expect(() => editor.document.loadSnapshot({
+    const before = editor.dump();
+    expect(() => editor.load({
       version: 6,
       blocks: [complete("root-note-only", "note-only")],
     })).toThrow(/cannot be placed under document root/);
-    expect(editor.document.getSnapshot()).toEqual(before);
+    expect(editor.dump()).toEqual(before);
 
     editor.destroy();
   });

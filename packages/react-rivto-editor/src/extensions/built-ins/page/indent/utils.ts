@@ -10,7 +10,6 @@
 import {
   getSelectedBlockIds,
   isStructuralSelection,
-  type RivtoEditorApi as Editor,
 } from "@chulane/rivto";
 import type { SelectionCapability } from "../../../../capabilities";
 import {
@@ -48,7 +47,7 @@ function indentTargetIds(target: KeyboardSelectionTarget): string[] {
  * @returns `true` when the shortcut was claimed.
  */
 export function applyIndentShortcut(
-  editor: Editor,
+  editor: ReactEditor,
   selectionManager: SelectionCapability,
   root: HTMLElement,
   event: KeyboardEvent,

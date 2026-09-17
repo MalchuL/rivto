@@ -1,10 +1,15 @@
+/**
+ * Stores portable, namespaced plugin data for a collaborative document.
+ * The manager preserves shared child-map identities during snapshot loads and
+ * exposes only detached values or explicitly requested collaborative maps.
+ */
 import type {
   CRDTType,
   BasicType,
+  CRDTDoc,
   CRDTMap,
   CRDTUndoScope,
 } from "@chulane/crdt-doc";
-import type { DocumentModel } from "../../types";
 import { assignMap, assertPortableRecord, assertPortableValue, clone, isCRDTMap } from "../../utils";
 
 const PLUGINS_KEY = "rivto.editor.plugins";
@@ -17,18 +22,28 @@ const PLUGINS_KEY = "rivto.editor.plugins";
  * through the active CRDT adapter instead of replacing the whole document.
  */
 export class DocumentPluginDataManager {
-  /** Collaborative root included in document undo history. */
-  readonly undoScopes: CRDTUndoScope[];
   private readonly root: CRDTMap<Record<string, CRDTType>>;
+  /** Collaborative roots owned by this manager and tracked by document history. */
+  readonly undoScopes: readonly CRDTUndoScope[];
 
   /**
    * Creates a generic plugin-data owner for one document.
    *
-   * @param document - Document providing CRDT storage and transactions.
+   * @param crdt - Collaborative storage adapter.
    */
-  constructor(private readonly document: DocumentModel) {
-    this.root = document.crdt.getMap<Record<string, CRDTType>>(PLUGINS_KEY);
+  constructor(private readonly crdt: CRDTDoc) {
+    this.root = crdt.getMap<Record<string, CRDTType>>(PLUGINS_KEY);
     this.undoScopes = [this.root];
+  }
+
+  /**
+   * Runs one plugin-data mutation through the collaborative document transaction.
+   *
+   * @param operation - Storage mutation to execute atomically.
+   * @returns No value.
+   */
+  private transact(operation: () => void): void {
+    this.crdt.transact(operation);
   }
 
   /**
@@ -52,7 +67,7 @@ export class DocumentPluginDataManager {
    */
   set(pluginId: string, value: BasicType): void {
     assertPortableValue(value, "pluginData");
-    this.document.transact(() => this.root.set(this.requireId(pluginId), clone(value) as CRDTType));
+    this.transact(() => this.root.set(this.requireId(pluginId), clone(value) as CRDTType));
   }
 
   /**
@@ -73,9 +88,9 @@ export class DocumentPluginDataManager {
     if (current !== undefined && (!current || typeof current !== "object" || Array.isArray(current))) {
       throw new Error(`Plugin data ${id} is not an object namespace`);
     }
-    const map = this.document.crdt.createDetachedMap<Record<string, CRDTType>>();
+    const map = this.crdt.createDetachedMap<Record<string, CRDTType>>();
     if (current) assignMap(map, current as Record<string, unknown>);
-    this.document.transact(() => this.root.set(id, map));
+    this.transact(() => this.root.set(id, map));
     return map;
   }
 
@@ -88,7 +103,7 @@ export class DocumentPluginDataManager {
   delete(pluginId: string): boolean {
     const id = this.requireId(pluginId);
     const existed = this.root.has(id);
-    if (existed) this.document.transact(() => this.root.delete(id));
+    if (existed) this.transact(() => this.root.delete(id));
     return existed;
   }
 
@@ -105,17 +120,28 @@ export class DocumentPluginDataManager {
    */
   load(values: Record<string, unknown>): void {
     assertPortableRecord(values, "pluginData");
-    this.document.transact(() => this.mergeMap(this.root, values));
+    this.transact(() => this.mergeMap(this.root, values));
   }
 
-  /** Validates and normalizes one namespace identifier. */
+  /**
+   * Validates and normalizes one namespace identifier.
+   *
+   * @param pluginId - Candidate plugin namespace identifier.
+   * @returns Trimmed nonempty identifier.
+   */
   private requireId(pluginId: string): string {
     const id = pluginId.trim();
     if (!id) throw new Error("Plugin data ID is required");
     return id;
   }
 
-  /** Preserves existing shared child maps while replacing portable fields. */
+  /**
+   * Preserves existing shared child maps while replacing portable fields.
+   *
+   * @param map - Collaborative map to reconcile in place.
+   * @param values - Complete portable fields that should remain after reconciliation.
+   * @returns No value.
+   */
   private mergeMap(map: CRDTMap<Record<string, CRDTType>>, values: Record<string, unknown>): void {
     [...map.keys()].filter((key) => !(key in values)).forEach((key) => map.delete(key));
     Object.entries(values).forEach(([key, value]) => {

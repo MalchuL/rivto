@@ -18,7 +18,7 @@ import { dispatchViewAction } from "../../../../../views/dispatch";
  * @returns No value.
  */
 export function registerBackwardBlockMerge(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMergeBackward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeBackward],

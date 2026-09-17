@@ -7,11 +7,10 @@
  */
 import {
   useDOMEvent,
-  useEditor,
+  useReactEditor,
   useEditorRoot,
   useElements,
   useKeyboardEvent,
-  useReactEditor,
   useRootBlockIds,
 } from "../../../hooks";
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
@@ -83,7 +82,7 @@ export function EdgelessSurface({
   readonly avoidBlockElementOverlap?: boolean;
   readonly blockElementWidth?: number;
 }) {
-  const editor = useEditor();
+  const editor = useReactEditor();
   const reactEditor = useReactEditor();
   const rootIds = useRootBlockIds();
   const blockElements = useElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);

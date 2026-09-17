@@ -17,7 +17,7 @@ import { findEdgelessRuntime } from "./edgeless-runtime";
  * the next click means "select this block".
  */
 export function registerBlockSelection(reactEditor: ReactEditor): () => void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   const setModifierDown = (value: boolean) => {
     const root = reactEditor.events.getRoot();
     if (!root) return;

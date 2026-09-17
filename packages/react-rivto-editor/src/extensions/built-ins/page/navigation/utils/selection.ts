@@ -7,7 +7,7 @@ import {
   assertBlockRangeEndpoints,
   createCaretSelection,
   type EditorPosition,
-  type RivtoEditorApi as Editor,
+  type RivtoEditorApi,
   type Selection,
 } from "@chulane/rivto";
 import type { SelectionCapability } from "../../../../../capabilities";
@@ -65,7 +65,7 @@ export function setNavigationCaret(
  */
 export function textSelectionEdge(
   reactEditor: ReactEditor,
-  editor: Editor,
+  editor: ReactEditor | RivtoEditorApi,
   selection: Selection,
   edge: "start" | "end",
 ): EditorPosition {

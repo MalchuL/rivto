@@ -28,7 +28,7 @@ export class ElementPasteStrategy implements PasteStrategy {
    * @returns True when this strategy should run after any block insertion.
    */
   matches(context: PasteContext, _placement: PastePlacement): boolean {
-    if (this.reactEditor.editor.mode.get() !== "edgeless") return false;
+    if (this.reactEditor.mode.get() !== "edgeless") return false;
     if (!context.bundle) return false;
     if (context.bundle.elements?.length) return true;
     return Boolean(this.canvasBlockSelection());
@@ -43,7 +43,7 @@ export class ElementPasteStrategy implements PasteStrategy {
   paste(context: PasteContext, _placement: PastePlacement): PasteResult | undefined {
     const bundle = context.bundle;
     if (!bundle) return undefined;
-    const { editor } = this.reactEditor;
+    const editor = this.reactEditor;
     const selected = new Set(bundle.selectedElementIds ?? bundle.elements?.map((element) => element.id));
     const sources = (bundle.elements ?? []).filter((element) => selected.has(element.id));
     const elementIdMap = editor.elements.resolveImportIds(sources.map((element) => element.id));
@@ -104,7 +104,7 @@ export class ElementPasteStrategy implements PasteStrategy {
    * @returns Block selection covering selected canvas block roots, if any.
    */
   private canvasBlockSelection(): Selection | undefined {
-    const { editor } = this.reactEditor;
+    const editor = this.reactEditor;
     const snapshot = findEdgelessRuntime(this.reactEditor)?.get();
     const blockIds = snapshot?.active ? snapshot.items.flatMap((id) => {
       const element = editor.elements.getElement(id);

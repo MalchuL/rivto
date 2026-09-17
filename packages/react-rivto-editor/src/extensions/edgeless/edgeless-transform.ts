@@ -86,7 +86,7 @@ interface ConnectorOverlayNode {
 
 /** Adds one delegated move/resize path for cards, visuals, and nested groups. */
 export function registerEdgelessTransform(reactEditor: ReactEditor): () => void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   const selection = getEdgelessRuntime(reactEditor);
   let start: TransformStart | null = null;
   let previewTargets: HTMLElement[] | null = null;
@@ -648,7 +648,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       editor.elements.updateElement(active.ids[0]!, { props: { rotation: rotationAt(root, active, active.lastX, active.lastY, active.rotationSnapped) } });
       return true;
     }
-    if (active.kind === "move" && editor.commands.has("edgeless.selection.move")) { editor.execute("edgeless.selection.move", { dx: result.dx, dy: result.dy }); return true; }
+    if (active.kind === "move" && editor.commands.has("edgeless.selection.move")) { editor.commands.execute("edgeless.selection.move", { dx: result.dx, dy: result.dy }); return true; }
     editor.batchUpdates(() => active.ids.forEach((id) => {
       const frame = previewFrame(id, active, result.dx, result.dy);
       if (frame) editor.elements.updateElement(id, {

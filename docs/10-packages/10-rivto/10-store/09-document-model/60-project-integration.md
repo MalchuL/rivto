@@ -4,7 +4,7 @@ CRDT-каталог предоставляет механику хранения
 
 ## Владение во время выполнения
 
-`EditorRuntime` принимает необязательный `CRDTDoc`. Если его нет, runtime создаёт `YjsDoc` и передаёт в `DocumentModelImpl`. Это точка подключения другого CRDT-адаптера или заранее настроенной синхронизации.
+Host создаёт `DocumentModelImpl` поверх выбранного `CRDTDoc` и передаёт готовую модель в `EditorRuntime`. Core editor не создаёт и не знает конкретный CRDT adapter.
 
 ```text
 EditorRuntime
@@ -13,7 +13,7 @@ EditorRuntime
       владеет shared-корнями и подключениями провайдеров
 ```
 
-`await editor.destroy()` освобождает runtime subscriptions, managers, commands и undo history, затем вызывает `document.crdt.destroy()`. Для `YjsDoc` это отключает все providers и уничтожает `Y.Doc`; переданный editor-у document поэтому считается owned ресурсом runtime.
+`await editor.destroy()` освобождает runtime subscriptions, managers, commands и undo history, затем вызывает `crdt.destroy()`. Для `YjsDoc` это отключает все providers и уничтожает `Y.Doc`; переданный editor-у document поэтому считается owned ресурсом runtime.
 
 ## `DocumentModelImpl`
 
@@ -21,7 +21,7 @@ EditorRuntime
 
 ### Транзакции
 
-Каждая мутация выполняется через `crdt.transact(operation, origin)`. У модели один стабильный origin. Группировка сохраняет инварианты и позволяет undo отличать локальные операции.
+Каждая мутация выполняется через `crdt.transact(operation)`. CRDT adapter назначает приватный стабильный local origin. Группировка сохраняет инварианты и позволяет undo отличать локальные операции.
 
 ### Подписки
 
@@ -29,20 +29,7 @@ EditorRuntime
 
 ### Области undo
 
-Менеджеры добавляют shared-контейнеры, которые должны участвовать в истории. `DocumentModelImpl` собирает их, а публичный undo manager вызывает `crdt.createUndoManager(scopes, [origin])`. Поэтому в истории оказываются только локальные транзакции модели.
-
-Текущий агрегированный массив строится так:
-
-```ts
-this.undoScopes = [
-  ...this.blocks.undoScopes,    // blocks map и roots array
-  ...this.elements.undoScopes,  // elements map
-  ...this.links.undoScopes,     // links map
-  ...this.pluginData.undoScopes // plugins map
-];
-```
-
-Scope — это сам живой CRDT-контейнер, а не его имя. Например, block manager сохраняет `[this.storage, this.roots]`, где `storage` получен через `getMap("blocks")`, а `roots` — через `getArray("roots")`. Новый manager должен аналогично предоставить массив своих корневых `CRDTMap`, `CRDTArray` или `CRDTText`.
+Каждый storage manager объявляет принадлежащие ему `undoScopes`. `DocumentModelImpl` объединяет их в constructor-local массив и один раз передаёт в `DocumentUndoManager`; core runtime повторно использует `document.history` и не получает aggregate scopes или origin.
 
 ### Snapshots
 
@@ -113,7 +100,7 @@ Helpers модели обновляют существующие shared-знач
 
 1. Определите смысл и проверку в `store/document-model/core`.
 2. Выберите атомарное значение или shared map/array/text согласно ожидаемым конкурирующим изменениям.
-3. Создавайте shared-значения через `document.crdt.createDetached*()`.
+3. Создавайте shared-значения через `crdt.createDetached*()`.
 4. Изменяйте их через владеющий manager и `DocumentModelImpl.transact()`.
 5. Добавьте контейнер в undo scopes, если изменение должно отменяться.
 6. Обновите dump/load snapshot, clipboard и rendering consumers.

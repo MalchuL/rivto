@@ -18,7 +18,8 @@ import "@chulane/rivto-react/styles.css";
 
 ```tsx
 function createRuntime() {
-  const editor = createRivtoEditor();
+  const document = new DocumentModelImpl(new YjsDoc("document-id"));
+  const editor = createRivtoEditor({ document });
   const reactEditor = createReactEditor({ editor, extensions: [standardPreset()] });
   return { editor, reactEditor };
 }
@@ -55,11 +56,11 @@ Children `EditorView` находятся в том же context перед activ
 
 ```tsx
 function Toolbar() {
-  const editor = useEditor();
+  const editor = useReactEditor();
   const { mode, setMode } = useEditorMode();
   return <header>
-    <button onClick={() => editor.undo()}>Undo</button>
-    <button onClick={() => editor.redo()}>Redo</button>
+    <button onClick={() => editor.history.undo()}>Undo</button>
+    <button onClick={() => editor.history.redo()}>Redo</button>
     <button onClick={() => setMode(mode === "block" ? "edgeless" : "block")}>Mode</button>
   </header>;
 }

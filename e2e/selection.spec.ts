@@ -160,8 +160,8 @@ test("Shift+Alt drag includes a contentless Counter without converting text to b
   await page.mouse.down();
   await page.mouse.move(counterBox.x + counterBox.width / 2, counterBox.y + counterBox.height / 2, { steps: 8 });
   const selected = await page.evaluate(() => (
-    window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor } }
-  ).__rivtoDemo.editor.editor.selection.get()?.blocks);
+    window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }
+  ).__rivtoDemo.editor.selection.get()?.blocks);
   expect(selected).toContainEqual(expect.objectContaining({
     id: await counter.getAttribute(BLOCK_ID_ATTRIBUTE),
     start: 0,

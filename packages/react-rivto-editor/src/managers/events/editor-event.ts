@@ -2,10 +2,10 @@
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import type {
-  RivtoEditorApi as Editor,
   EditorMode,
   Selection,
 } from "@chulane/rivto";
+import type { ReactEditor as Editor } from "../../types";
 import type {
   DOMEventMap,
   DOMEventName,

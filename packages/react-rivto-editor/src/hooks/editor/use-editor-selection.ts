@@ -17,7 +17,7 @@ import { useEditorContext } from "../../editor-context";
  * @throws If called outside an EditorView subtree.
  */
 export function useEditorSelection(): Selection | undefined {
-  const { editor } = useEditorContext();
+  const { reactEditor: editor } = useEditorContext();
   const subscribe = useCallback(
     (listener: () => void) => editor.selection.subscribe(listener),
     [editor],

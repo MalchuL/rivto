@@ -45,7 +45,7 @@ rivto.editor.blocks: CRDTMap<blockId, CRDTMap<BlockStorage>>
 rivto.editor.roots: CRDTArray<string>            (CRDT object; ID корней по порядку)
 ```
 
-**Что здесь является CRDT object:** обе root-структуры, отдельная map каждого блока, а также вложенные `listProps`, `props`, `content`, `children` и `pluginData`. Эти объекты создаются только через `document.crdt.createDetached*()`, затем присоединяются к родительской map. Их identity сохраняется при patch и materialization.
+**Что здесь является CRDT object:** обе root-структуры, отдельная map каждого блока, а также вложенные `listProps`, `props`, `content`, `children` и `pluginData`. Эти объекты создаются только через `crdt.createDetached*()`, затем присоединяются к родительской map. Их identity сохраняется при patch и materialization.
 
 **Что является base/plain value:** `id`, `type`, элементы массивов `roots`/`children` и значения, записанные в `listProps`, `props` и `pluginData` публичными методами manager-а. Примитивы (`string`, finite `number`, `boolean`, `null`) являются base types. Plain arrays и records — portable plain values: adapter сериализует их, но изменение внутри такого объекта не является отдельной CRDT-операцией. Независимо объединяются top-level keys содержащей их `CRDTMap`; чтобы изменить вложенный plain object, manager записывает значение соответствующего key заново.
 
@@ -93,7 +93,7 @@ document.blocks.setPluginData("task-1", "comments", {
 
 ### Когда consumer получает update
 
-Каждая mutation manager-а проходит через `document.transact()` со стабильным `document.origin`. После завершения transaction подписка `document.subscribe()` получает общий update signal; providers могут отправить CRDT update peers, а editor undo manager видит операцию в block scopes. Batch и hierarchy methods группируют несколько map/array/text операций в один document transaction.
+Каждая mutation manager-а проходит через `document.transact()` с приватным стабильным origin модели. После завершения transaction подписка `document.subscribe()` получает общий update signal; providers могут отправить CRDT update peers, а editor undo manager видит операцию в block scopes. Batch и hierarchy methods группируют несколько map/array/text операций в один document transaction.
 
 Изменение detached результата `getBlock()`/`getBlocks()` не создаёт update. Так же не работает mutation исходного plain object после передачи в manager: перед storage значения clone-ятся. Для persisted изменения всегда вызывайте focused manager method.
 
@@ -107,9 +107,8 @@ document.blocks.setPluginData("task-1", "comments", {
 
 ### `undoScopes`
 
-- **Тип:** readonly tuple `[blocksMap, rootsArray]`, публичное свойство.
-- **Значение:** `storage` и `roots`, передаваемые в общий undo manager.
-- **Исключения при чтении:** отсутствуют.
+- **Тип:** `readonly CRDTUndoScope[]`.
+- **Значение:** принадлежащие manager-у `storage` и `roots`, которые модель включает в общую историю.
 
 ### `validateProps`
 

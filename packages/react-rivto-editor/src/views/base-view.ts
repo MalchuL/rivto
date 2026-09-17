@@ -48,7 +48,8 @@ export class BaseBlockView implements BlockViewBehavior {
    */
   onSplit(context: BlockViewContext, target: KeyboardSelectionTarget): BlockViewOutcome {
     const { reactEditor, block, root } = context;
-    const { editor, isEmptyBlock } = reactEditor;
+    const { isEmptyBlock } = reactEditor;
+    const editor = reactEditor;
     if (isEmptyBlock(block) && editor.blocks.getParentId(block.id)) {
       outdentUntilBoundary(reactEditor, block.id);
       focusCaret(reactEditor, root, block.id, 0);

@@ -30,7 +30,7 @@ rivto.editor.links: CRDTMap<linkId, CRDTMap<LinkStorage>>
     meta -> Record<string, BasicType>       (plain object, атомарное поле)
 ```
 
-**CRDT objects:** root `links` и map отдельной связи. Link record создаётся через `document.crdt.createDetachedMap<LinkStorage>()` и присоединяется к root по `link.id`.
+**CRDT objects:** root `links` и map отдельной связи. Link record создаётся через `crdt.createDetachedMap<LinkStorage>()` и присоединяется к root по `link.id`.
 
 **Base/plain values:** `id` — base string; `from`, `to` и `meta` — cloned portable plain objects. Они не являются вложенными `CRDTMap`. Поэтому замена `from` является одной операцией для всего endpoint, а изменение отдельного `meta` key текущим manager API потребовало бы создать link заново и заменить whole record. Одновременные изменения разных полей outer link map теоретически имеют отдельную CRDT-гранулярность, но public API предоставляет только `createLink()` с полной записью.
 
@@ -78,11 +78,7 @@ Mutation `link.meta.label = "blocks"` без `createLink()` не сохрани�
 - **Значение:** root `rivto.editor.links`.
 - **Исключения при чтении:** CRDT adapter errors.
 
-### Свойство `undoScopes`
-
-- **Тип:** readonly tuple `[storage]`, публичное.
-- **Значение:** link root для document undo history.
-- **Исключения при чтении:** отсутствуют.
+Link manager объявляет собственный `undoScopes`; модель включает эти roots в общую историю.
 
 ### `constructor(document)`
 
@@ -200,7 +196,7 @@ document.transact(() => {
 
 `enabled` и `unresolvedCount` являются разными shared keys: peers могут менять их независимо, а `comments.observe()` получает deep events namespace. `document.subscribe()` получает общий document update после завершения transaction.
 
-Вызвать `comments.set()` можно и без `document.transact()`: attached CRDT adapter всё равно создаст update и providers смогут его синхронизировать. Но такая автоматическая transaction не использует `document.origin`, поэтому стандартный editor undo manager, настроенный только на этот origin, не обязан записать изменение. Для grouping и undo plugin должен выполнять mutations внутри `document.transact()`.
+Вызвать `comments.set()` можно и без `document.transact()`: attached CRDT adapter всё равно создаст update и providers смогут его синхронизировать. Но такая автоматическая transaction не использует приватный origin модели, поэтому стандартный editor undo manager не обязан записать изменение. Для grouping и undo plugin должен выполнять mutations внутри `document.transact()`.
 
 Если под key снова записать plain object, глубина заканчивается на этом key:
 
@@ -213,7 +209,7 @@ document.transact(() => {
 `display` является shared key, но `display.color` и `display.compact` — части одного plain value. Чтобы сделать их independently collaborative, создайте nested map через тот же `CRDTDoc` и присоедините её один раз:
 
 ```ts
-const display = document.crdt.createDetachedMap<{
+const display = crdt.createDetachedMap<{
   color: string;
   compact: boolean;
 }>();
@@ -225,7 +221,7 @@ document.transact(() => {
 });
 ```
 
-После attachment `display.set("color", "blue")` меняет только `color`. Shared object нельзя переиспользовать в двух parents; adapter-neutral код должен использовать `document.crdt.createDetached*()`. Подробный lifecycle описан на странице создания detached CRDT-объектов.
+После attachment `display.set("color", "blue")` меняет только `color`. Shared object нельзя переиспользовать в двух parents; adapter-neutral код должен использовать `crdt.createDetached*()`. Подробный lifecycle описан на странице создания detached CRDT-объектов.
 
 Итого: `set()` подходит для небольшого namespace, который всегда заменяется целиком. `getMap()` нужен, когда свойства plugin-а изменяются независимо. Nested `CRDTMap`/`CRDTArray`/`CRDTText` нужны только при необходимой granular collaboration ещё на один уровень глубже.
 
@@ -243,9 +239,8 @@ document.transact(() => {
 
 ### Свойство `undoScopes`
 
-- **Тип:** `CRDTUndoScope[]`, публичное.
-- **Значение:** `[root]`.
-- **Исключения при чтении:** отсутствуют.
+- **Тип:** `readonly CRDTUndoScope[]`.
+- **Значение:** plugin root, который модель включает в общую историю.
 
 ### `constructor(document)`
 

@@ -43,7 +43,8 @@ export function removeEmptyBlockAfterStructuralPredecessor(
   root: HTMLElement,
   blockId: string,
 ): boolean {
-  const { editor, isEmptyBlock } = reactEditor;
+  const { isEmptyBlock } = reactEditor;
+  const editor = reactEditor;
   const block = editor.blocks.getBlock(blockId);
   if (
     !block ||

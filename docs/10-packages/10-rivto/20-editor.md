@@ -7,7 +7,7 @@
 ```text
 createRivtoEditor(options)
   -> EditorRuntime
-    -> DocumentModelImpl
+    -> supplied DocumentModel
     -> BlockManager + BlockRegistryManager
     -> ElementManager + LinkManager
     -> CommandRegistry
@@ -21,7 +21,8 @@ Editor не владеет rendering и DOM. React-пакет подписыва
 ## Быстрый пример
 
 ```ts
-const editor = createRivtoEditor();
+const document = new DocumentModelImpl(new YjsDoc("document-id"));
+const editor = createRivtoEditor({ document });
 
 editor.blocksRegistry.defineBlock({
   type: "paragraph",
@@ -64,6 +65,6 @@ Persisted в CRDT:
 
 ## Владение lifecycle
 
-`EditorRuntime.destroy()` уничтожает runtime managers, registry, history, listeners и commands, затем вызывает `document.crdt.destroy()`. CRDT lifecycle отключает все providers и уничтожает внутренний документ. Поэтому переданный через options CRDT document становится owned runtime-ресурсом и не должен совместно использоваться после `await editor.destroy()`.
+`EditorRuntime.destroy()` уничтожает runtime managers, registry, history, listeners и commands, затем вызывает `crdt.destroy()`. CRDT lifecycle отключает все providers и уничтожает внутренний документ. Поэтому переданный через options CRDT document становится owned runtime-ресурсом и не должен совместно использоваться после `await editor.destroy()`.
 
 Вложенные страницы описывают каждый interface, property, method, argument, return value, exception, built-in command и interaction с остальными модулями.

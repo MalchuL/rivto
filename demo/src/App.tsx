@@ -1,7 +1,9 @@
 import {
   BroadcastChannelProvider,
   createRivtoEditor,
+  DocumentModelImpl,
   RIVTO_VERSION,
+  type RivtoEditorApi,
   YjsDoc,
 } from "@chulane/rivto";
 import {
@@ -22,7 +24,6 @@ import {
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
   todoItemExtension,
-  useEditor,
   useEditorMode,
 } from "@chulane/rivto-react";
 import { KeyboardPanel } from "./KeyboardPanel";
@@ -59,7 +60,10 @@ async function saveDemoReviewReport(report: ReviewReport): Promise<void> {
 }
 
 /** @returns A fresh Review extension for one independently owned editor. */
-const demoReviewReports = () => reviewReportExtensions({ saveReport: saveDemoReviewReport });
+const demoReviewReports = (editor: RivtoEditorApi) => reviewReportExtensions({
+  editor,
+  saveReport: saveDemoReviewReport,
+});
 
 /**
  * Intercepts custom Markdown link protocols (`rivto:` / `chulane:`).
@@ -229,7 +233,9 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
  * preceded by a separator so reconciliation mounts N additional cards.
  */
 function createDemoEditor() {
-  const editor = createRivtoEditor();
+  const editor = createRivtoEditor({
+    document: new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)),
+  });
   const edgelessVisuals = edgelessVisualsExtension(edgelessOptions);
   // Used by e2e / KEYMAP demos: `?keymap=alternate` remaps indent without test-only APIs.
   const alternateKeymap = new URLSearchParams(window.location.search).get("keymap") === "alternate"
@@ -249,14 +255,14 @@ function createDemoEditor() {
       edgelessVisuals,
       blockIdExtension(),
       ...customBlockExtensions,
-      ...demoReviewReports(),
+      ...demoReviewReports(editor),
     ],
   });
   // Playwright and host scripts locate this demo instance through window, not React refs.
   // The token changes on each create so a stale handle cannot be mistaken for a remount.
   const demoToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   Object.assign(window, {
-    __rivtoDemo: { token: demoToken, editor: reactEditor },
+    __rivtoDemo: { token: demoToken, editor, reactEditor },
   });
   const introId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
@@ -482,7 +488,9 @@ function createDemoEditor() {
  * and to contrast a populated document with an empty one.
  */
 function createEmptyDemoEditor() {
-  const editor = createRivtoEditor();
+  const editor = createRivtoEditor({
+    document: new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)),
+  });
   const reactEditor = createReactEditor({
     editor,
     extensions: [
@@ -492,7 +500,7 @@ function createEmptyDemoEditor() {
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
-      ...demoReviewReports(),
+      ...demoReviewReports(editor),
     ],
   });
   return { editor, reactEditor };
@@ -534,13 +542,14 @@ function JournalDate({ date }: { readonly date: Date }) {
  * journal, multi-editor, and sync surfaces.
  */
 function DemoToolbar({
+  editor,
   showBlockIds,
   onShowBlockIdsChange,
 }: {
+  readonly editor: RivtoEditorApi;
   readonly showBlockIds: boolean;
   readonly onShowBlockIdsChange: (visible: boolean) => void;
 }) {
-  const editor = useEditor();
   const { mode, setMode } = useEditorMode();
   const [reportError, setReportError] = useState<string | null>(null);
   /** No-ops when already in `next` so repeated clicks do not thrash mode. */
@@ -634,6 +643,7 @@ function JournalDemoApp() {
         <section className="journal-document" data-journal-document="today">
           <EditorView editor={todayEditor.reactEditor}>
             <DemoToolbar
+              editor={todayEditor.editor}
               showBlockIds={showBlockIds}
               onShowBlockIdsChange={setShowBlockIds}
             />
@@ -664,7 +674,9 @@ function createMultiEditor(
   side: "left" | "right",
   options: { readonly empty?: boolean; readonly conflict?: "block" } = {},
 ) {
-  const editor = createRivtoEditor();
+  const editor = createRivtoEditor({
+    document: new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)),
+  });
   const reactEditor = createReactEditor({
     editor,
     extensions: [
@@ -674,7 +686,7 @@ function createMultiEditor(
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
-      ...demoReviewReports(),
+      ...demoReviewReports(editor),
     ],
   });
   if (side === "left") {
@@ -722,8 +734,7 @@ function createMultiEditor(
 }
 
 /** Used by e2e: hidden `editor.dump()` for asserting structure not shown in the UI. */
-function DocumentStateDump() {
-  const editor = useEditor();
+function DocumentStateDump({ editor }: { readonly editor: RivtoEditorApi }) {
   const snapshot = useSyncExternalStore(
     (listener) => editor.subscribe(listener),
     () => JSON.stringify(editor.dump()),
@@ -746,9 +757,9 @@ function MultiEditorPane({
     <section className="multi-editor-pane" data-multi-editor={side}>
       <BlockIdsVisibleProvider visible={showBlockIds}>
         <EditorView editor={runtime.reactEditor}>
-          <DemoToolbar showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
+          <DemoToolbar editor={runtime.editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
           <RevisionsPanel />
-          <DocumentStateDump />
+          <DocumentStateDump editor={runtime.editor} />
         </EditorView>
       </BlockIdsVisibleProvider>
     </section>
@@ -790,7 +801,7 @@ function MultiEditorApp() {
  */
 function createSyncedPeer(side: "left" | "right", roomId: string) {
   const yjsDoc = new YjsDoc(`${roomId}:${side}`);
-  const editor = createRivtoEditor({ document: yjsDoc });
+  const editor = createRivtoEditor({ document: new DocumentModelImpl(yjsDoc) });
   const reactEditor = createReactEditor({
     editor,
     extensions: [
@@ -800,7 +811,7 @@ function createSyncedPeer(side: "left" | "right", roomId: string) {
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
       ...customBlockExtensions,
-      ...demoReviewReports(),
+      ...demoReviewReports(editor),
     ],
   });
   if (side === "left") {
@@ -863,7 +874,7 @@ function SyncEditorsApp() {
           <section key={side} className="multi-editor-pane" data-editor-sync={side}>
             <BlockIdsVisibleProvider visible={showBlockIds}>
               <EditorView editor={peers[side].reactEditor}>
-                <DemoToolbar showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
+                <DemoToolbar editor={peers[side].editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
                 <RevisionsPanel />
               </EditorView>
             </BlockIdsVisibleProvider>

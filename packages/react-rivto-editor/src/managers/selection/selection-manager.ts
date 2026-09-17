@@ -4,7 +4,7 @@
  * Core owns block selection with per-block offsets. React only reads native
  * endpoints and restores them after rendering.
  */
-import type { Selection } from "@chulane/rivto";
+import type { RivtoEditorApi, Selection } from "@chulane/rivto";
 import type { SelectionCapability } from "../../capabilities";
 import type { ReactEditorImpl } from "../../react-editor";
 import { readEditorDOMSelection, restoreEditorDOMSelection } from "./editor-dom-selection";
@@ -15,13 +15,17 @@ export { createCaretSelection, createTextSelection } from "@chulane/rivto";
 export class ReactSelectionManager implements SelectionCapability {
   /**
    * Creates a bridge scoped to one React runtime.
-   * @param reactEditor - Runtime providing core selection and the DOM root.
+   * @param reactEditor - Owning React runtime providing the active DOM root.
+   * @param editor - Core runtime providing selection state.
    */
-  constructor(private readonly reactEditor: ReactEditorImpl) {}
+  constructor(
+    private readonly reactEditor: ReactEditorImpl,
+    private readonly editor: RivtoEditorApi,
+  ) {}
 
   /** @returns Detached current selection. */
   get(): Selection | undefined {
-    return this.reactEditor.editor.selection.get();
+    return this.editor.selection.get();
   }
 
   /**
@@ -30,12 +34,12 @@ export class ReactSelectionManager implements SelectionCapability {
    * @returns No value.
    */
   set(selection: Selection): void {
-    this.reactEditor.editor.selection.set(selection);
+    this.editor.selection.set(selection);
   }
 
   /** Clears local selection. */
   clear(): void {
-    this.reactEditor.editor.selection.clear();
+    this.editor.selection.clear();
   }
 
   /**
@@ -44,7 +48,7 @@ export class ReactSelectionManager implements SelectionCapability {
    * @returns Function that removes the listener.
    */
   subscribe(listener: () => void): () => void {
-    return this.reactEditor.editor.selection.subscribe(listener);
+    return this.editor.selection.subscribe(listener);
   }
 
   /** Releases no resources because core owns the only subscription store. */
@@ -52,8 +56,17 @@ export class ReactSelectionManager implements SelectionCapability {
 
   /** Deletes the current selection through core. */
   delete(): void {
-    this.reactEditor.editor.selection.delete();
+    this.editor.selection.delete();
   }
+
+  /** @returns Stable core selection snapshot. */
+  snapshot(): Selection | undefined { return this.editor.selection.snapshot(); }
+
+  /** @returns Whether a block has structural selection coverage. */
+  isBlockSelected(id: string): boolean { return this.editor.selection.isBlockSelected(id); }
+
+  /** @returns Whether an element belongs to the current selection. */
+  isElementSelected(id: string): boolean { return this.editor.selection.isElementSelected(id); }
 
   /**
    * Reads current native endpoints.

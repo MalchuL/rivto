@@ -54,7 +54,7 @@ export interface UseBlockResult {
  * @throws If called outside an EditorView subtree.
  */
 export function useBlock(blockId: string): UseBlockResult {
-  const { editor, reactEditor } = useEditorContext();
+  const { reactEditor: editor } = useEditorContext();
   const subscribe = useCallback(
     (listener: () => void) => editor.blocks.subscribeBlock(blockId, listener),
     [blockId, editor],
@@ -65,7 +65,7 @@ export function useBlock(blockId: string): UseBlockResult {
   // operate on the latest document state. Memoization keeps their references
   // stable for consumers that pass them into memoized child components.
   const operations = useMemo<BlockOperations>(() => ({
-    update: (patch) => reactEditor.blocks.updateBlock(blockId, patch),
+    update: (patch) => editor.blocks.updateBlock(blockId, patch),
     setContent: (content) => editor.blocks.updateBlock(blockId, { content }),
     setType: (type) => editor.blocks.setBlockType(blockId, type),
     setProp: (key, value) => editor.blocks.setBlockProp(blockId, key, value),
@@ -77,7 +77,7 @@ export function useBlock(blockId: string): UseBlockResult {
     moveInside: (parentId) => editor.blocks.moveBlock(blockId, parentId, "inside"),
     indent: () => editor.blocks.indentBlock(blockId),
     outdent: () => editor.blocks.outdentBlock(blockId),
-  }), [blockId, editor, reactEditor]);
+  }), [blockId, editor]);
 
   return {
     block,

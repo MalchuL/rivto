@@ -2,11 +2,7 @@
  * Editor runtime coordinating document mutations and focused public managers.
  */
 import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
-import { YjsDoc } from "@chulane/crdt-doc";
 import {
-  DocumentModelImpl,
-  createBlockParentConstraintProcessor,
-  createBlockPropsProcessor,
   type Block,
   type DocumentModel,
   type Snapshot,
@@ -27,8 +23,8 @@ import { Listeners } from "../utils";
  * batching, clipboard bridges, and the shared revision stream.
  */
 export class EditorRuntime implements RivtoEditorApi {
-  /** Collaborative block, tree, and snapshot storage owned by this runtime. */
-  readonly document: DocumentModel;
+  /** Collaborative block, element, and snapshot storage owned by this runtime. */
+  private readonly document: DocumentModel;
   /** Public owner of block commands and typed block operations. */
   readonly blocks: BlockManager;
   /** Public owner of native block definitions and property validation. */
@@ -51,33 +47,23 @@ export class EditorRuntime implements RivtoEditorApi {
   private readonly unsubscribeFns: Array<() => void> = [];
   /** Monotonic snapshot incremented before notifying runtime subscribers. */
   private currentRevision = 0;
-  /** Zero outside a batch and positive while the outer transaction is active. */
-  private batchDepth = 0;
 
   /**
    * Creates a runtime with a collaborative document, default blocks, and mode.
    *
    * @param options - Optional document adapter and startup mode.
    */
-  constructor(options: CreateRivtoEditorOptions = {}) {
-    this.document = new DocumentModelImpl(options.document ?? new YjsDoc(`rivto-${crypto.randomUUID()}`));
+  constructor(options: CreateRivtoEditorOptions) {
+    this.document = options.document;
     this.mode = new ModeManager(options.mode ?? "block");
-    this.selection = new SelectionManager(this);
-    this.history = new UndoManager(this.document);
+    this.history = new UndoManager(this.document.history);
     this.blocksRegistry = new BlockRegistryManager();
     const unsubscribeFromBlockRegistryChanges = this.blocksRegistry.subscribe(() => this.notifyChanges());
     this.unsubscribeFns.push(unsubscribeFromBlockRegistryChanges);
-    this.blocks = new BlockManager(this);
-    this.elements = new ElementManager(this);
+    this.blocks = new BlockManager(this, this.document);
+    this.elements = new ElementManager(this, this.document);
+    this.selection = new SelectionManager(this);
     this.clipboard = new ClipboardManager(this);
-    this.unsubscribeFns.push(this.document.blocks.pipe.register(
-      createBlockParentConstraintProcessor((childType, parentType) => {
-        this.blocksRegistry.assertAllowedParent(childType, parentType);
-      }),
-    ));
-    this.unsubscribeFns.push(this.document.blocks.pipe.register(
-      createBlockPropsProcessor((type, props) => this.blocksRegistry.validate(type, props)),
-    ));
     this.registerRuntimeCommands();
     this.registerClipboardCommands();
 
@@ -137,19 +123,17 @@ export class EditorRuntime implements RivtoEditorApi {
    * @throws The original error when `operation` fails.
    */
   batchUpdates<Result>(operation: () => Result): Result {
-    if (this.batchDepth > 0) return operation();
-    this.history.stopCapturing();
-    this.batchDepth += 1;
-    let result!: Result;
-    try {
-      this.document.transact(() => {
-        result = operation();
-      });
-      return result;
-    } finally {
-      this.batchDepth -= 1;
-      this.history.stopCapturing();
-    }
+    return this.document.batchUpdates(operation);
+  }
+
+  /**
+   * Groups synchronous mutations into one transaction excluded from undo history.
+   *
+   * @param operation - Synchronous editor work to execute without an undo item.
+   * @returns Value returned by the operation.
+   */
+  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result {
+    return this.document.batchUpdatesWithoutHistory(operation);
   }
 
   /**
@@ -237,27 +221,6 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Wraps one document command with the runtime's undo-capture boundary.
-   *
-   * Commands executed inside an explicit batch reuse the outer history scope.
-   * Standalone commands stop capture before and after their mutation.
-   *
-   * @param handler - Command implementation that may mutate the document.
-   * @returns Wrapped command handler preserving history boundaries.
-   */
-  private documentCommand(handler: CommandHandler): CommandHandler {
-    return (value) => {
-      const ownsHistoryBoundary = this.batchDepth === 0;
-      if (ownsHistoryBoundary) this.history.stopCapturing();
-      try {
-        return handler(value);
-      } finally {
-        if (ownsHistoryBoundary) this.history.stopCapturing();
-      }
-    };
-  }
-
-  /**
    * Registers document-, selection-, and history-level runtime commands.
    *
    * Block command ownership belongs to the public block manager.
@@ -265,11 +228,11 @@ export class EditorRuntime implements RivtoEditorApi {
    * @returns No value.
    */
   private registerRuntimeCommands(): void {
-    this.commands.register("document.load", this.documentCommand((value) => {
+    this.commands.register("document.load", (value) => {
       const data = commandPayload(value) as unknown as { snapshot: SnapshotUpdate };
       this.document.loadSnapshot(data.snapshot);
       this.history.clear();
-    }));
+    });
     this.commands.register("selection.set", (value) => {
       const data = commandPayload(value) as unknown as {
         selection: Parameters<SelectionManager["set"]>[0];
@@ -418,11 +381,10 @@ export class EditorRuntime implements RivtoEditorApi {
     run(() => this.elements.destroy());
     run(() => this.blocks.destroy());
     run(() => this.blocksRegistry.destroy());
-    run(() => this.history.destroy());
     run(() => this.commands.clear());
     run(() => this.listeners.clear());
     try {
-      await this.document.crdt.destroy();
+      await this.document.destroy();
     } catch (error) {
       errors.push(error);
     }
@@ -447,6 +409,6 @@ export class EditorRuntime implements RivtoEditorApi {
  * @param options - Optional document adapter and initial presentation mode.
  * @returns Runtime whose lifecycle is owned by the caller.
  */
-export function createRivtoEditor(options: CreateRivtoEditorOptions = {}): EditorRuntime {
+export function createRivtoEditor(options: CreateRivtoEditorOptions): EditorRuntime {
   return new EditorRuntime(options);
 }

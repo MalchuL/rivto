@@ -51,7 +51,7 @@ export interface UseBlockChildrenResult {
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockChildren(blockId: string): UseBlockChildrenResult {
-  const { editor, reactEditor } = useEditorContext();
+  const { reactEditor: editor } = useEditorContext();
   const { block: parent } = useBlock(blockId);
 
   const operations = useMemo<BlockChildrenOperations>(() => {
@@ -74,13 +74,13 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
 
         let childId: string;
         if (children.length === 0) {
-          childId = reactEditor.blocks.insertBlock(block, blockId);
+          childId = editor.blocks.insertBlock(block, blockId);
           editor.blocks.indentBlock(childId);
         } else if (afterId === null) {
-          childId = reactEditor.blocks.insertBlock(block, children[0].id);
+          childId = editor.blocks.insertBlock(block, children[0].id);
           editor.blocks.moveBlock(childId, null);
         } else {
-          childId = reactEditor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
+          childId = editor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
         }
         return childId;
       },
@@ -94,7 +94,7 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
         editor.blocks.moveBlock(childId, afterId);
       },
     };
-  }, [blockId, editor, reactEditor]);
+  }, [blockId, editor]);
 
   return {
     children: parent?.children ?? NO_CHILDREN,

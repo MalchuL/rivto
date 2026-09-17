@@ -6,3 +6,5 @@
  */
 export * from "./paste-strategies";
 export * from "./paste-strategy-registry";
+export * from "./types";
+export * from "./utils";

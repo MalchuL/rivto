@@ -5,7 +5,7 @@ import { blockIdsOf } from "../../elements/block-element-projection";
 import { isStructuralSelection } from "@chulane/rivto";
 
 /** Removes selected descendants whose selected ancestor already owns them. */
-function topLevelSelection(editor: ReactEditor["editor"], blockIds: readonly string[]): string[] {
+function topLevelSelection(editor: ReactEditor, blockIds: readonly string[]): string[] {
   const selected = new Set(blockIds);
   return blockIds.filter((id) => {
     let parentId = editor.blocks.getParentId(id);
@@ -19,7 +19,7 @@ function topLevelSelection(editor: ReactEditor["editor"], blockIds: readonly str
 
 /** Deletes selected blocks, including nested blocks, as one structural transaction. */
 export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   const selection = getEdgelessRuntime(reactEditor);
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.edgelessSelectionDelete,
@@ -37,7 +37,7 @@ export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
     const canvas = selection.get();
     let handled = false;
     if (canvas.active && canvas.items.length && editor.commands.has("edgeless.visual.delete")) {
-      editor.execute("edgeless.visual.delete", { selection: true });
+      editor.commands.execute("edgeless.visual.delete", { selection: true });
       root.focus({ preventScroll: true });
       handled = true;
     } else {
@@ -58,7 +58,7 @@ export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
           });
           selection.clear();
         } else {
-          editor.deleteSelection();
+          editor.selection.delete();
         }
         root.focus({ preventScroll: true });
         requestAnimationFrame(() => root.focus({ preventScroll: true }));

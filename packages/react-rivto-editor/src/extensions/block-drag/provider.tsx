@@ -17,7 +17,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { createStructuralSelection } from "@chulane/rivto";
-import { useEditor, useEditorRoot, useReactEditor } from "../../hooks";
+import { useEditorRoot, useReactEditor } from "../../hooks";
 import {
   useLayoutEffect,
   useMemo,
@@ -92,8 +92,8 @@ export function PageDragProvider({
   gapDropZone = 8,
   allowChildPlacement = true,
 }: PageDragExtensionOptions) {
-  const editor = useEditor();
   const reactEditor = useReactEditor();
+  const editor = reactEditor;
   const { element: root } = useEditorRoot();
   const activeMove = useRef<SelectedMoveRoots | undefined>(undefined);
   const crossDocumentTarget = useRef<{
@@ -119,7 +119,6 @@ export function PageDragProvider({
   useLayoutEffect(() => {
     if (!root || editor.mode.get() !== "block") return;
     const controller: CrossDocumentPageRootController = {
-      editor,
       reactEditor,
       root,
       setPlacement: (placement, empty = false) => {
@@ -272,7 +271,7 @@ export function PageDragProvider({
       try {
         crossDocumentBlockTransfer(
           editor,
-          crossDocument.controller.editor,
+          crossDocument.controller.reactEditor,
           move.ids,
           crossDocument.placement,
         );
@@ -284,7 +283,7 @@ export function PageDragProvider({
         editor.selection.clear();
         const firstId = move.ids[0]!;
         const lastId = move.ids.at(-1)!;
-        crossDocument.controller.editor.selection.set(
+        crossDocument.controller.reactEditor.selection.set(
           createStructuralSelection([...move.ids], firstId, lastId),
         );
         requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));

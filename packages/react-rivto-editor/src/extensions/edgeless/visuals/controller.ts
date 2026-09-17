@@ -92,7 +92,7 @@ export class EdgelessVisualController {
     this.registerCommands();
     this.registerClipboard();
     this.registerToolSelectShortcut();
-    this.unsubscribeDocument = reactEditor.editor.document.subscribe(() => {
+    this.unsubscribeDocument = reactEditor.subscribe(() => {
       if (this.reconciling) return;
       this.reconciling = true;
       try { this.normalizeGroups(); this.normalizeConnectors(); } finally { this.reconciling = false; }
@@ -110,7 +110,7 @@ export class EdgelessVisualController {
 
   /** @returns Detached visual views backed by first-class elements. */
   getVisuals(): EdgelessVisual[] {
-    return this.reactEditor.editor.elements.getElements().flatMap((element) => {
+    return this.reactEditor.elements.getElements().flatMap((element) => {
       if (!VISUAL_TYPES.has(element.type)) return [];
       if (element.type === "sticker" && typeof element.props.text !== "string") return [];
       const preview = this.propertyPreview.get(element.id);
@@ -174,7 +174,7 @@ export class EdgelessVisualController {
       this.emit();
       return;
     }
-    this.reactEditor.editor.batchUpdates(() => {
+    this.reactEditor.batchUpdates(() => {
       entries.forEach(([id, patch]) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] }));
     });
     this.emit();
@@ -192,7 +192,7 @@ export class EdgelessVisualController {
 
   /** @returns Detached logical groups backed by `group` elements. */
   getGroups(): VisualGroup[] {
-    return this.reactEditor.editor.elements.getElements().flatMap((element) => {
+    return this.reactEditor.elements.getElements().flatMap((element) => {
       if (element.type !== "group") return [];
       const children = Array.isArray(element.props.children) ? element.props.children.filter((id): id is string => typeof id === "string") : [];
       return [{ id: element.id, title: typeof element.props.title === "string" ? element.props.title : "Group", children }];
@@ -268,7 +268,7 @@ export class EdgelessVisualController {
   create(payload: CreateVisualPayload): string {
     if (!payload || !VISUAL_TYPES.has(payload.kind)) throw new Error("Unsupported edgeless visual kind");
     let frame = this.frame({ ...DEFAULT_FRAME, ...payload.frame });
-    const zIndex = Math.max(0, ...this.reactEditor.editor.elements.getElements().map((element) => element.zIndex)) + 1;
+    const zIndex = Math.max(0, ...this.reactEditor.elements.getElements().map((element) => element.zIndex)) + 1;
     let props: Record<string, unknown>;
     if (payload.kind === "sticker") {
       props = { ...this.defaults.sticker, rotation: normalizeRotation(payload.rotation ?? 0), text: payload.text ?? "Sticky note", fill: payload.fill ?? this.defaults.sticker.fill, color: payload.color ?? this.defaults.sticker.color, fontFamily: payload.fontFamily ?? this.defaults.sticker.fontFamily, fontSize: payload.fontSize ?? this.defaults.sticker.fontSize, align: payload.align ?? this.defaults.sticker.align, verticalAlign: payload.verticalAlign ?? this.defaults.sticker.verticalAlign };
@@ -329,7 +329,7 @@ export class EdgelessVisualController {
         verticalAlign: payload.verticalAlign ?? this.defaults.shape.verticalAlign,
       };
     }
-    const id = this.reactEditor.editor.elements.insertElement({ type: payload.kind, frame, zIndex, props });
+    const id = this.reactEditor.elements.insertElement({ type: payload.kind, frame, zIndex, props });
     this.selection.set([id]);
     return id;
   }
@@ -345,7 +345,7 @@ export class EdgelessVisualController {
     const framePatch = isRecord(safe.frame) ? safe.frame as Partial<VisualFrame> : undefined;
     delete safe.frame;
     delete safe.zIndex;
-    this.reactEditor.editor.elements.updateElement(id, {
+    this.reactEditor.elements.updateElement(id, {
       frame: framePatch,
       props: safe,
     });
@@ -356,7 +356,7 @@ export class EdgelessVisualController {
   updateMany(ids: readonly string[], patch: Record<string, unknown>): void {
     const visuals = ids.map((id) => this.visual(id));
     if (!visuals.length || visuals.some((visual) => !visual || visual.kind !== visuals[0]!.kind)) throw new Error("Shared properties require one visual type");
-    this.reactEditor.editor.batchUpdates(() => ids.forEach((id) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] })));
+    this.reactEditor.batchUpdates(() => ids.forEach((id) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] })));
   }
 
   /** Moves the complete active selection by a canvas delta. */
@@ -372,7 +372,7 @@ export class EdgelessVisualController {
     if (!bounds || width <= 0 || height <= 0 || bounds.width <= 0 || bounds.height <= 0) return;
     const scaleX = width / bounds.width;
     const scaleY = height / bounds.height;
-    this.reactEditor.editor.batchUpdates(() => this.leaves(items).forEach((id) => {
+    this.reactEditor.batchUpdates(() => this.leaves(items).forEach((id) => {
       const frame = this.element(id)?.frame;
       if (!frame) return;
       const center = {
@@ -402,8 +402,8 @@ export class EdgelessVisualController {
     const groupParentId = [...parents][0];
     // Batch insert + parent rewrite so normalizeGroups never sees a child claimed by
     // both the old parent and the new nested group in the same pass.
-    const id = this.reactEditor.editor.batchUpdates(() => {
-      const created = this.reactEditor.editor.elements.insertElement({
+    const id = this.reactEditor.batchUpdates(() => {
+      const created = this.reactEditor.elements.insertElement({
         type: "group",
         frame: bounds,
         zIndex: Math.max(0, ...items.map((item) => this.element(item)?.zIndex ?? 0)),
@@ -412,7 +412,7 @@ export class EdgelessVisualController {
       if (groupParentId) {
         const parent = this.groupRecord(groupParentId)!;
         const children = parent.children.map((child) => items.includes(child) ? created : child).filter((child, index, all) => all.indexOf(child) === index);
-        this.reactEditor.editor.elements.updateElement(groupParentId, { props: { children } });
+        this.reactEditor.elements.updateElement(groupParentId, { props: { children } });
       }
       return created;
     });
@@ -424,16 +424,16 @@ export class EdgelessVisualController {
   ungroup(): void {
     const selected = this.selection.get().items.filter((id) => this.element(id)?.type === "group");
     const children: string[] = [];
-    this.reactEditor.editor.batchUpdates(() => selected.forEach((id) => {
+    this.reactEditor.batchUpdates(() => selected.forEach((id) => {
       const group = this.groupRecord(id);
       if (!group) return;
       children.push(...group.children);
       const parentId = this.parentId(id);
       if (parentId) {
         const parent = this.groupRecord(parentId)!;
-        this.reactEditor.editor.elements.updateElement(parentId, { props: { children: parent.children.flatMap((child) => child === id ? group.children : [child]) } });
+        this.reactEditor.elements.updateElement(parentId, { props: { children: parent.children.flatMap((child) => child === id ? group.children : [child]) } });
       }
-      this.reactEditor.editor.elements.removeElement(id);
+      this.reactEditor.elements.removeElement(id);
     }));
     this.selection.set(children);
   }
@@ -443,7 +443,7 @@ export class EdgelessVisualController {
     const entries = this.selection.get().items.flatMap((id) => { const bounds = this.bounds(id); return bounds ? [{ id, bounds }] : []; });
     const outer = unionFrames(entries.map(({ bounds }) => bounds));
     if (!outer || entries.length < 2) return;
-    this.reactEditor.editor.batchUpdates(() => entries.forEach(({ id, bounds }) => {
+    this.reactEditor.batchUpdates(() => entries.forEach(({ id, bounds }) => {
       const dx = mode === "left" ? outer.x - bounds.x : mode === "center" ? outer.x + outer.width / 2 - bounds.width / 2 - bounds.x : mode === "right" ? outer.x + outer.width - bounds.width - bounds.x : 0;
       const dy = mode === "top" ? outer.y - bounds.y : mode === "middle" ? outer.y + outer.height / 2 - bounds.height / 2 - bounds.y : mode === "bottom" ? outer.y + outer.height - bounds.height - bounds.y : 0;
       if (dx || dy) this.translate([id], dx, dy);
@@ -461,7 +461,7 @@ export class EdgelessVisualController {
     const span = axis === "horizontal" ? last.x + last.width - first.x : last.y + last.height - first.y;
     const gap = (span - occupied) / (entries.length - 1);
     let cursor = axis === "horizontal" ? first.x : first.y;
-    this.reactEditor.editor.batchUpdates(() => entries.forEach(({ id, bounds }) => {
+    this.reactEditor.batchUpdates(() => entries.forEach(({ id, bounds }) => {
       const delta = cursor - (axis === "horizontal" ? bounds.x : bounds.y);
       if (delta) this.translate([id], axis === "horizontal" ? delta : 0, axis === "vertical" ? delta : 0);
       cursor += (axis === "horizontal" ? bounds.width : bounds.height) + gap;
@@ -472,7 +472,7 @@ export class EdgelessVisualController {
   reorder(direction: EdgelessReorder): void {
     const items = this.selection.get().items;
     const selected = new Set([...this.leaves(items), ...this.internalConnectorIds(items)]);
-    const layers = this.reactEditor.editor.elements.getElements().filter((element) => element.type !== "group").sort((a, b) => a.zIndex - b.zIndex).map((element) => element.id);
+    const layers = this.reactEditor.elements.getElements().filter((element) => element.type !== "group").sort((a, b) => a.zIndex - b.zIndex).map((element) => element.id);
     const moving = layers.filter((id) => selected.has(id));
     const stationary = layers.filter((id) => !selected.has(id));
     const frontmost = Math.max(...moving.map((id) => layers.indexOf(id)));
@@ -483,7 +483,7 @@ export class EdgelessVisualController {
           : Math.max(0, current - 1);
     const next = [...stationary];
     next.splice(insertion, 0, ...moving);
-    this.reactEditor.editor.elements.updateElements(next.map((id, zIndex) => ({ id, patch: { zIndex } })));
+    this.reactEditor.elements.updateElements(next.map((id, zIndex) => ({ id, patch: { zIndex } })));
   }
 
   /**
@@ -495,7 +495,7 @@ export class EdgelessVisualController {
   setBlockAutoHeight(items: readonly EdgelessSelectionRef[], enabled: boolean): void {
     const blocks = items.filter((id) => this.element(id)?.type === "block");
     if (!blocks.length) return;
-    this.reactEditor.editor.elements.updateElements(blocks.map((id) => ({ id, patch: { props: { autoHeight: enabled } } })));
+    this.reactEditor.elements.updateElements(blocks.map((id) => ({ id, patch: { props: { autoHeight: enabled } } })));
   }
 
   /** Structurally deletes selected elements and block trees represented by block elements. */
@@ -508,12 +508,12 @@ export class EdgelessVisualController {
   deleteItems(items: readonly string[]): void {
     const selected = [...items];
     const leaves = this.leaves(selected);
-    this.reactEditor.editor.batchUpdates(() => {
+    this.reactEditor.batchUpdates(() => {
       leaves.forEach((id) => {
         const element = this.element(id);
-        if (element?.type === "block") blockIdsOf(element, this.reactEditor.editor.blocks.getRootIds()).forEach((blockId) => this.reactEditor.editor.blocks.removeBlock(blockId));
+        if (element?.type === "block") blockIdsOf(element, this.reactEditor.blocks.getRootIds()).forEach((blockId) => this.reactEditor.blocks.removeBlock(blockId));
       });
-      this.reactEditor.editor.elements.removeElements([...new Set([...leaves, ...selected.filter((id) => this.element(id)?.type === "group")])]);
+      this.reactEditor.elements.removeElements([...new Set([...leaves, ...selected.filter((id) => this.element(id)?.type === "group")])]);
       this.normalizeGroups();
     });
   }
@@ -527,7 +527,7 @@ export class EdgelessVisualController {
   getSelection() { return this.selection.get(); }
 
   private registerCommands(): void {
-    const register = (name: string, handler: (payload?: unknown) => unknown) => this.registrations.push(this.reactEditor.editor.register(name, handler));
+    const register = (name: string, handler: (payload?: unknown) => unknown) => this.registrations.push(this.reactEditor.commands.register(name, handler));
     register("edgeless.visual.create", (value) => {
       const data = value as VisualCommandPayload<"edgeless.visual.create">;
       return this.create(data);
@@ -648,13 +648,13 @@ export class EdgelessVisualController {
     const included = new Set(leaves);
     const collect = (id: string): void => { const group = this.groupRecord(id); if (!group || included.has(id)) return; included.add(id); group.children.forEach(collect); };
     items.forEach(collect);
-    const rootIds = this.reactEditor.editor.blocks.getRootIds();
+    const rootIds = this.reactEditor.blocks.getRootIds();
     const blockIds = new Set(leaves.flatMap((id) => { const element = this.element(id); return element?.type === "block" ? blockIdsOf(element, rootIds) : []; }));
-    const blocks = this.reactEditor.editor.blocks.getBlocks().filter((block) => blockIds.has(block.id)).map(copy);
+    const blocks = this.reactEditor.blocks.getBlocks().filter((block) => blockIds.has(block.id)).map(copy);
     return {
       version: 4,
       blocks,
-      elements: this.reactEditor.editor.elements.getElements().filter((element) => included.has(element.id)).map(copy),
+      elements: this.reactEditor.elements.getElements().filter((element) => included.has(element.id)).map(copy),
       selectedElementIds: [...items],
     };
   }
@@ -662,16 +662,16 @@ export class EdgelessVisualController {
   private pasteClipboardBundle(bundle: ClipboardBundle): void {
     validateClipboardBundle(bundle);
     if (!Array.isArray(bundle.elements)) throw new Error("Invalid edgeless clipboard payload");
-    const elementMap = this.reactEditor.editor.elements.resolveImportIds(
+    const elementMap = this.reactEditor.elements.resolveImportIds(
       bundle.elements.map((element) => element.id),
     );
     const sourceRootIds = bundle.blocks.map((block) => block.id);
     const sourceElements = bundle.elements.map((element) => this.validateElement(element));
     const selected = (bundle.selectedElementIds ?? []).flatMap((id) => elementMap.get(id) ?? []);
     let elements: EditorElement[] = [];
-    this.reactEditor.editor.batchUpdates(() => {
-      const afterId = this.reactEditor.editor.blocks.getBlocks().at(-1)?.id;
-      const blockMap = this.reactEditor.editor.blocks.importForest(bundle.blocks, afterId).idMap;
+    this.reactEditor.batchUpdates(() => {
+      const afterId = this.reactEditor.blocks.getBlocks().at(-1)?.id;
+      const blockMap = this.reactEditor.blocks.importForest(bundle.blocks, afterId).idMap;
       elements = sourceElements.map((element): EditorElement => {
         const props = JSON.parse(JSON.stringify(element.props)) as Record<string, unknown>;
         if (element.type === "block") Object.assign(props, blockRangeProps(blockIdsOf(element, sourceRootIds).flatMap((id) => blockMap.get(id) ?? [])));
@@ -687,7 +687,7 @@ export class EdgelessVisualController {
         return { ...element, id: elementMap.get(element.id)!, frame: { ...element.frame, x: element.frame.x + 24, y: element.frame.y + 24 }, props };
       });
       const blockElements = elements.filter((element) => element.type === "block");
-      const order = this.reactEditor.editor.blocks.getRootIds();
+      const order = this.reactEditor.blocks.getRootIds();
       const first = blockElements.flatMap((element) => blockIdsOf(element, order))[0];
       const before = first ? order[order.indexOf(first) - 1] : undefined;
       if (before) insertBlockElementSeparator(this.reactEditor, before);
@@ -697,7 +697,7 @@ export class EdgelessVisualController {
       });
       elements.forEach((element) => {
         try {
-          this.reactEditor.editor.elements.insertElement(element);
+          this.reactEditor.elements.insertElement(element);
         } catch (error) {
           throw new Error(`Failed to paste ${element.type} element ${element.id}`, { cause: error });
         }
@@ -772,7 +772,7 @@ export class EdgelessVisualController {
   duplicateSelection(): EdgelessSelectionRef[] { const items = this.selection.get().items; if (!items.length) return []; this.pasteClipboardBundle(this.createClipboardBundle(items)); return [...this.selection.get().items]; }
 
   private translate(items: readonly string[], dx: number, dy: number): void {
-    this.reactEditor.editor.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.element(id)?.frame; if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));
+    this.reactEditor.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.element(id)?.frame; if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));
   }
 
   private leaves(items: readonly string[], visited = new Set<string>()): string[] {
@@ -817,19 +817,19 @@ export class EdgelessVisualController {
     return element ? rotatedFrameBounds(element.frame, this.rotation(id)) : undefined;
   }
 
-  private setFrame(id: string, frame: VisualFrame): void { if (this.element(id)?.type !== "group") this.reactEditor.editor.elements.updateElement(id, { frame: this.frame(frame) }); }
+  private setFrame(id: string, frame: VisualFrame): void { if (this.element(id)?.type !== "group") this.reactEditor.elements.updateElement(id, { frame: this.frame(frame) }); }
   private parentId(id: string): string | undefined { return this.getGroups().find((group) => group.children.includes(id))?.id; }
 
   private normalizeGroups(): void {
-    const elements = new Set(this.reactEditor.editor.elements.getElements().map((element) => element.id));
+    const elements = new Set(this.reactEditor.elements.getElements().map((element) => element.id));
     const groups = new Map(this.getGroups().map((group) => [group.id, group]));
     const parents = new Set<string>();
     const reaches = (from: string, target: string, seen = new Set<string>()): boolean => { if (from === target) return true; if (seen.has(from)) return false; seen.add(from); return groups.get(from)?.children.some((child) => groups.has(child) && reaches(child, target, seen)) ?? false; };
     groups.forEach((group) => {
       const local = new Set<string>();
       const children = group.children.filter((id) => elements.has(id) && id !== group.id && !local.has(id) && !parents.has(id) && !(groups.has(id) && reaches(id, group.id)) && (local.add(id), parents.add(id), true));
-      if (!children.length) this.reactEditor.editor.elements.removeElement(group.id);
-      else if (children.length !== group.children.length) this.reactEditor.editor.elements.updateElement(group.id, { props: { children } });
+      if (!children.length) this.reactEditor.elements.removeElement(group.id);
+      else if (children.length !== group.children.length) this.reactEditor.elements.updateElement(group.id, { props: { children } });
     });
   }
 
@@ -849,7 +849,7 @@ export class EdgelessVisualController {
       };
       const source = resolve(connector.source);
       const target = resolve(connector.target);
-      if (missing && this.options.orphanConnectors === "delete") { this.reactEditor.editor.elements.removeElement(connector.id); return; }
+      if (missing && this.options.orphanConnectors === "delete") { this.reactEditor.elements.removeElement(connector.id); return; }
       const sourcePoint = this.resolveEndpoint(source);
       const targetPoint = this.resolveEndpoint(target);
       const frame = connectorFrame(
@@ -862,7 +862,7 @@ export class EdgelessVisualController {
         target.elementId ? this.bounds(target.elementId) : undefined,
       );
       if (JSON.stringify(source) !== JSON.stringify(connector.source) || JSON.stringify(target) !== JSON.stringify(connector.target) || JSON.stringify(frame) !== JSON.stringify(connector.frame)) {
-        this.reactEditor.editor.elements.updateElement(connector.id, { frame, props: { source, target } });
+        this.reactEditor.elements.updateElement(connector.id, { frame, props: { source, target } });
       }
     });
   }
@@ -891,7 +891,7 @@ export class EdgelessVisualController {
     Object.keys(target).forEach((key) => { if (key in patch) Object.assign(target, { [key]: copy(patch[key]) }); });
   }
 
-  private element(id: string): EditorElement | undefined { return this.reactEditor.editor.elements.getElement(id); }
+  private element(id: string): EditorElement | undefined { return this.reactEditor.elements.getElement(id); }
   private visual(id: string): EdgelessVisual | undefined { return this.getVisuals().find((visual) => visual.id === id); }
   private groupRecord(id: string): VisualGroup | undefined { return this.getGroups().find((group) => group.id === id); }
 

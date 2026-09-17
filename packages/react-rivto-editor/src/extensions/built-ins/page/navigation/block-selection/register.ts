@@ -31,7 +31,7 @@ import {
  * @returns No value.
  */
 export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   const isCollapsed = (block: EditorBlock) => (
     reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true
   );

@@ -200,7 +200,7 @@ export const collapseExtension = (): ReactEditorExtension => ({
 export const slashCommandExtension = (): ReactEditorExtension => ({
   id: "slash.commands",
   setup: (reactEditor) => {
-    const { editor } = reactEditor;
+    const editor = reactEditor;
     reactEditor.extensions.mount(SlashMenu);
     const listCommands: readonly { type: BlockListType; title: string }[] = [
       { type: "list", title: "List" },

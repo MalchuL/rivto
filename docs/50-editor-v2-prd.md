@@ -405,7 +405,7 @@ Block Mode рендерит дерево документа.
 
 ```tsx
 function BlockModeEditor({ editor }: { editor: EditorRuntime }) {
-  const rootBlocks = editor.document.getRootBlocks();
+  const rootBlocks = editor.blocks.getBlocks();
 
   return (
     <div className="editor editor--block-mode">

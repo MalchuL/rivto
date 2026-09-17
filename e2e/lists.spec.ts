@@ -148,8 +148,8 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   if (!startId || !nextId || !gapId) throw new Error("Expected numbered root IDs");
 
   await page.evaluate(({ movingId, targetId }) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, targetId, "before");
   }, { movingId: nextId, targetId: startId });
@@ -159,8 +159,8 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   expect(await continued.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(twoImage);
 
   await page.evaluate((blockId) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.blocks.updateBlock(blockId, { listProps: { type: "numbered_list" } });
   }, gapId);
@@ -169,8 +169,8 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   expect(await continued.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(threeImage);
 
   const nested = await page.evaluate(() => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     const leftParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered left parent" });
     const leftStart = editor.blocks.insertBlock({
@@ -202,8 +202,8 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   expect(await nestedNext.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(twoImage);
 
   await page.evaluate(({ movingId, targetId }) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, targetId, "before");
   }, { movingId: nested.leftNext, targetId: nested.leftStart });
@@ -213,8 +213,8 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   expect(await nestedNext.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(oneImage);
 
   await page.evaluate(({ movingId, parentId }) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, parentId, "inside");
   }, { movingId: nested.leftNext, parentId: nested.rightParent });

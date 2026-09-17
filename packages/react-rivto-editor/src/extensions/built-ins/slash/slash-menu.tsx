@@ -10,10 +10,9 @@ import {
 } from "../../../constants";
 import {
   useDOMEvent,
-  useEditor,
+  useReactEditor,
   useEditorRoot,
   useKeyboardEvent,
-  useReactEditor,
 } from "../../../hooks";
 import {
   useCallback,
@@ -103,7 +102,7 @@ function groupCommands(commands: readonly SlashCommand[]): Array<{ group: string
  * step while the preceding typing stays a separate capture.
  */
 export function SlashMenu() {
-  const editor = useEditor();
+  const editor = useReactEditor();
   const roots = editor.blocks.getBlocks();
   const reactEditor = useReactEditor();
   const slashCommands = reactEditor.slashCommands;

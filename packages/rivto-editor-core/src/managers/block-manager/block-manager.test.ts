@@ -15,15 +15,14 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
       children: [{ id: "child", type: "paragraph" }],
     });
     editor.history.clear();
-    const before = editor.document.getSnapshot();
-    expect(editor.document.blocks).not.toHaveProperty("mergeBlocks");
-    expect(editor.document.blocks).not.toHaveProperty("indentBlocks");
-    expect(editor.document.blocks).not.toHaveProperty("outdentBlocks");
+    const before = editor.dump();
+    const exposesDocument: "document" extends keyof typeof editor ? true : false = false;
+    expect(exposesDocument).toBe(false);
     expect(editor.blocks.mergeBlocks(target, source)).toBe(6);
     expect(editor.blocks.getBlock(target)?.content).toBe("Hello world");
     expect(editor.blocks.getChildIds(target)).toEqual(["child"]);
     editor.history.undo();
-    expect(editor.document.getSnapshot()).toEqual(before);
+    expect(editor.dump()).toEqual(before);
     editor.destroy();
   });
 
@@ -40,14 +39,14 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
         { id: "restricted", type: "restricted" },
       ],
     });
-    const before = editor.document.getSnapshot();
+    const before = editor.dump();
     expect(() => editor.blocks.mergeBlocks(target, source)).toThrow(/cannot be placed under paragraph/);
-    expect(editor.document.getSnapshot()).toEqual(before);
+    expect(editor.dump()).toEqual(before);
     expect(() => editor.blocks.outdentBlock("first")).toThrow(/cannot be placed under paragraph/);
-    expect(editor.document.getSnapshot()).toEqual(before);
+    expect(editor.dump()).toEqual(before);
     expect(() => editor.blocks.mergeBlocks("missing", source)).toThrow("Block missing not found");
     expect(() => editor.blocks.mergeBlocks("first", source)).toThrow(/into its descendant/);
-    expect(editor.document.getSnapshot()).toEqual(before);
+    expect(editor.dump()).toEqual(before);
     editor.destroy();
   });
 
@@ -61,10 +60,10 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     // the complete batch is checked before any shared arrays are changed.
     const child = editor.blocks.insertBlock({ type: "paragraph" });
     editor.blocks.moveBlock(child, target, "inside");
-    const nested = editor.document.getSnapshot();
+    const nested = editor.dump();
     expect(() => editor.blocks.moveBlocks([restricted, movable], child, "after"))
       .toThrow(/cannot be placed under paragraph/);
-    expect(editor.document.getSnapshot()).toEqual(nested);
+    expect(editor.dump()).toEqual(nested);
     editor.destroy();
   });
 
@@ -98,14 +97,13 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
       ["source-child", "source-child"],
     ]);
 
-    let generated = 0;
-    editor.document.blocks.generateId = () => `copy-${++generated}`;
     const copied = editor.blocks.importForest([source]);
-    expect(copied.rootIds).toEqual(["copy-1"]);
-    expect([...copied.idMap]).toEqual([
-      ["source-root", "copy-1"],
-      ["source-child", "copy-2"],
-    ]);
+    const copiedRootId = copied.idMap.get("source-root");
+    const copiedChildId = copied.idMap.get("source-child");
+    expect(copied.rootIds).toEqual([copiedRootId]);
+    expect(copiedRootId).not.toBe("source-root");
+    expect(copiedChildId).not.toBe("source-child");
+    expect(copiedRootId).not.toBe(copiedChildId);
     editor.destroy();
   });
 });

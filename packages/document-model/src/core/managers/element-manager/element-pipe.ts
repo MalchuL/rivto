@@ -1,3 +1,8 @@
+/**
+ * Defines the element-processing pipeline used before collaborative writes.
+ * Built-in processors normalize geometry, stacking order, and portable props
+ * while allowing document consumers to register additional validation steps.
+ */
 import type { Pipe, PipeProcessor } from "../../../utils/pipe";
 import { PIPE_INTERNAL_PRIORITY_MIN } from "../../../utils/pipe";
 import type { ElementInput } from "../../types";

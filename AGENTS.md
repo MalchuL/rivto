@@ -38,6 +38,8 @@ Slash commands belong to React. IDs remain stable except when creating entities 
 
 For persisted fields, verify snapshots, clipboard, undo, and rendering. For selection, navigation, clipboard, or hierarchy changes, verify page and edgeless modes. Mutations remain transactional and go through managers. React extensions register in `setup` and clean up on destruction.
 
+Breaking changes are allowed, including changes that affect schemas or previously saved data. Backward compatibility and data migrations are not required unless explicitly requested.
+
 ## Commands and Tests
 
 - `pnpm demo` — run the demo.

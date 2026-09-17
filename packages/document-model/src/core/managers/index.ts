@@ -1,3 +1,8 @@
+/**
+ * Exposes the focused managers owned by the document model.
+ * Each manager controls one persisted concern and hides its collaborative
+ * storage representation from editor and presentation layers.
+ */
 export {
   DocumentBlockManager,
   BLOCK_PARENT_CONSTRAINT_PROCESSOR_ID,
@@ -25,3 +30,4 @@ export {
   validateElementCollection,
 } from "./element-manager";
 export { DocumentPluginDataManager } from "./plugin-data-manager";
+export { DocumentUndoManager } from "./undo-manager";

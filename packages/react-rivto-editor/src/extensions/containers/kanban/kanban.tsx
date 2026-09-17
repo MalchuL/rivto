@@ -70,10 +70,10 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
    */
   const addColumn = () => {
     let columnId = "";
-    runtime.editor.batchUpdates(() => {
+    runtime.batchUpdates(() => {
       runtime.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
       columnId = runtime.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" });
-      runtime.editor.blocks.moveBlocks([columnId], blockId, "inside");
+      runtime.blocks.moveBlocks([columnId], blockId, "inside");
     });
     requestAnimationFrame(() => {
       const root = runtime.events.getRoot();
@@ -106,9 +106,9 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
    */
   const addCard = () => {
     let cardId = "";
-    runtime.editor.batchUpdates(() => {
+    runtime.batchUpdates(() => {
       cardId = runtime.blocks.insertBlock(runtime.createDefaultBlock());
-      runtime.editor.blocks.moveBlocks([cardId], blockId, "inside");
+      runtime.blocks.moveBlocks([cardId], blockId, "inside");
       runtime.selection.set(createCaretSelection(cardId, 0));
     });
     requestAnimationFrame(() => {
@@ -178,7 +178,7 @@ export function kanbanExtension(): ReactEditorExtension {
           title: "Kanban",
           group: "Turn into",
           keywords: ["board", "cards", "tasks"],
-          isAvailable: ({ blockId }) => reactEditor.editor.blocks.getBlock(blockId)?.children.length === 0,
+          isAvailable: ({ blockId }) => reactEditor.blocks.getBlock(blockId)?.children.length === 0,
           execute: ({ blockId }) => {
             convertLeafToContainer(reactEditor, blockId, createKanbanBlockInput());
           },

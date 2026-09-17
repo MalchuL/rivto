@@ -108,7 +108,7 @@ describe("EditorRuntime selection", () => {
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
     editor.selection.set(createStructuralSelection([firstId, secondId], firstId, secondId));
     const documentUpdates = jest.fn();
-    const unsubscribe = editor.document.subscribe(documentUpdates);
+    const unsubscribe = editor.subscribe(documentUpdates);
 
     editor.selection.delete();
 
@@ -170,7 +170,7 @@ describe("EditorRuntime selection", () => {
       selection: createStructuralSelection([firstId, secondId], firstId, secondId),
     });
 
-    editor.document.blocks.removeBlock(secondId);
+    editor.blocks.removeBlock(secondId);
 
     expect(editor.selection.get()).toEqual(whole([firstId], firstId, firstId));
     editor.destroy();
@@ -223,7 +223,7 @@ describe("EditorRuntime selection", () => {
     const selection = createStructuralSelection([firstId, middleId, lastId], lastId, firstId);
     editor.execute("selection.set", { selection });
     const documentUpdates = jest.fn();
-    const unsubscribe = editor.document.subscribe(documentUpdates);
+    const unsubscribe = editor.subscribe(documentUpdates);
 
     editor.blocks.indentBlocks([firstId, middleId, lastId]);
 

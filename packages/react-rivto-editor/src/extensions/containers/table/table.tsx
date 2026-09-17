@@ -232,15 +232,15 @@ function useBlockHost(): { readonly marker: RefObject<HTMLDivElement | null>; re
  * @returns The new row ID, or undefined when the row is no longer in a table.
  */
 export function insertTableRow(runtime: ReactEditor, rowId: string): string | undefined {
-  const tableId = runtime.editor.blocks.getParentId(rowId);
-  const table = tableId ? runtime.editor.blocks.getBlock(tableId) : undefined;
+  const tableId = runtime.blocks.getParentId(rowId);
+  const table = tableId ? runtime.blocks.getBlock(tableId) : undefined;
   if (table?.type !== TABLE_BLOCK_TYPE) return undefined;
   const columns = Math.max(1, ...table.children.map((row) => row.children.length));
   const widths = Array.from({ length: columns }, (_, column) => columnWidth(
     table.children.find((row) => row.children[column])?.children[column]?.props.tableColumnWidth,
   ));
   let insertedId = "";
-  runtime.editor.batchUpdates(() => {
+  runtime.batchUpdates(() => {
     runtime.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
     insertedId = runtime.blocks.insertBlock(createTableRowInput(widths), rowId);
   });
@@ -254,21 +254,21 @@ export function insertTableRow(runtime: ReactEditor, rowId: string): string | un
  * @returns IDs of the inserted cells, or an empty list outside a table.
  */
 export function insertTableColumn(runtime: ReactEditor, cellId: string): readonly string[] {
-  const rowId = runtime.editor.blocks.getParentId(cellId);
-  const tableId = rowId ? runtime.editor.blocks.getParentId(rowId) : undefined;
-  const row = rowId ? runtime.editor.blocks.getBlock(rowId) : undefined;
-  const table = tableId ? runtime.editor.blocks.getBlock(tableId) : undefined;
+  const rowId = runtime.blocks.getParentId(cellId);
+  const tableId = rowId ? runtime.blocks.getParentId(rowId) : undefined;
+  const row = rowId ? runtime.blocks.getBlock(rowId) : undefined;
+  const table = tableId ? runtime.blocks.getBlock(tableId) : undefined;
   const column = row?.children.findIndex((cell) => cell.id === cellId) ?? -1;
   if (row?.type !== TABLE_ROW_BLOCK_TYPE || table?.type !== TABLE_BLOCK_TYPE || column < 0) return [];
   const width = columnWidth(row.children[column]?.props.tableColumnWidth);
   const insertedIds: string[] = [];
-  runtime.editor.batchUpdates(() => {
+  runtime.batchUpdates(() => {
     runtime.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
     table.children.forEach((tableRow) => {
       runtime.blocks.updateBlock(tableRow.id, { listProps: { collapsed: false } });
       const anchor = tableRow.children[column] ?? tableRow.children.at(-1);
       const insertedId = runtime.blocks.insertBlock(createTableCellInput(width), anchor?.id);
-      if (!anchor) runtime.editor.blocks.moveBlocks([insertedId], tableRow.id, "inside");
+      if (!anchor) runtime.blocks.moveBlocks([insertedId], tableRow.id, "inside");
       insertedIds.push(insertedId);
     });
   });
@@ -283,7 +283,7 @@ export function insertTableColumn(runtime: ReactEditor, cellId: string): readonl
  * @returns Current cells in row order, or an empty list for invalid input.
  */
 function tableColumnCells(runtime: ReactEditor, tableId: string, column: number): EditorBlock[] {
-  const table = runtime.editor.blocks.getBlock(tableId);
+  const table = runtime.blocks.getBlock(tableId);
   return table?.type === TABLE_BLOCK_TYPE && Number.isInteger(column) && column >= 0
     ? table.children.flatMap((row) => row.children[column] ? [row.children[column]!] : [])
     : [];
@@ -420,10 +420,10 @@ function resolveCellColumn(
   runtime: ReactEditor,
   cellId: string,
 ): { readonly tableId: string; readonly column: number; readonly width: number } | undefined {
-  const rowId = runtime.editor.blocks.getParentId(cellId);
-  const tableId = rowId ? runtime.editor.blocks.getParentId(rowId) : undefined;
-  const row = rowId ? runtime.editor.blocks.getBlock(rowId) : undefined;
-  const table = tableId ? runtime.editor.blocks.getBlock(tableId) : undefined;
+  const rowId = runtime.blocks.getParentId(cellId);
+  const tableId = rowId ? runtime.blocks.getParentId(rowId) : undefined;
+  const row = rowId ? runtime.blocks.getBlock(rowId) : undefined;
+  const table = tableId ? runtime.blocks.getBlock(tableId) : undefined;
   const column = row?.children.findIndex((cell) => cell.id === cellId) ?? -1;
   return row?.type === TABLE_ROW_BLOCK_TYPE && table?.type === TABLE_BLOCK_TYPE && column >= 0
     ? { tableId: table.id, column, width: columnWidth(row.children[column]?.props.tableColumnWidth) }
@@ -441,7 +441,7 @@ function TableCell({ blockId }: { readonly blockId: string }) {
   const runtime = useReactEditor();
   const { marker, host } = useBlockHost();
   const resize = useRef<ColumnResizeGesture | null>(null);
-  const currentWidth = columnWidth(runtime.editor.blocks.getBlock(blockId)?.props.tableColumnWidth);
+  const currentWidth = columnWidth(runtime.blocks.getBlock(blockId)?.props.tableColumnWidth);
   /**
    * Starts a column resize from the hovered vertical boundary.
    * @param event - Primary pointer press on the resize separator.
@@ -577,7 +577,7 @@ export function tableExtension(): ReactEditorExtension {
         title: "Table",
         group: "Turn into",
         keywords: ["grid", "rows", "columns", "cells"],
-        isAvailable: ({ blockId }) => runtime.editor.blocks.getBlock(blockId)?.children.length === 0,
+        isAvailable: ({ blockId }) => runtime.blocks.getBlock(blockId)?.children.length === 0,
         execute: ({ blockId }) => { convertLeafToContainer(runtime, blockId, createTableBlockInput()); },
       });
     },

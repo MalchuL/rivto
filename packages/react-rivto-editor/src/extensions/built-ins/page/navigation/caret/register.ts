@@ -40,7 +40,7 @@ function isNativeControl(target: EventTarget | null): boolean {
  * @returns No value.
  */
 export function registerCaretNavigation(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   const lengthOf = (id: string) => editor.blocks.getBlock(id)?.content.length ?? 0;
   const movePlain = (root: HTMLElement, direction: "left" | "right" | VerticalDirection): boolean => {
     const selection = currentNavigationSelection(reactEditor.selection);

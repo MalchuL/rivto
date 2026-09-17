@@ -1,7 +1,11 @@
-import type { CRDTType, CRDTMap } from "@chulane/crdt-doc";
+/**
+ * Stores first-class canvas elements in adapter-neutral collaborative maps.
+ * The manager validates portable records through its processor pipe, maintains
+ * detached snapshot caches, and exposes the element scopes tracked by history.
+ */
+import type { CRDTDoc, CRDTType, CRDTMap, CRDTUndoScope } from "@chulane/crdt-doc";
 import type {
   DocumentElement,
-  DocumentModel,
   ElementFrame,
   ElementInput,
   ElementPatch,
@@ -34,8 +38,6 @@ const ELEMENTS_KEY = "rivto.editor.elements";
  * construction and remain replaceable by id.
  */
 export class DocumentElementManager {
-  /** Collaborative element container included in document undo history. */
-  readonly undoScopes: readonly [CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>];
   /** Priority-ordered processors applied to portable elements before writes. */
   readonly pipe = new Pipe<ElementInput, ElementPipeContext>();
   /**
@@ -46,6 +48,8 @@ export class DocumentElementManager {
    */
   generateId: GenerateId = () => crypto.randomUUID();
   private readonly storage: CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>;
+  /** Collaborative roots owned by this manager and tracked by document history. */
+  readonly undoScopes: readonly CRDTUndoScope[];
   /** Stable element snapshots invalidated by observed record changes. */
   private readonly snapshots = new Map<IDElement, DocumentElement>();
   /** Stable complete collection invalidated by any element change. */
@@ -57,10 +61,10 @@ export class DocumentElementManager {
   /**
    * Creates an element manager over existing collaborative document storage.
    *
-   * @param document - Owning document providing CRDT storage and transactions.
+   * @param crdt - Collaborative storage adapter.
    */
-  constructor(private readonly document: DocumentModel) {
-    this.storage = document.crdt.getMap<Record<IDElement, CRDTMap<ElementStorage>>>(ELEMENTS_KEY);
+  constructor(private readonly crdt: CRDTDoc) {
+    this.storage = crdt.getMap<Record<IDElement, CRDTMap<ElementStorage>>>(ELEMENTS_KEY);
     this.undoScopes = [this.storage];
     this.pipe.register(ELEMENT_FRAME_PROCESSOR);
     this.pipe.register(ELEMENT_Z_INDEX_PROCESSOR);
@@ -87,17 +91,27 @@ export class DocumentElementManager {
   }
 
   /**
+   * Runs one element mutation through the collaborative document transaction.
+   *
+   * @param operation - Storage mutation to execute atomically.
+   * @returns No value.
+   */
+  private transact(operation: () => void): void {
+    this.crdt.transact(operation);
+  }
+
+  /**
    * Reads one placed element.
    *
    * @param id - Stable element ID.
    * @returns Detached element, or undefined when absent.
    */
   getElement(id: string): DocumentElement | undefined {
-    const cached = this.document.isTransacting ? undefined : this.snapshots.get(id);
+    const cached = this.crdt.isTransacting ? undefined : this.snapshots.get(id);
     if (cached) return cached;
     const value = this.storage.get(id);
     const snapshot = isCRDTMap(value) ? this.read(value) : undefined;
-    if (snapshot && !this.document.isTransacting) this.snapshots.set(id, snapshot);
+    if (snapshot && !this.crdt.isTransacting) this.snapshots.set(id, snapshot);
     return snapshot;
   }
 
@@ -107,7 +121,7 @@ export class DocumentElementManager {
    * @returns Every detached element in collaborative map iteration order.
    */
   getElements(): DocumentElement[] {
-    if (this.document.isTransacting) {
+    if (this.crdt.isTransacting) {
       return [...this.storage.keys()].flatMap((id) => {
         const element = this.getElement(id);
         return element ? [element] : [];
@@ -162,7 +176,12 @@ export class DocumentElementManager {
     return () => this.membershipListeners.delete(listener);
   }
 
-  /** Calls a stable listener snapshot when the optional set exists. */
+  /**
+   * Calls a stable listener snapshot when the optional set exists.
+   *
+   * @param listeners - Optional callbacks to invoke once.
+   * @returns No value.
+   */
   private emit(listeners: ReadonlySet<() => void> | undefined): void {
     if (listeners) [...listeners].forEach((listener) => listener());
   }
@@ -178,10 +197,10 @@ export class DocumentElementManager {
     const id = requireNonemptyId(input.id ?? this.generateId(), "Element");
     if (this.storage.has(id)) throw new Error(`Element ${id} already exists`);
     const validated = this.processElement({ ...input, id });
-    this.document.transact(() => {
-      const model = this.document.crdt.createDetachedMap<ElementStorage>();
-      const frameMap = this.document.crdt.createDetachedMap<ElementFrameStorage>();
-      const props = this.document.crdt.createDetachedMap<Record<string, CRDTType>>();
+    this.transact(() => {
+      const model = this.crdt.createDetachedMap<ElementStorage>();
+      const frameMap = this.crdt.createDetachedMap<ElementFrameStorage>();
+      const props = this.crdt.createDetachedMap<Record<string, CRDTType>>();
       model.set("id", id);
       model.set("type", validated.type);
       model.set("frame", frameMap);
@@ -229,7 +248,7 @@ export class DocumentElementManager {
       simulated.set(id, validated);
       return { element, patch, validated };
     });
-    this.document.transact(() => prepared.forEach(({ element, patch, validated }) => {
+    this.transact(() => prepared.forEach(({ element, patch, validated }) => {
       if (patch.frame) {
         assignMap(this.requiredMap<ElementFrameStorage>(element, "frame"), validated.frame as ElementFrameStorage, false);
       }
@@ -260,7 +279,7 @@ export class DocumentElementManager {
    * @returns No value.
    */
   removeElements(ids: readonly string[]): void {
-    this.document.transact(() => ids.forEach((id) => this.storage.delete(id)));
+    this.transact(() => ids.forEach((id) => this.storage.delete(id)));
   }
 
   /**

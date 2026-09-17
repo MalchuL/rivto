@@ -157,7 +157,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   blockId: string,
   options: UseBlockEditingOptions = {},
 ): UseBlockEditingResult<Props, boolean> {
-  const { editor } = useEditorContext();
+  const { reactEditor: editor } = useEditorContext();
   const blockResult = useBlock(blockId);
   const elementRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);

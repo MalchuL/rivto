@@ -1,3 +1,8 @@
+/**
+ * Publishes element storage, normalization, and processor contracts.
+ * This barrel keeps CRDT implementation details private to the element manager
+ * while exposing the portable document-model capabilities used by core.
+ */
 export { DocumentElementManager } from "./element-manager";
 export type { ElementPipe, ElementPipeContext, ElementProcessor } from "./element-pipe";
 export {

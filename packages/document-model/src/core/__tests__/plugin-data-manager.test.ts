@@ -10,6 +10,20 @@ const sync = (left: YjsDoc, right: YjsDoc): void => {
 };
 
 describe("DocumentPluginDataManager", () => {
+  test("keeps CRDT runtime state outside the public model", () => {
+    const document = new DocumentModelImpl(new YjsDoc("private-runtime"));
+
+    const exposesCrdt: "crdt" extends keyof typeof document ? true : false = false;
+    const exposesOrigin: "origin" extends keyof typeof document ? true : false = false;
+    const exposesUndoScopes: "undoScopes" extends keyof typeof document ? true : false = false;
+    const exposesUndoFactory: "createUndoManager" extends keyof typeof document ? true : false = false;
+    expect(exposesCrdt).toBe(false);
+    expect(exposesOrigin).toBe(false);
+    expect(exposesUndoScopes).toBe(false);
+    expect(exposesUndoFactory).toBe(false);
+    expect(document.history).toBeDefined();
+  });
+
   test("updates one namespace without replacing neighbors and snapshots shared maps", () => {
     const document = new DocumentModelImpl(new YjsDoc("plugin-data"));
     document.pluginData.set("neighbor", { retained: true });
@@ -31,9 +45,10 @@ describe("DocumentPluginDataManager", () => {
   });
 
   test("participates in document undo history", () => {
-    const document = new DocumentModelImpl(new YjsDoc("plugin-data-undo"));
-    const history = document.crdt.createUndoManager(document.undoScopes, [document.origin]);
-    document.transact(() => document.pluginData.set("test", { value: 1 }));
+    const crdt = new YjsDoc("plugin-data-undo");
+    const document = new DocumentModelImpl(crdt);
+    const history = document.history;
+    document.batchUpdates(() => document.pluginData.set("test", { value: 1 }));
     history.stopCapturing();
     expect(document.pluginData.get("test")).toEqual({ value: 1 });
     history.undo();

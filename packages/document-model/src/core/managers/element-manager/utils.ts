@@ -1,3 +1,8 @@
+/**
+ * Validates and normalizes detached element data before collaborative writes.
+ * Snapshot loading and element mutations share these helpers so both paths
+ * enforce identical geometry, layer, identity, and portability invariants.
+ */
 import type { ElementFrame, ElementInput } from "../../types";
 import { assertPortableRecord, requireNonemptyId } from "../../utils/portable";
 import type { ElementPipe } from "./element-pipe";

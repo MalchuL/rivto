@@ -24,7 +24,7 @@ import { createBlockViewContext, dispatchViewAction } from "../../../../../views
  * @returns No value.
  */
 export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMergeForward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],

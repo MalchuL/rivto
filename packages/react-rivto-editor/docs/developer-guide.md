@@ -13,7 +13,7 @@ The React package never owns or duplicates document data. It presents a core
 ## Normal setup
 
 ```tsx
-import { createRivtoEditor } from "@chulane/rivto";
+import { createRivtoEditor, DocumentModelImpl, YjsDoc } from "@chulane/rivto";
 import {
   createReactEditor,
   EditorView,
@@ -25,7 +25,8 @@ import {
   standardPreset,
 } from "@chulane/rivto-react/extensions";
 
-const editor = createRivtoEditor();
+const document = new DocumentModelImpl(new YjsDoc("document-id"));
+const editor = createRivtoEditor({ document });
 const reactEditor = createReactEditor({
   editor,
   extensions: [
@@ -151,7 +152,7 @@ produce one collaborative update and one undo step.
 ## Rendering and subscriptions
 
 `EditorView` is the global core invalidation boundary. Its context contains
-stable core and React runtime references, while the provider subscribes to the
+only the stable React runtime, while the provider subscribes to the
 `RivtoEditorApi` revision stream. Document, selection, and mode changes rerender
 the active editor tree. Surface and extension registries keep their own
 React-only revision streams.
@@ -163,7 +164,7 @@ Hooks resolve current values through public getters:
 | `useBlock(id)` | One detached block snapshot |
 | `useBlockChildren(id)` | Direct child snapshots |
 | `useRootBlockIds()` | Ordered root IDs |
-| `useDocument()` | Stable `DocumentModel` interface |
+| `useReactEditor()` | Focused React runtime managers |
 | `useEditorMode()` | Mode manager |
 | `useEditorSelection()` / selection hooks | Detached selection |
 | slash hooks | Slash-command manager |

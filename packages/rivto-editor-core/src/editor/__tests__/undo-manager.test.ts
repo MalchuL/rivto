@@ -87,11 +87,31 @@ describe("EditorRuntime undo manager", () => {
     editor.destroy();
   });
 
+  it("excludes derived maintenance from user undo history", () => {
+    const editor = createRivtoEditor();
+    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "User change" });
+
+    editor.batchUpdatesWithoutHistory(() => {
+      editor.elements.insertElement({
+        id: "derived",
+        type: "block",
+        frame: { x: 0, y: 0, width: 100, height: 100 },
+        zIndex: 0,
+        props: { startBlockId: blockId, endBlockId: blockId },
+      });
+    });
+    editor.undo();
+
+    expect(editor.blocks.getBlock(blockId)).toBeUndefined();
+    expect(editor.elements.getElement("derived")).toBeDefined();
+    editor.destroy();
+  });
+
   it("publishes document updates for undo and redo", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
     const calls: string[] = [];
-    const unsubscribe = editor.document.subscribe(() => calls.push(editor.blocks.getBlocks()[0]?.content ?? ""));
+    const unsubscribe = editor.subscribe(() => calls.push(editor.blocks.getBlocks()[0]?.content ?? ""));
 
     editor.blocks.updateBlock(id, { content: "Updated" });
     editor.execute("history.undo");

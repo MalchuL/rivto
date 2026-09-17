@@ -201,4 +201,4 @@ Managers не заменяют nested `CRDTMap`, `CRDTArray` и `CRDTText` пр�
 
 Выбирайте `assignMap`/`assignArray` для полной или partial assignment, `assignText` для unconditional replacement и focused manager methods для domain validation и minimal diffs.
 
-`assignMap` и `assignArray` не являются deep-promotion API. Если внутреннее свойство plain object должно самостоятельно генерировать updates, создайте соответствующий nested `CRDTMap`/`CRDTArray`/`CRDTText` через `document.crdt.createDetached*()` и присоедините его явной CRDT operation.
+`assignMap` и `assignArray` не являются deep-promotion API. Если внутреннее свойство plain object должно самостоятельно генерировать updates, создайте соответствующий nested `CRDTMap`/`CRDTArray`/`CRDTText` через `crdt.createDetached*()` и присоедините его явной CRDT operation.

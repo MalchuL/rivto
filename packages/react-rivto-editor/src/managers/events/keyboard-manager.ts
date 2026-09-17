@@ -1,7 +1,7 @@
 import type { EditorMode } from "@chulane/rivto";
-import type { ReactEditorImpl } from "../../react-editor";
 import type { KeyboardCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
+import type { ReactEditorImpl } from "../../react-editor";
 import type { EditorEvent } from "./editor-event";
 import { modeMatches, scopeMatches } from "./event-manager";
 import { KeyboardEditorEvent } from "./keyboard-editor-event";
@@ -46,7 +46,7 @@ export class KeyboardManager implements KeyboardCapability {
   /**
    * Creates keyboard transport before extensions register DOM or keyboard behavior.
    *
-   * @param reactEditor - Complete owning React runtime.
+   * @param reactEditor - Owning React runtime providing events and extensions.
    * @param keymap - Initial semantic binding overrides.
    */
   constructor(
@@ -55,23 +55,22 @@ export class KeyboardManager implements KeyboardCapability {
   ) {
     this.keymap = cloneKeymap(keymap);
     validateKeymap(this.keymap);
-    const events = reactEditor.events;
     this.publish();
     this.transportDisposers = [
-      events.register<"surface", "keydown">({
+      reactEditor.events.register<"surface", "keydown">({
         id: "rivto.keyboard.surface.keydown",
         type: "keydown",
       }, (event) => this.dispatch(event, "keydown")),
-      events.register<"surface", "keyup">({
+      reactEditor.events.register<"surface", "keyup">({
         id: "rivto.keyboard.surface.keyup",
         type: "keyup",
       }, (event) => this.dispatch(event, "keyup")),
-      events.register<"window", "keydown">({
+      reactEditor.events.register<"window", "keydown">({
         id: "rivto.keyboard.window.keydown",
         type: "keydown",
         target: "window",
       }, (event) => this.dispatch(event, "keydown")),
-      events.register<"window", "keyup">({
+      reactEditor.events.register<"window", "keyup">({
         id: "rivto.keyboard.window.keyup",
         type: "keyup",
         target: "window",

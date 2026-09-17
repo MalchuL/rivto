@@ -183,9 +183,9 @@ function TodoStorageState({ block, children }: BlockWrapperProps) {
     const desired = orderTodoStorageChildren(block.children, props.statusOrder);
     const current = block.children.map(({ id }) => id);
     if (desired.some((id, index) => id !== current[index])) {
-      reactEditor.editor.batchUpdates(() => {
+      reactEditor.batchUpdates(() => {
         desired.forEach((id, index) => {
-          reactEditor.editor.blocks.moveBlock(id, index ? desired[index - 1]! : null);
+          reactEditor.blocks.moveBlock(id, index ? desired[index - 1]! : null);
         });
       });
     }
@@ -366,7 +366,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
 export function TodoStorageVisibility({ block, children }: { readonly block: EditorBlock; readonly children: ReactNode }) {
   const reactEditor = useReactEditor();
   const context = useContext(TodoStorageContext);
-  const directChild = context && reactEditor.editor.blocks.getParentId(block.id) === context.storageId;
+  const directChild = context && reactEditor.blocks.getParentId(block.id) === context.storageId;
   if (directChild && !matchesTodoStorage(block, context.query, context.filters)) return null;
   return children;
 }

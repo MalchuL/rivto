@@ -10,10 +10,10 @@ Union `"block" | "edgeless"`. Mode локален, не сохраняется �
 
 ### `CreateRivtoEditorOptions`
 
-- **`document?: CRDTDoc`:** внешний document adapter; без него создаётся local `YjsDoc`.
+- **`document: DocumentModel`:** заранее созданная document model.
 - **`mode?: EditorMode`:** initial presentation mode; default `"block"`.
 
-Оба свойства optional и не имеют getters. Переданный document становится owned runtime-ресурсом и уничтожается через `await editor.destroy()`.
+`document` обязателен; `mode` optional. Переданный document становится owned runtime-ресурсом и уничтожается через `await editor.destroy()`.
 
 ## Selection types
 

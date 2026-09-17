@@ -11,7 +11,7 @@ import { useEditorContext } from "../../editor-context";
 
 /** @returns Stable detached elements refreshed only after element mutations. */
 export function useElements() {
-  const { editor } = useEditorContext();
+  const { reactEditor: editor } = useEditorContext();
   const subscribe = useCallback(
     (listener: () => void) => editor.elements.subscribe(listener),
     [editor],

@@ -62,7 +62,7 @@ export class EventManager implements EventsCapability {
   /**
    * Creates the browser-event runtime before extensions are installed.
    *
-   * @param reactEditor - Complete owning React runtime.
+   * @param reactEditor - Owning React runtime for payloads and registration lifecycle.
    */
   constructor(private readonly reactEditor: ReactEditorImpl) {}
 
@@ -278,13 +278,13 @@ export class EventManager implements EventsCapability {
     const contentElement = closestContent && root.contains(closestContent)
       ? closestContent
       : null;
-    const editor = this.reactEditor.editor;
+    const editor = this.reactEditor;
     return new EditorEvent({
       raw: raw as never,
       editor,
       root,
       mode: editor.mode.get(),
-      selection: this.reactEditor.selection.get(),
+      selection: editor.selection.get(),
       eventTarget,
       insideRoot,
       blockElement,

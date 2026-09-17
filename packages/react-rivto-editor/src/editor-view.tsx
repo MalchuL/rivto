@@ -54,16 +54,16 @@ export function EditorView({ editor, children }: EditorViewProps) {
     () => editor.extensions.revision,
   );
   const subscribeMode = useCallback(
-    (listener: () => void) => editor.editor.mode.subscribe(listener),
+    (listener: () => void) => editor.mode.subscribe(listener),
     [editor],
   );
   const mode = useSyncExternalStore(
     subscribeMode,
-    () => editor.editor.mode.get(),
-    () => editor.editor.mode.get(),
+    () => editor.mode.get(),
+    () => editor.mode.get(),
   );
 
-  const context = useMemo(() => ({ editor: editor.editor, reactEditor: editor }), [editor]);
+  const context = useMemo(() => ({ reactEditor: editor }), [editor]);
   // The callback ref identity never changes, preventing React from unregistering
   // and registering the same surface root on ordinary editor renders.
   const rootRef = useCallback((element: HTMLElement | null) => {

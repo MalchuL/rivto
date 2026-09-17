@@ -1,3 +1,8 @@
+/**
+ * Defines the portable block-processing boundary used before storage writes.
+ * Built-in processors enforce editor-supplied placement and property rules
+ * without coupling the document model to core editor registries.
+ */
 import type { Pipe, PipeProcessor } from "../../../utils/pipe";
 import { PIPE_INTERNAL_PRIORITY_MIN } from "../../../utils/pipe";
 import type { BlockInput } from "../../types";

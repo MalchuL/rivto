@@ -10,7 +10,7 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
   private readonly store = new RevisionStore();
 
   /**
-   * @param reactEditor - Complete owning runtime used for registration ownership.
+   * @param reactEditor - Owning React runtime providing extension lifecycle.
    */
   constructor(private readonly reactEditor: ReactEditorImpl) {}
 

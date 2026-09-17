@@ -188,7 +188,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "parent", type: "paragraph" });
     model.blocks.insertBlock({ id: "child", type: "paragraph" }, "parent");
-    const history = model.crdt.createUndoManager(model.undoScopes, [model.origin]);
+    const history = model.history;
     history.clear();
 
     expect(model.blocks.getParentId("child")).toBeNull();
@@ -292,7 +292,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
 
   it("removes descendant blocks when deleting a block tree", () => {
     const doc = new YjsDoc("canonical-tree");
-    const model = new DocumentModelImpl("canonical-tree", doc);
+    const model = new DocumentModelImpl(doc);
 
     model.blocks.insertBlock({ id: "parent", type: "group", children: [{ id: "child", type: "paragraph", content: "Nested" }] });
     model.blocks.insertBlock({ id: "target", type: "paragraph" });

@@ -23,6 +23,26 @@ export interface CRDTDoc extends Serializible {
     get id(): string;
 
     /**
+     * Whether this adapter is currently executing or publishing a CRDT transaction.
+     *
+     * True from the start of `transact()` until it returns, including nested
+     * transacts and while observers/`update` events fire. Storage readers skip
+     * snapshot caches and read live CRDT state in this window because the tree
+     * can still be half-written.
+     *
+     * This is the CRDT write window, not an undo-grouping flag. Direct
+     * document-model mutations transact without opening a history batch.
+     */
+    get isTransacting(): boolean;
+
+    /**
+     * Reports whether an observed transaction origin belongs to this local adapter.
+     * @param origin - Origin received from a collaborative update event.
+     * @returns Whether the adapter assigned the origin to a default local transaction.
+     */
+    isLocalOrigin(origin: unknown): boolean;
+
+    /**
      * Creates a detached CRDT array for insertion into an attached CRDT
      * container.
      *
@@ -72,11 +92,19 @@ export interface CRDTDoc extends Serializible {
     detachProvider(id?: string): Promise<void>;
 
     /**
-     * Execute operations within a transaction for atomicity.
+     * Executes operations atomically, using the adapter's private local origin by default.
+     * @param fn - Synchronous operations to execute.
+     * @param origin - Optional explicit origin for foreign or specialized transactions.
+     * @returns No value.
      */
     transact(fn: () => void, origin?: unknown): void;
 
-    /** Create history for the provided CRDT scopes without leaking adapter types. */
+    /**
+     * Creates history for collaborative scopes, tracking the private local origin by default.
+     * @param scopes - Collaborative roots included in history.
+     * @param trackedOrigins - Optional explicit origins to track instead.
+     * @returns Adapter-neutral undo history.
+     */
     createUndoManager(scopes: CRDTUndoScope[], trackedOrigins?: unknown[]): CRDTUndoManager;
 
     /**

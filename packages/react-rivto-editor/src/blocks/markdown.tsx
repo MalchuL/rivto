@@ -7,7 +7,7 @@ import {
 import type { MarkdownLinkClick } from "../types";
 import {
   useBlockEditing,
-  useEditor,
+  useReactEditor,
 } from "../hooks";
 import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
@@ -69,7 +69,7 @@ export function MarkdownContent({
   readonly blockId: string;
   readonly onLinkClick?: (context: MarkdownLinkClick) => void;
 }) {
-  const editor = useEditor();
+  const editor = useReactEditor();
   const editing = useBlockEditing(blockId);
   const [isEditing, setIsEditing] = useState(false);
   const source = editing.block?.content ?? "";

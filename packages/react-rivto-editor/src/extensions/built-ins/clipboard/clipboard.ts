@@ -73,7 +73,7 @@ export function registerClipboard(
   reactEditor: ReactEditor,
   options: ClipboardExtensionOptions = {},
 ): () => void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   const unregisterElementPaste = editor.clipboard.pasteStrategies.register(
     ELEMENT_PASTE_STRATEGY_ID,
     new ElementPasteStrategy(reactEditor),
@@ -190,7 +190,7 @@ export function registerClipboard(
         validateBlockListProps(block.listProps);
         validateBlockListProps(block.props);
         validateBlockListProps(block.pluginData);
-        editor.blocksRegistry.validate(block.type, block.props);
+        editor.blocks.validateBlockProps(block.type, block.props);
       };
       const materializeReplacement = (input: EditorBlockInput): EditorBlock | undefined => {
         const prepared = reactEditor.blocks.prepareBlock({ ...input, children: [] });

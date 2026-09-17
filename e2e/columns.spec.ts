@@ -5,7 +5,7 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/");
   await page.evaluate(() => {
-    const { editor } = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
     editor.load({ ...editor.dump(), blocks: [board], elements: [] });
   });
@@ -38,7 +38,7 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
 test("creates a writing block on empty-column click and then wraps its content", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const { editor } = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
     editor.blocks.removeBlocks(board.children.flatMap((column) => column.children.map((child) => child.id)));
     editor.load({ ...editor.dump(), blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
@@ -55,7 +55,7 @@ test("creates a writing block on empty-column click and then wraps its content",
 test("aligns the inside-drop highlight with an empty column", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const { editor } = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
     editor.blocks.removeBlocks(board.children[0]!.children.map((child) => child.id));
   });
@@ -89,8 +89,8 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
 test("aligns sibling drag handles when only one block has a collapse toggle", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
     const column = board.children[0]!;

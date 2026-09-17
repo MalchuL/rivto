@@ -1,8 +1,9 @@
-import type { CRDTDoc, CRDTUndoScope, Unsubscribe } from "@chulane/crdt-doc";
+import type { Unsubscribe } from "@chulane/crdt-doc";
 import type {
   DocumentBlockManager,
   DocumentElementManager,
   DocumentPluginDataManager,
+  DocumentUndoManager,
 } from "../managers";
 
 /** Opaque properties interpreted by page/outline extensions. */
@@ -125,20 +126,14 @@ export interface SnapshotUpdate {
 export interface DocumentModel {
   /** Descriptive document identifier that does not control persistence. */
   readonly id: string;
-  /** Adapter-neutral collaborative document containing canonical shared state. */
-  readonly crdt: CRDTDoc;
-  /** Stable local transaction origin used to scope undo history. */
-  readonly origin: symbol;
-  /** Collaborative containers included in local undo tracking. */
-  readonly undoScopes: CRDTUndoScope[];
-  /** Whether callers are currently executing inside a document transaction. */
-  readonly isTransacting: boolean;
   /** Block records, text, hierarchy, and block snapshot operations. */
   readonly blocks: DocumentBlockManager;
   /** First-class generic canvas elements and geometry. */
   readonly elements: DocumentElementManager;
   /** Generic namespaced collaborative storage for optional document plugins. */
   readonly pluginData: DocumentPluginDataManager;
+  /** Local undo/redo history for mutations across all document managers. */
+  readonly history: DocumentUndoManager;
 
   /**
    * Subscribes to local and remote collaborative updates.
@@ -149,12 +144,20 @@ export interface DocumentModel {
   subscribe(listener: () => void): Unsubscribe;
 
   /**
-   * Executes one synchronous mutation under the model's local origin.
+   * Groups synchronous mutations into one transaction and undo item.
    *
-   * @param operation - Collaborative mutation to execute atomically.
-   * @returns No value.
+   * @param operation - Synchronous document work to execute atomically.
+   * @returns Value returned by the operation.
    */
-  transact(operation: () => void): void;
+  batchUpdates<Result>(operation: () => Result): Result;
+
+  /**
+   * Groups synchronous mutations into one transaction excluded from undo history.
+   *
+   * @param operation - Synchronous document work to execute without an undo item.
+   * @returns Value returned by the operation.
+   */
+  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result;
 
   /**
    * Produces a lossless schema-v6 snapshot.
@@ -173,4 +176,11 @@ export interface DocumentModel {
    * @returns No value.
    */
   loadSnapshot(snapshot: SnapshotUpdate): void;
+
+  /**
+   * Releases document history, subscriptions, providers, and collaborative storage.
+   *
+   * @returns Promise resolved after asynchronous CRDT cleanup.
+   */
+  destroy(): Promise<void>;
 }

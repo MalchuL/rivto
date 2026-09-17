@@ -37,7 +37,7 @@ editor.load({
 - **Возвращают:** `void`.
 - **Исключения:** missing command или CRDT history errors.
 
-History отслеживает `document.undoScopes` только с `document.origin`. Remote updates и mutations с другим origin не становятся локальными history items.
+History отслеживает собранные managers CRDT scopes только с приватным runtime origin. Remote updates и mutations с другим origin не становятся локальными history items.
 
 Standalone document commands разделяются через `documentCommand()`. `batchUpdates()` объединяет несколько commands в один capture step.
 
@@ -48,19 +48,19 @@ Standalone document commands разделяются через `documentCommand(
 3. `elements.destroy()`.
 4. `blocks.destroy()`.
 5. `blocksRegistry.destroy()`.
-6. `history.destroy()`.
-7. `commands.clear()`.
-8. `listeners.clear()`.
-9. `await document.crdt.destroy()`, который отключает все providers и уничтожает CRDT state.
+6. `commands.clear()`.
+7. `listeners.clear()`.
+8. `await document.destroy()`, который освобождает history, subscriptions, providers и CRDT state.
 
 Метод возвращает `Promise<void>`. Caller должен использовать `await`, чтобы дождаться асинхронного отключения providers. Если синхронный manager cleanup выбросил исключение, последующие manager steps не гарантированы, однако CRDT destroy всё равно выполняется через `finally`. После destroy runtime и его document считаются непригодными для дальнейшего использования.
 
 ## CRDT ownership
 
-Runtime владеет переданным `CRDTDoc`. Отдельного `DocumentModelImpl.destroy()` нет: lifecycle завершается через CRDT adapter.
+Runtime владеет переданным `DocumentModel`. Document model, в свою очередь, владеет CRDT adapter и его lifecycle.
 
 ```ts
-const document = new YjsDoc("shared");
+const crdt = new YjsDoc("shared");
+const document = new DocumentModelImpl(crdt);
 const editor = createRivtoEditor({ document });
 
 // ...работа...
@@ -72,11 +72,11 @@ await editor.destroy();
 
 ## Factory `createRivtoEditor()`
 
-- **Аргументы:** optional `{ document?: CRDTDoc; mode?: EditorMode }`.
+- **Аргументы:** `{ document: DocumentModel; mode?: EditorMode }`.
 - **Возвращает:** owned `EditorRuntime`.
 - **Исключения:** constructor initialization errors.
 
-Без внешнего adapter factory создаёт `YjsDoc` автоматически. И автоматически созданный, и переданный document уничтожаются одним `await editor.destroy()`.
+Host обязан создать document model. Переданный model уничтожается через `await editor.destroy()`.
 
 ## Test helper `createTestEditor()`
 

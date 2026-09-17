@@ -1,3 +1,8 @@
+/**
+ * Provides detached block validation and traversal helpers shared by snapshot
+ * loading and block mutations. All checks run before CRDT writes because the
+ * underlying transaction abstraction does not provide rollback.
+ */
 import type { CRDTArray } from "@chulane/crdt-doc";
 import type { BlockInput, BlockListProps } from "../../types";
 import type { BlockPipe } from "./block-pipe";

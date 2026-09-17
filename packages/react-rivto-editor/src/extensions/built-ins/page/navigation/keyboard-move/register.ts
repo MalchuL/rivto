@@ -23,7 +23,7 @@ import { selectedMoveRoots } from "../utils/move-roots";
  * @returns No value.
  */
 export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
+  const editor = reactEditor;
   const isCollapsed = (block: EditorBlock) => (
     reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true
   );
