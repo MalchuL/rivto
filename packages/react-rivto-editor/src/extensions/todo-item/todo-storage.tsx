@@ -26,7 +26,6 @@ import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import type { BlockWrapperProps } from "../../blocks";
 import { ContainerBlockView } from "../../views";
 import { createBlockViewContext } from "../../views/context";
@@ -42,13 +41,12 @@ import {
   TODO_STORAGE_FILTER_GROUP_CLASS,
   TODO_STORAGE_FILTER_LEGEND_CLASS,
   TODO_STORAGE_FILTER_OPTION_CLASS,
-  TODO_STORAGE_MENU_CLASS,
-  TODO_STORAGE_MENU_PANEL_CLASS,
   TODO_STORAGE_SEARCH_CLASS,
   TODO_STORAGE_SUMMARY_CLASS,
   TODO_STORAGE_SUMMARY_STATS_CLASS,
   TODO_STORAGE_TOOLBAR_CLASS,
 } from "./todo-item-classes";
+import { TodoStorageMenu } from "./todo-storage-menu";
 import { TODO_STATUS_LABELS, TodoStatusOrder } from "./todo-status-order";
 
 /** Persisted native type installed by `todoItemExtension`. */
@@ -246,7 +244,7 @@ export function TodoStorageBlockWrapper({ block, children }: BlockWrapperProps) 
     : children;
 }
 
-/** Renders search, popover filter menus, and persisted status-order controls. */
+/** Renders search, disclosure filter menus, and persisted status-order controls. */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   const reactEditor = useReactEditor();
   const editing = useBlockEditing<TodoStorageProps>(blockId, { textEdit: false });
@@ -296,8 +294,9 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
     );
   }
 
-  // Menus are Radix popovers rendered in a portal: they escape the editable
-  // block tree, close on outside pointer down, and only one is open at a time.
+  // Menus are in-flow disclosure panels rather than portalled popovers so the
+  // sortable status rows keep valid document offsets for keyboard dragging;
+  // see `TodoStorageMenu` for the dnd-kit constraint behind this choice.
   return (
     <div {...editing.attributes} className={TODO_STORAGE_CONTENT_CLASS}>
       <div {...editing.preventTextEditingAttributes} className={TODO_STORAGE_TOOLBAR_CLASS}>
@@ -309,61 +308,51 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
           value={context.query}
           onChange={(event: ChangeEvent<HTMLInputElement>) => context.setQuery(event.currentTarget.value)}
         />
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" type="button" className={TODO_STORAGE_MENU_CLASS}>Filter</Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className={TODO_STORAGE_MENU_PANEL_CLASS} aria-label="Filters">
-            <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
-              <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Status</legend>
-              {TODO_STATUSES.map((status) => <FilterOption
-                key={status}
-                id={`${fieldId}-status-${status}`}
-                checked={context.filters.statuses.has(status)}
-                label={TODO_STATUS_LABELS[status]}
-                onToggle={() => updateFilters("statuses", toggleFilter(context.filters.statuses, status))}
-              />)}
-            </fieldset>
-            <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
-              <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Priority</legend>
-              {PRIORITIES.map((priority) => <FilterOption
-                key={priority}
-                id={`${fieldId}-priority-${priority}`}
-                checked={context.filters.priorities.has(priority)}
-                label={`P${priority}`}
-                onToggle={() => updateFilters("priorities", toggleFilter(context.filters.priorities, priority))}
-              />)}
-            </fieldset>
-            {context.projects.length > 0 && <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
-              <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Project</legend>
-              {context.projects.map((project, index) => <FilterOption
-                key={project || "no-project"}
-                id={`${fieldId}-project-${index}`}
-                checked={context.filters.projects.has(project)}
-                label={project || "No project"}
-                onToggle={() => updateFilters("projects", toggleFilter(context.filters.projects, project))}
-              />)}
-            </fieldset>}
-            <Button variant="outline" size="sm" className={TODO_STORAGE_CLEAR_CLASS} type="button" onClick={clearFilters}>Clear filters</Button>
-          </PopoverContent>
-        </Popover>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" type="button" className={TODO_STORAGE_MENU_CLASS}>Order</Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className={TODO_STORAGE_MENU_PANEL_CLASS} aria-label="Ordering">
-            <FilterOption
-              id={`${fieldId}-order-status`}
-              checked={props.orderMode === "status"}
-              label="Status"
-              onToggle={() => updateProps({ orderMode: props.orderMode === "status" ? "manual" : "status" })}
-            />
-            {props.orderMode === "status" && <TodoStatusOrder
-              order={props.statusOrder}
-              onChange={(statusOrder) => updateProps({ statusOrder })}
-            />}
-          </PopoverContent>
-        </Popover>
+        <TodoStorageMenu label="Filter" panelLabel="Filters">
+          <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
+            <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Status</legend>
+            {TODO_STATUSES.map((status) => <FilterOption
+              key={status}
+              id={`${fieldId}-status-${status}`}
+              checked={context.filters.statuses.has(status)}
+              label={TODO_STATUS_LABELS[status]}
+              onToggle={() => updateFilters("statuses", toggleFilter(context.filters.statuses, status))}
+            />)}
+          </fieldset>
+          <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
+            <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Priority</legend>
+            {PRIORITIES.map((priority) => <FilterOption
+              key={priority}
+              id={`${fieldId}-priority-${priority}`}
+              checked={context.filters.priorities.has(priority)}
+              label={`P${priority}`}
+              onToggle={() => updateFilters("priorities", toggleFilter(context.filters.priorities, priority))}
+            />)}
+          </fieldset>
+          {context.projects.length > 0 && <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
+            <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Project</legend>
+            {context.projects.map((project, index) => <FilterOption
+              key={project || "no-project"}
+              id={`${fieldId}-project-${index}`}
+              checked={context.filters.projects.has(project)}
+              label={project || "No project"}
+              onToggle={() => updateFilters("projects", toggleFilter(context.filters.projects, project))}
+            />)}
+          </fieldset>}
+          <Button variant="outline" size="sm" className={TODO_STORAGE_CLEAR_CLASS} type="button" onClick={clearFilters}>Clear filters</Button>
+        </TodoStorageMenu>
+        <TodoStorageMenu label="Order" panelLabel="Ordering">
+          <FilterOption
+            id={`${fieldId}-order-status`}
+            checked={props.orderMode === "status"}
+            label="Status"
+            onToggle={() => updateProps({ orderMode: props.orderMode === "status" ? "manual" : "status" })}
+          />
+          {props.orderMode === "status" && <TodoStatusOrder
+            order={props.statusOrder}
+            onChange={(statusOrder) => updateProps({ statusOrder })}
+          />}
+        </TodoStorageMenu>
       </div>
       {block.children.length === 0 && (
         <div

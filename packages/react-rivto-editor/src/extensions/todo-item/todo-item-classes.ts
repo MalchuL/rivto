@@ -40,8 +40,9 @@ export const TODO_STORAGE_DROP_FIELD_CLASS = "rivto-todo-storage-drop-field abso
 export const TODO_STORAGE_DROP_ICON_CLASS = "rivto-todo-storage-drop-icon grid size-[19px] shrink-0 place-items-center rounded-full border-2 border-(--rivto-todo-focus) text-(--rivto-todo-accent) [&_svg]:size-3 [&_svg]:stroke-[3]";
 export const TODO_STORAGE_DROP_COPY_CLASS = "rivto-todo-storage-drop-copy grid gap-px text-sm leading-[18px] [&_small]:text-[11px] [&_small]:text-muted-foreground";
 export const TODO_STORAGE_SEARCH_CLASS = "rivto-todo-storage-search h-7 min-w-[100px] flex-1 px-[7px] py-1 text-sm";
-export const TODO_STORAGE_MENU_CLASS = "rivto-todo-storage-menu h-7 px-[7px] text-xs font-normal";
-export const TODO_STORAGE_MENU_PANEL_CLASS = "rivto-todo-storage-menu-panel grid w-auto min-w-[150px] gap-[7px] p-[9px] text-xs";
+export const TODO_STORAGE_MENU_CLASS = "rivto-todo-storage-menu relative";
+export const TODO_STORAGE_MENU_TRIGGER_CLASS = "rivto-todo-storage-menu-trigger h-7 px-[7px] text-xs font-normal data-[state=open]:bg-accent data-[state=open]:text-accent-foreground";
+export const TODO_STORAGE_MENU_PANEL_CLASS = "rivto-todo-storage-menu-panel absolute top-[calc(100%+4px)] right-0 z-20 grid w-max min-w-[150px] gap-[7px] rounded-md border border-border bg-popover p-[9px] text-xs text-popover-foreground shadow-md outline-hidden";
 export const TODO_STORAGE_FILTER_GROUP_CLASS = "rivto-todo-storage-filter-group m-0 grid gap-[3px] border-0 p-0";
 export const TODO_STORAGE_FILTER_LEGEND_CLASS = "mb-0.5 font-semibold text-muted-foreground";
 export const TODO_STORAGE_FILTER_OPTION_CLASS = "flex items-center gap-1.5 text-xs font-normal";
