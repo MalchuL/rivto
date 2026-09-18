@@ -289,6 +289,7 @@ Recommended reading order:
 6. `src/surfaces/page/page-block.tsx`
 7. `src/managers/events/event-manager.ts`
 8. [`selection.md`](./selection.md) and [`events.md`](./events.md)
+9. [`styling.md`](./styling.md) for the Tailwind stylesheet, tokens, and shadcn/ui workflow
 
 ## Adding behavior
 
