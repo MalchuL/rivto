@@ -46,7 +46,8 @@ export function PageDragBlockSlot({ block }: BlockSlotProps) {
       onPointerEnter={arm}
       onFocus={arm}
     >
-      <GripVerticalIcon aria-hidden="true" className="size-4" />
+      {/* The button must stay the hit target so hit testing and dnd-kit see one activator. */}
+      <GripVerticalIcon aria-hidden="true" className="pointer-events-none size-4" />
     </button>
   );
 }
