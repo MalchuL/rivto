@@ -137,3 +137,14 @@ not survive generation. An ESLint rule rejects `@/` imports inside the package.
 Treat `src/components/ui/` as vendored: re-run `ui:add` to refresh a primitive
 rather than editing it by hand, and put package-specific wrappers (such as
 `ui-scope.ts` or feature components) outside that directory.
+
+### Floating panels and sortable content
+
+`Popover`, `Dialog`, `DropdownMenu`, and `Tooltip` render through a Radix
+popper: a portalled, `position: fixed`, transformed wrapper. Keep `@dnd-kit`
+sortables out of those panels. The keyboard sensor derives document offsets
+from the `offsetParent` chain when a drag starts, which is wrong inside a
+fixed wrapper, so picking up a row scrolls the page away and the sortable
+loses its drop targets. Use an in-flow disclosure instead (`Collapsible` with
+an absolutely positioned panel, as `TodoStorageMenu` does) whenever a menu
+hosts draggable rows.
