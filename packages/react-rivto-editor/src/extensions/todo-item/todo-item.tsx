@@ -312,9 +312,11 @@ export function DefaultTodoItemPropertiesModal({
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) finish(); }}>
-      <DialogContent className={TODO_MODAL_CLASS} aria-label="TODO item properties" showCloseButton={false}>
+      <DialogContent className={TODO_MODAL_CLASS} showCloseButton={false}>
         <div className={TODO_MODAL_HEADER_CLASS}>
-          <DialogTitle className="text-base">TODO properties</DialogTitle>
+          {/* Radix names the dialog from its title via aria-labelledby, so the
+              title text is the public accessible name hosts and tests rely on. */}
+          <DialogTitle className="text-base">TODO item properties</DialogTitle>
           <DialogDescription className="sr-only">Edit status, description, priority, and project.</DialogDescription>
           <Button variant="ghost" size="icon-sm" className={TODO_MODAL_CLOSE_CLASS} type="button" aria-label="Close properties" onClick={finish}>
             <XIcon />

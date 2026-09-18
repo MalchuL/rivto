@@ -14,8 +14,8 @@ test("shows checkbox and numbered-list examples in the demo", async ({ page }) =
   const root = (text: string) => page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).filter({
     has: page.getByText(text, { exact: true }),
   });
-  await expect(root("Try the interactive checkbox").locator(":scope > .page-block-row input[type=checkbox]")).not.toBeChecked();
-  await expect(root("Completed checkbox item").locator(":scope > .page-block-row input[type=checkbox]")).toBeChecked();
+  await expect(root("Try the interactive checkbox").locator(":scope > .page-block-row [role=checkbox]")).not.toBeChecked();
+  await expect(root("Completed checkbox item").locator(":scope > .page-block-row [role=checkbox]")).toBeChecked();
   const oneMarker = root("Start a numbered sequence").locator(":scope > .page-block-row .page-list-marker");
   const twoMarker = root("Continue the adjacent sequence").locator(":scope > .page-block-row .page-list-marker");
   const threeMarker = root("Continue numbering across the ordinary block").locator(":scope > .page-block-row .page-list-marker");
@@ -230,13 +230,13 @@ test("uses the shared list and checkbox rendering in edgeless cards", async ({ p
     .filter({ hasText: new RegExp(`^${text}$`) })
     .locator("xpath=ancestor::*[@data-block-id][1]");
 
-  const checkbox = block("Try the interactive checkbox").locator(":scope > .page-block-row input[type=checkbox]");
+  const checkbox = block("Try the interactive checkbox").locator(":scope > .page-block-row [role=checkbox]");
   await expect(checkbox).not.toBeChecked();
-  await checkbox.evaluate((element: HTMLInputElement) => element.click());
+  await checkbox.evaluate((element: HTMLElement) => element.click());
   await expect(checkbox).toBeChecked();
   await page.locator('[data-editor-action="undo"]').click();
   await expect(checkbox).not.toBeChecked();
-  await expect(block("Completed checkbox item").locator(":scope > .page-block-row input[type=checkbox]")).toBeChecked();
+  await expect(block("Completed checkbox item").locator(":scope > .page-block-row [role=checkbox]")).toBeChecked();
   const oneImage = await block("Start a numbered sequence").locator(":scope > .page-block-row .page-list-marker").screenshot();
   const twoImage = await block("Continue the adjacent sequence").locator(":scope > .page-block-row .page-list-marker").screenshot();
   const threeImage = await block("Continue numbering across the ordinary block").locator(":scope > .page-block-row .page-list-marker").screenshot();
