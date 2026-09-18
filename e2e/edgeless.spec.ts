@@ -1769,7 +1769,10 @@ test("renders explicit separators and creates a new card with the separator shor
   const separators = page.locator('[data-separator-block="true"]');
   await expect(separators).toHaveCount(1);
   await expect(separators.first()).toHaveAttribute("role", "separator");
-  await expect(separators.first().locator(".rivto-separator-arrow")).toHaveText(["↑", "↓"]);
+  const arrows = separators.first().locator(".rivto-separator-arrow svg");
+  await expect(arrows).toHaveCount(2);
+  await expect(arrows.nth(0)).toHaveClass(/lucide-arrow-up/);
+  await expect(arrows.nth(1)).toHaveClass(/lucide-arrow-down/);
 
   const firstContent = page.locator(".page-surface > .page-block [data-block-content]").first();
   await firstContent.click();
