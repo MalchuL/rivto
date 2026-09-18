@@ -1,0 +1,51 @@
+/*
+ * Public stylesheet entry for @chulane/rivto-react.
+ *
+ * Consumers import the compiled `@chulane/rivto-react/styles.css`; workspace
+ * apps compile this source directly through Tailwind's Vite or PostCSS
+ * integration. The file wires Tailwind CSS v4 without preflight (the editor is
+ * embedded in host pages), scans the package source for utility classes, and
+ * imports one colocated stylesheet per feature for rules Tailwind cannot
+ * express as utilities: recursive block-tree geometry, `:has()` structural
+ * selectors, pseudo-element hit regions, CSS counters, and SVG styling.
+ *
+ * Cascade layers, lowest to highest: `theme` (Tailwind tokens), `base`
+ * (scoped reset), `components` (feature stylesheets), `utilities` (Tailwind
+ * classes in JSX). Unlayered host CSS loaded after this file still overrides
+ * every public class and `--rivto-*` custom property.
+ */
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+
+/* Scan the package source for Tailwind classes regardless of the compiling project. */
+@source "../";
+
+@import "./tokens.css";
+@import "./base.css";
+
+/* Page surface and recursive block tree. */
+@import "../surfaces/page/page-surface.css" layer(components);
+@import "../blocks/block-tree.css" layer(components);
+@import "../blocks/owner-slots.css" layer(components);
+@import "../blocks/block-slot-controls.css" layer(components);
+@import "../blocks/block-modal.css" layer(components);
+@import "../blocks/markdown.css" layer(components);
+
+/* Optional page interaction extensions. */
+@import "../extensions/block-drag/block-drag.css" layer(components);
+
+/* Edgeless canvas and visual objects. */
+@import "../extensions/edgeless/edgeless.css" layer(components);
+@import "../extensions/edgeless/visuals/visuals.css" layer(components);
+
+/* Layout containers built from the shared block tree. */
+@import "../extensions/containers/kanban/kanban.css" layer(components);
+@import "../extensions/containers/bento/bento.css" layer(components);
+@import "../extensions/containers/columns/columns.css" layer(components);
+@import "../extensions/containers/table/table.css" layer(components);
+
+/* TODO item and storage. */
+@import "../extensions/todo-item/todo-item.css" layer(components);

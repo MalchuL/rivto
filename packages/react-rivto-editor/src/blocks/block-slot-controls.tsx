@@ -4,11 +4,18 @@
  * These controls interpret extension-owned list properties but do not own
  * traversal or persistence. BlockTree remains responsible for descendants,
  * while the editor manager supplies transactional mutations for the current row.
+ * The public `.page-list-checkbox`, `.page-list-marker`, and
+ * `.page-collapse-toggle` classes remain stable slot-geometry hooks styled in
+ * `block-slot-controls.css`; presentation uses shadcn/ui primitives.
  *
  * @module
  */
+import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useBlockNode } from "../hooks";
 import type { BlockSlotProps } from "../managers";
+import { Button } from "../components/ui/button";
+import { Checkbox } from "../components/ui/checkbox";
+import { cn } from "cn";
 
 const LIST_CHECKBOX_CLASS = "page-list-checkbox";
 const LIST_MARKER_CLASS = "page-list-marker";
@@ -25,13 +32,12 @@ export function BlockListSlot({ block }: BlockSlotProps) {
 
   if (block.listProps.type === "checkbox") {
     return (
-      <input
-        type="checkbox"
-        className={LIST_CHECKBOX_CLASS}
+      <Checkbox
+        className={cn(LIST_CHECKBOX_CLASS, "size-[18px] rounded-[5px]")}
         aria-label={`Mark block as ${block.listProps.checked ? "incomplete" : "complete"}: ${block.content || block.type}`}
         checked={block.listProps.checked === true}
         onPointerDown={(event) => event.stopPropagation()}
-        onChange={(event) => operations.update({ listProps: { checked: event.currentTarget.checked } })}
+        onCheckedChange={(checked) => operations.update({ listProps: { checked: checked === true } })}
       />
     );
   }
@@ -54,21 +60,23 @@ export function BlockCollapseSlot({ block }: BlockSlotProps) {
   const { operations } = useBlockNode(block.id);
   if (!block.childIds.length) return null;
   const childrenId = `block-children-${block.id}`;
+  const collapsed = block.listProps.collapsed === true;
   return (
-    <button
-      type="button"
-      className={COLLAPSE_TOGGLE_CLASS}
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className={cn(COLLAPSE_TOGGLE_CLASS, "h-6 w-5 rounded text-muted-foreground select-none hover:bg-transparent hover:text-foreground")}
       data-collapse-toggle="true"
-      aria-label={`${block.listProps.collapsed === true ? "Expand" : "Collapse"} block: ${block.content || block.type}`}
-      aria-expanded={block.listProps.collapsed !== true}
+      aria-label={`${collapsed ? "Expand" : "Collapse"} block: ${block.content || block.type}`}
+      aria-expanded={!collapsed}
       aria-controls={childrenId}
       onPointerDown={(event) => {
         event.preventDefault();
         event.stopPropagation();
       }}
-      onClick={() => operations.update({ listProps: { collapsed: block.listProps.collapsed !== true } })}
+      onClick={() => operations.update({ listProps: { collapsed: !collapsed } })}
     >
-      {block.listProps.collapsed === true ? "▸" : "▾"}
-    </button>
+      {collapsed ? <ChevronRightIcon aria-hidden="true" /> : <ChevronDownIcon aria-hidden="true" />}
+    </Button>
   );
 }

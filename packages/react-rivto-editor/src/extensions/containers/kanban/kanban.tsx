@@ -16,13 +16,17 @@ import { kanbanColumnView, kanbanView } from "./kanban-view";
 import { convertLeafToContainer } from "../../../views/ops/outline-ops";
 
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal";
+import { PlusIcon } from "lucide-react";
+import { Button } from "../../../components/ui/button";
 
-const COLUMN_HEADER_CLASS = "rivto-kanban-column-header";
-const COLUMN_TITLE_CLASS = "rivto-kanban-column-title";
-const COLUMN_COUNT_CLASS = "rivto-kanban-column-count";
-const ADD_COLUMN_CLASS = "rivto-kanban-add-column";
-const ADD_CARD_CLASS = "rivto-kanban-add-card";
-const BOARD_SUMMARY_CLASS = "rivto-kanban-summary";
+const COLUMN_HEADER_CLASS = "rivto-kanban-column-header flex min-h-8 items-center gap-2 text-(--rivto-kanban-card-foreground)";
+const COLUMN_TITLE_CLASS = "rivto-kanban-column-title min-w-0 flex-1 rounded text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--rivto-kanban-accent)";
+const COLUMN_COUNT_CLASS = "rivto-kanban-column-count text-xs tabular-nums text-(--rivto-kanban-muted-foreground)";
+/** Structural sizing and flex order live in kanban.css; the dashed tile look is utility-based. */
+const ADD_COLUMN_CLASS = "rivto-kanban-add-column h-auto grid place-items-center rounded-xl border-2 border-dashed border-(--rivto-kanban-card-hover-border)/60 bg-white/45 p-3 text-(--rivto-kanban-muted-foreground) hover:bg-white hover:text-(--rivto-kanban-accent) [&_svg]:size-10";
+const ADD_CARD_CLASS = "rivto-kanban-add-card size-7 flex-none text-(--rivto-kanban-card-foreground)/80 hover:bg-[#dcdfe4] [&_svg]:size-5";
+const BOARD_SUMMARY_CLASS = "rivto-kanban-summary flex items-center gap-2";
+const BOARD_SUMMARY_STATS_CLASS = "text-xs tabular-nums text-(--rivto-kanban-muted-foreground)";
 
 export const KANBAN_BLOCK_TYPE = "kanban";
 export const KANBAN_COLUMN_BLOCK_TYPE = "kanban-column";
@@ -108,12 +112,16 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
       if (root) focusBlock(root, columnId, 0);
     });
   };
-  const addButton = <button className={ADD_COLUMN_CLASS} type="button" aria-label="Add Kanban column" onClick={addColumn}>+</button>;
+  const addButton = (
+    <Button variant="ghost" className={ADD_COLUMN_CLASS} type="button" aria-label="Add Kanban column" onClick={addColumn}>
+      <PlusIcon />
+    </Button>
+  );
   if (!block) return null;
   return <div ref={title} {...editing.attributes} className={BOARD_SUMMARY_CLASS}>
     {collapsed && <>
       <strong>Kanban</strong>
-      <span>{columnCount} {columnCount === 1 ? "column" : "columns"} · {cardCount} {cardCount === 1 ? "card" : "cards"}</span>
+      <span className={BOARD_SUMMARY_STATS_CLASS}>{columnCount} {columnCount === 1 ? "column" : "columns"} · {cardCount} {cardCount === 1 ? "card" : "cards"}</span>
     </>}
     {columns && !collapsed ? createPortal(addButton, columns) : null}
   </div>;
@@ -153,9 +161,9 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
       </span>
       {editing.block?.listProps.collapsed !== true && (
         // Collapse hides cards; keep the header compact without a dangling add control.
-        <button className={ADD_CARD_CLASS} type="button" aria-label={`Add card to ${editing.block?.content ?? "column"}`} onClick={addCard}>
-          +
-        </button>
+        <Button variant="ghost" size="icon-sm" className={ADD_CARD_CLASS} type="button" aria-label={`Add card to ${editing.block?.content ?? "column"}`} onClick={addCard}>
+          <PlusIcon />
+        </Button>
       )}
     </div>
   );

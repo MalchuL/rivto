@@ -17,6 +17,18 @@ export default tseslint.config(
     },
   },
   {
+    files: ["packages/react-rivto-editor/src/**/*.ts", "packages/react-rivto-editor/src/**/*.tsx"],
+    rules: {
+      // The `@/*` path alias exists only so the shadcn CLI can resolve
+      // components.json; the demo and app/web compile this package from source
+      // and app/web owns a conflicting `@/*` alias, so package code must stay
+      // relative. `pnpm ui:add` rewrites generated alias imports automatically.
+      "no-restricted-imports": ["error", {
+        "patterns": [{ "group": ["@/*"], "message": "Use relative imports inside @chulane/rivto-react; run `pnpm ui:add` so shadcn output is rewritten." }],
+      }],
+    },
+  },
+  {
     files: ["packages/react-rivto-editor/src/extensions/built-ins/**/*.ts", "packages/react-rivto-editor/src/extensions/built-ins/**/*.tsx"],
     plugins: {
       "rivto-boundaries": {

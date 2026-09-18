@@ -445,7 +445,10 @@ export function PageDragProvider({
   const overlay = (
     <DragOverlay dropAnimation={null}>
       {activeBlocks.length > 0 && (
-        <div className={PAGE_DRAG_OVERLAY_CLASS} aria-hidden="true">
+        <div
+          className={`${PAGE_DRAG_OVERLAY_CLASS} pointer-events-none box-border max-h-[220px] w-[min(520px,70vw)] max-w-[520px] overflow-hidden rounded-md border border-accent-foreground/30 bg-background px-3.5 py-2.5 text-foreground opacity-70 shadow-lg`}
+          aria-hidden="true"
+        >
           <PageDragPreview blocks={activeBlocks} collapseActive={reactEditor.blockListProps.has("collapse")} />
         </div>
       )}

@@ -3,6 +3,7 @@
  */
 import { createCaretSelection } from "@chulane/rivto";
 import { createPortal } from "react-dom";
+import { PlusIcon } from "lucide-react";
 import { useEditorRoot, useReactEditor } from "../../../../hooks";
 import { PAGE_END_SLOT_SELECTOR } from "../../../../constants";
 import { focusBlock } from "../../../../managers";
@@ -26,7 +27,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
         <button
           key={amount}
           type="button"
-          className={TRAILING_BLOCK_CLASS}
+          className={`${TRAILING_BLOCK_CLASS} my-1 box-border inline-flex h-(--rivto-default-block-height) w-full cursor-text items-center gap-1 rounded border-0 bg-transparent px-2 text-left [font:inherit] leading-normal text-transparent transition-colors outline-none hover:bg-primary/5 hover:text-primary focus-visible:bg-primary/5 focus-visible:text-primary focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5`}
           aria-label={amount === 1 ? "Add block" : `Add ${amount} blocks`}
           onClick={() => {
             let id = "";
@@ -43,7 +44,8 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
             requestAnimationFrame(() => focusBlock(root, id, 0));
           }}
         >
-          + Add block
+          <PlusIcon aria-hidden="true" />
+          Add block
         </button>
       );
     }),

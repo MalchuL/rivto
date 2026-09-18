@@ -1,0 +1,80 @@
+/*
+ * Structural rules for the equal-width Columns container.
+ *
+ * Column shells and their nested blocks are rendered by the shared block tree,
+ * so lane layout, dividers between sibling lanes, and hover-slab adjustments
+ * must be expressed through generated structure (`[data-block-type]`,
+ * `.page-block-children`, `.page-block-row`, `.rivto-slot`). The settings
+ * control the extension renders itself uses shadcn primitives and Tailwind
+ * utilities in `columns.tsx`.
+ */
+[data-block-type="columns"] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-block-type="columns-column"] {
+  min-width: 0;
+  max-width: 100%;
+  /* Internal lanes are layout shells rather than indented writing blocks. */
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* The collapsed summary hosts the board's contentless selection region. */
+.rivto-columns:not(:empty) {
+  min-height: var(--rivto-default-block-height);
+}
+
+[data-block-type="columns"] > .page-block-children {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+}
+
+[data-block-type="columns"] > .page-block-children > .page-block {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+
+/* A hairline divider sits in the gap before every lane but the first. */
+[data-block-type="columns"] > .page-block-children > .page-block + .page-block::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: -12px;
+  width: 1px;
+  background: var(--rivto-border);
+  pointer-events: none;
+}
+
+[data-block-type="columns"] > .page-block-children .page-block-row::before {
+  /* Cover the handle gutter and block padding without entering another lane. */
+  inset: 0 -8px 0 -28px;
+  width: auto;
+}
+
+[data-block-type="columns-column"] > .page-block-children {
+  margin: 0;
+  padding: 0 0 0 24px;
+  box-sizing: border-box;
+}
+
+/* A lane with content hides its own empty click-to-write row. */
+[data-block-type="columns-column"]:has(> .page-block-children) > .page-block-row {
+  display: none;
+}
+
+[data-block-type="columns"] > .page-block-row .rivto-slot[data-slot-position="right"] {
+  left: auto;
+  right: 0;
+  transform: translateY(-50%);
+}

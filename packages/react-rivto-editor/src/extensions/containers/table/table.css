@@ -1,0 +1,138 @@
+/*
+ * Structural rules for the Table container.
+ *
+ * Rows and cells are ordinary blocks rendered by the shared block tree, so the
+ * grid (row flex lanes, per-cell column width through
+ * `--rivto-table-column-width`, borders between siblings) is expressed through
+ * generated structure and attribute selectors. The hover-revealed insertion
+ * buttons and the column resize separator are portaled onto the row and cell
+ * shells; their reveal depends on shell hover, which utilities on the control
+ * itself cannot express. Widths must match the constants in `table.tsx`.
+ */
+[data-block-type="table"] > .page-block-children {
+  margin: 0;
+  overflow-x: auto;
+  border: 1px solid var(--rivto-border);
+  border-radius: 10px;
+}
+
+/* An expanded table with no rows still shows its frame as a drop target. */
+[data-block-type="table"]:not(:has(> .page-block-children)):has(.rivto-table-summary:empty) {
+  box-sizing: border-box;
+  min-height: 96px;
+  border: 1px solid var(--rivto-border);
+  border-radius: 10px;
+}
+
+[data-block-type="table-row"] {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+}
+
+[data-block-type="table-row"] > .page-block-row {
+  min-height: 0;
+}
+
+[data-block-type="table-row"] > .page-block-children {
+  display: flex;
+  align-items: stretch;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+}
+
+[data-block-type="table-row"] + [data-block-type="table-row"] {
+  border-top: 1px solid var(--rivto-border);
+}
+
+[data-block-type="table-cell"] {
+  position: relative;
+  flex: 0 0 var(--rivto-table-column-width, 180px);
+  width: var(--rivto-table-column-width, 180px);
+  min-width: 80px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  /* Width reflow is not a reorder; suppress the shared FLIP move animation. */
+  transform: none !important;
+}
+
+[data-block-type="table-cell"] + [data-block-type="table-cell"] {
+  border-left: 1px solid var(--rivto-border);
+}
+
+[data-block-type="table-cell"] > .page-block-children {
+  margin: 8px 0 0 16px;
+}
+
+[data-block-type="table"] > .page-block-children .page-block-row::before {
+  inset: 0;
+  width: auto;
+}
+
+/* Keep cell controls inside the cell instead of overlapping the neighbor. */
+[data-block-type="table"] > .page-block-children .rivto-slot[data-slot-position="left-top"] {
+  position: relative;
+  inset: auto;
+  transform: none;
+  order: -1;
+}
+
+.rivto-table-row {
+  min-height: 1px;
+}
+
+.rivto-table-summary:not(:empty) {
+  min-height: var(--rivto-default-block-height);
+}
+
+/* Boundary controls sit on the shell edge and appear only on hover or focus. */
+.rivto-table-add-row,
+.rivto-table-add-column {
+  position: absolute;
+  z-index: 5;
+  opacity: 0;
+}
+
+.rivto-table-add-row {
+  left: 50%;
+  bottom: -11px;
+  translate: -50% 0;
+}
+
+.rivto-table-add-column {
+  top: 50%;
+  right: -11px;
+  translate: 0 -50%;
+}
+
+.rivto-table-add-row:hover,
+.rivto-table-add-column:hover,
+.rivto-table-add-row:focus-visible,
+.rivto-table-add-column:focus-visible {
+  opacity: 1;
+}
+
+.rivto-table-resize-column {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  background: linear-gradient(90deg, transparent 3px, var(--rivto-accent) 3px 5px, transparent 5px);
+  cursor: col-resize;
+  opacity: 0;
+  touch-action: none;
+}
+
+.rivto-table-resize-column:hover,
+.rivto-table-resize-column:focus-visible,
+.rivto-table-resize-column[data-resizing="true"] {
+  opacity: 1;
+}
+
+.rivto-table-resize-column:focus-visible {
+  outline: 2px solid var(--rivto-accent);
+  outline-offset: 1px;
+}

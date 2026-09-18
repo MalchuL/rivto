@@ -30,7 +30,8 @@ const RESIZE_HANDLE_CLASS = "rivto-bento-resize";
 const RESIZE_EDGE_ATTRIBUTE = "data-bento-resize-edge";
 const RESIZING_TILE_ATTRIBUTE = "data-bento-resizing";
 const RESIZING_HANDLE_ATTRIBUTE = "data-resizing";
-const SUMMARY_CLASS = "rivto-bento-summary";
+const SUMMARY_CLASS = "rivto-bento-summary flex items-center gap-2";
+const SUMMARY_STATS_CLASS = "text-xs tabular-nums text-(--rivto-kanban-muted-foreground)";
 const MIN_TILE_WIDTH = 160;
 const MAX_TILE_WIDTH = 960;
 const DEFAULT_TILE_WIDTH = 280;
@@ -173,7 +174,7 @@ export function Bento({ blockId }: { readonly blockId: string }) {
     <div {...editing.attributes} className={SUMMARY_CLASS}>
       {block.listProps.collapsed === true && <>
         <strong>Bento</strong>
-        <span>{tileCount} {tileCount === 1 ? "tile" : "tiles"}</span>
+        <span className={SUMMARY_STATS_CLASS}>{tileCount} {tileCount === 1 ? "tile" : "tiles"}</span>
       </>}
     </div>
   );
