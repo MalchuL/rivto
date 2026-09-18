@@ -93,7 +93,8 @@ test("highlights a prompt and converts it when editing leaves the block", async 
   await converted.getByRole("button", { name: "Open TODO properties" }).click();
   dialog = page.getByRole("dialog", { name: "TODO item properties" });
   await dialog.getByLabel("Priority").selectOption("1");
-  await dialog.click({ position: { x: 2, y: 2 } });
+  // The dialog is modal: a pointer press on the overlay outside it closes and commits.
+  await page.mouse.click(4, 4);
   await expect(dialog).toHaveCount(0);
   const modalProps = await page.evaluate((blockId) => (
     (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks.getBlock(blockId).props
