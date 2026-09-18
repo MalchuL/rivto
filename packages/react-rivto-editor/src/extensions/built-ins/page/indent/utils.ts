@@ -38,7 +38,6 @@ function indentTargetIds(target: KeyboardSelectionTarget): string[] {
  * confirm that the shortcut originated in editable page content or from a
  * whole-block selection focused on the page root.
  *
- * @param editor - Core editor whose selection is republished after reparenting.
  * @param selectionManager - React selection bridge used to restore the caret.
  * @param root - Active page surface or edgeless card.
  * @param event - Native keyboard event that matched the binding.
@@ -47,7 +46,6 @@ function indentTargetIds(target: KeyboardSelectionTarget): string[] {
  * @returns `true` when the shortcut was claimed.
  */
 export function applyIndentShortcut(
-  editor: ReactEditor,
   selectionManager: SelectionCapability,
   root: HTMLElement,
   event: KeyboardEvent,

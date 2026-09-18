@@ -36,7 +36,7 @@ const reactEditor = createReactEditor({
 });
 
 export function RivtoView() {
-  return <EditorView editor={reactEditor} />;
+  return <EditorView reactEditor={reactEditor} />;
 }
 ```
 

@@ -194,36 +194,36 @@ export function createColumnsBlockInput(
 
 /**
  * Changes how many column shells a board owns, relocating nested blocks first.
- * @param runtime - Active React editor runtime.
+ * @param reactEditor - Active React editor runtime.
  * @param blockId - Columns board identifier.
  * @param count - Desired column count in the supported range.
  * @returns Whether the board existed and the count could be applied.
  */
-export function setColumnsCount(runtime: ReactEditor, blockId: string, count: number): boolean {
-  const board = runtime.blocks.getBlock(blockId);
+export function setColumnsCount(reactEditor: ReactEditor, blockId: string, count: number): boolean {
+  const board = reactEditor.blocks.getBlock(blockId);
   if (board?.type !== COLUMNS_BLOCK_TYPE || !Number.isFinite(count)) return false;
   const next = Math.max(COLUMNS_MIN_COUNT, Math.min(COLUMNS_MAX_COUNT, Math.round(count)));
   const columns = board.children.filter((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE);
   if (next === columns.length) return true;
-  runtime.batchUpdates(() => {
-    runtime.blocks.updateBlock(board.id, { listProps: { collapsed: false } });
+  reactEditor.history.batchUpdates(() => {
+    reactEditor.blocks.updateBlock(board.id, { listProps: { collapsed: false } });
     if (next > columns.length) {
       let afterId = columns.at(-1)?.id ?? board.id;
       for (let index = columns.length; index < next; index += 1) {
-        const insertedId = runtime.blocks.insertBlock({
+        const insertedId = reactEditor.blocks.insertBlock({
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           content: "",
         }, afterId === board.id ? undefined : afterId);
         if (afterId === board.id) {
-          runtime.blocks.moveBlocks([insertedId], board.id, "inside");
+          reactEditor.blocks.moveBlocks([insertedId], board.id, "inside");
         }
         afterId = insertedId;
       }
       return;
     }
     const removed = columns.slice(next);
-    relocateColumnContents(runtime, removed.map((column) => column.id));
-    runtime.blocks.removeBlocks(removed.map((column) => column.id));
+    relocateColumnContents(reactEditor, removed.map((column) => column.id));
+    reactEditor.blocks.removeBlocks(removed.map((column) => column.id));
   });
   return true;
 }
@@ -252,7 +252,7 @@ export function Columns({ blockId }: { readonly blockId: string }) {
  * @returns Empty-lane control; drop and sort markers live on the column shell.
  */
 function ColumnsColumn({ blockId }: { readonly blockId: string }) {
-  const runtime = useReactEditor();
+  const reactEditor = useReactEditor();
   const { block } = useBlock(blockId);
   const empty = (block?.children.length ?? 0) === 0;
   /**
@@ -265,8 +265,8 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    const root = runtime.events.getRoot();
-    const context = root ? createBlockViewContext(runtime, blockId, root) : undefined;
+    const root = reactEditor.events.getRoot();
+    const context = root ? createBlockViewContext(reactEditor, blockId, root) : undefined;
     if (context) columnsColumnView.insertFirstChild(context);
   };
   return (
@@ -287,7 +287,7 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
  * @returns Settings button and count panel.
  */
 function ColumnsControls({ block }: BlockSlotProps) {
-  const runtime = useReactEditor();
+  const reactEditor = useReactEditor();
   const [open, setOpen] = useState(false);
   const count = block.children.filter((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE).length;
   return (
@@ -298,10 +298,10 @@ function ColumnsControls({ block }: BlockSlotProps) {
           <strong>Columns</strong>
           <div className={COUNT_CLASS}>
             <button type="button" aria-label="Remove column" disabled={count <= COLUMNS_MIN_COUNT}
-              onClick={() => setColumnsCount(runtime, block.id, count - 1)}>-</button>
+              onClick={() => setColumnsCount(reactEditor, block.id, count - 1)}>-</button>
             <output aria-live="polite">{count}</output>
             <button type="button" aria-label="Add column" disabled={count >= COLUMNS_MAX_COUNT}
-              onClick={() => setColumnsCount(runtime, block.id, count + 1)}>+</button>
+              onClick={() => setColumnsCount(reactEditor, block.id, count + 1)}>+</button>
           </div>
         </div>
       )}
@@ -324,9 +324,9 @@ function ColumnsStyles() {
 export function columnsExtension(): ReactEditorExtension {
   return {
     id: "block.columns",
-    setup: (runtime) => {
-      runtime.extensions.mount(ColumnsStyles);
-      runtime.blocks.register({
+    setup: (reactEditor) => {
+      reactEditor.extensions.mount(ColumnsStyles);
+      reactEditor.blocks.register({
         definition: {
           type: COLUMNS_BLOCK_TYPE,
           title: "Columns",
@@ -335,7 +335,7 @@ export function columnsExtension(): ReactEditorExtension {
         render: Columns,
         view: columnsView,
       });
-      runtime.blocks.register({
+      reactEditor.blocks.register({
         definition: {
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           title: "Column",
@@ -345,19 +345,19 @@ export function columnsExtension(): ReactEditorExtension {
         render: ColumnsColumn,
         view: columnsColumnView,
       });
-      runtime.surfaces.registerBlockSlot({
+      reactEditor.surfaces.registerBlockSlot({
         position: "right",
         component: ColumnsControls,
         when: ({ block }) => block.type === COLUMNS_BLOCK_TYPE,
       });
-      runtime.slashCommands.register({
+      reactEditor.slashCommands.register({
         id: "block.columns.insert",
         title: "Columns",
         group: "Turn into",
         keywords: ["layout", "split", "grid"],
-        isAvailable: ({ blockId }) => runtime.blocks.getBlock(blockId)?.children.length === 0,
+        isAvailable: ({ blockId }) => reactEditor.blocks.getBlock(blockId)?.children.length === 0,
         execute: ({ blockId }) => {
-          convertLeafToContainer(runtime, blockId, createColumnsBlockInput());
+          convertLeafToContainer(reactEditor, blockId, createColumnsBlockInput());
         },
       });
     },

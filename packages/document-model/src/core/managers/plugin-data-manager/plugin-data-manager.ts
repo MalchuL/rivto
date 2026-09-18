@@ -37,16 +37,6 @@ export class DocumentPluginDataManager {
   }
 
   /**
-   * Runs one plugin-data mutation through the collaborative document transaction.
-   *
-   * @param operation - Storage mutation to execute atomically.
-   * @returns No value.
-   */
-  private transact(operation: () => void): void {
-    this.crdt.transact(operation);
-  }
-
-  /**
    * Reads a detached plugin namespace.
    *
    * @param pluginId - Stable plugin namespace identifier.
@@ -67,7 +57,7 @@ export class DocumentPluginDataManager {
    */
   set(pluginId: string, value: BasicType): void {
     assertPortableValue(value, "pluginData");
-    this.transact(() => this.root.set(this.requireId(pluginId), clone(value) as CRDTType));
+    this.crdt.transact(() => this.root.set(this.requireId(pluginId), clone(value) as CRDTType));
   }
 
   /**
@@ -90,7 +80,7 @@ export class DocumentPluginDataManager {
     }
     const map = this.crdt.createDetachedMap<Record<string, CRDTType>>();
     if (current) assignMap(map, current as Record<string, unknown>);
-    this.transact(() => this.root.set(id, map));
+    this.crdt.transact(() => this.root.set(id, map));
     return map;
   }
 
@@ -103,7 +93,7 @@ export class DocumentPluginDataManager {
   delete(pluginId: string): boolean {
     const id = this.requireId(pluginId);
     const existed = this.root.has(id);
-    if (existed) this.transact(() => this.root.delete(id));
+    if (existed) this.crdt.transact(() => this.root.delete(id));
     return existed;
   }
 
@@ -120,7 +110,7 @@ export class DocumentPluginDataManager {
    */
   load(values: Record<string, unknown>): void {
     assertPortableRecord(values, "pluginData");
-    this.transact(() => this.mergeMap(this.root, values));
+    this.crdt.transact(() => this.mergeMap(this.root, values));
   }
 
   /**

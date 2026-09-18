@@ -3,7 +3,7 @@ import type {
   ElementManager,
   ModeManager,
   RivtoEditorApi,
-  UndoManager,
+  HistoryManager,
 } from "@chulane/rivto";
 import type {
   BlockRenderer,
@@ -65,8 +65,8 @@ export interface ReactEditor {
   readonly mode: ModeManager;
   /** Named command registry used by extensions. */
   readonly commands: CommandRegistry;
-  /** Local undo and redo history. */
-  readonly history: UndoManager;
+  /** Local history and transaction batching. */
+  readonly history: HistoryManager;
   /** Core editor revision forwarded for React's global invalidation boundary. */
   readonly revision: number;
   /**
@@ -104,10 +104,6 @@ export interface ReactEditor {
   readonly keyboard: KeyboardCapability;
   readonly selection: SelectionCapability;
   readonly slashCommands: SlashCommandsCapability;
-  /** Groups synchronous mutations into one transaction and undo item. */
-  batchUpdates<Result>(operation: () => Result): Result;
-  /** Groups synchronous mutations into one transaction excluded from undo history. */
-  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result;
   /** Subscribes to document, mode, and selection changes from the core editor. */
   subscribe(listener: () => void): () => void;
   destroy(): void;

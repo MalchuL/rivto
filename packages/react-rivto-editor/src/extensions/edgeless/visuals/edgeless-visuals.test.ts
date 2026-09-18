@@ -31,7 +31,7 @@ describe("edgelessVisualsExtension", () => {
     expect(editor.elements.getElement(first)?.props.rotation).toBe(15);
     editor.mode.set("block");
     editor.mode.set("edgeless");
-    expect(editor.execute("edgeless.selection.get")).toMatchObject({ active: true, items: [second] });
+    expect(editor.commands.execute("edgeless.selection.get")).toMatchObject({ active: true, items: [second] });
     expect(reactEditor.selection.get()).toMatchObject({
       type: "selection",
       blocks: [],
@@ -43,7 +43,7 @@ describe("edgelessVisualsExtension", () => {
     const third = extension.createText({ text: "Canvas" });
     extension.select([groupId, third]);
     extension.group();
-    editor.execute("edgeless.selection.move", { dx: 5, dy: 7 });
+    editor.commands.execute("edgeless.selection.move", { dx: 5, dy: 7 });
 
     const visuals = editor.elements.getElements().filter((element) => element.type !== "group");
     expect(visuals).toHaveLength(3);
@@ -62,41 +62,41 @@ describe("edgelessVisualsExtension", () => {
       editor,
       extensions: [edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })],
     });
-    const a = editor.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 0, y: 0, width: 40, height: 40 } }) as string;
-    const b = editor.execute("edgeless.visual.create", { kind: "ellipse", frame: { x: 80, y: 0, width: 40, height: 40 } }) as string;
-    const c = editor.execute("edgeless.visual.create", { kind: "text", text: "C", frame: { x: 200, y: 0, width: 60, height: 40 } }) as string;
-    const d = editor.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 300, y: 0, width: 40, height: 40 } }) as string;
+    const a = editor.commands.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 0, y: 0, width: 40, height: 40 } }) as string;
+    const b = editor.commands.execute("edgeless.visual.create", { kind: "ellipse", frame: { x: 80, y: 0, width: 40, height: 40 } }) as string;
+    const c = editor.commands.execute("edgeless.visual.create", { kind: "text", text: "C", frame: { x: 200, y: 0, width: 60, height: 40 } }) as string;
+    const d = editor.commands.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 300, y: 0, width: 40, height: 40 } }) as string;
 
-    editor.execute("edgeless.selection.set", [a, b]);
-    const inner = editor.execute("edgeless.selection.group") as string;
-    expect(editor.execute("edgeless.selection.get")).toMatchObject({ items: [inner] });
+    editor.commands.execute("edgeless.selection.set", [a, b]);
+    const inner = editor.commands.execute("edgeless.selection.group") as string;
+    expect(editor.commands.execute("edgeless.selection.get")).toMatchObject({ items: [inner] });
     expect(editor.elements.getElement(inner)?.props.children).toEqual([a, b]);
 
     // Outer nest: existing group + another top-level shape.
-    editor.execute("edgeless.selection.set", [inner, c]);
-    const outer = editor.execute("edgeless.selection.group") as string;
+    editor.commands.execute("edgeless.selection.set", [inner, c]);
+    const outer = editor.commands.execute("edgeless.selection.group") as string;
     expect(editor.elements.getElement(outer)?.props.children).toEqual([inner, c]);
     expect(editor.elements.getElement(inner)?.props.children).toEqual([a, b]);
-    expect(editor.execute("edgeless.selection.get")).toMatchObject({ items: [outer] });
+    expect(editor.commands.execute("edgeless.selection.get")).toMatchObject({ items: [outer] });
 
     // Same-parent nest inside the outer group (inner group + sibling c already nested;
     // ungroup outer first so c is top-level again, then build a fresh parent of three).
-    editor.execute("edgeless.selection.ungroup");
-    expect(editor.execute("edgeless.selection.get")).toMatchObject({ items: [inner, c] });
-    editor.execute("edgeless.selection.set", [inner, c, d]);
-    const wide = editor.execute("edgeless.selection.group") as string;
+    editor.commands.execute("edgeless.selection.ungroup");
+    expect(editor.commands.execute("edgeless.selection.get")).toMatchObject({ items: [inner, c] });
+    editor.commands.execute("edgeless.selection.set", [inner, c, d]);
+    const wide = editor.commands.execute("edgeless.selection.group") as string;
     expect(editor.elements.getElement(wide)?.props.children).toEqual([inner, c, d]);
 
     // Drill: group two direct children that share `wide` as parent.
-    editor.execute("edgeless.selection.set", [c, d]);
-    const nested = editor.execute("edgeless.selection.group") as string;
+    editor.commands.execute("edgeless.selection.set", [c, d]);
+    const nested = editor.commands.execute("edgeless.selection.group") as string;
     expect(editor.elements.getElement(wide)?.props.children).toEqual([inner, nested]);
     expect(editor.elements.getElement(nested)?.props.children).toEqual([c, d]);
 
     // Mixed parents (inner child + top-level leftover) must fail.
-    const e = editor.execute("edgeless.visual.create", { kind: "ellipse", frame: { x: 400, y: 0, width: 40, height: 40 } }) as string;
-    editor.execute("edgeless.selection.set", [a, e]);
-    expect(() => editor.execute("edgeless.selection.group")).toThrow(/share one parent/);
+    const e = editor.commands.execute("edgeless.visual.create", { kind: "ellipse", frame: { x: 400, y: 0, width: 40, height: 40 } }) as string;
+    editor.commands.execute("edgeless.selection.set", [a, e]);
+    expect(() => editor.commands.execute("edgeless.selection.group")).toThrow(/share one parent/);
 
     reactEditor.destroy();
     editor.destroy();
@@ -107,15 +107,15 @@ describe("edgelessVisualsExtension", () => {
     const blockId = editor.blocks.insertBlock({ type: "paragraph" });
     const blockElementId = editor.elements.insertElement({ type: "block", frame: { x: 100, y: 30, width: 100, height: 80 }, zIndex: 0, props: { startBlockId: blockId, endBlockId: blockId } });
     const reactEditor = createReactEditor({ editor, extensions: [separatorBlockExtension(), edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })] });
-    const visualId = editor.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 10, y: 80, width: 20, height: 20 } }) as string;
-    editor.execute("edgeless.selection.set", [blockElementId, visualId]);
-    editor.execute("edgeless.selection.align", { alignment: "left" });
-    editor.execute("edgeless.selection.reorder", { direction: "front" });
+    const visualId = editor.commands.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 10, y: 80, width: 20, height: 20 } }) as string;
+    editor.commands.execute("edgeless.selection.set", [blockElementId, visualId]);
+    editor.commands.execute("edgeless.selection.align", { alignment: "left" });
+    editor.commands.execute("edgeless.selection.reorder", { direction: "front" });
 
     expect(editor.elements.getElement(blockElementId)?.frame.x).toBe(10);
     expect(editor.elements.getElement(visualId)?.frame.x).toBe(10);
     expect(Math.min(editor.elements.getElement(blockElementId)!.zIndex, editor.elements.getElement(visualId)!.zIndex)).toBeGreaterThanOrEqual(0);
-    editor.execute("edgeless.visual.delete", { selection: true });
+    editor.commands.execute("edgeless.visual.delete", { selection: true });
     expect(editor.blocks.getBlock(blockId)).toBeUndefined();
     expect(editor.elements.getElement(visualId)).toBeUndefined();
     reactEditor.destroy();
@@ -128,25 +128,25 @@ describe("edgelessVisualsExtension", () => {
       edgelessSelectionExtension(),
       edgelessVisualsExtension({ toolbar: false }),
     ] });
-    const outsideBack = editor.execute("edgeless.visual.create", { kind: "ellipse" }) as string;
-    const shape = editor.execute("edgeless.visual.create", { kind: "rectangle" }) as string;
-    const outsideFront = editor.execute("edgeless.visual.create", { kind: "sticker" }) as string;
-    const connector = editor.execute("edgeless.visual.create", {
+    const outsideBack = editor.commands.execute("edgeless.visual.create", { kind: "ellipse" }) as string;
+    const shape = editor.commands.execute("edgeless.visual.create", { kind: "rectangle" }) as string;
+    const outsideFront = editor.commands.execute("edgeless.visual.create", { kind: "sticker" }) as string;
+    const connector = editor.commands.execute("edgeless.visual.create", {
       kind: "connector",
       source: { anchor: { x: .5, y: .5 }, position: { x: 0, y: 0 } },
       target: { anchor: { x: .5, y: .5 }, position: { x: 100, y: 100 } },
     }) as string;
-    editor.execute("edgeless.selection.set", [shape, connector]);
-    const innerGroup = editor.execute("edgeless.selection.group") as string;
-    const sibling = editor.execute("edgeless.visual.create", { kind: "text", text: "Sibling" }) as string;
-    editor.execute("edgeless.selection.set", [innerGroup, sibling]);
-    const outerGroup = editor.execute("edgeless.selection.group") as string;
+    editor.commands.execute("edgeless.selection.set", [shape, connector]);
+    const innerGroup = editor.commands.execute("edgeless.selection.group") as string;
+    const sibling = editor.commands.execute("edgeless.visual.create", { kind: "text", text: "Sibling" }) as string;
+    editor.commands.execute("edgeless.selection.set", [innerGroup, sibling]);
+    const outerGroup = editor.commands.execute("edgeless.selection.group") as string;
 
-    editor.execute("edgeless.selection.reorder", "backward");
+    editor.commands.execute("edgeless.selection.reorder", "backward");
     expect([outsideBack, shape, connector, sibling, outsideFront].map((id) => editor.elements.getElement(id)!.zIndex)).toEqual([0, 1, 2, 3, 4]);
 
-    editor.execute("edgeless.selection.set", [outerGroup]);
-    editor.execute("edgeless.selection.reorder", "forward");
+    editor.commands.execute("edgeless.selection.set", [outerGroup]);
+    editor.commands.execute("edgeless.selection.reorder", "forward");
     expect([outsideBack, outsideFront, shape, connector, sibling].map((id) => editor.elements.getElement(id)!.zIndex)).toEqual([0, 1, 2, 3, 4]);
     reactEditor.destroy();
     editor.destroy();
@@ -158,27 +158,27 @@ describe("edgelessVisualsExtension", () => {
       edgelessSelectionExtension(),
       edgelessVisualsExtension({ toolbar: false }),
     ] });
-    const left = editor.execute("edgeless.visual.create", { kind: "rectangle" }) as string;
-    const right = editor.execute("edgeless.visual.create", { kind: "ellipse" }) as string;
-    const innerConnector = editor.execute("edgeless.visual.create", {
+    const left = editor.commands.execute("edgeless.visual.create", { kind: "rectangle" }) as string;
+    const right = editor.commands.execute("edgeless.visual.create", { kind: "ellipse" }) as string;
+    const innerConnector = editor.commands.execute("edgeless.visual.create", {
       kind: "connector",
       text: "inner link",
       source: { elementId: left, anchor: { x: 1, y: .5 }, position: { x: 0, y: 0 } },
       target: { elementId: right, anchor: { x: 0, y: .5 }, position: { x: 100, y: 0 } },
     }) as string;
-    editor.execute("edgeless.selection.set", [left, right]);
-    const innerGroup = editor.execute("edgeless.selection.group") as string;
+    editor.commands.execute("edgeless.selection.set", [left, right]);
+    const innerGroup = editor.commands.execute("edgeless.selection.group") as string;
     expect(editor.elements.getElement(innerGroup)?.props.children).toEqual([left, right, innerConnector]);
 
-    const sticky = editor.execute("edgeless.visual.create", { kind: "sticker" }) as string;
-    const outerConnector = editor.execute("edgeless.visual.create", {
+    const sticky = editor.commands.execute("edgeless.visual.create", { kind: "sticker" }) as string;
+    const outerConnector = editor.commands.execute("edgeless.visual.create", {
       kind: "connector",
       text: "outer link",
       source: { elementId: right, anchor: { x: 1, y: .5 }, position: { x: 100, y: 0 } },
       target: { elementId: sticky, anchor: { x: 0, y: .5 }, position: { x: 200, y: 0 } },
     }) as string;
-    editor.execute("edgeless.selection.set", [innerGroup, sticky]);
-    const outerGroup = editor.execute("edgeless.selection.group") as string;
+    editor.commands.execute("edgeless.selection.set", [innerGroup, sticky]);
+    const outerGroup = editor.commands.execute("edgeless.selection.group") as string;
     expect(editor.elements.getElement(outerGroup)?.props.children).toEqual([innerGroup, sticky, outerConnector]);
     reactEditor.destroy();
     editor.destroy();
@@ -190,21 +190,21 @@ describe("edgelessVisualsExtension", () => {
       edgelessSelectionExtension(),
       edgelessVisualsExtension({ toolbar: false }),
     ] });
-    const left = editor.execute("edgeless.visual.create", { kind: "rectangle" }) as string;
-    const right = editor.execute("edgeless.visual.create", { kind: "ellipse" }) as string;
-    const connector = editor.execute("edgeless.visual.create", {
+    const left = editor.commands.execute("edgeless.visual.create", { kind: "rectangle" }) as string;
+    const right = editor.commands.execute("edgeless.visual.create", { kind: "ellipse" }) as string;
+    const connector = editor.commands.execute("edgeless.visual.create", {
       kind: "connector",
       text: "legacy link",
       source: { elementId: left, anchor: { x: 1, y: .5 }, position: { x: 0, y: 0 } },
       target: { elementId: right, anchor: { x: 0, y: .5 }, position: { x: 100, y: 0 } },
     }) as string;
-    editor.execute("edgeless.selection.set", [left, right]);
-    const group = editor.execute("edgeless.selection.group") as string;
+    editor.commands.execute("edgeless.selection.set", [left, right]);
+    const group = editor.commands.execute("edgeless.selection.group") as string;
     editor.elements.updateElement(group, { props: { children: [left, right] } });
-    const covering = editor.execute("edgeless.visual.create", { kind: "sticker" }) as string;
+    const covering = editor.commands.execute("edgeless.visual.create", { kind: "sticker" }) as string;
 
-    editor.execute("edgeless.selection.set", [group]);
-    editor.execute("edgeless.selection.reorder", "front");
+    editor.commands.execute("edgeless.selection.set", [group]);
+    editor.commands.execute("edgeless.selection.reorder", "front");
 
     expect(editor.elements.getElement(connector)!.zIndex).toBeGreaterThan(editor.elements.getElement(covering)!.zIndex);
     reactEditor.destroy();
@@ -221,12 +221,12 @@ describe("edgelessVisualsExtension", () => {
       props: { startBlockId: blockId, endBlockId: blockId },
     });
     const reactEditor = createReactEditor({ editor, extensions: [separatorBlockExtension(), edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })] });
-    const one = editor.execute("edgeless.visual.create", { kind: "text", text: "One" }) as string;
-    const two = editor.execute("edgeless.visual.create", { kind: "sticker", text: "Remember" }) as string;
-    editor.execute("edgeless.selection.set", [one, two]);
-    const originalGroup = editor.execute("edgeless.selection.group") as string;
-    editor.execute("edgeless.selection.set", [originalGroup, blockElementId]);
-    const duplicated = editor.execute("edgeless.visual.duplicate") as string[];
+    const one = editor.commands.execute("edgeless.visual.create", { kind: "text", text: "One" }) as string;
+    const two = editor.commands.execute("edgeless.visual.create", { kind: "sticker", text: "Remember" }) as string;
+    editor.commands.execute("edgeless.selection.set", [one, two]);
+    const originalGroup = editor.commands.execute("edgeless.selection.group") as string;
+    editor.commands.execute("edgeless.selection.set", [originalGroup, blockElementId]);
+    const duplicated = editor.commands.execute("edgeless.visual.duplicate") as string[];
 
     expect(editor.elements.getElements().filter((element) => element.type !== "group")).toHaveLength(6);
     expect(editor.elements.getElements().filter((element) => element.type === "group")).toHaveLength(2);
@@ -242,10 +242,10 @@ describe("edgelessVisualsExtension", () => {
   test("persists drawing presets, styled stickies, and attached connectors", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
     const reactEditor = createReactEditor({ editor, extensions: [edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })] });
-    const rectangle = editor.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 10, y: 20, width: 80, height: 60 } }) as string;
-    const sticky = editor.execute("edgeless.visual.create", { kind: "sticker", text: "Plan", fill: "#ffd9e8", frame: { x: 200, y: 40, width: 120, height: 90 } }) as string;
-    const drawing = editor.execute("edgeless.visual.create", { kind: "drawing", brush: "marker", frame: { x: 0, y: 0, width: 20, height: 10 }, points: [{ x: 0, y: 0 }, { x: 20, y: 10 }] }) as string;
-    const connector = editor.execute("edgeless.visual.create", {
+    const rectangle = editor.commands.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 10, y: 20, width: 80, height: 60 } }) as string;
+    const sticky = editor.commands.execute("edgeless.visual.create", { kind: "sticker", text: "Plan", fill: "#ffd9e8", frame: { x: 200, y: 40, width: 120, height: 90 } }) as string;
+    const drawing = editor.commands.execute("edgeless.visual.create", { kind: "drawing", brush: "marker", frame: { x: 0, y: 0, width: 20, height: 10 }, points: [{ x: 0, y: 0 }, { x: 20, y: 10 }] }) as string;
+    const connector = editor.commands.execute("edgeless.visual.create", {
       kind: "connector",
       source: { elementId: rectangle, anchor: { x: 1, y: .5 }, position: { x: 90, y: 50 } },
       target: { elementId: sticky, anchor: { x: 0, y: .5 }, position: { x: 200, y: 85 } },
@@ -261,8 +261,8 @@ describe("edgelessVisualsExtension", () => {
       source: { elementId: rectangle },
       target: { elementId: sticky },
     });
-    editor.execute("edgeless.selection.set", [rectangle]);
-    editor.execute("edgeless.selection.move", { dx: 20, dy: 5 });
+    editor.commands.execute("edgeless.selection.set", [rectangle]);
+    editor.commands.execute("edgeless.selection.move", { dx: 20, dy: 5 });
     expect((editor.elements.getElement(connector)?.props.source as { position: { x: number; y: number } }).position).toEqual({ x: 110, y: 55 });
     reactEditor.destroy();
     editor.destroy();
@@ -271,14 +271,14 @@ describe("edgelessVisualsExtension", () => {
   test("stores editable labels on shapes and connectors", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
     const reactEditor = createReactEditor({ editor, extensions: [edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })] });
-    const shape = editor.execute("edgeless.visual.create", {
+    const shape = editor.commands.execute("edgeless.visual.create", {
       kind: "ellipse",
       text: "Node",
       align: "center",
       fontSize: 18,
     }) as string;
-    const other = editor.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 300 } }) as string;
-    const connector = editor.execute("edgeless.visual.create", {
+    const other = editor.commands.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 300 } }) as string;
+    const connector = editor.commands.execute("edgeless.visual.create", {
       kind: "connector",
       text: "link",
       source: { elementId: shape, anchor: { x: 1, y: .5 }, position: { x: 280, y: 180 } },
@@ -286,15 +286,15 @@ describe("edgelessVisualsExtension", () => {
     }) as string;
     expect(editor.elements.getElement(shape)?.props).toMatchObject({ text: "Node", align: "center", fontSize: 18 });
     expect(editor.elements.getElement(connector)?.props).toMatchObject({ text: "link" });
-    editor.execute("edgeless.visual.update", { id: shape, patch: { text: "Updated", align: "left" } });
+    editor.commands.execute("edgeless.visual.update", { id: shape, patch: { text: "Updated", align: "left" } });
     expect(editor.elements.getElement(shape)?.props).toMatchObject({ text: "Updated", align: "left" });
-    editor.execute("edgeless.visual.update", { id: shape, patch: { filled: false, stroked: false } });
+    editor.commands.execute("edgeless.visual.update", { id: shape, patch: { filled: false, stroked: false } });
     expect(editor.elements.getElement(shape)?.props).toMatchObject({ filled: false, stroked: false, fill: expect.any(String), stroke: expect.any(String) });
-    expect(() => editor.execute("edgeless.tool.set", { tool: "pan" })).not.toThrow();
-    expect(() => editor.execute("edgeless.tool.set", "select")).not.toThrow();
-    expect(() => editor.execute("edgeless.tool.set", { tool: "place", kind: "rectangle" })).not.toThrow();
-    expect(() => editor.execute("edgeless.tool.set", { tool: "place", kind: "ellipse" })).not.toThrow();
-    const blank = editor.execute("edgeless.visual.create", {
+    expect(() => editor.commands.execute("edgeless.tool.set", { tool: "pan" })).not.toThrow();
+    expect(() => editor.commands.execute("edgeless.tool.set", "select")).not.toThrow();
+    expect(() => editor.commands.execute("edgeless.tool.set", { tool: "place", kind: "rectangle" })).not.toThrow();
+    expect(() => editor.commands.execute("edgeless.tool.set", { tool: "place", kind: "ellipse" })).not.toThrow();
+    const blank = editor.commands.execute("edgeless.visual.create", {
       kind: "connector",
       source: { elementId: shape, anchor: { x: 1, y: .5 }, position: { x: 280, y: 180 } },
       target: { elementId: other, anchor: { x: 0, y: .5 }, position: { x: 300, y: 180 } },
@@ -320,7 +320,7 @@ describe("edgelessVisualsExtension", () => {
     expect(controller.getLastTool("shapes")).toEqual({ tool: "place", kind: "rectangle" });
     controller.setDrawingBrush("marker");
     expect(controller.getLastTool("drawing")).toEqual({ tool: "drawing", brush: "marker" });
-    editor.execute("edgeless.tool.set", "select");
+    editor.commands.execute("edgeless.tool.set", "select");
     expect(controller.getTool()).toEqual({ tool: "select" });
     controller.activateCategory("shapes");
     expect(controller.getTool()).toEqual({ tool: "place", kind: "rectangle" });
@@ -335,9 +335,9 @@ describe("edgelessVisualsExtension", () => {
     const setup = (orphanConnectors: "detach" | "delete") => {
       const editor = createRivtoEditor({ mode: "edgeless" });
       const reactEditor = createReactEditor({ editor, extensions: [edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false, orphanConnectors })] });
-      const one = editor.execute("edgeless.visual.create", { kind: "rectangle" }) as string;
-      const two = editor.execute("edgeless.visual.create", { kind: "ellipse", frame: { x: 400 } }) as string;
-      const connector = editor.execute("edgeless.visual.create", { kind: "connector", source: { elementId: one, anchor: { x: 1, y: .5 }, position: { x: 280, y: 180 } }, target: { elementId: two, anchor: { x: 0, y: .5 }, position: { x: 400, y: 180 } } }) as string;
+      const one = editor.commands.execute("edgeless.visual.create", { kind: "rectangle" }) as string;
+      const two = editor.commands.execute("edgeless.visual.create", { kind: "ellipse", frame: { x: 400 } }) as string;
+      const connector = editor.commands.execute("edgeless.visual.create", { kind: "connector", source: { elementId: one, anchor: { x: 1, y: .5 }, position: { x: 280, y: 180 } }, target: { elementId: two, anchor: { x: 0, y: .5 }, position: { x: 400, y: 180 } } }) as string;
       editor.elements.removeElement(one);
       return { editor, reactEditor, connector };
     };

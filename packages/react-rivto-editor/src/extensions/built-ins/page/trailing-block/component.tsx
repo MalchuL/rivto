@@ -14,7 +14,6 @@ const TRAILING_BLOCK_CLASS = "page-trailing-block";
 
 /** Page-end controls that create every writing block up to the activated row. */
 export function TrailingBlock({ count }: TrailingBlockProps) {
-  const editor = useReactEditor();
   const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
   const slot = root?.querySelector<HTMLElement>(PAGE_END_SLOT_SELECTOR);
@@ -31,7 +30,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
           aria-label={amount === 1 ? "Add block" : `Add ${amount} blocks`}
           onClick={() => {
             let id = "";
-            editor.batchUpdates(() => {
+            reactEditor.history.batchUpdates(() => {
               for (let current = 0; current < amount; current += 1) {
                 id = reactEditor.blocks.insertBlock(
                   reactEditor.createDefaultBlock(),

@@ -91,16 +91,6 @@ export class DocumentElementManager {
   }
 
   /**
-   * Runs one element mutation through the collaborative document transaction.
-   *
-   * @param operation - Storage mutation to execute atomically.
-   * @returns No value.
-   */
-  private transact(operation: () => void): void {
-    this.crdt.transact(operation);
-  }
-
-  /**
    * Reads one placed element.
    *
    * @param id - Stable element ID.
@@ -197,7 +187,7 @@ export class DocumentElementManager {
     const id = requireNonemptyId(input.id ?? this.generateId(), "Element");
     if (this.storage.has(id)) throw new Error(`Element ${id} already exists`);
     const validated = this.processElement({ ...input, id });
-    this.transact(() => {
+    this.crdt.transact(() => {
       const model = this.crdt.createDetachedMap<ElementStorage>();
       const frameMap = this.crdt.createDetachedMap<ElementFrameStorage>();
       const props = this.crdt.createDetachedMap<Record<string, CRDTType>>();
@@ -248,7 +238,7 @@ export class DocumentElementManager {
       simulated.set(id, validated);
       return { element, patch, validated };
     });
-    this.transact(() => prepared.forEach(({ element, patch, validated }) => {
+    this.crdt.transact(() => prepared.forEach(({ element, patch, validated }) => {
       if (patch.frame) {
         assignMap(this.requiredMap<ElementFrameStorage>(element, "frame"), validated.frame as ElementFrameStorage, false);
       }
@@ -279,7 +269,7 @@ export class DocumentElementManager {
    * @returns No value.
    */
   removeElements(ids: readonly string[]): void {
-    this.transact(() => ids.forEach((id) => this.storage.delete(id)));
+    this.crdt.transact(() => ids.forEach((id) => this.storage.delete(id)));
   }
 
   /**

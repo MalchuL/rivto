@@ -102,9 +102,8 @@ function groupCommands(commands: readonly SlashCommand[]): Array<{ group: string
  * step while the preceding typing stays a separate capture.
  */
 export function SlashMenu() {
-  const editor = useReactEditor();
-  const roots = editor.blocks.getBlocks();
   const reactEditor = useReactEditor();
+  const roots = reactEditor.blocks.getBlocks();
   const slashCommands = reactEditor.slashCommands;
   const { element: root } = useEditorRoot();
   const [session, setSession] = useState<SlashSession | null>(null);
@@ -197,8 +196,8 @@ export function SlashMenu() {
   });
 
   useEffect(() => {
-    if (session && !editor.blocks.getBlock(session.blockId)) close();
-  }, [close, editor, roots, session]);
+    if (session && !reactEditor.blocks.getBlock(session.blockId)) close();
+  }, [close, reactEditor, roots, session]);
 
   useDOMEvent({
     id: "slash.selection-change",
@@ -217,14 +216,14 @@ export function SlashMenu() {
   const execute = useCallback((command: SlashCommand) => {
     const current = sessionRef.current;
     if (!current || !root) return;
-    const block = editor.blocks.getBlock(current.blockId);
+    const block = reactEditor.blocks.getBlock(current.blockId);
     if (!block) return close();
     const caret = current.slashOffset + current.query.length + 1;
     if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
 
-    editor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
-      editor.blocks.updateBlock(current.blockId, { content: next });
+      reactEditor.blocks.updateBlock(current.blockId, { content: next });
       reactEditor.selection.set(createCaretSelection(current.blockId, current.slashOffset));
       slashCommands.execute(command.id, { blockId: current.blockId });
     });
@@ -235,7 +234,7 @@ export function SlashMenu() {
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });
     });
-  }, [close, editor, reactEditor, root, slashCommands]);
+  }, [close, reactEditor, root, slashCommands]);
 
   const currentResults = useCallback(() => {
     const current = sessionRef.current;

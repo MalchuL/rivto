@@ -29,7 +29,7 @@ EditorRuntime
 
 ### Области undo
 
-Каждый storage manager объявляет принадлежащие ему `undoScopes`. `DocumentModelImpl` объединяет их в constructor-local массив и один раз передаёт в `DocumentUndoManager`; core runtime повторно использует `document.history` и не получает aggregate scopes или origin.
+Каждый storage manager объявляет принадлежащие ему `undoScopes`. `DocumentModelImpl` объединяет их в constructor-local массив и один раз передаёт в `DocumentHistoryManager`; core runtime повторно использует `document.history` и не получает aggregate scopes или origin.
 
 ### Snapshots
 
@@ -82,9 +82,9 @@ Namespaced-данные плагинов. Plugin-data manager выделяет �
 
 Использует `getMap("plugins")` и вложенные карты. Это поддерживаемая точка расширения совместного состояния плагинов.
 
-### Undo manager
+### History manager
 
-Делегирует `undo`, `redo`, `clear`, `stopCapturing` и `destroy` в `CRDTUndoManager` и ничего не знает о `Y.UndoManager`.
+Управляет `batchUpdates` и `batchUpdatesWithoutHistory` через `CRDTDoc`, а `undo`, `redo`, `clear`, `stopCapturing` и `destroy` делегирует в `CRDTUndoManager`. Нативный `Y.UndoManager` остаётся скрыт в adapter layer.
 
 ## Присваивание при загрузке snapshot
 

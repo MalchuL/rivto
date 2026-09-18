@@ -12,7 +12,7 @@ import type { ReactEditor } from "./types";
 /** Properties accepted by the React editor boundary. */
 export interface EditorViewProps {
   /** React runtime created and destroyed by the host application. */
-  readonly editor: ReactEditor;
+  readonly reactEditor: ReactEditor;
   /** Optional application chrome; extensions are registered at runtime creation. */
   readonly children?: ReactNode;
 }
@@ -32,51 +32,51 @@ export interface EditorViewProps {
  * @param props - Editor runtime and React subtree to bind together.
  * @returns A context provider; EditorView adds no DOM element.
  */
-export function EditorView({ editor, children }: EditorViewProps) {
+export function EditorView({ reactEditor, children }: EditorViewProps) {
   const [root, setRoot] = useState<HTMLElement | null>(null);
 
   const subscribeSurfaces = useCallback(
-    (listener: () => void) => editor.surfaces.subscribe(listener),
-    [editor],
+    (listener: () => void) => reactEditor.surfaces.subscribe(listener),
+    [reactEditor],
   );
   useSyncExternalStore(
     subscribeSurfaces,
-    () => editor.surfaces.revision,
-    () => editor.surfaces.revision,
+    () => reactEditor.surfaces.revision,
+    () => reactEditor.surfaces.revision,
   );
   const subscribeExtensions = useCallback(
-    (listener: () => void) => editor.extensions.subscribe(listener),
-    [editor],
+    (listener: () => void) => reactEditor.extensions.subscribe(listener),
+    [reactEditor],
   );
   useSyncExternalStore(
     subscribeExtensions,
-    () => editor.extensions.revision,
-    () => editor.extensions.revision,
+    () => reactEditor.extensions.revision,
+    () => reactEditor.extensions.revision,
   );
   const subscribeMode = useCallback(
-    (listener: () => void) => editor.mode.subscribe(listener),
-    [editor],
+    (listener: () => void) => reactEditor.mode.subscribe(listener),
+    [reactEditor],
   );
   const mode = useSyncExternalStore(
     subscribeMode,
-    () => editor.mode.get(),
-    () => editor.mode.get(),
+    () => reactEditor.mode.get(),
+    () => reactEditor.mode.get(),
   );
 
-  const context = useMemo(() => ({ reactEditor: editor }), [editor]);
+  const context = useMemo(() => ({ reactEditor }), [reactEditor]);
   // The callback ref identity never changes, preventing React from unregistering
   // and registering the same surface root on ordinary editor renders.
   const rootRef = useCallback((element: HTMLElement | null) => {
-    editor.events.setRoot(element);
+    reactEditor.events.setRoot(element);
     setRoot(element);
-  }, [editor]);
+  }, [reactEditor]);
   const rootContext = useMemo(() => ({ element: root, ref: rootRef }), [root, rootRef]);
 
-  const Surface = editor.surfaces.get(mode);
+  const Surface = reactEditor.surfaces.get(mode);
   if (!Surface) throw new Error(`No React surface is registered for editor mode ${mode}`);
-  const beforeSurface = editor.extensions.getComponents("beforeSurface");
-  const afterSurface = editor.extensions.getComponents("afterSurface");
-  const editorWrappers = editor.surfaces.getEditorWrappers(mode);
+  const beforeSurface = reactEditor.extensions.getComponents("beforeSurface");
+  const afterSurface = reactEditor.extensions.getComponents("afterSurface");
+  const editorWrappers = reactEditor.surfaces.getEditorWrappers(mode);
   let content: ReactNode = (
     <>
       {children}

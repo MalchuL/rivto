@@ -3,7 +3,7 @@ import {
   DocumentBlockManager,
   DocumentElementManager,
   DocumentPluginDataManager,
-  DocumentUndoManager,
+  DocumentHistoryManager,
 } from "./managers";
 import type {
   DocumentModel,
@@ -16,7 +16,7 @@ import { assertPortableRecord, clone } from "./utils";
  * Coordinates collaborative document lifecycle through block and element managers.
  *
  * Block and element APIs live exclusively on their focused managers.
- * This class retains CRDT transactions, undo scope aggregation,
+ * This class retains raw CRDT transactions, history construction,
  * document-level plugin data, subscriptions, and complete snapshot orchestration.
  */
 export class DocumentModelImpl implements DocumentModel {
@@ -30,12 +30,8 @@ export class DocumentModelImpl implements DocumentModel {
   readonly elements: DocumentElementManager;
   /** Generic namespaced collaborative document plugin data. */
   readonly pluginData: DocumentPluginDataManager;
-  /** Local undo/redo history configured from every document manager's roots. */
-  readonly history: DocumentUndoManager;
-  /** Nesting depth for the active undoable document batch. */
-  private batchDepth = 0;
-  /** Transaction origin excluded from this document's user undo history. */
-  private readonly withoutHistoryOrigin = Symbol("rivto-without-history");
+  /** Local history and batching configured from every document manager's roots. */
+  readonly history: DocumentHistoryManager;
   /** Removes the foreign-update normalization listener during destruction. */
   private readonly unsubscribeFromUpdates: Unsubscribe;
   /**
@@ -63,7 +59,7 @@ export class DocumentModelImpl implements DocumentModel {
       ...this.elements.undoScopes,
       ...this.pluginData.undoScopes,
     ];
-    this.history = new DocumentUndoManager(crdt, undoScopes);
+    this.history = new DocumentHistoryManager(crdt, undoScopes);
     // Yjs `"update"` carries the transaction origin: the adapter's local token,
     // a provider instance, undo, or `null`/`undefined` from `applyUpdate`.
     // Skip local origin so we do not open a
@@ -86,37 +82,13 @@ export class DocumentModelImpl implements DocumentModel {
   }
 
   /**
-   * Groups synchronous mutations into one transaction and undo item.
-   *
-   * Nested calls reuse the active transaction and history boundary.
+   * Runs synchronous document work in one collaborative transaction.
    *
    * @param operation - Synchronous document work to execute atomically.
-   * @returns Value returned by the operation.
+   * @returns No value.
    */
-  batchUpdates<Result>(operation: () => Result): Result {
-    if (this.batchDepth > 0) return operation();
-    this.history.stopCapturing();
-    this.batchDepth += 1;
-    let result!: Result;
-    try {
-      this.crdt.transact(() => { result = operation(); });
-      return result;
-    } finally {
-      this.batchDepth -= 1;
-      this.history.stopCapturing();
-    }
-  }
-
-  /**
-   * Groups synchronous mutations into one transaction excluded from undo history.
-   *
-   * @param operation - Synchronous document work to execute without an undo item.
-   * @returns Value returned by the operation.
-   */
-  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result {
-    let result!: Result;
-    this.crdt.transact(() => { result = operation(); }, this.withoutHistoryOrigin);
-    return result;
+  transact(operation: () => void): void {
+    this.crdt.transact(operation);
   }
 
   /**

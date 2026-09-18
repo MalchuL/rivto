@@ -1,7 +1,7 @@
 /**
  * Editor coordinator contracts. Selection and clipboard types live with their owning managers.
  */
-import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, ElementManager, RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
+import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, HistoryManager, ModeManager, SelectionManager } from "../managers";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
@@ -19,7 +19,7 @@ export interface CreateRivtoEditorOptions {
  *
  * Block and element behavior is intentionally available only through
  * `.blocks` and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
- * commands, batching, selection, history, mode, snapshots, and subscriptions.
+ * commands, selection, history, mode, snapshots, and subscriptions.
  */
 export interface RivtoEditorApi {
   /** Block commands and typed block operations. */
@@ -36,8 +36,8 @@ export interface RivtoEditorApi {
   readonly selection: SelectionManager;
   /** Framework-neutral structured clipboard operations. */
   readonly clipboard: ClipboardManager;
-  /** Local undo/redo history for document mutations. */
-  readonly history: UndoManager;
+  /** Local history and transaction batching for document mutations. */
+  readonly history: HistoryManager;
   /** Monotonic view invalidation snapshot. */
   readonly revision: number;
 
@@ -48,55 +48,6 @@ export interface RivtoEditorApi {
    * @returns Function that removes the listener.
    */
   subscribe(listener: () => void): () => void;
-
-  /**
-   * Groups synchronous editor mutations into one transaction and undo item.
-   *
-   * @param operation - Synchronous editor work to execute.
-   * @returns Value returned by the operation.
-   */
-  batchUpdates<Result>(operation: () => Result): Result;
-
-  /**
-   * Groups synchronous mutations into one transaction excluded from undo history.
-   *
-   * @param operation - Synchronous editor work to execute without an undo item.
-   * @returns Value returned by the operation.
-   */
-  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result;
-
-  /**
-   * Registers one named runtime command.
-   *
-   * @param name - Unique command identifier.
-   * @param handler - Command implementation.
-   * @returns Ownership handle for the exact registration.
-   */
-  register(name: string, handler: CommandHandler): RegisteredCommand;
-
-  /**
-   * Executes one registered runtime command.
-   *
-   * @param name - Command identifier to execute.
-   * @param payload - Optional command payload.
-   * @returns Command handler result.
-   */
-  execute(name: string, payload?: unknown): unknown;
-
-  /**
-   * Removes one command registration by name.
-   *
-   * @param name - Command identifier to remove.
-   * @returns No value.
-   */
-  removeCommand(name: string): void;
-
-  /**
-   * Deletes the complete active selection as one undoable operation.
-   *
-   * @returns No value.
-   */
-  deleteSelection(): void;
 
   /**
    * Replaces supplied document sections and clears previous local history.
@@ -112,20 +63,6 @@ export interface RivtoEditorApi {
    * @returns Detached snapshot-v6 value.
    */
   dump(): EditorSnapshot;
-
-  /**
-   * Reverts the latest captured local document operation.
-   *
-   * @returns No value.
-   */
-  undo(): void;
-
-  /**
-   * Reapplies the latest locally undone document operation.
-   *
-   * @returns No value.
-   */
-  redo(): void;
 
   /**
    * Releases runtime subscriptions, managers, registries, and history.

@@ -26,7 +26,6 @@ import type { BlockViewBehavior } from "../../../views/types";
  * Delete/Backspace behavior.
  */
 export function registerSelectionDeletion(reactEditor: ReactEditor): void {
-  const editor = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.selectionDelete,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
@@ -35,7 +34,7 @@ export function registerSelectionDeletion(reactEditor: ReactEditor): void {
       if (!root) return false;
       const editableEvent = isEditableKeyboardEvent(event);
       const current = editableEvent
-        ? readKeyboardSelection(reactEditor.selection, editor, blockId)
+        ? readKeyboardSelection(reactEditor.selection, reactEditor, blockId)
         : selection;
       if (!shouldDeleteSelection(current)) return false;
       const rootBlockSelection = root.ownerDocument.activeElement === root &&
@@ -44,7 +43,7 @@ export function registerSelectionDeletion(reactEditor: ReactEditor): void {
     },
   }, ({ root }) => {
     const current = reactEditor.selection.get();
-    editor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       if (current && isStructuralSelection(current)) {
         const ids = getSelectedBlockIds(current);
         const seen = new Set<BlockViewBehavior>();

@@ -7,7 +7,7 @@
  */
 import { Component, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createRivtoEditor } from '@chulane/rivto';
+import { createRivtoEditor, DocumentModelImpl, YjsDoc } from '@chulane/rivto';
 import { createReactEditor, EditorView, standardPreset, pageDragExtension, edgelessPreset, edgelessVisualsExtension, kanbanExtension, tableExtension, columnsExtension, bentoExtension, createKanbanBlockInput, createTableBlockInput, createColumnsBlockInput, createBentoBlockInput } from '@chulane/rivto-react';
 import { parseDocument, exportMarkdown, type DocumentFile } from './documents';
 import { DEFAULT_SETTINGS, SettingsDialog, type Settings } from './settings';
@@ -41,7 +41,7 @@ function readSettings(): Settings {
  */
 function createSession() {
   const settings = readSettings();
-  const editor = createRivtoEditor();
+  const editor = createRivtoEditor({ document: new DocumentModelImpl(new YjsDoc(`rivto-desktop-${crypto.randomUUID()}`)) });
   const reactEditor = createReactEditor({ editor, extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset(), edgelessVisualsExtension(), kanbanExtension(), tableExtension(), columnsExtension(), bentoExtension()] });
   let error = '';
   for (const [id, keys] of Object.entries(settings.keymap)) {
@@ -249,9 +249,9 @@ function App() {
       {error && <div role="alert" className={ERROR_CLASS}>{error}<button aria-label="Dismiss error" onClick={() => setError('')}>✕</button></div>}
       <article className={PAPER_CLASS} inert={busy} data-mode={mode} style={{ '--editor-width': `${settings.width}px` } as CSSProperties}>
         <div className={TITLE_CLASS}><small>MAKE SOMETHING WORTH KEEPING</small><input aria-label="Document title" maxLength={240} value={title} onChange={(event) => { latestTitle.current = event.target.value; setTitle(event.target.value); updateDraft(); }} placeholder="Untitled" />
-          <nav aria-label="Insert block"><button onClick={() => editor.undo()}>Undo</button><button onClick={() => editor.redo()}>Redo</button>{Object.entries({ Kanban: createKanbanBlockInput, Table: createTableBlockInput, Columns: createColumnsBlockInput, Bento: createBentoBlockInput }).map(([label, create]) => <button key={label} onClick={() => editor.blocks.insertBlock(create(), editor.blocks.getRootIds().at(-1))}>＋ {label}</button>)}</nav>
+          <nav aria-label="Insert block"><button onClick={() => editor.history.undo()}>Undo</button><button onClick={() => editor.history.redo()}>Redo</button>{Object.entries({ Kanban: createKanbanBlockInput, Table: createTableBlockInput, Columns: createColumnsBlockInput, Bento: createBentoBlockInput }).map(([label, create]) => <button key={label} onClick={() => editor.blocks.insertBlock(create(), editor.blocks.getRootIds().at(-1))}>＋ {label}</button>)}</nav>
         </div>
-        <EditorBoundary key={path ?? 'untitled'}><EditorView editor={reactEditor} /></EditorBoundary>
+        <EditorBoundary key={path ?? 'untitled'}><EditorView reactEditor={reactEditor} /></EditorBoundary>
       </article>
       <footer className={STATUS_CLASS}><span role="status">{status}</span><span>{words} words · {mode === 'block' ? `${settings.width} px` : 'Infinite canvas'}</span></footer>
     </main>

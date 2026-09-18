@@ -43,8 +43,8 @@ Demo block-ID extension регистрирует `BlockWrapper` и исполь�
 Каждый document получает собственные `{ editor, reactEditor }`. Один shared React context на два документа использовать нельзя:
 
 ```tsx
-<EditorView editor={left.reactEditor} />
-<EditorView editor={right.reactEditor} />
+<EditorView reactEditor={left.reactEditor} />
+<EditorView reactEditor={right.reactEditor} />
 ```
 
 Cleanup выполняется для каждой пары. Cross-document transfer должен явно работать с source/destination APIs и проверять ID collisions.

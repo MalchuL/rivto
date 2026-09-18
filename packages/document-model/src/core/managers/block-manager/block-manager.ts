@@ -151,16 +151,6 @@ export class DocumentBlockManager {
     get revision(): number { return this.currentRevision; }
 
     /**
-     * Runs one semantic block mutation through the owning document transaction.
-     *
-     * @param operation - Synchronous block mutation to execute atomically.
-     * @returns No value.
-     */
-    private transact(operation: () => void): void {
-        this.crdt.transact(operation);
-    }
-
-    /**
      * Reports whether the document has no root blocks.
      *
      * @returns `true` when the ordered root list is empty.
@@ -301,7 +291,7 @@ export class DocumentBlockManager {
         const container = this.resolveInsertContainer(afterId);
         this.validateInsertedForest([block], this.resolveInsertParentType(afterId));
         let id = "";
-        this.transact(() => {
+        this.crdt.transact(() => {
             id = this.insertInto(block, container, afterId, this.resolveInsertParentType(afterId));
         });
         return id;
@@ -364,7 +354,7 @@ export class DocumentBlockManager {
             return { block, patch, validatedListProps, validatedProps };
         });
 
-        this.transact(() => {
+        this.crdt.transact(() => {
             prepared.forEach(({ block, patch, validatedListProps, validatedProps }) => {
                 if (validatedListProps && patch.listProps) {
                     assignMap(this.requiredMap(block, "listProps"), { ...patch.listProps }, false);
@@ -399,7 +389,7 @@ export class DocumentBlockManager {
             type,
             props,
         }).props ?? {};
-        this.transact(() => {
+        this.crdt.transact(() => {
             const block = this.requiredBlock(id);
             block.set("type", type);
             assignMap(this.requiredMap(block, "props"), nextProps);
@@ -417,7 +407,7 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     setBlockProp(id: string, key: string, value: unknown): void {
-        this.transact(() => {
+        this.crdt.transact(() => {
             const block = this.requiredBlock(id);
             this.patchProps(id, String(block.get("type")), this.requiredMap(block, "props"), { [key]: value });
         });
@@ -454,7 +444,7 @@ export class DocumentBlockManager {
             map: this.requiredMap(this.requiredBlock(id), "listProps"),
             keys: [...new Set(keys)],
         }));
-        this.transact(() => prepared.forEach(({ map, keys }) => keys.forEach((key) => map.delete(key))));
+        this.crdt.transact(() => prepared.forEach(({ map, keys }) => keys.forEach((key) => map.delete(key))));
     }
 
     /**
@@ -467,7 +457,7 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     setPluginData(id: string, pluginId: string, value: unknown): void {
-        this.transact(() => {
+        this.crdt.transact(() => {
             const data = this.requiredMap(this.requiredBlock(id), "pluginData");
             if (value === undefined) data.delete(pluginId);
             else data.set(pluginId, clone(value) as CRDTType);
@@ -484,7 +474,7 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     setBlockText(id: string, text: string): void {
-        this.transact(() => {
+        this.crdt.transact(() => {
             const content = this.requiredText(this.requiredBlock(id), "content");
             const current = content.toString();
             if (current === text) return;
@@ -512,7 +502,7 @@ export class DocumentBlockManager {
      */
     insertText(id: string, offset: number, text: string): void {
         if (!text) return;
-        this.transact(() => {
+        this.crdt.transact(() => {
             const content = this.requiredText(this.requiredBlock(id), "content");
             const position = Math.max(0, Math.min(offset, content.length));
             content.insert(position, text);
@@ -530,7 +520,7 @@ export class DocumentBlockManager {
      */
     deleteText(id: string, offset: number, length: number): void {
         if (length <= 0) return;
-        this.transact(() => {
+        this.crdt.transact(() => {
             const content = this.requiredText(this.requiredBlock(id), "content");
             const position = Math.max(0, Math.min(offset, content.length));
             content.delete(position, Math.min(length, content.length - position));
@@ -544,7 +534,7 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     removeBlock(id: string): void {
-        this.transact(() => {
+        this.crdt.transact(() => {
             const found = this.findContainer(id);
             if (!found) return;
             this.removeTree(id);
@@ -636,7 +626,7 @@ export class DocumentBlockManager {
             this.processBlock(this.storedBlockInput(id), parentType);
             parents.set(id, parentId);
         }
-        this.transact(() => {
+        this.crdt.transact(() => {
             for (const { id, targetId, position } of pending) {
                 const source = this.findContainer(id)!;
                 let target: CRDTArray<string>;
@@ -704,7 +694,7 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     normalize(): void {
-        this.transact(() => {
+        this.crdt.transact(() => {
             const seen = new Set<string>();
             const clean = (array: CRDTArray<string>) => {
                 for (let index = array.length - 1; index >= 0; index -= 1) {

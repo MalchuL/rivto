@@ -115,12 +115,12 @@ describe("EditorRuntime selection", () => {
     expect(documentUpdates).toHaveBeenCalledTimes(1);
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.selection.get()).toBeUndefined();
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([
       { id: firstId, content: "First" },
       { id: secondId, content: "Second" },
     ]);
-    editor.redo();
+    editor.history.redo();
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.selection.get()).toBeUndefined();
     unsubscribe();
@@ -131,14 +131,14 @@ describe("EditorRuntime selection", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph" });
 
-    editor.execute("selection.set", { selection: createStructuralSelection([id], id, id) });
+    editor.commands.execute("selection.set", { selection: createStructuralSelection([id], id, id) });
     editor.blocks.removeBlock(id);
 
     expect(editor.selection.get()).toBeUndefined();
 
     const nextId = editor.blocks.insertBlock({ type: "paragraph" });
     editor.mode.set("edgeless");
-    editor.execute("selection.set", {
+    editor.commands.execute("selection.set", {
       selection: createStructuralSelection([nextId], nextId, nextId),
     });
     editor.mode.set("block");
@@ -152,11 +152,11 @@ describe("EditorRuntime selection", () => {
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
     const thirdId = editor.blocks.insertBlock({ type: "paragraph", content: "Third" }, secondId);
-    editor.execute("selection.set", {
+    editor.commands.execute("selection.set", {
       selection: createStructuralSelection([firstId, secondId, thirdId], thirdId, firstId),
     });
 
-    editor.undo();
+    editor.history.undo();
 
     expect(editor.selection.get()).toEqual(whole([firstId, secondId], secondId, firstId));
     editor.destroy();
@@ -166,7 +166,7 @@ describe("EditorRuntime selection", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
     const firstId = editor.blocks.insertBlock({ type: "paragraph" });
     const secondId = editor.blocks.insertBlock({ type: "paragraph" }, firstId);
-    editor.execute("selection.set", {
+    editor.commands.execute("selection.set", {
       selection: createStructuralSelection([firstId, secondId], firstId, secondId),
     });
 
@@ -186,7 +186,7 @@ describe("EditorRuntime selection", () => {
     editor.blocks.indentBlock(secondChildId);
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: parentId, children: [{ id: firstChildId }, { id: secondChildId }] }]);
 
-    editor.execute("selection.set", {
+    editor.commands.execute("selection.set", {
       selection: createStructuralSelection([firstChildId, secondChildId], secondChildId, firstChildId),
     });
     editor.blocks.outdentBlocks([firstChildId, secondChildId]);
@@ -202,7 +202,7 @@ describe("EditorRuntime selection", () => {
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId);
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
     const selection = createStructuralSelection([firstId, secondId], firstId, secondId);
-    editor.execute("selection.set", { selection });
+    editor.commands.execute("selection.set", { selection });
 
     editor.blocks.indentBlocks([firstId, secondId]);
 
@@ -221,7 +221,7 @@ describe("EditorRuntime selection", () => {
     const middleId = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, firstId);
     const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middleId);
     const selection = createStructuralSelection([firstId, middleId, lastId], lastId, firstId);
-    editor.execute("selection.set", { selection });
+    editor.commands.execute("selection.set", { selection });
     const documentUpdates = jest.fn();
     const unsubscribe = editor.subscribe(documentUpdates);
 
@@ -233,7 +233,7 @@ describe("EditorRuntime selection", () => {
       children: [{ id: firstId }, { id: middleId }, { id: lastId }],
     }]);
     expect(editor.selection.get()).toEqual(whole([firstId, middleId, lastId], lastId, firstId));
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([previousId, firstId, middleId, lastId]);
     unsubscribe();
     editor.destroy();
@@ -243,7 +243,7 @@ describe("EditorRuntime selection", () => {
     const editor = createRivtoEditor();
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-    editor.execute("selection.set", {
+    editor.commands.execute("selection.set", {
       selection: createStructuralSelection([firstId, secondId], firstId, secondId),
     });
 
@@ -251,7 +251,7 @@ describe("EditorRuntime selection", () => {
 
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([secondId, firstId]);
     expect(editor.selection.get()).toEqual(whole([secondId, firstId], firstId, secondId));
-    editor.undo();
+    editor.history.undo();
     expect(editor.selection.get()).toEqual(whole([firstId, secondId], firstId, secondId));
     editor.destroy();
   });

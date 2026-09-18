@@ -29,11 +29,6 @@ export class ElementManager {
     private readonly document: DocumentModel,
   ) { this.registerCommands(); }
 
-  /** Runs one element operation inside the shared transaction boundary. */
-  private batchUpdates<Result>(operation: () => Result): Result {
-    return this.editor.batchUpdates(operation);
-  }
-
   /** Registers a document element processor and returns its disposer. */
   registerProcessor(processor: ElementProcessor): () => void {
     return this.document.elements.pipe.register(processor);
@@ -109,7 +104,7 @@ export class ElementManager {
   destroy(): void { this.registrations.splice(0).reverse().forEach((item) => item.dispose()); }
 
   private registerCommands(): void {
-    const documentCommand = (handler: CommandHandler): CommandHandler => (value) => this.batchUpdates(() => handler(value));
+    const documentCommand = (handler: CommandHandler): CommandHandler => (value) => this.editor.history.batchUpdates(() => handler(value));
     const register = (name: string, handler: CommandHandler) => this.registrations.push(this.editor.commands.register(name, documentCommand(handler)));
     register("element.insert", (value) => {
       const data = commandPayload(value) as unknown as { input: ElementInput };

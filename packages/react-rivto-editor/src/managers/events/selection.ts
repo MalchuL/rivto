@@ -64,17 +64,17 @@ export function shouldDeleteSelection(
  * selection when no native range exists.
  *
  * @param selectionManager - React selection bridge that reads the active DOM range.
- * @param editor - Core editor whose portable selection is synchronized when needed.
+ * @param reactEditor - React editor whose portable selection is synchronized when needed.
  * @param emptyBlockId - Editable event target used when an empty host has no DOM range.
  * @returns Current selection suitable for a keyboard command.
  */
 export function readKeyboardSelection(
   selectionManager: SelectionCapability,
-  editor: Pick<ReactEditor, "blocks">,
+  reactEditor: Pick<ReactEditor, "blocks">,
   emptyBlockId?: string,
 ): Selection | undefined {
   const nativeSelection = selectionManager.readDOM();
-  const emptyBlock = emptyBlockId ? editor.blocks.getBlock(emptyBlockId) : undefined;
+  const emptyBlock = emptyBlockId ? reactEditor.blocks.getBlock(emptyBlockId) : undefined;
   const focusedEmptySelection: Selection | undefined = !nativeSelection && emptyBlock?.content === ""
     ? createCaretSelection(emptyBlock.id, 0)
     : undefined;

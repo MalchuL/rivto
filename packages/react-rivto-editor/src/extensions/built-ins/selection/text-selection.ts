@@ -120,14 +120,13 @@ interface PointerSelection {
  *
  * @example
  * ```tsx
- * <EditorView editor={editor}>
+ * <EditorView reactEditor={reactEditor}>
  *   <TextSelectionPlugin />
  *   <PageSurface />
  * </EditorView>
  * ```
  */
 export function registerTextSelection(reactEditor: ReactEditor): () => void {
-  const editor = reactEditor;
   let pointer: PointerSelection | null = null;
   let releaseTimer: number | undefined;
   let suppressClickBlockId: string | undefined;
@@ -174,15 +173,23 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
         pointer = null;
         ownsCrossBlockSelection = false;
       } else if (event.button === 0) {
-        // Keep the original event target, not only its owning anchor. Buttons
-        // may seed a drag because no structural selection is published before
-        // the movement threshold; other pointer controls retain their gesture.
-        // Editable anchors still enter the text-selection path, while structural
-        // anchors start only from non-interactive surface space.
+        // Keep the original event target, not only its owning anchor. Nested
+        // controls and structural selection receive the same pointerdown;
+        // checking only the ancestor would start both gestures at once.
         const target = isElementNode(event.target) ? event.target : null;
         const selectionAnchor = target?.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);
+        // Three entry paths, because click-to-activate and drag-to-select share
+        // this pointerdown and must not steal each other:
+        // - Editable anchors always enter so caret drags keep working.
+        // - Native buttons seed a drag only. Nothing is published until the
+        //   movement threshold, so a click still activates the control; a drag
+        //   becomes structural selection and the later click is suppressed.
+        // - Remaining structural surface starts selection only when the target
+        //   is not an excluded control (inputs, links, drop fields, sortable
+        //   rows, `data-prevent-text-editing`). Those keep their own gesture.
         if (target && selectionAnchor && root.contains(selectionAnchor) && (
-          selectionAnchor.isContentEditable || target.matches("button") || !isExcludedFromStructuralSelection(target)
+          selectionAnchor.isContentEditable
+          || !isExcludedFromStructuralSelection(target)
         )) {
           if (releaseTimer !== undefined) view?.clearTimeout(releaseTimer);
           ownsCrossBlockSelection = false;
@@ -207,7 +214,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
           // Shift extends the existing selection instead of replacing its anchor.
           if (event.shiftKey && clickedPosition) {
             const item = current;
-            const lengthOf = (id: string) => editor.blocks.getBlock(id)?.content.length ?? 0;
+            const lengthOf = (id: string) => reactEditor.blocks.getBlock(id)?.content.length ?? 0;
             const ends = item ? resolveSelectionEndpoints(item, lengthOf) : undefined;
             const originId = ends?.anchor.blockId ?? item?.anchorBlockId;
             const wholeBlocks = originId
@@ -228,7 +235,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
               const originIndex = originFromBlock ? ids.indexOf(originFromBlock) : -1;
               const clickIndex = originFromBlock ? ids.indexOf(clickedPosition.blockId) : -1;
               const originContentLength = originFromBlock
-                ? (editor.blocks.getBlock(originFromBlock)?.content.length ?? 0)
+                ? (reactEditor.blocks.getBlock(originFromBlock)?.content.length ?? 0)
                 : 0;
               const anchorPosition = ends?.anchor ?? (originFromBlock
                 ? {
@@ -409,7 +416,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
 
       const selection = createVisibleStructuralSelection(orderedBlockIds(root), blockId, blockId);
       if (selection) reactEditor.selection.set(selection);
-      if (editor.mode.get() === "edgeless") findEdgelessRuntime(reactEditor)?.deactivate();
+      if (reactEditor.mode.get() === "edgeless") findEdgelessRuntime(reactEditor)?.deactivate();
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });
       return true;
@@ -424,7 +431,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       const selection = reactEditor.selection.readDOM();
       if (selection) {
         reactEditor.selection.set(selection);
-      } else if (!(editor.mode.get() === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active)) {
+      } else if (!(reactEditor.mode.get() === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active)) {
         // Losing the browser range keeps a structural selection and clears carets.
         const current = reactEditor.selection.get();
         if (current && !isStructuralSelection(current)) reactEditor.selection.clear();

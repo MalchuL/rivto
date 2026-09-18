@@ -35,9 +35,9 @@ describe("EditorRuntime element commands", () => {
     expect(editor.elements.getElement("shape")?.frame.x).toBe(10);
 
     editor.elements.updateElement("shape", { frame: { x: 40 } });
-    editor.undo();
+    editor.history.undo();
     expect(editor.elements.getElement("shape")?.frame.x).toBe(10);
-    editor.redo();
+    editor.history.redo();
     expect(editor.elements.getElement("shape")?.frame.x).toBe(40);
     editor.destroy();
   });

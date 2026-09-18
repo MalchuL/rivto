@@ -37,10 +37,10 @@ describe("cross-document block transfer", () => {
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],
     });
 
-    destination.undo();
+    destination.history.undo();
     expect(destination.blocks.getRootIds()).toEqual([target]);
     expect(source.blocks.getRootIds()).toEqual([outside]);
-    source.undo();
+    source.history.undo();
     expect(source.blocks.getRootIds()).toEqual([first, second, outside]);
 
     source.destroy();

@@ -80,7 +80,7 @@ function EdgelessBlockElementView({
       const height = Math.max(MIN_CARD_HEIGHT, Math.ceil(content.scrollHeight + 2));
       host.style.height = previousHeight;
       if (Math.abs(element.frame.height - height) < 1) return;
-      reactEditor.batchUpdates(() => {
+      reactEditor.history.batchUpdates(() => {
         reactEditor.elements.updateElement(element.id, { frame: { height } });
       });
     };

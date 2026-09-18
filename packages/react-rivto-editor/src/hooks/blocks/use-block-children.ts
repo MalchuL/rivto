@@ -51,12 +51,12 @@ export interface UseBlockChildrenResult {
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockChildren(blockId: string): UseBlockChildrenResult {
-  const { reactEditor: editor } = useEditorContext();
+  const { reactEditor } = useEditorContext();
   const { block: parent } = useBlock(blockId);
 
   const operations = useMemo<BlockChildrenOperations>(() => {
     const getChildren = (): Block[] => {
-      const currentParent = editor.blocks.getBlock(blockId);
+      const currentParent = reactEditor.blocks.getBlock(blockId);
       if (!currentParent) throw new Error(`Block ${blockId} not found`);
       return currentParent.children;
     };
@@ -74,27 +74,27 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
 
         let childId: string;
         if (children.length === 0) {
-          childId = editor.blocks.insertBlock(block, blockId);
-          editor.blocks.indentBlock(childId);
+          childId = reactEditor.blocks.insertBlock(block, blockId);
+          reactEditor.blocks.indentBlock(childId);
         } else if (afterId === null) {
-          childId = editor.blocks.insertBlock(block, children[0].id);
-          editor.blocks.moveBlock(childId, null);
+          childId = reactEditor.blocks.insertBlock(block, children[0].id);
+          reactEditor.blocks.moveBlock(childId, null);
         } else {
-          childId = editor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
+          childId = reactEditor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
         }
         return childId;
       },
       remove: (childId) => {
         requireChild(childId);
-        editor.blocks.removeBlock(childId);
+        reactEditor.blocks.removeBlock(childId);
       },
       move: (childId, afterId) => {
         requireChild(childId);
         if (afterId !== null) requireChild(afterId);
-        editor.blocks.moveBlock(childId, afterId);
+        reactEditor.blocks.moveBlock(childId, afterId);
       },
     };
-  }, [blockId, editor]);
+  }, [blockId, reactEditor]);
 
   return {
     children: parent?.children ?? NO_CHILDREN,

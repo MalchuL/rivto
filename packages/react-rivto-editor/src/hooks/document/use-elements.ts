@@ -11,11 +11,11 @@ import { useEditorContext } from "../../editor-context";
 
 /** @returns Stable detached elements refreshed only after element mutations. */
 export function useElements() {
-  const { reactEditor: editor } = useEditorContext();
+  const { reactEditor } = useEditorContext();
   const subscribe = useCallback(
-    (listener: () => void) => editor.elements.subscribe(listener),
-    [editor],
+    (listener: () => void) => reactEditor.elements.subscribe(listener),
+    [reactEditor],
   );
-  const getSnapshot = useCallback(() => editor.elements.getElements(), [editor]);
+  const getSnapshot = useCallback(() => reactEditor.elements.getElements(), [reactEditor]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

@@ -28,10 +28,9 @@ export function splitBlockAt(
   block: EditorBlock,
   splitAt: number,
 ): string {
-  const editor = reactEditor;
   const listActive = reactEditor.blocks.hasListProps("list");
   const clamped = Math.max(0, Math.min(splitAt, block.content.length));
-  editor.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
+  reactEditor.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
   const nextBlockId = reactEditor.blocks.insertBlock({
     ...reactEditor.createDefaultBlock(),
     ...(listActive ? { listProps: {

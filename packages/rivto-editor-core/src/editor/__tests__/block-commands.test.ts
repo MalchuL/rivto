@@ -43,13 +43,13 @@ describe("EditorRuntime block commands", () => {
   it("registers and removes runtime commands through the editor api", () => {
     const editor = createRivtoEditor();
 
-    editor.register("test.echo", (payload) => payload);
+    editor.commands.register("test.echo", (payload) => payload);
 
-    expect(editor.execute("test.echo", "ok")).toBe("ok");
+    expect(editor.commands.execute("test.echo", "ok")).toBe("ok");
 
-    editor.removeCommand("test.echo");
+    editor.commands.remove("test.echo");
 
-    expect(() => editor.execute("test.echo")).toThrow("Unknown command test.echo");
+    expect(() => editor.commands.execute("test.echo")).toThrow("Unknown command test.echo");
     editor.destroy();
   });
 
@@ -74,7 +74,7 @@ describe("EditorRuntime block commands", () => {
       content: "Title",
       children: [{ content: "Child" }],
     });
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlock(id)).toMatchObject({ type: "paragraph", props: { old: true } });
     expect(() => editor.blocks.setBlockType(id, "missing")).toThrow("Unknown block type missing");
     editor.destroy();
@@ -116,12 +116,12 @@ describe("EditorRuntime block commands", () => {
       required: "Present",
       extensionValue: { enabled: true },
     });
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlock(id)).toMatchObject({
       type: "paragraph",
       props: { count: "invalid", title: "Preserved", required: "Present" },
     });
-    editor.redo();
+    editor.history.redo();
     expect(editor.blocks.getBlock(id)).toMatchObject({ type: "card", props: { count: 1 } });
 
     const failing = editor.blocks.insertBlock({ type: "paragraph", props: { required: 3 } });
@@ -183,12 +183,12 @@ describe("EditorRuntime block commands", () => {
     expect(editor.blocks.getBlock(childId)).toBeUndefined();
     expect(editor.blocks.getBlock(outsideId)?.content).toBe("Outside");
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlock(id)).toMatchObject({
       content: "Parent",
       children: [{ id: childId, children: [{ content: "Grandchild" }] }],
     });
-    editor.redo();
+    editor.history.redo();
     expect(editor.blocks.getBlock(id)).toMatchObject({ content: "", children: [] });
     editor.destroy();
   });
@@ -208,7 +208,7 @@ describe("EditorRuntime block commands", () => {
     editor.history.clear();
 
     expectOneUpdate(editor, () => {
-      editor.batchUpdates(() => {
+      editor.history.batchUpdates(() => {
         editor.blocks.clearBlock(first);
         editor.blocks.clearBlock(second);
       });
@@ -216,7 +216,7 @@ describe("EditorRuntime block commands", () => {
     expect(editor.blocks.getBlock(first)).toMatchObject({ content: "", children: [] });
     expect(editor.blocks.getBlock(second)).toMatchObject({ content: "", children: [] });
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlock(first)).toMatchObject({
       content: "First",
       children: [{ content: "First child" }],
@@ -282,16 +282,16 @@ describe("EditorRuntime block commands", () => {
     expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
     expect(editor.blocks.getBlock(second)?.listProps.checked).toBe(false);
 
-    expect(() => editor.execute("block.update-many", { updates: [
+    expect(() => editor.commands.execute("block.update-many", { updates: [
       { id: first, patch: { listProps: { type: "list" } } },
       { id: second, patch: { listProps: { checked: Number.POSITIVE_INFINITY } } },
     ] })).toThrow("block.listProps.checked must be a finite number");
     expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlock(first)?.listProps.type).toBeUndefined();
     expect(editor.blocks.getBlock(second)?.listProps.checked).toBe(true);
-    editor.redo();
+    editor.history.redo();
     expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
     expect(editor.blocks.getBlock(second)?.listProps.checked).toBe(false);
     editor.destroy();
@@ -331,7 +331,7 @@ describe("EditorRuntime block commands", () => {
     expect(editor.blocks.getBlock(first)?.listProps.collapsed).toBe(true);
     expect(updates).toHaveBeenCalledTimes(1);
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlock(first)).toMatchObject({ listProps: {}, props: {} });
     expect(editor.blocks.getBlock(second)?.listProps.collapsed).toBeUndefined();
     expect(editor.blocks.getBlock(leaf)?.listProps.collapsed).toBeUndefined();
@@ -420,7 +420,7 @@ describe("EditorRuntime block commands", () => {
       },
     ]);
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{
       id: parentId,
       children: [
@@ -453,7 +453,7 @@ describe("EditorRuntime block commands", () => {
         { id: secondId },
       ],
     }]);
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([
       { id: previousId },
       { id: firstId, children: [{ id: childId }] },
@@ -510,7 +510,7 @@ describe("EditorRuntime block commands", () => {
       { id: targetId },
       { id: parentId, children: [{ id: childId }] },
     ]);
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([
       { id: parentId, children: [{ id: childId }] },
       { id: targetId },
@@ -535,7 +535,7 @@ describe("EditorRuntime block commands", () => {
     expect(documentUpdates).toHaveBeenCalledTimes(1);
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([gapId, targetId, firstId, secondId]);
     expect(editor.blocks.getBlock(firstId)?.children).toMatchObject([{ id: childId }]);
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([firstId, gapId, secondId, targetId]);
     unsubscribe();
     editor.destroy();
@@ -610,7 +610,7 @@ describe("EditorRuntime block commands", () => {
       { id: firstId, children: [{ id: existingChildId }] },
       { id: secondId, children: [{ id: followingId }] },
     ]);
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{
       id: parentId,
       children: [
@@ -646,7 +646,7 @@ describe("EditorRuntime block commands", () => {
     }]);
     expect(editor.blocks.getBlock(sourceId)).toBeUndefined();
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([
       { id: targetId, content: "Before", children: [{ id: targetChildId }] },
       { id: sourceId, content: "After", children: [{ id: sourceChildId }] },
@@ -672,7 +672,7 @@ describe("EditorRuntime block commands", () => {
     editor.subscribe(listener);
     const before = editor.revision;
 
-    expect(() => editor.execute("block.insert", { block: { type: "missing" } })).toThrow("unavailable");
+    expect(() => editor.commands.execute("block.insert", { block: { type: "missing" } })).toThrow("unavailable");
 
     expect(listener).not.toHaveBeenCalled();
     expect(editor.revision).toBe(before);
@@ -703,11 +703,11 @@ describe("EditorRuntime block commands", () => {
     });
 
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
-    expect(() => editor.execute("document.load", {
+    expect(() => editor.commands.execute("document.load", {
       snapshot: { version: 3, blocks: [] },
     })).toThrow("Unsupported Rivto document snapshot version: 3");
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
-    expect(() => editor.execute("document.load", {
+    expect(() => editor.commands.execute("document.load", {
       snapshot: {
         version: 6,
         blocks: [{

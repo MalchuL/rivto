@@ -64,11 +64,6 @@ export class BlockManager {
     this.registerRequiredProcessors();
   }
 
-  /** Runs one block operation inside the shared transaction boundary. */
-  private batchUpdates<Result>(operation: () => Result): Result {
-    return this.editor.batchUpdates(operation);
-  }
-
   /** @returns Monotonic document block revision for derived read caches. */
   get revision(): number { return this.document.blocks.revision; }
 
@@ -193,7 +188,7 @@ export class BlockManager {
     };
     const prepared = blocks.map(prepare);
     const rootIds: string[] = [];
-    this.batchUpdates(() => {
+    this.editor.history.batchUpdates(() => {
       let previous = afterId;
       prepared.forEach((block) => {
         previous = this.insertBlock(block, previous);
@@ -233,7 +228,7 @@ export class BlockManager {
 
   /** Deletes list-property keys from several blocks in one batch. */
   deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void {
-    this.batchUpdates(() => this.document.blocks.deleteListPropsBatch(updates));
+    this.editor.history.batchUpdates(() => this.document.blocks.deleteListPropsBatch(updates));
   }
 
   /**
@@ -426,7 +421,7 @@ export class BlockManager {
    */
   private registerRequiredCommands(): void {
     const documentCommand = (handler: CommandHandler): CommandHandler => (value) =>
-      this.batchUpdates(() => handler(value));
+      this.editor.history.batchUpdates(() => handler(value));
     const register = (name: string, handler: CommandHandler): void => {
       this.registrations.push(this.editor.commands.register(name, handler));
     };
@@ -460,7 +455,7 @@ export class BlockManager {
     register("block.clear", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { id: string };
       const id = commandString(data.id, "id");
-      this.batchUpdates(() => {
+      this.editor.history.batchUpdates(() => {
         this.document.blocks.updateBlock(id, { content: "" });
         this.document.blocks.getChildIds(id).forEach((childId) => this.document.blocks.removeBlock(childId));
       });
@@ -481,7 +476,7 @@ export class BlockManager {
     register("block.remove-many", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { ids: string[] };
       const ids = this.requireIds(data.ids);
-      this.batchUpdates(() => {
+      this.editor.history.batchUpdates(() => {
         ids.forEach((id) => this.document.blocks.removeBlock(id));
       });
     }));

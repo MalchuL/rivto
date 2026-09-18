@@ -24,16 +24,15 @@ import { createBlockViewContext, dispatchViewAction } from "../../../../../views
  * @returns No value.
  */
 export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
-  const editor = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMergeForward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
     when: ({ raw: event, blockId }) =>
       isEditableKeyboardEvent(event) &&
-      !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, editor, blockId)),
+      !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, reactEditor, blockId)),
   }, ({ root, blockId }) => {
-    const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, editor, blockId));
-    const block = target?.collapsed ? editor.blocks.getBlock(target.blockId) : undefined;
+    const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, reactEditor, blockId));
+    const block = target?.collapsed ? reactEditor.blocks.getBlock(target.blockId) : undefined;
     if (!target?.collapsed || !block || target.offset !== block.content.length) return false;
     const context = createBlockViewContext(reactEditor, target.blockId, root, reactEditor.selection.get());
     if (!context) return false;

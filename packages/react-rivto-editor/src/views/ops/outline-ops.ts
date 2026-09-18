@@ -20,10 +20,9 @@ import { getBlockContainment } from "../../managers/blocks/block-types";
  * @returns Parent containment, or `undefined` at the root or without metadata.
  */
 function parentContainment(reactEditor: ReactEditor, id: string) {
-  const editor = reactEditor;
-  const parentId = editor.blocks.getParentId(id);
-  const parentType = parentId ? editor.blocks.getBlock(parentId)?.type : undefined;
-  return parentType ? getBlockContainment(editor.blocks.getDefinition(parentType)) : undefined;
+  const parentId = reactEditor.blocks.getParentId(id);
+  const parentType = parentId ? reactEditor.blocks.getBlock(parentId)?.type : undefined;
+  return parentType ? getBlockContainment(reactEditor.blocks.getDefinition(parentType)) : undefined;
 }
 
 /**
@@ -63,11 +62,10 @@ export function outdentBlocks(reactEditor: ReactEditor, ids: readonly string[]):
  * @returns Nothing; the block stays at the last successful depth.
  */
 export function outdentUntilBoundary(reactEditor: ReactEditor, id: string): void {
-  const editor = reactEditor;
-  let parentId = editor.blocks.getParentId(id);
+  let parentId = reactEditor.blocks.getParentId(id);
   while (parentId) {
     outdentBlocks(reactEditor, [id]);
-    const next = editor.blocks.getParentId(id);
+    const next = reactEditor.blocks.getParentId(id);
     if (next === parentId) break;
     parentId = next;
   }
@@ -84,12 +82,11 @@ export function outdentUntilBoundary(reactEditor: ReactEditor, id: string): void
  * @returns Identifier of the inserted writing block.
  */
 export function insertFirstChild(reactEditor: ReactEditor, parentId: string): string {
-  const editor = reactEditor;
   let childId = "";
-  editor.batchUpdates(() => {
+  reactEditor.history.batchUpdates(() => {
     reactEditor.blocks.updateBlock(parentId, { listProps: { collapsed: false } });
     childId = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock());
-    editor.blocks.moveBlocks([childId], parentId, "inside");
+    reactEditor.blocks.moveBlocks([childId], parentId, "inside");
     reactEditor.selection.set(createCaretSelection(childId, 0));
   });
   return childId;
@@ -112,14 +109,13 @@ export function convertLeafToContainer(
   blockId: string,
   input: EditorBlockInput,
 ): void {
-  const editor = reactEditor;
-  const block = editor.blocks.getBlock(blockId);
+  const block = reactEditor.blocks.getBlock(blockId);
   if (!block || block.children.length) return;
-  editor.batchUpdates(() => {
+  reactEditor.history.batchUpdates(() => {
     const templateId = reactEditor.blocks.insertBlock(input, blockId);
-    const childIds = editor.blocks.getBlock(templateId)?.children.map((child) => child.id) ?? [];
-    editor.blocks.setBlockType(blockId, input.type);
-    if (childIds.length) editor.blocks.moveBlocks(childIds, blockId, "inside");
-    editor.blocks.removeBlock(templateId);
+    const childIds = reactEditor.blocks.getBlock(templateId)?.children.map((child) => child.id) ?? [];
+    reactEditor.blocks.setBlockType(blockId, input.type);
+    if (childIds.length) reactEditor.blocks.moveBlocks(childIds, blockId, "inside");
+    reactEditor.blocks.removeBlock(templateId);
   });
 }

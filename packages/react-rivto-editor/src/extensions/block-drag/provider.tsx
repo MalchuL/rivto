@@ -93,7 +93,6 @@ export function PageDragProvider({
   allowChildPlacement = true,
 }: PageDragExtensionOptions) {
   const reactEditor = useReactEditor();
-  const editor = reactEditor;
   const { element: root } = useEditorRoot();
   const activeMove = useRef<SelectedMoveRoots | undefined>(undefined);
   const crossDocumentTarget = useRef<{
@@ -112,12 +111,12 @@ export function PageDragProvider({
     useSensor(KeyboardSensor),
   );
   const activeBlocks = activeIds.flatMap((id) => {
-    const block = editor.blocks.getBlock(id);
+    const block = reactEditor.blocks.getBlock(id);
     return block ? [block] : [];
   });
 
   useLayoutEffect(() => {
-    if (!root || editor.mode.get() !== "block") return;
+    if (!root || reactEditor.mode.get() !== "block") return;
     const controller: CrossDocumentPageRootController = {
       reactEditor,
       root,
@@ -145,7 +144,7 @@ export function PageDragProvider({
       root.removeAttribute(CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE);
       root.removeAttribute("data-drop-empty");
     };
-  }, [allowChildPlacement, childDropIndent, editor, gapDropZone, placements, reactEditor, root]);
+  }, [allowChildPlacement, childDropIndent, reactEditor, gapDropZone, placements, reactEditor, root]);
 
   // A gesture abandoned by unmounting still owns a document listener.
   useLayoutEffect(() => () => {
@@ -165,7 +164,7 @@ export function PageDragProvider({
   };
 
   const updateCrossDocumentTarget = (): boolean => {
-    if (editor.mode.get() !== "block") return false;
+    if (reactEditor.mode.get() !== "block") return false;
     const pointer = pointerTracker.current?.get() ?? null;
     const controller = pointer ? findCrossDocumentPageController(root, pointer) : null;
     let handled = false;
@@ -191,10 +190,10 @@ export function PageDragProvider({
 
   /** Removes feedback for targets owned by any currently moved subtree. */
   const validPlacement = (event: DragMoveEvent): DropPlacement | null => {
-    const zoom = editor.mode.get() === "edgeless"
+    const zoom = reactEditor.mode.get() === "edgeless"
       ? Number(root?.dataset.edgelessZoom) || 1
       : 1;
-    const blocks = dragBlocks.current ?? editor.blocks.getBlocks();
+    const blocks = dragBlocks.current ?? reactEditor.blocks.getBlocks();
     const pointer = pointerTracker.current?.get() ?? null;
     const targetedEvent = pointer
       ? withPointerDropTarget(event, pointer, root, reactEditor, draggedSubtreeIds.current)
@@ -227,16 +226,16 @@ export function PageDragProvider({
     clearCrossDocumentTarget();
     stopPointerTracking();
     pointerTracker.current = trackGesturePointer(activatorEvent);
-    const blocks = editor.blocks.getBlocks();
+    const blocks = reactEditor.blocks.getBlocks();
     const move = selectedMoveRoots(
       blocks,
-      editor.selection.get(),
+      reactEditor.selection.get(),
       String(active.id),
       (block) => reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true,
     );
     const subtreeIds = new Set<string>();
     move.ids.forEach((id) => {
-      const block = editor.blocks.getBlock(id);
+      const block = reactEditor.blocks.getBlock(id);
       if (block) collectSubtreeIds(block, subtreeIds);
     });
     dragBlocks.current = excludeDropSubtrees(blocks, new Set(move.ids));
@@ -270,7 +269,7 @@ export function PageDragProvider({
       let transferred = false;
       try {
         crossDocumentBlockTransfer(
-          editor,
+          reactEditor,
           crossDocument.controller.reactEditor,
           move.ids,
           crossDocument.placement,
@@ -280,7 +279,7 @@ export function PageDragProvider({
         transferred = false;
       }
       if (transferred) {
-        editor.selection.clear();
+        reactEditor.selection.clear();
         const firstId = move.ids[0]!;
         const lastId = move.ids.at(-1)!;
         crossDocument.controller.reactEditor.selection.set(
@@ -293,11 +292,11 @@ export function PageDragProvider({
       // Persisted parent constraints can reject a structural destination.
       // Refuse the drop instead of leaving an uncaught gesture error.
       try {
-        editor.blocks.moveBlocks(move.ids, targetId, position);
+        reactEditor.blocks.moveBlocks(move.ids, targetId, position);
         const selection = move.grouped && move.selection
           ? move.selection
           : createStructuralSelection([move.ids[0]!]);
-        editor.selection.set(selection);
+        reactEditor.selection.set(selection);
         requestAnimationFrame(() => root?.focus({ preventScroll: true }));
       } catch {
         requestAnimationFrame(() => root?.focus({ preventScroll: true }));

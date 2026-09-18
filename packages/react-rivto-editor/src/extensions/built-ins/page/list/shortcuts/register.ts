@@ -57,7 +57,7 @@ export function registerListShortcuts(reactEditor: ReactEditor): void {
     root: HTMLElement,
     shortcut: ListShortcutPatch,
   ): void => {
-    reactEditor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       reactEditor.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
       reactEditor.selection.set(createCaretSelection(blockId, 0));
     });

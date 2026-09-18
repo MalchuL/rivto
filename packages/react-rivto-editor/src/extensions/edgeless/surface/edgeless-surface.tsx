@@ -82,7 +82,6 @@ export function EdgelessSurface({
   readonly avoidBlockElementOverlap?: boolean;
   readonly blockElementWidth?: number;
 }) {
-  const editor = useReactEditor();
   const reactEditor = useReactEditor();
   const rootIds = useRootBlockIds();
   const blockElements = useElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
@@ -256,19 +255,19 @@ export function EdgelessSurface({
       y,
     };
     const frame = avoidBlockElementOverlap
-      ? nonOverlappingBlockFrame(preferredFrame, editor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
+      ? nonOverlappingBlockFrame(preferredFrame, reactEditor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
       : preferredFrame;
-    const roots = editor.blocks.getBlocks();
-    const zIndex = Math.max(0, ...editor.elements.getElements().map((element) => element.zIndex)) + 1;
+    const roots = reactEditor.blocks.getBlocks();
+    const zIndex = Math.max(0, ...reactEditor.elements.getElements().map((element) => element.zIndex)) + 1;
     let id = "";
-    editor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       let afterId = roots.at(-1)?.id;
       const last = roots.at(-1);
       if (last && !reactEditor.blocks.separatesBlockElements(last.type)) {
         afterId = insertBlockElementSeparator(reactEditor, last.id);
       }
       id = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock(), afterId);
-      editor.elements.insertElement({
+      reactEditor.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame,
         zIndex,

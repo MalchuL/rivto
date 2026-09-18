@@ -426,7 +426,7 @@ function createDemoEditor() {
       const block = editor.blocks.getBlock(id);
       return block ? [block] : [];
     });
-    editor.batchUpdates(() => {
+    editor.history.batchUpdates(() => {
       let afterId = editor.blocks.getRootIds().at(-1);
       for (let index = 0; index < repeatCount; index += 1) {
         afterId = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, afterId);
@@ -592,8 +592,8 @@ function DemoToolbar({
           <button type="button" data-editor-mode="block" aria-pressed={mode === "block"} onClick={() => switchMode("block")}>Page</button>
           <button type="button" data-editor-mode="edgeless" aria-pressed={mode === "edgeless"} onClick={() => switchMode("edgeless")}>Edgeless</button>
         </div>
-        <button type="button" data-editor-action="delete" onClick={() => editor.deleteSelection()}>Delete</button>
-        <button type="button" data-editor-action="undo" onClick={() => editor.undo()}>Undo</button>
+        <button type="button" data-editor-action="delete" onClick={() => editor.selection.delete()}>Delete</button>
+        <button type="button" data-editor-action="undo" onClick={() => editor.history.undo()}>Undo</button>
         <label>
           Restore report
           <input
@@ -641,7 +641,7 @@ function JournalDemoApp() {
       <div className="journal-stack">
         {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
         <section className="journal-document" data-journal-document="today">
-          <EditorView editor={todayEditor.reactEditor}>
+          <EditorView reactEditor={todayEditor.reactEditor}>
             <DemoToolbar
               editor={todayEditor.editor}
               showBlockIds={showBlockIds}
@@ -653,7 +653,7 @@ function JournalDemoApp() {
           </EditorView>
         </section>
         <section className="journal-document" data-journal-document="yesterday">
-          <EditorView editor={yesterdayEditor.reactEditor}>
+          <EditorView reactEditor={yesterdayEditor.reactEditor}>
             <JournalDate date={dates.yesterday} />
           </EditorView>
         </section>
@@ -756,7 +756,7 @@ function MultiEditorPane({
     // `data-multi-editor` is used by e2e to scope left/right locators.
     <section className="multi-editor-pane" data-multi-editor={side}>
       <BlockIdsVisibleProvider visible={showBlockIds}>
-        <EditorView editor={runtime.reactEditor}>
+        <EditorView reactEditor={runtime.reactEditor}>
           <DemoToolbar editor={runtime.editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
           <RevisionsPanel />
           <DocumentStateDump editor={runtime.editor} />
@@ -873,7 +873,7 @@ function SyncEditorsApp() {
           // `data-editor-sync` is used by e2e to scope sync panes.
           <section key={side} className="multi-editor-pane" data-editor-sync={side}>
             <BlockIdsVisibleProvider visible={showBlockIds}>
-              <EditorView editor={peers[side].reactEditor}>
+              <EditorView reactEditor={peers[side].reactEditor}>
                 <DemoToolbar editor={peers[side].editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
                 <RevisionsPanel />
               </EditorView>

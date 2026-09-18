@@ -75,7 +75,7 @@ test("saves a slash-created Review report and reproduces it with native load", a
       const core = (window as unknown as {
         __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
-      core.undo();
+      core.history.undo();
       const props = core.blocks.getBlock(id)?.props;
       if (props?.snapshot !== null || props.savedAt !== null) {
         throw new Error("Review Save was not reverted as one undo item");

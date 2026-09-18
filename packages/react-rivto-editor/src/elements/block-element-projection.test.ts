@@ -86,7 +86,7 @@ describe("edgeless block element reconciliation", () => {
     await Promise.resolve();
     expect(ranges(editor)).toEqual([[first], [last]]);
 
-    editor.undo();
+    editor.history.undo();
     await Promise.resolve();
     expect(editor.blocks.getBlock(separator)).toBeUndefined();
     expect(ranges(editor)).toEqual([[first, last]]);
@@ -258,7 +258,7 @@ describe("edgeless block element reconciliation", () => {
     editor.elements.insertElement({ id: "right-card", type: "block", frame: { x: 500, y: 200, width: 400, height: 180 }, zIndex: 2, props: { startBlockId: rightFirst, endBlockId: rightLast } });
     reconcileBlockElements(reactEditor);
 
-    editor.batchUpdates(() => {
+    editor.history.batchUpdates(() => {
       editor.blocks.moveBlocks([rightFirst, rightLast], leftIds[2]!, "after");
       editor.blocks.moveBlock(separator, rightLast, "after");
     });
@@ -279,8 +279,8 @@ describe("edgeless block element reconciliation", () => {
       editor,
       extensions: [{
         id: "custom-separator",
-        setup: (runtime) => {
-          runtime.blocks.register({
+        setup: (reactEditor) => {
+          reactEditor.blocks.register({
             definition: { type: "test.separator" },
             render: () => null,
             separatesBlockElements: true,

@@ -89,13 +89,13 @@ export function crossDocumentBlockTransfer(
   placement: CrossDocumentBlockTransferPlacement,
 ): void {
   const bundle = createCrossDocumentBlockTransferBundle(source, destination, rootIds, placement);
-  destination.batchUpdates(() => {
+  destination.history.batchUpdates(() => {
     const insertedIds = bundle.blocks.map((block) => destination.blocks.insertBlock(block));
     if (placement.targetId !== null) {
       destination.blocks.moveBlocks(insertedIds, placement.targetId, placement.position);
     }
   });
-  source.batchUpdates(() => {
+  source.history.batchUpdates(() => {
     rootIds.forEach((id) => source.blocks.removeBlock(id));
   });
 }

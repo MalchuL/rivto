@@ -16,7 +16,7 @@ Editor runtime соединяет versioned document snapshots с local history 
 - **Возвращает:** `void`.
 - **Исключения:** command отсутствует, invalid command payload, validation supplied sections, manager или CRDT write errors.
 
-Built-in `document.load` заменяет только supplied sections, затем вызывает `history.clear()`. Поэтому state до load нельзя вернуть через `editor.undo()`.
+Built-in `document.load` заменяет только supplied sections, затем вызывает `history.clear()`. Поэтому state до load нельзя вернуть через `editor.history.undo()`.
 
 Public TypeScript shape и runtime loader требуют `version: 6`. Другая версия отклоняется до document mutations.
 
@@ -31,7 +31,7 @@ editor.load({
 
 В примере links, elements и pluginData не меняются.
 
-## `undo()` и `redo()`
+## `history.undo()` и `history.redo()`
 
 - **Аргументы:** отсутствуют.
 - **Возвращают:** `void`.
@@ -39,7 +39,7 @@ editor.load({
 
 History отслеживает собранные managers CRDT scopes только с приватным runtime origin. Remote updates и mutations с другим origin не становятся локальными history items.
 
-Standalone document commands разделяются через `documentCommand()`. `batchUpdates()` объединяет несколько commands в один capture step.
+Standalone document commands разделяются через `documentCommand()`. `history.batchUpdates()` объединяет несколько commands в один capture step.
 
 ## `destroy()` порядок
 

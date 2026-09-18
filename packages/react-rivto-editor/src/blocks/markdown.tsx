@@ -69,15 +69,15 @@ export function MarkdownContent({
   readonly blockId: string;
   readonly onLinkClick?: (context: MarkdownLinkClick) => void;
 }) {
-  const editor = useReactEditor();
+  const reactEditor = useReactEditor();
   const editing = useBlockEditing(blockId);
   const [isEditing, setIsEditing] = useState(false);
   const source = editing.block?.content ?? "";
 
   const updateCode = useCallback((node: PositionedNode, value: string) => {
-    const current = editor.blocks.getBlock(blockId)?.content ?? "";
-    editor.blocks.updateBlock(blockId, { content: replaceMarkdownCode(current, node, value) });
-  }, [blockId, editor]);
+    const current = reactEditor.blocks.getBlock(blockId)?.content ?? "";
+    reactEditor.blocks.updateBlock(blockId, { content: replaceMarkdownCode(current, node, value) });
+  }, [blockId, reactEditor]);
   const transformUrl = useCallback<UrlTransform>((url) => {
     const safe = defaultUrlTransform(url);
     if (safe || !onLinkClick) return safe;

@@ -5,13 +5,13 @@ import { blockIdsOf } from "../../elements/block-element-projection";
 import { isStructuralSelection } from "@chulane/rivto";
 
 /** Removes selected descendants whose selected ancestor already owns them. */
-function topLevelSelection(editor: ReactEditor, blockIds: readonly string[]): string[] {
+function topLevelSelection(reactEditor: ReactEditor, blockIds: readonly string[]): string[] {
   const selected = new Set(blockIds);
   return blockIds.filter((id) => {
-    let parentId = editor.blocks.getParentId(id);
+    let parentId = reactEditor.blocks.getParentId(id);
     while (parentId) {
       if (selected.has(parentId)) return false;
-      parentId = editor.blocks.getParentId(parentId);
+      parentId = reactEditor.blocks.getParentId(parentId);
     }
     return true;
   });
@@ -19,7 +19,6 @@ function topLevelSelection(editor: ReactEditor, blockIds: readonly string[]): st
 
 /** Deletes selected blocks, including nested blocks, as one structural transaction. */
 export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
-  const editor = reactEditor;
   const selection = getEdgelessRuntime(reactEditor);
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.edgelessSelectionDelete,
@@ -36,29 +35,29 @@ export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
   }, ({ root }) => {
     const canvas = selection.get();
     let handled = false;
-    if (canvas.active && canvas.items.length && editor.commands.has("edgeless.visual.delete")) {
-      editor.commands.execute("edgeless.visual.delete", { selection: true });
+    if (canvas.active && canvas.items.length && reactEditor.commands.has("edgeless.visual.delete")) {
+      reactEditor.commands.execute("edgeless.visual.delete", { selection: true });
       root.focus({ preventScroll: true });
       handled = true;
     } else {
-      const current = editor.selection.get();
+      const current = reactEditor.selection.get();
       const core = isStructuralSelection(current) ? current : undefined;
       const blockIds = canvas.active && canvas.items.length
         ? canvas.items.flatMap((id) => {
-          const element = editor.elements.getElement(id);
-          return element?.type === "block" ? blockIdsOf(element, editor.blocks.getRootIds()) : [];
+          const element = reactEditor.elements.getElement(id);
+          return element?.type === "block" ? blockIdsOf(element, reactEditor.blocks.getRootIds()) : [];
         })
         : core?.blocks.map((block) => block.id) ?? [];
-      const targets = topLevelSelection(editor, blockIds);
+      const targets = topLevelSelection(reactEditor, blockIds);
       if (targets.length) {
         if (canvas.active && canvas.items.length) {
-          editor.batchUpdates(() => {
-            targets.forEach((id) => editor.blocks.removeBlock(id));
-            editor.elements.removeElements(canvas.items);
+          reactEditor.history.batchUpdates(() => {
+            targets.forEach((id) => reactEditor.blocks.removeBlock(id));
+            reactEditor.elements.removeElements(canvas.items);
           });
           selection.clear();
         } else {
-          editor.selection.delete();
+          reactEditor.selection.delete();
         }
         root.focus({ preventScroll: true });
         requestAnimationFrame(() => root.focus({ preventScroll: true }));

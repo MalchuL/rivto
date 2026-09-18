@@ -3,11 +3,11 @@ import { useEditorContext } from "../../editor-context";
 
 /** Returns the stable ordered root IDs, updating only when root structure changes. */
 export function useRootBlockIds(): readonly string[] {
-  const { reactEditor: editor } = useEditorContext();
+  const { reactEditor } = useEditorContext();
   const subscribe = useCallback(
-    (listener: () => void) => editor.blocks.subscribeRootIds(listener),
-    [editor],
+    (listener: () => void) => reactEditor.blocks.subscribeRootIds(listener),
+    [reactEditor],
   );
-  const getSnapshot = useCallback(() => editor.blocks.getRootIds(), [editor]);
+  const getSnapshot = useCallback(() => reactEditor.blocks.getRootIds(), [reactEditor]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

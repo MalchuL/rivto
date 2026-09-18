@@ -24,7 +24,6 @@ import { createBlockViewContext, dispatchViewAction } from "../../../../views";
  * @returns Nothing; the binding is owned by the extension lifecycle.
  */
 export function registerBlockCreation(reactEditor: ReactEditor): void {
-  const editor = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockCreate,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,
@@ -41,7 +40,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
     let claimed = false;
     // Selection deletion, text splitting, insertion, and nesting share one CRDT
     // transaction, so Enter is one collaborative update and one undo step.
-    editor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       let target = initialTarget;
       if (shouldDeleteSelection(selection)) {
         reactEditor.selection.delete();

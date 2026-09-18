@@ -11,8 +11,8 @@ describe("ExtensionManager", () => {
     const released: string[] = [];
     expect(() => reactEditor.extensions.install({
       id: "failing.setup",
-      setup: (runtime) => {
-        runtime.extensions.mount(Mounted);
+      setup: (reactEditor) => {
+        reactEditor.extensions.mount(Mounted);
         released.push("mounted");
         throw new Error("setup failed");
       },
@@ -27,8 +27,8 @@ describe("ExtensionManager", () => {
     });
     reactEditor.extensions.install({
       id: "later",
-      setup: (runtime) => {
-        runtime.extensions.mount(Mounted, "afterSurface");
+      setup: (reactEditor) => {
+        reactEditor.extensions.mount(Mounted, "afterSurface");
       },
     });
     expect(reactEditor.extensions.getComponents("afterSurface")).toEqual([Mounted]);

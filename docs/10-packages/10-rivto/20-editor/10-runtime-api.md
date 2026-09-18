@@ -56,7 +56,7 @@
 
 ### `history`
 
-- **Тип:** `UndoManager`, публичное `readonly`.
+- **Тип:** `HistoryManager`, публичное `readonly`.
 - **Значение:** local-origin undo/redo history document scopes.
 - **Исключения при чтении:** отсутствуют.
 
@@ -90,12 +90,6 @@
 
 - **Тип:** `number`, приватное; initial `0`.
 - **Значение:** backing value getter `revision`.
-- **Исключения при чтении:** отсутствуют.
-
-### `batchDepth`
-
-- **Тип:** `number`, приватное; initial `0`.
-- **Значение:** nesting depth explicit batch. Положительное значение отключает отдельные history boundaries nested document commands.
 - **Исключения при чтении:** отсутствуют.
 
 ## Создание
@@ -152,41 +146,13 @@ Host заранее создаёт `DocumentModel`. Default mode — `"block"`. 
 - **Возвращает:** idempotent unsubscribe.
 - **Не уведомляет:** `clear()` при уже пустой selection; initial selection читается через `get()`.
 
-### `batchUpdates(operation)`
+### `history.batchUpdates(operation)`
 
 - **Аргументы:** synchronous `operation: () => Result`.
 - **Возвращает:** generic `Result`, возвращённый callback.
 - **Исключения:** передаёт исходное исключение operation и transaction/history errors; rollback не выполняется.
 
-Outermost batch вызывает `history.stopCapturing()` до и после, а callback выполняет через `document.transact()`. Nested batch сразу вызывает callback внутри текущей boundary.
-
-### `register(name, handler)`
-
-- **Аргументы:** непустой unique `name: string`; `handler: CommandHandler`.
-- **Возвращает:** `RegisteredCommand` ownership handle.
-- **Исключения:** `Error("Command name is required")` или `Error("Command <name> is already registered")`.
-
-### `execute(name, payload?)`
-
-- **Аргументы:** command `name: string`; optional `payload: unknown`.
-- **Возвращает:** `unknown`, фактический result handler.
-- **Исключения:** `Error("Unknown command <name>")` или исходное исключение handler.
-
-Successful execution обновляет `commands.lastExecuted` и уведомляет command subscribers, но общий editor revision меняется только если соответствующее состояние также вызвало runtime notification.
-
-### `removeCommand(name)`
-
-- **Аргументы:** command `name: string`.
-- **Возвращает:** `void`.
-- **Исключения:** отсутствуют; missing name безопасен.
-
-Удаление built-in command разрешено. После этого соответствующий convenience method может выбросить `Unknown command`.
-
-### `deleteSelection()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** errors command `selection.delete`; `Unknown command`, если registration удалена.
+Outermost batch вызывает `stopCapturing()` до и после и выполняет callback в одной CRDT transaction. Nested batch сразу вызывает callback внутри текущей boundary.
 
 ### `load(snapshot)`
 
@@ -203,18 +169,6 @@ Successful execution обновляет `commands.lastExecuted` и уведом�
 - **Аргументы:** отсутствуют.
 - **Возвращает:** complete detached `EditorSnapshot` schema version 6.
 - **Исключения:** document materialization/validation/conversion errors.
-
-### `undo()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** unknown `history.undo` command или CRDT undo errors.
-
-### `redo()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** unknown `history.redo` command или CRDT redo errors.
 
 ### `destroy()`
 

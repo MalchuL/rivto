@@ -30,4 +30,4 @@ export {
   validateElementCollection,
 } from "./element-manager";
 export { DocumentPluginDataManager } from "./plugin-data-manager";
-export { DocumentUndoManager } from "./undo-manager";
+export { DocumentHistoryManager } from "./history-manager";

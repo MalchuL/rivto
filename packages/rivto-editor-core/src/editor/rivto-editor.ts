@@ -1,7 +1,7 @@
 /**
  * Editor runtime coordinating document mutations and focused public managers.
  */
-import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
+import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, HistoryManager, ModeManager, SelectionManager } from "../managers";
 import {
   type Block,
   type DocumentModel,
@@ -20,7 +20,7 @@ import { Listeners } from "../utils";
  *
  * Block APIs live exclusively on `.blocks`. The runtime
  * owns cross-cutting commands, selection, history, mode, subscriptions,
- * batching, clipboard bridges, and the shared revision stream.
+ * clipboard bridges, and the shared revision stream.
  */
 export class EditorRuntime implements RivtoEditorApi {
   /** Collaborative block, element, and snapshot storage owned by this runtime. */
@@ -31,14 +31,14 @@ export class EditorRuntime implements RivtoEditorApi {
   readonly blocksRegistry: BlockRegistryManager;
   /** Public owner of first-class canvas element commands. */
   readonly elements: ElementManager;
-  /** Named command handlers exposed to integrations and typed runtime methods. */
+  /** Named command handlers exposed to integrations and focused managers. */
   readonly commands = new CommandRegistry();
   /** Local presentation mode shared by views of this runtime. */
   readonly mode: ModeManager;
   /** Local text and structural selection state; never persisted to the document. */
   readonly selection: SelectionManager;
-  /** Local Yjs undo/redo history for document changes made through this runtime. */
-  readonly history: UndoManager;
+  /** Local history and transaction batching for document changes. */
+  readonly history: HistoryManager;
   /** Framework-neutral structured and plain-text clipboard operations. */
   readonly clipboard: ClipboardManager;
   /** Named subscribers notified whenever public runtime state changes. */
@@ -56,7 +56,7 @@ export class EditorRuntime implements RivtoEditorApi {
   constructor(options: CreateRivtoEditorOptions) {
     this.document = options.document;
     this.mode = new ModeManager(options.mode ?? "block");
-    this.history = new UndoManager(this.document.history);
+    this.history = new HistoryManager(this.document.history);
     this.blocksRegistry = new BlockRegistryManager();
     const unsubscribeFromBlockRegistryChanges = this.blocksRegistry.subscribe(() => this.notifyChanges());
     this.unsubscribeFns.push(unsubscribeFromBlockRegistryChanges);
@@ -109,76 +109,6 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Groups synchronous editor mutations into one collaborative update and undo step.
-   *
-   * The outermost call owns the CRDT transaction and history boundaries.
-   * Nested calls reuse that active batch, so helpers can compose without
-   * publishing intermediate document revisions or creating extra undo items.
-   *
-   * This is a batching boundary, not a rollback mechanism. Yjs retains writes
-   * already made if `operation` throws; the original error is still propagated.
-   *
-   * @param operation - Synchronous editor work to execute inside the batch.
-   * @returns The value returned by `operation`.
-   * @throws The original error when `operation` fails.
-   */
-  batchUpdates<Result>(operation: () => Result): Result {
-    return this.document.batchUpdates(operation);
-  }
-
-  /**
-   * Groups synchronous mutations into one transaction excluded from undo history.
-   *
-   * @param operation - Synchronous editor work to execute without an undo item.
-   * @returns Value returned by the operation.
-   */
-  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result {
-    return this.document.batchUpdatesWithoutHistory(operation);
-  }
-
-  /**
-   * Registers one command on this runtime.
-   *
-   * @param name - Unique, non-empty command ID.
-   * @param handler - Runtime command implementation.
-   * @returns Ownership handle for this exact registration.
-   */
-  register(name: string, handler: CommandHandler): RegisteredCommand {
-    return this.commands.register(name, handler);
-  }
-
-  /**
-   * Executes a registered runtime command.
-   *
-   * @param name - Command ID to execute.
-   * @param payload - Optional runtime payload passed to the handler.
-   * @returns The command handler result.
-   */
-  execute(name: string, payload?: unknown): unknown {
-    return this.commands.execute(name, payload);
-  }
-
-  /**
-   * Removes a command from this runtime by name.
-   *
-   * @param name - Command ID to remove.
-   * @returns No value.
-   */
-  removeCommand(name: string): void {
-    this.commands.remove(name);
-  }
-
-  /**
-   * Deletes the complete active selection as one undoable operation.
-   *
-   * Text boundaries are preserved according to SelectionManager normalization.
-   * @returns No value.
-   */
-  deleteSelection(): void {
-    this.execute("selection.delete");
-  }
-
-  /**
    * Replaces supplied document sections from a snapshot v6 update.
    *
    * Loading establishes a new history baseline, so earlier local changes
@@ -189,7 +119,7 @@ export class EditorRuntime implements RivtoEditorApi {
    */
   load(snapshot: EditorSnapshotUpdate): void {
     const command = { snapshot } satisfies { snapshot: SnapshotUpdate };
-    this.execute("document.load", command);
+    this.commands.execute("document.load", command);
   }
 
   /**
@@ -200,24 +130,6 @@ export class EditorRuntime implements RivtoEditorApi {
   dump(): EditorSnapshot {
     const snapshot = this.document.getSnapshot() satisfies Snapshot;
     return snapshot satisfies EditorSnapshot;
-  }
-
-  /**
-   * Reverts the latest captured local document operation.
-   *
-   * Remote collaborator updates are not part of this editor's undo history.
-   * @returns No value.
-   */
-  undo(): void {
-    this.execute("history.undo");
-  }
-
-  /**
-   * Reapplies the latest locally undone document operation.
-   * @returns No value.
-   */
-  redo(): void {
-    this.execute("history.redo");
   }
 
   /**

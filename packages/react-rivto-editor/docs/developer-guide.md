@@ -45,7 +45,7 @@ const reactEditor = createReactEditor({
   ],
 });
 
-root.render(<EditorView editor={reactEditor} />);
+root.render(<EditorView reactEditor={reactEditor} />);
 
 // Host teardown:
 reactEditor.destroy();
@@ -146,7 +146,7 @@ editor.getParentId(id);
 ```
 
 Never walk `editor.getBlocks()` to find one ID and never mutate a snapshot.
-Use `editor.batchUpdates(() => { ... })` when several editor operations must
+Use `editor.history.batchUpdates(() => { ... })` when several editor operations must
 produce one collaborative update and one undo step.
 
 ## Rendering and subscriptions

@@ -183,7 +183,7 @@ function TodoStorageState({ block, children }: BlockWrapperProps) {
     const desired = orderTodoStorageChildren(block.children, props.statusOrder);
     const current = block.children.map(({ id }) => id);
     if (desired.some((id, index) => id !== current[index])) {
-      reactEditor.batchUpdates(() => {
+      reactEditor.history.batchUpdates(() => {
         desired.forEach((id, index) => {
           reactEditor.blocks.moveBlock(id, index ? desired[index - 1]! : null);
         });

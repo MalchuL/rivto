@@ -22,7 +22,7 @@ export function useDOMEvent<
   definition: DOMEventDefinition<Target, Type>,
   listener: EditorEventHandler<EditorEvent<Target, Type>>,
 ): void {
-  const editor = useReactEditor();
+  const reactEditor = useReactEditor();
   const definitionRef = useRef(definition);
   const listenerRef = useRef(listener);
   definitionRef.current = definition;
@@ -35,7 +35,7 @@ export function useDOMEvent<
   const passive = definition.passive;
   const type = definition.type;
 
-  useEffect(() => editor.events.register({
+  useEffect(() => reactEditor.events.register({
     ...definitionRef.current,
     when: (event) => definitionRef.current.when?.(event) ?? true,
   },
@@ -43,7 +43,7 @@ export function useDOMEvent<
   ), [
     capture,
     definition.id,
-    editor,
+    reactEditor,
     modeKey,
     passive,
     scope,

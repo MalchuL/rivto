@@ -54,30 +54,30 @@ export interface UseBlockResult {
  * @throws If called outside an EditorView subtree.
  */
 export function useBlock(blockId: string): UseBlockResult {
-  const { reactEditor: editor } = useEditorContext();
+  const { reactEditor } = useEditorContext();
   const subscribe = useCallback(
-    (listener: () => void) => editor.blocks.subscribeBlock(blockId, listener),
-    [blockId, editor],
+    (listener: () => void) => reactEditor.blocks.subscribeBlock(blockId, listener),
+    [blockId, reactEditor],
   );
-  const getSnapshot = useCallback(() => editor.blocks.getBlock(blockId), [blockId, editor]);
+  const getSnapshot = useCallback(() => reactEditor.blocks.getBlock(blockId), [blockId, reactEditor]);
   const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   // Commands target the ID rather than the detached snapshot, so they always
   // operate on the latest document state. Memoization keeps their references
   // stable for consumers that pass them into memoized child components.
   const operations = useMemo<BlockOperations>(() => ({
-    update: (patch) => editor.blocks.updateBlock(blockId, patch),
-    setContent: (content) => editor.blocks.updateBlock(blockId, { content }),
-    setType: (type) => editor.blocks.setBlockType(blockId, type),
-    setProp: (key, value) => editor.blocks.setBlockProp(blockId, key, value),
-    setPluginData: (pluginId, value) => editor.blocks.setBlockPluginData(blockId, pluginId, value),
-    remove: () => editor.blocks.removeBlock(blockId),
-    mergeInto: (targetId) => editor.blocks.mergeBlocks(targetId, blockId),
-    moveAfter: (afterId) => editor.blocks.moveBlock(blockId, afterId),
-    moveBefore: (beforeId) => editor.blocks.moveBlock(blockId, beforeId, "before"),
-    moveInside: (parentId) => editor.blocks.moveBlock(blockId, parentId, "inside"),
-    indent: () => editor.blocks.indentBlock(blockId),
-    outdent: () => editor.blocks.outdentBlock(blockId),
-  }), [blockId, editor]);
+    update: (patch) => reactEditor.blocks.updateBlock(blockId, patch),
+    setContent: (content) => reactEditor.blocks.updateBlock(blockId, { content }),
+    setType: (type) => reactEditor.blocks.setBlockType(blockId, type),
+    setProp: (key, value) => reactEditor.blocks.setBlockProp(blockId, key, value),
+    setPluginData: (pluginId, value) => reactEditor.blocks.setBlockPluginData(blockId, pluginId, value),
+    remove: () => reactEditor.blocks.removeBlock(blockId),
+    mergeInto: (targetId) => reactEditor.blocks.mergeBlocks(targetId, blockId),
+    moveAfter: (afterId) => reactEditor.blocks.moveBlock(blockId, afterId),
+    moveBefore: (beforeId) => reactEditor.blocks.moveBlock(blockId, beforeId, "before"),
+    moveInside: (parentId) => reactEditor.blocks.moveBlock(blockId, parentId, "inside"),
+    indent: () => reactEditor.blocks.indentBlock(blockId),
+    outdent: () => reactEditor.blocks.outdentBlock(blockId),
+  }), [blockId, reactEditor]);
 
   return {
     block,

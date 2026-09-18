@@ -101,7 +101,7 @@ export class ClipboardManager {
     let context = this.createPasteContext(input);
     const placement: PastePlacement = input.placement ?? {};
     let caret: EditorPosition | undefined;
-    this.batchUpdates(() => {
+    this.editor.history.batchUpdates(() => {
       this.pasteStrategies.getPasteStrategies().forEach((strategy) => {
         if (!strategy.matches(context, placement)) return;
         const result = strategy.paste(context, placement);
@@ -121,11 +121,6 @@ export class ClipboardManager {
       });
     });
     return caret;
-  }
-
-  /** Runs one clipboard mutation inside the shared transaction boundary. */
-  private batchUpdates<Result>(operation: () => Result): Result {
-    return this.editor.batchUpdates(operation);
   }
 
   /**

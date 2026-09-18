@@ -19,7 +19,7 @@ Managers создаются до extensions. При ошибке setup уже с
 
 ### Properties
 
-- **`editor: ReactEditor`:** host-owned React runtime.
+- **`reactEditor: ReactEditor`:** host-owned React runtime.
 - **`children?: ReactNode`:** application chrome рядом с extension UI и surface.
 
 ### Вызов

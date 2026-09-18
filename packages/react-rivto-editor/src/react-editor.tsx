@@ -157,16 +157,6 @@ export class ReactEditorImpl implements ReactEditor {
     return this.editor.subscribe(listener);
   }
 
-  /** Groups synchronous core mutations into one transaction and undo item. */
-  batchUpdates<Result>(operation: () => Result): Result {
-    return this.editor.batchUpdates(operation);
-  }
-
-  /** Groups synchronous core mutations into one transaction excluded from undo history. */
-  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result {
-    return this.editor.batchUpdatesWithoutHistory(operation);
-  }
-
   /**
    * Releases React managers without destroying the core editor.
    *

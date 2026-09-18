@@ -278,13 +278,12 @@ export class EventManager implements EventsCapability {
     const contentElement = closestContent && root.contains(closestContent)
       ? closestContent
       : null;
-    const editor = this.reactEditor;
     return new EditorEvent({
       raw: raw as never,
-      editor,
+      reactEditor: this.reactEditor,
       root,
-      mode: editor.mode.get(),
-      selection: editor.selection.get(),
+      mode: this.reactEditor.mode.get(),
+      selection: this.reactEditor.selection.get(),
       eventTarget,
       insideRoot,
       blockElement,

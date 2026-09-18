@@ -12,7 +12,7 @@ createRivtoEditor(options)
     -> ElementManager + LinkManager
     -> CommandRegistry
     -> SelectionManager + ModeManager
-    -> ClipboardManager + UndoManager
+    -> ClipboardManager + HistoryManager
       -> React surfaces / extensions / host integrations
 ```
 

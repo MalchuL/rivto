@@ -242,14 +242,13 @@ export function insertBlockElementSeparator(reactEditor: ReactEditor, afterId: s
  * @returns No value; required element changes are committed synchronously.
  */
 export function reconcileBlockElements(reactEditor: ReactEditor): void {
-  const editor = reactEditor;
 
   // Build the two sides of the projection: current document roots and the
   // persisted canvas elements that render ranges of those roots as cards.
-  const roots = editor.blocks.getBlocks();
+  const roots = reactEditor.blocks.getBlocks();
   const rootOrder = roots.map((block) => block.id);
   const rootSet = new Set(rootOrder);
-  const existing = editor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
+  const existing = reactEditor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
   const currentRanges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
 
   // A moved range endpoint can temporarily make its persisted start/end pair
@@ -325,9 +324,9 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
   // limited to range boundaries so reconciliation never resets card geometry.
   const desiredIds = new Set(desired.map((element) => element.id));
   const remove = existing.filter((element) => !desiredIds.has(element.id)).map((element) => element.id);
-  const insert = desired.filter((element) => !editor.elements.getElement(element.id));
+  const insert = desired.filter((element) => !reactEditor.elements.getElement(element.id));
   const update = desired.flatMap((element) => {
-    const current = editor.elements.getElement(element.id);
+    const current = reactEditor.elements.getElement(element.id);
     return current && (current.props.startBlockId !== element.props.startBlockId || current.props.endBlockId !== element.props.endBlockId)
       ? [{ id: element.id, patch: { props: element.props } }]
       : [];
@@ -344,9 +343,9 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
   });
   if (!remove.length && !insert.length && !update.length) return;
 
-  editor.batchUpdatesWithoutHistory(() => {
-    if (remove.length) editor.elements.removeElements(remove);
-    insert.forEach((element) => editor.elements.insertElement(element));
-    if (update.length) editor.elements.updateElements(update);
+  reactEditor.history.batchUpdatesWithoutHistory(() => {
+    if (remove.length) reactEditor.elements.removeElements(remove);
+    insert.forEach((element) => reactEditor.elements.insertElement(element));
+    if (update.length) reactEditor.elements.updateElements(update);
   });
 }

@@ -76,8 +76,8 @@ Listener не получает snapshot или описание patch: это о
 
 ### `history`
 
-- **Тип:** `DocumentUndoManager`, публичное `readonly`-свойство.
-- **Значение:** focused undo/redo manager, уже настроенный на приватные scopes всех storage managers.
+- **Тип:** `DocumentHistoryManager`, публичное `readonly`-свойство.
+- **Значение:** focused history manager с batching, уже настроенный на приватные scopes всех storage managers.
 
 ### `getSnapshot()`
 

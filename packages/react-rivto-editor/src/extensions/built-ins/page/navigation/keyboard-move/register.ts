@@ -23,7 +23,6 @@ import { selectedMoveRoots } from "../utils/move-roots";
  * @returns No value.
  */
 export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
-  const editor = reactEditor;
   const isCollapsed = (block: EditorBlock) => (
     reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true
   );
@@ -33,11 +32,11 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
     const textLike = blocks && !isStructuralSelection(selection);
     const activeId = selection?.focusBlockId;
     if (!activeId) return false;
-    const outline = navigationOutlineBlocks(editor, activeId);
+    const outline = navigationOutlineBlocks(reactEditor, activeId);
     const roots = selectedMoveRoots(outline, selection, activeId, isCollapsed);
     const placement = keyboardMovePlacement(outline, roots.ids, direction, isCollapsed);
     if (!placement) return false;
-    editor.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
+    reactEditor.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
     if (roots.grouped && roots.selection) {
       reactEditor.selection.set(roots.selection);
     } else if (blocks) {

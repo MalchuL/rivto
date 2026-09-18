@@ -17,10 +17,20 @@ describe("DocumentPluginDataManager", () => {
     const exposesOrigin: "origin" extends keyof typeof document ? true : false = false;
     const exposesUndoScopes: "undoScopes" extends keyof typeof document ? true : false = false;
     const exposesUndoFactory: "createUndoManager" extends keyof typeof document ? true : false = false;
+    type RemovedBatching = Extract<
+      "batchUpdates" | "batchUpdatesWithoutHistory",
+      keyof typeof document
+    >;
+    const exposesBatching: Record<RemovedBatching, never> = {};
     expect(exposesCrdt).toBe(false);
     expect(exposesOrigin).toBe(false);
     expect(exposesUndoScopes).toBe(false);
     expect(exposesUndoFactory).toBe(false);
+    expect(exposesBatching).toEqual({});
+    expect(document).not.toHaveProperty("batchUpdates");
+    expect(document).not.toHaveProperty("batchUpdatesWithoutHistory");
+    expect(document.history.batchUpdates).toBeInstanceOf(Function);
+    expect(document.history.batchUpdatesWithoutHistory).toBeInstanceOf(Function);
     expect(document.history).toBeDefined();
   });
 
@@ -48,7 +58,7 @@ describe("DocumentPluginDataManager", () => {
     const crdt = new YjsDoc("plugin-data-undo");
     const document = new DocumentModelImpl(crdt);
     const history = document.history;
-    document.batchUpdates(() => document.pluginData.set("test", { value: 1 }));
+    document.transact(() => document.pluginData.set("test", { value: 1 }));
     history.stopCapturing();
     expect(document.pluginData.get("test")).toEqual({ value: 1 });
     history.undo();

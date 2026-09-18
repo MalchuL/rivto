@@ -174,7 +174,7 @@ export class EdgelessVisualController {
       this.emit();
       return;
     }
-    this.reactEditor.batchUpdates(() => {
+    this.reactEditor.history.batchUpdates(() => {
       entries.forEach(([id, patch]) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] }));
     });
     this.emit();
@@ -356,7 +356,7 @@ export class EdgelessVisualController {
   updateMany(ids: readonly string[], patch: Record<string, unknown>): void {
     const visuals = ids.map((id) => this.visual(id));
     if (!visuals.length || visuals.some((visual) => !visual || visual.kind !== visuals[0]!.kind)) throw new Error("Shared properties require one visual type");
-    this.reactEditor.batchUpdates(() => ids.forEach((id) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] })));
+    this.reactEditor.history.batchUpdates(() => ids.forEach((id) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] })));
   }
 
   /** Moves the complete active selection by a canvas delta. */
@@ -372,7 +372,7 @@ export class EdgelessVisualController {
     if (!bounds || width <= 0 || height <= 0 || bounds.width <= 0 || bounds.height <= 0) return;
     const scaleX = width / bounds.width;
     const scaleY = height / bounds.height;
-    this.reactEditor.batchUpdates(() => this.leaves(items).forEach((id) => {
+    this.reactEditor.history.batchUpdates(() => this.leaves(items).forEach((id) => {
       const frame = this.element(id)?.frame;
       if (!frame) return;
       const center = {
@@ -402,7 +402,7 @@ export class EdgelessVisualController {
     const groupParentId = [...parents][0];
     // Batch insert + parent rewrite so normalizeGroups never sees a child claimed by
     // both the old parent and the new nested group in the same pass.
-    const id = this.reactEditor.batchUpdates(() => {
+    const id = this.reactEditor.history.batchUpdates(() => {
       const created = this.reactEditor.elements.insertElement({
         type: "group",
         frame: bounds,
@@ -424,7 +424,7 @@ export class EdgelessVisualController {
   ungroup(): void {
     const selected = this.selection.get().items.filter((id) => this.element(id)?.type === "group");
     const children: string[] = [];
-    this.reactEditor.batchUpdates(() => selected.forEach((id) => {
+    this.reactEditor.history.batchUpdates(() => selected.forEach((id) => {
       const group = this.groupRecord(id);
       if (!group) return;
       children.push(...group.children);
@@ -443,7 +443,7 @@ export class EdgelessVisualController {
     const entries = this.selection.get().items.flatMap((id) => { const bounds = this.bounds(id); return bounds ? [{ id, bounds }] : []; });
     const outer = unionFrames(entries.map(({ bounds }) => bounds));
     if (!outer || entries.length < 2) return;
-    this.reactEditor.batchUpdates(() => entries.forEach(({ id, bounds }) => {
+    this.reactEditor.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
       const dx = mode === "left" ? outer.x - bounds.x : mode === "center" ? outer.x + outer.width / 2 - bounds.width / 2 - bounds.x : mode === "right" ? outer.x + outer.width - bounds.width - bounds.x : 0;
       const dy = mode === "top" ? outer.y - bounds.y : mode === "middle" ? outer.y + outer.height / 2 - bounds.height / 2 - bounds.y : mode === "bottom" ? outer.y + outer.height - bounds.height - bounds.y : 0;
       if (dx || dy) this.translate([id], dx, dy);
@@ -461,7 +461,7 @@ export class EdgelessVisualController {
     const span = axis === "horizontal" ? last.x + last.width - first.x : last.y + last.height - first.y;
     const gap = (span - occupied) / (entries.length - 1);
     let cursor = axis === "horizontal" ? first.x : first.y;
-    this.reactEditor.batchUpdates(() => entries.forEach(({ id, bounds }) => {
+    this.reactEditor.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
       const delta = cursor - (axis === "horizontal" ? bounds.x : bounds.y);
       if (delta) this.translate([id], axis === "horizontal" ? delta : 0, axis === "vertical" ? delta : 0);
       cursor += (axis === "horizontal" ? bounds.width : bounds.height) + gap;
@@ -508,7 +508,7 @@ export class EdgelessVisualController {
   deleteItems(items: readonly string[]): void {
     const selected = [...items];
     const leaves = this.leaves(selected);
-    this.reactEditor.batchUpdates(() => {
+    this.reactEditor.history.batchUpdates(() => {
       leaves.forEach((id) => {
         const element = this.element(id);
         if (element?.type === "block") blockIdsOf(element, this.reactEditor.blocks.getRootIds()).forEach((blockId) => this.reactEditor.blocks.removeBlock(blockId));
@@ -669,7 +669,7 @@ export class EdgelessVisualController {
     const sourceElements = bundle.elements.map((element) => this.validateElement(element));
     const selected = (bundle.selectedElementIds ?? []).flatMap((id) => elementMap.get(id) ?? []);
     let elements: EditorElement[] = [];
-    this.reactEditor.batchUpdates(() => {
+    this.reactEditor.history.batchUpdates(() => {
       const afterId = this.reactEditor.blocks.getBlocks().at(-1)?.id;
       const blockMap = this.reactEditor.blocks.importForest(bundle.blocks, afterId).idMap;
       elements = sourceElements.map((element): EditorElement => {
@@ -772,7 +772,7 @@ export class EdgelessVisualController {
   duplicateSelection(): EdgelessSelectionRef[] { const items = this.selection.get().items; if (!items.length) return []; this.pasteClipboardBundle(this.createClipboardBundle(items)); return [...this.selection.get().items]; }
 
   private translate(items: readonly string[], dx: number, dy: number): void {
-    this.reactEditor.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.element(id)?.frame; if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));
+    this.reactEditor.history.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.element(id)?.frame; if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));
   }
 
   private leaves(items: readonly string[], visited = new Set<string>()): string[] {

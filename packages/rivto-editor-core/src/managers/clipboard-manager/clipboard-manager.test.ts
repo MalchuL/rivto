@@ -22,7 +22,7 @@ describe("core ClipboardManager", () => {
     expect(editor.selection.get()).toMatchObject({
       blocks: [{ id: roots[1]!.id, start: 3, end: 3 }],
     });
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "BeforeAfter", children: [{ content: "Keep child" }] }]);
     editor.destroy();
   });
@@ -51,7 +51,7 @@ describe("core ClipboardManager", () => {
     const blocks = editor.blocks.getBlocks();
     expect(blocks.map((block) => block.content)).toEqual(["LeftFirst", "Middle", "LastRight"]);
     expect(caret).toEqual({ blockId: blocks[2]!.id, offset: 4 });
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "LeftRight" }]);
     editor.destroy();
   });
@@ -70,7 +70,7 @@ describe("core ClipboardManager", () => {
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.selection.get()).toBeUndefined();
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Selected" }]);
     editor.destroy();
   });

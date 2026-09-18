@@ -5,35 +5,37 @@
 ## Command lifecycle
 
 ```ts
-const registration = editor.register("app.publish", (payload) => {
+const registration = editor.commands.register("app.publish", (payload) => {
   return publish(payload);
 });
 
-const result = editor.execute("app.publish", { target: "preview" });
+const result = editor.commands.execute("app.publish", { target: "preview" });
 registration.dispose();
 ```
 
 `RegisteredCommand` владеет только своей registration: `dispose()` повторно безопасен и не удалит позднюю replacement registration. `removeCommand(name)` удаляет по имени без ownership check.
 
-## `batchUpdates(operation)`
+## `history.batchUpdates(operation)`
 
 - **Аргументы:** synchronous `operation: () => Result`.
 - **Возвращает:** exact `Result` callback.
 - **Исключения:** исходное исключение callback, document transaction или history boundary.
 
-Outermost batch создаёт одну `DocumentModel.transact()` и закрывает Yjs undo capture до/после. Nested calls используют уже активный batch.
+Outermost batch создаёт одну CRDT transaction и закрывает undo capture до/после. Nested calls используют уже активный batch.
 
 ```ts
-editor.batchUpdates(() => {
+editor.history.batchUpdates(() => {
   const first = editor.blocks.insertBlock({ type: "paragraph" });
   const second = editor.blocks.insertBlock({ type: "paragraph" }, first);
   editor.blocks.indentBlock(second);
 });
 
-editor.undo(); // Отменяет весь batch одним шагом.
+editor.history.undo(); // Отменяет весь batch одним шагом.
 ```
 
 Это batching, а не rollback. Если callback выбросил исключение после CRDT writes, writes сохраняются, но `finally` корректно уменьшает `batchDepth` и закрывает capture group.
+
+`history.batchUpdatesWithoutHistory(operation)` использует ту же transaction boundary, но помечает её origin так, чтобы изменения не попадали в local undo history.
 
 ## Приватный `documentCommand(handler)`
 
@@ -132,7 +134,7 @@ Block, link и element commands регистрируются их public manager
 Structured input comes from `bundle` or serialized `structured`; plain input comes from `text`. Defaults: `mergeText !== false`, `preserveNewlines === false`.
 
 ```ts
-editor.execute("clipboard.paste", {
+editor.commands.execute("clipboard.paste", {
   text: "Первый\nВторой",
   preserveNewlines: true,
   defaultBlockType: "paragraph",

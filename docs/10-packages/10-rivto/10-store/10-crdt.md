@@ -19,7 +19,7 @@ DocumentModelImpl
   -> ElementManager: elements
   -> LinkManager: links
   -> PluginDataManager: plugins
-  -> UndoManager: области CRDT undo
+  -> HistoryManager: области CRDT undo
 
 YjsDoc <-> BroadcastChannelProvider или WebRTCProvider
 ```

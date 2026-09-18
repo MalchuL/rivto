@@ -282,7 +282,7 @@ export class KeyboardManager implements KeyboardCapability {
     const raw = domEvent.raw;
     const event = new KeyboardEditorEvent({
       raw,
-      editor: domEvent.editor,
+      reactEditor: domEvent.reactEditor,
       root: domEvent.root,
       mode: domEvent.mode,
       selection: domEvent.selection,

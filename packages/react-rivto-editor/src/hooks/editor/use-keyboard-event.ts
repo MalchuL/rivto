@@ -20,7 +20,7 @@ export function useKeyboardEvent(
   binding: KeyboardEventDefinition,
   listener: EditorEventHandler<KeyboardEditorEvent>,
 ): void {
-  const editor = useReactEditor();
+  const reactEditor = useReactEditor();
   const bindingRef = useRef(binding);
   const listenerRef = useRef(listener);
   bindingRef.current = binding;
@@ -29,11 +29,11 @@ export function useKeyboardEvent(
   const mode = binding.mode;
   const modeKey = Array.isArray(mode) ? mode.join("\u0000") : mode;
 
-  useEffect(() => editor.keyboard.register({
+  useEffect(() => reactEditor.keyboard.register({
     ...bindingRef.current,
     when: (event) => bindingRef.current.when?.(event) ?? true,
   }, (event) => listenerRef.current(event)), [
-    editor,
+    reactEditor,
     binding.id,
     keys,
     binding.phase,

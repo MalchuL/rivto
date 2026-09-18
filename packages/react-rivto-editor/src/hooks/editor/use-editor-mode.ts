@@ -34,15 +34,15 @@ export interface UseEditorModeResult {
  * @throws If called outside an EditorView subtree.
  */
 export function useEditorMode(): UseEditorModeResult {
-  const { reactEditor: editor } = useEditorContext();
+  const { reactEditor } = useEditorContext();
   const subscribe = useCallback(
-    (listener: () => void) => editor.mode.subscribe(listener),
-    [editor],
+    (listener: () => void) => reactEditor.mode.subscribe(listener),
+    [reactEditor],
   );
-  const mode = useSyncExternalStore(subscribe, () => editor.mode.get(), () => editor.mode.get());
+  const mode = useSyncExternalStore(subscribe, () => reactEditor.mode.get(), () => reactEditor.mode.get());
   const setMode = useCallback(
-    (mode: EditorMode) => editor.mode.set(mode),
-    [editor],
+    (mode: EditorMode) => reactEditor.mode.set(mode),
+    [reactEditor],
   );
 
   return {

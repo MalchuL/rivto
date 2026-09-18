@@ -2,6 +2,27 @@ import { createTestEditor as createRivtoEditor } from "../test-utils";
 import { YjsDoc } from "@chulane/crdt-doc";
 
 describe("EditorRuntime methods", () => {
+  it("exposes manager capabilities without duplicate forwarding methods", () => {
+    type RemovedEditorMethods = Extract<
+      "register" | "execute" | "removeCommand" | "deleteSelection" | "undo" | "redo"
+      | "batchUpdates" | "batchUpdatesWithoutHistory",
+      keyof ReturnType<typeof createRivtoEditor>
+    >;
+    const noRemovedMethods: Record<RemovedEditorMethods, never> = {};
+    const editor = createRivtoEditor();
+
+    expect(noRemovedMethods).toEqual({});
+    expect(editor).not.toHaveProperty("register");
+    expect(editor).not.toHaveProperty("execute");
+    expect(editor).not.toHaveProperty("removeCommand");
+    expect(editor).not.toHaveProperty("deleteSelection");
+    expect(editor).not.toHaveProperty("undo");
+    expect(editor).not.toHaveProperty("redo");
+    expect(editor).not.toHaveProperty("batchUpdates");
+    expect(editor).not.toHaveProperty("batchUpdatesWithoutHistory");
+    editor.destroy();
+  });
+
   it("supports a complete lifecycle without blocks", () => {
     const editor = createRivtoEditor();
 
@@ -10,17 +31,17 @@ describe("EditorRuntime methods", () => {
     expect(editor.selection.get()).toBeUndefined();
     expect(editor.dump()).toMatchObject({ version: 6, blocks: [] });
 
-    editor.deleteSelection();
-    editor.undo();
-    editor.redo();
+    editor.selection.delete();
+    editor.history.undo();
+    editor.history.redo();
     expect(editor.blocks.getBlocks()).toEqual([]);
 
-    const id = editor.batchUpdates(() => editor.blocks.insertBlock({ type: "paragraph", content: "Created later" }));
+    const id = editor.history.batchUpdates(() => editor.blocks.insertBlock({ type: "paragraph", content: "Created later" }));
     editor.blocks.removeBlock(id);
     expect(editor.blocks.getBlocks()).toEqual([]);
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlock(id)?.content).toBe("Created later");
-    editor.redo();
+    editor.history.redo();
     expect(editor.blocks.getBlocks()).toEqual([]);
     editor.destroy();
   });
@@ -35,7 +56,7 @@ describe("EditorRuntime methods", () => {
     expect(destroy).toHaveBeenCalledTimes(1);
   });
 
-  it("mutates blocks through editor methods", () => {
+  it("mutates blocks through the focused block manager", () => {
     const editor = createRivtoEditor();
 
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
