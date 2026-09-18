@@ -1,9 +1,13 @@
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
 import { reviewReportFilesPlugin } from "./review-report-files";
 
 export default defineConfig({
   plugins: [
+    // Compiles the editor's Tailwind source stylesheet (aliased below) so class
+    // edits in packages/react-rivto-editor hot-reload without a package build.
+    tailwindcss(),
     reviewReportFilesPlugin(fileURLToPath(new URL("../reports/", import.meta.url))),
   ],
   resolve: {
@@ -14,7 +18,7 @@ export default defineConfig({
     alias: [
       {
         find: "@chulane/rivto-react/styles.css",
-        replacement: fileURLToPath(new URL("../packages/react-rivto-editor/styles.css", import.meta.url)),
+        replacement: fileURLToPath(new URL("../packages/react-rivto-editor/src/styles/index.css", import.meta.url)),
       },
       {
         find: /^@chulane\/rivto-react$/,
