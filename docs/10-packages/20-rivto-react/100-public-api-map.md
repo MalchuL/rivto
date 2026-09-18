@@ -21,7 +21,7 @@
 
 ### `@chulane/rivto-react/styles.css`
 
-Готовые base styles и CSS variables. Application может переопределять theme values после этого import.
+Скомпилированный Tailwind v4 bundle (`dist/styles.css`, собирается `pnpm build`) без preflight: chrome стилизован utilities и shadcn/ui primitives, structural rules лежат в colocated CSS per feature. Все правила layered, поэтому unlayered CSS приложения переопределяет их; theme настраивается через `--rivto-*` custom properties. Подробнее: `packages/react-rivto-editor/docs/styling.md`.
 
 ## Capability methods
 
