@@ -1,9 +1,35 @@
+/**
+ * Bottom-centered create toolbar for the edgeless canvas.
+ *
+ * Hosts the always-visible Select and Pan tools plus one button per tool
+ * category. Activating a category opens the in-tree `CreationPanel` popover,
+ * which stays open while the user places or draws so defaults remain
+ * reachable, and closes on Select/Pan, a category toggle, Escape, or a
+ * pointer press outside the bar while no creation tool is active. The bar
+ * raises its stacking level while a menu is open so the popover clears the
+ * selection toolbar.
+ */
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
+import { Separator } from "../../../../components/ui/separator";
 import { isNodeLike } from "../../../../managers/events/dom-nodes";
 import type { EdgelessVisualController } from "../controller";
 import type { EdgelessFontOption, EdgelessStickerOption, EdgelessVisualTool, PresetPayload, ToolCategory } from "../types";
 import { CreationPanel } from "./creation-panel";
 import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
+
+/** Floating bar chrome; `edgeless-tool-bar` is a stable hook for hosts. */
+const TOOL_BAR_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-bar absolute bottom-3.5 left-1/2 z-21 flex w-max max-w-[calc(100%-160px)] -translate-x-1/2 flex-row items-center gap-[3px] rounded-xl border border-border bg-background/95 p-[5px] shadow-(--rivto-edgeless-chrome-shadow) data-[menu-open]:z-24`;
+const DIVIDER_CLASS = "mx-0.5 self-center data-[orientation=vertical]:h-[22px]";
+
+/**
+ * Renders the thin vertical rule that separates groups of toolbar buttons.
+ *
+ * @returns A decorative vertical shadcn `Separator`.
+ */
+export function ToolBarDivider() {
+  return <Separator orientation="vertical" className={DIVIDER_CLASS} />;
+}
 
 const categories: readonly { id: ToolCategory; label: string; icon: EdgelessToolIcon }[] = [
   { id: "shapes", label: "Shapes", icon: "rectangle" },
@@ -95,20 +121,20 @@ export function ToolBar({
   };
 
   return (
-    <div ref={barRef} className="edgeless-tool-bar" data-edgeless-ui="true" data-menu-open={menu || undefined} role="toolbar" aria-label="Visual objects">
+    <div ref={barRef} className={TOOL_BAR_CLASS} data-edgeless-ui="true" data-menu-open={menu || undefined} role="toolbar" aria-label="Visual objects">
       <EdgelessToolButton
         label="Select"
         icon="select"
-        aria-pressed={tool.tool === "select"}
+        pressed={tool.tool === "select"}
         onClick={selectTool}
       />
       <EdgelessToolButton
         label="Pan"
         icon="pan"
-        aria-pressed={tool.tool === "pan"}
+        pressed={tool.tool === "pan"}
         onClick={panTool}
       />
-      <span className="edgeless-tool-bar-divider" aria-hidden="true" />
+      <ToolBarDivider />
       {categories.map((category) => {
         const open = menu === category.id;
         const last = controller.getLastTool(category.id);
@@ -119,7 +145,7 @@ export function ToolBar({
             label={category.label}
             icon={categoryIcon(category.id, last, category.icon)}
             aria-expanded={open}
-            aria-pressed={active || open}
+            pressed={active || open}
             onClick={() => {
               if (open) {
                 setMenu(null);
