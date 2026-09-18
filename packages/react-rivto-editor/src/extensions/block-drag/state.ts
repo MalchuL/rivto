@@ -1,9 +1,17 @@
-/** Focused external state stores and React contexts for page block dragging. */
-import { useDraggable } from "@dnd-kit/core";
+/**
+ * Focused external state stores and React contexts for page block dragging.
+ *
+ * The store is library-neutral: it holds Rivto placements, armed and dragged
+ * IDs, and the handle registration a slot needs to activate a draggable, so
+ * per-row subscribers never observe dnd-kit's broad manager state.
+ *
+ * @module
+ */
 import { createContext } from "react";
 import type {
   DropPlacement,
   DropPlacementStore,
+  PageDragHandle,
   PageDragItemState,
   PageDragState,
 } from "./types";
@@ -35,7 +43,7 @@ export function createDropPlacementStore(): DropPlacementStore {
   let dragged = new Set<string>();
   let armedId: string | undefined;
   let keyboardDragging = false;
-  const draggables = new Map<string, ReturnType<typeof useDraggable>>();
+  const draggables = new Map<string, PageDragHandle>();
   const listeners = new Map<string, Set<() => void>>();
   const emit = (ids: ReadonlySet<string | undefined>): void => ids.forEach((id) => {
     if (id) [...(listeners.get(id) ?? [])].forEach((listener) => listener());

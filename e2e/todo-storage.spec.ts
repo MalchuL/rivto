@@ -126,14 +126,15 @@ test("persists keyboard status order and leaves manual child order untouched", a
   const statusOrdering = storage.getByLabel("Status", { exact: true });
   await expect(statusOrdering).toBeChecked();
   const doneOrder = storage.getByRole("listitem", { name: /Done status order/ });
+  const doingOrder = storage.getByRole("listitem", { name: /Doing status order/ });
+  const doingBefore = await doingOrder.boundingBox();
+  if (!doingBefore) throw new Error("Expected sortable status geometry");
   await doneOrder.focus();
   await page.keyboard.press("Space");
   await expect(doneOrder).toHaveAttribute("data-dragging", "true");
   await page.keyboard.press("ArrowUp");
-  await expect(doneOrder).toHaveAttribute(
-    "style",
-    /transform: translate3d\(0px, -/,
-  );
+  // Optimistic sorting moves the displaced row down before the drop commits.
+  await expect.poll(async () => (await doingOrder.boundingBox())?.y ?? 0).toBeGreaterThan(doingBefore.y);
   await page.keyboard.press("Space");
 
   await expect.poll(() => page.evaluate((parentId) => {
@@ -173,7 +174,8 @@ test("animates and persists sortable status drag and drop", async ({ page }) => 
   await page.mouse.down();
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 5 });
   await expect(source).toHaveAttribute("data-dragging", "true");
-  await expect(target).toHaveAttribute("style", /transform: translate3d/);
+  // Optimistic sorting moves the displaced row down before the drop commits.
+  await expect.poll(async () => (await target.boundingBox())?.y ?? 0).toBeGreaterThan(targetBox.y);
   await page.mouse.up();
   await expect(storage).not.toHaveAttribute("data-block-selected", "true");
   await expect.poll(() => page.evaluate((parentId) => {
