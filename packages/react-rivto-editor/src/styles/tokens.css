@@ -35,6 +35,11 @@
   --rivto-ring: var(--rivto-accent);
   --rivto-radius: 0.5rem;
 
+  /* Block selection highlight; darker than `--rivto-subtle` so a selected
+     subtree stays distinguishable from hovered chrome that shares the tint. */
+  --rivto-block-selection-background: #e5dfff;
+  --rivto-block-selection-outline: #cfc4ff;
+
   /* Block geometry shared by the page and edgeless block trees. */
   --rivto-default-block-height: 1.5em;
   --rivto-block-surface-padding: 56px 64px;

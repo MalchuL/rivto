@@ -71,8 +71,8 @@
    one rectangle. Nested selected markers do not draw additional rectangles. */
 .page-block[data-block-selected] {
   border-radius: 4px;
-  background: var(--rivto-subtle);
-  outline: 1px solid color-mix(in srgb, var(--rivto-accent) 35%, transparent);
+  background: var(--rivto-block-selection-background);
+  outline: 1px solid var(--rivto-block-selection-outline);
 }
 
 .page-block[data-block-selected] .page-block[data-block-selected] {
