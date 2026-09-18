@@ -6,9 +6,7 @@
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
   "files": [
-    "dist/esm",
-    "styles.css",
-    "todo-item.css",
+    "dist",
     "docs"
   ],
   "exports": {
@@ -22,13 +20,15 @@
       "types": "./dist/esm/extensions.d.ts",
       "default": "./dist/esm/extensions.js"
     },
-    "./styles.css": "./styles.css",
-    "./todo-item.css": "./todo-item.css"
+    "./styles.css": "./dist/styles.css"
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "tsup src/index.ts src/extensions.ts --format esm --dts --sourcemap --clean --out-dir dist/esm",
+    "build": "pnpm build:js && pnpm build:styles",
+    "build:js": "tsup src/index.ts src/extensions.ts --format esm --dts --sourcemap --clean --out-dir dist/esm",
+    "build:styles": "tailwindcss -i src/styles/index.css -o dist/styles.css --minify",
     "dev": "tsup src/index.ts src/extensions.ts --format esm --dts --sourcemap --clean --out-dir dist/esm --watch",
+    "dev:styles": "tailwindcss -i src/styles/index.css -o dist/styles.css --watch",
     "check-types": "tsc --noEmit",
     "lint": "eslint src --max-warnings=0",
     "test": "NODE_OPTIONS=--experimental-vm-modules ../../scripts/run-test.sh --runInBand",
