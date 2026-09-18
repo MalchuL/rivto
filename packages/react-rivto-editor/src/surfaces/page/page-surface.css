@@ -1,0 +1,45 @@
+/*
+ * Page surface geometry.
+ *
+ * `.page-surface` is the public styling hook for the document column in page
+ * mode. Hosts override its width, padding, and chrome after importing the
+ * package stylesheet. The empty-document drop state is driven by a data
+ * attribute written by the drag extension, so it lives here rather than in a
+ * utility class.
+ */
+.page-surface {
+  width: min(720px, calc(100% - 32px));
+  min-height: 70vh;
+  margin: 24px auto 64px;
+  padding: var(--rivto-block-surface-padding);
+  box-sizing: border-box;
+  background: var(--rivto-background);
+  border: 1px solid var(--rivto-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 6%);
+  overflow-x: clip;
+}
+
+.page-surface[data-drop-empty] {
+  border-color: var(--rivto-accent);
+  background: color-mix(in srgb, var(--rivto-accent) 4%, var(--rivto-background));
+}
+
+[data-page-end-slot] {
+  margin: 0;
+}
+
+/* Numbering is a sibling-layout concern shared by both surfaces. Native
+   counters follow DOM moves and list-mode changes without waking otherwise
+   unchanged block components. */
+.page-surface,
+.edgeless-card-content,
+.page-block-children {
+  counter-reset: rivto-list-number;
+}
+
+@media (max-width: 640px) {
+  .page-surface {
+    padding: 32px 24px;
+  }
+}

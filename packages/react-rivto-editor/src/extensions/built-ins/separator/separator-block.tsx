@@ -6,6 +6,7 @@
  * @module
  */
 import { createCaretSelection } from "@chulane/rivto";
+import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -25,19 +26,27 @@ const SEPARATOR_LINE_CLASS = "rivto-separator-line";
 const SEPARATOR_ARROW_CLASS = "rivto-separator-arrow";
 const SEPARATOR_SELECTION_ATTRIBUTES = { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
 
-/** Contentless divider renderer shared by page and nested edgeless block trees. */
+/**
+ * Contentless divider renderer shared by page and nested edgeless block trees.
+ *
+ * @returns A three-row grid: an upward arrow, the rule, and a downward arrow.
+ */
 export function SeparatorBlock() {
   return (
     <div
       {...SEPARATOR_SELECTION_ATTRIBUTES}
-      className={SEPARATOR_BLOCK_CLASS}
+      className={`${SEPARATOR_BLOCK_CLASS} grid min-h-[21px] w-full grid-rows-[10px_1px_10px] place-items-center text-muted-foreground select-none`}
       data-separator-block="true"
       role="separator"
       aria-label="Block element separator"
     >
-      <span className={SEPARATOR_ARROW_CLASS} aria-hidden="true">↑</span>
-      <span className={SEPARATOR_LINE_CLASS} aria-hidden="true" />
-      <span className={SEPARATOR_ARROW_CLASS} aria-hidden="true">↓</span>
+      <span className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`} aria-hidden="true">
+        <ArrowUpIcon strokeWidth={2.5} />
+      </span>
+      <span className={`${SEPARATOR_LINE_CLASS} w-full border-t border-border`} aria-hidden="true" />
+      <span className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`} aria-hidden="true">
+        <ArrowDownIcon strokeWidth={2.5} />
+      </span>
     </div>
   );
 }
