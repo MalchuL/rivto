@@ -65,4 +65,12 @@
   [data-slot] svg {
     display: block;
   }
+
+  /* Radix keeps closed Collapsible/Tabs content mounted behind `hidden`;
+     mirror preflight so display utilities on the same element cannot reveal it. */
+  .rivto-ui [hidden]:where(:not([hidden="until-found"])),
+  [data-slot][hidden]:where(:not([hidden="until-found"])),
+  [data-slot] [hidden]:where(:not([hidden="until-found"])) {
+    display: none !important;
+  }
 }
