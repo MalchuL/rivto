@@ -547,7 +547,6 @@ export function tableExtension(): ReactEditorExtension {
         definition: {
           type: TABLE_ROW_BLOCK_TYPE,
           title: "Table row",
-          allowedParents: [TABLE_BLOCK_TYPE],
           metadata: { containment: { childOutline: "fixed" } },
         },
         render: TableRow,
@@ -557,7 +556,6 @@ export function tableExtension(): ReactEditorExtension {
         definition: {
           type: TABLE_CELL_BLOCK_TYPE,
           title: "Table cell",
-          allowedParents: [TABLE_ROW_BLOCK_TYPE],
           metadata: { containment: { childOutline: "free", outlineFloor: true } },
         },
         render: TableCell,

@@ -8,13 +8,13 @@ describe("editor Pipe", () => {
     const disposeAdd = pipe.register({ id: "add", priority: 10, processor: (value) => value + 1 });
     const disposeReplacement = pipe.register({ id: "add", priority: 10, processor: (value) => value + 2 });
 
-    expect(pipe.process(2, undefined)).toBe(6);
+    expect(pipe.process(2)).toBe(6);
     disposeAdd();
-    expect(pipe.process(2, undefined)).toBe(6);
+    expect(pipe.process(2)).toBe(6);
     disposeReplacement();
-    expect(pipe.process(2, undefined)).toBe(4);
+    expect(pipe.process(2)).toBe(4);
     disposeDouble();
-    expect(pipe.process(2, undefined)).toBe(2);
+    expect(pipe.process(2)).toBe(2);
   });
 
   test("rejects empty processor identifiers", () => {
@@ -32,7 +32,19 @@ describe("editor Pipe", () => {
     expect(pipe.get("missing")).toBeUndefined();
     expect(pipe.delete("double")).toBe(true);
     expect(pipe.delete("double")).toBe(false);
-    expect(pipe.process(2, undefined)).toBe(2);
+    expect(pipe.process(2)).toBe(2);
     dispose();
+  });
+
+  test("uses an empty context by default and accepts an explicit context", () => {
+    const pipe = new Pipe<number, { add?: number }>();
+    pipe.register({
+      id: "add",
+      priority: 0,
+      processor: (value, context) => value + (context.add ?? 0),
+    });
+
+    expect(pipe.process(2)).toBe(2);
+    expect(pipe.process(2, { add: 3 })).toBe(5);
   });
 });

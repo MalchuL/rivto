@@ -3,9 +3,7 @@
  *
  * Table and row types freeze their structural children (rows and cells). A
  * cell is an outline floor: nested writing blocks indent underneath it, and
- * Enter always creates a child instead of splitting cell text. Drag may still
- * relocate writing out of a cell; `allowedParents` keeps rows and cells in
- * the table.
+ * Enter always creates a child instead of splitting cell text.
  *
  * @module
  */

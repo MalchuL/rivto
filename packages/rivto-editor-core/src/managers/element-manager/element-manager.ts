@@ -14,7 +14,7 @@ import type {
 import type { CommandHandler, RegisteredCommand } from "../command-registry";
 import { commandPayload, commandString } from "../utils";
 import type { RivtoEditorApi } from "../../editor/types";
-import type { ElementPipeContext, ElementProcessor } from "./element-pipe";
+import type { ElementProcessor } from "./element-pipe";
 import { Pipe } from "../../utils/pipe";
 
 interface ElementSubscription {
@@ -37,7 +37,7 @@ export class ElementManager {
    * It remains stable when the active document changes, so extension
    * processors follow this editor without becoming shared document state.
    */
-  private readonly pipe = new Pipe<ElementInput, ElementPipeContext>();
+  private readonly pipe = new Pipe<ElementInput>();
   private readonly processors = new Set<ElementProcessorRegistration>();
   private readonly subscriptions = new Set<ElementSubscription>();
   /** Document currently attached to the owning editor. */
@@ -112,7 +112,7 @@ export class ElementManager {
    * @returns Processed complete elements.
    */
   processSnapshotElements(elements: readonly DocumentElement[]): DocumentElement[] {
-    return elements.map((element) => this.pipe.process(element, {}) as DocumentElement);
+    return elements.map((element) => this.pipe.process(element) as DocumentElement);
   }
 
   /** @param input - Complete element creation data. @returns Stable new ID. */
@@ -204,7 +204,7 @@ export class ElementManager {
         frame: patch.frame ? { ...current.frame, ...patch.frame } : current.frame,
         zIndex: patch.zIndex ?? current.zIndex,
         props: patch.props ? { ...current.props, ...patch.props } : current.props,
-      }, {});
+      });
       simulated.set(id, processed);
       const frame = patch.frame
         ? Object.fromEntries(Object.keys(patch.frame).map((key) => [key, processed.frame[key as keyof typeof processed.frame]]))
@@ -231,7 +231,7 @@ export class ElementManager {
     register("element.insert", (value) => {
       const data = commandPayload(value) as unknown as { input: ElementInput };
       const input = commandPayload(data.input) as unknown as ElementInput;
-      return this.document.elements.insertElement(this.pipe.process(input, {}));
+      return this.document.elements.insertElement(this.pipe.process(input));
     });
     register("element.update", (value) => {
       const data = commandPayload(value) as unknown as { id: string; patch: ElementPatch };

@@ -235,7 +235,6 @@ Container behavior is declared separately with `ContainerBlockView`:
 - `dropAxis` describes direct-child layout;
 - `acceptsDropContainer` describes body drops;
 - containment metadata describes fixed or free outline behavior;
-- `allowedParents` protects persisted structural validity.
 
 Do not map `block.children`, create a parallel child store, or register a second
 drag system in the renderer.

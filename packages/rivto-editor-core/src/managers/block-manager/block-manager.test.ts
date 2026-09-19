@@ -1,7 +1,7 @@
 /**
  * Verifies editor-owned outline policies against the generic document store.
- * Exercises page and edgeless runtimes, rejected child adoption, and atomic
- * placement preflight so failed commands cannot leave partial document writes.
+ * Exercises page and edgeless runtimes, grouped movement, imports, and command
+ * behavior without coupling those policies to document storage.
  */
 import { createTestEditor, createStructuralSelection } from "../../editor/test-utils";
 
@@ -23,47 +23,6 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     expect(editor.blocks.getChildIds(target)).toEqual(["child"]);
     editor.history.undo();
     expect(editor.dump()).toEqual(before);
-    editor.destroy();
-  });
-
-  it("rejects merge and outdent adoption before changing text or hierarchy", () => {
-    const editor = createTestEditor({ mode });
-    editor.blocksRegistry.defineBlock({ type: "container" });
-    editor.blocksRegistry.defineBlock({ type: "restricted", allowedParents: ["container"] });
-    const target = editor.blocks.insertBlock({ type: "paragraph", content: "Target" });
-    const source = editor.blocks.insertBlock({
-      type: "container",
-      content: "Source",
-      children: [
-        { id: "first", type: "paragraph" },
-        { id: "restricted", type: "restricted" },
-      ],
-    });
-    const before = editor.dump();
-    expect(() => editor.blocks.mergeBlocks(target, source)).toThrow(/cannot be placed under paragraph/);
-    expect(editor.dump()).toEqual(before);
-    expect(() => editor.blocks.outdentBlock("first")).toThrow(/cannot be placed under paragraph/);
-    expect(editor.dump()).toEqual(before);
-    expect(() => editor.blocks.mergeBlocks("missing", source)).toThrow("Block missing not found");
-    expect(() => editor.blocks.mergeBlocks("first", source)).toThrow(/into its descendant/);
-    expect(editor.dump()).toEqual(before);
-    editor.destroy();
-  });
-
-  it("preflights all selected moves before writing an accepted earlier move", () => {
-    const editor = createTestEditor({ mode });
-    editor.blocksRegistry.defineBlock({ type: "root-only", allowedParents: [null] });
-    const restricted = editor.blocks.insertBlock({ type: "root-only" });
-    const movable = editor.blocks.insertBlock({ type: "paragraph" });
-    const target = editor.blocks.insertBlock({ type: "paragraph" });
-    // Reverse execution for 'after' makes the valid move execute first unless
-    // the complete batch is checked before any shared arrays are changed.
-    const child = editor.blocks.insertBlock({ type: "paragraph" });
-    editor.blocks.moveBlock(child, target, "inside");
-    const nested = editor.dump();
-    expect(() => editor.blocks.moveBlocks([restricted, movable], child, "after"))
-      .toThrow(/cannot be placed under paragraph/);
-    expect(editor.dump()).toEqual(nested);
     editor.destroy();
   });
 

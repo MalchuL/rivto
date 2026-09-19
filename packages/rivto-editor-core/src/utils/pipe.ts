@@ -7,7 +7,7 @@
  */
 
 /** One named transformation or validation step in an editor pipeline. */
-export interface PipeProcessor<Value, Context = void> {
+export interface PipeProcessor<Value, Context = Record<string, never>> {
   /** Stable identity used for replacement and removal. */
   readonly id: string;
   /** Lower values execute first. */
@@ -15,14 +15,14 @@ export interface PipeProcessor<Value, Context = void> {
   /**
    * Processes one value.
    * @param value - Current pipeline value.
-   * @param context - Operation context shared by processors.
+   * @param context - Optional operation context; empty by default.
    * @returns Processed value.
    */
   readonly processor: (value: Value, context: Context) => Value;
 }
 
 /** Priority-ordered processor registry owned by one editor manager. */
-export class Pipe<Value, Context = void> {
+export class Pipe<Value, Context = Record<string, never>> {
   private readonly registry = new Map<string, PipeProcessor<Value, Context>>();
   private ordered: readonly PipeProcessor<Value, Context>[] = [];
 
@@ -65,10 +65,10 @@ export class Pipe<Value, Context = void> {
   /**
    * Processes a value with the current ordered processors.
    * @param value - Initial value.
-   * @param context - Operation context.
+   * @param context - Operation context, or an empty object when omitted.
    * @returns Final processed value.
    */
-  process(value: Value, context: Context): Value {
+  process(value: Value, context: Context = {} as Context): Value {
     return this.ordered.reduce((current, item) => item.processor(current, context), value);
   }
 

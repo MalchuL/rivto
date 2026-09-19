@@ -339,7 +339,6 @@ export function columnsExtension(): ReactEditorExtension {
         definition: {
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           title: "Column",
-          allowedParents: [COLUMNS_BLOCK_TYPE],
           metadata: { containment: { childOutline: "free", outlineFloor: true } },
         },
         render: ColumnsColumn,

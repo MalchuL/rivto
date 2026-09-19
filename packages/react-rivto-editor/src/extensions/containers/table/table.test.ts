@@ -1,5 +1,5 @@
 /**
- * Verifies the table extension keeps rows and cells in the ordinary block tree,
+ * Verifies the table extension creates rows and cells in the ordinary block tree,
  * inserts complete row and column boundaries, and participates in undo.
  * @module
  */
@@ -50,7 +50,8 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", () => 
   editor.history.undo();
   expect(editor.blocks.getBlock(table.id)?.children.every((row) => row.children.length === 3)).toBe(true);
 
-  expect(() => editor.blocks.moveBlocks([cellId], table.id, "inside")).toThrow();
+  editor.blocks.moveBlocks([cellId], table.id, "inside");
+  expect(editor.blocks.getParentId(cellId)).toBe(table.id);
   reactEditor.destroy();
   editor.destroy();
 });

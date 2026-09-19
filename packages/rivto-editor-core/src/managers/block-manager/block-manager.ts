@@ -17,9 +17,7 @@ import type {
   DocumentModel,
 } from "@chulane/document-model";
 import {
-  createBlockParentConstraintProcessor,
   createBlockPropsProcessor,
-  type BlockPipeContext,
   type BlockProcessor,
 } from "./block-pipe";
 import type {
@@ -61,14 +59,13 @@ interface BlockProcessorRegistration {
  */
 export class BlockManager {
   private readonly registrations: RegisteredCommand[] = [];
-  private readonly processorDisposers: Array<() => void> = [];
   /**
    * Editor-owned block processing pipeline.
    *
    * It remains stable when the active document changes, so extension
    * processors follow this editor without becoming shared document state.
    */
-  private readonly pipe = new Pipe<BlockInput, BlockPipeContext>();
+  private readonly pipe = new Pipe<BlockInput>();
   private readonly processors = new Set<BlockProcessorRegistration>();
   private readonly subscriptions = new Set<BlockSubscription>();
   /** Document currently attached to the owning editor. */
@@ -185,7 +182,7 @@ export class BlockManager {
    * @returns Processed complete block trees.
    */
   processSnapshotBlocks(blocks: readonly EditorBlock[]): EditorBlock[] {
-    return blocks.map((block) => this.processForest(block, null) as EditorBlock);
+    return blocks.map((block) => this.processForest(block) as EditorBlock);
   }
 
   /**
@@ -455,7 +452,6 @@ export class BlockManager {
   destroy(): void {
     this.subscriptions.forEach((subscription) => subscription.dispose());
     this.subscriptions.clear();
-    this.processorDisposers.splice(0).reverse().forEach((dispose) => dispose());
     this.processors.forEach((registration) => registration.dispose());
     this.processors.clear();
     this.registrations.splice(0).reverse().forEach((registration) => registration.dispose());
@@ -492,13 +488,8 @@ export class BlockManager {
    * @returns No value.
    */
   private registerRequiredProcessors(): void {
-    this.processorDisposers.push(
-      this.registerProcessor(createBlockParentConstraintProcessor((childType, parentType) => {
-        this.editor.blocksRegistry.assertAllowedParent(childType, parentType);
-      })),
-      this.registerProcessor(createBlockPropsProcessor((type, props) =>
-        this.editor.blocksRegistry.validate(type, props))),
-    );
+    this.registerProcessor(createBlockPropsProcessor((type, props) =>
+      this.editor.blocksRegistry.validate(type, props)));
   }
 
   /**
@@ -525,12 +516,8 @@ export class BlockManager {
       const afterId = data.afterId === undefined
         ? undefined
         : data.afterId === null ? null : commandString(data.afterId, "afterId");
-      // Parent placement is not part of BlockInput, so resolve it before the
-      // editor pipe validates allowedParents and before the document is changed.
-      const parentId = afterId == null ? null : this.document.blocks.getParentId(afterId) ?? null;
-      const parentType = parentId ? this.getBlock(parentId)?.type ?? null : null;
       return this.document.blocks.insertBlock(
-        this.processForest(this.editor.blocksRegistry.prepare(block), parentType),
+        this.processForest(this.editor.blocksRegistry.prepare(block)),
         afterId,
       );
     }));
@@ -601,7 +588,7 @@ export class BlockManager {
       const id = commandString(data.id, "id");
       const targetId = rawTarget === null ? null : commandString(rawTarget, "targetId");
       const position = data.position === "before" || data.position === "inside" ? data.position : "after";
-      this.moveDocumentBlocks([{ id, targetId, position }]);
+      this.document.blocks.moveBlock(id, targetId, position);
     }));
     register("block.move-many", documentCommand((value) => {
       const data = commandPayload(value) as unknown as {
@@ -654,9 +641,7 @@ export class BlockManager {
       throw new Error(`Cannot merge block ${sourceId} into its descendant ${targetId}`);
     }
     const blocks = this.document.blocks;
-    // Validate and transfer children before text changes so a forbidden parent
-    // cannot leave a partially merged document when validation throws.
-    this.moveDocumentBlocks(source.children.map(({ id }) => ({ id, targetId, position: "inside" })));
+    blocks.moveBlocks(source.children.map(({ id }) => ({ id, targetId, position: "inside" })));
     if (source.content) blocks.insertText(targetId, target.content.length, source.content);
     blocks.removeBlock(sourceId);
     return target.content.length;
@@ -682,7 +667,7 @@ export class BlockManager {
     // Inserting repeatedly after the same anchor reverses order unless the
     // grouped roots are processed backwards. Prepending has the same rule.
     const ordered = targetId === null || position === "after" ? [...roots].reverse() : roots;
-    this.moveDocumentBlocks(ordered.map((id) => ({ id, targetId, position })));
+    this.document.blocks.moveBlocks(ordered.map((id) => ({ id, targetId, position })));
   }
 
   /**
@@ -697,7 +682,7 @@ export class BlockManager {
     const index = siblings.indexOf(roots[0]!);
     if (index <= 0) return;
     const targetId = siblings[index - 1]!;
-    this.moveDocumentBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
+    this.document.blocks.moveBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
   }
 
   /**
@@ -726,7 +711,7 @@ export class BlockManager {
     // Siblings below the last moved root stay nested under it after the lift.
     const siblings = this.siblingIds(lastId);
     const following = siblings.slice(siblings.indexOf(lastId) + 1);
-    this.moveDocumentBlocks([
+    this.document.blocks.moveBlocks([
       // Repeated "after parent" inserts reverse order unless roots go last-first.
       ...[...moving].reverse().map((id) => ({ id, targetId: parentId, position: "after" as const })),
       ...following.map((id) => ({ id, targetId: lastId, position: "inside" as const })),
@@ -734,33 +719,25 @@ export class BlockManager {
   }
 
   /**
-   * Processes an inserted forest with destination context for every descendant.
+   * Processes every record in an inserted forest.
    * @param block - Root block input.
-   * @param parentType - Destination parent type, or null at document root.
    * @returns Processed forest retaining nested structure.
    */
-  private processForest(block: BlockInput, parentType: string | null): BlockInput {
-    const processed = this.pipe.process(block, { parentType });
+  private processForest(block: BlockInput): BlockInput {
+    const processed = this.pipe.process(block);
     return {
       ...processed,
-      // Each descendant is validated against its immediate processed parent,
-      // not against the root's external destination.
-      children: processed.children?.map((child) => this.processForest(child, processed.type)),
+      children: processed.children?.map((child) => this.processForest(child)),
     };
   }
 
   /**
    * Processes one stored or incoming block without its recursive children.
    * @param block - Complete node-level block input.
-   * @param parentType - Optional destination parent type; current placement is used when omitted.
    * @returns Processed node-level input.
    */
-  private processBlock(block: BlockInput, parentType?: string | null): BlockInput {
-    const parentId = block.id ? this.document.blocks.getParentId(block.id) : null;
-    const resolvedParentType = parentType !== undefined
-      ? parentType
-      : parentId ? this.getBlock(parentId)?.type ?? null : null;
-    return this.pipe.process(block, { parentType: resolvedParentType });
+  private processBlock(block: BlockInput): BlockInput {
+    return this.pipe.process(block);
   }
 
   /**
@@ -794,42 +771,6 @@ export class BlockManager {
         patch: processedProps ? { ...patch, props: processedProps } : patch,
       };
     });
-  }
-
-  /**
-   * Validates destination parent policy with this editor, then moves in the document.
-   * @param moves - Ordered raw document placements.
-   * @returns No value.
-   */
-  private moveDocumentBlocks(moves: readonly {
-    id: string;
-    targetId: string | null;
-    position: "before" | "after" | "inside";
-  }[]): void {
-    const parents = new Map<string, string | null>();
-    const parentOf = (id: string): string | null => parents.has(id)
-      ? parents.get(id)!
-      : this.document.blocks.getParentId(id) ?? null;
-    moves.filter(({ id, targetId }) => id !== targetId).forEach(({ id, targetId, position }) => {
-      const block = this.getBlock(id);
-      if (!block) throw new Error(`Block ${id} not found`);
-      if (targetId !== null && !this.getBlock(targetId)) {
-        throw new Error(`Target block ${targetId} not found`);
-      }
-      const parentId = targetId === null
-        ? parentOf(id)
-        : position === "inside" ? targetId : parentOf(targetId);
-      // Explicit anchors validate against the simulated destination, which can
-      // differ from live storage because earlier batch moves are not written yet.
-      // A null anchor retains the existing root-context check even though the
-      // document operation only prepends within the current sibling list.
-      const parentType = targetId === null
-        ? null
-        : parentId ? this.getBlock(parentId)?.type ?? null : null;
-      this.processBlock({ ...block, children: undefined }, parentType);
-      parents.set(id, parentId);
-    });
-    this.document.blocks.moveBlocks(moves);
   }
 
   /**
