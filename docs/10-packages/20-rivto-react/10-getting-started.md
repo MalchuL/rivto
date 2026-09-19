@@ -18,7 +18,9 @@ import "@chulane/rivto-react/styles.css";
 
 ```tsx
 function createRuntime() {
+  const document = new DocumentModelImpl(new YjsDoc("document-id"));
   const editor = createRivtoEditor();
+  editor.setDocument(document);
   const reactEditor = createReactEditor({ editor, extensions: [standardPreset()] });
   return { editor, reactEditor };
 }
@@ -31,7 +33,7 @@ export function DocumentEditor() {
     runtime.editor.destroy();
   }, [runtime]);
 
-  return <EditorView editor={runtime.reactEditor} />;
+  return <EditorView reactEditor={runtime.reactEditor} />;
 }
 ```
 
@@ -55,16 +57,16 @@ Children `EditorView` находятся в том же context перед activ
 
 ```tsx
 function Toolbar() {
-  const editor = useEditor();
+  const reactEditor = useReactEditor();
   const { mode, setMode } = useEditorMode();
   return <header>
-    <button onClick={() => editor.undo()}>Undo</button>
-    <button onClick={() => editor.redo()}>Redo</button>
+    <button onClick={() => reactEditor.history.undo()}>Undo</button>
+    <button onClick={() => reactEditor.history.redo()}>Redo</button>
     <button onClick={() => setMode(mode === "block" ? "edgeless" : "block")}>Mode</button>
   </header>;
 }
 
-<EditorView editor={reactEditor}><Toolbar /></EditorView>
+<EditorView reactEditor={reactEditor}><Toolbar /></EditorView>
 ```
 
 ## Частые ошибки

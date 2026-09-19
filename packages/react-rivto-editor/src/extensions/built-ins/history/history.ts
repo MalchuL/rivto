@@ -16,7 +16,7 @@ function inputHistoryAction(event: InputEvent): HistoryAction | undefined {
  * A contenteditable normally owns a private DOM undo stack. Allowing that stack
  * to run would mutate rendered text first, after which `onInput` would record
  * the browser's old DOM as a new collaborative edit. This extension prevents that
- * native operation and invokes `editor.undo()` or `editor.redo()` instead.
+ * native operation and invokes `editor.history.undo()` or `editor.history.redo()` instead.
  *
  * Keyboard shortcuts are handled on `keydown`. The separate `beforeinput`
  * listener covers browser or operating-system editing commands that arrive as
@@ -41,7 +41,7 @@ function inputHistoryAction(event: InputEvent): HistoryAction | undefined {
  *
  * @example
  * ```tsx
- * <EditorView editor={editor}>
+ * <EditorView reactEditor={reactEditor}>
  *   <HistoryPlugin />
  *   <PageSurface />
  * </EditorView>
@@ -58,11 +58,10 @@ export function registerHistory(
   reactEditor: ReactEditor,
   options: HistoryExtensionOptions = {},
 ): void {
-  const { editor } = reactEditor;
   /** Executes one history step and restores focus after React renders it. */
   const run = (root: HTMLElement, action: HistoryAction): void => {
     if (!root) return;
-    editor[action]();
+    reactEditor.history[action]();
     requestAnimationFrame(() => {
       if (reactEditor.selection.restoreDOM()) return;
       root.ownerDocument.getSelection()?.removeAllRanges();

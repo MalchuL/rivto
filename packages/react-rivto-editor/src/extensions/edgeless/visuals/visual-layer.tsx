@@ -54,7 +54,7 @@ function GroupSelectionChrome({
   const selected = useEdgelessSelected(groupId);
   const bounds = controller.getBounds(groupId);
   if (!selected || !bounds) return null;
-  const element = controller.reactEditor.editor.elements.getElement(groupId);
+  const element = controller.reactEditor.elements.getElement(groupId);
   const geometry = {
     left: bounds.x,
     top: bounds.y,
@@ -116,7 +116,7 @@ function EdgelessSelectionChrome({
     ? sameType
     : [];
   const propertyBlocks = selection.items.flatMap((id) => {
-    const element = controller.reactEditor.editor.elements.getElement(id);
+    const element = controller.reactEditor.elements.getElement(id);
     return element?.type === "block" ? [element] : [];
   });
   return (
@@ -205,7 +205,7 @@ export function EdgelessVisualLayer({
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.reactEditor.editor.execute("edgeless.tool.set", "select");
+      controller.reactEditor.commands.execute("edgeless.tool.set", "select");
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 2) return;
@@ -213,7 +213,7 @@ export function EdgelessVisualLayer({
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.reactEditor.editor.execute("edgeless.tool.set", "select");
+      controller.reactEditor.commands.execute("edgeless.tool.set", "select");
     };
     root.addEventListener("contextmenu", onContextMenu);
     root.addEventListener("pointerdown", onPointerDown, true);

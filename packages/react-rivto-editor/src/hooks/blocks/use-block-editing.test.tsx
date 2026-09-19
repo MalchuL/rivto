@@ -51,7 +51,7 @@ describe("useBlockEditing", () => {
     const reactEditor = createReactEditor({ editor });
     reactEditor.surfaces.register("block", Surface);
 
-    renderToStaticMarkup(createElement(EditorView, { editor: reactEditor }));
+    renderToStaticMarkup(createElement(EditorView, { reactEditor }));
 
     expect(structural?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
     expect(text?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");

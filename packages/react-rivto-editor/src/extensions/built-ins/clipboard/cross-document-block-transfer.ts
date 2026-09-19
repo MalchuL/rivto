@@ -3,6 +3,8 @@ import type {
   EditorBlockInput,
   RivtoEditorApi,
 } from "@chulane/rivto";
+import type { ReactEditor } from "../../../types";
+import { isRivtoEditor } from "../../../utils";
 
 /** Destination used by a cross-document page drag. */
 export interface CrossDocumentBlockTransferPlacement {
@@ -22,8 +24,8 @@ function collectBlockIds(block: EditorBlock, ids: Set<string>): void {
   block.children.forEach((child) => collectBlockIds(child, ids));
 }
 
-function prepareBlock(editor: RivtoEditorApi, block: EditorBlock): EditorBlockInput {
-  return editor.blocksRegistry.prepare({
+function prepareBlock(editor: ReactEditor | RivtoEditorApi, block: EditorBlock): EditorBlockInput {
+  const input = {
     id: block.id,
     type: block.type,
     listProps: structuredClone(block.listProps),
@@ -31,7 +33,12 @@ function prepareBlock(editor: RivtoEditorApi, block: EditorBlock): EditorBlockIn
     props: structuredClone(block.props),
     pluginData: structuredClone(block.pluginData),
     children: block.children.map((child) => prepareBlock(editor, child)),
-  });
+  };
+  if (isRivtoEditor(editor)) return editor.blocksRegistry.prepare(input);
+  if (!editor.blocks.getDefinition(block.type)) {
+    throw new Error(`Unknown block type ${block.type}`);
+  }
+  return editor.blocks.prepareBlock(input);
 }
 
 /**
@@ -42,8 +49,8 @@ function prepareBlock(editor: RivtoEditorApi, block: EditorBlock): EditorBlockIn
  * editor that did not install its extension.
  */
 function createCrossDocumentBlockTransferBundle(
-  source: RivtoEditorApi,
-  destination: RivtoEditorApi,
+  source: ReactEditor | RivtoEditorApi,
+  destination: ReactEditor | RivtoEditorApi,
   rootIds: readonly string[],
   placement: CrossDocumentBlockTransferPlacement,
 ): CrossDocumentBlockTransferBundle {
@@ -76,19 +83,19 @@ function createCrossDocumentBlockTransferBundle(
  * Each batch remains one undo item in its owning Yjs history.
  */
 export function crossDocumentBlockTransfer(
-  source: RivtoEditorApi,
-  destination: RivtoEditorApi,
+  source: ReactEditor | RivtoEditorApi,
+  destination: ReactEditor | RivtoEditorApi,
   rootIds: readonly string[],
   placement: CrossDocumentBlockTransferPlacement,
 ): void {
   const bundle = createCrossDocumentBlockTransferBundle(source, destination, rootIds, placement);
-  destination.batchUpdates(() => {
+  destination.history.batchUpdates(() => {
     const insertedIds = bundle.blocks.map((block) => destination.blocks.insertBlock(block));
     if (placement.targetId !== null) {
       destination.blocks.moveBlocks(insertedIds, placement.targetId, placement.position);
     }
   });
-  source.batchUpdates(() => {
+  source.history.batchUpdates(() => {
     rootIds.forEach((id) => source.blocks.removeBlock(id));
   });
 }

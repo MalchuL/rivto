@@ -18,7 +18,7 @@ ReactEditor
 - Registration внутри extension `setup()` автоматически принадлежит этой extension.
 - Dynamic registration после initialization допустима и принадлежит runtime до disposer/destroy.
 - Registry mutation после `reactEditor.destroy()` throws.
-- Core document mutations всё равно проходят через `reactEditor.editor` или `reactEditor.blocks`.
+- Core document mutations проходят через focused managers вроде `reactEditor.blocks` и `reactEditor.elements`.
 - Mode filters применяют events/keyboard/surfaces; managers не создают скрытый второй editor state.
 
 Вложенные страницы описывают каждый manager, methods, arguments, returns, errors, lifecycle и взаимодействие с `block`/`edgeless` modes.

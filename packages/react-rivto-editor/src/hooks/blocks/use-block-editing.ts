@@ -157,7 +157,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   blockId: string,
   options: UseBlockEditingOptions = {},
 ): UseBlockEditingResult<Props, boolean> {
-  const { editor } = useEditorContext();
+  const { reactEditor } = useEditorContext();
   const blockResult = useBlock(blockId);
   const elementRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);
@@ -264,23 +264,23 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   }, []);
 
   const getProps = useCallback((): Readonly<Props> | undefined => (
-    editor.blocks.getBlock(blockId)?.props as Props | undefined
-  ), [blockId, editor]);
+    reactEditor.blocks.getBlock(blockId)?.props as Props | undefined
+  ), [blockId, reactEditor]);
 
   const getProp = useCallback(<Key extends keyof Props,>(key: Key): Props[Key] | undefined => (
     getProps()?.[key]
   ), [getProps]);
 
   const setProps = useCallback((props: Partial<Props>): void => {
-    editor.blocks.updateBlock(blockId, { props: props as Record<string, unknown> });
-  }, [blockId, editor]);
+    reactEditor.blocks.updateBlock(blockId, { props: props as Record<string, unknown> });
+  }, [blockId, reactEditor]);
 
   const setProp = useCallback(<Key extends keyof Props,>(
     key: Key,
     value: Props[Key] | undefined,
   ): void => {
-    editor.blocks.setBlockProp(blockId, String(key), value);
-  }, [blockId, editor]);
+    reactEditor.blocks.setBlockProp(blockId, String(key), value);
+  }, [blockId, reactEditor]);
 
   const attributes: BlockTextEditingAttributes | BlockSelectionAnchorAttributes = textEdit
     ? {

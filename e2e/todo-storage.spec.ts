@@ -18,9 +18,7 @@ test("keeps the storage surface inside its selection and aligns root controls", 
   const storageId = await storage.getAttribute("data-block-id");
   if (!storageId) throw new Error("Expected seeded TODO storage ID");
   await page.evaluate((id) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
-    }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     editor.selection.set({
       type: "selection",
       blocks: [{ id, start: 0, end: -1 }],
@@ -76,13 +74,7 @@ test("searches and filters only direct TODO children without persisting UI state
   await storage.getByLabel("Planning", { exact: true }).check();
   await expect(todos).toHaveCount(1);
   await page.evaluate(() => {
-    const blocks = (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: {
-        getRootIds(): string[];
-        getBlock(id: string): { id: string; type: string; content: string; children: Array<{ id: string; content: string }> };
-        updateBlock(id: string, patch: { props: Record<string, unknown> }): void;
-      } } } };
-    }).__rivtoDemo.editor.editor.blocks;
+    const blocks = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks;
     const storageBlock = blocks.getRootIds().map((id) => blocks.getBlock(id)).find(({ type }) => type === "todo-storage")!;
     const planning = storageBlock.children.find(({ content }) => content === "Review the project brief")!;
     blocks.updateBlock(planning.id, { props: { project: "Archive" } });
@@ -100,15 +92,7 @@ test("searches and filters only direct TODO children without persisting UI state
   const storageId = await storage.getAttribute("data-block-id");
   if (!storageId) throw new Error("Expected seeded TODO storage ID");
   const injected = await page.evaluate((parentId) => {
-    const runtime = (window as unknown as {
-      __rivtoDemo: { editor: { editor: {
-        blocks: {
-          getBlock(id: string): { children: Array<{ id: string }> };
-          insertBlock(input: Record<string, unknown>, afterId?: string): string;
-          indentBlock(id: string): void;
-        };
-      } } };
-    }).__rivtoDemo.editor.editor;
+    const runtime = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     const last = runtime.blocks.getBlock(parentId).children.at(-1)?.id;
     const noteId = runtime.blocks.insertBlock({ type: "paragraph", content: "Always visible note" }, last);
     const nestedId = runtime.blocks.insertBlock({
@@ -123,9 +107,7 @@ test("searches and filters only direct TODO children without persisting UI state
   await expect(storage.locator(`[data-block-id="${injected.nestedId}"]`)).toBeVisible();
 
   const persisted = await page.evaluate((parentId) => (
-    (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: { getBlock(id: string): { props: Record<string, unknown> } } } } };
-    }).__rivtoDemo.editor.editor.blocks.getBlock(parentId).props
+    (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks.getBlock(parentId).props
   ), storageId);
   expect(persisted).toEqual({ orderMode: "status", statusOrder: ["todo", "doing", "done"] });
 
@@ -144,50 +126,37 @@ test("persists keyboard status order and leaves manual child order untouched", a
   const statusOrdering = storage.getByLabel("Status", { exact: true });
   await expect(statusOrdering).toBeChecked();
   const doneOrder = storage.getByRole("listitem", { name: /Done status order/ });
+  const doingOrder = storage.getByRole("listitem", { name: /Doing status order/ });
+  const doingBefore = await doingOrder.boundingBox();
+  if (!doingBefore) throw new Error("Expected sortable status geometry");
   await doneOrder.focus();
   await page.keyboard.press("Space");
   await expect(doneOrder).toHaveAttribute("data-dragging", "true");
   await page.keyboard.press("ArrowUp");
-  await expect(doneOrder).toHaveAttribute(
-    "style",
-    /transform: translate3d\(0px, -/,
-  );
+  // Optimistic sorting moves the displaced row down before the drop commits.
+  await expect.poll(async () => (await doingOrder.boundingBox())?.y ?? 0).toBeGreaterThan(doingBefore.y);
   await page.keyboard.press("Space");
 
   await expect.poll(() => page.evaluate((parentId) => {
-    const block = (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: { getBlock(id: string): {
-        props: { statusOrder: string[] };
-        children: Array<{ props: { status?: string } }>;
-      } } } } };
-    }).__rivtoDemo.editor.editor.blocks.getBlock(parentId);
+    const block = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks.getBlock(parentId);
     return { saved: block.props.statusOrder, children: block.children.map((child) => child.props.status) };
   }, storageId)).toEqual({ saved: ["todo", "done", "doing"], children: ["todo", "done", "doing"] });
 
   await storage.getByRole("button", { name: /Status: todo/ }).click();
   await expect.poll(() => page.evaluate((parentId) => (
-    (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: { getBlock(id: string): { children: Array<{ content: string }> } } } } };
-    }).__rivtoDemo.editor.editor.blocks.getBlock(parentId).children.map((child) => child.content)
+    (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks.getBlock(parentId).children.map((child) => child.content)
   ), storageId)).toEqual(["Set up the workspace", "Review the project brief", "Build the editor extension"]);
 
   await storage.getByText("Order", { exact: true }).click();
   await statusOrdering.uncheck();
   const manualOrder = await page.evaluate((parentId) => {
-    const blocks = (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: {
-        getBlock(id: string): { children: Array<{ id: string; props: { status: string } }> };
-        moveBlock(id: string, targetId: string | null): void;
-      } } } };
-    }).__rivtoDemo.editor.editor.blocks;
+    const blocks = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks;
     const children = blocks.getBlock(parentId).children;
     blocks.moveBlock(children.at(-1)!.id, null);
     return blocks.getBlock(parentId).children.map((child) => child.id);
   }, storageId);
   await expect.poll(() => page.evaluate((parentId) => (
-    (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: { getBlock(id: string): { children: Array<{ id: string }> } } } } };
-    }).__rivtoDemo.editor.editor.blocks.getBlock(parentId).children.map((child) => child.id)
+    (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks.getBlock(parentId).children.map((child) => child.id)
   ), storageId)).toEqual(manualOrder);
 });
 
@@ -205,16 +174,12 @@ test("animates and persists sortable status drag and drop", async ({ page }) => 
   await page.mouse.down();
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 5 });
   await expect(source).toHaveAttribute("data-dragging", "true");
-  await expect(target).toHaveAttribute("style", /transform: translate3d/);
+  // Optimistic sorting moves the displaced row down before the drop commits.
+  await expect.poll(async () => (await target.boundingBox())?.y ?? 0).toBeGreaterThan(targetBox.y);
   await page.mouse.up();
   await expect(storage).not.toHaveAttribute("data-block-selected", "true");
   await expect.poll(() => page.evaluate((parentId) => {
-    const block = (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: { getBlock(id: string): {
-        props: { statusOrder: string[] };
-        children: Array<{ props: { status: string } }>;
-      } } } } };
-    }).__rivtoDemo.editor.editor.blocks.getBlock(parentId);
+    const block = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks.getBlock(parentId);
     return { saved: block.props.statusOrder, children: block.children.map((child) => child.props.status) };
   }, storageId)).toEqual({ saved: ["doing", "todo", "done"], children: ["doing", "todo", "done"] });
 });
@@ -263,9 +228,7 @@ test("reorders visible tasks while a filter is active in Manual mode", async ({ 
   await page.mouse.up();
 
   await expect.poll(() => page.evaluate((parentId) => (
-    (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: { getBlock(id: string): { children: Array<{ content: string }> } } } } };
-    }).__rivtoDemo.editor.editor.blocks.getBlock(parentId).children.map((child) => child.content)
+    (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks.getBlock(parentId).children.map((child) => child.content)
   ), storageId)).toEqual(["Review the project brief", "Set up the workspace", "Build the editor extension"]);
   await expect(storage.locator('[data-block-type="todo-item"] [aria-label="TODO item name"]')).toHaveText([
     "Set up the workspace",
@@ -304,9 +267,7 @@ test("creates a TODO storage from the slash menu", async ({ page }) => {
 
 test("starts writing in an empty TODO storage from the keyboard", async ({ page }) => {
   const storageId = await page.evaluate(() => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
-    }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     return editor.blocks.insertBlock({ type: "todo-storage", content: "" });
   });
   const storage = page.locator(`[data-block-id="${storageId}"]`);

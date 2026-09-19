@@ -2,7 +2,6 @@
  * Copies normalized block ranges and dispatches paste to registered strategies
  * inside one transaction.
  */
-import type { EditorRuntime } from "../../editor/rivto-editor";
 import {
   isCaretSelection,
   isStructuralSelection,
@@ -24,6 +23,7 @@ import {
   type PastePlacement,
 } from "./strategies";
 import { PasteStrategyRegistry } from "./strategies";
+import type { RivtoEditorApi } from "../../editor/types";
 
 /** Framework-neutral clipboard operations over blocks with per-block offsets. */
 export class ClipboardManager {
@@ -32,9 +32,9 @@ export class ClipboardManager {
 
   /**
    * Creates the clipboard owner and registers core paste strategies.
-   * @param editor - Runtime providing document operations and history.
+   * @param editor - Owning editor providing block and selection operations.
    */
-  constructor(private readonly editor: EditorRuntime) {
+  constructor(private readonly editor: RivtoEditorApi) {
     this.pasteStrategies.register(
       PRESERVE_NEWLINES_PASTE_STRATEGY_ID,
       new PreserveNewlinesPasteStrategy(editor),
@@ -101,7 +101,7 @@ export class ClipboardManager {
     let context = this.createPasteContext(input);
     const placement: PastePlacement = input.placement ?? {};
     let caret: EditorPosition | undefined;
-    this.editor.batchUpdates(() => {
+    this.editor.history.batchUpdates(() => {
       this.pasteStrategies.getPasteStrategies().forEach((strategy) => {
         if (!strategy.matches(context, placement)) return;
         const result = strategy.paste(context, placement);

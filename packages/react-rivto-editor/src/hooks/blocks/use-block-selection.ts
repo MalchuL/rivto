@@ -21,15 +21,15 @@ import { useEditorSelection } from "../editor/use-editor-selection";
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockSelected(blockId: string): boolean {
-  const { editor } = useEditorContext();
+  const { reactEditor } = useEditorContext();
   const subscribe = useCallback(
-    (listener: () => void) => editor.selection.subscribe(listener),
-    [editor],
+    (listener: () => void) => reactEditor.selection.subscribe(listener),
+    [reactEditor],
   );
   return useSyncExternalStore(
     subscribe,
-    () => editor.selection.isBlockSelected(blockId),
-    () => editor.selection.isBlockSelected(blockId),
+    () => reactEditor.selection.isBlockSelected(blockId),
+    () => reactEditor.selection.isBlockSelected(blockId),
   );
 }
 

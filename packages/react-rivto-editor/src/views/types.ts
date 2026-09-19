@@ -5,7 +5,7 @@
  * that page Enter/Tab/Backspace/drag dispatchers consult so container
  * extensions can override split, indent, and drop without type switches in
  * those modules. Views call `views/ops` primitives and never touch
- * `editor.document` directly.
+ * internal document storage directly.
  *
  * @module
  */

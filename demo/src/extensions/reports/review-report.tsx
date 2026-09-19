@@ -11,14 +11,13 @@ import {
   ElementSlots,
   blockExtension,
   useBlockEditing,
-  useEditor,
   useEditorMode,
   useEditorRoot,
   useEditorSelection,
   useElements,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
-import type { EditorElement } from "@chulane/rivto";
+import type { EditorElement, RivtoEditorApi } from "@chulane/rivto";
 import { createPortal } from "react-dom";
 import {
   useState,
@@ -143,13 +142,14 @@ function ReviewControls(props: ReviewControlsProps) {
  * @returns Editable problem statement and report controls, or null after deletion.
  */
 function ReviewBlock({
+  editor,
   blockId,
   saveReport,
 }: {
+  readonly editor: RivtoEditorApi;
   readonly blockId: string;
   readonly saveReport: SaveReviewReport;
 }) {
-  const editor = useEditor();
   const editing = useBlockEditing<ReviewBlockProps>(blockId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -227,15 +227,16 @@ function ReviewBlock({
  * @returns Positioned canvas frame with the same Save UX as the block.
  */
 function ReviewElement({
+  editor,
   element,
   selected,
   saveReport,
 }: {
+  readonly editor: RivtoEditorApi;
   readonly element: EditorElement;
   readonly selected: boolean;
   readonly saveReport: SaveReviewReport;
 }) {
-  const editor = useEditor();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const props = reviewElementPropsSchema.parse(element.props);
@@ -321,7 +322,10 @@ function ReviewElement({
  * @param props - Host persistence callback shared by every rendered report.
  * @returns Portal contents in edgeless mode, otherwise null.
  */
-function ReviewElementLayer({ saveReport }: { readonly saveReport: SaveReviewReport }) {
+function ReviewElementLayer({ editor, saveReport }: {
+  readonly editor: RivtoEditorApi;
+  readonly saveReport: SaveReviewReport;
+}) {
   const { mode } = useEditorMode();
   const { element: root } = useEditorRoot();
   const elements = useElements();
@@ -334,6 +338,7 @@ function ReviewElementLayer({ saveReport }: { readonly saveReport: SaveReviewRep
       {elements.filter(({ type }) => type === REVIEW_REPORT_TYPE).map((element) => (
         <ReviewElement
           key={element.id}
+          editor={editor}
           element={element}
           selected={selected.has(element.id)}
           saveReport={saveReport}
@@ -351,13 +356,14 @@ function ReviewElementLayer({ saveReport }: { readonly saveReport: SaveReviewRep
  * @returns Separate block and canvas extensions sharing one host callback.
  */
 export function reviewReportExtensions(options: {
+  readonly editor: RivtoEditorApi;
   readonly saveReport: SaveReviewReport;
 }): readonly ReactEditorExtension[] {
   return [
     blockExtension({
       definition: reviewBlockDefinition,
       render: ({ blockId }) => (
-        <ReviewBlock blockId={blockId} saveReport={options.saveReport} />
+        <ReviewBlock editor={options.editor} blockId={blockId} saveReport={options.saveReport} />
       ),
       slashCommand: {
         title: "Review report",
@@ -369,9 +375,9 @@ export function reviewReportExtensions(options: {
       id: "demo.review-report.elements",
       setup: (reactEditor) => {
         reactEditor.extensions.mount(() => (
-          <ReviewElementLayer saveReport={options.saveReport} />
+          <ReviewElementLayer editor={options.editor} saveReport={options.saveReport} />
         ));
-        return reactEditor.editor.document.elements.pipe.register({
+        return reactEditor.elements.registerProcessor({
           id: "demo.review-report.props",
           priority: 0,
           processor: (element) => element.type === REVIEW_REPORT_TYPE

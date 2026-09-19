@@ -7,7 +7,6 @@ import { ElementPasteStrategy } from "./element-paste-strategy";
 describe("ElementPasteStrategy", () => {
   it("clones selected visual elements with fresh IDs and offset geometry", () => {
     const editor = createTestCoreEditor({ mode: "edgeless" });
-    editor.document.elements.generateId = () => "generated-element";
     editor.elements.insertElement({
       id: "source",
       type: "text",
@@ -40,8 +39,9 @@ describe("ElementPasteStrategy", () => {
     }, {});
 
     const elementIds = created?.proposedSelection.elements;
-    expect(elementIds).toEqual(["generated-element"]);
-    expect([...(created?.elementIdMap ?? [])]).toEqual([["source", "generated-element"]]);
+    expect(elementIds).toHaveLength(1);
+    expect(elementIds?.[0]).not.toBe("source");
+    expect([...(created?.elementIdMap ?? [])]).toEqual([["source", elementIds?.[0]]]);
     expect(editor.elements.getElement(elementIds![0]!)).toMatchObject({
       type: "text",
       frame: { x: 34, y: 44, width: 100, height: 40 },

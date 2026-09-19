@@ -1,16 +1,16 @@
 import { createTestEditor as createRivtoEditor } from "../test-utils";
 
-describe("EditorRuntime undo manager", () => {
+describe("EditorRuntime history manager", () => {
   it("undoes and redoes one document command at a time", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
 
     editor.blocks.updateBlock(id, { content: "Updated" });
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
 
-    editor.redo();
+    editor.history.redo();
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Updated" }]);
     editor.destroy();
   });
@@ -21,10 +21,10 @@ describe("EditorRuntime undo manager", () => {
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
     editor.blocks.setBlockProp(id, "tone", "info");
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Initial", props: {} }]);
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toEqual([]);
     editor.destroy();
   });
@@ -36,9 +36,9 @@ describe("EditorRuntime undo manager", () => {
       revisions += 1;
     });
 
-    const secondId = editor.batchUpdates(() => {
+    const secondId = editor.history.batchUpdates(() => {
       const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-      return editor.batchUpdates(() => (
+      return editor.history.batchUpdates(() => (
         editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId)
       ));
     });
@@ -49,9 +49,9 @@ describe("EditorRuntime undo manager", () => {
     ]);
     expect(revisions).toBe(1);
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toEqual([]);
-    editor.redo();
+    editor.history.redo();
     expect(editor.blocks.getBlocks()).toHaveLength(2);
 
     unsubscribe();
@@ -65,7 +65,7 @@ describe("EditorRuntime undo manager", () => {
     editor.blocks.updateBlock(id, { content: "First" });
     editor.blocks.updateBlock(id, { content: "Second" });
 
-    editor.undo();
+    editor.history.undo();
 
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
     editor.destroy();
@@ -79,11 +79,31 @@ describe("EditorRuntime undo manager", () => {
     editor.mode.set("edgeless");
     editor.blocks.updateBlock(id, { content: "Second" });
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "First" }]);
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Initial" }]);
+    editor.destroy();
+  });
+
+  it("excludes derived maintenance from user undo history", () => {
+    const editor = createRivtoEditor();
+    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "User change" });
+
+    editor.history.batchUpdatesWithoutHistory(() => {
+      editor.elements.insertElement({
+        id: "derived",
+        type: "block",
+        frame: { x: 0, y: 0, width: 100, height: 100 },
+        zIndex: 0,
+        props: { startBlockId: blockId, endBlockId: blockId },
+      });
+    });
+    editor.history.undo();
+
+    expect(editor.blocks.getBlock(blockId)).toBeUndefined();
+    expect(editor.elements.getElement("derived")).toBeDefined();
     editor.destroy();
   });
 
@@ -91,11 +111,11 @@ describe("EditorRuntime undo manager", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
     const calls: string[] = [];
-    const unsubscribe = editor.document.subscribe(() => calls.push(editor.blocks.getBlocks()[0]?.content ?? ""));
+    const unsubscribe = editor.subscribe(() => calls.push(editor.blocks.getBlocks()[0]?.content ?? ""));
 
     editor.blocks.updateBlock(id, { content: "Updated" });
-    editor.execute("history.undo");
-    editor.execute("history.redo");
+    editor.commands.execute("history.undo");
+    editor.commands.execute("history.redo");
 
     expect(calls).toEqual(["Updated", "Initial", "Updated"]);
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Updated" }]);
@@ -120,7 +140,7 @@ describe("EditorRuntime undo manager", () => {
       }],
     });
 
-    editor.undo();
+    editor.history.undo();
 
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     editor.destroy();

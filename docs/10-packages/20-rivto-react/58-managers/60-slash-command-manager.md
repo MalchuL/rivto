@@ -58,4 +58,4 @@ Availability проверяется повторно непосредствен�
 
 Registry общий для page и edgeless. Context всегда block-local, поэтому slash menu открывается внутри editable block как на page, так и внутри edgeless card. Canvas object selection без active text block сама по себе не создаёт slash context.
 
-Mode-specific command реализуется через `isAvailable`, читающий `reactEditor.editor.mode`, либо отдельный mounted UI. Manager автоматически по mode commands не фильтрует.
+Mode-specific command реализуется через `isAvailable`, читающий `reactEditor.mode`, либо отдельный mounted UI. Manager автоматически по mode commands не фильтрует.

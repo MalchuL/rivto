@@ -57,7 +57,7 @@ export function registerListShortcuts(reactEditor: ReactEditor): void {
     root: HTMLElement,
     shortcut: ListShortcutPatch,
   ): void => {
-    reactEditor.editor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       reactEditor.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
       reactEditor.selection.set(createCaretSelection(blockId, 0));
     });
@@ -87,7 +87,7 @@ export function registerListShortcuts(reactEditor: ReactEditor): void {
       return false;
     }
     queueMicrotask(() => {
-      const block = reactEditor.editor.blocks.getBlock(blockId);
+      const block = reactEditor.blocks.getBlock(blockId);
       const shortcut = block ? listShortcutPatch(block.content.replaceAll("\u00a0", " ")) : undefined;
       if (!shortcut) return;
       convert(blockId, root, shortcut);

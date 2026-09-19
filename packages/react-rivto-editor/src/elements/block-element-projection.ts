@@ -14,7 +14,6 @@ export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
 export const EDGELESS_BLOCK_ELEMENT_ID_PREFIX = "rivto:block-element:";
 export const EDGELESS_CARD_DEFAULT_FRAME = { x: 60, y: 60, width: 720, height: 120 } as const;
 export const EDGELESS_BLOCK_PLACEMENT_STEP = 20;
-const RECONCILE_ORIGIN = Symbol("rivto-react-block-elements");
 const placementSettings = new WeakMap<ReactEditor, boolean>();
 const defaultWidthSettings = new WeakMap<ReactEditor, number>();
 
@@ -192,7 +191,7 @@ export function blockIdsOf(element: EditorElement, rootIds: readonly string[]): 
  * alone only lists roots and would reject every child hit.
  */
 export function elementContainsBlock(
-  editor: Pick<ReactEditor["editor"], "blocks">,
+  editor: { readonly blocks: Pick<ReactEditor["blocks"], "getParentId"> },
   element: EditorElement,
   rootIds: readonly string[],
   blockId: string,
@@ -243,14 +242,13 @@ export function insertBlockElementSeparator(reactEditor: ReactEditor, afterId: s
  * @returns No value; required element changes are committed synchronously.
  */
 export function reconcileBlockElements(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
 
   // Build the two sides of the projection: current document roots and the
   // persisted canvas elements that render ranges of those roots as cards.
-  const roots = editor.blocks.getBlocks();
+  const roots = reactEditor.blocks.getBlocks();
   const rootOrder = roots.map((block) => block.id);
   const rootSet = new Set(rootOrder);
-  const existing = editor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
+  const existing = reactEditor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
   const currentRanges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
 
   // A moved range endpoint can temporarily make its persisted start/end pair
@@ -326,9 +324,9 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
   // limited to range boundaries so reconciliation never resets card geometry.
   const desiredIds = new Set(desired.map((element) => element.id));
   const remove = existing.filter((element) => !desiredIds.has(element.id)).map((element) => element.id);
-  const insert = desired.filter((element) => !editor.elements.getElement(element.id));
+  const insert = desired.filter((element) => !reactEditor.elements.getElement(element.id));
   const update = desired.flatMap((element) => {
-    const current = editor.elements.getElement(element.id);
+    const current = reactEditor.elements.getElement(element.id);
     return current && (current.props.startBlockId !== element.props.startBlockId || current.props.endBlockId !== element.props.endBlockId)
       ? [{ id: element.id, patch: { props: element.props } }]
       : [];
@@ -345,11 +343,9 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
   });
   if (!remove.length && !insert.length && !update.length) return;
 
-  // Commit the complete repair atomically under a separate origin so these
-  // derived maintenance writes do not become user-visible undo steps.
-  editor.document.crdt.transact(() => {
-    if (remove.length) editor.document.elements.removeElements(remove);
-    insert.forEach((element) => editor.document.elements.insertElement(element));
-    if (update.length) editor.document.elements.updateElements(update);
-  }, RECONCILE_ORIGIN);
+  reactEditor.history.batchUpdatesWithoutHistory(() => {
+    if (remove.length) reactEditor.elements.removeElements(remove);
+    insert.forEach((element) => reactEditor.elements.insertElement(element));
+    if (update.length) reactEditor.elements.updateElements(update);
+  });
 }

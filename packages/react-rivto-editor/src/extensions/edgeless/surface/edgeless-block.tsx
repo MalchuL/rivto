@@ -13,7 +13,6 @@ import { useEdgelessSelected } from "../../built-ins/selection/edgeless-runtime"
 import { BlockTree, ElementSlots } from "../../../blocks";
 import { useReactEditor } from "../../../hooks";
 
-const AUTO_HEIGHT_ORIGIN = Symbol("rivto-react-block-element-auto-height");
 const CARD_CLASS = "edgeless-card";
 const CARD_CONTENT_CLASS = "edgeless-card-content";
 const RESIZE_HANDLE_CLASS = "edgeless-resize-handle";
@@ -81,9 +80,9 @@ function EdgelessBlockElementView({
       const height = Math.max(MIN_CARD_HEIGHT, Math.ceil(content.scrollHeight + 2));
       host.style.height = previousHeight;
       if (Math.abs(element.frame.height - height) < 1) return;
-      reactEditor.editor.document.crdt.transact(() => {
-        reactEditor.editor.document.elements.updateElement(element.id, { frame: { height } });
-      }, AUTO_HEIGHT_ORIGIN);
+      reactEditor.history.batchUpdates(() => {
+        reactEditor.elements.updateElement(element.id, { frame: { height } });
+      });
     };
     measure();
     if (typeof ResizeObserver === "undefined") return;

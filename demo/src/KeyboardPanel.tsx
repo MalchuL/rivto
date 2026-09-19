@@ -167,17 +167,17 @@ function KeyboardShortcutModal({
  * @returns Collapsible shortcut table used by the journal demo and keymap e2e.
  */
 export function KeyboardPanel() {
-  const editor = useReactEditor();
+  const reactEditor = useReactEditor();
   const subscribe = useCallback(
-    (listener: () => void) => editor.keyboard.subscribe(listener),
-    [editor],
+    (listener: () => void) => reactEditor.keyboard.subscribe(listener),
+    [reactEditor],
   );
   const revision = useSyncExternalStore(
     subscribe,
-    () => editor.keyboard.revision,
-    () => editor.keyboard.revision,
+    () => reactEditor.keyboard.revision,
+    () => reactEditor.keyboard.revision,
   );
-  const bindings = editor.keyboard.list();
+  const bindings = reactEditor.keyboard.list();
   const [recorder, setRecorder] = useState<ShortcutRecorderTarget | undefined>();
 
   /**
@@ -190,7 +190,7 @@ export function KeyboardPanel() {
     binding: KeyboardBindingSnapshot,
     shortcut: string,
   ): void => {
-    editor.keyboard.setKeymapOverride(binding.id, [shortcut]);
+    reactEditor.keyboard.setKeymapOverride(binding.id, [shortcut]);
     setRecorder(undefined);
   };
 
@@ -251,14 +251,14 @@ export function KeyboardPanel() {
                       <button
                         type="button"
                         data-keyboard-action="disable"
-                        onClick={() => editor.keyboard.setKeymapOverride(binding.id, [])}
+                        onClick={() => reactEditor.keyboard.setKeymapOverride(binding.id, [])}
                       >
                         Disable
                       </button>
                       <button
                         type="button"
                         data-keyboard-action="restore"
-                        onClick={() => editor.keyboard.setKeymapOverride(binding.id, undefined)}
+                        onClick={() => reactEditor.keyboard.setKeymapOverride(binding.id, undefined)}
                       >
                         Restore
                       </button>

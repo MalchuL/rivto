@@ -35,9 +35,9 @@ describe("EditorRuntime element commands", () => {
     expect(editor.elements.getElement("shape")?.frame.x).toBe(10);
 
     editor.elements.updateElement("shape", { frame: { x: 40 } });
-    editor.undo();
+    editor.history.undo();
     expect(editor.elements.getElement("shape")?.frame.x).toBe(10);
-    editor.redo();
+    editor.history.redo();
     expect(editor.elements.getElement("shape")?.frame.x).toBe(40);
     editor.destroy();
   });
@@ -55,7 +55,7 @@ describe("EditorRuntime element commands", () => {
 
   it("runs registered element processors before insert and update", () => {
     const editor = createRivtoEditor();
-    const dispose = editor.document.elements.pipe.register({
+    const dispose = editor.elements.registerProcessor({
       id: "test.element.tag",
       priority: 30,
       processor: (element) => ({

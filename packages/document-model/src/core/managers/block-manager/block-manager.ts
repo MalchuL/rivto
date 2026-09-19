@@ -5,10 +5,12 @@
  * this layer supplies generic storage operations and snapshot validation.
  */
 import {
+    CRDTDoc,
     CRDTType,
     CRDTArray,
     CRDTMap,
     CRDTText,
+    CRDTUndoScope,
 } from "@chulane/crdt-doc";
 import type {
     Block,
@@ -16,8 +18,7 @@ import type {
     BlockListProps,
     BlockPatch,
     BlockUpdate,
-    DocumentModel,
-    GenerateId,
+    DocumentBlockManagerApi,
 } from "../../types";
 import type {
     BlockListPropsStorage,
@@ -37,8 +38,6 @@ import {
     isCRDTText,
     requireNonemptyId,
 } from "../../utils";
-import { Pipe } from "../../../utils/pipe";
-import type { BlockPipeContext } from "./block-pipe";
 import {
     contentFrom,
     strings,
@@ -48,7 +47,6 @@ import {
 
 const ROOTS_KEY = "rivto.editor.roots";
 const BLOCKS_KEY = "rivto.editor.blocks";
-
 interface LocatedBlock {
     array: CRDTArray<string>;
     index: number;
@@ -60,23 +58,12 @@ interface LocatedBlock {
  * Owns block records, collaborative text, and ordered tree placement.
  *
  * The manager is exposed as `document.blocks`. It preserves stable CRDT
- * container identities and lazily repairs cached tree paths. Plugin constraints are
- * registered on `pipe` and processed against portable block instances before
- * writes.
+ * container identities and lazily repairs cached tree paths. Editor-specific
+ * schema and placement policy is applied before this storage boundary.
  */
-export class DocumentBlockManager {
-    /** Collaborative containers tracked by the owning document's undo manager. */
-    readonly undoScopes: readonly [CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>, CRDTArray<IDBlock>];
-
-    /** Priority-ordered processors applied to portable blocks before writes. */
-    readonly pipe = new Pipe<BlockInput, BlockPipeContext>();
-    /**
-     * Creates a block identity when an insert omits `id`.
-     *
-     * Replace this per manager; it is independent of element identity generation.
-     * The default uses `crypto.randomUUID`.
-     */
-    generateId: GenerateId = () => crypto.randomUUID();
+export class DocumentBlockManager implements DocumentBlockManagerApi {
+    /** Creates block identities without exposing generator configuration. */
+    private readonly generateId = (): string => crypto.randomUUID();
     /** Cached block paths for each block. */
     private readonly blockPaths = new Map<IDBlock, readonly number[]>();
     /** Stable detached snapshots reused until their record or a descendant changes. */
@@ -101,16 +88,17 @@ export class DocumentBlockManager {
     private readonly roots: CRDTArray<IDBlock>;
     /** Block storage. */
     private readonly storage: CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>;
-
+    /** Adapter roots tracked by document-owned history. */
+    readonly historyScopes: readonly CRDTUndoScope[];
     /**
      * Creates a block manager over existing collaborative document storage.
      *
-     * @param document - Owning document model providing CRDT and transaction boundaries.
+     * @param crdt - Collaborative storage adapter.
      */
-    constructor(private readonly document: DocumentModel) {
-        this.roots = document.crdt.getArray<IDBlock>(ROOTS_KEY);
-        this.storage = document.crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY);
-        this.undoScopes = [this.storage, this.roots];
+    constructor(private readonly crdt: CRDTDoc) {
+        this.roots = crdt.getArray<IDBlock>(ROOTS_KEY);
+        this.storage = crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY);
+        this.historyScopes = [this.storage, this.roots];
         this.refreshParents();
         // Nested maps name the owning block in `path` / `keys`. Child-list
         // edits therefore already include the parent ID, so ancestor snapshots
@@ -149,16 +137,6 @@ export class DocumentBlockManager {
 
     /** @returns Monotonic revision incremented by block data or hierarchy changes. */
     get revision(): number { return this.currentRevision; }
-
-    /**
-     * Runs one semantic block mutation through the owning document transaction.
-     *
-     * @param operation - Synchronous block mutation to execute atomically.
-     * @returns No value.
-     */
-    private transact(operation: () => void): void {
-        this.document.transact(operation);
-    }
 
     /**
      * Reports whether the document has no root blocks.
@@ -212,7 +190,7 @@ export class DocumentBlockManager {
      * @returns Root identifiers in collaborative array order.
      */
     getRootIds(): string[] {
-        if (this.document.isTransacting) return strings(this.roots);
+        if (this.crdt.isTransacting) return strings(this.roots);
         this.rootIdsSnapshot ??= strings(this.roots);
         return this.rootIdsSnapshot;
     }
@@ -281,7 +259,7 @@ export class DocumentBlockManager {
      * @returns Parent identifier, null for a root, or undefined when absent.
      */
     getParentId(id: string): string | null | undefined {
-        if (this.document.isTransacting) {
+        if (this.crdt.isTransacting) {
             const found = this.findContainer(id);
             return found ? found.parentId ?? null : undefined;
         }
@@ -293,16 +271,16 @@ export class DocumentBlockManager {
      *
      * @param block - Initial portable block data including its required native type.
      * @param afterId - Sibling to insert after block id, `null` for first, or omitted for last.
-     * @returns Stable ID of the inserted block, either supplied or from `generateId`.
+     * @returns Stable ID of the inserted block, either supplied or generated internally.
      * @throws If the ID already exists or the requested sibling is missing.
      */
     insertBlock(block: BlockInput, afterId?: string | null): string {
         if (!block.type) throw new Error("Block type is required");
         const container = this.resolveInsertContainer(afterId);
-        this.validateInsertedForest([block], this.resolveInsertParentType(afterId));
+        this.validateInsertedForest([block]);
         let id = "";
-        this.transact(() => {
-            id = this.insertInto(block, container, afterId, this.resolveInsertParentType(afterId));
+        this.crdt.transact(() => {
+            id = this.insertInto(block, container, afterId);
         });
         return id;
     }
@@ -336,7 +314,6 @@ export class DocumentBlockManager {
         const simulatedListProps = new Map<string, BlockListProps>();
         const prepared = updates.map(({ id, patch }) => {
             const block = this.requiredBlock(id);
-            const type = this.requiredType(block, id);
             let validatedListProps: BlockListProps | undefined;
             if (patch.listProps) {
                 const current = simulatedListProps.get(id)
@@ -351,20 +328,14 @@ export class DocumentBlockManager {
                 Object.entries(patch.props).forEach(([key, value]) => {
                     if (value !== undefined) assertPortableValue(value, `block.props.${key}`);
                 });
-                validatedProps = this.processBlock({
-                    ...this.storedBlockInput(id),
-                    type,
-                    props: { ...current, ...patch.props },
-                    listProps: simulatedListProps.get(id)
-                        ?? this.requiredMap(block, "listProps").toObject(),
-                }).props ?? {};
+                validatedProps = { ...current, ...patch.props };
                 simulatedProps.set(id, validatedProps);
             }
             if (patch.pluginData) assertPortableRecord(patch.pluginData, "block.pluginData");
             return { block, patch, validatedListProps, validatedProps };
         });
 
-        this.transact(() => {
+        this.crdt.transact(() => {
             prepared.forEach(({ block, patch, validatedListProps, validatedProps }) => {
                 if (validatedListProps && patch.listProps) {
                     assignMap(this.requiredMap(block, "listProps"), { ...patch.listProps }, false);
@@ -394,12 +365,9 @@ export class DocumentBlockManager {
      */
     setBlockType(id: string, type: string, props: Record<string, unknown> = {}): void {
         if (!type) throw new Error("Block type is required");
-        const nextProps = this.processBlock({
-            ...this.storedBlockInput(id),
-            type,
-            props,
-        }).props ?? {};
-        this.transact(() => {
+        assertPortableRecord(props, "block.props");
+        const nextProps = props;
+        this.crdt.transact(() => {
             const block = this.requiredBlock(id);
             block.set("type", type);
             assignMap(this.requiredMap(block, "props"), nextProps);
@@ -417,7 +385,7 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     setBlockProp(id: string, key: string, value: unknown): void {
-        this.transact(() => {
+        this.crdt.transact(() => {
             const block = this.requiredBlock(id);
             this.patchProps(id, String(block.get("type")), this.requiredMap(block, "props"), { [key]: value });
         });
@@ -454,7 +422,7 @@ export class DocumentBlockManager {
             map: this.requiredMap(this.requiredBlock(id), "listProps"),
             keys: [...new Set(keys)],
         }));
-        this.transact(() => prepared.forEach(({ map, keys }) => keys.forEach((key) => map.delete(key))));
+        this.crdt.transact(() => prepared.forEach(({ map, keys }) => keys.forEach((key) => map.delete(key))));
     }
 
     /**
@@ -467,7 +435,7 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     setPluginData(id: string, pluginId: string, value: unknown): void {
-        this.transact(() => {
+        this.crdt.transact(() => {
             const data = this.requiredMap(this.requiredBlock(id), "pluginData");
             if (value === undefined) data.delete(pluginId);
             else data.set(pluginId, clone(value) as CRDTType);
@@ -484,7 +452,7 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     setBlockText(id: string, text: string): void {
-        this.transact(() => {
+        this.crdt.transact(() => {
             const content = this.requiredText(this.requiredBlock(id), "content");
             const current = content.toString();
             if (current === text) return;
@@ -512,7 +480,7 @@ export class DocumentBlockManager {
      */
     insertText(id: string, offset: number, text: string): void {
         if (!text) return;
-        this.transact(() => {
+        this.crdt.transact(() => {
             const content = this.requiredText(this.requiredBlock(id), "content");
             const position = Math.max(0, Math.min(offset, content.length));
             content.insert(position, text);
@@ -530,7 +498,7 @@ export class DocumentBlockManager {
      */
     deleteText(id: string, offset: number, length: number): void {
         if (length <= 0) return;
-        this.transact(() => {
+        this.crdt.transact(() => {
             const content = this.requiredText(this.requiredBlock(id), "content");
             const position = Math.max(0, Math.min(offset, content.length));
             content.delete(position, Math.min(length, content.length - position));
@@ -544,7 +512,7 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     removeBlock(id: string): void {
-        this.transact(() => {
+        this.crdt.transact(() => {
             const found = this.findContainer(id);
             if (!found) return;
             this.removeTree(id);
@@ -583,14 +551,13 @@ export class DocumentBlockManager {
      *
      * A placement that names itself as the anchor is skipped. Remaining entries
      * are validated as a sequence before any write because CRDT transactions
-     * cannot roll back. Cycle checks and parent-type pipe constraints run against
-     * simulated parents, so later entries observe parents established by earlier
-     * ones. The write then detaches each ID and inserts it at the resolved index.
+     * cannot roll back. Cycle checks run against simulated parents, so later
+     * entries observe parents established by earlier ones. The write then
+     * detaches each ID and inserts it at the resolved index.
      *
      * @param moves - Ordered subtree placements; later entries see earlier parents.
      * @returns No value.
-     * @throws When a source or anchor is unplaced, a cycle would form, or a pipe
-     *   processor rejects the destination parent.
+     * @throws When a source or anchor is unplaced or a cycle would form.
      */
     moveBlocks(moves: readonly {
         id: string;
@@ -627,16 +594,9 @@ export class DocumentBlockManager {
             if (targetId === null) parentId = parentOf(id);
             else if (position === "inside") parentId = targetId;
             else parentId = parentOf(targetId);
-            // Null-anchor prepends in the current list, but still runs as a
-            // root-eligibility check so constrained children cannot become roots.
-            let parentType: string | null = null;
-            if (targetId !== null && parentId !== null) {
-                parentType = this.requiredType(this.requiredBlock(parentId), parentId);
-            }
-            this.processBlock(this.storedBlockInput(id), parentType);
             parents.set(id, parentId);
         }
-        this.transact(() => {
+        this.crdt.transact(() => {
             for (const { id, targetId, position } of pending) {
                 const source = this.findContainer(id)!;
                 let target: CRDTArray<string>;
@@ -681,18 +641,14 @@ export class DocumentBlockManager {
      *
      * Validation precedes destructive replacement because CRDT transactions do
      * not roll back writes when an operation throws. Unique IDs, nonempty types,
-     * portable records, schema props, and acyclic children are all required.
+     * portable records and acyclic children are all required.
      *
      * @param blocks - Portable root block trees to validate recursively.
      * @returns No value.
      * @throws {Error} When any descendant is malformed, duplicated, or cyclic.
      */
     validateBlocks(blocks: readonly Block[]): void {
-        validateBlockForest(blocks, {
-            requireComplete: true,
-            pipe: this.pipe,
-            parentType: null,
-        });
+        validateBlockForest(blocks, { requireComplete: true });
     }
 
     /**
@@ -704,7 +660,7 @@ export class DocumentBlockManager {
      * @returns No value.
      */
     normalize(): void {
-        this.transact(() => {
+        this.crdt.transact(() => {
             const seen = new Set<string>();
             const clean = (array: CRDTArray<string>) => {
                 for (let index = array.length - 1; index >= 0; index -= 1) {
@@ -722,35 +678,57 @@ export class DocumentBlockManager {
     }
 
     /**
+     * Creates the block ID map used by an immediate import.
+     *
+     * Available source IDs survive cut/paste. IDs already present in this
+     * document receive generated replacements so copied blocks cannot overwrite
+     * existing data. The returned IDs are not inserted or reserved.
+     *
+     * @param sourceIds - Stable source IDs in import order.
+     * @returns Destination ID for every source block ID.
+     */
+    createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string> {
+        const assigned = new Set<string>();
+        return new Map(sourceIds.map((sourceId) => {
+            // A free identity survives cut/paste. Copying into a document that
+            // still owns it needs a fresh identity to avoid replacing data.
+            const reusable = !this.storage.has(sourceId) && !assigned.has(sourceId);
+            let id = reusable ? sourceId : this.generateId();
+            // Generated collisions are improbable, but the document boundary
+            // still guarantees a usable mapping rather than relying on chance.
+            while (this.storage.has(id) || assigned.has(id)) id = this.generateId();
+            assigned.add(id);
+            return [sourceId, id];
+        }));
+    }
+
+    /**
      * Creates CRDT containers for a block and inserts its ID into an ordered list.
      *
      * @param block - Portable block data, including its type and optional descendants.
      * @param container - Root or child array that receives the block ID.
      * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
-     * @param parentType - Native type of the insertion parent, or `null` for roots.
-     * @returns Stable ID assigned to the block, either supplied or from `generateId`.
+     * @returns Stable ID assigned to the block, either supplied or generated internally.
      * @throws If the ID already exists or the requested sibling is missing.
      */
     private insertInto(
         block: BlockInput,
         container: CRDTArray<string>,
         afterId?: string | null,
-        parentType: string | null = null,
     ): string {
         if (!block.type) throw new Error("Block type is required");
-        const validated = this.processBlock(block, parentType);
-        const listProps = validateBlockListProps(validated.listProps ?? {});
-        const id = requireNonemptyId(validated.id ?? this.generateId(), "Block");
+        const listProps = validateBlockListProps(block.listProps ?? {});
+        const id = requireNonemptyId(block.id ?? this.generateId(), "Block");
         if (this.storage.has(id)) throw new Error(`Block ${id} already exists`);
         const index = this.placementIndex(container, afterId);
-        const model = this.document.crdt.instantiator.createMap<BlockStorage>();
-        const props = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
-        const content = this.document.crdt.instantiator.createText();
-        const children = this.document.crdt.instantiator.createArray<string>();
-        const listPropsStorage = this.document.crdt.instantiator.createMap<BlockListPropsStorage>();
-        const pluginData = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
+        const model = this.crdt.createDetachedMap<BlockStorage>();
+        const props = this.crdt.createDetachedMap<Record<string, CRDTType>>();
+        const content = this.crdt.createDetachedText();
+        const children = this.crdt.createDetachedArray<string>();
+        const listPropsStorage = this.crdt.createDetachedMap<BlockListPropsStorage>();
+        const pluginData = this.crdt.createDetachedMap<Record<string, CRDTType>>();
         model.set("id", id);
-        model.set("type", validated.type);
+        model.set("type", block.type);
         model.set("listProps", listPropsStorage);
         model.set("props", props);
         model.set("content", content);
@@ -758,10 +736,10 @@ export class DocumentBlockManager {
         model.set("pluginData", pluginData);
         this.storage.set(id, model);
         assignMap(listPropsStorage, { ...listProps }, true);
-        assignMap(props, validated.props ?? {});
-        assignText(content, contentFrom(validated.content));
-        assignMap(pluginData, validated.pluginData ?? {});
-        validated.children?.forEach((child) => this.insertInto(child, children, undefined, validated.type));
+        assignMap(props, block.props ?? {});
+        assignText(content, contentFrom(block.content));
+        assignMap(pluginData, block.pluginData ?? {});
+        block.children?.forEach((child) => this.insertInto(child, children));
         container.insert(index, id);
         return id;
     }
@@ -797,32 +775,14 @@ export class DocumentBlockManager {
     }
 
     /**
-     * Resolves the parent type that will own an insertion.
-     *
-     * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
-     * @returns Parent native type, or `null` when the insertion is a document root.
-     */
-    private resolveInsertParentType(afterId?: string | null): string | null {
-        if (afterId === undefined || afterId === null) return null;
-        const found = this.findContainer(afterId);
-        if (!found) throw new Error(`Target block ${afterId} not found`);
-        return found.parentId == null ? null : this.requiredType(this.requiredBlock(found.parentId), found.parentId);
-    }
-
-    /**
      * Preflights one inserted forest against current storage before writing.
      *
      * @param blocks - Root inputs that will be written in one insertion.
-     * @param parentType - Native type of the insertion parent, or `null` for roots.
      * @returns No value.
      * @throws {Error} When any descendant is malformed or collides with storage.
      */
-    private validateInsertedForest(blocks: readonly BlockInput[], parentType: string | null): void {
-        validateBlockForest(blocks, {
-            existingIds: new Set([...this.storage.keys()]),
-            pipe: this.pipe,
-            parentType,
-        });
+    private validateInsertedForest(blocks: readonly BlockInput[]): void {
+        validateBlockForest(blocks, { existingIds: new Set([...this.storage.keys()]) });
     }
 
     /**
@@ -837,7 +797,7 @@ export class DocumentBlockManager {
         const value = this.storage.get(id);
         if (!isCRDTMap(value)) return undefined;
         visited.add(id);
-        const cached = this.document.isTransacting ? undefined : this.blockSnapshots.get(id);
+        const cached = this.crdt.isTransacting ? undefined : this.blockSnapshots.get(id);
         if (cached) return cached;
         const props = this.requiredMap(value, "props").toObject() as Record<IDProp, unknown>;
         const pluginData = this.requiredMap(value, "pluginData").toObject() as Record<IDPlugin, unknown>;
@@ -855,7 +815,7 @@ export class DocumentBlockManager {
             content,
             children,
         };
-        if (!this.document.isTransacting) this.blockSnapshots.set(id, snapshot);
+        if (!this.crdt.isTransacting) this.blockSnapshots.set(id, snapshot);
         return snapshot;
     }
 
@@ -864,6 +824,9 @@ export class DocumentBlockManager {
      *
      * Used from storage observation, where the event already lists the mutated
      * record or the parent whose `children` array changed.
+     *
+     * @param ids - Changed block IDs whose cached ancestor chains are stale.
+     * @returns No value.
      */
     private invalidateBlocks(ids: ReadonlySet<string>): void {
         const affected = new Set<string>();
@@ -882,6 +845,9 @@ export class DocumentBlockManager {
      *
      * Root observation has no parent ID in the event. Nested child-list edits
      * skip this helper: storage events already name those parents.
+     *
+     * @param previousParents - Parent index captured before the hierarchy changed.
+     * @returns No value.
      */
     private invalidateChangedParents(previousParents: ReadonlyMap<string, string | null>): void {
         const affected = new Set<string>();
@@ -912,6 +878,9 @@ export class DocumentBlockManager {
      * therefore rebuild an ancestor from a descendant snapshot still waiting
      * its turn in this same set, re-caching the pre-mutation subtree and
      * leaving the block reachable by ID but absent from the materialized tree.
+     *
+     * @param ids - Exact block snapshots to evict and notify.
+     * @returns No value.
      */
     private invalidateSnapshotIds(ids: ReadonlySet<string>): void {
         ids.forEach((id) => this.blockSnapshots.delete(id));
@@ -921,19 +890,34 @@ export class DocumentBlockManager {
         });
     }
 
-    /** Calls a stable listener snapshot so callbacks may unsubscribe safely. */
+    /**
+     * Calls a stable listener snapshot so callbacks may unsubscribe safely.
+     *
+     * @param listeners - Callbacks to invoke once.
+     * @returns No value.
+     */
     private emit(listeners: ReadonlySet<() => void>): void {
         [...listeners].forEach((listener) => listener());
     }
 
-    /** Publishes at most one hierarchy notification for a CRDT transaction. */
+    /**
+     * Publishes at most one hierarchy notification for a CRDT transaction.
+     *
+     * @param transaction - Adapter transaction identity used for deduplication.
+     * @returns No value.
+     */
     private emitStructure(transaction: unknown): void {
         if (this.lastStructureTransaction === transaction) return;
         this.lastStructureTransaction = transaction;
         this.emit(this.structureListeners);
     }
 
-    /** Rebuilds the cheap parent index after hierarchy transactions only. */
+    /**
+     * Rebuilds the cheap parent index after hierarchy transactions only.
+     *
+     * @param transaction - Optional adapter transaction identity used to skip repeated work.
+     * @returns No value.
+     */
     private refreshParents(transaction?: unknown): void {
         if (transaction !== undefined && this.lastParentTransaction === transaction) return;
         this.lastParentTransaction = transaction;
@@ -1047,52 +1031,6 @@ export class DocumentBlockManager {
     }
 
     /**
-     * Runs the block pipe against one portable block instance.
-     *
-     * @param block - Candidate block, typically a stored snapshot or insert input.
-     * @param parentType - Destination parent type; omitted uses the stored parent.
-     * @returns The original block or a processor-normalized replacement.
-     */
-    private processBlock(block: BlockInput, parentType?: string | null): BlockInput {
-        const resolvedParent = parentType !== undefined
-            ? parentType
-            : (block.id ? this.currentParentType(block.id) : null);
-        return this.pipe.process(block, { parentType: resolvedParent });
-    }
-
-    /**
-     * Resolves the native type of a block's current tree parent.
-     *
-     * @param id - Placed block identifier.
-     * @returns Parent native type, or `null` for a root or unplaced block.
-     */
-    private currentParentType(id: string): string | null {
-        const parentId = this.findContainer(id)?.parentId;
-        return parentId == null ? null : this.requiredType(this.requiredBlock(parentId), parentId);
-    }
-
-    /**
-     * Snapshots one stored block as portable input without walking children.
-     *
-     * Child trees are omitted so node-level validators cannot recurse through
-     * descendants that are not part of the current operation.
-     *
-     * @param id - Stored block identifier to materialize.
-     * @returns Detached block input for the requested record.
-     */
-    private storedBlockInput(id: string): BlockInput {
-        const block = this.requiredBlock(id);
-        return {
-            id,
-            type: this.requiredType(block, id),
-            listProps: this.requiredMap(block, "listProps").toObject(),
-            props: this.requiredMap(block, "props").toObject() as Record<string, unknown>,
-            pluginData: this.requiredMap(block, "pluginData").toObject() as Record<string, unknown>,
-            content: this.requiredText(block, "content").toString(),
-        };
-    }
-
-    /**
      * Applies caller-owned prop keys without rebuilding the live CRDT map.
      *
      * @param id - Block identifier used to resolve the current parent type.
@@ -1107,11 +1045,10 @@ export class DocumentBlockManager {
         props: CRDTMap<Record<string, CRDTType>>,
         patch: Record<string, unknown>,
     ): void {
-        const validated = this.processBlock({
-            ...this.storedBlockInput(id),
-            type,
-            props: { ...props.toObject(), ...patch } as Record<string, unknown>,
-        }).props ?? {};
+        Object.entries(patch).forEach(([key, value]) => {
+            if (value !== undefined) assertPortableValue(value, `block.props.${key}`);
+        });
+        const validated = { ...props.toObject(), ...patch } as Record<string, unknown>;
         for (const key of Object.keys(patch)) {
             const value = validated[key];
             if (value === undefined) props.delete(key);

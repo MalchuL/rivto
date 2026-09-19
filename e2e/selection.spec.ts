@@ -113,6 +113,39 @@ test("Alt drag selects complete blocks", async ({ page }) => {
   await expect(contents.nth(1).locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute("data-block-selected", "true");
 });
 
+test("dragging from the adjacent writing block onto Counter selects both blocks", async ({ page }) => {
+  // The immediately neighboring writing block is the regression: caret
+  // hit-testing snaps back to that origin, so Counter used to be skipped
+  // until the pointer reached another editable host.
+  const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+  const nextContent = counter.locator("xpath=following::*[@data-block-content and normalize-space(.) != ''][1]");
+  await nextContent.scrollIntoViewIfNeeded();
+  const from = await textPoint(nextContent, 5);
+  const counterBox = await counter.boundingBox();
+  if (!counterBox) throw new Error("Expected Counter geometry");
+
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(
+    counterBox.x + counterBox.width / 2,
+    counterBox.y + counterBox.height / 2,
+    { steps: 8 },
+  );
+  await page.mouse.move(counterBox.x + counterBox.width / 2 + 1, counterBox.y + counterBox.height / 2);
+
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
+  await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
+  await page.mouse.up();
+  await expect(counter).toHaveAttribute("data-block-selected", "true");
+  await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
+});
+
 test("dragging onto a contentless Counter immediately extends block selection", async ({ page }) => {
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
   const nextContent = counter.locator("xpath=following::*[@data-block-content and normalize-space(.) != ''][2]");
@@ -160,8 +193,8 @@ test("Shift+Alt drag includes a contentless Counter without converting text to b
   await page.mouse.down();
   await page.mouse.move(counterBox.x + counterBox.width / 2, counterBox.y + counterBox.height / 2, { steps: 8 });
   const selected = await page.evaluate(() => (
-    window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor } }
-  ).__rivtoDemo.editor.editor.selection.get()?.blocks);
+    window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }
+  ).__rivtoDemo.editor.selection.get()?.blocks);
   expect(selected).toContainEqual(expect.objectContaining({
     id: await counter.getAttribute(BLOCK_ID_ATTRIBUTE),
     start: 0,

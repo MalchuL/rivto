@@ -1,11 +1,20 @@
-/** React and DOM contracts shared across the page drag extension. */
-import type { useDraggable } from "@dnd-kit/core";
+/**
+ * React and DOM contracts shared across the page drag extension.
+ *
+ * These contracts describe Rivto's own gesture state. The only dnd-kit-shaped
+ * value is the handle ref callback exposed through {@link PageDragHandle}, so
+ * block slots can activate a draggable without importing the library.
+ *
+ * @module
+ */
 import type { EditorBlock as Block } from "@chulane/rivto";
 import type { ReactNode } from "react";
 import type { CrossDocumentBlockTransferPlacement } from "../built-ins/clipboard/cross-document-block-transfer";
 import type { ReactEditor } from "../../types";
-import type { BlockDropPlacementOptions, DropAxis } from "../../views/types";
+import type { DropAxis } from "../../views/types";
 import type { CanonicalDropPlacement } from "./placement/types";
+
+export type { PageDragData, PageDropTargetData } from "./placement/types";
 
 /** Viewport pointer coordinates for a drag gesture. */
 export interface PointerCoordinates {
@@ -21,7 +30,6 @@ export interface PointerTracker {
 
 /** Live destination surface operations used by a source drag provider. */
 export interface CrossDocumentPageRootController {
-  editor: ReactEditor["editor"];
   reactEditor: ReactEditor;
   root: HTMLElement;
   setPlacement: (placement: DropPlacement | null, empty?: boolean) => void;
@@ -51,11 +59,14 @@ export type DropPlacement = CanonicalDropPlacement & {
   readonly gapPointer?: PointerCoordinates;
 };
 
-/** dnd-kit data shared by pointer and keyboard target paths. */
-export interface PageDragData {
-  readonly sortChildren: DropAxis | undefined;
-  readonly targetDropPlacement?: BlockDropPlacementOptions;
-  readonly parentDropPlacement?: BlockDropPlacementOptions;
+/**
+ * Activator registration for one armed block handle.
+ *
+ * The handle button is the only sensor activator; the block row remains the
+ * source geometry, so the ref must never be attached to the row itself.
+ */
+export interface PageDragHandle {
+  readonly handleRef: (element: Element | null) => void;
 }
 
 /** Per-row external store for drag placement feedback. */
@@ -65,8 +76,8 @@ export interface DropPlacementStore {
   isDragged(id: string): boolean;
   isArmed(id: string): boolean;
   arm(id: string): void;
-  getDraggable(id: string): ReturnType<typeof useDraggable> | null;
-  setDraggable(id: string, value: ReturnType<typeof useDraggable> | null): void;
+  getDraggable(id: string): PageDragHandle | null;
+  setDraggable(id: string, value: PageDragHandle | null): void;
   isKeyboardDragging(): boolean;
   setKeyboardDragging(active: boolean): void;
   setDragged(ids: readonly string[]): void;

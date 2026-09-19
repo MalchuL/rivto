@@ -30,7 +30,7 @@ rivto.editor.links: CRDTMap<linkId, CRDTMap<LinkStorage>>
     meta -> Record<string, BasicType>       (plain object, атомарное поле)
 ```
 
-**CRDT objects:** root `links` и map отдельной связи. Link record создаётся через `document.crdt.instantiator.createMap<LinkStorage>()` и присоединяется к root по `link.id`.
+**CRDT objects:** root `links` и map отдельной связи. Link record создаётся через `crdt.createDetachedMap<LinkStorage>()` и присоединяется к root по `link.id`.
 
 **Base/plain values:** `id` — base string; `from`, `to` и `meta` — cloned portable plain objects. Они не являются вложенными `CRDTMap`. Поэтому замена `from` является одной операцией для всего endpoint, а изменение отдельного `meta` key текущим manager API потребовало бы создать link заново и заменить whole record. Одновременные изменения разных полей outer link map теоретически имеют отдельную CRDT-гранулярность, но public API предоставляет только `createLink()` с полной записью.
 
@@ -78,11 +78,7 @@ Mutation `link.meta.label = "blocks"` без `createLink()` не сохрани�
 - **Значение:** root `rivto.editor.links`.
 - **Исключения при чтении:** CRDT adapter errors.
 
-### Свойство `undoScopes`
-
-- **Тип:** readonly tuple `[storage]`, публичное.
-- **Значение:** link root для document undo history.
-- **Исключения при чтении:** отсутствуют.
+Link manager объявляет собственный `undoScopes`; модель включает эти roots в общую историю.
 
 ### `constructor(document)`
 
@@ -110,9 +106,9 @@ Top-level values, которые не являются CRDT maps, пропуск
 
 - **Аргументы:** полный `link: Link`.
 - **Возвращает:** `void`.
-- **Исключения:** `Error("Link endpoints must reference existing blocks")`, если `from.blockId` или `to.blockId` отсутствует; также clone/instantiator/CRDT errors.
+- **Исключения:** `Error("Link endpoints must reference existing blocks")`, если `from.blockId` или `to.blockId` отсутствует; также clone/CRDT errors.
 
-Создаёт `LinkStorage` через instantiator. Существующий record с тем же link ID заменяется; отдельной duplicate validation нет. Endpoints и meta сохраняются как cloned атомарные values.
+Создаёт `LinkStorage` через `createDetachedMap()`. Существующий record с тем же link ID заменяется; отдельной duplicate validation нет. Endpoints и meta сохраняются как cloned атомарные values.
 
 Проверка `hasBlock()` смотрит наличие payload в block storage, а не placement в tree; это позволяет не отклонять endpoint во время промежуточного concurrent move. В transaction создаётся новая outer map, в неё записываются четыре plain поля, затем root key `link.id` указывает на новую map. При совпадающем ID старая record и её identity заменяются целиком.
 
@@ -176,63 +172,30 @@ rivto.editor.plugins: CRDTMap<pluginId, CRDTType>
   pluginId -> BasicType | plain object/array | CRDTMap | CRDTArray | CRDTText
 ```
 
-В отличие от block-level `pluginData`, этот manager позволяет plugin-у получить live shared namespace через `getMap(pluginId)`. Поэтому доступны два разных режима хранения:
+В отличие от block-level `pluginData`, этот manager предоставляет portable field CRUD, не возвращая live shared objects:
 
 | Операция | Что хранится | Гранулярность updates |
 | --- | --- | --- |
 | `set(pluginId, value)` | cloned `BasicType`/plain value под одним root key | весь namespace `pluginId` заменяется атомарно; вложенные свойства plain object не независимы |
-| `getMap(pluginId)` впервые | новая attached `CRDTMap` под root key | создание/promotion namespace создаёт update root map |
-| `namespace.set(key, value)` | отдельный key live namespace map | property `key` меняется независимо от соседних keys |
-| `namespace.delete(key)` | удаление одного shared key | отдельная map operation для key |
-| nested map/array/text из instantiator | attached CRDT object внутри namespace | его keys, позиции или text ranges получают собственные CRDT operations |
+| `setField(pluginId, key, value)` | отдельный internal shared key | property `key` меняется независимо от соседних keys |
+| `deleteField(pluginId, key)` | удаление одного internal shared key | отдельная map operation для key |
 | `get()`/`getAll()` | detached materialized value | mutation результата не создаёт update |
 
 ### Как изменять отдельные свойства plugin namespace
 
 ```ts
-const comments = document.pluginData.getMap("comments");
-
-document.transact(() => {
-  comments.set("enabled", true);
-  comments.set("unresolvedCount", 4);
+document.history.batchUpdates(() => {
+  document.pluginData.setField("comments", "enabled", true);
+  document.pluginData.setField("comments", "unresolvedCount", 4);
 });
 ```
 
-`enabled` и `unresolvedCount` являются разными shared keys: peers могут менять их независимо, а `comments.observe()` получает deep events namespace. `document.subscribe()` получает общий document update после завершения transaction.
-
-Вызвать `comments.set()` можно и без `document.transact()`: attached CRDT adapter всё равно создаст update и providers смогут его синхронизировать. Но такая автоматическая transaction не использует `document.origin`, поэтому стандартный editor undo manager, настроенный только на этот origin, не обязан записать изменение. Для grouping и undo plugin должен выполнять mutations внутри `document.transact()`.
-
-Если под key снова записать plain object, глубина заканчивается на этом key:
-
-```ts
-document.transact(() => {
-  comments.set("display", { color: "red", compact: false });
-});
-```
-
-`display` является shared key, но `display.color` и `display.compact` — части одного plain value. Чтобы сделать их independently collaborative, создайте nested map тем же document instantiator и присоедините её один раз:
-
-```ts
-const display = document.crdt.instantiator.createMap<{
-  color: string;
-  compact: boolean;
-}>();
-
-document.transact(() => {
-  comments.set("display", display);
-  display.set("color", "red");
-  display.set("compact", false);
-});
-```
-
-После attachment `display.set("color", "blue")` меняет только `color`. Shared object нельзя переиспользовать в двух parents или создавать adapter-specific `Y.Map` напрямую; нужно использовать `document.crdt.instantiator`. Подробный lifecycle описан на странице `CRDT instantiator usage`.
-
-Итого: `set()` подходит для небольшого namespace, который всегда заменяется целиком. `getMap()` нужен, когда свойства plugin-а изменяются независимо. Nested `CRDTMap`/`CRDTArray`/`CRDTText` нужны только при необходимой granular collaboration ещё на один уровень глубже.
+`enabled` и `unresolvedCount` являются разными internal shared keys: peers могут менять их независимо. Public reads через `getField()` всегда detached. Вложенный object остаётся одним portable field value; raw nested CRDT objects не являются частью model API.
 
 ### Свойство `document`
 
 - **Тип:** `DocumentModel`, приватное `readonly`.
-- **Значение:** owning model для transactions и instantiator.
+- **Значение:** owning model для transactions и detached construction.
 - **Исключения при чтении:** отсутствуют.
 
 ### Свойство `root`
@@ -240,12 +203,6 @@ document.transact(() => {
 - **Тип:** `CRDTMap<Record<string, CRDTType>>`, приватное `readonly`.
 - **Значение:** root `rivto.editor.plugins`.
 - **Исключения при чтении:** CRDT adapter errors.
-
-### Свойство `undoScopes`
-
-- **Тип:** `CRDTUndoScope[]`, публичное.
-- **Значение:** `[root]`.
-- **Исключения при чтении:** отсутствуют.
 
 ### `constructor(document)`
 
@@ -263,26 +220,19 @@ Shared map namespace materializes через `toObject()`. Generic cast не в�
 
 ### `set(pluginId, value)`
 
-- **Аргументы:** непустой `pluginId: string`; `value: BasicType`.
+- **Аргументы:** непустой `pluginId: string`; portable `value: unknown`.
 - **Возвращает:** `void`.
 - **Исключения:** required ID, clone, transaction или CRDT conversion errors.
 
 Заменяет только namespace этого plugin атомарным cloned value и не затрагивает соседей.
 
-### `getMap(pluginId)`
+### `getField(pluginId, key)` / `setField(pluginId, key, value)` / `deleteField(pluginId, key)`
 
-- **Аргументы:** непустой `pluginId: string`.
-- **Возвращает:** attached `CRDTMap<Record<string, CRDTType>>`.
-- **Исключения:** required ID; `Error("Plugin data <id> is not an object namespace")` для существующего primitive/array/null; instantiation/conversion errors.
+- **Аргументы:** непустой `pluginId: string`, field `key`, а для setter portable `value`.
+- **Возвращает:** detached field value, `void`, либо boolean удаления соответственно.
+- **Исключения:** required ID, portable-value validation и object-namespace errors.
 
-Если namespace уже shared map, возвращает его. Existing plain object один раз переносится в новый CRDTMap и присоединяется к root, поэтому сам getter в этом случае изменяет persisted state.
-
-**Примечание об assignment:** при promotion existing plain namespace `assignMap()` копирует только его top-level properties в новую detached map, clone-ит их values и оставляет nested objects/arrays plain. После этого root attachment делает namespace live. Например, properties `enabled` и `display` становятся разными shared keys, но поля plain `display.color` и `display.compact` не становятся CRDT keys автоматически.
-
-```ts
-const comments = document.pluginData.getMap("comments");
-comments.set("thread-1", { resolved: false });
-```
+`getField()` не мутирует storage. Первый field write к existing plain object internally promotes namespace, сохраняя siblings; public API при этом возвращает только detached values.
 
 ### `delete(pluginId)`
 

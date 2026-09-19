@@ -49,7 +49,7 @@ export function createKanbanBlockInput(): EditorBlockInput {
  * @returns Structural selection region and a compact collapsed summary.
  */
 export function Kanban({ blockId }: { readonly blockId: string }) {
-  const runtime = useReactEditor();
+  const reactEditor = useReactEditor();
   const editing = useBlockEditing(blockId, { textEdit: false });
   const block = editing.block;
   const title = useRef<HTMLDivElement>(null);
@@ -70,13 +70,13 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
    */
   const addColumn = () => {
     let columnId = "";
-    runtime.editor.batchUpdates(() => {
-      runtime.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
-      columnId = runtime.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" });
-      runtime.editor.blocks.moveBlocks([columnId], blockId, "inside");
+    reactEditor.history.batchUpdates(() => {
+      reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
+      columnId = reactEditor.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" });
+      reactEditor.blocks.moveBlocks([columnId], blockId, "inside");
     });
     requestAnimationFrame(() => {
-      const root = runtime.events.getRoot();
+      const root = reactEditor.events.getRoot();
       if (root) focusBlock(root, columnId, 0);
     });
   };
@@ -99,20 +99,20 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
  */
 function KanbanColumn({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId);
-  const runtime = useReactEditor();
+  const reactEditor = useReactEditor();
   /**
    * Appends an editable card in one undo step and places the caret inside it.
    * @returns Nothing; the shared block tree mounts the new card.
    */
   const addCard = () => {
     let cardId = "";
-    runtime.editor.batchUpdates(() => {
-      cardId = runtime.blocks.insertBlock(runtime.createDefaultBlock());
-      runtime.editor.blocks.moveBlocks([cardId], blockId, "inside");
-      runtime.selection.set(createCaretSelection(cardId, 0));
+    reactEditor.history.batchUpdates(() => {
+      cardId = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock());
+      reactEditor.blocks.moveBlocks([cardId], blockId, "inside");
+      reactEditor.selection.set(createCaretSelection(cardId, 0));
     });
     requestAnimationFrame(() => {
-      const root = runtime.events.getRoot();
+      const root = reactEditor.events.getRoot();
       if (root) focusBlock(root, cardId, 0);
     });
   };
@@ -178,7 +178,7 @@ export function kanbanExtension(): ReactEditorExtension {
           title: "Kanban",
           group: "Turn into",
           keywords: ["board", "cards", "tasks"],
-          isAvailable: ({ blockId }) => reactEditor.editor.blocks.getBlock(blockId)?.children.length === 0,
+          isAvailable: ({ blockId }) => reactEditor.blocks.getBlock(blockId)?.children.length === 0,
           execute: ({ blockId }) => {
             convertLeafToContainer(reactEditor, blockId, createKanbanBlockInput());
           },

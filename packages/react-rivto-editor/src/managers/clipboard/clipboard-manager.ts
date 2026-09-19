@@ -1,4 +1,9 @@
-import type { EditorBlock, EditorBlockInput } from "@chulane/rivto";
+import type {
+  ClipboardManager as CoreClipboardManager,
+  EditorBlock,
+  EditorBlockInput,
+  RivtoEditorApi,
+} from "@chulane/rivto";
 import type { ReactEditorImpl } from "../../react-editor";
 
 /** Portable text representations produced for one block forest. */
@@ -55,9 +60,34 @@ export class ClipboardManager {
   /**
    * Creates the React-owned formatter and parser registry.
    *
-   * @param reactEditor - Owning React editor used for extension lifecycle cleanup.
+   * @param reactEditor - Owning React runtime providing extension lifecycle.
+   * @param editor - Core runtime providing clipboard operations.
    */
-  constructor(private readonly reactEditor: ReactEditorImpl) {}
+  constructor(
+    private readonly reactEditor: ReactEditorImpl,
+    private readonly editor: RivtoEditorApi,
+  ) {}
+
+  /** Core paste strategies extended by React clipboard integrations. */
+  get pasteStrategies(): CoreClipboardManager["pasteStrategies"] { return this.editor.clipboard.pasteStrategies; }
+
+  /** Copies the current or supplied selection as structured data. */
+  copy(...args: Parameters<CoreClipboardManager["copy"]>): ReturnType<CoreClipboardManager["copy"]> {
+    return this.editor.clipboard.copy(...args);
+  }
+
+  /** Copies an explicit text selection. */
+  copyText(...args: Parameters<CoreClipboardManager["copyText"]>): ReturnType<CoreClipboardManager["copyText"]> {
+    return this.editor.clipboard.copyText(...args);
+  }
+
+  /** Copies and deletes the current selection. */
+  cut(): ReturnType<CoreClipboardManager["cut"]> { return this.editor.clipboard.cut(); }
+
+  /** Pastes structured or plain clipboard data. */
+  paste(...args: Parameters<CoreClipboardManager["paste"]>): ReturnType<CoreClipboardManager["paste"]> {
+    return this.editor.clipboard.paste(...args);
+  }
 
   /**
    * Appends a formatter to the ordered, composable formatting pipeline.

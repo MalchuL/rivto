@@ -136,16 +136,16 @@ function clearBentoResizeStyles(tiles: readonly HTMLElement[]): void {
 /**
  * Persists one preferred tile width through the ordinary block command.
  *
- * @param runtime - Active React editor runtime.
+ * @param reactEditor - Active React editor runtime.
  * @param blockId - Tile whose `bentoWidth` should change.
  * @param width - Requested width in CSS pixels.
  * @returns Nothing; no-ops when the block is gone or the value is unchanged.
  */
-function commitBentoTileWidth(runtime: ReactEditor, blockId: string, width: number): void {
-  const block = runtime.editor.blocks.getBlock(blockId);
+function commitBentoTileWidth(reactEditor: ReactEditor, blockId: string, width: number): void {
+  const block = reactEditor.blocks.getBlock(blockId);
   const next = tileWidth(width);
   if (!block || tileWidth(block.props.bentoWidth) === next) return;
-  runtime.blocks.updateBlock(blockId, { props: { ...block.props, bentoWidth: next } });
+  reactEditor.blocks.updateBlock(blockId, { props: { ...block.props, bentoWidth: next } });
 }
 
 /**
@@ -188,9 +188,9 @@ export function Bento({ blockId }: { readonly blockId: string }) {
  * @returns Two accessible vertical resize handles.
  */
 function BentoResizeHandles({ blockId, tile }: { readonly blockId: string; readonly tile: HTMLElement }) {
-  const runtime = useReactEditor();
+  const reactEditor = useReactEditor();
   const gesture = useRef<TileResizeGesture | null>(null);
-  const width = tileWidth(runtime.editor.blocks.getBlock(blockId)?.props.bentoWidth);
+  const width = tileWidth(reactEditor.blocks.getBlock(blockId)?.props.bentoWidth);
 
   useLayoutEffect(() => () => {
     const active = gesture.current;
@@ -260,7 +260,7 @@ function BentoResizeHandles({ blockId, tile }: { readonly blockId: string; reado
     }
     const widthToWrite = commit ? active.width : active.startWidth;
     clearBentoResizeStyles(active.frozen);
-    if (commit) commitBentoTileWidth(runtime, blockId, widthToWrite);
+    if (commit) commitBentoTileWidth(reactEditor, blockId, widthToWrite);
   };
 
   /**
@@ -276,7 +276,7 @@ function BentoResizeHandles({ blockId, tile }: { readonly blockId: string; reado
     const towardRight = event.key === "ArrowRight";
     const direction = edge === "right" ? (towardRight ? 1 : -1) : (towardRight ? -1 : 1);
     const step = event.shiftKey ? 50 : 10;
-    commitBentoTileWidth(runtime, blockId, width + direction * step);
+    commitBentoTileWidth(reactEditor, blockId, width + direction * step);
   };
 
   /**
@@ -317,13 +317,13 @@ function BentoResizeHandles({ blockId, tile }: { readonly blockId: string; reado
  * @returns Expandable board, a width-aware tile, or the unchanged subtree.
  */
 function BentoWrapper({ block, children }: BlockWrapperProps) {
-  const runtime = useReactEditor();
+  const reactEditor = useReactEditor();
   const [element, setElement] = useState<HTMLDivElement | null>(null);
-  const parentId = runtime.editor.blocks.getParentId(block.id);
+  const parentId = reactEditor.blocks.getParentId(block.id);
   const isBoard = block.type === BENTO_BLOCK_TYPE;
   const isTile = !isBoard
     && typeof parentId === "string"
-    && runtime.editor.blocks.getBlock(parentId)?.type === BENTO_BLOCK_TYPE;
+    && reactEditor.blocks.getBlock(parentId)?.type === BENTO_BLOCK_TYPE;
   const width = tileWidth(block.props.bentoWidth);
 
   useLayoutEffect(() => {
@@ -352,9 +352,9 @@ function BentoWrapper({ block, children }: BlockWrapperProps) {
 export function bentoExtension(): ReactEditorExtension {
   return {
     id: "block.bento",
-    setup: (runtime) => {
+    setup: (reactEditor) => {
       const disposers = [
-        runtime.blocks.register({
+        reactEditor.blocks.register({
           definition: {
             type: BENTO_BLOCK_TYPE,
             title: "Bento",
@@ -369,9 +369,9 @@ export function bentoExtension(): ReactEditorExtension {
             keywords: ["grid", "tiles"],
           },
         }),
-        runtime.surfaces.registerBlockWrapper("block", BentoWrapper),
-        runtime.surfaces.registerBlockWrapper("edgeless", BentoWrapper),
-        runtime.surfaces.registerBlockSlot({
+        reactEditor.surfaces.registerBlockWrapper("block", BentoWrapper),
+        reactEditor.surfaces.registerBlockWrapper("edgeless", BentoWrapper),
+        reactEditor.surfaces.registerBlockSlot({
           position: "right",
           component: BlockModalButton,
           when: ({ block }) => block.type === BENTO_BLOCK_TYPE,

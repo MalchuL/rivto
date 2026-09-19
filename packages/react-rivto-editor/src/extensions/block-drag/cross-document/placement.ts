@@ -47,7 +47,7 @@ export function resolveCrossDocumentPageRootPlacement(
         allowChildPlacement,
       );
       const indicator = resolveGeometryPlacement(
-        reactEditor.editor.blocks.getBlocks(),
+        reactEditor.blocks.getBlocks(),
         row,
         x,
         y,

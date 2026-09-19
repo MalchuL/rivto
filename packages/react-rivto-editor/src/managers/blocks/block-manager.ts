@@ -1,14 +1,17 @@
-import type { ReactEditorImpl } from "../../react-editor";
 import type { BlocksCapability } from "../../capabilities";
 import { getBlockContainment, type ReactBlockRegistration } from "./block-types";
 import type {
   BlockListProps,
+  BlockManager as CoreBlockManager,
+  BlockRegistryManager,
   EditorBlockInput,
   EditorBlockPatch,
   EditorBlockUpdate,
+  RivtoEditorApi,
 } from "@chulane/rivto";
 import { validateBlockListProps } from "@chulane/rivto";
 import type { BlockMutationResult, ListPropsRegistration } from "./block-types";
+import type { ReactEditorImpl } from "../../react-editor";
 
 /**
  * Atomically connects a core block definition to React presentation.
@@ -24,10 +27,13 @@ export class BlockManager implements BlocksCapability {
   /**
    * Creates the atomic block-extension facade.
    *
-   * @param reactEditor - Complete owning runtime. Core commands, renderers,
-   * slash commands, and registration ownership are resolved lazily from it.
+   * @param reactEditor - Owning React runtime providing presentation managers.
+   * @param editor - Core runtime providing block definitions and mutations.
    */
-  constructor(private readonly reactEditor: ReactEditorImpl) {}
+  constructor(
+    private readonly reactEditor: ReactEditorImpl,
+    private readonly editor: RivtoEditorApi,
+  ) {}
 
   /**
    * Registers definition, renderer, and optional type conversion as one unit.
@@ -37,7 +43,8 @@ export class BlockManager implements BlocksCapability {
    * @throws On definition, renderer, or slash-command conflicts.
    */
   register(registration: ReactBlockRegistration): () => void {
-    const { editor, extensions, renderers, slashCommands } = this.reactEditor;
+    const { blocks: core, blocksRegistry: registry } = this.editor;
+    const { extensions, renderers, slashCommands, views } = this.reactEditor;
     extensions.assertActive();
     const { definition, render, slashCommand, view } = registration;
     if (renderers.has(definition.type)) {
@@ -46,7 +53,7 @@ export class BlockManager implements BlocksCapability {
 
     const disposers: Array<() => void> = [];
     try {
-      const existing = editor.blocksRegistry.get(definition.type);
+      const existing = registry.get(definition.type);
       if (existing) {
         const containment = getBlockContainment(definition);
         const existingContainment = getBlockContainment(existing);
@@ -57,7 +64,7 @@ export class BlockManager implements BlocksCapability {
           throw new Error(`Block containment ${definition.type} does not match its existing definition`);
         }
       } else {
-        disposers.push(extensions.own(editor.blocksRegistry.defineBlock(definition)));
+        disposers.push(extensions.own(registry.defineBlock(definition)));
       }
       // When the type is already defined (host or test helper), reuse it and only
       // attach React presentation. Object identity is no longer required because
@@ -65,7 +72,7 @@ export class BlockManager implements BlocksCapability {
 
       disposers.push(renderers.register(definition.type, render));
       if (view) {
-        disposers.push(this.reactEditor.views.register(definition.type, view));
+        disposers.push(views.register(definition.type, view));
       }
       if (registration.separatesBlockElements) {
         this.blockElementSeparatorTypes.add(definition.type);
@@ -76,14 +83,14 @@ export class BlockManager implements BlocksCapability {
           ...slashCommand,
           id: slashCommand.id ?? `type.${definition.type}`,
           isAvailable: (context) => {
-            const block = editor.blocks.getBlock(context.blockId);
+            const block = core.getBlock(context.blockId);
             return Boolean(
               block &&
               block.type !== definition.type &&
               slashCommand.isAvailable?.(context) !== false
             );
           },
-          execute: ({ blockId }) => editor.blocks.setBlockType(blockId, definition.type),
+          execute: ({ blockId }) => core.setBlockType(blockId, definition.type),
         }));
       }
     } catch (error) {
@@ -175,7 +182,7 @@ export class BlockManager implements BlocksCapability {
       this.isValid(block.listProps ?? {}) && (block.children ?? []).every(validateTree)
     );
     if (!validateTree(prepared)) throw new Error("Invalid block list properties");
-    return this.reactEditor.editor.blocks.insertBlock(prepared, afterId);
+    return this.editor.blocks.insertBlock(prepared, afterId);
   }
 
   /**
@@ -187,10 +194,10 @@ export class BlockManager implements BlocksCapability {
    * missing or its resulting list properties are invalid.
    */
   updateBlock(id: string, patch: EditorBlockPatch): boolean {
-    const block = this.reactEditor.editor.blocks.getBlock(id);
+    const block = this.editor.blocks.getBlock(id);
     if (!block) return false;
     if (patch.listProps && !this.isValid({ ...this.defaults(), ...block.listProps, ...patch.listProps })) return false;
-    this.reactEditor.editor.blocks.updateBlock(id, patch);
+    this.editor.blocks.updateBlock(id, patch);
     return true;
   }
 
@@ -208,7 +215,7 @@ export class BlockManager implements BlocksCapability {
     const accepted: EditorBlockUpdate[] = [];
     const simulated = new Map<string, BlockListProps>();
     const results = updates.map(({ id, patch }, index) => {
-      const block = this.reactEditor.editor.blocks.getBlock(id);
+      const block = this.editor.blocks.getBlock(id);
       if (!block) return { index, id, status: "skipped" as const, reason: "missing" as const };
       const current = simulated.get(id) ?? block.listProps;
       const next = patch.listProps ? { ...current, ...patch.listProps } : current;
@@ -219,7 +226,7 @@ export class BlockManager implements BlocksCapability {
       accepted.push({ id, patch });
       return { index, id, status: "applied" as const };
     });
-    if (accepted.length) this.reactEditor.editor.blocks.updateBlocks(accepted);
+    if (accepted.length) this.editor.blocks.updateBlocks(accepted);
     return { results };
   }
 
@@ -232,12 +239,12 @@ export class BlockManager implements BlocksCapability {
    * missing or the resulting properties are invalid.
    */
   deleteListProps(id: string, keys: readonly string[]): boolean {
-    const block = this.reactEditor.editor.blocks.getBlock(id);
+    const block = this.editor.blocks.getBlock(id);
     if (!block) return false;
     const next = { ...block.listProps };
     keys.forEach((key) => delete next[key]);
     if (!this.isValid({ ...this.defaults(), ...next })) return false;
-    return this.reactEditor.editor.document.blocks.deleteListProps(id, keys);
+    return this.editor.blocks.deleteListProps(id, keys);
   }
 
   /**
@@ -251,7 +258,7 @@ export class BlockManager implements BlocksCapability {
     const accepted: Array<{ id: string; keys: readonly string[] }> = [];
     const simulated = new Map<string, BlockListProps>();
     const results = updates.map(({ id, keys }, index) => {
-      const block = this.reactEditor.editor.blocks.getBlock(id);
+      const block = this.editor.blocks.getBlock(id);
       if (!block) return { index, id, status: "skipped" as const, reason: "missing" as const };
       const next = { ...(simulated.get(id) ?? block.listProps) };
       keys.forEach((key) => delete next[key]);
@@ -262,8 +269,89 @@ export class BlockManager implements BlocksCapability {
       accepted.push({ id, keys });
       return { index, id, status: "applied" as const };
     });
-    if (accepted.length) this.reactEditor.editor.document.blocks.deleteListPropsBatch(accepted);
+    if (accepted.length) this.editor.blocks.deleteListPropsBatch(accepted);
     return { results };
+  }
+
+  /** @returns Current core block revision. */
+  get revision(): number { return this.editor.blocks.revision; }
+
+  /** @returns One detached block, when present. */
+  getBlock(id: string): ReturnType<CoreBlockManager["getBlock"]> { return this.editor.blocks.getBlock(id); }
+
+  /** @returns The complete detached root forest. */
+  getBlocks(): ReturnType<CoreBlockManager["getBlocks"]> { return this.editor.blocks.getBlocks(); }
+
+  /** @returns Ordered root block identifiers. */
+  getRootIds(): string[] { return this.editor.blocks.getRootIds(); }
+
+  /** Subscribes to one recursive block snapshot. */
+  subscribeBlock(id: string, listener: () => void): () => void { return this.editor.blocks.subscribeBlock(id, listener); }
+
+  /** Subscribes to ordered root identifiers. */
+  subscribeRootIds(listener: () => void): () => void { return this.editor.blocks.subscribeRootIds(listener); }
+
+  /** Subscribes to hierarchy changes. */
+  subscribeStructure(listener: () => void): () => void { return this.editor.blocks.subscribeStructure(listener); }
+
+  /** @returns Direct child identifiers for a block. */
+  getChildIds(id: string): string[] { return this.editor.blocks.getChildIds(id); }
+
+  /** @returns A block's parent, root marker, or missing marker. */
+  getParentId(id: string): string | null | undefined { return this.editor.blocks.getParentId(id); }
+
+  /** Imports a detached block forest with collision remapping. */
+  importForest(...args: Parameters<CoreBlockManager["importForest"]>): ReturnType<CoreBlockManager["importForest"]> {
+    return this.editor.blocks.importForest(...args);
+  }
+
+  /** Clears one block while preserving its identity. */
+  clearBlock(id: string): void { this.editor.blocks.clearBlock(id); }
+
+  /** Converts one block to a registered type. */
+  setBlockType(id: string, type: string): void { this.editor.blocks.setBlockType(id, type); }
+
+  /** Removes one block subtree. */
+  removeBlock(id: string): void { this.editor.blocks.removeBlock(id); }
+
+  /** Removes several block subtrees atomically. */
+  removeBlocks(ids: readonly string[]): void { this.editor.blocks.removeBlocks([...ids]); }
+
+  /** Merges source content and children into the target. */
+  mergeBlocks(targetId: string, sourceId: string): number { return this.editor.blocks.mergeBlocks(targetId, sourceId); }
+
+  /** Moves one block relative to a target. */
+  moveBlock(...args: Parameters<CoreBlockManager["moveBlock"]>): void { this.editor.blocks.moveBlock(...args); }
+
+  /** Moves several block roots as one group. */
+  moveBlocks(...args: Parameters<CoreBlockManager["moveBlocks"]>): void { this.editor.blocks.moveBlocks(...args); }
+
+  /** Indents one block when eligible. */
+  indentBlock(id: string): void { this.editor.blocks.indentBlock(id); }
+
+  /** Indents a block range when eligible. */
+  indentBlocks(ids: readonly string[]): void { this.editor.blocks.indentBlocks([...ids]); }
+
+  /** Outdents one block when eligible. */
+  outdentBlock(id: string): void { this.editor.blocks.outdentBlock(id); }
+
+  /** Outdents a block range when eligible. */
+  outdentBlocks(ids: readonly string[]): void { this.editor.blocks.outdentBlocks([...ids]); }
+
+  /** Sets one opaque block property. */
+  setBlockProp(id: string, key: string, value: unknown): void { this.editor.blocks.setBlockProp(id, key, value); }
+
+  /** Sets namespaced block plugin data. */
+  setBlockPluginData(id: string, pluginId: string, value: unknown): void {
+    this.editor.blocks.setBlockPluginData(id, pluginId, value);
+  }
+
+  /** @returns A registered native block definition. */
+  getDefinition(type: string): ReturnType<BlockRegistryManager["get"]> { return this.editor.blocksRegistry.get(type); }
+
+  /** Validates native block properties through the core definition registry. */
+  validateBlockProps(type: string, props: Record<string, unknown>): Record<string, unknown> {
+    return this.editor.blocksRegistry.validate(type, props);
   }
 
   /**

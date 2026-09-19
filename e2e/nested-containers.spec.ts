@@ -14,9 +14,9 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.goto("/");
     await page.evaluate((nextMode) => {
       const runtime = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
-      const { editor } = runtime;
+      const editor = runtime;
       const bento = editor.blocks.insertBlock({
         type: "bento",
         content: "Outer bento",
@@ -58,8 +58,8 @@ for (const mode of ["block", "edgeless"] as const) {
     if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
 
     const ids = await page.evaluate(() => {
-      const { editor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
       const all = editor.blocks.getBlocks().flatMap(function walk(block): string[] {
         return [block.id, ...block.children.flatMap(walk)];
@@ -73,8 +73,8 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.locator(`[data-block-id="${ids.card}"] [contenteditable='plaintext-only']`).click();
     await page.keyboard.press("Shift+Tab");
     await expect.poll(() => page.evaluate((id) => {
-      const { editor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
       const parent = editor.blocks.getBlock(editor.blocks.getParentId(id) ?? "");
       return parent?.type;
@@ -83,8 +83,8 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.locator(`[data-block-id="${ids.writing}"] [contenteditable='plaintext-only']`).click();
     await page.keyboard.press("Shift+Tab");
     await expect.poll(() => page.evaluate((id) => {
-      const { editor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
       const parent = editor.blocks.getBlock(editor.blocks.getParentId(id) ?? "");
       return parent?.type;

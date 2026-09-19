@@ -1,5 +1,5 @@
 /**
- * Verifies the table extension keeps rows and cells in the ordinary block tree,
+ * Verifies the table extension creates rows and cells in the ordinary block tree,
  * inserts complete row and column boundaries, and participates in undo.
  * @module
  */
@@ -19,12 +19,12 @@ import {
 
 test("inserts rectangular rows and columns as draggable ordinary blocks", () => {
   const editor = createTestCoreEditor();
-  const runtime = createReactEditor({
+  const reactEditor = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],
   });
   const before = editor.blocks.insertBlock({ type: "paragraph", content: "" });
-  runtime.slashCommands.execute("block.table.insert", { blockId: before });
+  reactEditor.slashCommands.execute("block.table.insert", { blockId: before });
   const table = editor.blocks.getBlock(before)!;
 
   expect(table.id).toBe(before);
@@ -37,21 +37,22 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", () => 
 
   const rowId = table.children[0]!.id;
   const cellId = table.children[0]!.children[0]!.id;
-  expect(setTableColumnWidth(runtime, table.id, 1, 260)).toBe(true);
+  expect(setTableColumnWidth(reactEditor, table.id, 1, 260)).toBe(true);
   expect(editor.blocks.getBlock(table.id)?.children.every((row) => row.children[1]?.props.tableColumnWidth === 260)).toBe(true);
-  const addedRow = insertTableRow(runtime, rowId)!;
+  const addedRow = insertTableRow(reactEditor, rowId)!;
   expect(editor.blocks.getBlock(addedRow)?.children).toHaveLength(3);
   expect(editor.blocks.getBlock(addedRow)?.children[1]?.props.tableColumnWidth).toBe(260);
 
   editor.history.clear();
-  const addedCells = insertTableColumn(runtime, cellId);
+  const addedCells = insertTableColumn(reactEditor, cellId);
   expect(addedCells).toHaveLength(4);
   expect(editor.blocks.getBlock(table.id)?.children.every((row) => row.children.length === 4)).toBe(true);
   editor.history.undo();
   expect(editor.blocks.getBlock(table.id)?.children.every((row) => row.children.length === 3)).toBe(true);
 
-  expect(() => editor.blocks.moveBlocks([cellId], table.id, "inside")).toThrow();
-  runtime.destroy();
+  editor.blocks.moveBlocks([cellId], table.id, "inside");
+  expect(editor.blocks.getParentId(cellId)).toBe(table.id);
+  reactEditor.destroy();
   editor.destroy();
 });
 

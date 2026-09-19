@@ -27,7 +27,7 @@ Public barrel экспортирует model/types, clipboard-manager API и run
 - `element-commands.test.ts` — first-class element commands.
 - `rivto-editor-methods.test.ts` — public convenience API, snapshots и subscriptions.
 - `selection-manager.test.ts` — direction, ordering, reconciliation и heterogeneous ranges.
-- `undo-manager.test.ts` — capture boundaries, remote origin filtering и load baseline.
+- `history-manager.test.ts` — capture boundaries, remote origin filtering и load baseline.
 
 ## Ownership между слоями
 
@@ -52,7 +52,7 @@ React package
 3. Local mode/selection behavior оставить в соответствующем manager.
 4. Runtime method добавлять только для действительно cross-cutting lifecycle operation.
 5. Named command должен валидировать unknown payload на своей boundary.
-6. Document mutation обернуть `documentCommand()` или explicit `batchUpdates()`.
+6. Document mutation обернуть `documentCommand()` или explicit `history.batchUpdates()`.
 7. Добавить cleanup subscription в `unsubscribeFns`.
 8. Проверить revision notification, undo boundary, snapshots и destroy.
 

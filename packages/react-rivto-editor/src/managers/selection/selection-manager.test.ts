@@ -20,7 +20,7 @@ describe("ReactSelectionManager", () => {
       type: "selection",
       blocks: [{ id, start: 0, end: 0 }],
     });
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlock(id)?.content).toBe("BeforeAfter");
     const block = createStructuralSelection([id]);
     reactEditor.selection.set(block);

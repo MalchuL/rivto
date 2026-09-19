@@ -40,7 +40,7 @@ const snapshots = new WeakMap<ReactEditor, RevisionSnapshot>();
 function readManagerRevisions(reactEditor: ReactEditor): RevisionSnapshot {
   const rows: readonly ManagerRevision[] = [
     { manager: "editor", revision: reactEditor.revision },
-    { manager: "blocks", revision: reactEditor.editor.blocks.revision },
+    { manager: "blocks", revision: reactEditor.blocks.revision },
     { manager: "renderers", revision: reactEditor.renderers.revision },
     { manager: "keyboard", revision: reactEditor.keyboard.revision },
     { manager: "surfaces", revision: reactEditor.surfaces.revision },

@@ -8,6 +8,7 @@
  * @module
  */
 import type { RivtoEditorApi as Editor } from "@chulane/rivto";
+import type { DocumentModel } from "@chulane/document-model";
 import {
   BlockManager,
   ClipboardManager,
@@ -32,7 +33,15 @@ const WRITING_NOT_INSTALLED =
 /** Internal implementation; applications receive the capability-only interface. */
 export class ReactEditorImpl implements ReactEditor {
   /** Framework-neutral document, command, mode, and history runtime. */
-  readonly editor: Editor;
+  private readonly editor: Editor;
+  /** Focused core element manager exposed without its coordinator. */
+  readonly elements: Editor["elements"];
+  /** Focused core mode manager exposed without its coordinator. */
+  readonly mode: Editor["mode"];
+  /** Focused core command manager exposed without its coordinator. */
+  readonly commands: Editor["commands"];
+  /** Focused core history manager exposed without its coordinator. */
+  readonly history: Editor["history"];
   /** Factory for empty writing blocks; set by {@link installDefaultWriting}. */
   createDefaultBlock: CreateDefaultBlock = () => {
     throw new Error(WRITING_NOT_INSTALLED);
@@ -81,27 +90,29 @@ export class ReactEditorImpl implements ReactEditor {
    * `defaultWritingBlockExtension` (included by `standardPreset`).
    */
   constructor(options: CreateReactEditorOptions) {
-    this.editor = options.editor;
-    // Constructors retain this owner but must not resolve sibling managers
-    // until an operation runs. This keeps the dependency graph cyclic in
-    // capability while initialization itself remains strictly ordered.
+    const editor = options.editor;
+    this.editor = editor;
+    this.elements = editor.elements;
+    this.mode = editor.mode;
+    this.commands = editor.commands;
+    this.history = editor.history;
     this.extensions = new ExtensionManager(this);
     this.events = new EventManager(this);
+    this.selection = new ReactSelectionManager(this, editor);
     this.keyboard = new KeyboardManager(this, options.keymap);
-    this.selection = new ReactSelectionManager(this);
     this.slashCommands = new ReactSlashCommandManager(this);
     this.renderers = new RendererManager(this, options.unknownBlockRenderer);
     this.views = new ViewManager(this);
-    this.blocks = new BlockManager(this);
-    this.clipboard = new ClipboardManager(this);
+    this.blocks = new BlockManager(this, editor);
+    this.clipboard = new ClipboardManager(this, editor);
     this.surfaces = new SurfaceManager(this);
     try {
       this.extensions.initialize(options.extensions ?? []);
       this.reconciliationDisposers.push(
-        this.editor.blocks.subscribeRootIds(() => this.queueBlockElementReconciliation()),
-        this.editor.elements.subscribe(() => this.queueBlockElementReconciliation()),
+        this.blocks.subscribeRootIds(() => this.queueBlockElementReconciliation()),
+        this.elements.subscribe(() => this.queueBlockElementReconciliation()),
       );
-      this.queueBlockElementReconciliation();
+      if (editor.getDocument()) this.queueBlockElementReconciliation();
     } catch (error) {
       this.destroy();
       throw error;
@@ -145,6 +156,22 @@ export class ReactEditorImpl implements ReactEditor {
   /** Forwards the core editor's document/mode/registry revision stream. */
   subscribe(listener: () => void): () => void {
     return this.editor.subscribe(listener);
+  }
+
+  /**
+   * @returns The document model currently presented by the core editor, or undefined while unbound.
+   */
+  getDocument(): DocumentModel | undefined {
+    return this.editor.getDocument();
+  }
+
+  /**
+   * Replaces the active core document while retaining every React manager.
+   * @param document - Caller-owned model to present.
+   * @returns No value.
+   */
+  setDocument(document: DocumentModel): void {
+    this.editor.setDocument(document);
   }
 
   /**

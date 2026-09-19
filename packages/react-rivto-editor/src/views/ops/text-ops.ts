@@ -28,10 +28,9 @@ export function splitBlockAt(
   block: EditorBlock,
   splitAt: number,
 ): string {
-  const { editor } = reactEditor;
   const listActive = reactEditor.blocks.hasListProps("list");
   const clamped = Math.max(0, Math.min(splitAt, block.content.length));
-  editor.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
+  reactEditor.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
   const nextBlockId = reactEditor.blocks.insertBlock({
     ...reactEditor.createDefaultBlock(),
     ...(listActive ? { listProps: {
@@ -71,7 +70,7 @@ export function mergeBlocks(
   targetId: string,
   sourceId: string,
 ): number {
-  const joinOffset = reactEditor.editor.blocks.mergeBlocks(targetId, sourceId);
+  const joinOffset = reactEditor.blocks.mergeBlocks(targetId, sourceId);
   reactEditor.selection.set(createCaretSelection(targetId, joinOffset));
   return joinOffset;
 }
@@ -84,5 +83,5 @@ export function mergeBlocks(
  * @returns Nothing; identity is preserved.
  */
 export function resetToWritingType(reactEditor: ReactEditor, blockId: string): void {
-  reactEditor.editor.blocks.setBlockType(blockId, reactEditor.createDefaultBlock().type);
+  reactEditor.blocks.setBlockType(blockId, reactEditor.createDefaultBlock().type);
 }

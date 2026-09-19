@@ -4,12 +4,6 @@
 
 ## Runtime hooks
 
-### `useEditor()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** stable core `RivtoEditorApi`.
-- **Исключения:** `Editor hooks must be used inside EditorView`.
-
 ### `useReactEditor()`
 
 - **Аргументы:** отсутствуют.
@@ -39,12 +33,6 @@ Mode локален и не входит в snapshot.
 Нужен прежде всего custom surface: container назначает `ref` и становится DOM scope.
 
 ## Document hooks
-
-### `useDocument()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** stable `DocumentModel`.
-- **Исключения:** provider error.
 
 ### `useRootBlockIds()`
 

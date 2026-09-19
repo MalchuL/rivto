@@ -1,8 +1,7 @@
 /**
  * Editor coordinator contracts. Selection and clipboard types live with their owning managers.
  */
-import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandHandler, CommandRegistry, ElementManager, RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
-import type { CRDTDoc } from "@chulane/crdt-doc";
+import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, HistoryManager, ModeManager, SelectionManager } from "../managers";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
@@ -10,7 +9,7 @@ import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 export type EditorMode = "block" | "edgeless";
 
 export interface CreateRivtoEditorOptions {
-  document?: CRDTDoc;
+  /** Initial local presentation mode; defaults to block mode. */
   mode?: EditorMode;
 }
 
@@ -19,11 +18,9 @@ export interface CreateRivtoEditorOptions {
  *
  * Block and element behavior is intentionally available only through
  * `.blocks` and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
- * commands, batching, selection, history, mode, snapshots, and subscriptions.
+ * commands, selection, history, mode, snapshots, and subscriptions.
  */
 export interface RivtoEditorApi {
-  /** Canonical collaborative document and persistence boundary. */
-  readonly document: DocumentModel;
   /** Block commands and typed block operations. */
   readonly blocks: BlockManager;
   /** Native block definitions, defaults, and property validation. */
@@ -38,8 +35,8 @@ export interface RivtoEditorApi {
   readonly selection: SelectionManager;
   /** Framework-neutral structured clipboard operations. */
   readonly clipboard: ClipboardManager;
-  /** Local undo/redo history for document mutations. */
-  readonly history: UndoManager;
+  /** Local history and transaction batching for document mutations. */
+  readonly history: HistoryManager;
   /** Monotonic view invalidation snapshot. */
   readonly revision: number;
 
@@ -52,45 +49,16 @@ export interface RivtoEditorApi {
   subscribe(listener: () => void): () => void;
 
   /**
-   * Groups synchronous editor mutations into one transaction and undo item.
-   *
-   * @param operation - Synchronous editor work to execute.
-   * @returns Value returned by the operation.
+   * @returns The document model currently presented by this editor, or undefined while unbound.
    */
-  batchUpdates<Result>(operation: () => Result): Result;
+  getDocument(): DocumentModel | undefined;
 
   /**
-   * Registers one named runtime command.
-   *
-   * @param name - Unique command identifier.
-   * @param handler - Command implementation.
-   * @returns Ownership handle for the exact registration.
-   */
-  register(name: string, handler: CommandHandler): RegisteredCommand;
-
-  /**
-   * Executes one registered runtime command.
-   *
-   * @param name - Command identifier to execute.
-   * @param payload - Optional command payload.
-   * @returns Command handler result.
-   */
-  execute(name: string, payload?: unknown): unknown;
-
-  /**
-   * Removes one command registration by name.
-   *
-   * @param name - Command identifier to remove.
+   * Replaces the active document while preserving editor and manager identity.
+   * @param document - Caller-owned model to present.
    * @returns No value.
    */
-  removeCommand(name: string): void;
-
-  /**
-   * Deletes the complete active selection as one undoable operation.
-   *
-   * @returns No value.
-   */
-  deleteSelection(): void;
+  setDocument(document: DocumentModel): void;
 
   /**
    * Replaces supplied document sections and clears previous local history.
@@ -108,21 +76,7 @@ export interface RivtoEditorApi {
   dump(): EditorSnapshot;
 
   /**
-   * Reverts the latest captured local document operation.
-   *
-   * @returns No value.
-   */
-  undo(): void;
-
-  /**
-   * Reapplies the latest locally undone document operation.
-   *
-   * @returns No value.
-   */
-  redo(): void;
-
-  /**
-   * Releases runtime subscriptions, managers, registries, and history.
+   * Releases runtime subscriptions, managers, and registries without destroying the caller-owned document.
    *
    * @returns A Promise that resolves after runtime, provider, and CRDT cleanup.
    */

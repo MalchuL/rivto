@@ -70,13 +70,13 @@ export class EdgelessSelectionRuntime {
 
   /** @returns Detached current canvas selection view. */
   get(): EdgelessSelectionSnapshot {
-    const current = this.reactEditor.editor.selection.get();
+    const current = this.reactEditor.selection.get();
     return { active: isActive(current), items: [...(current?.elements ?? [])] };
   }
 
   /** @returns Stable snapshot until the underlying core selection changes. */
   snapshot(): EdgelessSelectionSnapshot {
-    const current = this.reactEditor.editor.selection.snapshot();
+    const current = this.reactEditor.selection.snapshot();
     if (current !== this.snapshotSource) {
       this.snapshotSource = current;
       this.snapshotValue = { active: isActive(current), items: current?.elements ?? [] };
@@ -102,9 +102,9 @@ export class EdgelessSelectionRuntime {
    * @returns No value.
    */
   set(items: readonly EdgelessSelectionRef[]): void {
-    const current = this.reactEditor.editor.selection.get();
+    const current = this.reactEditor.selection.get();
     const keepBlocks = current && isStructuralSelection(current);
-    this.reactEditor.editor.selection.set(createEdgelessSelection(
+    this.reactEditor.selection.set(createEdgelessSelection(
       keepBlocks ? current : undefined,
       true,
       items,
@@ -117,9 +117,9 @@ export class EdgelessSelectionRuntime {
    * @returns No value.
    */
   setBlocks(blocks: Selection): void {
-    const current = this.reactEditor.editor.selection.get();
+    const current = this.reactEditor.selection.get();
     const active = isActive(current);
-    this.reactEditor.editor.selection.set({
+    this.reactEditor.selection.set({
       ...blocks,
       elements: active ? current?.elements ?? [] : [],
       pluginData: {
@@ -132,15 +132,15 @@ export class EdgelessSelectionRuntime {
 
   /** Deactivates selected elements while retaining their IDs. */
   deactivate(): void {
-    const current = this.reactEditor.editor.selection.get();
+    const current = this.reactEditor.selection.get();
     if (!current || !isActive(current)) return;
-    this.reactEditor.editor.selection.set(createEdgelessSelection(current, false, current.elements));
+    this.reactEditor.selection.set(createEdgelessSelection(current, false, current.elements));
   }
 
   /** Clears selected elements and keeps edgeless selection active. */
   clear(): void {
-    const current = this.reactEditor.editor.selection.get();
-    this.reactEditor.editor.selection.set(createEdgelessSelection(current, true));
+    const current = this.reactEditor.selection.get();
+    this.reactEditor.selection.set(createEdgelessSelection(current, true));
   }
 
   /**
@@ -149,19 +149,19 @@ export class EdgelessSelectionRuntime {
    * @returns Subscription disposer.
    */
   subscribe(listener: () => void): () => void {
-    return this.reactEditor.editor.selection.subscribe(listener);
+    return this.reactEditor.selection.subscribe(listener);
   }
 
   /** Removes edgeless-owned data while retaining other generic selection data. */
   destroy(): void {
-    const current = this.reactEditor.editor.selection.get();
+    const current = this.reactEditor.selection.get();
     if (!current || (!(current.elements?.length) && !(EDGELESS_SELECTION_PLUGIN_KEY in (current.pluginData ?? {})))) return;
     const pluginData = { ...current.pluginData };
     delete pluginData[EDGELESS_SELECTION_PLUGIN_KEY];
     if (current.blocks.length || Object.keys(pluginData).length) {
-      this.reactEditor.editor.selection.set({ ...current, elements: [], pluginData });
+      this.reactEditor.selection.set({ ...current, elements: [], pluginData });
     } else {
-      this.reactEditor.editor.selection.clear();
+      this.reactEditor.selection.clear();
     }
   }
 }

@@ -8,15 +8,16 @@
 import type {
   EditorBlock,
   EditorElement,
-  RivtoEditorApi as Editor,
+  RivtoEditorApi,
 } from "@chulane/rivto";
+import type { ReactEditor } from "../../../../../types";
 import { findRenderedBlock } from "../../../../../managers";
 import { blockIdsOf } from "../../../../../elements/block-element-projection";
 
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 
 /** Walks to the document root that owns `blockId`. */
-export function owningRootId(editor: Editor, blockId: string): string {
+export function owningRootId(editor: ReactEditor | RivtoEditorApi, blockId: string): string {
   let rootId = blockId;
   for (
     let parentId = editor.blocks.getParentId(rootId);
@@ -30,7 +31,7 @@ export function owningRootId(editor: Editor, blockId: string): string {
 
 /** Finds the edgeless card element whose root range includes `blockId`. */
 export function owningBlockElement(
-  editor: Editor,
+  editor: ReactEditor | RivtoEditorApi,
   blockId: string,
 ): EditorElement | undefined {
   const rootId = owningRootId(editor, blockId);
@@ -46,7 +47,7 @@ export function owningBlockElement(
  * Page mode uses the complete document. Edgeless mode keeps navigation inside
  * the card that owns `blockId`, so Up/Down never crosses into another element.
  */
-export function navigationOutlineBlocks(editor: Editor, blockId: string): EditorBlock[] {
+export function navigationOutlineBlocks(editor: ReactEditor | RivtoEditorApi, blockId: string): EditorBlock[] {
   const roots = editor.blocks.getBlocks();
   let outline = roots;
   if (editor.mode.get() === "edgeless") {

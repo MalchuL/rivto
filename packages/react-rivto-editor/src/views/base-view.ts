@@ -48,8 +48,8 @@ export class BaseBlockView implements BlockViewBehavior {
    */
   onSplit(context: BlockViewContext, target: KeyboardSelectionTarget): BlockViewOutcome {
     const { reactEditor, block, root } = context;
-    const { editor, isEmptyBlock } = reactEditor;
-    if (isEmptyBlock(block) && editor.blocks.getParentId(block.id)) {
+    const { isEmptyBlock } = reactEditor;
+    if (isEmptyBlock(block) && reactEditor.blocks.getParentId(block.id)) {
       outdentUntilBoundary(reactEditor, block.id);
       focusCaret(reactEditor, root, block.id, 0);
       return "handled";
@@ -68,13 +68,13 @@ export class BaseBlockView implements BlockViewBehavior {
     if (block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true)) {
       // Insertion created a sibling. Indent then prepend so Enter places the
       // new writing block as the first visible child.
-      editor.blocks.indentBlock(nextBlockId);
-      editor.blocks.moveBlock(nextBlockId, null);
-    } else if (editor.mode.get() === "edgeless" && editor.blocks.getParentId(block.id) === null) {
-      const element = editor.elements.getElements().find((candidate) =>
+      reactEditor.blocks.indentBlock(nextBlockId);
+      reactEditor.blocks.moveBlock(nextBlockId, null);
+    } else if (reactEditor.mode.get() === "edgeless" && reactEditor.blocks.getParentId(block.id) === null) {
+      const element = reactEditor.elements.getElements().find((candidate) =>
         candidate.type === "block" && candidate.props.endBlockId === block.id,
       );
-      if (element) editor.elements.updateElement(element.id, { props: { endBlockId: nextBlockId } });
+      if (element) reactEditor.elements.updateElement(element.id, { props: { endBlockId: nextBlockId } });
     }
     focusBlockLater(root, nextBlockId, 0);
     return "handled";

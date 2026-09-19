@@ -1,4 +1,5 @@
 import { BroadcastChannelProvider, YjsDoc } from "@chulane/crdt-doc";
+import { DocumentModelImpl } from "@chulane/document-model";
 import { createTestEditor as createRivtoEditor } from "../test-utils";
 
 async function eventually(assertion: () => void, timeoutMs = 500): Promise<void> {
@@ -19,8 +20,10 @@ describe("BroadcastChannelProvider editor sync", () => {
     const roomId = `room-${crypto.randomUUID()}`;
     const leftDoc = new YjsDoc(`${roomId}:left`);
     const rightDoc = new YjsDoc(`${roomId}:right`);
-    const left = createRivtoEditor({ document: leftDoc });
-    const right = createRivtoEditor({ document: rightDoc });
+    const left = createRivtoEditor();
+    const right = createRivtoEditor();
+    left.setDocument(new DocumentModelImpl(leftDoc));
+    right.setDocument(new DocumentModelImpl(rightDoc));
     const leftProvider = new BroadcastChannelProvider(roomId);
     const rightProvider = new BroadcastChannelProvider(roomId);
 

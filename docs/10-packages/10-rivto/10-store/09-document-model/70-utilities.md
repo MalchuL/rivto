@@ -58,7 +58,7 @@ assignMap(props, {
 }, false);
 ```
 
-Здесь `title` и `style` — два независимо обновляемых map keys. `style.color` и `style.width` — поля одного plain object: присваивание `style.color = "blue"` не является CRDT operation, не вызывает observers и не синхронизируется. Нужно снова вызвать `assignMap(props, { style: { ...oldStyle, color: "blue" } }, false)` либо заранее использовать nested map, созданную через instantiator, но сам `assignMap()` не предназначен для записи CRDT wrappers.
+Здесь `title` и `style` — два независимо обновляемых map keys. `style.color` и `style.width` — поля одного plain object: присваивание `style.color = "blue"` не является CRDT operation, не вызывает observers и не синхронизируется. Нужно снова вызвать `assignMap(props, { style: { ...oldStyle, color: "blue" } }, false)` либо заранее использовать nested map, созданную через `createDetachedMap()`, но сам `assignMap()` не предназначен для записи CRDT wrappers.
 
 Семантика `clear`:
 
@@ -201,4 +201,4 @@ Managers не заменяют nested `CRDTMap`, `CRDTArray` и `CRDTText` пр�
 
 Выбирайте `assignMap`/`assignArray` для полной или partial assignment, `assignText` для unconditional replacement и focused manager methods для domain validation и minimal diffs.
 
-`assignMap` и `assignArray` не являются deep-promotion API. Если внутреннее свойство plain object должно самостоятельно генерировать updates, создайте соответствующий nested `CRDTMap`/`CRDTArray`/`CRDTText` через `document.crdt.instantiator` и присоедините его явной CRDT operation.
+`assignMap` и `assignArray` не являются deep-promotion API. Если внутреннее свойство plain object должно самостоятельно генерировать updates, создайте соответствующий nested `CRDTMap`/`CRDTArray`/`CRDTText` через `crdt.createDetached*()` и присоедините его явной CRDT operation.

@@ -65,6 +65,7 @@ export type {
   MarkdownLinkClick,
   ReactEditor,
 } from "./types";
+export { isReactEditor, isRivtoEditor } from "./utils";
 export {
   createIsEmptyDefaultBlock,
   resolveIsEmptyBlock,

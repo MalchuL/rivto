@@ -52,10 +52,10 @@ test("highlights a prompt and converts it when editing leaves the block", async 
   await expect(converted).toHaveAttribute("data-block-type", "todo-item");
   await expect(converted.getByRole("textbox", { name: "TODO item name" })).toHaveText("Buy milk");
   const props = await page.evaluate((blockId) => {
-    const demo = (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: { getBlock(id: string): { props: Record<string, unknown> } } } } };
-    }).__rivtoDemo;
-    return demo.editor.editor.blocks.getBlock(blockId).props;
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getBlock(blockId).props;
   }, id);
   expect(props).toMatchObject({ status: "todo", description: "", priority: 4, project: "" });
   expect(props.createdAt).toBe(props.updatedAt);
@@ -74,8 +74,8 @@ test("highlights a prompt and converts it when editing leaves the block", async 
   await expect(converted.getByRole("button", { name: /Status: doing/ })).toBeVisible();
   const edited = await page.evaluate((blockId) => (
     (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: { getBlock(id: string): { content: string; props: Record<string, unknown> } } } } };
-    }).__rivtoDemo.editor.editor.blocks.getBlock(blockId)
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor.blocks.getBlock(blockId)
   ), id);
   expect(edited.content).toBe("Buy milk!");
   expect(new Date(String(edited.props.updatedAt)).getTime()).toBeGreaterThan(new Date(String(props.updatedAt)).getTime());
@@ -96,9 +96,7 @@ test("highlights a prompt and converts it when editing leaves the block", async 
   await dialog.click({ position: { x: 2, y: 2 } });
   await expect(dialog).toHaveCount(0);
   const modalProps = await page.evaluate((blockId) => (
-    (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: { getBlock(id: string): { props: Record<string, unknown> } } } } };
-    }).__rivtoDemo.editor.editor.blocks.getBlock(blockId).props
+    (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks.getBlock(blockId).props
   ), id);
   expect(modalProps).toMatchObject({
     status: "doing",
@@ -115,9 +113,7 @@ test("highlights a prompt and converts it when editing leaves the block", async 
   await converted.getByRole("combobox", { name: "Priority" }).selectOption("2");
   await converted.getByRole("textbox", { name: "Project" }).fill("Inline project");
   const inlineProps = await page.evaluate((blockId) => (
-    (window as unknown as {
-      __rivtoDemo: { editor: { editor: { blocks: { getBlock(id: string): { props: Record<string, unknown> } } } } };
-    }).__rivtoDemo.editor.editor.blocks.getBlock(blockId).props
+    (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks.getBlock(blockId).props
   ), id);
   expect(inlineProps).toMatchObject({
     description: "InlineXY description",

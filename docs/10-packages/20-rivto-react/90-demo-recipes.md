@@ -6,7 +6,9 @@
 
 ```ts
 function createAppEditor() {
+  const document = new DocumentModelImpl(new YjsDoc("document-id"));
   const editor = createRivtoEditor();
+  editor.setDocument(document);
   const visuals = edgelessVisualsExtension(appVisualOptions);
   const reactEditor = createReactEditor({
     editor,
@@ -31,7 +33,7 @@ Core definitions находятся отдельно от React renderers. Эт�
 
 ## Application toolbar
 
-Demo toolbar находится child `EditorView` и использует `useEditor()`/`useEditorMode()` для delete, undo и mode switch. UI state вроде видимости block IDs остаётся React state, а не pluginData документа.
+Demo toolbar получает core editor от host для persistence/lifecycle и использует `useReactEditor()`/`useEditorMode()` для focused operations и mode switch. UI state вроде видимости block IDs остаётся React state, а не pluginData документа.
 
 ## Decorator без duplicate block DOM
 
@@ -42,8 +44,8 @@ Demo block-ID extension регистрирует `BlockWrapper` и исполь�
 Каждый document получает собственные `{ editor, reactEditor }`. Один shared React context на два документа использовать нельзя:
 
 ```tsx
-<EditorView editor={left.reactEditor} />
-<EditorView editor={right.reactEditor} />
+<EditorView reactEditor={left.reactEditor} />
+<EditorView reactEditor={right.reactEditor} />
 ```
 
 Cleanup выполняется для каждой пары. Cross-document transfer должен явно работать с source/destination APIs и проверять ID collisions.
@@ -53,19 +55,19 @@ Cleanup выполняется для каждой пары. Cross-document tran
 Demo sync создаёт отдельный `YjsDoc`, передаёт его core editor, затем подключает provider:
 
 ```ts
-const document = new YjsDoc(documentId);
-const editor = createRivtoEditor({ document });
+const crdt = new YjsDoc(documentId);
+const document = new DocumentModelImpl(crdt);
+const editor = createRivtoEditor();
+editor.setDocument(document);
 const reactEditor = createReactEditor({ editor, extensions: [standardPreset()] });
-await document.attachProvider(provider);
+await crdt.attachProvider(provider);
 ```
 
 Cleanup:
 
 ```ts
 reactEditor.destroy();
-editor.destroy();
-await document.detachProvider();
-document.destroy();
+await editor.destroy();
 ```
 
 Provider и CRDT lifecycle не принадлежат React package.

@@ -2,7 +2,11 @@ import { createRivtoEditor, type EditorRuntime } from "./rivto-editor";
 import type { CreateRivtoEditorOptions } from "./types";
 import type { EditorPosition } from "../managers/selection-manager";
 import { createCaretSelection, createTextSelection, createStructuralSelection } from "../managers/selection-manager";
-import type { Block } from "@chulane/document-model";
+import type { Block, DocumentModel } from "@chulane/document-model";
+import { DocumentModelImpl } from "@chulane/document-model";
+import { YjsDoc } from "@chulane/crdt-doc";
+
+type CreateTestEditorOptions = CreateRivtoEditorOptions;
 
 /**
  * Core test editor with a local writing block registered.
@@ -10,8 +14,26 @@ import type { Block } from "@chulane/document-model";
  * Production hosts / React extensions own writing types; core no longer
  * auto-installs `paragraph`.
  */
-export function createTestEditor(options: CreateRivtoEditorOptions = {}): EditorRuntime {
+export function createTestEditor(options: CreateTestEditorOptions = {}): EditorRuntime {
+  const document = new DocumentModelImpl(new YjsDoc(`rivto-test-${crypto.randomUUID()}`));
   const editor = createRivtoEditor(options);
+  editor.setDocument(document);
+  const documents = new Set<DocumentModel>([document]);
+  const setDocument = editor.setDocument.bind(editor);
+  const destroy = editor.destroy.bind(editor);
+  let destroyed = false;
+  editor.setDocument = (next) => {
+    documents.add(next);
+    setDocument(next);
+  };
+  editor.destroy = async () => {
+    if (destroyed) return;
+    destroyed = true;
+    const runtimeCleanup = destroy();
+    const documentCleanup = Promise.all([...documents].map((item) => item.destroy()));
+    await runtimeCleanup;
+    await documentCleanup;
+  };
   editor.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
   return editor;
 }

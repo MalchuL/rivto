@@ -26,13 +26,13 @@
 
 Возвращает логический ID документа, заданный адаптеру. Провайдер может использовать другой ID комнаты, поэтому это не сетевой адрес.
 
-### `instantiator`
+### `createDetachedArray()`, `createDetachedMap()`, `createDetachedText()`
 
-- **Тип:** `CRDTInstantiator`, только для чтения.
-- **Значение:** фабрика shared-типов текущего адаптера.
-- **Исключения при чтении:** контракт не задаёт.
+- **Аргументы:** отсутствуют; generic-параметры ограничивают item или schema.
+- **Возвращают:** detached shared-тип, совместимый с текущим адаптером.
+- **Исключения:** контракт создания не задаёт; большинство операций чтения до attachment недоступны.
 
-Возвращает `CRDTInstantiator` текущей реализации. Менеджеры создают через него совместимые карты, массивы и текст, не импортируя Yjs.
+Методы не создают именованный root. Результат нужно вставить через `set()`, `push()` или `insert()` в parent, полученный через `getMap()` или `getArray()`.
 
 ### `attachProvider(provider)`
 
@@ -56,7 +56,7 @@
 - **Возвращает:** `void`.
 - **Исключения:** исключение из `operation` или CRDT-адаптера передаётся вызывающему коду.
 
-Выполняет связанные изменения как одну CRDT-транзакцию. `DocumentModelImpl.transact()` использует метод для всех публичных мутаций и передаёт стабильный локальный origin для undo.
+Выполняет связанные изменения как одну CRDT-транзакцию. Без явного origin adapter использует свой приватный стабильный local origin для undo.
 
 ### `createUndoManager(scopes, trackedOrigins?)`
 
@@ -64,7 +64,7 @@
 - **Возвращает:** `CRDTUndoManager`.
 - **Исключения:** контракт не задаёт; адаптер может отклонить несовместимую или detached-область.
 
-Создаёт undo manager для переданных карт, массивов и текстов. Rivto передаёт собранные области документа и локальный origin, чтобы удалённые updates не считались локальной историей.
+Создаёт undo manager для переданных карт, массивов и текстов. Без `trackedOrigins` adapter отслеживает свой приватный local origin, поэтому удалённые updates не считаются локальной историей.
 
 `scopes` — это не строки путей и не snapshot-данные. Это массив живых экземпляров `CRDTMap`, `CRDTArray` или `CRDTText`, изменения которых должен отслеживать manager. Обычно передаются корневые контейнеры функциональной области: вложенные shared-типы под таким корнем также относятся к ней. Все scopes должны быть созданы тем же CRDT-адаптером, принадлежать тому же документу и уже быть присоединены к нему.
 
@@ -72,32 +72,27 @@
 const document = new YjsDoc("manual-undo");
 const blocks = document.getMap("blocks");
 const roots = document.getArray<string>("roots");
-const localOrigin = Symbol("local-edit");
-
-const history = document.createUndoManager(
-  [blocks, roots], // CRDTUndoScope[]
-  [localOrigin],   // транзакции только с этим origin
-);
+const history = document.createUndoManager([blocks, roots]);
 
 document.transact(() => {
   blocks.set("first", { type: "paragraph" });
   roots.push("first");
-}, localOrigin);
+});
 
 history.undo();
 history.redo();
 history.destroy();
 ```
 
-Если передан `trackedOrigins`, undo записывает только транзакции с одним из этих origin. Один и тот же объект origin нужно передать и в `createUndoManager`, и в `transact`: новый `Symbol()` при каждом вызове не совпадёт с предыдущим.
+Если передан `trackedOrigins`, undo записывает только транзакции с одним из этих origin. Один и тот же объект нужно передать и в `createUndoManager`, и в `transact`.
 
-При обычной работе через Rivto вручную собирать scopes не нужно. `DocumentModelImpl` объединяет `undoScopes` менеджеров блоков, элементов, связей и plugin data, а публичный `UndoManager` вызывает:
+При обычной работе через Rivto вручную собирать scopes не нужно. `DocumentModelImpl` передаёт их своему focused history manager и открывает готовую историю:
 
 ```ts
-document.crdt.createUndoManager(document.undoScopes, [document.origin]);
+document.history;
 ```
 
-Новый manager persisted-состояния должен предоставить свои корневые shared-контейнеры в `undoScopes`, после чего `DocumentModelImpl` добавляет их в общий массив. Не добавляйте один корень несколько раз и не передавайте plain object, snapshot или wrapper из другого документа.
+Новый manager persisted-состояния добавляет корневые shared-контейнеры во внутренний accumulator, переданный моделью. Не добавляйте один корень несколько раз и не передавайте plain object, snapshot или wrapper из другого документа.
 
 ### `getArray(path)`
 
@@ -446,50 +441,6 @@ document.crdt.createUndoManager(document.undoScopes, [document.origin]);
 - **Исключения:** Promise может быть отклонён для несовместимого документа, отсутствующего подключения или ошибки транспорта.
 
 Останавливает синхронизацию и освобождает listeners и ресурсы транспорта.
-
-## `CRDTInstantiator`
-
-Фабрика shared-типов, привязанная к реализации CRDT.
-
-### `createArray()`
-
-- **Аргументы:** отсутствуют; generic `Item` ограничивает элементы.
-- **Возвращает:** detached-`CRDTArray<Item>`.
-- **Исключения:** контракт не задаёт.
-
-Создаёт пустой неприсоединённый shared-массив.
-
-### `createMap()`
-
-- **Аргументы:** отсутствуют; generic `Schema` описывает ключи и значения.
-- **Возвращает:** detached-`CRDTMap<Schema>`.
-- **Исключения:** контракт не задаёт.
-
-Создаёт пустую неприсоединённую shared-карту.
-
-### `createText()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** detached-`CRDTText`.
-- **Исключения:** контракт не задаёт.
-
-Создаёт пустой неприсоединённый shared-текст.
-
-### `convertBasicToCRDTType(item, options?)`
-
-- **Аргументы:** `item: BasicType`; необязательный `options: WrapBasicTypeToCRDTOptions`.
-- **Возвращает:** `CRDTType`.
-- **Исключения:** реализация может отклонить неподдерживаемое или циклическое значение.
-
-Рекурсивно преобразует поддерживаемые данные. По умолчанию строки становятся CRDT-текстом, массивы — CRDT-массивами, а обычные объекты и JS `Map` — CRDT-картами.
-
-### `isPlainRecord(value)`
-
-- **Аргументы:** `value: BasicType`.
-- **Возвращает:** `boolean`.
-- **Исключения:** контракт не задаёт.
-
-Проверяет, является ли значение глубоко поддерживаемым ациклическим обычным объектом. Экземпляры классов, функции, символы, `undefined` и циклы отклоняются.
 
 ## Контракты undo
 

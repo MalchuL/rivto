@@ -6,12 +6,6 @@
 
 ## Публичные свойства
 
-### `document`
-
-- **Тип:** `DocumentModel`, публичное `readonly`.
-- **Значение:** canonical collaborative storage и persistence boundary.
-- **Исключения при чтении:** отсутствуют.
-
 ### `blocks`
 
 - **Тип:** `BlockManager`, публичное `readonly`.
@@ -56,7 +50,7 @@
 
 ### `history`
 
-- **Тип:** `UndoManager`, публичное `readonly`.
+- **Тип:** `HistoryManager`, публичное `readonly`.
 - **Значение:** local-origin undo/redo history document scopes.
 - **Исключения при чтении:** отсутствуют.
 
@@ -83,7 +77,7 @@
 ### `unsubscribeFns`
 
 - **Тип:** `Array<() => void>`, приватное `readonly`.
-- **Значение:** cleanup callbacks block registry, document, selection и mode subscriptions.
+- **Значение:** cleanup callbacks block registry, manager subscriptions и mode subscriptions. Active document subscription хранится отдельно для replacement.
 - **Исключения при чтении:** отсутствуют.
 
 ### `currentRevision`
@@ -92,23 +86,21 @@
 - **Значение:** backing value getter `revision`.
 - **Исключения при чтении:** отсутствуют.
 
-### `batchDepth`
-
-- **Тип:** `number`, приватное; initial `0`.
-- **Значение:** nesting depth explicit batch. Положительное значение отключает отдельные history boundaries nested document commands.
-- **Исключения при чтении:** отсутствуют.
-
 ## Создание
 
-### `constructor(options = {})`
+### `constructor(options)`
 
-- **Аргументы:** `options: CreateRivtoEditorOptions` с optional `document` и `mode`.
+- **Аргументы:** optional `CreateRivtoEditorOptions` с `mode`.
 - **Создаёт:** полностью связанный `EditorRuntime`.
-- **Исключения:** передаёт ошибки создания `YjsDoc`, `DocumentModelImpl`, managers, duplicate built-in commands и subscriptions.
+- **Исключения:** передаёт ошибки managers, duplicate built-in commands и subscriptions.
 
-Без document создаётся `YjsDoc("rivto-" + crypto.randomUUID())`. Default mode — `"block"`. Constructor создаёт managers, устанавливает block props validator, регистрирует runtime/clipboard commands и подписывает revision на document, registry, selection и mode changes.
+Default mode — `"block"`. Constructor создаёт unbound managers, устанавливает block props validator и регистрирует runtime/clipboard commands. `setDocument()` позже подключает model subscriptions.
 
 ## Публичные методы
+
+### `getDocument()` / `setDocument(document)`
+
+`getDocument()` возвращает active `DocumentModel` либо `undefined`, пока runtime unbound. `setDocument()` атомарно переключает history и document subscriptions, сохраняя stable managers и editor-owned processors, очищает selection и публикует один global revision. Старый caller-owned document не уничтожается; updates от него больше не доходят до runtime. Повторная установка active instance ничего не делает.
 
 ### `subscribe(listener)`
 
@@ -152,41 +144,13 @@
 - **Возвращает:** idempotent unsubscribe.
 - **Не уведомляет:** `clear()` при уже пустой selection; initial selection читается через `get()`.
 
-### `batchUpdates(operation)`
+### `history.batchUpdates(operation)`
 
 - **Аргументы:** synchronous `operation: () => Result`.
 - **Возвращает:** generic `Result`, возвращённый callback.
 - **Исключения:** передаёт исходное исключение operation и transaction/history errors; rollback не выполняется.
 
-Outermost batch вызывает `history.stopCapturing()` до и после, а callback выполняет через `document.transact()`. Nested batch сразу вызывает callback внутри текущей boundary.
-
-### `register(name, handler)`
-
-- **Аргументы:** непустой unique `name: string`; `handler: CommandHandler`.
-- **Возвращает:** `RegisteredCommand` ownership handle.
-- **Исключения:** `Error("Command name is required")` или `Error("Command <name> is already registered")`.
-
-### `execute(name, payload?)`
-
-- **Аргументы:** command `name: string`; optional `payload: unknown`.
-- **Возвращает:** `unknown`, фактический result handler.
-- **Исключения:** `Error("Unknown command <name>")` или исходное исключение handler.
-
-Successful execution обновляет `commands.lastExecuted` и уведомляет command subscribers, но общий editor revision меняется только если соответствующее состояние также вызвало runtime notification.
-
-### `removeCommand(name)`
-
-- **Аргументы:** command `name: string`.
-- **Возвращает:** `void`.
-- **Исключения:** отсутствуют; missing name безопасен.
-
-Удаление built-in command разрешено. После этого соответствующий convenience method может выбросить `Unknown command`.
-
-### `deleteSelection()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** errors command `selection.delete`; `Unknown command`, если registration удалена.
+Outermost batch вызывает `stopCapturing()` до и после и выполняет callback в одной CRDT transaction. Nested batch сразу вызывает callback внутри текущей boundary.
 
 ### `load(snapshot)`
 
@@ -204,29 +168,17 @@ Successful execution обновляет `commands.lastExecuted` и уведом�
 - **Возвращает:** complete detached `EditorSnapshot` schema version 6.
 - **Исключения:** document materialization/validation/conversion errors.
 
-### `undo()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** unknown `history.undo` command или CRDT undo errors.
-
-### `redo()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** unknown `history.redo` command или CRDT redo errors.
-
 ### `destroy()`
 
 - **Аргументы:** отсутствуют.
 - **Возвращает:** `Promise<void>`, завершённый после runtime cleanup, отключения всех providers и уничтожения CRDT document.
 - **Исключения:** передаёт ошибку runtime cleanup, provider disconnect или CRDT destroy; subsequent manager cleanup после синхронной ошибки не гарантирован, но CRDT destroy выполняется через `finally`.
 
-Удаляет owned subscriptions, затем уничтожает links, elements, blocks, block registry и history, очищает commands и listeners и ожидает `document.crdt.destroy()`.
+Удаляет owned subscriptions, затем уничтожает links, elements, blocks, block registry и history, очищает commands и listeners и ожидает `crdt.destroy()`.
 
 ## Factory
 
-### `createRivtoEditor(options = {})`
+### `createRivtoEditor(options)`
 
 - **Аргументы:** optional `CreateRivtoEditorOptions`.
 - **Возвращает:** новый `EditorRuntime`.

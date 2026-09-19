@@ -96,7 +96,7 @@ export function CreationPanel({
               label="Eraser"
               icon="eraser"
               aria-pressed={tool.tool === "eraser"}
-              onClick={() => { controller.reactEditor.editor.execute("edgeless.tool.set", { tool: "eraser" }); }}
+              onClick={() => { controller.reactEditor.commands.execute("edgeless.tool.set", { tool: "eraser" }); }}
             />
           </>
         }
@@ -156,7 +156,7 @@ export function CreationPanel({
               aria-pressed={tool.tool === "connector" && tool.route === route}
               onClick={() => {
                 controller.setCreationDefaults("connector", { route });
-                controller.reactEditor.editor.execute("edgeless.tool.set", { tool: "connector", route });
+                controller.reactEditor.commands.execute("edgeless.tool.set", { tool: "connector", route });
               }}
             />
           ))}

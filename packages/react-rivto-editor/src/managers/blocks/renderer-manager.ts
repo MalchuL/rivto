@@ -1,6 +1,6 @@
-import type { ReactEditorImpl } from "../../react-editor";
 import type { RenderersCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
+import type { ReactEditorImpl } from "../../react-editor";
 import type { BlockRenderer } from "./renderer-types";
 
 /**
@@ -21,8 +21,7 @@ export class RendererManager implements RenderersCapability {
   /**
    * Creates a renderer registry.
    *
-   * @param reactEditor - Complete owning runtime used for lifecycle ownership
-   * and React invalidation.
+   * @param reactEditor - Owning React runtime providing extension lifecycle.
    * @param fallback - Optional renderer for persisted unknown block types.
    */
   constructor(

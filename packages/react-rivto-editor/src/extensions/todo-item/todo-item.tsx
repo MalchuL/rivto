@@ -17,7 +17,7 @@ import {
 } from "react";
 import type { EditorBlock } from "@chulane/rivto";
 import { z } from "zod";
-import { useBlockEditing, useEditor, useReactEditor } from "../../hooks";
+import { useBlockEditing, useReactEditor } from "../../hooks";
 import {
   restoreDOMSelection,
   saveDOMSelection,
@@ -257,7 +257,7 @@ const commitPropertiesPatch = (
   blockId: string,
   patch?: TodoItemPropertiesPatch,
 ): boolean => {
-  const block = reactEditor.editor.blocks.getBlock(blockId);
+  const block = reactEditor.blocks.getBlock(blockId);
   if (!block || block.type !== TODO_ITEM_BLOCK_TYPE || !patch) return false;
   const changed = Object.fromEntries(
     Object.entries(patch).filter(([key, value]) => block.props[key] !== value),
@@ -266,7 +266,7 @@ const commitPropertiesPatch = (
   const updatedAt = nextTimestamp(String(block.props.updatedAt));
   const result = todoItemPropsSchema.loose().safeParse({ ...block.props, ...changed, updatedAt });
   if (!result.success) return false;
-  reactEditor.editor.batchUpdates(() => {
+  reactEditor.history.batchUpdates(() => {
     reactEditor.blocks.updateBlock(blockId, { props: { ...changed, updatedAt } });
   });
   return true;
@@ -367,7 +367,6 @@ export function TodoItem({
   blockId,
   propertiesModal: PropertiesModal = DefaultTodoItemPropertiesModal,
 }: TodoItemComponentProps) {
-  const editor = useEditor();
   const reactEditor = useReactEditor();
   const editing = useBlockEditing<TodoItemProps>(blockId);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
@@ -377,7 +376,7 @@ export function TodoItem({
   /** Updates content and its timestamp inside one editor batch. */
   const updateName = (event: Parameters<typeof editing.attributes.onInput>[0]): void => {
     const updatedAt = nextTimestamp(String(editing.getProp("updatedAt") ?? block.props.updatedAt));
-    editor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       editing.attributes.onInput(event);
       editing.setProp("updatedAt", updatedAt);
     });
@@ -386,7 +385,7 @@ export function TodoItem({
   /** Completes IME input and advances its timestamp atomically. */
   const finishComposition = (event: Parameters<typeof editing.attributes.onCompositionEnd>[0]): void => {
     const updatedAt = nextTimestamp(String(editing.getProp("updatedAt") ?? block.props.updatedAt));
-    editor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       editing.attributes.onCompositionEnd(event);
       editing.setProp("updatedAt", updatedAt);
     });
@@ -396,7 +395,7 @@ export function TodoItem({
   const cycleStatus = (): void => {
     const status = editing.getProp("status") ?? block.props.status;
     const updatedAt = nextTimestamp(String(editing.getProp("updatedAt") ?? block.props.updatedAt));
-    editor.batchUpdates(() => editing.setProps({
+    reactEditor.history.batchUpdates(() => editing.setProps({
       status: nextStatus(status),
       updatedAt,
     }));
@@ -513,15 +512,15 @@ export function todoItemExtension(
         const current = candidate;
         if (!current) return;
         candidate = undefined;
-        const block = reactEditor.editor.blocks.getBlock(current.blockId);
+        const block = reactEditor.blocks.getBlock(current.blockId);
         const match = block ? matchPrompt(block.content, prompts) : undefined;
         if (!block || block.type === TODO_ITEM_BLOCK_TYPE || !match) {
           decoratePrompt(current.contentElement);
           return;
         }
         const owned = createTodoItemProps();
-        reactEditor.editor.batchUpdates(() => {
-          reactEditor.editor.blocks.setBlockType(current.blockId, TODO_ITEM_BLOCK_TYPE);
+        reactEditor.history.batchUpdates(() => {
+          reactEditor.blocks.setBlockType(current.blockId, TODO_ITEM_BLOCK_TYPE);
           reactEditor.blocks.updateBlock(current.blockId, {
             content: block.content.slice(match.prompt.length).replace(/^\s+/, ""),
             props: { ...owned, status: match.status },
@@ -546,7 +545,7 @@ export function todoItemExtension(
             group: "Turn into",
             keywords: ["tasks", "todos"],
             isAvailable: ({ blockId }) => (
-              reactEditor.editor.blocks.getBlock(blockId)?.children.length === 0
+              reactEditor.blocks.getBlock(blockId)?.children.length === 0
             ),
           },
         }),
@@ -570,7 +569,7 @@ export function todoItemExtension(
         }, ({ blockId, contentElement }) => {
           if (!blockId || !contentElement) return false;
           queueMicrotask(() => {
-            const block = reactEditor.editor.blocks.getBlock(blockId);
+            const block = reactEditor.blocks.getBlock(blockId);
             if (!block || block.type === TODO_ITEM_BLOCK_TYPE) return;
             const match = matchPrompt(contentElement.textContent ?? "", prompts);
             if (!match) {

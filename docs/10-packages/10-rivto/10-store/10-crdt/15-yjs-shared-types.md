@@ -4,11 +4,11 @@
 
 ## Жизненный цикл присоединения
 
-`YjsInstantiator` создаёт неприсоединённые wrapper-объекты. Тип присоединяется после вставки в корень документа или в другой уже присоединённый shared-тип.
+Методы `YjsDoc.createDetached*()` создают неприсоединённые wrapper-объекты. Тип присоединяется после вставки в корень документа или в другой уже присоединённый shared-тип.
 
 ```ts
 const root = document.getMap("example");
-const metadata = document.instantiator.createMap();
+const metadata = document.createDetachedMap();
 
 root.set("metadata", metadata);
 metadata.set("status", "draft");

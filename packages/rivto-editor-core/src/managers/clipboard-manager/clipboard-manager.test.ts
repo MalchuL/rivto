@@ -12,7 +12,7 @@ describe("core ClipboardManager", () => {
     expect(bundle.blocks[0]?.children).toEqual([]);
     expect(bundle.blocks[0]?.content).toBe("Before");
     const updates = jest.fn();
-    editor.document.subscribe(updates);
+    editor.subscribe(updates);
     const caret = editor.clipboard.paste({ textTarget, text: "One\nTwo", defaultBlockType: "paragraph" });
     expect(updates).toHaveBeenCalledTimes(1);
     const roots = editor.blocks.getBlocks();
@@ -22,7 +22,7 @@ describe("core ClipboardManager", () => {
     expect(editor.selection.get()).toMatchObject({
       blocks: [{ id: roots[1]!.id, start: 3, end: 3 }],
     });
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "BeforeAfter", children: [{ content: "Keep child" }] }]);
     editor.destroy();
   });
@@ -51,7 +51,7 @@ describe("core ClipboardManager", () => {
     const blocks = editor.blocks.getBlocks();
     expect(blocks.map((block) => block.content)).toEqual(["LeftFirst", "Middle", "LastRight"]);
     expect(caret).toEqual({ blockId: blocks[2]!.id, offset: 4 });
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "LeftRight" }]);
     editor.destroy();
   });
@@ -61,7 +61,7 @@ describe("core ClipboardManager", () => {
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Selected" });
     editor.selection.set(createStructuralSelection([id], id, id));
     const updates = jest.fn();
-    editor.document.subscribe(updates);
+    editor.subscribe(updates);
 
     expect(editor.clipboard.copy()?.blocks[0]?.content).toBe("Selected");
     expect(updates).not.toHaveBeenCalled();
@@ -70,7 +70,7 @@ describe("core ClipboardManager", () => {
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.selection.get()).toBeUndefined();
 
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Selected" }]);
     editor.destroy();
   });
@@ -237,8 +237,6 @@ describe("core ClipboardManager", () => {
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
     const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first);
     editor.selection.set(createStructuralSelection([first, second], first, second));
-    let generated = 0;
-    editor.document.blocks.generateId = () => `pasted-${++generated}`;
     let importedIds: ReadonlyMap<string, string> | undefined;
     editor.clipboard.pasteStrategies.register("test.observe-import", {
       matches: () => true,
@@ -252,10 +250,14 @@ describe("core ClipboardManager", () => {
     editor.clipboard.paste({ bundle: payload, placement: { mergeText: false } });
 
     const ids = editor.blocks.getBlocks().map((block) => block.id);
-    expect(ids).toEqual([first, second, "pasted-1", "pasted-2"]);
+    const pastedIds = ids.slice(2);
+    expect(ids.slice(0, 2)).toEqual([first, second]);
+    expect(new Set(pastedIds).size).toBe(2);
+    expect(pastedIds).not.toContain(first);
+    expect(pastedIds).not.toContain(second);
     expect([...(importedIds ?? [])]).toEqual([
-      [first, "pasted-1"],
-      [second, "pasted-2"],
+      [first, pastedIds[0]],
+      [second, pastedIds[1]],
     ]);
     editor.destroy();
   });
