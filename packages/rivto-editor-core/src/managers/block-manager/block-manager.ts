@@ -237,9 +237,9 @@ export class BlockManager {
       block.children.forEach(collectIds);
     };
     blocks.forEach(collectIds);
-    // Resolve every descendant before insertion so the returned map can also
-    // rewrite references stored by clipboard extensions.
-    const idMap = this.document.blocks.resolveImportIds(sourceIds);
+    // Map every descendant before insertion so clipboard extensions can use
+    // the same destination IDs when rewriting stored references.
+    const idMap = this.document.blocks.createImportIdMap(sourceIds);
     const prepare = (block: EditorBlock): EditorBlockInput => {
       const id = idMap.get(block.id)!;
       return { ...block, id, children: block.children.map(prepare) };

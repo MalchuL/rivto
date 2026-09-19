@@ -678,16 +678,16 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     }
 
     /**
-     * Resolves imported block identities against this document.
+     * Creates the block ID map used by an immediate import.
      *
-     * This is intentionally document-owned: collision checks and ID generation
-     * must use the same destination store. It only returns a plan; callers must
-     * insert immediately because returned IDs are not reserved.
+     * Available source IDs survive cut/paste. IDs already present in this
+     * document receive generated replacements so copied blocks cannot overwrite
+     * existing data. The returned IDs are not inserted or reserved.
      *
      * @param sourceIds - Stable source IDs in import order.
-     * @returns Source IDs unchanged when free and document-generated replacements when occupied.
+     * @returns Destination ID for every source block ID.
      */
-    resolveImportIds(sourceIds: readonly string[]): ReadonlyMap<string, string> {
+    createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string> {
         const assigned = new Set<string>();
         return new Map(sourceIds.map((sourceId) => {
             // A free identity survives cut/paste. Copying into a document that

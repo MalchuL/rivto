@@ -662,7 +662,7 @@ export class EdgelessVisualController {
   private pasteClipboardBundle(bundle: ClipboardBundle): void {
     validateClipboardBundle(bundle);
     if (!Array.isArray(bundle.elements)) throw new Error("Invalid edgeless clipboard payload");
-    const elementMap = this.reactEditor.elements.resolveImportIds(
+    const elementMap = this.reactEditor.elements.createImportIdMap(
       bundle.elements.map((element) => element.id),
     );
     const sourceRootIds = bundle.blocks.map((block) => block.id);

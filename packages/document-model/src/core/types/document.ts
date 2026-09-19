@@ -122,13 +122,13 @@ export interface DocumentBlockManagerApi {
   /** @param id - Block identifier. @returns Parent ID, null for roots, or undefined when absent. */
   getParentId(id: string): string | null | undefined;
   /**
-   * Plans identities for an immediate import without inserting or reserving them.
-   * Free IDs are preserved (supporting cut/paste), while occupied IDs receive
-   * document-generated replacements that callers use to rewrite references.
-   * @param sourceIds - IDs being imported.
-   * @returns Complete source-to-destination identity mapping.
+   * Creates a source-to-destination ID map for an immediate import.
+   * Available source IDs are preserved, while IDs already used by this document
+   * receive generated replacements. This does not insert or reserve any ID.
+   * @param sourceIds - Source IDs in import order.
+   * @returns Destination ID for every source ID.
    */
-  resolveImportIds(sourceIds: readonly string[]): ReadonlyMap<string, string>;
+  createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string>;
   /** @param block - Block to insert. @param afterId - Optional sibling anchor. @returns Inserted block ID. */
   insertBlock(block: BlockInput, afterId?: string | null): string;
   /** @param id - Block identifier. @param patch - Fields to update. @returns No value. */
@@ -182,13 +182,13 @@ export interface DocumentElementManagerApi {
   /** @param listener - Membership callback. @returns Unsubscribe callback. */
   subscribeMembership(listener: () => void): () => void;
   /**
-   * Plans identities for an immediate import without inserting or reserving them.
-   * Free IDs are preserved (supporting cut/paste), while occupied IDs receive
-   * document-generated replacements that callers use to rewrite references.
-   * @param sourceIds - IDs being imported.
-   * @returns Complete source-to-destination identity mapping.
+   * Creates a source-to-destination ID map for an immediate import.
+   * Available source IDs are preserved, while IDs already used by this document
+   * receive generated replacements. This does not insert or reserve any ID.
+   * @param sourceIds - Source IDs in import order.
+   * @returns Destination ID for every source ID.
    */
-  resolveImportIds(sourceIds: readonly string[]): ReadonlyMap<string, string>;
+  createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string>;
   /** @param input - Element to insert. @returns Inserted element ID. */
   insertElement(input: ElementInput): string;
   /** @param id - Element identifier. @param patch - Fields to update. @returns No value. */

@@ -45,7 +45,7 @@ export class ElementPasteStrategy implements PasteStrategy {
     if (!bundle) return undefined;
     const selected = new Set(bundle.selectedElementIds ?? bundle.elements?.map((element) => element.id));
     const sources = (bundle.elements ?? []).filter((element) => selected.has(element.id));
-    const elementIdMap = this.reactEditor.elements.resolveImportIds(sources.map((element) => element.id));
+    const elementIdMap = this.reactEditor.elements.createImportIdMap(sources.map((element) => element.id));
     const pastedRootIds = bundle.blocks.flatMap((block) => context.blockIdMap?.get(block.id) ?? []);
     if (!sources.length && !pastedRootIds.length) return undefined;
     const sourceRootIds = bundle.blocks.map((block) => block.id);

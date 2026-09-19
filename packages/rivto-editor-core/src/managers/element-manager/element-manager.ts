@@ -121,19 +121,19 @@ export class ElementManager {
   }
 
   /**
-   * Resolves source element identities for a destination import.
+   * Creates the element ID map for a destination import.
    *
-   * Free IDs survive cut-and-paste, while conflicts receive identities from
-   * the destination element manager. The returned map lets extensions rewrite
-   * opaque group and connector references before insertion.
+   * The active document preserves available IDs and replaces collisions. The
+   * returned map lets extensions rewrite group and connector references before
+   * inserting elements; it does not insert or reserve IDs itself.
    *
    * @param sourceIds - Stable source element IDs in import order.
-   * @returns Source-to-destination identity mapping.
+   * @returns Destination ID for every source element ID.
    */
-  resolveImportIds(sourceIds: readonly string[]): ReadonlyMap<string, string> {
+  createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string> {
     // Keep generation inside the active document. Callers use this map to
     // rewrite group and connector references before inserting the elements.
-    return this.document.elements.resolveImportIds(sourceIds);
+    return this.document.elements.createImportIdMap(sourceIds);
   }
 
   /** @param id - Element to patch. @param patch - Geometry, layer, or props changes. */

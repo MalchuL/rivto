@@ -93,7 +93,7 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
     void doc.destroy();
   });
 
-  it("resolves occupied import IDs inside the document", () => {
+  it("creates import ID maps inside the document", () => {
     const doc = new YjsDoc("import-ids");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "occupied-block", type: "paragraph" });
@@ -104,8 +104,8 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
       zIndex: 0,
     });
 
-    const blockIds = model.blocks.resolveImportIds(["free-block", "occupied-block"]);
-    const elementIds = model.elements.resolveImportIds(["free-element", "occupied-element"]);
+    const blockIds = model.blocks.createImportIdMap(["free-block", "occupied-block"]);
+    const elementIds = model.elements.createImportIdMap(["free-element", "occupied-element"]);
 
     expect(blockIds.get("free-block")).toBe("free-block");
     expect(blockIds.get("occupied-block")).not.toBe("occupied-block");
