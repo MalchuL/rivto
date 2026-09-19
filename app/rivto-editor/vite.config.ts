@@ -3,6 +3,7 @@
  * Relative assets allow Electron to load the output without a web server or a
  * prebuilt demo application.
  */
+import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
@@ -11,11 +12,13 @@ export default defineConfig({
   esbuild: { jsx: 'automatic' },
   base: './',
   build: { outDir: '../dist/renderer', emptyOutDir: true },
+  // Compiles the editor's Tailwind source stylesheet aliased below.
+  plugins: [tailwindcss()],
   resolve: {
     alias: [
       {
         find: '@chulane/rivto-react/styles.css',
-        replacement: fileURLToPath(new URL('../../packages/react-rivto-editor/styles.css', import.meta.url)),
+        replacement: fileURLToPath(new URL('../../packages/react-rivto-editor/src/styles/index.css', import.meta.url)),
       },
       {
         find: /^@chulane\/rivto-react$/,

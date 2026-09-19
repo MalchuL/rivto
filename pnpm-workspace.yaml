@@ -9,6 +9,7 @@ packages:
   - app/server
 
 allowBuilds:
+  '@parcel/watcher': false
   electron: true
   esbuild: true
   sharp: true

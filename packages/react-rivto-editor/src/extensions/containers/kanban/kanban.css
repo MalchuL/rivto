@@ -1,0 +1,140 @@
+/*
+ * Structural rules for the Kanban container.
+ *
+ * The board, its lanes, and its cards are ordinary blocks rendered by the
+ * shared block tree, so their layout must be expressed through the tree's
+ * generated structure (`[data-block-type]`, `.page-block-children`,
+ * `.page-block`, `.rivto-slot`) rather than through utilities on elements this
+ * extension owns. Chrome the extension renders itself (column header, add
+ * controls, collapsed summary) is styled with Tailwind utilities in
+ * `kanban.tsx`; only rules needing structural or `:has()` selectors live here.
+ */
+[data-block-type="kanban"] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-block-type="kanban"] > .page-block-children {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow-x: auto;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--rivto-kanban-board-background);
+  scrollbar-width: thin;
+}
+
+/* An expanded board with no lanes still shows its surface as a drop target. */
+[data-block-type="kanban"]:not(:has(> .page-block-children)):has(.rivto-kanban-summary:empty) {
+  box-sizing: border-box;
+  min-height: 192px;
+  border-radius: 14px;
+  background: var(--rivto-kanban-board-background);
+}
+
+[data-block-type="kanban"] > .page-block-children > .page-block {
+  /* Anchor the absolute insertion line to this lane, not the outer surface. */
+  position: relative;
+  flex: 1 0 240px;
+  min-width: 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--rivto-kanban-lane-background);
+  min-height: 160px;
+  box-shadow: 0 1px 2px rgb(9 30 66 / 16%);
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+[data-block-type="kanban-column"] > .page-block-children {
+  margin: 10px 0 0;
+}
+
+[data-block-type="kanban-column"] > .page-block-children > .page-block {
+  margin: 10px 0;
+  padding: 12px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--rivto-background);
+  position: relative;
+  color: var(--rivto-kanban-card-foreground);
+  box-shadow: 0 1px 2px rgb(9 30 66 / 24%);
+  transition: box-shadow 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+
+[data-block-type="kanban-column"] > .page-block-children > .page-block:hover {
+  border-color: var(--rivto-kanban-card-hover-border);
+  box-shadow: 0 3px 8px rgb(9 30 66 / 14%);
+}
+
+[data-block-type="kanban-column"] > .page-block-children > [data-dragging="true"] {
+  opacity: 0.3;
+  background: var(--rivto-kanban-drag-background);
+  box-shadow: none;
+}
+
+[data-block-type="kanban"] > .page-block-children > [data-block-type="kanban-column"][data-dragging="true"] {
+  opacity: 0.4;
+  outline: 2px dashed var(--rivto-kanban-muted-foreground);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.edgeless-card [data-block-type="kanban"] .page-block-row::before,
+[data-block-type="kanban"] .page-block-row::before {
+  /* Beat the edgeless 100vw hover slab so lane overflow matches the columns. */
+  inset: 0;
+  width: auto;
+}
+
+/* Keep controls within columns instead of overlapping neighboring cards. */
+[data-block-type="kanban"] > .page-block-children .rivto-slot[data-slot-owner="block"][data-slot-position="left-top"] {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  transform: none;
+  flex-shrink: 0;
+  order: -1;
+}
+
+[data-block-type="kanban"] .page-drag-handle {
+  color: var(--rivto-kanban-muted-foreground);
+  border-radius: 5px;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+[data-block-type="kanban"] .page-drag-handle:hover {
+  color: var(--rivto-kanban-accent);
+  background: var(--rivto-kanban-drag-background);
+}
+
+/* The collapsed summary hosts the board's contentless selection region. */
+.rivto-kanban-summary:not(:empty) {
+  box-sizing: border-box;
+  width: fit-content;
+  min-height: var(--rivto-default-block-height);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--rivto-kanban-board-background);
+}
+
+/* The add-column tile is portaled into the lane container and sorts last. */
+.rivto-kanban-add-column {
+  order: 1;
+  flex: 0 0 240px;
+  min-height: 160px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-block-type="kanban"] *,
+  [data-block-type="kanban"] *::before {
+    transition: none !important;
+  }
+}

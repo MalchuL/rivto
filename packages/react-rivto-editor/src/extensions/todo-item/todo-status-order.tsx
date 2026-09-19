@@ -14,7 +14,9 @@
 import { DragDropProvider, type DragEndEvent } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { arrayMove } from "@dnd-kit/helpers";
+import { GripVerticalIcon } from "lucide-react";
 import type { TodoItemStatus } from "./todo-item";
+import { Button } from "../../components/ui/button";
 import { TODO_STATUS_ORDER_CLASS, TODO_STATUS_ORDER_ROW_CLASS } from "./todo-item-classes";
 
 /** Human-readable labels shared by ordering and status filters. */
@@ -63,14 +65,16 @@ export function reorderTodoStatuses(
 function SortableStatusRow({ status, position, total }: SortableStatusRowProps) {
   const { ref, isDragging } = useSortable({ id: status, index: position - 1 });
   return (
-    <button
+    <Button
       ref={ref}
+      variant="secondary"
+      size="sm"
       className={TODO_STATUS_ORDER_ROW_CLASS}
       data-dragging={isDragging ? "true" : undefined}
       type="button"
       role="listitem"
       aria-label={`${TODO_STATUS_LABELS[status]} status order. Position ${position} of ${total}. Press Space to pick up, arrow keys to move, and Space to drop.`}
-    >↕ {TODO_STATUS_LABELS[status]}</button>
+    ><GripVerticalIcon aria-hidden="true" />{TODO_STATUS_LABELS[status]}</Button>
   );
 }
 

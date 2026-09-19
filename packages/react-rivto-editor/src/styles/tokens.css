@@ -1,0 +1,128 @@
+/*
+ * Public design tokens for @chulane/rivto-react.
+ *
+ * Every token is a `--rivto-*` custom property on `:root` so hosts can retheme
+ * the editor by redefining a handful of variables on any ancestor. The
+ * `@theme inline` block maps those tokens onto the shadcn/ui semantic palette
+ * (`bg-background`, `text-muted-foreground`, `ring-ring`, ...) used by the
+ * package's Tailwind utilities and UI primitives. `inline` makes utilities
+ * reference the `--rivto-*` variables directly, so portalled chrome (slash
+ * menu, dialogs, popovers) resolves the same values as content inside the
+ * editor root.
+ */
+:root {
+  /* Brand accent shared by selection, focus rings, and primary actions. */
+  --rivto-accent: #6c5ce7;
+
+  /* Semantic surface palette consumed through the Tailwind theme below. */
+  --rivto-background: #ffffff;
+  --rivto-foreground: #1f1d2b;
+  --rivto-card: #ffffff;
+  --rivto-card-foreground: #1f1d2b;
+  --rivto-popover: #ffffff;
+  --rivto-popover-foreground: #1f1d2b;
+  --rivto-primary: var(--rivto-accent);
+  --rivto-primary-foreground: #ffffff;
+  --rivto-secondary: #f4f2f8;
+  --rivto-secondary-foreground: #514a61;
+  --rivto-muted: #f4f5f7;
+  --rivto-muted-foreground: #6b6478;
+  --rivto-subtle: #eeeaff;
+  --rivto-subtle-foreground: #4c3fc9;
+  --rivto-destructive: #d64545;
+  --rivto-border: #dedbe7;
+  --rivto-input: #d8d4e2;
+  --rivto-ring: var(--rivto-accent);
+  --rivto-radius: 0.5rem;
+
+  /* Block selection highlight; darker than `--rivto-subtle` so a selected
+     subtree stays distinguishable from hovered chrome that shares the tint. */
+  --rivto-block-selection-background: #e5dfff;
+  --rivto-block-selection-outline: #cfc4ff;
+
+  /* Block geometry shared by the page and edgeless block trees. */
+  --rivto-default-block-height: 1.5em;
+  --rivto-block-surface-padding: 56px 64px;
+
+  /* Drag and drop feedback. */
+  --rivto-drop-indicator-thickness: 4px;
+  --rivto-drop-indicator-color: var(--rivto-accent);
+  --rivto-drop-indicator-radius: 4px;
+  --rivto-drop-inside-background: color-mix(in srgb, var(--rivto-drop-indicator-color) 8%, transparent);
+
+  /* Markdown code blocks and links. */
+  --rivto-code-border: #dedede;
+  --rivto-code-background: #f6f7f8;
+  --rivto-code-label-color: #555555;
+  --rivto-code-language-color: #777777;
+  --rivto-code-scrollbar: #aaaaaa;
+  --rivto-code-keyword: #a626a4;
+  --rivto-code-string: #50a14f;
+  --rivto-code-number: #986801;
+  --rivto-code-title: #4078f2;
+  --rivto-code-comment: #7f848e;
+  --rivto-link-color: #5b4bd8;
+
+  /* Layout containers: boards, tiles, and column groups. */
+  --rivto-kanban-board-background: linear-gradient(125deg, #e9eefc, #e8f4f5);
+  --rivto-kanban-lane-background: #f1f2f4;
+  --rivto-kanban-card-foreground: #172b4d;
+  --rivto-kanban-card-hover-border: #85b8ff;
+  --rivto-kanban-drag-background: #dce6f5;
+  --rivto-kanban-muted-foreground: #626f86;
+  --rivto-kanban-accent: #0c66e4;
+  --rivto-bento-background: #f4f5f7;
+
+  /* TODO item and storage. */
+  --rivto-todo-accent: #1971c2;
+  --rivto-todo-focus: #74c0fc;
+  --rivto-todo-done: #2f9e44;
+  --rivto-todo-foreground: #212529;
+  --rivto-todo-muted-foreground: #495057;
+  --rivto-todo-item-border: #e9ecef;
+  --rivto-todo-control-border: #ced4da;
+  --rivto-todo-control-border-strong: #adb5bd;
+  --rivto-todo-chip: #f1f3f5;
+  --rivto-todo-chip-foreground: #6c757d;
+  --rivto-todo-storage-border: #dee2e6;
+  --rivto-todo-storage-background: #f8f9fa;
+  --rivto-todo-priority-1: #fff0f0;
+  --rivto-todo-priority-2: #fff9db;
+  --rivto-todo-priority-3: #edf2ff;
+
+  /* Edgeless canvas, visual objects, and floating chrome. */
+  --rivto-edgeless-background: #f7f6fa;
+  --rivto-edgeless-grid-dot: #c8c3d3;
+  --rivto-edgeless-grid-dot-strong: #81798f;
+  --rivto-edgeless-snap-guide: #ef3f87;
+  --rivto-edgeless-chrome-shadow: 0 8px 24px rgb(42 34 72 / 12%);
+  --rivto-edgeless-panel-shadow: 0 12px 32px rgb(42 34 72 / 14%);
+  --rivto-edgeless-panel-divider: #ece8f2;
+  --rivto-edgeless-panel-header: linear-gradient(180deg, #faf8ff 0%, #ffffff 100%);
+  --rivto-edgeless-sticker-shadow: 0 6px 14px rgb(35 30 20 / 14%);
+}
+
+@theme inline {
+  --color-background: var(--rivto-background);
+  --color-foreground: var(--rivto-foreground);
+  --color-card: var(--rivto-card);
+  --color-card-foreground: var(--rivto-card-foreground);
+  --color-popover: var(--rivto-popover);
+  --color-popover-foreground: var(--rivto-popover-foreground);
+  --color-primary: var(--rivto-primary);
+  --color-primary-foreground: var(--rivto-primary-foreground);
+  --color-secondary: var(--rivto-secondary);
+  --color-secondary-foreground: var(--rivto-secondary-foreground);
+  --color-muted: var(--rivto-muted);
+  --color-muted-foreground: var(--rivto-muted-foreground);
+  --color-accent: var(--rivto-subtle);
+  --color-accent-foreground: var(--rivto-subtle-foreground);
+  --color-destructive: var(--rivto-destructive);
+  --color-border: var(--rivto-border);
+  --color-input: var(--rivto-input);
+  --color-ring: var(--rivto-ring);
+  --radius-sm: calc(var(--rivto-radius) - 4px);
+  --radius-md: calc(var(--rivto-radius) - 2px);
+  --radius-lg: var(--rivto-radius);
+  --radius-xl: calc(var(--rivto-radius) + 4px);
+}

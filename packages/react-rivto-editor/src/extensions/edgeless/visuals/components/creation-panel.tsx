@@ -1,4 +1,13 @@
+/**
+ * Category-specific Tools / Defaults content for the bottom create toolbar.
+ *
+ * Each category renders its tool presets (draggable onto the canvas or
+ * clickable to arm the tool) and the default fill, stroke, size, font, and
+ * line-style controls that new objects of that category inherit. Defaults are
+ * persisted through the visual controller so they survive tool switches.
+ */
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
 import type { EdgelessVisualController } from "../controller";
 import type {
   ConnectorLineStyle,
@@ -15,7 +24,18 @@ import { SizeControl } from "./size-control";
 import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
 import { ToolPopover } from "./tool-popover";
 
-/** Category-specific Tools / Defaults content for the bottom create bar. */
+/** Sticker presets are square thumbnails rather than icon-plus-label buttons. */
+const STICKER_PRESET_CLASS = "w-10 min-w-10 p-1.5";
+const STICKER_SWATCH_CLASS = "block size-[22px] rounded-[4px_4px_10px_4px] border border-black/12 shadow-[0_2px_6px_rgb(35_30_20/12%)]";
+const SELECT_CLASS = "text-xs";
+
+/**
+ * Renders the Tools / Defaults popover content for one create-tool category.
+ *
+ * @param props - Active category, controller, current tool, font and sticker
+ * options, and the preset drag callbacks shared with the toolbar.
+ * @returns The category's `ToolPopover`.
+ */
 export function CreationPanel({
   category,
   controller,
@@ -51,13 +71,13 @@ export function CreationPanel({
       label={label}
       icon={icon}
       className={className}
-      aria-pressed={placePressed(payload)}
+      pressed={placePressed(payload)}
       onPointerDown={(event) => startPresetDrag(event, payload)}
       onPointerMove={movePresetDrag}
       onPointerUp={(event) => endPresetDrag(event)}
       onPointerCancel={(event) => endPresetDrag(event, false)}
     >
-      {category === "stickers" ? <span className="edgeless-sticker-swatch" style={{ background: payload.kind === "sticker" ? payload.fill : undefined }} /> : <span>{label}</span>}
+      {category === "stickers" ? <span className={STICKER_SWATCH_CLASS} style={{ background: payload.kind === "sticker" ? payload.fill : undefined }} /> : <span>{label}</span>}
     </EdgelessToolButton>
   );
 
@@ -88,14 +108,14 @@ export function CreationPanel({
                 key={brush}
                 label={brush[0]!.toUpperCase() + brush.slice(1)}
                 icon={brushIcon(brush)}
-                aria-pressed={tool.tool === "drawing" && tool.brush === brush}
+                pressed={tool.tool === "drawing" && tool.brush === brush}
                 onClick={() => { controller.setDrawingBrush(brush); }}
               />
             ))}
             <EdgelessToolButton
               label="Eraser"
               icon="eraser"
-              aria-pressed={tool.tool === "eraser"}
+              pressed={tool.tool === "eraser"}
               onClick={() => { controller.reactEditor.commands.execute("edgeless.tool.set", { tool: "eraser" }); }}
             />
           </>
@@ -117,13 +137,15 @@ export function CreationPanel({
         tools={preset("Text", { kind: "text" }, "text")}
         defaults={
           <>
-            <select
+            <NativeSelect
+              size="sm"
+              className={SELECT_CLASS}
               aria-label="Default font"
               value={defaults.text.fontFamily}
               onChange={(event) => controller.setCreationDefaults("text", { fontFamily: event.currentTarget.value })}
             >
-              {fontOptions.map((font) => <option key={font.fontFamily} value={font.fontFamily}>{font.label}</option>)}
-            </select>
+              {fontOptions.map((font) => <NativeSelectOption key={font.fontFamily} value={font.fontFamily}>{font.label}</NativeSelectOption>)}
+            </NativeSelect>
             <ColorControl label="Default text color" value={defaults.text.color} onChange={(color) => controller.setCreationDefaults("text", { color })} />
             <SizeControl label="Default font size" preview="text" value={defaults.text.fontSize} min={10} max={96} onChange={(fontSize) => controller.setCreationDefaults("text", { fontSize })} />
           </>
@@ -137,7 +159,7 @@ export function CreationPanel({
       <ToolPopover
         category={category}
         tools={stickerOptions.map((sticker) =>
-          preset(sticker.label, { kind: "sticker", fill: sticker.fill, color: sticker.color, fontFamily: sticker.fontFamily }, undefined, "edgeless-sticker-preset"),
+          preset(sticker.label, { kind: "sticker", fill: sticker.fill, color: sticker.color, fontFamily: sticker.fontFamily }, undefined, STICKER_PRESET_CLASS),
         )}
       />
     );
@@ -153,7 +175,7 @@ export function CreationPanel({
               key={route}
               label={`${route[0]!.toUpperCase() + route.slice(1)} connector`}
               icon={routeIcon(route)}
-              aria-pressed={tool.tool === "connector" && tool.route === route}
+              pressed={tool.tool === "connector" && tool.route === route}
               onClick={() => {
                 controller.setCreationDefaults("connector", { route });
                 controller.reactEditor.commands.execute("edgeless.tool.set", { tool: "connector", route });
@@ -166,15 +188,17 @@ export function CreationPanel({
         <>
           <ColorControl label="Default connector color" value={defaults.connector.stroke} onChange={(stroke) => controller.setCreationDefaults("connector", { stroke })} />
           <SizeControl label="Default connector width" preview="dot" value={defaults.connector.strokeWidth} max={24} onChange={(strokeWidth) => controller.setCreationDefaults("connector", { strokeWidth })} />
-          <select
+          <NativeSelect
+            size="sm"
+            className={SELECT_CLASS}
             aria-label="Default connector line style"
             value={defaults.connector.lineStyle}
             onChange={(event) => controller.setCreationDefaults("connector", { lineStyle: event.currentTarget.value as ConnectorLineStyle })}
           >
-            <option value="solid">Solid</option>
-            <option value="dashed">Dashed</option>
-            <option value="dashed-animated">Dashed animated</option>
-          </select>
+            <NativeSelectOption value="solid">Solid</NativeSelectOption>
+            <NativeSelectOption value="dashed">Dashed</NativeSelectOption>
+            <NativeSelectOption value="dashed-animated">Dashed animated</NativeSelectOption>
+          </NativeSelect>
         </>
       }
     />

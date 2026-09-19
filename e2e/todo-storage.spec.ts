@@ -67,11 +67,12 @@ test("searches and filters only direct TODO children without persisting UI state
 
   await search.fill("extension");
   await storage.getByText("Filter", { exact: true }).click();
-  await storage.getByLabel("Doing", { exact: true }).check();
-  await storage.getByLabel("P1", { exact: true }).check();
-  await storage.getByLabel("Rivto", { exact: true }).check();
+  const filters = page.getByRole("dialog", { name: "Filters" });
+  await filters.getByLabel("Doing", { exact: true }).check();
+  await filters.getByLabel("P1", { exact: true }).check();
+  await filters.getByLabel("Rivto", { exact: true }).check();
   await expect(todos).toHaveCount(1);
-  await storage.getByLabel("Planning", { exact: true }).check();
+  await filters.getByLabel("Planning", { exact: true }).check();
   await expect(todos).toHaveCount(1);
   await page.evaluate(() => {
     const blocks = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks;
@@ -79,13 +80,13 @@ test("searches and filters only direct TODO children without persisting UI state
     const planning = storageBlock.children.find(({ content }) => content === "Review the project brief")!;
     blocks.updateBlock(planning.id, { props: { project: "Archive" } });
   });
-  await expect(storage.getByLabel("Planning", { exact: true })).toHaveCount(0);
-  await storage.getByLabel("Rivto", { exact: true }).uncheck();
+  await expect(filters.getByLabel("Planning", { exact: true })).toHaveCount(0);
+  await filters.getByLabel("Rivto", { exact: true }).uncheck();
   await expect(todos).toHaveCount(1);
-  await storage.getByLabel("Doing", { exact: true }).uncheck();
-  await storage.getByLabel("Todo", { exact: true }).check();
+  await filters.getByLabel("Doing", { exact: true }).uncheck();
+  await filters.getByLabel("Todo", { exact: true }).check();
   await expect(todos).toHaveCount(0);
-  await storage.getByRole("button", { name: "Clear filters" }).click();
+  await filters.getByRole("button", { name: "Clear filters" }).click();
   await expect(search).toHaveValue("extension");
   await expect(todos).toHaveCount(1);
 
@@ -123,10 +124,11 @@ test("persists keyboard status order and leaves manual child order untouched", a
   const storageId = await storage.getAttribute("data-block-id");
   if (!storageId) throw new Error("Expected seeded TODO storage ID");
   await storage.getByText("Order", { exact: true }).click();
-  const statusOrdering = storage.getByLabel("Status", { exact: true });
+  const ordering = page.getByRole("dialog", { name: "Ordering" });
+  const statusOrdering = ordering.getByLabel("Status", { exact: true });
   await expect(statusOrdering).toBeChecked();
-  const doneOrder = storage.getByRole("listitem", { name: /Done status order/ });
-  const doingOrder = storage.getByRole("listitem", { name: /Doing status order/ });
+  const doneOrder = ordering.getByRole("listitem", { name: /Done status order/ });
+  const doingOrder = ordering.getByRole("listitem", { name: /Doing status order/ });
   const doingBefore = await doingOrder.boundingBox();
   if (!doingBefore) throw new Error("Expected sortable status geometry");
   await doneOrder.focus();
@@ -165,8 +167,9 @@ test("animates and persists sortable status drag and drop", async ({ page }) => 
   const storageId = await storage.getAttribute("data-block-id");
   if (!storageId) throw new Error("Expected seeded TODO storage ID");
   await storage.getByText("Order", { exact: true }).click();
-  const source = storage.getByRole("listitem", { name: /Doing status order/ });
-  const target = storage.getByRole("listitem", { name: /Todo status order/ });
+  const ordering = page.getByRole("dialog", { name: "Ordering" });
+  const source = ordering.getByRole("listitem", { name: /Doing status order/ });
+  const target = ordering.getByRole("listitem", { name: /Todo status order/ });
   const sourceBox = await source.boundingBox();
   const targetBox = await target.boundingBox();
   if (!sourceBox || !targetBox) throw new Error("Expected sortable status geometry");
@@ -186,18 +189,18 @@ test("animates and persists sortable status drag and drop", async ({ page }) => 
 
 test("closes Filter and Order menus only when clicking outside them", async ({ page }) => {
   const storage = page.locator('[data-journal-document="today"] [data-block-type="todo-storage"]');
-  const filterMenu = storage.locator("details", { hasText: "Filter" });
-  const orderMenu = storage.locator("details", { hasText: "Order" });
+  const filterMenu = page.getByRole("dialog", { name: "Filters" });
+  const orderMenu = page.getByRole("dialog", { name: "Ordering" });
 
   await storage.getByText("Filter", { exact: true }).click();
-  await expect(filterMenu).toHaveAttribute("open", "");
-  await storage.getByLabel("Todo", { exact: true }).check();
-  await expect(filterMenu).toHaveAttribute("open", "");
+  await expect(filterMenu).toBeVisible();
+  await filterMenu.getByLabel("Todo", { exact: true }).check();
+  await expect(filterMenu).toBeVisible();
   await storage.getByText("Order", { exact: true }).click();
-  await expect(filterMenu).not.toHaveAttribute("open", "");
-  await expect(orderMenu).toHaveAttribute("open", "");
+  await expect(filterMenu).toHaveCount(0);
+  await expect(orderMenu).toBeVisible();
   await storage.getByRole("searchbox", { name: "Search TODOs" }).click();
-  await expect(orderMenu).not.toHaveAttribute("open", "");
+  await expect(orderMenu).toHaveCount(0);
 });
 
 test("reorders visible tasks while a filter is active in Manual mode", async ({ page }) => {
@@ -205,9 +208,9 @@ test("reorders visible tasks while a filter is active in Manual mode", async ({ 
   const storageId = await storage.getAttribute("data-block-id");
   if (!storageId) throw new Error("Expected seeded TODO storage ID");
   await storage.getByText("Order", { exact: true }).click();
-  await storage.getByLabel("Status", { exact: true }).uncheck();
+  await page.getByRole("dialog", { name: "Ordering" }).getByLabel("Status", { exact: true }).uncheck();
   await storage.getByText("Filter", { exact: true }).click();
-  await storage.getByLabel("Rivto", { exact: true }).check();
+  await page.getByRole("dialog", { name: "Filters" }).getByLabel("Rivto", { exact: true }).check();
   await storage.getByText("Filter", { exact: true }).click();
 
   const source = storage.locator('[data-block-type="todo-item"]').filter({ hasText: "Set up the workspace" });

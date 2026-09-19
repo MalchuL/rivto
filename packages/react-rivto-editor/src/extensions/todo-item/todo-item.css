@@ -1,0 +1,76 @@
+/*
+ * Structural rules for the TODO item and TODO storage extension.
+ *
+ * Element appearance is expressed with Tailwind utilities through the
+ * constants in `todo-item-classes.ts`. This file keeps only what utilities on
+ * the owning element cannot express: the prompt span injected into editable
+ * text, storage card chrome applied to the shared block tree's `.page-block`
+ * and `.page-block-children`, hover and drop feedback that depends on
+ * `:has()` over sibling structure, and the empty-storage minimum height.
+ * Colors reference the `--rivto-todo-*` tokens declared in `tokens.css`.
+ */
+.rivto-todo-prompt {
+  color: var(--rivto-todo-accent);
+  font-weight: 700;
+}
+
+.rivto-todo-storage {
+  margin: 8px 0;
+}
+
+.rivto-todo-storage > .page-block {
+  margin: 0;
+  padding: 8px 7px;
+  border: 1px solid var(--rivto-todo-storage-border);
+  border-radius: 10px;
+  background: var(--rivto-todo-storage-background);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.rivto-todo-storage > .page-block > .page-block-row {
+  position: relative;
+  z-index: 1;
+  min-height: auto;
+}
+
+[data-block-type="todo-storage"]:not(:has(> .page-block-children)):has(.rivto-todo-storage-content) {
+  /* Keep the empty field outside fixed-outline title-row hit testing while
+     enclosing its positioned height inside the storage BlockView. */
+  min-height: 100px;
+}
+
+/* Hovering the title row or dragging over the card highlights the drop field. */
+.rivto-todo-storage:has(> .page-block > .page-block-row:hover) .rivto-todo-storage-drop-field,
+.rivto-todo-storage:has(> .page-block[data-drop-inside]) .rivto-todo-storage-drop-field {
+  border-color: var(--rivto-todo-accent);
+  box-shadow: 0 2px 8px rgb(25 113 194 / 12%);
+}
+
+.rivto-todo-storage > .page-block:has(.page-drop-indicator) {
+  border-color: var(--rivto-todo-focus);
+  box-shadow: 0 0 0 2px rgb(25 113 194 / 10%);
+}
+
+.rivto-todo-storage > .page-block > .page-block-children {
+  box-sizing: border-box;
+  position: relative;
+  z-index: 0;
+  margin: 8px 0 0;
+  padding-left: 24px;
+}
+
+.rivto-todo-storage > .page-block > .page-block-children .page-block-row::before {
+  inset: 0 -8px 0 -28px;
+  width: auto;
+}
+
+/* The inline priority chip is far smaller than the primitive's default select. */
+.rivto-todo-meta [data-slot="native-select-wrapper"] {
+  width: auto;
+}
+
+.rivto-todo-meta [data-slot="native-select-icon"] {
+  right: 4px;
+  width: 10px;
+  height: 10px;
+}
