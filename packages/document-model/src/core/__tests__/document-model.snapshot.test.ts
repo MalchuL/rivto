@@ -71,45 +71,46 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
     void doc.destroy();
   });
 
-  it("assigns omitted IDs from each manager's generateId independently", () => {
-    const doc = new YjsDoc("custom-ids");
-    let blocks = 0;
-    let elements = 0;
+  it("keeps automatic ID generation private to document managers", () => {
+    const doc = new YjsDoc("private-ids");
     const model = new DocumentModelImpl(doc);
-    model.blocks.generateId = () => `block-${++blocks}`;
-    model.elements.generateId = () => `element-${++elements}`;
 
-    expect(model.blocks.insertBlock({ type: "paragraph", content: "Root" })).toBe("block-1");
-    expect(model.blocks.insertBlock({
+    const rootId = model.blocks.insertBlock({ type: "paragraph", content: "Root" });
+    const parentId = model.blocks.insertBlock({
       type: "paragraph",
       children: [{ type: "paragraph", content: "Nested" }],
-    })).toBe("block-2");
-    expect(model.blocks.getBlock("block-2")?.children[0]?.id).toBe("block-3");
-    expect(model.elements.insertElement({
+    });
+    const childId = model.blocks.getBlock(parentId)?.children[0]?.id;
+    const elementId = model.elements.insertElement({
       type: "note",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
-    })).toBe("element-1");
+    });
+
+    expect(childId).toBeDefined();
+    expect(new Set([rootId, parentId, childId, elementId]).size).toBe(4);
     expect(model.blocks.insertBlock({ id: "explicit", type: "paragraph" })).toBe("explicit");
-    expect(blocks).toBe(3);
-    expect(elements).toBe(1);
     void doc.destroy();
   });
 
-  it("rejects empty identities produced by a manager generateId", () => {
-    const doc = new YjsDoc("empty-generated-ids");
+  it("resolves occupied import IDs inside the document", () => {
+    const doc = new YjsDoc("import-ids");
     const model = new DocumentModelImpl(doc);
-    model.blocks.generateId = () => "  ";
-    model.elements.generateId = () => "  ";
-
-    expect(() => model.blocks.insertBlock({ type: "paragraph" }))
-      .toThrow("Block ID is required");
-    expect(() => model.elements.insertElement({
+    model.blocks.insertBlock({ id: "occupied-block", type: "paragraph" });
+    model.elements.insertElement({
+      id: "occupied-element",
       type: "note",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
-    })).toThrow("Element ID is required");
-    expect(model.blocks.getRootIds()).toEqual([]);
+    });
+
+    const blockIds = model.blocks.resolveImportIds(["free-block", "occupied-block"]);
+    const elementIds = model.elements.resolveImportIds(["free-element", "occupied-element"]);
+
+    expect(blockIds.get("free-block")).toBe("free-block");
+    expect(blockIds.get("occupied-block")).not.toBe("occupied-block");
+    expect(elementIds.get("free-element")).toBe("free-element");
+    expect(elementIds.get("occupied-element")).not.toBe("occupied-element");
     void doc.destroy();
   });
 

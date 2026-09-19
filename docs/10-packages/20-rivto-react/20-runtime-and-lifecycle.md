@@ -62,6 +62,10 @@ View подписывается на core revision, mode, surface registry и ex
 
 Disposer idempotent и удаляет только соответствующую function. Immediate notification при подписке отсутствует. `ReactEditor.subscribe()` сообщает только core runtime revisions; изменения React-only renderer/surface/extension registries нужно слушать через их собственные `subscribe()` streams.
 
+### `getDocument()` / `setDocument(document)`
+
+Методы forward-ят active model core editor-а. Replacement сохраняет React managers, extensions и mounted views; retained block/element subscriptions получают refresh через core runtime.
+
 ### `destroy()`
 
 - **Аргументы:** отсутствуют.

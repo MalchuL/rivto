@@ -19,7 +19,8 @@ import "@chulane/rivto-react/styles.css";
 ```tsx
 function createRuntime() {
   const document = new DocumentModelImpl(new YjsDoc("document-id"));
-  const editor = createRivtoEditor({ document });
+  const editor = createRivtoEditor();
+  editor.setDocument(document);
   const reactEditor = createReactEditor({ editor, extensions: [standardPreset()] });
   return { editor, reactEditor };
 }

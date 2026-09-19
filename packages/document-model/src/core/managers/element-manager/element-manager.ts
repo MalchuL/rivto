@@ -1,55 +1,39 @@
 /**
  * Stores first-class canvas elements in adapter-neutral collaborative maps.
- * The manager validates portable records through its processor pipe, maintains
- * detached snapshot caches, and exposes the element scopes tracked by history.
+ * The manager validates portable records, maintains detached snapshot caches,
+ * and exposes the element scopes tracked by history.
  */
 import type { CRDTDoc, CRDTType, CRDTMap, CRDTUndoScope } from "@chulane/crdt-doc";
 import type {
   DocumentElement,
+  DocumentElementManagerApi,
   ElementFrame,
   ElementInput,
   ElementPatch,
   ElementUpdate,
-  GenerateId,
 } from "../../types";
 import type { ElementFrameStorage, ElementStorage, IDElement, IDProp } from "../../types/storage";
 import { assignMap, clone, isCRDTMap, requireNonemptyId } from "../../utils";
-import { Pipe } from "../../../utils/pipe";
-import {
-  ELEMENT_FRAME_PROCESSOR,
-  ELEMENT_PROPS_PROCESSOR,
-  ELEMENT_Z_INDEX_PROCESSOR,
-  type ElementPipeContext,
-} from "./element-pipe";
 import {
   normalizeElementFrame,
+  normalizeElementProps,
   normalizeElementZIndex,
   validateElementCollection,
 } from "./utils";
 
 const ELEMENTS_KEY = "rivto.editor.elements";
-
 /**
  * Owns generic first-class canvas records without interpreting element types.
  *
- * Geometry, layer, and props envelopes run through `pipe` before writes so
- * plugins can add or replace processors without the storage layer importing
- * registries. Built-in frame, z-index, and props steps are registered at
- * construction and remain replaceable by id.
+ * Geometry, layer, and props envelopes are normalized as document invariants.
+ * Editor-specific processors run before values cross this storage boundary.
  */
-export class DocumentElementManager {
-  /** Priority-ordered processors applied to portable elements before writes. */
-  readonly pipe = new Pipe<ElementInput, ElementPipeContext>();
-  /**
-   * Creates an element identity when an insert omits `id`.
-   *
-   * Replace this per manager; it is independent of block identity generation.
-   * The default uses `crypto.randomUUID`.
-   */
-  generateId: GenerateId = () => crypto.randomUUID();
+export class DocumentElementManager implements DocumentElementManagerApi {
+  /** Creates element identities without exposing generator configuration. */
+  private readonly generateId = (): string => crypto.randomUUID();
   private readonly storage: CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>;
-  /** Collaborative roots owned by this manager and tracked by document history. */
-  readonly undoScopes: readonly CRDTUndoScope[];
+  /** Adapter roots tracked by document-owned history. */
+  readonly historyScopes: readonly CRDTUndoScope[];
   /** Stable element snapshots invalidated by observed record changes. */
   private readonly snapshots = new Map<IDElement, DocumentElement>();
   /** Stable complete collection invalidated by any element change. */
@@ -65,10 +49,7 @@ export class DocumentElementManager {
    */
   constructor(private readonly crdt: CRDTDoc) {
     this.storage = crdt.getMap<Record<IDElement, CRDTMap<ElementStorage>>>(ELEMENTS_KEY);
-    this.undoScopes = [this.storage];
-    this.pipe.register(ELEMENT_FRAME_PROCESSOR);
-    this.pipe.register(ELEMENT_Z_INDEX_PROCESSOR);
-    this.pipe.register(ELEMENT_PROPS_PROCESSOR);
+    this.historyScopes = [this.storage];
     this.storage.observe((events) => {
       const changedIds = new Set<string>();
       let membershipChanged = false;
@@ -167,6 +148,31 @@ export class DocumentElementManager {
   }
 
   /**
+   * Resolves imported element identities against this document.
+   *
+   * This is intentionally document-owned: collision checks and ID generation
+   * must use the same destination store. It only returns a plan; callers must
+   * insert immediately because returned IDs are not reserved.
+   *
+   * @param sourceIds - Stable source IDs in import order.
+   * @returns Source IDs unchanged when free and document-generated replacements when occupied.
+   */
+  resolveImportIds(sourceIds: readonly string[]): ReadonlyMap<string, string> {
+    const assigned = new Set<string>();
+    return new Map(sourceIds.map((sourceId) => {
+      // A free identity survives cut/paste. Copying into a document that still
+      // owns it needs a fresh identity to avoid replacing data.
+      const reusable = !this.storage.has(sourceId) && !assigned.has(sourceId);
+      let id = reusable ? sourceId : this.generateId();
+      // Generated collisions are improbable, but the document boundary still
+      // guarantees a usable mapping rather than relying on chance.
+      while (this.storage.has(id) || assigned.has(id)) id = this.generateId();
+      assigned.add(id);
+      return [sourceId, id];
+    }));
+  }
+
+  /**
    * Calls a stable listener snapshot when the optional set exists.
    *
    * @param listeners - Optional callbacks to invoke once.
@@ -177,11 +183,11 @@ export class DocumentElementManager {
   }
 
   /**
-   * Inserts one element after pipe processing.
+   * Inserts one element after portable invariant validation.
    *
    * @param input - Complete type, geometry, layer, and optional props.
-   * @returns Stable element ID, either supplied or from `generateId`.
-   * @throws {Error} When the ID exists, the type is empty, or a processor rejects the record.
+   * @returns Stable element ID, either supplied or generated internally.
+   * @throws {Error} When the ID exists, the type is empty, or the record is invalid.
    */
   insertElement(input: ElementInput): string {
     const id = requireNonemptyId(input.id ?? this.generateId(), "Element");
@@ -217,12 +223,12 @@ export class DocumentElementManager {
   /**
    * Prevalidates and applies multiple element patches in one transaction.
    *
-   * Each target is processed as a complete portable element so pipe steps see
-   * the post-patch record. Duplicate IDs observe preceding patches in the batch.
+   * Each target is validated as a complete portable element. Duplicate IDs
+   * observe preceding patches in the batch.
    *
    * @param updates - Ordered element IDs and partial field updates.
    * @returns No value.
-   * @throws {Error} When a target is missing or a processor rejects the record.
+   * @throws {Error} When a target is missing or the record is invalid.
    */
   updateElements(updates: readonly ElementUpdate[]): void {
     const simulated = new Map<string, ElementInput>();
@@ -280,7 +286,7 @@ export class DocumentElementManager {
    * @throws {Error} When any element is malformed or duplicated.
    */
   validateElements(elements: readonly DocumentElement[]): void {
-    validateElementCollection(elements, { pipe: this.pipe });
+    validateElementCollection(elements);
   }
 
   /**
@@ -296,19 +302,24 @@ export class DocumentElementManager {
   }
 
   /**
-   * Runs the element pipe against one portable record.
+   * Normalizes one portable element record.
    *
    * @param element - Candidate insert input or reconstructed update.
-   * @returns The original element or a processor-normalized replacement.
-   * @throws {Error} When the type is empty or a processor rejects the record.
+   * @returns Detached element containing normalized generic fields.
+   * @throws {Error} When the type is empty or the record is invalid.
    */
   private processElement(element: ElementInput): ElementInput {
     if (!element.type) throw new Error("Element type is required");
-    return this.pipe.process(element, {});
+    return {
+      ...element,
+      frame: normalizeElementFrame(element.frame),
+      zIndex: normalizeElementZIndex(element.zIndex),
+      props: normalizeElementProps(element.props),
+    };
   }
 
   /**
-   * Converts a detached element into pipe input without dropping identity.
+   * Converts a detached element into mutation input without dropping identity.
    *
    * @param element - Materialized element record.
    * @returns Portable input used for update reconstruction.

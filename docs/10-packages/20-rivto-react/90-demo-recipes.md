@@ -7,7 +7,8 @@
 ```ts
 function createAppEditor() {
   const document = new DocumentModelImpl(new YjsDoc("document-id"));
-  const editor = createRivtoEditor({ document });
+  const editor = createRivtoEditor();
+  editor.setDocument(document);
   const visuals = edgelessVisualsExtension(appVisualOptions);
   const reactEditor = createReactEditor({
     editor,
@@ -56,7 +57,8 @@ Demo sync создаёт отдельный `YjsDoc`, передаёт его co
 ```ts
 const crdt = new YjsDoc(documentId);
 const document = new DocumentModelImpl(crdt);
-const editor = createRivtoEditor({ document });
+const editor = createRivtoEditor();
+editor.setDocument(document);
 const reactEditor = createReactEditor({ editor, extensions: [standardPreset()] });
 await crdt.attachProvider(provider);
 ```

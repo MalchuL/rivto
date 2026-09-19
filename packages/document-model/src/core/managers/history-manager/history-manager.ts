@@ -4,9 +4,10 @@
  * private scope accumulator here once during construction.
  */
 import type { CRDTDoc, CRDTUndoManager, CRDTUndoScope } from "@chulane/crdt-doc";
+import type { DocumentHistoryManagerApi } from "../../types";
 
 /** Focused history manager shared by document and editor operations. */
-export class DocumentHistoryManager {
+export class DocumentHistoryManager implements DocumentHistoryManagerApi {
   private readonly manager: CRDTUndoManager;
   /** Collaborative document used to group writes into transaction boundaries. */
   private readonly crdt: CRDTDoc;

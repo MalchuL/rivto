@@ -1,10 +1,10 @@
-import type { Unsubscribe } from "@chulane/crdt-doc";
-import type {
-  DocumentBlockManager,
-  DocumentElementManager,
-  DocumentPluginDataManager,
-  DocumentHistoryManager,
-} from "../managers";
+/**
+ * Defines the portable public document-model contract.
+ *
+ * These interfaces describe store capabilities rather than concrete CRDT-backed
+ * manager classes, allowing hosts to extend or replace a document model without
+ * inheriting adapter state or exposing persistence-only operations.
+ */
 
 /** Opaque properties interpreted by page/outline extensions. */
 export type BlockListProps = Record<string, unknown>;
@@ -97,8 +97,151 @@ export interface BlockUpdate {
   patch: BlockPatch;
 }
 
-/** Factory that returns a new stable entity identity. */
-export type GenerateId = () => string;
+/** Public block-store capabilities required by editors and extensions. */
+export interface DocumentBlockManagerApi {
+  /** Monotonic block-data and hierarchy revision. */
+  readonly revision: number;
+  /** Whether the root block list is empty. */
+  readonly isEmpty: boolean;
+  /** @param id - Block identifier. @returns Whether the block exists. */
+  hasBlock(id: string): boolean;
+  /** @param id - Block identifier. @returns Detached block subtree when present. */
+  getBlock(id: string): Block | undefined;
+  /** @returns Detached root block trees. */
+  getBlocks(): Block[];
+  /** @returns Ordered root block identifiers. */
+  getRootIds(): string[];
+  /** @param id - Block identifier. @param listener - Change callback. @returns Unsubscribe callback. */
+  subscribeBlock(id: string, listener: () => void): () => void;
+  /** @param listener - Root-list callback. @returns Unsubscribe callback. */
+  subscribeRootIds(listener: () => void): () => void;
+  /** @param listener - Hierarchy callback. @returns Unsubscribe callback. */
+  subscribeStructure(listener: () => void): () => void;
+  /** @param id - Parent block identifier. @returns Ordered direct-child identifiers. */
+  getChildIds(id: string): string[];
+  /** @param id - Block identifier. @returns Parent ID, null for roots, or undefined when absent. */
+  getParentId(id: string): string | null | undefined;
+  /**
+   * Plans identities for an immediate import without inserting or reserving them.
+   * Free IDs are preserved (supporting cut/paste), while occupied IDs receive
+   * document-generated replacements that callers use to rewrite references.
+   * @param sourceIds - IDs being imported.
+   * @returns Complete source-to-destination identity mapping.
+   */
+  resolveImportIds(sourceIds: readonly string[]): ReadonlyMap<string, string>;
+  /** @param block - Block to insert. @param afterId - Optional sibling anchor. @returns Inserted block ID. */
+  insertBlock(block: BlockInput, afterId?: string | null): string;
+  /** @param id - Block identifier. @param patch - Fields to update. @returns No value. */
+  updateBlock(id: string, patch: BlockPatch): void;
+  /** @param updates - Ordered block patches. @returns No value. */
+  updateBlocks(updates: readonly BlockUpdate[]): void;
+  /** @param id - Block identifier. @param type - New block type. @param props - Complete new properties. @returns No value. */
+  setBlockType(id: string, type: string, props?: Record<string, unknown>): void;
+  /** @param id - Block identifier. @param key - Property name. @param value - Portable value or undefined to delete. @returns No value. */
+  setBlockProp(id: string, key: string, value: unknown): void;
+  /** @param id - Block identifier. @param keys - List-property names. @returns Whether the block existed. */
+  deleteListProps(id: string, keys: readonly string[]): boolean;
+  /** @param updates - Block IDs and list-property names. @returns No value. */
+  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void;
+  /** @param id - Block identifier. @param pluginId - Plugin namespace. @param value - Portable value. @returns No value. */
+  setPluginData(id: string, pluginId: string, value: unknown): void;
+  /** @param id - Block identifier. @param text - Complete replacement text. @returns No value. */
+  setBlockText(id: string, text: string): void;
+  /** @param id - Block identifier. @param offset - Insertion offset. @param text - Text to insert. @returns No value. */
+  insertText(id: string, offset: number, text: string): void;
+  /** @param id - Block identifier. @param offset - Start offset. @param length - Character count. @returns No value. */
+  deleteText(id: string, offset: number, length: number): void;
+  /** @param id - Block subtree root. @returns No value. */
+  removeBlock(id: string): void;
+  /** @param id - Block to move. @param targetId - Placement anchor. @param position - Placement relative to the anchor. @returns No value. */
+  moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
+  /** @param moves - Ordered block placements. @returns No value. */
+  moveBlocks(moves: readonly {
+    id: string;
+    targetId: string | null;
+    position: "before" | "after" | "inside";
+  }[]): void;
+  /** @param blocks - Complete portable block forest to validate. @returns No value. */
+  validateBlocks(blocks: readonly Block[]): void;
+  /** @param blocks - Complete portable block forest replacing stored blocks. @returns No value. */
+  loadBlocks(blocks: readonly Block[]): void;
+  /** @returns No value after repairing invalid hierarchy references. */
+  normalize(): void;
+}
+
+/** Public element-store capabilities required by editors and extensions. */
+export interface DocumentElementManagerApi {
+  /** @param id - Element identifier. @returns Detached element when present. */
+  getElement(id: string): DocumentElement | undefined;
+  /** @returns Detached elements in storage order. */
+  getElements(): DocumentElement[];
+  /** @param listener - Collection callback. @returns Unsubscribe callback. */
+  subscribe(listener: () => void): () => void;
+  /** @param id - Element identifier. @param listener - Change callback. @returns Unsubscribe callback. */
+  subscribeElement(id: string, listener: () => void): () => void;
+  /** @param listener - Membership callback. @returns Unsubscribe callback. */
+  subscribeMembership(listener: () => void): () => void;
+  /**
+   * Plans identities for an immediate import without inserting or reserving them.
+   * Free IDs are preserved (supporting cut/paste), while occupied IDs receive
+   * document-generated replacements that callers use to rewrite references.
+   * @param sourceIds - IDs being imported.
+   * @returns Complete source-to-destination identity mapping.
+   */
+  resolveImportIds(sourceIds: readonly string[]): ReadonlyMap<string, string>;
+  /** @param input - Element to insert. @returns Inserted element ID. */
+  insertElement(input: ElementInput): string;
+  /** @param id - Element identifier. @param patch - Fields to update. @returns No value. */
+  updateElement(id: string, patch: ElementPatch): void;
+  /** @param updates - Ordered element patches. @returns No value. */
+  updateElements(updates: readonly ElementUpdate[]): void;
+  /** @param id - Element identifier. @returns No value. */
+  removeElement(id: string): void;
+  /** @param ids - Element identifiers. @returns No value. */
+  removeElements(ids: readonly string[]): void;
+  /** @param elements - Complete portable element collection to validate. @returns No value. */
+  validateElements(elements: readonly DocumentElement[]): void;
+  /** @param elements - Complete portable element collection replacing stored elements. @returns No value. */
+  loadElements(elements: readonly DocumentElement[]): void;
+}
+
+/** Public namespaced plugin-data store. */
+export interface DocumentPluginDataManagerApi {
+  /** @param pluginId - Plugin namespace. @returns Detached namespace data when present. */
+  get<Value = unknown>(pluginId: string): Value | undefined;
+  /** @param pluginId - Plugin namespace. @param value - Portable namespace value. @returns No value. */
+  set(pluginId: string, value: unknown): void;
+  /** @param pluginId - Plugin namespace. @param key - Field name. @returns Detached field value when present. */
+  getField<Value = unknown>(pluginId: string, key: string): Value | undefined;
+  /** @param pluginId - Plugin namespace. @param key - Field name. @param value - Portable field value. @returns No value. */
+  setField(pluginId: string, key: string, value: unknown): void;
+  /** @param pluginId - Plugin namespace. @param key - Field name. @returns Whether the field existed. */
+  deleteField(pluginId: string, key: string): boolean;
+  /** @param pluginId - Plugin namespace. @returns Whether the namespace existed. */
+  delete(pluginId: string): boolean;
+  /** @returns Detached data for every plugin namespace. */
+  getAll(): Record<string, unknown>;
+  /** @param values - Complete plugin-data value replacing stored namespaces. @returns No value. */
+  load(values: Record<string, unknown>): void;
+}
+
+/** Public local-history capabilities owned by a document model. */
+export interface DocumentHistoryManagerApi {
+  /** @param operation - Synchronous work grouped into one undo item. @returns The operation result. */
+  batchUpdates<Result>(operation: () => Result): Result;
+  /** @param operation - Synchronous work excluded from undo history. @returns The operation result. */
+  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result;
+  /** @returns No value after undoing the latest local change. */
+  undo(): void;
+  /** @returns No value after redoing the latest reverted change. */
+  redo(): void;
+  /** @returns No value after clearing undo and redo history. */
+  clear(): void;
+  /** @returns No value after ending the current capture group. */
+  stopCapturing(): void;
+  /** @returns No value after releasing history resources. */
+  destroy(): void;
+}
 
 /** Lossless, versioned document value used for persistence. */
 export interface Snapshot {
@@ -120,20 +263,20 @@ export interface SnapshotUpdate {
  * Public collaborative document coordinator used by editors and persistence.
  *
  * Block and element behavior is intentionally available only through
- * `.blocks` and `.elements`. The document itself owns lifecycle, raw transactions,
+ * `.blocks` and `.elements`. The document itself owns lifecycle,
  * history construction, and complete snapshot orchestration.
  */
 export interface DocumentModel {
   /** Descriptive document identifier that does not control persistence. */
   readonly id: string;
   /** Block records, text, hierarchy, and block snapshot operations. */
-  readonly blocks: DocumentBlockManager;
+  readonly blocks: DocumentBlockManagerApi;
   /** First-class generic canvas elements and geometry. */
-  readonly elements: DocumentElementManager;
+  readonly elements: DocumentElementManagerApi;
   /** Generic namespaced collaborative storage for optional document plugins. */
-  readonly pluginData: DocumentPluginDataManager;
+  readonly pluginData: DocumentPluginDataManagerApi;
   /** Local history and transaction batching across all document managers. */
-  readonly history: DocumentHistoryManager;
+  readonly history: DocumentHistoryManagerApi;
 
   /**
    * Subscribes to local and remote collaborative updates.
@@ -141,15 +284,7 @@ export interface DocumentModel {
    * @param listener - Callback invoked after a document update.
    * @returns Function that removes the subscription.
    */
-  subscribe(listener: () => void): Unsubscribe;
-
-  /**
-   * Runs synchronous document work in one collaborative transaction.
-   *
-   * @param operation - Synchronous document work to execute atomically.
-   * @returns No value.
-   */
-  transact(operation: () => void): void;
+  subscribe(listener: () => void): () => void;
 
   /**
    * Produces a lossless schema-v6 snapshot.

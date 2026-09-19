@@ -6,12 +6,6 @@
 
 ## Публичные свойства
 
-### `document`
-
-- **Тип:** `DocumentModel`, публичное `readonly`.
-- **Значение:** canonical collaborative storage и persistence boundary.
-- **Исключения при чтении:** отсутствуют.
-
 ### `blocks`
 
 - **Тип:** `BlockManager`, публичное `readonly`.
@@ -83,7 +77,7 @@
 ### `unsubscribeFns`
 
 - **Тип:** `Array<() => void>`, приватное `readonly`.
-- **Значение:** cleanup callbacks block registry, document, selection и mode subscriptions.
+- **Значение:** cleanup callbacks block registry, manager subscriptions и mode subscriptions. Active document subscription хранится отдельно для replacement.
 - **Исключения при чтении:** отсутствуют.
 
 ### `currentRevision`
@@ -96,13 +90,17 @@
 
 ### `constructor(options)`
 
-- **Аргументы:** `options: CreateRivtoEditorOptions` с required `document` и optional `mode`.
+- **Аргументы:** optional `CreateRivtoEditorOptions` с `mode`.
 - **Создаёт:** полностью связанный `EditorRuntime`.
 - **Исключения:** передаёт ошибки managers, duplicate built-in commands и subscriptions.
 
-Host заранее создаёт `DocumentModel`. Default mode — `"block"`. Constructor создаёт managers, устанавливает block props validator, регистрирует runtime/clipboard commands и подписывает revision на document, registry, selection и mode changes.
+Default mode — `"block"`. Constructor создаёт unbound managers, устанавливает block props validator и регистрирует runtime/clipboard commands. `setDocument()` позже подключает model subscriptions.
 
 ## Публичные методы
+
+### `getDocument()` / `setDocument(document)`
+
+`getDocument()` возвращает active `DocumentModel` либо `undefined`, пока runtime unbound. `setDocument()` атомарно переключает history и document subscriptions, сохраняя stable managers и editor-owned processors, очищает selection и публикует один global revision. Старый caller-owned document не уничтожается; updates от него больше не доходят до runtime. Повторная установка active instance ничего не делает.
 
 ### `subscribe(listener)`
 
@@ -182,7 +180,7 @@ Outermost batch вызывает `stopCapturing()` до и после и вып�
 
 ### `createRivtoEditor(options)`
 
-- **Аргументы:** required `CreateRivtoEditorOptions`.
+- **Аргументы:** optional `CreateRivtoEditorOptions`.
 - **Возвращает:** новый `EditorRuntime`.
 - **Исключения:** те же, что у constructor.
 

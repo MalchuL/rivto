@@ -2,15 +2,21 @@
  * Exposes history and transaction capture while keeping the document-owned
  * implementation behind a core capability boundary.
  */
-import type { DocumentHistoryManager } from "@chulane/document-model";
+import type { DocumentHistoryManagerApi } from "@chulane/document-model";
 
 /** Core-facing proxy for one document's history and batching operations. */
 export class HistoryManager {
+  /** Document history currently attached to the editor. */
+  private manager?: DocumentHistoryManagerApi;
+
   /**
-   * Creates a core history proxy.
-   * @param manager - Document-owned history implementation to delegate to.
+   * Switches every history operation to the active document's history.
+   * @param manager - History manager owned by the new active document.
+   * @returns No value.
    */
-  constructor(private readonly manager: DocumentHistoryManager) {}
+  setDocument(manager: DocumentHistoryManagerApi): void {
+    this.manager = manager;
+  }
 
   /**
    * Groups synchronous mutations into one transaction and undo item.
@@ -19,7 +25,7 @@ export class HistoryManager {
    * @returns Value returned by the operation.
    */
   batchUpdates<Result>(operation: () => Result): Result {
-    return this.manager.batchUpdates(operation);
+    return this.getManager().batchUpdates(operation);
   }
 
   /**
@@ -29,31 +35,32 @@ export class HistoryManager {
    * @returns Value returned by the operation.
    */
   batchUpdatesWithoutHistory<Result>(operation: () => Result): Result {
-    return this.manager.batchUpdatesWithoutHistory(operation);
+    return this.getManager().batchUpdatesWithoutHistory(operation);
   }
 
   /** @returns No value after reverting the latest local document operation. */
   undo(): void {
-    this.manager.undo();
+    this.getManager().undo();
   }
 
   /** @returns No value after reapplying the latest reverted operation. */
   redo(): void {
-    this.manager.redo();
+    this.getManager().redo();
   }
 
   /** @returns No value after dropping all undo and redo entries. */
   clear(): void {
-    this.manager.clear();
+    this.getManager().clear();
   }
 
   /** @returns No value after ending the current capture group. */
   stopCapturing(): void {
-    this.manager.stopCapturing();
+    this.getManager().stopCapturing();
   }
 
-  /** @returns No value after releasing document history resources. */
-  destroy(): void {
-    this.manager.destroy();
+  /** @returns The attached document history manager. */
+  private getManager(): DocumentHistoryManagerApi {
+    if (!this.manager) throw new Error("Document is not set");
+    return this.manager;
   }
 }

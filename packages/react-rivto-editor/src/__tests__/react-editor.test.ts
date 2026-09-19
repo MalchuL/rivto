@@ -29,6 +29,7 @@ import {
 import { pageDragExtension } from "../extensions/block-drag";
 import { edgelessPreset } from "../extensions/edgeless";
 import { isReactEditor, isRivtoEditor } from "../utils";
+import { createRivtoEditor, DocumentModelImpl, YjsDoc } from "@chulane/rivto";
 
 const Empty: ComponentType<{ blockId: string }> = () => null;
 const EmptyComponent: ComponentType = () => null;
@@ -40,6 +41,52 @@ const EmptyEditorWrapper: ComponentType<{ readonly children?: ReactNode }> = ({
 }) => children;
 
 describe("ReactEditor", () => {
+  test("can attach a document after the React runtime is created", async () => {
+    const editor = createRivtoEditor();
+    const reactEditor = createReactEditor({ editor });
+    const document = new DocumentModelImpl(new YjsDoc("react-first-document"));
+    document.blocks.insertBlock({ id: "first", type: "paragraph" });
+
+    expect(reactEditor.getDocument()).toBeUndefined();
+    reactEditor.setDocument(document);
+
+    expect(reactEditor.getDocument()).toBe(document);
+    expect(reactEditor.blocks.getRootIds()).toEqual(["first"]);
+    reactEditor.destroy();
+    await editor.destroy();
+    await document.destroy();
+  });
+
+  test("keeps a shared document active after another React editor is destroyed", async () => {
+    const document = new DocumentModelImpl(new YjsDoc("react-shared-document"));
+    const firstCore = createRivtoEditor();
+    const secondCore = createRivtoEditor();
+    firstCore.setDocument(document);
+    secondCore.setDocument(document);
+    const first = createReactEditor({ editor: firstCore, extensions: [standardPreset()] });
+    const second = createReactEditor({ editor: secondCore, extensions: [standardPreset()] });
+    let firstUpdates = 0;
+    let secondUpdates = 0;
+    first.subscribe(() => { firstUpdates += 1; });
+    second.subscribe(() => { secondUpdates += 1; });
+
+    const sharedId = firstCore.blocks.insertBlock({ type: "paragraph", content: "Shared" });
+    expect(secondCore.blocks.getBlock(sharedId)?.content).toBe("Shared");
+    expect(firstUpdates).toBeGreaterThan(0);
+    expect(secondUpdates).toBeGreaterThan(0);
+
+    second.destroy();
+    await secondCore.destroy();
+    const secondUpdatesAfterDestroy = secondUpdates;
+    const survivingId = firstCore.blocks.insertBlock({ type: "paragraph", content: "Surviving" });
+
+    expect(firstCore.blocks.getBlock(survivingId)?.content).toBe("Surviving");
+    expect(secondUpdates).toBe(secondUpdatesAfterDestroy);
+    first.destroy();
+    await firstCore.destroy();
+    await document.destroy();
+  });
+
   test("distinguishes React and core editor runtimes", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
@@ -420,6 +467,30 @@ describe("ReactEditor", () => {
     dispose();
     reactEditor.destroy();
     editor.destroy();
+  });
+
+  test("forwards document replacement without recreating React managers", async () => {
+    const editor = createEditor();
+    const first = editor.getDocument()!;
+    const second = new DocumentModelImpl(new YjsDoc("react-editor-swap"));
+    second.blocks.insertBlock({ id: "second", type: "paragraph", content: "Second" });
+    const reactEditor = createReactEditor({ editor });
+    const blocks = reactEditor.blocks;
+    let updates = 0;
+    const dispose = reactEditor.subscribe(() => { updates += 1; });
+
+    reactEditor.setDocument(second);
+
+    expect(reactEditor.getDocument()).toBe(second);
+    expect(reactEditor.blocks).toBe(blocks);
+    expect(reactEditor.blocks.getRootIds()).toEqual(["second"]);
+    expect(updates).toBe(1);
+    first.blocks.insertBlock({ id: "detached", type: "paragraph" });
+    expect(updates).toBe(1);
+
+    dispose();
+    reactEditor.destroy();
+    await editor.destroy();
   });
 
   test("rolls back registrations when a duplicate surface fails setup", () => {

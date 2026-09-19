@@ -89,7 +89,7 @@ document.blocks.setPluginData("task-1", "comments", {
 
 `comments` и `review` меняются независимо, потому что это разные keys `pluginData` map. Однако `comments.resolved` и `comments.count` не являются отдельными CRDT keys. Изменение объекта из `getBlock(id).pluginData` также ничего не сохранит: это detached snapshot.
 
-Если plugin-у нужна независимая collaborative запись каждого внутреннего свойства, используйте document-level `document.pluginData.getMap(pluginId)` либо расширьте block manager отдельным API, который создаёт nested map через `createDetachedMap()`. Записывать CRDT wrappers через `setPluginData()` нельзя: метод clone-ит portable значение и предназначен для plain namespace data.
+Если plugin-у нужна независимая collaborative запись каждого внутреннего свойства, используйте document-level `document.pluginData.setField(pluginId, key, value)`. Записывать CRDT wrappers через `setPluginData()` нельзя: метод clone-ит portable значение и предназначен для plain namespace data.
 
 ### Когда consumer получает update
 

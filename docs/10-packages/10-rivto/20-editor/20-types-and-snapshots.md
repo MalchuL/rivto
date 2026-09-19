@@ -10,10 +10,9 @@ Union `"block" | "edgeless"`. Mode локален, не сохраняется �
 
 ### `CreateRivtoEditorOptions`
 
-- **`document: DocumentModel`:** заранее созданная document model.
 - **`mode?: EditorMode`:** initial presentation mode; default `"block"`.
 
-`document` обязателен; `mode` optional. Переданный document становится owned runtime-ресурсом и уничтожается через `await editor.destroy()`.
+Options целиком optional. Document присоединяется после construction через `setDocument()` и остаётся caller-owned.
 
 ## Selection types
 

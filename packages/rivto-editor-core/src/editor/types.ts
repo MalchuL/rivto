@@ -9,8 +9,7 @@ import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 export type EditorMode = "block" | "edgeless";
 
 export interface CreateRivtoEditorOptions {
-  /** Existing document model owned and destroyed by the editor runtime. */
-  document: DocumentModel;
+  /** Initial local presentation mode; defaults to block mode. */
   mode?: EditorMode;
 }
 
@@ -50,6 +49,18 @@ export interface RivtoEditorApi {
   subscribe(listener: () => void): () => void;
 
   /**
+   * @returns The document model currently presented by this editor, or undefined while unbound.
+   */
+  getDocument(): DocumentModel | undefined;
+
+  /**
+   * Replaces the active document while preserving editor and manager identity.
+   * @param document - Caller-owned model to present.
+   * @returns No value.
+   */
+  setDocument(document: DocumentModel): void;
+
+  /**
    * Replaces supplied document sections and clears previous local history.
    *
    * @param snapshot - Snapshot-v6 sections to validate and load.
@@ -65,7 +76,7 @@ export interface RivtoEditorApi {
   dump(): EditorSnapshot;
 
   /**
-   * Releases runtime subscriptions, managers, registries, and history.
+   * Releases runtime subscriptions, managers, and registries without destroying the caller-owned document.
    *
    * @returns A Promise that resolves after runtime, provider, and CRDT cleanup.
    */

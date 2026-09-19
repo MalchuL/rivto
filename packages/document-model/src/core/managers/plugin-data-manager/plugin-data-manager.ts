@@ -1,19 +1,18 @@
 /**
  * Stores portable, namespaced plugin data for a collaborative document.
  * The manager preserves shared child-map identities during snapshot loads and
- * exposes only detached values or explicitly requested collaborative maps.
+ * exposes only detached portable values.
  */
 import type {
   CRDTType,
-  BasicType,
   CRDTDoc,
   CRDTMap,
   CRDTUndoScope,
 } from "@chulane/crdt-doc";
+import type { DocumentPluginDataManagerApi } from "../../types";
 import { assignMap, assertPortableRecord, assertPortableValue, clone, isCRDTMap } from "../../utils";
 
 const PLUGINS_KEY = "rivto.editor.plugins";
-
 /**
  * Owns generic, namespaced collaborative data used by document plugins.
  *
@@ -21,10 +20,10 @@ const PLUGINS_KEY = "rivto.editor.plugins";
  * namespaces can be materialized as shared maps so independent records merge
  * through the active CRDT adapter instead of replacing the whole document.
  */
-export class DocumentPluginDataManager {
+export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
   private readonly root: CRDTMap<Record<string, CRDTType>>;
-  /** Collaborative roots owned by this manager and tracked by document history. */
-  readonly undoScopes: readonly CRDTUndoScope[];
+  /** Adapter roots tracked by document-owned history. */
+  readonly historyScopes: readonly CRDTUndoScope[];
 
   /**
    * Creates a generic plugin-data owner for one document.
@@ -33,7 +32,7 @@ export class DocumentPluginDataManager {
    */
   constructor(private readonly crdt: CRDTDoc) {
     this.root = crdt.getMap<Record<string, CRDTType>>(PLUGINS_KEY);
-    this.undoScopes = [this.root];
+    this.historyScopes = [this.root];
   }
 
   /**
@@ -55,24 +54,63 @@ export class DocumentPluginDataManager {
    * @param value - Serializable namespace value.
    * @returns No value.
    */
-  set(pluginId: string, value: BasicType): void {
+  set(pluginId: string, value: unknown): void {
     assertPortableValue(value, "pluginData");
     this.crdt.transact(() => this.root.set(this.requireId(pluginId), clone(value) as CRDTType));
   }
 
   /**
-   * Returns a collaborative map for an object-valued namespace.
-   *
-   * Existing plain snapshot data is promoted once while preserving its fields.
-   * Calling this method can therefore mutate storage when the namespace has not
-   * yet been materialized as a shared map.
-   *
+   * Reads one detached field from an object-valued namespace.
    * @param pluginId - Stable plugin namespace identifier.
-   * @returns Attached collaborative namespace map.
-   * @throws {Error} When existing namespace data is not an object.
+   * @param key - Field name inside the namespace.
+   * @returns Detached field value, or undefined when absent.
    */
-  getMap(pluginId: string): CRDTMap<Record<string, CRDTType>> {
+  getField<Value = unknown>(pluginId: string, key: string): Value | undefined {
     const id = this.requireId(pluginId);
+    const current = this.root.get(id);
+    const value = isCRDTMap(current)
+      ? current.get(key)
+      : current && typeof current === "object" && !Array.isArray(current)
+        ? (current as Record<string, unknown>)[key]
+        : undefined;
+    return value === undefined ? undefined : clone(value) as Value;
+  }
+
+  /**
+   * Sets one portable field while preserving independently collaborative siblings.
+   * @param pluginId - Stable plugin namespace identifier.
+   * @param key - Field name inside the namespace.
+   * @param value - Portable field value.
+   * @returns No value.
+   */
+  setField(pluginId: string, key: string, value: unknown): void {
+    assertPortableValue(value, "pluginData");
+    const id = this.requireId(pluginId);
+    this.crdt.transact(() => this.requireMap(id).set(key, clone(value) as CRDTType));
+  }
+
+  /**
+   * Deletes one field without replacing sibling values.
+   * @param pluginId - Stable plugin namespace identifier.
+   * @param key - Field name inside the namespace.
+   * @returns Whether the field existed.
+   */
+  deleteField(pluginId: string, key: string): boolean {
+    const id = this.requireId(pluginId);
+    const current = this.root.get(id);
+    const existed = isCRDTMap(current)
+      ? current.has(key)
+      : Boolean(current && typeof current === "object" && !Array.isArray(current) && key in current);
+    if (existed) this.crdt.transact(() => this.requireMap(id).delete(key));
+    return existed;
+  }
+
+  /**
+   * Materializes an object namespace as an internal collaborative map.
+   * @param id - Validated namespace identifier.
+   * @returns Attached collaborative namespace map.
+   */
+  private requireMap(id: string): CRDTMap<Record<string, CRDTType>> {
     const current = this.root.get(id);
     if (isCRDTMap(current)) return current;
     if (current !== undefined && (!current || typeof current !== "object" || Array.isArray(current))) {
@@ -80,7 +118,7 @@ export class DocumentPluginDataManager {
     }
     const map = this.crdt.createDetachedMap<Record<string, CRDTType>>();
     if (current) assignMap(map, current as Record<string, unknown>);
-    this.crdt.transact(() => this.root.set(id, map));
+    this.root.set(id, map);
     return map;
   }
 

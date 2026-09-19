@@ -61,6 +61,6 @@ const snapshot = document.getSnapshot();
 document.loadSnapshot(snapshot);
 ```
 
-Приложение создаёт `DocumentModelImpl`, передаёт её в `createRivtoEditor({ document })` и работает через focused editor managers.
+Приложение создаёт `DocumentModelImpl`, присоединяет её через `editor.setDocument(document)` и работает через focused editor managers.
 
 Вложенные страницы описывают все классы, свойства, методы, аргументы, результаты, исключения, persisted-типы, utilities и реальные consumers модели документа.

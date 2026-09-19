@@ -18,7 +18,8 @@ Create a document model, then pass it to the editor runtime:
 import { createRivtoEditor, DocumentModelImpl, YjsDoc } from "@chulane/rivto";
 
 const document = new DocumentModelImpl(new YjsDoc("document-id"));
-const editor = createRivtoEditor({ document });
+const editor = createRivtoEditor();
+editor.setDocument(document);
 editor.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
 const blockId = editor.blocks.insertBlock({
   type: "paragraph",
@@ -44,7 +45,7 @@ The runtime exposes focused owners rather than forwarding every operation throug
 
 ## Persistence and collaboration
 
-Hosts choose a CRDT adapter, construct `DocumentModelImpl`, and pass that model through `createRivtoEditor({ document })`. Snapshots are the portable persistence boundary; local selection and presentation mode are runtime state rather than document content.
+Hosts choose a CRDT adapter, construct `DocumentModelImpl`, then attach it with `editor.setDocument(document)`. Snapshots are the portable persistence boundary; local selection and presentation mode are runtime state rather than document content.
 
 ## Package commands
 

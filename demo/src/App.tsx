@@ -92,7 +92,7 @@ const edgelessOptions = {
 } as const;
 
 /**
- * Reads `?repeat=` as extra copies of the second edgeless block card.
+ * Reads `?repeat=` as extra seeded content for the active demo route.
  *
  * Invalid, missing, or non-positive values are ignored so the default seed
  * stays unchanged. Each copy is a new card because a separator is inserted
@@ -233,9 +233,8 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
  * preceded by a separator so reconciliation mounts N additional cards.
  */
 function createDemoEditor() {
-  const editor = createRivtoEditor({
-    document: new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)),
-  });
+  const editor = createRivtoEditor();
+  editor.setDocument(new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)));
   const edgelessVisuals = edgelessVisualsExtension(edgelessOptions);
   // Used by e2e / KEYMAP demos: `?keymap=alternate` remaps indent without test-only APIs.
   const alternateKeymap = new URLSearchParams(window.location.search).get("keymap") === "alternate"
@@ -488,9 +487,8 @@ function createDemoEditor() {
  * and to contrast a populated document with an empty one.
  */
 function createEmptyDemoEditor() {
-  const editor = createRivtoEditor({
-    document: new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)),
-  });
+  const editor = createRivtoEditor();
+  editor.setDocument(new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)));
   const reactEditor = createReactEditor({
     editor,
     extensions: [
@@ -632,8 +630,10 @@ function JournalDemoApp() {
   useEffect(() => () => {
     todayEditor.reactEditor.destroy();
     void todayEditor.editor.destroy();
+    void todayEditor.editor.getDocument()?.destroy();
     yesterdayEditor.reactEditor.destroy();
     void yesterdayEditor.editor.destroy();
+    void yesterdayEditor.editor.getDocument()?.destroy();
   }, [todayEditor, yesterdayEditor]);
 
   return (
@@ -674,9 +674,8 @@ function createMultiEditor(
   side: "left" | "right",
   options: { readonly empty?: boolean; readonly conflict?: "block" } = {},
 ) {
-  const editor = createRivtoEditor({
-    document: new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)),
-  });
+  const editor = createRivtoEditor();
+  editor.setDocument(new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)));
   const reactEditor = createReactEditor({
     editor,
     extensions: [
@@ -781,8 +780,10 @@ function MultiEditorApp() {
   useEffect(() => () => {
     left.reactEditor.destroy();
     void left.editor.destroy();
+    void left.editor.getDocument()?.destroy();
     right.reactEditor.destroy();
     void right.editor.destroy();
+    void right.editor.getDocument()?.destroy();
   }, [left, right]);
   return (
     <div className="multi-editor-page">
@@ -798,10 +799,16 @@ function MultiEditorApp() {
  * Needed to wire a Yjs-backed editor + `BroadcastChannelProvider` without a
  * server. Only the left peer is seeded; the right starts empty and receives
  * the document so convergence is obvious.
+ *
+ * @param side - Stable peer identity used for seeding and document IDs.
+ * @param roomId - Broadcast channel shared by every peer.
+ * @param repeatCount - Additional writing blocks seeded on the left peer.
+ * @returns Editor runtime and provider resources for one peer.
  */
-function createSyncedPeer(side: "left" | "right", roomId: string) {
+function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: number) {
   const yjsDoc = new YjsDoc(`${roomId}:${side}`);
-  const editor = createRivtoEditor({ document: new DocumentModelImpl(yjsDoc) });
+  const editor = createRivtoEditor();
+  editor.setDocument(new DocumentModelImpl(yjsDoc));
   const reactEditor = createReactEditor({
     editor,
     extensions: [
@@ -823,6 +830,15 @@ function createSyncedPeer(side: "left" | "right", roomId: string) {
       type: DEFAULT_WRITING_BLOCK_TYPE,
       content: "Both editors share one Yjs room over `BroadcastChannel` (same PC, no server).",
     }, introId);
+    editor.history.batchUpdates(() => {
+      let afterId = editor.blocks.getRootIds().at(-1);
+      for (let index = 0; index < repeatCount; index += 1) {
+        afterId = editor.blocks.insertBlock({
+          type: DEFAULT_WRITING_BLOCK_TYPE,
+          content: `Synced repeated block ${index + 1}`,
+        }, afterId);
+      }
+    });
     editor.history.clear();
   }
   return { yjsDoc, editor, reactEditor, provider: new BroadcastChannelProvider(roomId) };
@@ -836,9 +852,10 @@ function createSyncedPeer(side: "left" | "right", roomId: string) {
  */
 function SyncEditorsApp() {
   const roomId = new URLSearchParams(window.location.search).get("room") ?? "rivto-demo-sync";
+  const repeatCount = demoRepeatCount();
   const [peers] = useState(() => ({
-    left: createSyncedPeer("left", roomId),
-    right: createSyncedPeer("right", roomId),
+    left: createSyncedPeer("left", roomId, repeatCount),
+    right: createSyncedPeer("right", roomId, repeatCount),
   }));
   const [showBlockIds, setShowBlockIds] = useState(true);
 
@@ -856,8 +873,10 @@ function SyncEditorsApp() {
       cancelled = true;
       peers.left.reactEditor.destroy();
       void peers.left.editor.destroy().catch(() => undefined);
+      void peers.left.editor.getDocument()?.destroy().catch(() => undefined);
       peers.right.reactEditor.destroy();
       void peers.right.editor.destroy().catch(() => undefined);
+      void peers.right.editor.getDocument()?.destroy().catch(() => undefined);
     };
   }, [peers]);
 
@@ -890,7 +909,7 @@ function SyncEditorsApp() {
  *
  * - default → journal stack (`JournalDemoApp`)
  * - `?editors=2` → dual editors (`MultiEditorApp`)
- * - `?sync=1` → BroadcastChannel peers (`SyncEditorsApp`)
+ * - `?sync=1` → BroadcastChannel peers (`SyncEditorsApp`); `repeat=N` adds N synced blocks
  * - `?repeat=N` → N extra copies of the second journal card (with separators)
  *
  * Needed so one Vite demo app can cover walkthrough, regression, and sync

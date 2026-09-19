@@ -3,6 +3,7 @@ import {
   DocumentModelImpl,
   YjsDoc,
   type CreateRivtoEditorOptions,
+  type DocumentModel,
   type RivtoEditorApi,
 } from "@chulane/rivto";
 import { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-writing-block";
@@ -14,10 +15,27 @@ import { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-
  * `defaultWritingBlockExtension` / `standardPreset`.
  */
 export function createTestCoreEditor(
-  options: Omit<CreateRivtoEditorOptions, "document"> = {},
+  options: CreateRivtoEditorOptions = {},
 ): RivtoEditorApi {
   const document = new DocumentModelImpl(new YjsDoc(`rivto-react-test-${crypto.randomUUID()}`));
-  const editor = createRivtoEditor({ ...options, document });
+  const editor = createRivtoEditor(options);
+  editor.setDocument(document);
+  const documents = new Set<DocumentModel>([document]);
+  const setDocument = editor.setDocument.bind(editor);
+  const destroy = editor.destroy.bind(editor);
+  let destroyed = false;
+  editor.setDocument = (next) => {
+    documents.add(next);
+    setDocument(next);
+  };
+  editor.destroy = async () => {
+    if (destroyed) return;
+    destroyed = true;
+    const runtimeCleanup = destroy();
+    const documentCleanup = Promise.all([...documents].map((item) => item.destroy()));
+    await runtimeCleanup;
+    await documentCleanup;
+  };
   editor.blocksRegistry.defineBlock({ type: DEFAULT_WRITING_BLOCK_TYPE, title: "Paragraph" });
   return editor;
 }

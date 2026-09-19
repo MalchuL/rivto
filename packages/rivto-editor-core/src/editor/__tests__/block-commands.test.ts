@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { z } from "zod";
 import { YjsDoc } from "@chulane/crdt-doc";
+import { DocumentModelImpl } from "@chulane/document-model";
 import { createTestEditor as createRivtoEditor } from "../test-utils";
 
 describe("EditorRuntime block commands", () => {
@@ -342,8 +343,10 @@ describe("EditorRuntime block commands", () => {
   it("synchronizes collapse state through the CRDT document", () => {
     const leftDocument = new YjsDoc("collapse-left");
     const rightDocument = new YjsDoc("collapse-right");
-    const left = createRivtoEditor({ document: leftDocument });
-    const right = createRivtoEditor({ document: rightDocument });
+    const left = createRivtoEditor();
+    const right = createRivtoEditor();
+    left.setDocument(new DocumentModelImpl(leftDocument));
+    right.setDocument(new DocumentModelImpl(rightDocument));
     const parent = left.blocks.insertBlock({
       type: "paragraph",
       content: "Parent",

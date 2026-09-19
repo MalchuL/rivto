@@ -22,7 +22,8 @@ Editor не владеет rendering и DOM. React-пакет подписыва
 
 ```ts
 const document = new DocumentModelImpl(new YjsDoc("document-id"));
-const editor = createRivtoEditor({ document });
+const editor = createRivtoEditor();
+editor.setDocument(document);
 
 editor.blocksRegistry.defineBlock({
   type: "paragraph",
@@ -65,6 +66,6 @@ Persisted в CRDT:
 
 ## Владение lifecycle
 
-`EditorRuntime.destroy()` уничтожает runtime managers, registry, history, listeners и commands, затем вызывает `crdt.destroy()`. CRDT lifecycle отключает все providers и уничтожает внутренний документ. Поэтому переданный через options CRDT document становится owned runtime-ресурсом и не должен совместно использоваться после `await editor.destroy()`.
+`EditorRuntime.destroy()` уничтожает только runtime managers, registry, listeners и commands. Переданный document принадлежит host: его можно переключить через `setDocument()` или совместно использовать, а после завершения работы нужно отдельно вызвать `document.destroy()` для отключения providers и CRDT cleanup.
 
 Вложенные страницы описывают каждый interface, property, method, argument, return value, exception, built-in command и interaction с остальными модулями.

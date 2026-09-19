@@ -12,7 +12,7 @@
 - **Значение:** описательный ID модели; не управляет персистентностью или provider room.
 - **Исключения при чтении:** отсутствуют.
 
-CRDT document и transaction origin являются приватными деталями реализации. Каждый focused storage manager объявляет собственные `undoScopes`; модель объединяет их только при создании `history`.
+CRDT document, transaction origin и history scopes являются приватными деталями реализации. Они не возвращаются из public model API.
 
 ### `blocks`
 
@@ -53,7 +53,7 @@ CRDT document и transaction origin являются приватными дет
 ### `subscribe(listener)`
 
 - **Аргументы:** `listener: () => void`.
-- **Возвращает:** `Unsubscribe`.
+- **Возвращает:** обычный cleanup callback `() => void`.
 - **Исключения:** передаёт ошибки `crdt.on("update", listener)`; исключения listener возникают при доставке события.
 
 Подписывается на общий CRDT update. `EditorRuntime` использует сигнал для reconciliation selection и увеличения revision после локальных и remote mutations.
@@ -62,17 +62,7 @@ Listener не получает snapshot или описание patch: это о
 
 `DocumentModel.subscribe()` предоставляет **один вид notification — document update** и всегда делегирует `crdt.on("update", listener)`. Одновременно можно зарегистрировать несколько distinct listeners; новая подписка не заменяет существующие. В `YjsDoc` одинаковая function reference deduplicate-ится native `Set`, поэтому для независимых подписок используйте разные callback functions.
 
-Каждый вызов возвращает cleanup только соответствующего callback. Повторный cleanup безопасен. Регистрация не вызывает listener немедленно; initial data нужно получить через `getSnapshot()` или focused managers. Несколько writes одной `document.transact()` обычно приводят к одному update notification, тогда как разные transactions могут дать несколько последовательных вызовов.
-
-### `transact(operation)`
-
-- **Аргументы:** `operation: () => void`.
-- **Возвращает:** `void`.
-- **Исключения:** передаёт исходное исключение `operation` и ошибки `CRDTDoc.transact`; rollback не гарантируется.
-
-Выполняет callback через `crdt.transact(operation)`. Adapter сам назначает приватный local origin.
-
-`operation` выполняется синхронно и ничего не возвращает через API модели. Вложенные manager transactions остаются частью adapter transaction, если adapter поддерживает nesting. Atomic delivery означает один согласованный update для observers, но не rollback: исключение callback-а передаётся caller-у, а уже выполненные CRDT writes могут сохраниться.
+Каждый вызов возвращает cleanup только соответствующего callback. Повторный cleanup безопасен. Регистрация не вызывает listener немедленно; initial data нужно получить через `getSnapshot()` или focused managers. Группировка model mutations доступна через `document.history.batchUpdates()` и не раскрывает raw CRDT transaction.
 
 ### `history`
 
@@ -116,7 +106,8 @@ Host создаёт модель и передаёт её в editor так:
 
 ```ts
 const document = new DocumentModelImpl(new YjsDoc("document-id"));
-const editor = createRivtoEditor({ document });
+const editor = createRivtoEditor();
+editor.setDocument(document);
 ```
 
 Затем public editor managers делегируют focused operations в document managers. `EditorRuntime` повторно использует `document.history`, а persistence API вызывает `getSnapshot()` и `loadSnapshot()`.

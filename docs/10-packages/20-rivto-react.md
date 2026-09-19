@@ -29,7 +29,8 @@ import {
 import "@chulane/rivto-react/styles.css";
 
 const document = new DocumentModelImpl(new YjsDoc("document-id"));
-const editor = createRivtoEditor({ document });
+const editor = createRivtoEditor();
+editor.setDocument(document);
 const reactEditor = createReactEditor({
   editor,
   extensions: [standardPreset()],

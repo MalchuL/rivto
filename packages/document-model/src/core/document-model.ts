@@ -1,4 +1,4 @@
-import { CRDTDoc, CRDTUndoScope, Unsubscribe } from "@chulane/crdt-doc";
+import { CRDTDoc, CRDTUndoScope } from "@chulane/crdt-doc";
 import {
   DocumentBlockManager,
   DocumentElementManager,
@@ -6,7 +6,11 @@ import {
   DocumentHistoryManager,
 } from "./managers";
 import type {
+  DocumentBlockManagerApi,
+  DocumentElementManagerApi,
+  DocumentHistoryManagerApi,
   DocumentModel,
+  DocumentPluginDataManagerApi,
   Snapshot,
   SnapshotUpdate,
 } from "./types";
@@ -16,8 +20,8 @@ import { assertPortableRecord, clone } from "./utils";
  * Coordinates collaborative document lifecycle through block and element managers.
  *
  * Block and element APIs live exclusively on their focused managers.
- * This class retains raw CRDT transactions, history construction,
- * document-level plugin data, subscriptions, and complete snapshot orchestration.
+ * This class retains history construction, document-level plugin data,
+ * subscriptions, and complete snapshot orchestration.
  */
 export class DocumentModelImpl implements DocumentModel {
   /** Descriptive model identifier; persistence remains controlled by the CRDT document. */
@@ -25,15 +29,15 @@ export class DocumentModelImpl implements DocumentModel {
   /** Adapter-neutral collaborative document containing canonical shared state. */
   private readonly crdt: CRDTDoc;
   /** Block records, text, hierarchy, and block snapshot behavior. */
-  readonly blocks: DocumentBlockManager;
+  readonly blocks: DocumentBlockManagerApi;
   /** Generic first-class canvas elements and their geometry. */
-  readonly elements: DocumentElementManager;
+  readonly elements: DocumentElementManagerApi;
   /** Generic namespaced collaborative document plugin data. */
-  readonly pluginData: DocumentPluginDataManager;
+  readonly pluginData: DocumentPluginDataManagerApi;
   /** Local history and batching configured from every document manager's roots. */
-  readonly history: DocumentHistoryManager;
+  readonly history: DocumentHistoryManagerApi;
   /** Removes the foreign-update normalization listener during destruction. */
-  private readonly unsubscribeFromUpdates: Unsubscribe;
+  private readonly unsubscribeFromUpdates: () => void;
   /**
    * Initializes document-level storage and focused managers.
    *
@@ -50,16 +54,20 @@ export class DocumentModelImpl implements DocumentModel {
   constructor(crdt: CRDTDoc) {
     this.crdt = crdt;
     this.id = crdt.id;
-    this.blocks = new DocumentBlockManager(crdt);
-    this.elements = new DocumentElementManager(crdt);
-    this.pluginData = new DocumentPluginDataManager(crdt);
-    this.blocks.normalize();
+    const blocks = new DocumentBlockManager(crdt);
+    const elements = new DocumentElementManager(crdt);
+    const pluginData = new DocumentPluginDataManager(crdt);
+    blocks.normalize();
     const undoScopes: CRDTUndoScope[] = [
-      ...this.blocks.undoScopes,
-      ...this.elements.undoScopes,
-      ...this.pluginData.undoScopes,
+      ...blocks.historyScopes,
+      ...elements.historyScopes,
+      ...pluginData.historyScopes,
     ];
-    this.history = new DocumentHistoryManager(crdt, undoScopes);
+    const history = new DocumentHistoryManager(crdt, undoScopes);
+    this.blocks = blocks;
+    this.elements = elements;
+    this.pluginData = pluginData;
+    this.history = history;
     // Yjs `"update"` carries the transaction origin: the adapter's local token,
     // a provider instance, undo, or `null`/`undefined` from `applyUpdate`.
     // Skip local origin so we do not open a
@@ -67,7 +75,7 @@ export class DocumentModelImpl implements DocumentModel {
     // extra undo stacks). Repair only foreign merges.
     this.unsubscribeFromUpdates = this.crdt.on("update", (_update: unknown, updateOrigin?: unknown) => {
       if (this.crdt.isLocalOrigin(updateOrigin)) return;
-      this.blocks.normalize();
+      blocks.normalize();
     });
   }
 
@@ -77,18 +85,8 @@ export class DocumentModelImpl implements DocumentModel {
    * @param listener - Callback invoked after a collaborative update.
    * @returns Function that removes the subscription.
    */
-  subscribe(listener: () => void): Unsubscribe {
+  subscribe(listener: () => void): () => void {
     return this.crdt.on("update", listener);
-  }
-
-  /**
-   * Runs synchronous document work in one collaborative transaction.
-   *
-   * @param operation - Synchronous document work to execute atomically.
-   * @returns No value.
-   */
-  transact(operation: () => void): void {
-    this.crdt.transact(operation);
   }
 
   /**

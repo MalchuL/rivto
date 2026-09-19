@@ -257,7 +257,8 @@ const cleanupProvider = await crdt.attachProvider(
 );
 
 const document = new DocumentModelImpl(crdt);
-const editor = createRivtoEditor({ document });
+const editor = createRivtoEditor();
+editor.setDocument(document);
 
 // При завершении жизненного цикла:
 await cleanupProvider();

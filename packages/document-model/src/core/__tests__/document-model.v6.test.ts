@@ -183,7 +183,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     docB.destroy();
   });
 
-  it("repairs cached paths after reparenting, deletion, undo, and redo", () => {
+  it("repairs cached paths after reparenting, deletion, undo, and redo", async () => {
     const doc = new YjsDoc("lazy-path-history");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "parent", type: "paragraph" });
@@ -211,8 +211,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     history.undo();
     expect(model.blocks.getParentId("child")).toBe("parent");
 
-    history.destroy();
-    doc.destroy();
+    await model.destroy();
   });
 
   it("preflights sequential placements against simulated parents before any write", () => {

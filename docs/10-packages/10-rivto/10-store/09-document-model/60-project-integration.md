@@ -7,13 +7,14 @@ CRDT-каталог предоставляет механику хранения
 Host создаёт `DocumentModelImpl` поверх выбранного `CRDTDoc` и передаёт готовую модель в `EditorRuntime`. Core editor не создаёт и не знает конкретный CRDT adapter.
 
 ```text
-EditorRuntime
+Host
   владеет DocumentModelImpl
+    используется EditorRuntime
     владеет CRDTDoc
       владеет shared-корнями и подключениями провайдеров
 ```
 
-`await editor.destroy()` освобождает runtime subscriptions, managers, commands и undo history, затем вызывает `crdt.destroy()`. Для `YjsDoc` это отключает все providers и уничтожает `Y.Doc`; переданный editor-у document поэтому считается owned ресурсом runtime.
+`await editor.destroy()` освобождает runtime subscriptions, managers и commands. Host отдельно вызывает `await document.destroy()`; для `YjsDoc` это отключает providers и уничтожает `Y.Doc`.
 
 ## `DocumentModelImpl`
 
@@ -29,7 +30,7 @@ EditorRuntime
 
 ### Области undo
 
-Каждый storage manager объявляет принадлежащие ему `undoScopes`. `DocumentModelImpl` объединяет их в constructor-local массив и один раз передаёт в `DocumentHistoryManager`; core runtime повторно использует `document.history` и не получает aggregate scopes или origin.
+Каждый storage manager хранит принадлежащие ему history scopes вне public instance. `DocumentModelImpl` приватно объединяет их и один раз передаёт в `DocumentHistoryManager`; core runtime повторно использует `document.history` и не получает scopes или origin.
 
 ### Snapshots
 
@@ -120,7 +121,7 @@ Helpers модели обновляют существующие shared-знач
 
 ## Пользовательские адаптеры
 
-Другую реализацию `CRDTDoc` можно передать в `createRivtoEditor({ document })`. Она должна сохранять ожидаемую семантику:
+Другую реализацию `CRDTDoc` можно передать в `DocumentModelImpl`, а model присоединить через `editor.setDocument()`. Adapter должна сохранять ожидаемую семантику:
 
 - стабильная идентичность корневых контейнеров;
 - транзакционные update-уведомления;

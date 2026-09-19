@@ -5,6 +5,7 @@ import type {
   RivtoEditorApi,
   HistoryManager,
 } from "@chulane/rivto";
+import type { DocumentModel } from "@chulane/document-model";
 import type {
   BlockRenderer,
   KeymapOverrides,
@@ -106,5 +107,15 @@ export interface ReactEditor {
   readonly slashCommands: SlashCommandsCapability;
   /** Subscribes to document, mode, and selection changes from the core editor. */
   subscribe(listener: () => void): () => void;
+  /**
+   * @returns The document model currently presented by the core editor, or undefined while unbound.
+   */
+  getDocument(): DocumentModel | undefined;
+  /**
+   * Replaces the active document without recreating the React runtime.
+   * @param document - Caller-owned model to present.
+   * @returns No value.
+   */
+  setDocument(document: DocumentModel): void;
   destroy(): void;
 }

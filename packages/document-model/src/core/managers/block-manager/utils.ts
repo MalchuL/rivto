@@ -5,7 +5,6 @@
  */
 import type { CRDTArray } from "@chulane/crdt-doc";
 import type { BlockInput, BlockListProps } from "../../types";
-import type { BlockPipe } from "./block-pipe";
 import { assertPortableRecord, assertPortableValue, requireNonemptyId } from "../../utils/portable";
 
 /**
@@ -19,10 +18,6 @@ export interface ValidateBlockForestOptions {
   readonly requireComplete?: boolean;
   /** IDs already present in storage that incoming supplied IDs must not collide with. */
   readonly existingIds?: ReadonlySet<string>;
-  /** Parent type of the forest roots; `null` is the document root. */
-  readonly parentType?: string | null;
-  /** Installed block pipe applied to every node in document order. */
-  readonly pipe?: BlockPipe;
 }
 
 /**
@@ -46,30 +41,14 @@ export function validateBlockListProps(value: unknown): BlockListProps {
 }
 
 /**
- * Collects every supplied block identifier in a detached forest.
- *
- * @param blocks - Root blocks or inputs to walk in document order.
- * @returns Unique supplied IDs. Generated IDs are not represented.
- */
-export function collectBlockIds(blocks: readonly BlockInput[]): Set<string> {
-  const ids = new Set<string>();
-  const visit = (block: BlockInput): void => {
-    if (typeof block.id === "string" && block.id.trim() !== "") ids.add(block.id);
-    block.children?.forEach(visit);
-  };
-  blocks.forEach(visit);
-  return ids;
-}
-
-/**
  * Validates a portable block forest before the first destructive write.
  *
- * Unique nonempty IDs, nonempty types, portable records, schema props, and
+ * Unique nonempty IDs, nonempty types, portable records, and
  * acyclic children are all checked. CRDT transactions do not roll back, so
  * this preflight is the atomicity boundary for insert and snapshot load.
  *
  * @param blocks - Root blocks or inputs to validate recursively.
- * @param options - Completeness, collision, and schema-validation policy.
+ * @param options - Completeness and identity-collision policy.
  * @returns Collected supplied IDs after a successful preflight.
  * @throws {Error} When any descendant is malformed, duplicated, or cyclic.
  */
@@ -79,7 +58,7 @@ export function validateBlockForest(
 ): Set<string> {
   const ids = new Set<string>();
   const visiting = new Set<BlockInput>();
-  const visit = (block: BlockInput, parentType: string | null): void => {
+  const visit = (block: BlockInput): void => {
     if (!block || typeof block !== "object" || Array.isArray(block)) {
       throw new Error("Snapshot block children must be an array");
     }
@@ -92,30 +71,29 @@ export function validateBlockForest(
       ids.add(id);
     }
     if (!block.type || typeof block.type !== "string") throw new Error("Block type is required");
-    const validated = options.pipe?.process(block, { parentType }) ?? block;
     if (options.requireComplete) {
-      if (typeof validated.content !== "string") throw new Error("Block content must be a string");
-      if (!Array.isArray(validated.children)) throw new Error("Snapshot block children must be an array");
-      validateBlockListProps(validated.listProps);
-      assertPortableRecord(validated.props, "block.props");
-      assertPortableRecord(validated.pluginData, "block.pluginData");
+      if (typeof block.content !== "string") throw new Error("Block content must be a string");
+      if (!Array.isArray(block.children)) throw new Error("Snapshot block children must be an array");
+      validateBlockListProps(block.listProps);
+      assertPortableRecord(block.props, "block.props");
+      assertPortableRecord(block.pluginData, "block.pluginData");
     } else {
-      if (validated.content !== undefined && typeof validated.content !== "string") {
+      if (block.content !== undefined && typeof block.content !== "string") {
         throw new Error("Block content must be a string");
       }
-      if (validated.children !== undefined && !Array.isArray(validated.children)) {
+      if (block.children !== undefined && !Array.isArray(block.children)) {
         throw new Error("Snapshot block children must be an array");
       }
-      if (validated.listProps !== undefined) validateBlockListProps(validated.listProps);
-      if (validated.props !== undefined) {
-        assertPortableRecord(validated.props, "block.props");
+      if (block.listProps !== undefined) validateBlockListProps(block.listProps);
+      if (block.props !== undefined) {
+        assertPortableRecord(block.props, "block.props");
       }
-      if (validated.pluginData !== undefined) assertPortableRecord(validated.pluginData, "block.pluginData");
+      if (block.pluginData !== undefined) assertPortableRecord(block.pluginData, "block.pluginData");
     }
-    (validated.children ?? []).forEach((child) => visit(child, validated.type));
+    (block.children ?? []).forEach(visit);
     visiting.delete(block);
   };
-  blocks.forEach((block) => visit(block, options.parentType ?? null));
+  blocks.forEach(visit);
   return ids;
 }
 

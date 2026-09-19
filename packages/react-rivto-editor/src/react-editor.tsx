@@ -8,6 +8,7 @@
  * @module
  */
 import type { RivtoEditorApi as Editor } from "@chulane/rivto";
+import type { DocumentModel } from "@chulane/document-model";
 import {
   BlockManager,
   ClipboardManager,
@@ -111,7 +112,7 @@ export class ReactEditorImpl implements ReactEditor {
         this.blocks.subscribeRootIds(() => this.queueBlockElementReconciliation()),
         this.elements.subscribe(() => this.queueBlockElementReconciliation()),
       );
-      this.queueBlockElementReconciliation();
+      if (editor.getDocument()) this.queueBlockElementReconciliation();
     } catch (error) {
       this.destroy();
       throw error;
@@ -155,6 +156,22 @@ export class ReactEditorImpl implements ReactEditor {
   /** Forwards the core editor's document/mode/registry revision stream. */
   subscribe(listener: () => void): () => void {
     return this.editor.subscribe(listener);
+  }
+
+  /**
+   * @returns The document model currently presented by the core editor, or undefined while unbound.
+   */
+  getDocument(): DocumentModel | undefined {
+    return this.editor.getDocument();
+  }
+
+  /**
+   * Replaces the active core document while retaining every React manager.
+   * @param document - Caller-owned model to present.
+   * @returns No value.
+   */
+  setDocument(document: DocumentModel): void {
+    this.editor.setDocument(document);
   }
 
   /**
