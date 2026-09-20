@@ -573,7 +573,6 @@ function DemoToolbar({
 
   return (
     <header className="demo-header">
-      <span>Rivto v{RIVTO_VERSION}</span>
       <div className="demo-toolbar-controls">
         <label className="demo-block-id-toggle">
           <input

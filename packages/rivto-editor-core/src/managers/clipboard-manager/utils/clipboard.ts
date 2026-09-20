@@ -140,7 +140,7 @@ export function cloneSelectedTopLevelSubtrees(
   // Text ranges may cross nested blocks. Rebuild only the selected branches so
   // each retained child stays attached to its selected parent.
   const cloneSelection = (block: Block): Block => ({
-    ...cloneBlock(block),
+    ...structuredClone(block),
     children: block.children.filter((child) => selectedIds.has(child.id)).map(cloneSelection),
   });
 
@@ -157,5 +157,5 @@ export function cloneSelectedTopLevelSubtrees(
       parent = parents.get(parent);
     }
     return isTopLevel;
-  }).map(wholeBlocks ? cloneBlock : cloneSelection);
+  }).map(wholeBlocks ? (block) => structuredClone(block) : cloneSelection);
 }
