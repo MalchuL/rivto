@@ -9,6 +9,9 @@
 /** Opaque properties interpreted by page/outline extensions. */
 export type BlockListProps = Record<string, unknown>;
 
+/** Current document snapshot schema version. */
+export const DOCUMENT_SNAPSHOT_VERSION = 6 as const;
+
 /** Axis-aligned geometry shared by every first-class canvas element. */
 export interface ElementFrame {
   /** Horizontal canvas coordinate; any finite value is accepted. */
