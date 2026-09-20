@@ -103,18 +103,6 @@ export interface DOMSelectionPoint {
 }
 
 /**
- * Minimal visible-block snapshot used when mapping native endpoints to
- * per-block `start`/`end` coverage.
- */
-export interface SelectionBlock {
-  /** Stable block identity (`data-block-id`) in visible document order. */
-  readonly id: string;
-  /** Current plain-text length in UTF-16 code units (`textContent.length`). */
-  readonly length: number;
-}
-
-
-/**
  * Reads the stable block ID that owns one editable content element.
  *
  * @param content - A `[data-block-content]` HTMLElement (or a descendant of one).

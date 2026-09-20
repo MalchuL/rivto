@@ -1,6 +1,5 @@
 import {
   createRivtoEditor,
-  RIVTO_VERSION,
   type RivtoEditorApi,
 } from "@chulane/rivto";
 import { BroadcastChannelProvider, YjsDoc } from "@chulane/crdt-doc";
