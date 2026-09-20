@@ -8,7 +8,8 @@ import {
   type EditorPosition,
   type Selection,
 } from "../selection-manager";
-import type { ClipboardBundle, ClipboardPasteInput } from "./clipboard-data";
+import type { ClipboardBundle, ClipboardPasteInput, BlockPastePlacement } from "./clipboard-data";
+import { CLIPBOARD_BUNDLE_VERSION } from "./clipboard-data";
 import {
   BLOCK_PASTE_STRATEGY_ID,
   PRESERVE_NEWLINES_PASTE_STRATEGY_ID,
