@@ -54,8 +54,8 @@ export class BaseBlockView implements BlockViewBehavior {
       focusCaret(reactEditor, root, block.id, 0);
       return "handled";
     }
-    const listActive = reactEditor.blocks.hasListProps("list");
-    const collapseActive = reactEditor.blocks.hasListProps("collapse");
+    const listActive = reactEditor.blockListProps.has("list");
+    const collapseActive = reactEditor.blockListProps.has("collapse");
     if (listActive && isEmptyBlock(block) && block.listProps.type !== "list") {
       convertEmptyToList(reactEditor, block.id);
       focusBlockLater(root, block.id, 0);
@@ -148,7 +148,7 @@ export class BaseBlockView implements BlockViewBehavior {
    */
   onMergeForward(context: BlockViewContext, target: KeyboardSelectionTarget): BlockViewOutcome {
     const { reactEditor, block, root } = context;
-    if (reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true) return "default";
+    if (reactEditor.blockListProps.has("collapse") && block.listProps.collapsed === true) return "default";
     const scope = navigationDomRoot(root, block.id);
     if (removeEmptyBlockAfterStructuralPredecessor(reactEditor, scope, block.id)) return "handled";
     const next = findNextEditableBlock(scope, target.blockId);

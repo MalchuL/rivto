@@ -101,7 +101,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
       __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     const bento = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
-    const tile = editor.blocks.insertBlock({ type: "paragraph", content: "Fourth tile" });
+    const tile = editor.blocks.insertBlock({ type: "paragraph", content: "Fourth tile" }).id;
     editor.blocks.moveBlocks([tile], bento.id, "inside");
   });
   await expect(page.locator('[data-block-type="bento"]').first().getByText("4 tiles", { exact: true })).toBeVisible();

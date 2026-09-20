@@ -172,30 +172,30 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
     const editor = (window as unknown as {
       __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
-    const leftParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered left parent" });
+    const leftParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered left parent" }).id;
     const leftStart = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested left one",
       listProps: { type: "start_numbered_list" },
-    }, leftParent);
+    }, leftParent).id;
     editor.blocks.indentBlock(leftStart);
     const leftNext = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested left two",
       listProps: { type: "numbered_list" },
-    }, leftStart);
-    const rightParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered right parent" });
+    }, leftStart).id;
+    const rightParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered right parent" }).id;
     const rightStart = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested right one",
       listProps: { type: "start_numbered_list" },
-    }, rightParent);
+    }, rightParent).id;
     editor.blocks.indentBlock(rightStart);
     const rightNext = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested right two",
       listProps: { type: "numbered_list" },
-    }, rightStart);
+    }, rightStart).id;
     return { leftParent, leftStart, leftNext, rightParent, rightNext };
   });
   const nestedNext = page.locator(blockIdSelector(nested.leftNext));

@@ -4,7 +4,7 @@ import { crossDocumentBlockTransfer } from "./cross-document-block-transfer";
 
 function createEditor(): RivtoEditorApi {
   const editor = createRivtoEditor();
-  editor.blocksRegistry.defineBlock({ type: "test.counter", defaultProps: { count: 0 } });
+  editor.blockRegistry.defineBlock({ type: "test.counter", defaultProps: { count: 0 } });
   return editor;
 }
 
@@ -19,10 +19,10 @@ describe("cross-document block transfer", () => {
       listProps: { collapsed: true, type: "checkbox", checked: true },
       pluginData: { test: { retained: true } },
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],
-    });
-    const second = source.blocks.insertBlock({ id: "second", type: "paragraph", content: "Second" });
-    const outside = source.blocks.insertBlock({ id: "outside", type: "paragraph", content: "Outside" });
-    const target = destination.blocks.insertBlock({ id: "target", type: "paragraph", content: "Target" });
+    }).id;
+    const second = source.blocks.insertBlock({ id: "second", type: "paragraph", content: "Second" }).id;
+    const outside = source.blocks.insertBlock({ id: "outside", type: "paragraph", content: "Outside" }).id;
+    const target = destination.blocks.insertBlock({ id: "target", type: "paragraph", content: "Target" }).id;
     source.history.clear();
     destination.history.clear();
 
@@ -91,7 +91,7 @@ describe("cross-document block transfer", () => {
     expect(() => crossDocumentBlockTransfer(source, destination, ["custom"], {
       targetId: null,
       position: "after",
-    })).toThrow("Unknown block type test.counter");
+    })).toThrow("Block type test.counter is unavailable in block mode");
     expect(source.dump()).toEqual(sourceBefore);
     expect(destination.blocks.getBlocks()).toEqual([]);
     source.destroy();

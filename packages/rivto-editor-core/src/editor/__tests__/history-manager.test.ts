@@ -3,7 +3,7 @@ import { createTestEditor as createRivtoEditor } from "../test-utils";
 describe("EditorRuntime history manager", () => {
   it("undoes and redoes one document command at a time", () => {
     const editor = createRivtoEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" }).id;
 
     editor.blocks.updateBlock(id, { content: "Updated" });
 
@@ -18,7 +18,7 @@ describe("EditorRuntime history manager", () => {
   it("keeps fast consecutive commands as separate undo steps", () => {
     const editor = createRivtoEditor();
 
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" }).id;
     editor.blocks.setBlockProp(id, "tone", "info");
 
     editor.history.undo();
@@ -37,10 +37,10 @@ describe("EditorRuntime history manager", () => {
     });
 
     const secondId = editor.history.batchUpdates(() => {
-      const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
+      const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
       return editor.history.batchUpdates(() => (
         editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId)
-      ));
+      )).id;
     });
 
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([
@@ -60,7 +60,7 @@ describe("EditorRuntime history manager", () => {
 
   it("keeps consecutive block updates in one capture group", () => {
     const editor = createRivtoEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" }).id;
 
     editor.blocks.updateBlock(id, { content: "First" });
     editor.blocks.updateBlock(id, { content: "Second" });
@@ -73,7 +73,7 @@ describe("EditorRuntime history manager", () => {
 
   it("keeps undo history across mode switches and splits typing capture", () => {
     const editor = createRivtoEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" }).id;
 
     editor.blocks.updateBlock(id, { content: "First" });
     editor.mode.set("edgeless");
@@ -89,7 +89,7 @@ describe("EditorRuntime history manager", () => {
 
   it("excludes derived maintenance from user undo history", () => {
     const editor = createRivtoEditor();
-    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "User change" });
+    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "User change" }).id;
 
     editor.history.batchUpdatesWithoutHistory(() => {
       editor.elements.insertElement({
@@ -109,13 +109,13 @@ describe("EditorRuntime history manager", () => {
 
   it("publishes document updates for undo and redo", () => {
     const editor = createRivtoEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" }).id;
     const calls: string[] = [];
     const unsubscribe = editor.subscribe(() => calls.push(editor.blocks.getBlocks()[0]?.content ?? ""));
 
     editor.blocks.updateBlock(id, { content: "Updated" });
-    editor.commands.execute("history.undo");
-    editor.commands.execute("history.redo");
+    editor.history.undo();
+    editor.history.redo();
 
     expect(calls).toEqual(["Updated", "Initial", "Updated"]);
     expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "Updated" }]);

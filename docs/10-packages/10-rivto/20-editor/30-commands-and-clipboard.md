@@ -1,6 +1,6 @@
 # Commands, batching и clipboard bridge
 
-`EditorRuntime` использует string command registry как integration boundary. Typed convenience methods и managers регистрируют/исполняют те же commands, а host может добавить собственные.
+`CommandRegistry` остаётся integration boundary для динамических extension/app commands. Встроенные document, block, element, selection, history и clipboard операции вызываются через typed managers.
 
 ## Command lifecycle
 
@@ -37,108 +37,19 @@ editor.history.undo(); // Отменяет весь batch одним шагом.
 
 `history.batchUpdatesWithoutHistory(operation)` использует ту же transaction boundary, но помечает её origin так, чтобы изменения не попадали в local undo history.
 
-## Приватный `documentCommand(handler)`
+## Typed built-ins
 
-- **Аргументы:** `handler: CommandHandler`.
-- **Возвращает:** wrapped `CommandHandler`.
-- **Исключения:** передаёт ошибку handler/history; `finally` пытается закрыть capture boundary.
-
-Standalone document command вызывает `history.stopCapturing()` до и после. В explicit batch boundary принадлежит outer operation.
-
-## Приватный `registerRuntimeCommands()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** duplicate/invalid command registration errors.
-
-Регистрирует:
-
-### `document.load`
-
-- **Payload:** `{ snapshot: SnapshotUpdate }`.
-- **Возвращает:** `void`.
-- **Исключения:** `Error("Command payload must be an object")` для отсутствующего/non-object payload, validation supplied snapshot sections и document load errors.
-
-После successful load вызывает `history.clear()`.
-
-Поле `version` должно равняться `6`; `DocumentModelImpl.loadSnapshot()` проверяет его до применения supplied sections.
-
-### `selection.set`
-
-- **Payload:** `{ selection: Selection }`.
-- **Возвращает:** `void`.
-- **Исключения:** command payload или selection validation errors.
-
-### `selection.delete`
-
-- **Payload:** не используется.
-- **Возвращает:** результат `SelectionManager.delete()`, фактически `void`.
-- **Исключения:** selection/document command errors.
-
-### `selection.clear`
-
-- **Payload:** не используется.
-- **Возвращает:** `void`.
-- **Исключения:** selection notification errors.
-
-### `history.undo` и `history.redo`
-
-- **Payload:** не используется.
-- **Возвращает:** `void`.
-- **Исключения:** CRDT history errors.
-
-Block, link и element commands регистрируются их public managers, а не `EditorRuntime`.
-
-## Приватный `registerClipboardCommands()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** duplicate command registration errors.
-
-Метод регистрирует data-only commands поверх typed `ClipboardManager`.
-
-### Local helper `payload(value)`
-
-- **Аргументы:** `value: unknown`; generic desired payload type.
-- **Возвращает:** `Partial<Payload>` для non-array object, иначе `{}`.
-- **Исключения:** Proxy/property access errors.
-
-### Local helper `text(value)`
-
-- **Аргументы:** `value: unknown`.
-- **Возвращает:** `string | undefined`.
-- **Исключения:** отсутствуют.
-
-## Clipboard commands
-
-### `clipboard.copy`
-
-- **Payload:** optional `{ textTarget?: Selection }`. `textTarget` задаёт text range; без него используется current selection.
-- **Возвращает:** serialized `ClipboardBundle` JSON или `""`, если selection нельзя скопировать.
-- **Исключения:** selection normalization, serialization или host `setData` errors.
-
-### `clipboard.cut`
-
-- **Payload:** не используется.
-- **Возвращает:** serialized bundle JSON или `""`.
-- **Исключения:** copy/delete/serialization и host clipboard errors.
-
-При успешном cut clipboard manager удаляет selected content как document mutation.
-
-### `clipboard.paste`
-
-- **Payload:** optional fields `bundle`, `structured`, `mergeText`, `preserveNewlines`, `defaultBlockType`, `text`, `placement`, `textTarget`.
-- **Возвращает:** `EditorPosition | undefined`: caret после text insertion либо undefined для structural paste/no-op.
-- **Исключения:** invalid structured JSON/bundle, placement collision, missing block type и document operations.
-
-Structured input comes from `bundle` or serialized `structured`; plain input comes from `text`. Defaults: `mergeText !== false`, `preserveNewlines === false`.
+- `editor.load(snapshot)` загружает supplied snapshot sections и очищает history.
+- `editor.blocks` и `editor.elements` выполняют document mutations.
+- `editor.selection.set/delete/clear` управляет local selection.
+- `editor.history.undo/redo` управляет local history.
+- `editor.clipboard.copy/copyText/cut/paste` работает с `ClipboardBundle` без string payload adapters.
 
 ```ts
-editor.commands.execute("clipboard.paste", {
+editor.clipboard.paste({
   text: "Первый\nВторой",
-  preserveNewlines: true,
   defaultBlockType: "paragraph",
-  placement: { parentId: null, afterId: null },
+  placement: { parentId: null, afterId: null, preserveNewlines: true },
 });
 ```
 
@@ -146,7 +57,6 @@ editor.commands.execute("clipboard.paste", {
 
 - empty или duplicate name при registration;
 - unknown name при execution;
-- payload validation конкретного command;
 - handler exception;
 - listener exception после successful handler.
 

@@ -158,6 +158,12 @@ importers:
 
   demo:
     dependencies:
+      '@chulane/crdt-doc':
+        specifier: workspace:*
+        version: link:../packages/crdt-doc
+      '@chulane/document-model':
+        specifier: workspace:*
+        version: link:../packages/document-model
       '@chulane/rivto':
         specifier: workspace:*
         version: link:../packages/rivto-editor-core
@@ -334,6 +340,9 @@ importers:
 
   packages/react-rivto-editor:
     dependencies:
+      '@chulane/document-model':
+        specifier: workspace:*
+        version: link:../document-model
       '@chulane/rivto':
         specifier: workspace:*
         version: link:../rivto-editor-core
@@ -365,6 +374,9 @@ importers:
         specifier: ^4.1.13
         version: 4.4.3
     devDependencies:
+      '@chulane/crdt-doc':
+        specifier: workspace:*
+        version: link:../crdt-doc
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
@@ -395,9 +407,6 @@ importers:
 
   packages/rivto-editor-core:
     dependencies:
-      '@chulane/crdt-doc':
-        specifier: workspace:*
-        version: link:../crdt-doc
       '@chulane/document-model':
         specifier: workspace:*
         version: link:../document-model
@@ -405,6 +414,9 @@ importers:
         specifier: ^4.1.13
         version: 4.4.3
     devDependencies:
+      '@chulane/crdt-doc':
+        specifier: workspace:*
+        version: link:../crdt-doc
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14

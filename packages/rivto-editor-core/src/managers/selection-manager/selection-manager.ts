@@ -9,6 +9,7 @@
 import type { Block } from "@chulane/document-model";
 import { Listeners } from "../../utils";
 import type { RivtoEditorApi } from "../../editor/types";
+import type { SelectionManagerApi } from "../types";
 import type { Selection } from "./selection";
 import type { ResolvedSelection } from "./resolved-selection";
 import {
@@ -20,7 +21,7 @@ import {
 } from "./selection-ranges";
 
 /** Local selection manager shared by core commands and browser adapters. */
-export class SelectionManager {
+export class SelectionManager implements SelectionManagerApi {
   private value: Selection | undefined;
   private selectedBlockIds = new Set<string>();
   private selectedElementIds = new Set<string>();

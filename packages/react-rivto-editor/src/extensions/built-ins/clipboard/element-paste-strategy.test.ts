@@ -82,7 +82,7 @@ describe("ElementPasteStrategy", () => {
 
   it("uses the block import map without reading block selection order", () => {
     const editor = createTestCoreEditor({ mode: "edgeless" });
-    const destinationId = editor.blocks.insertBlock({ type: "paragraph", content: "Pasted" });
+    const destinationId = editor.blocks.insertBlock({ type: "paragraph", content: "Pasted" }).id;
     const reactEditor = createReactEditor({ editor });
     const uninstall = installEdgelessRuntime(reactEditor);
 

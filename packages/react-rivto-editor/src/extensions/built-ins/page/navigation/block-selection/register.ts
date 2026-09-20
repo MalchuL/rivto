@@ -32,7 +32,7 @@ import {
  */
 export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void {
   const isCollapsed = (block: EditorBlock) => (
-    reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true
+    reactEditor.blockListProps.has("collapse") && block.listProps.collapsed === true
   );
   const move = (root: HTMLElement, direction: VerticalDirection, extend: boolean): boolean => {
     const selection = currentNavigationSelection(reactEditor.selection);

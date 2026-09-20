@@ -2,8 +2,9 @@
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import type {
-  BlockListProps,
   BlockDefinition,
+  BlockListPropsManagerApi,
+  BlockPrepareErrorHandler,
   ClipboardBundle,
   ClipboardPasteInput,
   EditorBlock,
@@ -34,8 +35,6 @@ import type {
   PortableBlockFormats,
   ReactBlockRegistration,
   ReactEditorExtension,
-  ListPropsRegistration,
-  BlockMutationResult,
   ClipboardFormatter,
   ClipboardParser,
   SlashCommand,
@@ -51,34 +50,21 @@ import type {
 import type { BlockViewBehavior } from "./views/types";
 
 export interface BlocksCapability {
-  register(registration: ReactBlockRegistration): () => void;
-  /** Registers ordered list-property defaults and validation; returns a disposer. */
-  registerListProps(registration: ListPropsRegistration): () => void;
-  /** Returns whether the given list-property registration is active. */
-  hasListProps(id: string): boolean;
-  /** Returns whether core portability and every active validator accept the record. */
-  validateListProps(candidate: BlockListProps): boolean;
-  /** Returns a detached recursive input with active defaults shallowly merged. */
-  prepareBlock(input: EditorBlockInput): EditorBlockInput;
-  /** Inserts a prepared block and returns its stable root identifier. */
-  insertBlock(input: EditorBlockInput, afterId?: string | null): string;
-  /** Applies a valid patch and returns whether the target was updated. */
-  updateBlock(id: string, patch: EditorBlockPatch): boolean;
-  /** Applies valid entries best-effort and returns every positional outcome. */
-  updateBlocks(updates: readonly EditorBlockUpdate[]): BlockMutationResult;
+  /** Applies definitions, list policy, processors, and validation to a detached block-input tree. */
+  prepareInput(
+    input: readonly (EditorBlock | EditorBlockInput)[],
+    onError?: BlockPrepareErrorHandler,
+  ): EditorBlockInput[];
+  /** Prepares and inserts a block, returning its complete persisted root. */
+  insertBlock(input: EditorBlockInput, afterId?: string | null): EditorBlock;
+  /** Applies one valid patch and returns the complete persisted block, or throws. */
+  updateBlock(id: string, patch: EditorBlockPatch): EditorBlock;
+  /** Applies an entire valid patch batch and returns complete persisted blocks in input order, or throws. */
+  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlock[];
   /** Deletes list-property keys and returns whether the mutation was applied. */
   deleteListProps(id: string, keys: readonly string[]): boolean;
-  /** Deletes valid key batches best-effort and returns every positional outcome. */
-  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): BlockMutationResult;
-  delete(type: string): boolean;
-  /** Reports whether a registered type partitions root block elements. */
-  separatesBlockElements(type: string): boolean;
-  /** Returns the first separator type registered for automatic card creation. */
-  getDefaultBlockElementSeparatorType(): string | undefined;
-  /** Returns one registered native block definition. */
-  getDefinition(type: string): BlockDefinition | undefined;
-  /** Validates and returns native block properties. */
-  validateBlockProps(type: string, props: Record<string, unknown>): Record<string, unknown>;
+  /** Deletes an entire valid key batch or throws. */
+  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void;
   /** Current block revision used by React subscriptions. */
   readonly revision: number;
   /** @param id - Block identifier. @returns Detached subtree, or undefined when absent. */
@@ -112,14 +98,16 @@ export interface BlocksCapability {
   getParentId(id: string): string | null | undefined;
   /**
    * Imports a detached forest and reports its destination identities.
-   * @param blocks - Detached root subtrees to import.
+   * @param blocks - Complete copied roots or creation inputs to import.
    * @param afterId - Existing sibling to follow, null to prepend, or undefined to append.
-   * @returns Inserted root IDs and source-to-destination ID mapping.
+   * @param onError - Optional one-shot replacement for a failed block.
+   * @returns Complete persisted roots and source-to-destination ID mapping.
    */
   importForest(
-    blocks: readonly EditorBlock[],
+    blocks: readonly (EditorBlock | EditorBlockInput)[],
     afterId?: string | null,
-  ): { rootIds: string[]; idMap: ReadonlyMap<string, string> };
+    onError?: BlockPrepareErrorHandler,
+  ): { roots: EditorBlock[]; idMap: ReadonlyMap<string, string> };
   /** @param id - Block identifier to clear. @returns No value. */
   clearBlock(id: string): void;
   /** @param id - Block identifier. @param type - Destination block type. @returns No value. */
@@ -177,6 +165,23 @@ export interface BlocksCapability {
   setBlockPluginData(id: string, pluginId: string, value: unknown): void;
 }
 
+/** Atomic React block-type and presentation registration. */
+export interface BlockTypesCapability {
+  register(registration: ReactBlockRegistration): () => void;
+  delete(type: string): boolean;
+  /** Reports whether a registered type partitions root block elements. */
+  separatesBlockElements(type: string): boolean;
+  /** Returns the first separator type registered for automatic card creation. */
+  getDefaultBlockElementSeparatorType(): string | undefined;
+  /** Returns one registered native block definition. */
+  getDefinition(type: string): BlockDefinition | undefined;
+  /** Validates and returns native block properties. */
+  validateBlockProps(type: string, props: Record<string, unknown>): Record<string, unknown>;
+}
+
+/** Core list-property policy whose registrations are owned by the active React extension. */
+export type BlockListPropsCapability = Omit<BlockListPropsManagerApi, "destroy">;
+
 /** React-owned registry for portable clipboard formatting and parsing. */
 export interface ClipboardCapability {
   /** Core paste-strategy registry shared with React clipboard extensions. */
@@ -207,7 +212,6 @@ export interface RenderersCapability {
   readonly revision: number;
   subscribe(listener: () => void): () => void;
 }
-
 /** Per-type outline, split, and drop behavior resolved by page dispatchers. */
 export interface ViewsCapability {
   /** Registers one behavior object for a persisted block type. */

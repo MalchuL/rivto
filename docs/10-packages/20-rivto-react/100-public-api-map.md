@@ -27,7 +27,9 @@
 
 | Property | Основные methods |
 | --- | --- |
-| `blocks` | `register`, `registerListProps`, `prepareBlock`, `insertBlock`, `updateBlock(s)`, `deleteListProps(Batch)`, `delete` |
+| `blocks` | `prepareInput`, `insertBlock`, `updateBlock(s)`, `deleteListProps(Batch)`, core block delegation |
+| `blockTypes` | `register`, `delete`, `getDefinition`, `validateBlockProps`, separator metadata |
+| `blockListProps` | `register`, `has`, `validate`, `prepare` (core policy lifecycle adapter) |
 | `renderers` | `register`, `get`, `has`, `delete`, `subscribe`, `revision` |
 | `surfaces` | `register/get/delete`, `registerBlockWrapper`, `registerEditorWrapper`, wrapper getters, subscription |
 | `extensions` | `mount`, `getComponents`, `subscribe`, `revision` |

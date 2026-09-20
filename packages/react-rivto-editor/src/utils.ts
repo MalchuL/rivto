@@ -23,5 +23,5 @@ export function isReactEditor(editor: ReactEditor | RivtoEditorApi): editor is R
  * @returns Whether `editor` exposes the core block-definition registry.
  */
 export function isRivtoEditor(editor: ReactEditor | RivtoEditorApi): editor is RivtoEditorApi {
-  return "blocksRegistry" in editor;
+  return "blockRegistry" in editor;
 }

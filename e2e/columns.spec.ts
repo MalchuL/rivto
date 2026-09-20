@@ -99,8 +99,8 @@ test("aligns sibling drag handles when only one block has a collapse toggle", as
       type: "paragraph",
       content: "Collapsible",
       children: [{ type: "paragraph", content: "Nested" }],
-    });
-    const sibling = editor.blocks.insertBlock({ type: "paragraph", content: "Sibling" });
+    }).id;
+    const sibling = editor.blocks.insertBlock({ type: "paragraph", content: "Sibling" }).id;
     editor.blocks.moveBlocks([parent, sibling], column.id, "inside");
     editor.blocks.updateBlock(parent, { listProps: { collapsed: true } });
     editor.load({ ...editor.dump(), blocks: [editor.blocks.getBlock(board.id)!], elements: [] });

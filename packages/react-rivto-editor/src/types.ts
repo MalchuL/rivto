@@ -1,9 +1,9 @@
 import type {
-  CommandRegistry,
-  ElementManager,
-  ModeManager,
+  CommandRegistryApi,
+  ElementManagerApi,
+  ModeManagerApi,
   RivtoEditorApi,
-  HistoryManager,
+  HistoryManagerApi,
 } from "@chulane/rivto";
 import type { DocumentModel } from "@chulane/document-model";
 import type {
@@ -12,6 +12,8 @@ import type {
   ReactEditorExtension,
 } from "./managers";
 import type {
+  BlockListPropsCapability,
+  BlockTypesCapability,
   BlocksCapability,
   ClipboardCapability,
   EventsCapability,
@@ -61,13 +63,13 @@ export interface CreateReactEditorOptions {
  */
 export interface ReactEditor {
   /** Core first-class element operations. */
-  readonly elements: ElementManager;
+  readonly elements: ElementManagerApi;
   /** Local presentation mode. */
-  readonly mode: ModeManager;
+  readonly mode: ModeManagerApi;
   /** Named command registry used by extensions. */
-  readonly commands: CommandRegistry;
+  readonly commands: CommandRegistryApi;
   /** Local history and transaction batching. */
-  readonly history: HistoryManager;
+  readonly history: HistoryManagerApi;
   /** Core editor revision forwarded for React's global invalidation boundary. */
   readonly revision: number;
   /**
@@ -94,7 +96,12 @@ export interface ReactEditor {
   readonly renderers: RenderersCapability;
   /** Per-type outline and drop behavior resolved by page dispatchers. */
   readonly views: ViewsCapability;
+  /** Guarded mutations and delegated core block operations. */
   readonly blocks: BlocksCapability;
+  /** Atomic React block-type and presentation registration. */
+  readonly blockTypes: BlockTypesCapability;
+  /** Core list-property policy registered with React extension lifecycle ownership. */
+  readonly blockListProps: BlockListPropsCapability;
   /** React-owned portable clipboard formatter and parser registry. */
   readonly clipboard: ClipboardCapability;
   readonly surfaces: SurfacesCapability;

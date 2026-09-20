@@ -1,11 +1,10 @@
 import {
   createRivtoEditor,
-  DocumentModelImpl,
-  YjsDoc,
   type CreateRivtoEditorOptions,
-  type DocumentModel,
   type RivtoEditorApi,
 } from "@chulane/rivto";
+import { DocumentModelImpl, type DocumentModel } from "@chulane/document-model";
+import { YjsDoc } from "@chulane/crdt-doc";
 import { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-writing-block";
 
 /**
@@ -36,6 +35,6 @@ export function createTestCoreEditor(
     await runtimeCleanup;
     await documentCleanup;
   };
-  editor.blocksRegistry.defineBlock({ type: DEFAULT_WRITING_BLOCK_TYPE, title: "Paragraph" });
+  editor.blockRegistry.defineBlock({ type: DEFAULT_WRITING_BLOCK_TYPE, title: "Paragraph" });
   return editor;
 }

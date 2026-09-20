@@ -17,8 +17,8 @@ describe("separator block extension", () => {
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
     });
 
-    expect(editor.blocksRegistry.has(SEPARATOR_BLOCK_TYPE)).toBe(true);
-    expect(reactEditor.blocks.separatesBlockElements(SEPARATOR_BLOCK_TYPE)).toBe(true);
+    expect(editor.blockRegistry.has(SEPARATOR_BLOCK_TYPE)).toBe(true);
+    expect(reactEditor.blockTypes.separatesBlockElements(SEPARATOR_BLOCK_TYPE)).toBe(true);
     expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('role="separator"');
     expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('data-separator-block="true"');
     expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('data-block-selection-anchor=""');
@@ -33,7 +33,7 @@ describe("separator block extension", () => {
       editor,
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
     });
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "Keep me" });
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "Keep me" }).id;
     reactEditor.selection.set(createCaretSelection(first, 0));
 
     reactEditor.slashCommands.execute("block.separator.insert", { blockId: first });
@@ -55,7 +55,7 @@ describe("separator block extension", () => {
       editor,
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
     });
-    const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" });
+    const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
     reactEditor.selection.set(createCaretSelection(empty, 0));
 
     reactEditor.slashCommands.execute("block.separator.insert", { blockId: empty });

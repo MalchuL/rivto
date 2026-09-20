@@ -25,7 +25,7 @@ test("saves a slash-created Review report and reproduces it with native load", a
       ).__rivtoDemo.reactEditor;
       return {
         commands: reactEditor.slashCommands.getAll({ blockId: id }).map(({ id: commandId }) => commandId),
-        definition: reactEditor.blocks.getDefinition("demo.review")?.type,
+        definition: reactEditor.blockTypes.getDefinition("demo.review")?.type,
         element: reactEditor.elements.getElement("demo-review-element")?.type,
       };
     }, blockId);

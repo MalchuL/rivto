@@ -12,7 +12,7 @@ describe("EditorRuntime methods", () => {
     let elements = 0;
     editor.blocks.subscribeRootIds(() => { roots += 1; });
     editor.elements.subscribe(() => { elements += 1; });
-    editor.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
+    editor.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
     editor.blocks.registerProcessor({
       id: "test.first-document",
       priority: 0,
@@ -28,7 +28,7 @@ describe("EditorRuntime methods", () => {
     expect(editor.getDocument()).toBe(document);
     expect(roots).toBe(1);
     expect(elements).toBe(1);
-    const id = editor.blocks.insertBlock({ type: "paragraph" });
+    const id = editor.blocks.insertBlock({ type: "paragraph" }).id;
     expect(editor.blocks.getBlock(id)?.props).toMatchObject({ attached: true });
     await editor.destroy();
     await document.destroy();
@@ -68,7 +68,7 @@ describe("EditorRuntime methods", () => {
     editor.history.redo();
     expect(editor.blocks.getBlocks()).toEqual([]);
 
-    const id = editor.history.batchUpdates(() => editor.blocks.insertBlock({ type: "paragraph", content: "Created later" }));
+    const id = editor.history.batchUpdates(() => editor.blocks.insertBlock({ type: "paragraph", content: "Created later" })).id;
     editor.blocks.removeBlock(id);
     expect(editor.blocks.getBlocks()).toEqual([]);
     editor.history.undo();
@@ -104,7 +104,7 @@ describe("EditorRuntime methods", () => {
     });
     const editor = createCoreEditor();
     editor.setDocument(first);
-    editor.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
+    editor.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
     const blocks = editor.blocks;
     const elements = editor.elements;
     const calls = { editor: 0, block: 0, roots: 0, structure: 0, elements: 0, element: 0, membership: 0 };
@@ -156,7 +156,7 @@ describe("EditorRuntime methods", () => {
     });
     expect(editor.elements.getElement("processed-shape")?.props).toMatchObject({ swapped: true });
 
-    const inserted = editor.blocks.insertBlock({ type: "paragraph", content: "Processed" });
+    const inserted = editor.blocks.insertBlock({ type: "paragraph", content: "Processed" }).id;
     expect(editor.blocks.getBlock(inserted)?.props).toMatchObject({ swapped: true });
     editor.history.undo();
     expect(editor.blocks.getBlock(inserted)).toBeUndefined();
@@ -164,7 +164,7 @@ describe("EditorRuntime methods", () => {
 
     editor.setDocument(first);
     editor.setDocument(second);
-    const afterRoundTrip = editor.blocks.insertBlock({ type: "paragraph" });
+    const afterRoundTrip = editor.blocks.insertBlock({ type: "paragraph" }).id;
     expect(editor.blocks.getBlock(afterRoundTrip)?.props).toMatchObject({ swapped: true });
 
     const callsBeforeNoop = { ...calls };
@@ -181,8 +181,8 @@ describe("EditorRuntime methods", () => {
     const document = new DocumentModelImpl(new YjsDoc("shared-editor-processors"));
     const first = createCoreEditor();
     const second = createCoreEditor();
-    first.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
-    second.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
+    first.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
+    second.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
     first.setDocument(document);
     second.setDocument(document);
     const disposeFirstBlock = first.blocks.registerProcessor({
@@ -206,7 +206,7 @@ describe("EditorRuntime methods", () => {
       processor: (element) => ({ ...element, props: { ...element.props, owner: "second" } }),
     });
 
-    const whileBoth = first.blocks.insertBlock({ type: "paragraph" });
+    const whileBoth = first.blocks.insertBlock({ type: "paragraph" }).id;
     expect(document.blocks.getBlock(whileBoth)?.props).toMatchObject({ owner: "first" });
     second.elements.insertElement({
       id: "while-both",
@@ -239,12 +239,12 @@ describe("EditorRuntime methods", () => {
         props: {},
       }],
     });
-    expect(document.blocks.getBlock("loaded")?.props).toMatchObject({ owner: "first" });
-    expect(document.elements.getElement("loaded-element")?.props).toMatchObject({ owner: "first" });
+    expect(document.blocks.getBlock("loaded")?.props).toEqual({});
+    expect(document.elements.getElement("loaded-element")?.props).toEqual({});
 
     await second.destroy();
 
-    const afterSecondDestroy = first.blocks.insertBlock({ type: "paragraph" });
+    const afterSecondDestroy = first.blocks.insertBlock({ type: "paragraph" }).id;
     expect(document.blocks.getBlock(afterSecondDestroy)?.props).toMatchObject({ owner: "first" });
     first.elements.insertElement({
       id: "after-second-destroy",
@@ -266,8 +266,8 @@ describe("EditorRuntime methods", () => {
     const document = new DocumentModelImpl(new YjsDoc("shared-editor-unregister"));
     const first = createCoreEditor();
     const second = createCoreEditor();
-    first.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
-    second.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
+    first.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
+    second.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
     first.setDocument(document);
     second.setDocument(document);
     const disposeFirstBlock = first.blocks.registerProcessor({
@@ -301,8 +301,8 @@ describe("EditorRuntime methods", () => {
     expect(document.blocks.getBlock("direct-while-registered")?.props).not.toHaveProperty("owner");
     expect(document.elements.getElement("direct-element-while-registered")?.props).not.toHaveProperty("owner");
 
-    const firstBlock = first.blocks.insertBlock({ type: "paragraph" });
-    const secondBlock = second.blocks.insertBlock({ type: "paragraph" });
+    const firstBlock = first.blocks.insertBlock({ type: "paragraph" }).id;
+    const secondBlock = second.blocks.insertBlock({ type: "paragraph" }).id;
     first.elements.insertElement({
       id: "first-element",
       type: "shape",
@@ -322,8 +322,8 @@ describe("EditorRuntime methods", () => {
 
     disposeFirstBlock();
     disposeFirstElement();
-    const firstUnregistered = first.blocks.insertBlock({ type: "paragraph" });
-    const secondStillRegistered = second.blocks.insertBlock({ type: "paragraph" });
+    const firstUnregistered = first.blocks.insertBlock({ type: "paragraph" }).id;
+    const secondStillRegistered = second.blocks.insertBlock({ type: "paragraph" }).id;
     first.elements.insertElement({
       id: "first-unregistered-element",
       type: "shape",
@@ -336,7 +336,7 @@ describe("EditorRuntime methods", () => {
 
     disposeSecondBlock();
     disposeSecondElement();
-    const secondUnregistered = second.blocks.insertBlock({ type: "paragraph" });
+    const secondUnregistered = second.blocks.insertBlock({ type: "paragraph" }).id;
     second.elements.insertElement({
       id: "unowned-element",
       type: "shape",
@@ -360,8 +360,8 @@ describe("EditorRuntime methods", () => {
     alternate.blocks.insertBlock({ id: "alternate", type: "paragraph", content: "Alternate" });
     const first = createCoreEditor();
     const second = createCoreEditor();
-    first.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
-    second.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
+    first.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
+    second.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
     first.setDocument(shared);
     second.setDocument(shared);
     const calls = { first: 0, second: 0 };
@@ -398,8 +398,8 @@ describe("EditorRuntime methods", () => {
   it("mutates blocks through the focused block manager", () => {
     const editor = createRivtoEditor();
 
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
 
     editor.blocks.updateBlock(firstId, { content: "First updated" });
     editor.blocks.setBlockProp(firstId, "tone", "info");

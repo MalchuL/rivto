@@ -72,7 +72,7 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
     let columnId = "";
     reactEditor.history.batchUpdates(() => {
       reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
-      columnId = reactEditor.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" });
+      columnId = reactEditor.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" }).id;
       reactEditor.blocks.moveBlocks([columnId], blockId, "inside");
     });
     requestAnimationFrame(() => {
@@ -107,7 +107,7 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
   const addCard = () => {
     let cardId = "";
     reactEditor.history.batchUpdates(() => {
-      cardId = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock());
+      cardId = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock()).id;
       reactEditor.blocks.moveBlocks([cardId], blockId, "inside");
       reactEditor.selection.set(createCaretSelection(cardId, 0));
     });
@@ -155,7 +155,7 @@ export function kanbanExtension(): ReactEditorExtension {
         reactEditor.surfaces.registerBlockSlot({
           position: "right", component: BlockModalButton, when: ({ block }) => block.type === KANBAN_BLOCK_TYPE,
         }),
-        reactEditor.blocks.register({
+        reactEditor.blockTypes.register({
           definition: {
             type: KANBAN_BLOCK_TYPE,
             title: "Kanban",
@@ -164,7 +164,7 @@ export function kanbanExtension(): ReactEditorExtension {
           render: Kanban,
           view: kanbanView,
         }),
-        reactEditor.blocks.register({
+        reactEditor.blockTypes.register({
           definition: {
             type: KANBAN_COLUMN_BLOCK_TYPE,
             title: "Kanban column",

@@ -4,3 +4,5 @@ export {
   createBlockPropsProcessor,
 } from "./block-pipe";
 export type { BlockProcessor } from "./block-pipe";
+export type { BlockPrepareErrorHandler } from "./types";
+export type { ImportedBlockForest } from "../types";

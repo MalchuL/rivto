@@ -349,7 +349,7 @@ export function PageDragProvider({
       blocks,
       reactEditor.selection.get(),
       String(source.id),
-      (block) => reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true,
+      (block) => reactEditor.blockListProps.has("collapse") && block.listProps.collapsed === true,
     );
     const subtreeIds = new Set<string>();
     move.ids.forEach((id) => {
@@ -446,7 +446,7 @@ export function PageDragProvider({
     <DragOverlay dropAnimation={null}>
       {activeBlocks.length > 0 && (
         <div className={PAGE_DRAG_OVERLAY_CLASS} aria-hidden="true">
-          <PageDragPreview blocks={activeBlocks} collapseActive={reactEditor.blocks.hasListProps("collapse")} />
+          <PageDragPreview blocks={activeBlocks} collapseActive={reactEditor.blockListProps.has("collapse")} />
         </div>
       )}
     </DragOverlay>

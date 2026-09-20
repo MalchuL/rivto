@@ -52,7 +52,7 @@ Children форматируются сначала. Context содержит cur
 
 При normal paste priority: Rivto MIME → first React parser from HTML/text → core plain-text fallback. Paste-as-plain-text shortcut игнорирует structured flavors и сохраняет multiline text внутри одного block (`preserveNewlines`).
 
-Invalid structured blocks валидируются через core definitions и React list policy. `ClipboardExtensionOptions.onBlockError(block, error)` может вернуть replacement input или nullish value для skip.
+Invalid structured blocks валидируются один раз внутри core `prepareInput`. `ClipboardExtensionOptions.onPrepareError(block, error)` может вернуть replacement input; replacement готовится повторно один раз, и повторная ошибка выбрасывается.
 
 ## Page mode
 

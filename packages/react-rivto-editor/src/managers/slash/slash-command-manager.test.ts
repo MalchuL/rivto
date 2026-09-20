@@ -4,7 +4,7 @@ import { createReactEditor } from "../../react-editor";
 describe("ReactSlashCommandManager", () => {
   test("owns storage, execution, revision, and disposal", () => {
     const editor = createEditor();
-    const blockId = editor.blocks.insertBlock({ type: "paragraph" });
+    const blockId = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const reactEditor = createReactEditor({ editor });
     const manager = reactEditor.slashCommands;
     let executed = false;
@@ -29,7 +29,7 @@ describe("ReactSlashCommandManager", () => {
 
   test("validates registrations and command availability", () => {
     const editor = createEditor();
-    const blockId = editor.blocks.insertBlock({ type: "paragraph" });
+    const blockId = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const reactEditor = createReactEditor({ editor });
     const manager = reactEditor.slashCommands;
     expect(() => manager.register({ id: "", title: "Missing", execute() {} })).toThrow("ID");

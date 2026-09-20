@@ -5,6 +5,7 @@
 import type { Block } from "@chulane/document-model";
 import type { Selection } from "../../selection-manager";
 import type { BlockPastePlacement, ClipboardBundle } from "../clipboard-data";
+import type { BlockPrepareErrorHandler } from "../../block-manager/types";
 
 /** Shared clipboard payload supplied to every strategy. */
 export interface PasteContext {
@@ -16,6 +17,8 @@ export interface PasteContext {
   readonly defaultBlockType?: string;
   /** Selection observed when paste started. */
   readonly selection?: Selection;
+  /** Optional one-shot replacement for a block rejected during import preparation. */
+  readonly onPrepareError?: BlockPrepareErrorHandler;
   /** Block identities produced by an earlier strategy in this paste pipeline. */
   readonly blockIdMap?: ReadonlyMap<string, string>;
   /** Element identities produced by an earlier strategy in this paste pipeline. */

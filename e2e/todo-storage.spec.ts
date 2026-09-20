@@ -94,12 +94,12 @@ test("searches and filters only direct TODO children without persisting UI state
   const injected = await page.evaluate((parentId) => {
     const runtime = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     const last = runtime.blocks.getBlock(parentId).children.at(-1)?.id;
-    const noteId = runtime.blocks.insertBlock({ type: "paragraph", content: "Always visible note" }, last);
+    const noteId = runtime.blocks.insertBlock({ type: "paragraph", content: "Always visible note" }, last).id;
     const nestedId = runtime.blocks.insertBlock({
       type: "todo-item",
       content: "Nested unrelated task",
       props: { status: "done", description: "", priority: 4, project: "" },
-    }, noteId);
+    }, noteId).id;
     runtime.blocks.indentBlock(nestedId);
     return { noteId, nestedId };
   }, storageId);

@@ -4,7 +4,7 @@
  * underlying transaction abstraction does not provide rollback.
  */
 import type { CRDTArray } from "@chulane/crdt-doc";
-import type { BlockInput, BlockListProps } from "../../types";
+import type { Block, BlockInput, BlockListProps } from "../../types";
 import { assertPortableRecord, assertPortableValue, requireNonemptyId } from "../../utils/portable";
 
 /**
@@ -53,7 +53,7 @@ export function validateBlockListProps(value: unknown): BlockListProps {
  * @throws {Error} When any descendant is malformed, duplicated, or cyclic.
  */
 export function validateBlockForest(
-  blocks: readonly BlockInput[],
+  blocks: readonly (Block | BlockInput)[],
   options: ValidateBlockForestOptions = {},
 ): Set<string> {
   const ids = new Set<string>();

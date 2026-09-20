@@ -7,10 +7,18 @@
  *
  * @module
  */
-import type { RivtoEditorApi as Editor } from "@chulane/rivto";
+import type {
+  BlockListPropsManagerApi,
+  CommandRegistryApi,
+  ElementManagerApi,
+  HistoryManagerApi,
+  ModeManagerApi,
+  RivtoEditorApi,
+} from "@chulane/rivto";
 import type { DocumentModel } from "@chulane/document-model";
 import {
   BlockManager,
+  BlockTypeManager,
   ClipboardManager,
   EventManager,
   ExtensionManager,
@@ -20,8 +28,24 @@ import {
   RendererManager,
   SurfaceManager,
   ViewManager,
+  type ReactEditorExtension,
+  type RegistrationDisposer,
 } from "./managers";
 import type { CreateReactEditorOptions, ReactEditor } from "./types";
+import type {
+  BlockListPropsCapability,
+  BlocksCapability,
+  BlockTypesCapability,
+  ClipboardCapability,
+  EventsCapability,
+  ExtensionsCapability,
+  KeyboardCapability,
+  RenderersCapability,
+  SelectionCapability,
+  SlashCommandsCapability,
+  SurfacesCapability,
+  ViewsCapability,
+} from "./capabilities";
 import { reconcileBlockElements } from "./elements/block-element-projection";
 import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/built-ins/page/default-writing-block";
 
@@ -30,18 +54,26 @@ export type { CreateReactEditorOptions, ReactEditor } from "./types";
 const WRITING_NOT_INSTALLED =
   "Install defaultWritingBlockExtension (or call installDefaultWriting) before using writing factories";
 
+/** Internal extension lifecycle required by collaborating managers. */
+interface RuntimeExtensionsCapability extends ExtensionsCapability {
+  initialize(extensions: readonly ReactEditorExtension[]): void;
+  own(release: RegistrationDisposer): RegistrationDisposer;
+  assertActive(): void;
+  destroy(): void;
+}
+
 /** Internal implementation; applications receive the capability-only interface. */
 export class ReactEditorImpl implements ReactEditor {
   /** Framework-neutral document, command, mode, and history runtime. */
-  private readonly editor: Editor;
+  private readonly editor: RivtoEditorApi;
   /** Focused core element manager exposed without its coordinator. */
-  readonly elements: Editor["elements"];
+  readonly elements: ElementManagerApi;
   /** Focused core mode manager exposed without its coordinator. */
-  readonly mode: Editor["mode"];
+  readonly mode: ModeManagerApi;
   /** Focused core command manager exposed without its coordinator. */
-  readonly commands: Editor["commands"];
+  readonly commands: CommandRegistryApi;
   /** Focused core history manager exposed without its coordinator. */
-  readonly history: Editor["history"];
+  readonly history: HistoryManagerApi;
   /** Factory for empty writing blocks; set by {@link installDefaultWriting}. */
   createDefaultBlock: CreateDefaultBlock = () => {
     throw new Error(WRITING_NOT_INSTALLED);
@@ -51,25 +83,29 @@ export class ReactEditorImpl implements ReactEditor {
     throw new Error(WRITING_NOT_INSTALLED);
   };
   /** Content renderers indexed by persisted block type. */
-  readonly renderers: RendererManager;
+  readonly renderers: RenderersCapability;
   /** Per-type outline and drop behavior resolved by page dispatchers. */
-  readonly views: ViewManager;
-  /** Atomic definition, renderer, and type-conversion registration. */
-  readonly blocks: BlockManager;
+  readonly views: ViewsCapability;
+  /** Guarded mutations and delegated core block operations. */
+  readonly blocks: BlocksCapability;
+  /** Atomic React block-type and presentation registration. */
+  readonly blockTypes: BlockTypesCapability;
+  /** Core list-property policy with React extension lifecycle ownership. */
+  readonly blockListProps: BlockListPropsCapability;
   /** React-owned portable clipboard formatter and parser registry. */
-  readonly clipboard: ClipboardManager;
+  readonly clipboard: ClipboardCapability;
   /** Root surfaces and their ordered block/editor wrappers. */
-  readonly surfaces: SurfaceManager;
+  readonly surfaces: SurfacesCapability;
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
-  readonly extensions: ExtensionManager;
+  readonly extensions: RuntimeExtensionsCapability;
   /** Delegated surface/document/window DOM event runtime. */
-  readonly events: EventManager;
+  readonly events: EventsCapability;
   /** Semantic keyboard bindings and runtime keymap overrides. */
-  readonly keyboard: KeyboardManager;
+  readonly keyboard: KeyboardCapability;
   /** Current-surface DOM selection conversion and highlighting. */
-  readonly selection: ReactSelectionManager;
+  readonly selection: SelectionCapability;
   /** React-owned slash-command registry. */
-  readonly slashCommands: ReactSlashCommandManager;
+  readonly slashCommands: SlashCommandsCapability;
   private destroyed = false;
   private reconciliationQueued = false;
   private readonly reconciliationDisposers: Array<() => void> = [];
@@ -97,13 +133,32 @@ export class ReactEditorImpl implements ReactEditor {
     this.commands = editor.commands;
     this.history = editor.history;
     this.extensions = new ExtensionManager(this);
-    this.events = new EventManager(this);
+    const events = new EventManager(this);
+    this.events = events;
     this.selection = new ReactSelectionManager(this, editor);
-    this.keyboard = new KeyboardManager(this, options.keymap);
-    this.slashCommands = new ReactSlashCommandManager(this);
+    const keyboard = new KeyboardManager(this, options.keymap);
+    this.keyboard = keyboard;
+    const slashCommands = new ReactSlashCommandManager(this);
+    this.slashCommands = slashCommands;
+    // Keep teardown private while the public fields expose capability-only contracts.
+    this.extensions.own(() => {
+      slashCommands.destroy();
+      keyboard.destroy();
+      events.destroy();
+    });
     this.renderers = new RendererManager(this, options.unknownBlockRenderer);
     this.views = new ViewManager(this);
-    this.blocks = new BlockManager(this, editor);
+    this.blockListProps = {
+      register: (registration) => {
+        this.extensions.assertActive();
+        return this.extensions.own(editor.blockListProps.register(registration));
+      },
+      has: (id) => editor.blockListProps.has(id),
+      validate: (candidate) => editor.blockListProps.validate(candidate),
+      prepare: (candidate) => editor.blockListProps.prepare(candidate),
+    } satisfies Omit<BlockListPropsManagerApi, "destroy">;
+    this.blockTypes = new BlockTypeManager(this, editor);
+    this.blocks = new BlockManager(editor);
     this.clipboard = new ClipboardManager(this, editor);
     this.surfaces = new SurfaceManager(this);
     try {
@@ -185,10 +240,6 @@ export class ReactEditorImpl implements ReactEditor {
     this.destroyed = true;
     this.reconciliationDisposers.splice(0).forEach((dispose) => dispose());
     this.extensions.destroy();
-    this.slashCommands.destroy();
-    this.keyboard.destroy();
-    this.events.destroy();
-    this.selection.destroy();
   }
 }
 

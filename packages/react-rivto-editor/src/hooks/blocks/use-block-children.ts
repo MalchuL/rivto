@@ -74,13 +74,13 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
 
         let childId: string;
         if (children.length === 0) {
-          childId = reactEditor.blocks.insertBlock(block, blockId);
+          childId = reactEditor.blocks.insertBlock(block, blockId).id;
           reactEditor.blocks.indentBlock(childId);
         } else if (afterId === null) {
-          childId = reactEditor.blocks.insertBlock(block, children[0].id);
+          childId = reactEditor.blocks.insertBlock(block, children[0].id).id;
           reactEditor.blocks.moveBlock(childId, null);
         } else {
-          childId = reactEditor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
+          childId = reactEditor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id).id;
         }
         return childId;
       },

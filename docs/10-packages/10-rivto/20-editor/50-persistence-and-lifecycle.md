@@ -14,9 +14,9 @@ Editor runtime соединяет versioned document snapshots с local history 
 
 - **Аргументы:** `EditorSnapshotUpdate` version 6.
 - **Возвращает:** `void`.
-- **Исключения:** command отсутствует, invalid command payload, validation supplied sections, manager или CRDT write errors.
+- **Исключения:** document-model validation или CRDT write errors.
 
-Built-in `document.load` заменяет только supplied sections, затем вызывает `history.clear()`. Поэтому state до load нельзя вернуть через `editor.history.undo()`.
+`load()` передаёт snapshot напрямую в document-model, не запускает editor processors, заменяет только supplied sections, затем вызывает `history.clear()`. Поэтому state до load нельзя вернуть через `editor.history.undo()`. Migration, remapping и repair выполняются явно до вызова `load()`.
 
 Public TypeScript shape и runtime loader требуют `version: 6`. Другая версия отклоняется до document mutations.
 
@@ -35,11 +35,11 @@ editor.load({
 
 - **Аргументы:** отсутствуют.
 - **Возвращают:** `void`.
-- **Исключения:** missing command или CRDT history errors.
+- **Исключения:** CRDT history errors.
 
 History отслеживает собранные managers CRDT scopes только с приватным runtime origin. Remote updates и mutations с другим origin не становятся локальными history items.
 
-Standalone document commands разделяются через `documentCommand()`. `history.batchUpdates()` объединяет несколько commands в один capture step.
+Typed manager mutations создают собственные capture steps. `history.batchUpdates()` объединяет несколько mutations в один capture step.
 
 ## `destroy()` порядок
 
@@ -47,7 +47,7 @@ Standalone document commands разделяются через `documentCommand(
 2. `links.destroy()`.
 3. `elements.destroy()`.
 4. `blocks.destroy()`.
-5. `blocksRegistry.destroy()`.
+5. `blockRegistry.destroy()`.
 6. `commands.clear()`.
 7. `listeners.clear()`.
 Document model не уничтожается. Метод возвращает `Promise<void>` только для совместимости lifecycle API; после destroy runtime непригоден, а caller-owned document остаётся доступен.

@@ -1,5 +1,5 @@
 /** React block containment lookup used by page drop resolvers. */
-import { getBlockContainment } from "../../../managers/blocks/block-types";
+import { getBlockContainment } from "../../../managers/blocks/types";
 import type { ReactEditor } from "../../../types";
 
 /**
@@ -11,5 +11,5 @@ import type { ReactEditor } from "../../../types";
  */
 export function blockContainment(reactEditor: ReactEditor, blockId: string) {
   const type = reactEditor.blocks.getBlock(blockId)?.type;
-  return type ? getBlockContainment(reactEditor.blocks.getDefinition(type)) : undefined;
+  return type ? getBlockContainment(reactEditor.blockTypes.getDefinition(type)) : undefined;
 }

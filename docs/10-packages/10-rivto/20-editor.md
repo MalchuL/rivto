@@ -25,7 +25,7 @@ const document = new DocumentModelImpl(new YjsDoc("document-id"));
 const editor = createRivtoEditor();
 editor.setDocument(document);
 
-editor.blocksRegistry.defineBlock({
+editor.blockRegistry.defineBlock({
   type: "paragraph",
   title: "Paragraph",
 });

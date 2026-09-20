@@ -30,7 +30,8 @@ export class DocumentHistoryManager implements DocumentHistoryManagerApi {
   /**
    * Groups synchronous mutations into one transaction and undo item.
    *
-   * Nested calls reuse the active transaction and capture boundary.
+   * The capture stops before and after the outer operation are undo
+   * breakpoints; nested calls reuse that transaction and boundary.
    *
    * @param operation - Synchronous document work to execute atomically.
    * @returns Value returned by the operation.

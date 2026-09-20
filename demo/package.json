@@ -11,6 +11,8 @@
     "test": "node --test --experimental-strip-types tests/*.test.mjs"
   },
   "dependencies": {
+    "@chulane/crdt-doc": "workspace:*",
+    "@chulane/document-model": "workspace:*",
     "@chulane/rivto": "workspace:*",
     "@chulane/rivto-react": "workspace:*",
     "react": "^19.2.0",

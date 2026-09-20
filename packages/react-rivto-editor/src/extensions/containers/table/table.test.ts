@@ -23,7 +23,7 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", () => 
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],
   });
-  const before = editor.blocks.insertBlock({ type: "paragraph", content: "" });
+  const before = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
   reactEditor.slashCommands.execute("block.table.insert", { blockId: before });
   const table = editor.blocks.getBlock(before)!;
 

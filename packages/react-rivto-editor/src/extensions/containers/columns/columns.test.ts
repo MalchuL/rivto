@@ -28,7 +28,7 @@ function createColumnsRuntime() {
 
 test("slash insert creates empty columns", () => {
   const { editor, reactEditor } = createColumnsRuntime();
-  const before = editor.blocks.insertBlock({ type: "paragraph", content: "" });
+  const before = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
   reactEditor.slashCommands.execute("block.columns.insert", { blockId: before });
   const board = editor.blocks.getBlock(before)!;
   expect(board.id).toBe(before);
@@ -43,19 +43,19 @@ test("slash insert creates empty columns", () => {
 
 test("inserts equally sized columns and relocates nested blocks when a column is removed", () => {
   const { editor, reactEditor } = createColumnsRuntime();
-  const boardId = editor.blocks.insertBlock(createColumnsBlockInput(2));
+  const boardId = editor.blocks.insertBlock(createColumnsBlockInput(2)).id;
   const board = editor.blocks.getBlock(boardId)!;
   expect(board.children).toHaveLength(2);
   expect(board.children.every((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE)).toBe(true);
 
   const left = board.children[0]!;
   const right = board.children[1]!;
-  const keep = editor.blocks.insertBlock({ type: "paragraph", content: "Keep" });
+  const keep = editor.blocks.insertBlock({ type: "paragraph", content: "Keep" }).id;
   const moving = editor.blocks.insertBlock({
     type: "paragraph",
     content: "Moving",
     children: [{ type: "paragraph", content: "Detail" }],
-  });
+  }).id;
   editor.blocks.moveBlocks([keep], left.id, "inside");
   editor.blocks.moveBlocks([moving], right.id, "inside");
   const original = editor.blocks.getBlock(moving);
@@ -87,9 +87,9 @@ test("inserts equally sized columns and relocates nested blocks when a column is
 
 test("structural column deletion moves nested blocks instead of removing them", () => {
   const { editor, reactEditor } = createColumnsRuntime();
-  const boardId = editor.blocks.insertBlock(createColumnsBlockInput(2));
+  const boardId = editor.blocks.insertBlock(createColumnsBlockInput(2)).id;
   const [left, right] = editor.blocks.getBlock(boardId)!.children;
-  const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Survive" });
+  const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Survive" }).id;
   editor.blocks.moveBlocks([nested], right!.id, "inside");
 
   relocateColumnContents(editor, [right!.id]);

@@ -109,7 +109,7 @@ export function insertPlainText(
       previous = editor.blocks.insertBlock({
         type: defaultBlockType,
         content: line + (last ? suffix : ""),
-      }, previous);
+      }, previous).id;
     }
     caret = { blockId: previous!, offset };
   });

@@ -217,8 +217,8 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
         { type: "paragraph", content: "Tile A" },
         { type: "paragraph", content: "Tile B" },
       ],
-    });
-    const outsideId = editor.blocks.insertBlock({ type: "paragraph", content: "From page" });
+    }).id;
+    const outsideId = editor.blocks.insertBlock({ type: "paragraph", content: "From page" }).id;
     editor.load({
       ...editor.dump(),
       blocks: [editor.blocks.getBlock(boardId)!, editor.blocks.getBlock(outsideId)!],
@@ -262,8 +262,8 @@ test("drops a page block into an empty Bento grid", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
-    const boardId = editor.blocks.insertBlock({ type: "bento", content: "" });
-    const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Drop me" });
+    const boardId = editor.blocks.insertBlock({ type: "bento", content: "" }).id;
+    const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Drop me" }).id;
     editor.load({
       ...editor.dump(),
       blocks: [editor.blocks.getBlock(boardId)!, editor.blocks.getBlock(sourceId)!],

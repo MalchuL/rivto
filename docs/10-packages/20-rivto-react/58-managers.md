@@ -4,7 +4,7 @@ Managers — public extension boundary `ReactEditor`. Они не дублиру
 
 ```text
 ReactEditor
-  ├─ blocks + renderers       model/presentation registration
+  ├─ blockTypes + renderers   model/presentation registration
   ├─ extensions + surfaces   lifecycle/composition
   ├─ events + keyboard       browser input
   ├─ selection               DOM bridge

@@ -263,10 +263,10 @@ export function EdgelessSurface({
     reactEditor.history.batchUpdates(() => {
       let afterId = roots.at(-1)?.id;
       const last = roots.at(-1);
-      if (last && !reactEditor.blocks.separatesBlockElements(last.type)) {
+      if (last && !reactEditor.blockTypes.separatesBlockElements(last.type)) {
         afterId = insertBlockElementSeparator(reactEditor, last.id);
       }
-      id = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock(), afterId);
+      id = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock(), afterId).id;
       reactEditor.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame,

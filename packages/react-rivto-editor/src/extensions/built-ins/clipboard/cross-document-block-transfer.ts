@@ -1,10 +1,8 @@
 import type {
   EditorBlock,
-  EditorBlockInput,
   RivtoEditorApi,
 } from "@chulane/rivto";
 import type { ReactEditor } from "../../../types";
-import { isRivtoEditor } from "../../../utils";
 
 /** Destination used by a cross-document page drag. */
 export interface CrossDocumentBlockTransferPlacement {
@@ -16,37 +14,40 @@ export interface CrossDocumentBlockTransferPlacement {
 
 /** Complete data transported between two independent editor documents. */
 interface CrossDocumentBlockTransferBundle {
-  readonly blocks: readonly EditorBlockInput[];
+  readonly blocks: readonly EditorBlock[];
 }
 
+/**
+ * Collects every stable identifier in a detached subtree.
+ * @param block - Subtree root to visit.
+ * @param ids - Destination set receiving root and descendant identifiers.
+ * @returns No value.
+ */
 function collectBlockIds(block: EditorBlock, ids: Set<string>): void {
   ids.add(block.id);
   block.children.forEach((child) => collectBlockIds(child, ids));
 }
 
-function prepareBlock(editor: ReactEditor | RivtoEditorApi, block: EditorBlock): EditorBlockInput {
-  const input = {
-    id: block.id,
-    type: block.type,
+/**
+ * Detaches one complete persisted subtree from its source editor snapshots.
+ * @param block - Source subtree to clone.
+ * @returns Lossless detached subtree retaining stable identifiers.
+ */
+function cloneBlock(block: EditorBlock): EditorBlock {
+  return {
+    ...block,
     listProps: structuredClone(block.listProps),
-    content: block.content,
     props: structuredClone(block.props),
     pluginData: structuredClone(block.pluginData),
-    children: block.children.map((child) => prepareBlock(editor, child)),
+    children: block.children.map(cloneBlock),
   };
-  if (isRivtoEditor(editor)) return editor.blocksRegistry.prepare(input);
-  if (!editor.blocks.getDefinition(block.type)) {
-    throw new Error(`Unknown block type ${block.type}`);
-  }
-  return editor.blocks.prepareBlock(input);
 }
 
 /**
- * Builds and validates the lossless payload for a page-to-page move.
+ * Builds the lossless payload and validates placement and identity conflicts.
  *
- * Validation happens before either document changes. Requiring every block
- * definition prevents a custom block from becoming unusable in a destination
- * editor that did not install its extension.
+ * Complete destination preparation happens inside `importForest` before its
+ * first write, preventing an unavailable custom type from partially importing.
  */
 function createCrossDocumentBlockTransferBundle(
   source: ReactEditor | RivtoEditorApi,
@@ -71,7 +72,7 @@ function createCrossDocumentBlockTransferBundle(
   }
 
   return {
-    blocks: roots.map((block) => prepareBlock(destination, block)),
+    blocks: roots.map(cloneBlock),
   };
 }
 
@@ -90,7 +91,7 @@ export function crossDocumentBlockTransfer(
 ): void {
   const bundle = createCrossDocumentBlockTransferBundle(source, destination, rootIds, placement);
   destination.history.batchUpdates(() => {
-    const insertedIds = bundle.blocks.map((block) => destination.blocks.insertBlock(block));
+    const insertedIds = destination.blocks.importForest(bundle.blocks).roots.map(({ id }) => id);
     if (placement.targetId !== null) {
       destination.blocks.moveBlocks(insertedIds, placement.targetId, placement.position);
     }

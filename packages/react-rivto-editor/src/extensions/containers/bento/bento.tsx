@@ -354,7 +354,7 @@ export function bentoExtension(): ReactEditorExtension {
     id: "block.bento",
     setup: (reactEditor) => {
       const disposers = [
-        reactEditor.blocks.register({
+        reactEditor.blockTypes.register({
           definition: {
             type: BENTO_BLOCK_TYPE,
             title: "Bento",

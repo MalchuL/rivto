@@ -35,7 +35,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
                 id = reactEditor.blocks.insertBlock(
                   reactEditor.createDefaultBlock(),
                   id || undefined,
-                );
+                ).id;
               }
             });
             if (!id) return;

@@ -12,11 +12,19 @@
 - **Значение:** typed block operations и block command owner.
 - **Исключения при чтении:** отсутствуют.
 
-### `blocksRegistry`
+### `blockRegistry`
 
 - **Тип:** `BlockRegistryManager`, публичное `readonly`.
 - **Значение:** native block definitions, defaults и props validation.
 - **Исключения при чтении:** отсутствуют.
+
+### `blockListProps`
+
+- **Тип:** `BlockListPropsManager`, публичное `readonly`.
+- **Значение:** editor-wide registrations, defaults и semantic validation для persisted `listProps`.
+- **Исключения при чтении:** отсутствуют.
+
+`register({ id, defaults?, isValid? })` возвращает idempotent disposer. `validate(candidate)` ничего не возвращает и выбрасывает ошибку для invalid input; `prepare(candidate)` применяет defaults и validation. `blocks.prepareInput(inputs)` принимает root forest и является complete recursive creation pipeline: применяет block definitions, list policy, processors и portable validation. Core block insertion и import используют этот pipeline перед первой записью. Snapshot loading передаёт данные напрямую в document-model и не запускает editor processors; migration или repair выполняются явно до `load`.
 
 ### `links`
 
@@ -112,7 +120,7 @@ Default mode — `"block"`. Constructor создаёт unbound managers, уст�
 
 Возвращённый disposer удаляет этот callback и является idempotent. Подписка не вызывается сразу. Один document update, selection/mode change или block-registry change сначала увеличивает `revision`, затем вызывает snapshot текущих listeners. Вызов disposer во время notification безопасен, но iteration уже использует snapshot текущего списка.
 
-### `blocksRegistry.subscribe(listener)`
+### `blockRegistry.subscribe(listener)`
 
 - **События:** один stream `blockRegistryChanged`, после успешного add/remove definition.
 - **Количество подписчиков:** несколько distinct callbacks одновременно; следующий не заменяет предыдущий.
@@ -156,9 +164,9 @@ Outermost batch вызывает `stopCapturing()` до и после и вып�
 
 - **Аргументы:** `snapshot: EditorSnapshotUpdate` schema version 6.
 - **Возвращает:** `void`.
-- **Исключения:** unknown command, invalid command payload, validation supplied sections и manager/CRDT write errors.
+- **Исключения:** document-model validation и CRDT write errors.
 
-Выполняет `document.load` command. Successful load очищает history, делая загруженное состояние новым baseline.
+Передаёт snapshot напрямую в document-model без block/element processors, затем очищает history и делает загруженное состояние новым baseline. Migration, remapping и repair выполняются явно до `load()`.
 
 Статический и runtime-контракты требуют literal `version: 6`. Любое другое значение отклоняется до записи supplied sections.
 

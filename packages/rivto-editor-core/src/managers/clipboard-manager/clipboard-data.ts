@@ -6,6 +6,7 @@
  */
 import type { Selection } from "../selection-manager";
 import type { Block, DocumentElement } from "@chulane/document-model";
+import type { BlockPrepareErrorHandler } from "../block-manager/types";
 
 /**
  * Lossless Rivto clipboard representation.
@@ -91,4 +92,6 @@ export interface ClipboardPasteInput {
   readonly defaultBlockType?: string;
   /** Destination and merge/newline behavior already resolved by the host. */
   readonly placement?: BlockPastePlacement;
+  /** Optional one-shot replacement for a block rejected during import preparation. */
+  readonly onPrepareError?: BlockPrepareErrorHandler;
 }

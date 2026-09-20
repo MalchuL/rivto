@@ -12,6 +12,7 @@ import {
 } from "../../selection-manager";
 import type { EditorPosition } from "../../selection-manager";
 import type { ClipboardBundle } from "../clipboard-data";
+import type { BlockPrepareErrorHandler } from "../../block-manager/types";
 import { cloneSelectedTopLevelSubtrees } from "../utils";
 import type {
   PasteContext,
@@ -57,7 +58,7 @@ export class TextPasteStrategy implements PasteStrategy {
     const range = textRangeFromSelection(this.editor, context.selection);
     if (context.bundle?.blocks.length && range && context.bundle.startsWithText === true
       && placement.mergeText !== false
-    ) return this.pasteBundle(context.bundle, range);
+    ) return this.pasteBundle(context.bundle, range, context.onPrepareError);
     const caret = this.pastePlainText(context, placement, range);
     return caret ? { proposedSelection: createCaretSelection(caret.blockId, caret.offset) } : undefined;
   }
@@ -66,9 +67,14 @@ export class TextPasteStrategy implements PasteStrategy {
    * Merges a partial structured bundle into a text range.
    * @param bundle - Valid partial-text clipboard bundle.
    * @param target - Valid normalized replacement range.
+   * @param onPrepareError - Optional one-shot replacement for an invalid imported block.
    * @returns Resulting caret selection and source-to-destination block mapping.
    */
-  private pasteBundle(bundle: ClipboardBundle, target: TextPasteTarget): PasteResult {
+  private pasteBundle(
+    bundle: ClipboardBundle,
+    target: TextPasteTarget,
+    onPrepareError?: BlockPrepareErrorHandler,
+  ): PasteResult {
     const destination = target.blocks[0]!;
     const source = bundle.blocks[0]!;
     const suffixBlock = target.blocks.at(-1)!;
@@ -81,17 +87,21 @@ export class TextPasteStrategy implements PasteStrategy {
     this.editor.blocks.updateBlock(destination.id, {
       content: prefix + source.content + (rest.length ? "" : suffix),
     });
-    const children = this.editor.blocks.importForest(first?.children ?? [], destination.id);
+    const children = this.editor.blocks.importForest(first?.children ?? [], destination.id, onPrepareError);
     children.idMap.forEach((id, sourceId) => idMap.set(sourceId, id));
-    children.rootIds.forEach((id) => {
+    children.roots.forEach(({ id }) => {
       this.editor.blocks.moveBlock(id, destination.id, "inside");
     });
-    const imported = this.editor.blocks.importForest(rest.map((block, index) => ({
+    const imported = this.editor.blocks.importForest(
+      rest.map((block, index) => ({
         ...block,
         content: block.content + (index === rest.length - 1 ? suffix : ""),
-      })), caret.blockId);
+      })),
+      caret.blockId,
+      onPrepareError,
+    );
     imported.idMap.forEach((id, sourceId) => idMap.set(sourceId, id));
-    imported.rootIds.forEach((id, index) => {
+    imported.roots.forEach(({ id }, index) => {
       caret = { blockId: id, offset: rest[index]?.content.length ?? 0 };
     });
     return { proposedSelection: createCaretSelection(caret.blockId, caret.offset), blockIdMap: idMap };
@@ -190,8 +200,12 @@ export class BlockPasteStrategy implements PasteStrategy {
     const bundle = context.bundle;
     if (!bundle?.blocks.length) return undefined;
     const resolved = this.resolvePlacement(context, placement);
-    const imported = this.editor.blocks.importForest(bundle.blocks, resolved.afterId ?? undefined);
-    const insertedIds = imported.rootIds;
+    const imported = this.editor.blocks.importForest(
+      bundle.blocks,
+      resolved.afterId ?? undefined,
+      context.onPrepareError,
+    );
+    const insertedIds = imported.roots.map(({ id }) => id);
     if (resolved.beforeChildId && insertedIds.length) {
       this.editor.blocks.moveBlocks(insertedIds, resolved.beforeChildId, "before");
     } else if (resolved.parentId && resolved.afterId === null && insertedIds.length) {

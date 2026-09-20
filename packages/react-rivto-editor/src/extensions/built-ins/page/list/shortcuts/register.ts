@@ -20,10 +20,10 @@ import { listShortcutPatch } from "./utils";
  * @returns No value.
  */
 export function registerListShortcuts(reactEditor: ReactEditor): void {
-  reactEditor.blocks.registerListProps({
+  reactEditor.blockListProps.register({
     id: "list",
     defaults: { type: "list", checked: false },
-    validate: (candidate) =>
+    isValid: (candidate) =>
       BLOCK_LIST_TYPES.includes(candidate.type as BlockListType) &&
       typeof candidate.checked === "boolean",
   });

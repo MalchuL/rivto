@@ -1,12 +1,12 @@
-# `BlockManager` и `RendererManager`
+# Block type, list-property, block-operation, and renderer managers
 
-## `BlockManager`
+## `BlockTypeManager`
 
-`reactEditor.blocks` соединяет core block definition, React renderer, slash conversion и React-owned list-property policy. Сам block content хранится только в core.
+`reactEditor.blockTypes` соединяет core block definition, React renderer, optional view, slash conversion и separator metadata. Сам block content хранится только в core.
 
 ### Properties
 
-Public mutable properties отсутствуют. Manager хранит registrations, separator types и ordered list-property registrations внутри runtime; прямого доступа к collections нет.
+Public mutable properties отсутствуют. Manager хранит type registrations и separator types внутри runtime; прямого доступа к collections нет.
 
 ### `register(registration)`
 
@@ -16,7 +16,21 @@ Public mutable properties отсутствуют. Manager хранит registrat
 
 Если core definition уже существует, manager переиспользует её и добавляет presentation.
 
-### `registerListProps(registration)`
+### Read and cleanup methods
+
+- `separatesBlockElements(type)` возвращает `boolean`.
+- `getDefaultBlockElementSeparatorType()` возвращает первый separator type или `undefined`.
+- `delete(type)` удаляет complete React-owned definition/renderer/view/slash registration.
+
+### Modes
+
+Один registration действует в обеих surfaces: `BlockTree` выбирает тот же renderer. `separatesBlockElements` влияет только на разбиение root flow в edgeless; page hierarchy не меняется.
+
+## `blockListProps` lifecycle adapter
+
+`reactEditor.blockListProps` делегирует core `BlockListPropsManager`; React владеет только cleanup registrations extension lifecycle.
+
+### `register(registration)`
 
 - **Аргументы:** `{ id: string; defaults?: BlockListProps; validate?(candidate): boolean }`.
 - **Возвращает:** disposer.
@@ -26,24 +40,24 @@ Defaults объединяются shallowly в registration order. Ошибка 
 
 ### Read methods
 
-- `hasListProps(id)` принимает ID, возвращает `boolean`, не throws.
-- `validateListProps(candidate)` принимает complete record, возвращает `false` при portability/validator error.
-- `separatesBlockElements(type)` возвращает `boolean`.
-- `getDefaultBlockElementSeparatorType()` возвращает первый separator type или `undefined`.
+- `has(id)` принимает ID, возвращает `boolean`, не throws.
+- `validate(candidate)` принимает complete record, возвращает `false` при portability/validator error.
+- `prepare(candidate)` возвращает copied list-property record с defaults и validation.
+
+## `BlockManager` operations
+
+`reactEditor.blocks` владеет guarded mutations и делегирует core block reads/structure operations.
+
+`prepareInput(input)` делегирует recursive preparation core `BlockManager`.
 
 ### Mutation methods
 
-- `prepareBlock(input)` → recursive copied input с list defaults; не выполняет core schema validation.
-- `insertBlock(input, afterId?)` → new root ID; throws для invalid list props/core insertion.
-- `updateBlock(id, patch)` → `false` для missing/invalid list state, иначе applies и возвращает `true`; core errors propagate.
-- `updateBlocks(updates)` → positional best-effort result; accepted subset выполняется одним core batch.
-- `deleteListProps(id, keys)` → `boolean`.
-- `deleteListPropsBatch(updates)` → positional result.
-- `delete(type)` → `boolean`; удаляет complete React-owned definition/renderer/slash registration.
-
-### Modes
-
-Один registration действует в обеих surfaces: `BlockTree` выбирает тот же renderer. `separatesBlockElements` влияет только на разбиение root flow в edgeless; page hierarchy не меняется.
+- `insertBlock(input, afterId?)` → complete persisted block; throws для invalid list props/core insertion.
+- `importForest(blocks, afterId?, onError?)` accepts explicit `EditorBlock | EditorBlockInput` roots and returns `{ roots, idMap }`.
+- `updateBlock(id, patch)` → complete persisted block; throws для missing/invalid operation.
+- `updateBlocks(updates)` → complete persisted blocks in input order; strict atomic core batch, throws если любая entry invalid.
+- `deleteListProps(id, keys)` → change `boolean`; throws для missing/invalid operation.
+- `deleteListPropsBatch(updates)` → `void`; strict atomic core batch.
 
 ## `RendererManager`
 

@@ -29,7 +29,9 @@ import {
 import { pageDragExtension } from "../extensions/block-drag";
 import { edgelessPreset } from "../extensions/edgeless";
 import { isReactEditor, isRivtoEditor } from "../utils";
-import { createRivtoEditor, DocumentModelImpl, YjsDoc } from "@chulane/rivto";
+import { createRivtoEditor } from "@chulane/rivto";
+import { DocumentModelImpl } from "@chulane/document-model";
+import { YjsDoc } from "@chulane/crdt-doc";
 
 const Empty: ComponentType<{ blockId: string }> = () => null;
 const EmptyComponent: ComponentType = () => null;
@@ -70,7 +72,7 @@ describe("ReactEditor", () => {
     first.subscribe(() => { firstUpdates += 1; });
     second.subscribe(() => { secondUpdates += 1; });
 
-    const sharedId = firstCore.blocks.insertBlock({ type: "paragraph", content: "Shared" });
+    const sharedId = firstCore.blocks.insertBlock({ type: "paragraph", content: "Shared" }).id;
     expect(secondCore.blocks.getBlock(sharedId)?.content).toBe("Shared");
     expect(firstUpdates).toBeGreaterThan(0);
     expect(secondUpdates).toBeGreaterThan(0);
@@ -78,7 +80,7 @@ describe("ReactEditor", () => {
     second.destroy();
     await secondCore.destroy();
     const secondUpdatesAfterDestroy = secondUpdates;
-    const survivingId = firstCore.blocks.insertBlock({ type: "paragraph", content: "Surviving" });
+    const survivingId = firstCore.blocks.insertBlock({ type: "paragraph", content: "Surviving" }).id;
 
     expect(firstCore.blocks.getBlock(survivingId)?.content).toBe("Surviving");
     expect(secondUpdates).toBe(secondUpdatesAfterDestroy);
@@ -157,17 +159,17 @@ describe("ReactEditor", () => {
   test("registers and disposes a model, renderer, and slash conversion atomically", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
-    const dispose = reactEditor.blocks.register({
+    const dispose = reactEditor.blockTypes.register({
       definition: { type: "test.card", title: "Card" },
       render: Empty,
       slashCommand: { title: "Card" },
     });
-    expect(editor.blocksRegistry.has("test.card")).toBe(true);
+    expect(editor.blockRegistry.has("test.card")).toBe(true);
     expect(reactEditor.renderers.get("test.card")).toBe(Empty);
-    const paragraphId = editor.blocks.insertBlock({ type: "paragraph" });
+    const paragraphId = editor.blocks.insertBlock({ type: "paragraph" }).id;
     expect(reactEditor.slashCommands.getAll({ blockId: paragraphId }).some(({ id }) => id === "type.test.card")).toBe(true);
     dispose();
-    expect(editor.blocksRegistry.has("test.card")).toBe(false);
+    expect(editor.blockRegistry.has("test.card")).toBe(false);
     expect(reactEditor.renderers.get("test.card")).toBeUndefined();
     reactEditor.destroy();
     editor.destroy();
@@ -178,7 +180,7 @@ describe("ReactEditor", () => {
     const blockId = editor.blocks.insertBlock({
       type: "paragraph",
       listProps: { type: "checkbox", checked: true },
-    });
+    }).id;
     const reactEditor = createReactEditor({ editor, extensions: [standardPreset()] });
 
     expect(reactEditor.slashCommands.getAll({ blockId }).map(({ id }) => id)).toEqual(
@@ -199,8 +201,8 @@ describe("ReactEditor", () => {
 
   test("configures the default paragraph slash command", () => {
     const editor = createEditor();
-    editor.blocksRegistry.defineBlock({ type: "test.source" });
-    const blockId = editor.blocks.insertBlock({ type: "test.source" });
+    editor.blockRegistry.defineBlock({ type: "test.source" });
+    const blockId = editor.blocks.insertBlock({ type: "test.source" }).id;
     const reactEditor = createReactEditor({
       editor,
       extensions: [standardPreset({ writing: { slashCommand: { group: "Writing" } } })],
@@ -224,12 +226,12 @@ describe("ReactEditor", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
     const releaseConflict = reactEditor.slashCommands.register({ id: "type.test.conflict", title: "Conflict", execute() {} });
-    expect(() => reactEditor.blocks.register({
+    expect(() => reactEditor.blockTypes.register({
       definition: { type: "test.conflict" },
       render: Empty,
       slashCommand: { title: "Conflict" },
     })).toThrow(/already registered/);
-    expect(editor.blocksRegistry.has("test.conflict")).toBe(false);
+    expect(editor.blockRegistry.has("test.conflict")).toBe(false);
     expect(reactEditor.renderers.get("test.conflict")).toBeUndefined();
     releaseConflict();
     reactEditor.destroy();
@@ -260,7 +262,7 @@ describe("ReactEditor", () => {
 
   test("composes the first registered block wrapper outermost", () => {
     const editor = createEditor();
-    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Order" });
+    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Order" }).id;
     const block = editor.blocks.getBlock(blockId)!;
     const Shell: ComponentType<BlockShellProps> = () => createElement("span", { "data-layer": "shell" });
     const Outer: ComponentType<BlockWrapperProps> = ({ children }) => (
@@ -445,13 +447,13 @@ describe("ReactEditor", () => {
 
   test("forwards core changes through one global revision stream", () => {
     const editor = createEditor();
-    const leftId = editor.blocks.insertBlock({ type: "paragraph", content: "left" });
-    const rightId = editor.blocks.insertBlock({ type: "paragraph", content: "right" }, leftId);
+    const leftId = editor.blocks.insertBlock({ type: "paragraph", content: "left" }).id;
+    const rightId = editor.blocks.insertBlock({ type: "paragraph", content: "right" }, leftId).id;
     const parentId = editor.blocks.insertBlock({
       type: "paragraph",
       content: "parent",
       children: [{ type: "paragraph", content: "child" }],
-    }, rightId);
+    }, rightId).id;
     const childId = editor.blocks.getBlock(parentId)!.children[0]!.id;
     const reactEditor = createReactEditor({ editor });
     let updates = 0;
@@ -550,7 +552,7 @@ describe("ReactEditor", () => {
     reactEditor.destroy();
 
     expect(() => reactEditor.extensions.mount(EmptyComponent)).toThrow(/destroyed/);
-    expect(() => reactEditor.blocks.delete("paragraph")).toThrow(/destroyed/);
+    expect(() => reactEditor.blockTypes.delete("paragraph")).toThrow(/destroyed/);
     expect(() => reactEditor.renderers.delete("paragraph")).toThrow(/destroyed/);
     expect(() => reactEditor.surfaces.delete("block")).toThrow(/destroyed/);
     expect(() => reactEditor.slashCommands.delete("type.paragraph")).toThrow(/destroyed/);

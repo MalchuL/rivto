@@ -310,7 +310,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * @returns No value.
      */
     updateBlocks(updates: readonly BlockUpdate[]): void {
-        const simulatedProps = new Map<string, Record<string, unknown>>();
         const simulatedListProps = new Map<string, BlockListProps>();
         const prepared = updates.map(({ id, patch }) => {
             const block = this.requiredBlock(id);
@@ -321,29 +320,23 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 validatedListProps = validateBlockListProps({ ...current, ...patch.listProps });
                 simulatedListProps.set(id, validatedListProps);
             }
-            let validatedProps: Record<string, unknown> | undefined;
             if (patch.props) {
-                const current = simulatedProps.get(id)
-                    ?? this.requiredMap(block, "props").toObject() as Record<string, unknown>;
                 Object.entries(patch.props).forEach(([key, value]) => {
                     if (value !== undefined) assertPortableValue(value, `block.props.${key}`);
                 });
-                validatedProps = { ...current, ...patch.props };
-                simulatedProps.set(id, validatedProps);
             }
             if (patch.pluginData) assertPortableRecord(patch.pluginData, "block.pluginData");
-            return { block, patch, validatedListProps, validatedProps };
+            return { block, patch, validatedListProps };
         });
 
         this.crdt.transact(() => {
-            prepared.forEach(({ block, patch, validatedListProps, validatedProps }) => {
+            prepared.forEach(({ block, patch, validatedListProps }) => {
                 if (validatedListProps && patch.listProps) {
                     assignMap(this.requiredMap(block, "listProps"), { ...patch.listProps }, false);
                 }
-                if (patch.props && validatedProps) {
+                if (patch.props) {
                     const props = this.requiredMap(block, "props");
-                    for (const key of Object.keys(patch.props)) {
-                        const value = validatedProps[key];
+                    for (const [key, value] of Object.entries(patch.props)) {
                         if (value === undefined) props.delete(key);
                         else props.set(key, clone(value) as CRDTType);
                     }
@@ -387,7 +380,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     setBlockProp(id: string, key: string, value: unknown): void {
         this.crdt.transact(() => {
             const block = this.requiredBlock(id);
-            this.patchProps(id, String(block.get("type")), this.requiredMap(block, "props"), { [key]: value });
+            this.patchProps(this.requiredMap(block, "props"), { [key]: value });
         });
     }
 
@@ -1033,27 +1026,19 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     /**
      * Applies caller-owned prop keys without rebuilding the live CRDT map.
      *
-     * @param id - Block identifier used to resolve the current parent type.
-     * @param type - Block type used when reconstructing the portable block.
      * @param props - Shared property map to patch.
      * @param patch - Property keys owned by this operation.
      * @returns No value.
      */
     private patchProps(
-        id: string,
-        type: string,
         props: CRDTMap<Record<string, CRDTType>>,
         patch: Record<string, unknown>,
     ): void {
         Object.entries(patch).forEach(([key, value]) => {
             if (value !== undefined) assertPortableValue(value, `block.props.${key}`);
-        });
-        const validated = { ...props.toObject(), ...patch } as Record<string, unknown>;
-        for (const key of Object.keys(patch)) {
-            const value = validated[key];
             if (value === undefined) props.delete(key);
             else props.set(key, clone(value) as CRDTType);
-        }
+        });
     }
 
     /**

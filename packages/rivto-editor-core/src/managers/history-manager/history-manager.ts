@@ -3,9 +3,10 @@
  * implementation behind a core capability boundary.
  */
 import type { DocumentHistoryManagerApi } from "@chulane/document-model";
+import type { HistoryManagerApi } from "../types";
 
 /** Core-facing proxy for one document's history and batching operations. */
-export class HistoryManager {
+export class HistoryManager implements HistoryManagerApi {
   /** Document history currently attached to the editor. */
   private manager?: DocumentHistoryManagerApi;
 
@@ -20,6 +21,8 @@ export class HistoryManager {
 
   /**
    * Groups synchronous mutations into one transaction and undo item.
+   * It also creates capture breakpoints before and after the operation so
+   * adjacent editor actions do not merge into the same undo step.
    *
    * @param operation - Synchronous editor work to execute.
    * @returns Value returned by the operation.

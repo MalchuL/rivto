@@ -87,10 +87,10 @@ narrow: registered defaults plus optional semantic validation of the complete
 candidate record.
 
 ```ts
-reactEditor.blocks.registerListProps({
+reactEditor.blockListProps.register({
   id: "outline.collapse",
   defaults: { collapsed: false },
-  validate: candidate => typeof candidate.collapsed === "boolean",
+  isValid: candidate => typeof candidate.collapsed === "boolean",
 });
 ```
 
@@ -160,17 +160,17 @@ Clipboard error handling stays small. `clipboardExtension` accepts one optional
 callback, invoked only when a structured block fails preparation:
 
 ```ts
-onBlockError?: (
+onPrepareError?: (
   block: BlockInput,
   error: unknown,
-) => BlockInput | null | undefined;
+) => BlockInput;
 ```
 
-A returned block replaces the invalid block. `null`, `undefined`, or an absent
-handler skips that block and its subtree. A replacement is checked once; an
-invalid replacement is skipped without invoking the callback again. Invalid
-children can be removed or replaced while their valid parent and siblings are
-retained, and the prepared forest is then pasted atomically by core.
+A returned block replaces the invalid block. Without a handler, preparation
+throws the original error. A replacement is prepared once without invoking the
+callback again; a second failure is thrown. Valid parents and siblings remain
+available while the failed node is replaced, and core performs the only full
+preparation pass during import.
 
 An Error block extension provides a renderer and a ready-made callback that
 stores the complete original subtree as portable data and displays its content,
@@ -192,7 +192,7 @@ Regression coverage must include:
 
 - CRDT storage, snapshot round trips, deep cloning, and undo;
 - shallow patching and explicit deletion;
-- strict core batches and best-effort React batches;
+- strict core and React batches;
 - recursive React defaults and composed validators;
 - list rendering, numbering, checkbox state, and collapse visibility;
 - selection repair, navigation, Enter/Delete behavior, and drag previews;
@@ -323,20 +323,19 @@ prevents every write in that core batch.
 
 **Q22. Where does best-effort behavior live?**
 
-The React facade filters invalid or missing entries, submits the valid subset
-to core as one atomic batch, and reports one result for every original input
-entry. Input order and repeated block IDs are preserved.
+It does not apply to block mutations. React delegates to the strict core batch,
+which validates every entry before writing.
 
 **Q23. What do single-block operations return for a missing block?**
 
-They return `false` rather than throwing. Successfully applied operations
-return `true`.
+Missing targets throw consistently with invalid values. Mutation methods return
+their documented operation result only after validation succeeds.
 
 ### React extensions and page behavior
 
 **Q24. Where are list-property definitions registered?**
 
-They are registered through `reactEditor.blocks`. The registration contains an
+They are registered through `reactEditor.blockListProps`. The registration contains an
 ID, defaults, and optional validation; it does not become a catch-all object
 for rendering, commands, selection, and clipboard behavior.
 
@@ -439,19 +438,19 @@ a structured block fails preparation.
 **Q41. What is the error callback contract?**
 
 ```ts
-onBlockError?: (
+onPrepareError?: (
   block: BlockInput,
   error: unknown,
-) => BlockInput | null | undefined;
+) => BlockInput;
 ```
 
-A returned block replaces the invalid block. Returning `null` or `undefined`,
-or omitting the callback, skips that block and all of its descendants.
+A returned block replaces the invalid block. Omitting the callback preserves
+strict behavior and throws the preparation error.
 
 **Q42. What if the callback returns another invalid block?**
 
-The replacement is checked once. If it is still invalid, it is skipped without
-calling the error callback again.
+The replacement is prepared once. If it is still invalid, the second error is
+thrown without calling the error callback again.
 
 **Q43. Does one invalid child discard its valid family?**
 

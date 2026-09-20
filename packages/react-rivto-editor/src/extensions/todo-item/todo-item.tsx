@@ -529,7 +529,7 @@ export function todoItemExtension(
       };
 
       const disposers = [
-        reactEditor.blocks.register({
+        reactEditor.blockTypes.register({
           definition: {
             type: TODO_STORAGE_BLOCK_TYPE,
             title: "TODO storage",
@@ -549,7 +549,7 @@ export function todoItemExtension(
             ),
           },
         }),
-        reactEditor.blocks.register({
+        reactEditor.blockTypes.register({
           definition: {
             type: TODO_ITEM_BLOCK_TYPE,
             title: "TODO item",

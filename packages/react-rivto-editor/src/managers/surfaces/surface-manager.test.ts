@@ -46,7 +46,7 @@ describe("SurfaceManager", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
     const manager = reactEditor.surfaces;
-    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Slot owner" });
+    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Slot owner" }).id;
     const block = editor.blocks.getBlock(blockId)!;
     const elementId = editor.elements.insertElement({
       type: "rectangle",

@@ -34,7 +34,7 @@ export function createTestEditor(options: CreateTestEditorOptions = {}): EditorR
     await runtimeCleanup;
     await documentCleanup;
   };
-  editor.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
+  editor.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
   return editor;
 }
 

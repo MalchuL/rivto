@@ -30,7 +30,7 @@ manager classes and lifecycle bookkeeping stay internal to the package.
 Registries with stable keys also expose explicit deletion:
 
 ```ts
-reactEditor.blocks.delete("acme.card");
+reactEditor.blockTypes.delete("acme.card");
 reactEditor.renderers.delete("persisted.unknown");
 reactEditor.surfaces.delete("edgeless");
 reactEditor.slashCommands.delete("acme.command");
@@ -46,7 +46,9 @@ component registrations are valid.
 
 | Property | Owns |
 | --- | --- |
-| `blocks` | Atomic core definition + renderer + optional slash conversion |
+| `blocks` | Guarded mutations and delegated core block operations |
+| `blockTypes` | Atomic core definition + renderer/view + optional slash conversion |
+| `blockListProps` | React lifecycle adapter for the core list-property policy registry |
 | `renderers` | Renderer lookup, duplicate checks, and unknown fallback |
 | `surfaces` | One root per mode plus ordered block/editor wrappers |
 | `extensions` | Extension setup/rollback, reverse cleanup, and mounted visual UI |
@@ -75,7 +77,7 @@ own store rather than one editor-wide invalidation counter.
 Normal custom blocks use one atomic call:
 
 ```tsx
-const dispose = reactEditor.blocks.register({
+const dispose = reactEditor.blockTypes.register({
   definition: cardDefinition,
   render: CardContent,
   slashCommand: {

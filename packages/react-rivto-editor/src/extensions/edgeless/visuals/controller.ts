@@ -1,10 +1,10 @@
 import {
   RIVTO_CLIPBOARD_MIME,
   validateClipboardBundle,
-  validateElementCollection,
   type ClipboardBundle,
   type EditorElement,
 } from "@chulane/rivto";
+import { validateElementCollection } from "@chulane/document-model";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
 import type { ReactEditor } from "../../../types";
 import { isNonBlockEditableClipboardEvent } from "../../built-ins/clipboard/clipboard-target";

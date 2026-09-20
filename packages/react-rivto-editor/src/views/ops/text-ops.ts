@@ -28,7 +28,7 @@ export function splitBlockAt(
   block: EditorBlock,
   splitAt: number,
 ): string {
-  const listActive = reactEditor.blocks.hasListProps("list");
+  const listActive = reactEditor.blockListProps.has("list");
   const clamped = Math.max(0, Math.min(splitAt, block.content.length));
   reactEditor.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
   const nextBlockId = reactEditor.blocks.insertBlock({
@@ -40,7 +40,7 @@ export function splitBlockAt(
       checked: false,
     } } : {}),
     content: block.content.slice(clamped),
-  }, block.id);
+  }, block.id).id;
   reactEditor.selection.set(createCaretSelection(nextBlockId, 0));
   return nextBlockId;
 }

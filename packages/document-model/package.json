@@ -4,14 +4,14 @@
   "type": "module",
   "main": "./dist/esm/index.js",
   "module": "./dist/esm/index.js",
-  "types": "./src/index.ts",
+  "types": "./dist/esm/index.d.ts",
   "files": [
     "dist/esm"
   ],
   "exports": {
     ".": {
       "import": "./dist/esm/index.js",
-      "types": "./src/index.ts",
+      "types": "./dist/esm/index.d.ts",
       "default": "./dist/esm/index.js"
     }
   },
@@ -20,6 +20,7 @@
     "build": "tsup src/index.ts --format esm --dts --sourcemap --clean --out-dir dist/esm",
     "dev": "tsup src/index.ts --format esm --dts --sourcemap --clean --out-dir dist/esm --watch",
     "test": "../../scripts/run-test.sh",
+    "test:package": "pnpm build && pnpm pack --dry-run",
     "check-types": "tsc --noEmit"
   },
   "peerDependencies": {

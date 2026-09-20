@@ -1,11 +1,10 @@
 import {
-  BroadcastChannelProvider,
   createRivtoEditor,
-  DocumentModelImpl,
   RIVTO_VERSION,
   type RivtoEditorApi,
-  YjsDoc,
 } from "@chulane/rivto";
+import { BroadcastChannelProvider, YjsDoc } from "@chulane/crdt-doc";
+import { DocumentModelImpl } from "@chulane/document-model";
 import {
   createReactEditor,
   createKanbanBlockInput,
@@ -266,38 +265,38 @@ function createDemoEditor() {
   const introId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "**Rivto editor**",
-  });
+  }).id;
   const paragraphId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "This paragraph renders *Markdown*, ~~old text~~, and `inline code` when it is not edited.",
-  }, introId);
+  }, introId).id;
 
   const selectionStartId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Start a selection in the middle of this sentence and drag downward. See [Rivto](https://example.com).",
-  }, paragraphId);
+  }, paragraphId).id;
   const middleParagraphId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "This complete **Markdown paragraph** should be included between partial selections.",
-  }, selectionStartId);
+  }, selectionStartId).id;
   const listId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Nested branch one owns several Markdown children.",
-  }, middleParagraphId);
+  }, middleParagraphId).id;
   const childId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Level 2: this child owns another nested branch.",
-  }, listId);
+  }, listId).id;
   editor.blocks.indentBlock(childId);
   const grandchildId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Level 3: selection now crosses two indentation boundaries.",
-  }, childId);
+  }, childId).id;
   editor.blocks.indentBlock(grandchildId);
   const greatGrandchildId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Level 4: deepest item for recursive rendering and outdent checks.",
-  }, grandchildId);
+  }, grandchildId).id;
   editor.blocks.indentBlock(greatGrandchildId);
   editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
@@ -307,20 +306,20 @@ function createDemoEditor() {
   const reverseSelectionId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Reverse selection should preserve the browser's anchor and focus direction.",
-  }, listId);
+  }, listId).id;
   const secondBranchId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Nested branch two is a second independent structure.",
-  }, reverseSelectionId);
+  }, reverseSelectionId).id;
   const numberedChildId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Second branch level 2 child.",
-  }, secondBranchId);
+  }, secondBranchId).id;
   editor.blocks.indentBlock(numberedChildId);
   const numberedGrandchildId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Second branch level 3 descendant.",
-  }, numberedChildId);
+  }, numberedChildId).id;
   editor.blocks.indentBlock(numberedGrandchildId);
   editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
@@ -331,48 +330,48 @@ function createDemoEditor() {
     type: SLIDER_BLOCK_TYPE,
     content: "const selectedBlocks = selection.filter(item => item.type === 'block');",
     props: { value: 35 },
-  }, secondBranchId);
+  }, secondBranchId).id;
   const selectionEndId = editor.blocks.insertBlock({
     type: COUNTER_BLOCK_TYPE,
     props: { count: 2 },
-  }, sliderId);
+  }, sliderId).id;
   const finalId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Finish the selection in the middle of this sentence, then try copy or cut.",
-  }, selectionEndId);
+  }, selectionEndId).id;
   const slashId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Type `/` anywhere here to open searchable slash commands.",
-  }, finalId);
+  }, finalId).id;
   const uncheckedId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Try the interactive checkbox",
     listProps: { type: "checkbox", checked: false },
-  }, slashId);
+  }, slashId).id;
   const checkedId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Completed checkbox item",
     listProps: { type: "checkbox", checked: true },
-  }, uncheckedId);
+  }, uncheckedId).id;
   const numberedStartId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Start a numbered sequence",
     listProps: { type: "start_numbered_list" },
-  }, checkedId);
+  }, checkedId).id;
   const numberedNextId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Continue the adjacent sequence",
     listProps: { type: "numbered_list" },
-  }, numberedStartId);
+  }, numberedStartId).id;
   const numberedGapId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Ordinary content between numbered items",
-  }, numberedNextId);
+  }, numberedNextId).id;
   const numberedContinueId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Continue numbering across the ordinary block",
     listProps: { type: "continue_numbered_list" },
-  }, numberedGapId);
+  }, numberedGapId).id;
 
   // The explicit separator is visible in block mode and partitions cards only
   // because its React block plugin declares `separatesBlockElements`.
@@ -396,24 +395,24 @@ function createDemoEditor() {
     { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.", props: { bentoWidth: 400 } },
     { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Drag blocks between tiles, nest them inside, or move them back into the editor." },
   ] }, numberedContinueId);
-  const tableId = editor.blocks.insertBlock(createTableBlockInput(), numberedContinueId);
-  const kanbanId = editor.blocks.insertBlock(createKanbanBlockInput(), tableId);
+  const tableId = editor.blocks.insertBlock(createTableBlockInput(), numberedContinueId).id;
+  const kanbanId = editor.blocks.insertBlock(createKanbanBlockInput(), tableId).id;
   const column = editor.blocks.getBlock(kanbanId)!.children[0]!;
   const cardId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Drag me between columns or back into the editor",
-  }, kanbanId);
+  }, kanbanId).id;
   editor.blocks.moveBlocks([cardId], column.id, "inside");
-  const columnsId = editor.blocks.insertBlock(createColumnsBlockInput(2), kanbanId);
+  const columnsId = editor.blocks.insertBlock(createColumnsBlockInput(2), kanbanId).id;
   const columnsBoard = editor.blocks.getBlock(columnsId)!;
   const leftColumnId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Left column. Add more blocks here, or use the settings control to change the column count.",
-  }, columnsId);
+  }, columnsId).id;
   const rightColumnId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Right column. Deleting a column moves its blocks into the remaining column.",
-  }, columnsId);
+  }, columnsId).id;
   editor.blocks.moveBlocks([leftColumnId], columnsBoard.children[0]!.id, "inside");
   editor.blocks.moveBlocks([rightColumnId], columnsBoard.children[1]!.id, "inside");
   const repeatCount = demoRepeatCount();
@@ -428,15 +427,15 @@ function createDemoEditor() {
     editor.history.batchUpdates(() => {
       let afterId = editor.blocks.getRootIds().at(-1);
       for (let index = 0; index < repeatCount; index += 1) {
-        afterId = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, afterId);
-        afterId = editor.blocks.importForest(template, afterId).rootIds.at(-1) ?? afterId;
+        afterId = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, afterId).id;
+        afterId = editor.blocks.importForest(template, afterId).roots.at(-1)?.id ?? afterId;
       }
     });
   }
   const todoStorageId = editor.blocks.insertBlock({
     type: TODO_STORAGE_BLOCK_TYPE,
     content: "",
-  });
+  }).id;
   const todoId = editor.blocks.insertBlock({
     type: TODO_ITEM_BLOCK_TYPE,
     content: "Review the project brief",
@@ -446,7 +445,7 @@ function createDemoEditor() {
       priority: 2,
       project: "Planning",
     },
-  }, todoStorageId);
+  }, todoStorageId).id;
   editor.blocks.indentBlock(todoId);
   const doingId = editor.blocks.insertBlock({
     type: TODO_ITEM_BLOCK_TYPE,
@@ -457,7 +456,7 @@ function createDemoEditor() {
       priority: 1,
       project: "Rivto",
     },
-  }, todoId);
+  }, todoId).id;
   editor.blocks.insertBlock({
     type: TODO_ITEM_BLOCK_TYPE,
     content: "Set up the workspace",
@@ -699,7 +698,7 @@ function createMultiEditor(
         type: DEFAULT_WRITING_BLOCK_TYPE,
         content: "Nested child",
       }],
-    });
+    }).id;
     editor.elements.insertElement({
       id: parentId,
       type: "block",
@@ -825,7 +824,7 @@ function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: n
     const introId = editor.blocks.insertBlock({
       type: DEFAULT_WRITING_BLOCK_TYPE,
       content: "**Synced demo** — edit here or in the other pane.",
-    });
+    }).id;
     editor.blocks.insertBlock({
       type: DEFAULT_WRITING_BLOCK_TYPE,
       content: "Both editors share one Yjs room over `BroadcastChannel` (same PC, no server).",
@@ -836,7 +835,7 @@ function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: n
         afterId = editor.blocks.insertBlock({
           type: DEFAULT_WRITING_BLOCK_TYPE,
           content: `Synced repeated block ${index + 1}`,
-        }, afterId);
+        }, afterId).id;
       }
     });
     editor.history.clear();

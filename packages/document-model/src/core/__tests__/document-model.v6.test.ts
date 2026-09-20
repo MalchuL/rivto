@@ -258,6 +258,25 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     doc.destroy();
   });
 
+  it("applies portable property patches atomically in batch order", () => {
+    const doc = new YjsDoc("property-patches");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({ id: "target", type: "paragraph", props: { keep: true, remove: "me" } });
+
+    model.blocks.updateBlocks([
+      { id: "target", patch: { props: { count: 1, remove: undefined } } },
+      { id: "target", patch: { props: { count: 2 } } },
+    ]);
+    expect(model.blocks.getBlock("target")?.props).toEqual({ keep: true, count: 2 });
+
+    expect(() => model.blocks.updateBlocks([
+      { id: "target", patch: { props: { keep: false } } },
+      { id: "target", patch: { props: { invalid: 1n } } },
+    ])).toThrow("block.props.invalid");
+    expect(model.blocks.getBlock("target")?.props).toEqual({ keep: true, count: 2 });
+    doc.destroy();
+  });
+
   it("merges concurrent property, plugin namespace, and text operations", () => {
     const docA = new YjsDoc("canonical-a");
     const docB = new YjsDoc("canonical-b");

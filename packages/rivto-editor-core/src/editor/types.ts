@@ -1,7 +1,17 @@
 /**
  * Editor coordinator contracts. Selection and clipboard types live with their owning managers.
  */
-import type { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, HistoryManager, ModeManager, SelectionManager } from "../managers";
+import type {
+  BlockManagerApi,
+  BlockListPropsManagerApi,
+  BlockRegistryManagerApi,
+  ClipboardManagerApi,
+  CommandRegistryApi,
+  ElementManagerApi,
+  HistoryManagerApi,
+  ModeManagerApi,
+  SelectionManagerApi,
+} from "../managers";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
@@ -21,22 +31,24 @@ export interface CreateRivtoEditorOptions {
  * commands, selection, history, mode, snapshots, and subscriptions.
  */
 export interface RivtoEditorApi {
-  /** Block commands and typed block operations. */
-  readonly blocks: BlockManager;
+  /** Typed block operations. */
+  readonly blocks: BlockManagerApi;
+  /** Editor-wide list-property defaults and semantic validation. */
+  readonly blockListProps: BlockListPropsManagerApi;
   /** Native block definitions, defaults, and property validation. */
-  readonly blocksRegistry: BlockRegistryManager;
+  readonly blockRegistry: BlockRegistryManagerApi;
   /** Generic first-class canvas element operations. */
-  readonly elements: ElementManager;
+  readonly elements: ElementManagerApi;
   /** Named command registry shared by managers and integrations. */
-  readonly commands: CommandRegistry;
+  readonly commands: CommandRegistryApi;
   /** Local block/edgeless presentation mode. */
-  readonly mode: ModeManager;
+  readonly mode: ModeManagerApi;
   /** Local ordered text and whole-block selection state. */
-  readonly selection: SelectionManager;
+  readonly selection: SelectionManagerApi;
   /** Framework-neutral structured clipboard operations. */
-  readonly clipboard: ClipboardManager;
+  readonly clipboard: ClipboardManagerApi;
   /** Local history and transaction batching for document mutations. */
-  readonly history: HistoryManager;
+  readonly history: HistoryManagerApi;
   /** Monotonic view invalidation snapshot. */
   readonly revision: number;
 

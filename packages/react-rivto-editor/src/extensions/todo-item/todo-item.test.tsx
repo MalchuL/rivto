@@ -21,8 +21,8 @@ describe("todoItemExtension", () => {
     const editor = createRivtoEditor();
     const reactEditor = createReactEditor({ editor, extensions: [todoItemExtension()] });
 
-    const first = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "First" });
-    const second = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "Second" });
+    const first = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "First" }).id;
+    const second = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "Second" }).id;
     const firstProps = editor.blocks.getBlock(first)?.props;
     const secondProps = editor.blocks.getBlock(second)?.props;
 
@@ -52,7 +52,7 @@ describe("todoItemExtension", () => {
   test("converts a leaf to storage in place and rejects populated containers", () => {
     const editor = createRivtoEditor();
     const reactEditor = createReactEditor({ editor, extensions: [todoItemExtension()] });
-    const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" });
+    const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
     reactEditor.slashCommands.execute("type.todo-storage", { blockId: empty });
     expect(editor.blocks.getBlock(empty)?.type).toBe(TODO_STORAGE_BLOCK_TYPE);
 
@@ -60,7 +60,7 @@ describe("todoItemExtension", () => {
       type: "paragraph",
       content: "Keep me",
       children: [{ type: "paragraph", content: "Keep child" }],
-    }, empty);
+    }, empty).id;
     expect(() => reactEditor.slashCommands.execute("type.todo-storage", { blockId: populated }))
       .toThrow(/unavailable/);
     expect(editor.blocks.getBlock(populated)).toMatchObject({
@@ -73,12 +73,12 @@ describe("todoItemExtension", () => {
       "paragraph",
     ]);
     expect(reactEditor.views.resolve(empty).dropAxis).toBe("vertical");
-    expect(editor.blocksRegistry.get(TODO_STORAGE_BLOCK_TYPE)?.metadata).toEqual({
+    expect(editor.blockRegistry.get(TODO_STORAGE_BLOCK_TYPE)?.metadata).toEqual({
       containment: { childOutline: "free", outlineFloor: true },
     });
 
-    const firstTodo = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "First" });
-    const nestedTodo = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "Nested" }, firstTodo);
+    const firstTodo = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "First" }).id;
+    const nestedTodo = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "Nested" }, firstTodo).id;
     editor.blocks.moveBlocks([firstTodo, nestedTodo], empty, "inside");
     indentBlocks(reactEditor, [nestedTodo]);
     expect(editor.blocks.getParentId(nestedTodo)).toBe(firstTodo);

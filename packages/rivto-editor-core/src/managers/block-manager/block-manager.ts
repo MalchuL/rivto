@@ -1,20 +1,17 @@
 /**
- * Implements editor block features, invariant processors, and command registrations.
+ * Implements editor block features and invariant processors.
  * Owns outline indentation, outdent adoption, grouped moves, and merge
  * policy. Callers pass the block IDs to mutate; this manager does not read
  * editor selection. Mutations use document storage primitives inside the
- * editor batch boundary so each command retains stable IDs and one undo
- * operation.
+ * document-model transaction boundary so each mutation retains stable IDs and
+ * atomic storage updates. History batches remain only for compound editor
+ * operations and tested undo breakpoints.
  */
-import type {
-  CommandHandler,
-  RegisteredCommand,
-} from "../command-registry";
-import type {
-  BlockInput,
-  BlockPatch,
-  BlockUpdate,
-  DocumentModel,
+import {
+  validateBlockForest,
+  type BlockInput,
+  type BlockUpdate,
+  type DocumentModel,
 } from "@chulane/document-model";
 import {
   createBlockPropsProcessor,
@@ -26,17 +23,10 @@ import type {
   EditorBlockPatch,
   EditorBlockUpdate,
 } from "../../editor/model";
-import { commandPayload, commandString } from "../utils";
 import type { RivtoEditorApi } from "../../editor/types";
+import type { BlockManagerApi, ImportedBlockForest } from "../types";
+import type { BlockPrepareErrorHandler } from "./types";
 import { Pipe } from "../../utils/pipe";
-
-/** Result of importing a detached block forest into one editor. */
-export interface ImportedBlockForest {
-  /** Inserted root IDs in source order. */
-  readonly rootIds: string[];
-  /** Source block ID to inserted destination block ID. */
-  readonly idMap: ReadonlyMap<string, string>;
-}
 
 interface BlockSubscription {
   readonly bind: (document: DocumentModel) => () => void;
@@ -50,15 +40,14 @@ interface BlockProcessorRegistration {
 }
 
 /**
- * Owns editor block commands and typed block operations.
+ * Owns typed editor block operations.
  *
  * Collaborative block state remains in DocumentModel.
- * Block definitions remain in the editor's separate `.blocksRegistry`
+ * Block definitions remain in the editor's separate `.blockRegistry`
  * manager. This manager validates command payloads and applies outline
  * grouping to the identifiers the caller supplied.
  */
-export class BlockManager {
-  private readonly registrations: RegisteredCommand[] = [];
+export class BlockManager implements BlockManagerApi {
   /**
    * Editor-owned block processing pipeline.
    *
@@ -72,14 +61,13 @@ export class BlockManager {
   private currentDocument?: DocumentModel;
 
   /**
-   * Creates the public block manager and installs its built-in commands.
+   * Creates the public block manager and installs its built-in processors.
    *
    * @param editor - Owning editor providing shared runtime capabilities.
    */
   constructor(
     private readonly editor: RivtoEditorApi,
   ) {
-    this.registerRequiredCommands();
     this.registerRequiredProcessors();
   }
 
@@ -177,12 +165,77 @@ export class BlockManager {
   }
 
   /**
-   * Applies this editor's processors to complete snapshot block trees.
-   * @param blocks - Complete portable block trees.
-   * @returns Processed complete block trees.
+   * Applies definitions, list-property policy, and registered processors to
+   * every node, then validates the complete detached forest.
+   *
+   * @param input - Detached block forest to prepare atomically.
+   * @param onError - Optional handler that supplies one replacement for a failed node.
+   * @returns Recursively copied forest ready for insertion.
    */
-  processSnapshotBlocks(blocks: readonly EditorBlock[]): EditorBlock[] {
-    return blocks.map((block) => this.processForest(block) as EditorBlock);
+  prepareInput(
+    input: readonly (EditorBlock | EditorBlockInput)[],
+    onError?: BlockPrepareErrorHandler,
+  ): EditorBlockInput[] {
+    // Validate before recursion so malformed children or a caller-provided cycle
+    // fail deterministically instead of running factories/processors or overflowing
+    // the preparation walk before the postcondition can be checked.
+    validateBlockForest(input);
+    // Use reference identity because creation nodes may not have IDs and cycles
+    // belong to the in-memory object graph. Duplicate persisted IDs are a separate
+    // forest invariant handled by validateBlockForest.
+    const activeNodes = new Set<BlockInput>();
+    /** Applies the complete creation policy recursively to one forest node. */
+    const applyCreationPolicy = (
+      block: EditorBlockInput,
+      canRecover = true,
+    ): EditorBlockInput => {
+      if (activeNodes.has(block)) throw new Error("Block forest must be acyclic");
+      activeNodes.add(block);
+      let processed: BlockInput | undefined;
+      try {
+        try {
+          if (!this.editor.blockRegistry.has(block.type)) {
+            throw new Error(`Block type ${block.type} is unavailable in ${this.editor.mode.get()} mode`);
+          }
+          processed = this.runProcessors(this.editor.blockRegistry.prepare({
+            ...block,
+            listProps: this.editor.blockListProps.prepare(block.listProps),
+          }));
+          if (processed !== block) {
+            if (activeNodes.has(processed)) throw new Error("Block forest must be acyclic");
+            activeNodes.add(processed);
+          }
+        } catch (error) {
+          if (!onError || !canRecover) throw error;
+          const replacement = onError(block, error);
+          // Preserve an assigned import identity and disable recovery so a bad
+          // replacement cannot recurse through the callback indefinitely.
+          return applyCreationPolicy({
+            ...replacement,
+            id: replacement.id ?? block.id,
+            listProps: replacement.listProps ?? {},
+            props: replacement.props ?? {},
+            pluginData: replacement.pluginData ?? {},
+            content: replacement.content ?? "",
+            children: replacement.children ?? [],
+          }, false);
+        }
+        return {
+          ...processed,
+          children: processed.children?.map((child) => applyCreationPolicy(child, canRecover)),
+        };
+      } finally {
+        if (processed && processed !== block) activeNodes.delete(processed);
+        activeNodes.delete(block);
+      }
+    };
+    const prepared = input.map((block) => applyCreationPolicy(block));
+    // Definitions and processors may change IDs, children, or portable values,
+    // so their complete output needs the same forest invariants checked again.
+    // The active-node guard above makes processor-created cycles fail before
+    // recursion; this pass verifies all other complete-forest postconditions.
+    validateBlockForest(prepared);
+    return prepared;
   }
 
   /**
@@ -206,15 +259,21 @@ export class BlockManager {
   }
 
   /**
-   * Inserts a validated block through the built-in command path.
+   * Inserts a validated block through the typed manager path.
+   * The batch separates creation from the next captured editor action.
    *
    * @param block - Native type and initial persisted values.
    * @param afterId - Sibling to follow, null to prepend, or undefined to append.
-   * @returns Stable identifier assigned to the new block.
+   * @returns Complete detached block after persistence assigns every identity.
    */
-  insertBlock(block: EditorBlockInput, afterId?: string | null): string {
-    const command = { block, afterId } satisfies { block: BlockInput; afterId?: string | null };
-    return this.editor.commands.execute("block.insert", command) as string;
+  insertBlock(block: EditorBlockInput, afterId?: string | null): EditorBlock {
+    const prepared = this.prepareInput([block])[0]!;
+    // Storage insertion is already transactional; this wrapper creates undo
+    // capture breakpoints so the following action does not merge with creation.
+    const id = this.editor.history.batchUpdates(() => this.document.blocks.insertBlock(prepared, afterId));
+    const inserted = this.getBlock(id);
+    if (!inserted) throw new Error(`Inserted block ${id} not found`);
+    return inserted;
   }
 
   /**
@@ -226,34 +285,46 @@ export class BlockManager {
    * exposes the complete mapping so clipboard extensions can update references
    * without inferring insertion results from selection state.
    *
-   * @param blocks - Complete detached source roots to insert recursively.
+   * @param blocks - Complete copied roots or creation inputs to insert recursively.
    * @param afterId - Existing sibling after which roots are inserted.
-   * @returns Inserted root IDs and every source-to-destination identity mapping.
+   * @param onError - Optional handler that supplies one replacement for a failed node.
+   * @returns Complete persisted roots and mappings for supplied source identities.
    */
-  importForest(blocks: readonly EditorBlock[], afterId?: string | null): ImportedBlockForest {
+  importForest(
+    blocks: readonly (EditorBlock | EditorBlockInput)[],
+    afterId?: string | null,
+    onError?: BlockPrepareErrorHandler,
+  ): ImportedBlockForest {
     const sourceIds: string[] = [];
-    const collectIds = (block: EditorBlock): void => {
-      sourceIds.push(block.id);
-      block.children.forEach(collectIds);
+    /** Collects stable source identities before destination remapping. */
+    const collectIds = (block: EditorBlock | EditorBlockInput): void => {
+      if (block.id !== undefined) sourceIds.push(block.id);
+      block.children?.forEach(collectIds);
     };
     blocks.forEach(collectIds);
     // Map every descendant before insertion so clipboard extensions can use
     // the same destination IDs when rewriting stored references.
     const idMap = this.document.blocks.createImportIdMap(sourceIds);
-    const prepare = (block: EditorBlock): EditorBlockInput => {
-      const id = idMap.get(block.id)!;
-      return { ...block, id, children: block.children.map(prepare) };
+    /** Rewrites one complete source subtree with its destination identities. */
+    const remap = (block: EditorBlock | EditorBlockInput): EditorBlockInput => {
+      const id = block.id === undefined ? undefined : idMap.get(block.id)!;
+      return { ...block, id, children: block.children?.map(remap) };
     };
-    const prepared = blocks.map(prepare);
+    const prepared = this.prepareInput(blocks.map(remap), onError);
     const rootIds: string[] = [];
     this.editor.history.batchUpdates(() => {
       let previous = afterId;
       prepared.forEach((block) => {
-        previous = this.insertBlock(block, previous);
+        previous = this.document.blocks.insertBlock(block, previous);
         rootIds.push(previous);
       });
     });
-    return { rootIds, idMap };
+    const roots = rootIds.map((id) => {
+      const root = this.getBlock(id);
+      if (!root) throw new Error(`Inserted block ${id} not found`);
+      return root;
+    });
+    return { roots, idMap };
   }
 
   /**
@@ -261,31 +332,49 @@ export class BlockManager {
    *
    * @param id - Block identifier to update.
    * @param patch - Mutable fields to validate and apply.
-   * @returns No value.
+   * @returns Complete detached block after applying the processed patch.
    */
-  updateBlock(id: string, patch: EditorBlockPatch): void {
-    const command = { id, patch } satisfies { id: string; patch: BlockPatch };
-    this.editor.commands.execute("block.update", command);
+  updateBlock(id: string, patch: EditorBlockPatch): EditorBlock {
+    const [update] = this.processUpdates([{ id, patch }]);
+    this.document.blocks.updateBlock(update!.id, update!.patch);
+    const updated = this.getBlock(id);
+    if (!updated) throw new Error(`Updated block ${id} not found`);
+    return updated;
   }
 
   /**
-   * Applies several identified block patches as one command and undo item.
+   * Applies several identified block patches atomically.
    *
    * @param updates - Ordered block identifiers and patches.
-   * @returns No value.
+   * @returns Complete detached blocks in the same order as the supplied updates.
    */
-  updateBlocks(updates: readonly EditorBlockUpdate[]): void {
-    const command = { updates } satisfies { updates: readonly BlockUpdate[] };
-    this.editor.commands.execute("block.update-many", command);
+  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlock[] {
+    const processed = this.processUpdates(updates);
+    this.editor.history.batchUpdates(() => this.document.blocks.updateBlocks(processed));
+    return processed.map(({ id }) => {
+      const updated = this.getBlock(id);
+      if (!updated) throw new Error(`Updated block ${id} not found`);
+      return updated;
+    });
   }
 
   /** Deletes list-property keys from one block. */
   deleteListProps(id: string, keys: readonly string[]): boolean {
-    return this.document.blocks.deleteListProps(id, keys);
+    const block = this.getBlock(id);
+    if (!block) throw new Error(`Block ${id} not found`);
+    this.validateListPropsDeletion(block.listProps, keys);
+    return this.editor.history.batchUpdates(() => this.document.blocks.deleteListProps(id, keys));
   }
 
-  /** Deletes list-property keys from several blocks in one batch. */
+  /** Deletes list-property keys from several blocks atomically. */
   deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void {
+    const simulated = new Map<string, Record<string, unknown>>();
+    updates.forEach(({ id, keys }) => {
+      const block = this.getBlock(id);
+      if (!block) throw new Error(`Block ${id} not found`);
+      const next = this.validateListPropsDeletion(simulated.get(id) ?? block.listProps, keys);
+      simulated.set(id, next);
+    });
     this.editor.history.batchUpdates(() => this.document.blocks.deleteListPropsBatch(updates));
   }
 
@@ -296,7 +385,10 @@ export class BlockManager {
    * @returns No value.
    */
   clearBlock(id: string): void {
-    this.editor.commands.execute("block.clear", { id });
+    this.editor.history.batchUpdates(() => {
+      this.document.blocks.updateBlock(id, { content: "" });
+      this.document.blocks.getChildIds(id).forEach((childId) => this.document.blocks.removeBlock(childId));
+    });
   }
 
   /**
@@ -307,7 +399,13 @@ export class BlockManager {
    * @returns No value.
    */
   setBlockType(id: string, type: string): void {
-    this.editor.commands.execute("block.type.set", { id, type });
+    const current = this.getBlock(id);
+    if (!current) throw new Error(`Block ${id} not found`);
+    const props = this.editor.blockRegistry.prepareTypeChange(type, current.props);
+    const processed = this.runProcessors({ ...current, type, props, children: undefined });
+    // Storage insertion is already transactional; this wrapper creates undo
+    // capture breakpoints so the following action does not merge with creation.
+    this.editor.history.batchUpdates(() => this.document.blocks.setBlockType(id, type, processed.props));
   }
 
   /**
@@ -317,17 +415,19 @@ export class BlockManager {
    * @returns No value.
    */
   removeBlock(id: string): void {
-    this.editor.commands.execute("block.remove", { id });
+    this.editor.history.batchUpdates(() => this.document.blocks.removeBlock(id));
   }
 
   /**
-   * Removes several block subtrees as one command and undo item.
+   * Removes several block subtrees as one undo item.
    *
    * @param ids - Block identifiers to remove.
    * @returns No value.
    */
   removeBlocks(ids: string[]): void {
-    this.editor.commands.execute("block.remove-many", { ids });
+    this.editor.history.batchUpdates(() => {
+      ids.forEach((id) => this.document.blocks.removeBlock(id));
+    });
   }
 
   /**
@@ -338,7 +438,7 @@ export class BlockManager {
    * @returns Target content offset where source content begins.
    */
   mergeBlocks(targetId: string, sourceId: string): number {
-    return this.editor.commands.execute("block.merge", { targetId, sourceId }) as number;
+    return this.editor.history.batchUpdates(() => this.mergeBlockContent(targetId, sourceId));
   }
 
   /**
@@ -354,11 +454,11 @@ export class BlockManager {
     targetId: string | null,
     position: "before" | "after" | "inside" = "after",
   ): void {
-    this.editor.commands.execute("block.move", { id, targetId, position });
+    this.editor.history.batchUpdates(() => this.document.blocks.moveBlock(id, targetId, position));
   }
 
   /**
-   * Moves several sibling subtree roots as one command and undo item.
+   * Moves several sibling subtree roots as one undo item.
    *
    * Descendant IDs of other supplied roots are dropped and remaining roots must
    * share a parent. Document storage `moveBlocks` is the lower-level placement
@@ -374,7 +474,9 @@ export class BlockManager {
     targetId: string | null,
     position: "before" | "after" | "inside" = "after",
   ): void {
-    this.editor.commands.execute("block.move-many", { ids, targetId, position });
+    // The document move is already atomic; this wrapper creates undo capture
+    // breakpoints between consecutive structural moves.
+    this.editor.history.batchUpdates(() => this.moveGroupedBlocks(ids, targetId, position));
   }
 
   /**
@@ -395,7 +497,7 @@ export class BlockManager {
    * @returns No value.
    */
   indentBlocks(ids: string[]): void {
-    this.editor.commands.execute("block.indent", { ids });
+    this.editor.history.batchUpdates(() => this.applyIndent(ids));
   }
 
   /**
@@ -417,7 +519,7 @@ export class BlockManager {
    * @returns No value.
    */
   outdentBlocks(ids: string[]): void {
-    this.editor.commands.execute("block.outdent", { ids });
+    this.editor.history.batchUpdates(() => this.applyOutdent(ids));
   }
 
   /**
@@ -429,7 +531,8 @@ export class BlockManager {
    * @returns No value.
    */
   setBlockProp(id: string, key: string, value: unknown): void {
-    this.editor.commands.execute("block.prop.set", { id, key, value });
+    const [update] = this.processUpdates([{ id, patch: { props: { [key]: value } } }]);
+    this.document.blocks.setBlockProp(id, key, update!.patch.props?.[key]);
   }
 
   /**
@@ -441,11 +544,11 @@ export class BlockManager {
    * @returns No value.
    */
   setBlockPluginData(id: string, pluginId: string, value: unknown): void {
-    this.editor.commands.execute("block.pluginData.set", { id, pluginId, value });
+    this.document.blocks.setPluginData(id, pluginId, value);
   }
 
   /**
-   * Releases the built-in block processors and command registrations.
+   * Releases the built-in block processors and subscriptions.
    *
    * @returns No value.
    */
@@ -454,7 +557,6 @@ export class BlockManager {
     this.subscriptions.clear();
     this.processors.forEach((registration) => registration.dispose());
     this.processors.clear();
-    this.registrations.splice(0).reverse().forEach((registration) => registration.dispose());
   }
 
   /**
@@ -489,140 +591,7 @@ export class BlockManager {
    */
   private registerRequiredProcessors(): void {
     this.registerProcessor(createBlockPropsProcessor((type, props) =>
-      this.editor.blocksRegistry.validate(type, props)));
-  }
-
-  /**
-   * Registers every block command required by the public manager API.
-   *
-   * Document mutations execute through the editor's batching boundary so each
-   * command has one CRDT transaction and undo item unless an outer batch exists.
-   *
-   * @returns No value.
-   */
-  private registerRequiredCommands(): void {
-    const documentCommand = (handler: CommandHandler): CommandHandler => (value) =>
-      this.editor.history.batchUpdates(() => handler(value));
-    const register = (name: string, handler: CommandHandler): void => {
-      this.registrations.push(this.editor.commands.register(name, handler));
-    };
-
-    register("block.insert", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { block: BlockInput; afterId?: string | null };
-      const block = commandPayload(data.block) as unknown as BlockInput;
-      if (typeof block.type !== "string") throw new Error("block.type must be a string");
-      const definition = this.editor.blocksRegistry.get(block.type);
-      if (!definition) throw new Error(`Block type ${block.type} is unavailable in ${this.editor.mode.get()} mode`);
-      const afterId = data.afterId === undefined
-        ? undefined
-        : data.afterId === null ? null : commandString(data.afterId, "afterId");
-      return this.document.blocks.insertBlock(
-        this.processForest(this.editor.blocksRegistry.prepare(block)),
-        afterId,
-      );
-    }));
-    register("block.update", (value) => {
-      const data = commandPayload(value) as unknown as { id: string; patch: BlockPatch };
-      const [update] = this.processUpdates([{
-        id: commandString(data.id, "id"),
-        patch: commandPayload(data.patch) as BlockPatch,
-      }]);
-      this.document.blocks.updateBlock(update!.id, update!.patch);
-    });
-    register("block.update-many", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { updates: readonly BlockUpdate[] };
-      if (!Array.isArray(data.updates)) throw new Error("updates must be an array");
-      const updates = data.updates.map((item) => {
-        const update = commandPayload(item);
-        return {
-          id: commandString(update.id, "id"),
-          patch: commandPayload(update.patch) as BlockPatch,
-        };
-      });
-      this.document.blocks.updateBlocks(this.processUpdates(updates));
-    }));
-    register("block.clear", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { id: string };
-      const id = commandString(data.id, "id");
-      this.editor.history.batchUpdates(() => {
-        this.document.blocks.updateBlock(id, { content: "" });
-        this.document.blocks.getChildIds(id).forEach((childId) => this.document.blocks.removeBlock(childId));
-      });
-    }));
-    register("block.type.set", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { id: string; type: string };
-      const id = commandString(data.id, "id");
-      const type = commandString(data.type, "type");
-      const current = this.getBlock(id);
-      if (!current) throw new Error(`Block ${id} not found`);
-      const props = this.editor.blocksRegistry.prepareTypeChange(type, current.props);
-      const processed = this.processBlock({ ...current, type, props, children: undefined });
-      this.document.blocks.setBlockType(id, type, processed.props);
-    }));
-    register("block.remove", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { id: string };
-      this.document.blocks.removeBlock(commandString(data.id, "id"));
-    }));
-    register("block.remove-many", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { ids: string[] };
-      const ids = this.requireIds(data.ids);
-      this.editor.history.batchUpdates(() => {
-        ids.forEach((id) => this.document.blocks.removeBlock(id));
-      });
-    }));
-    register("block.merge", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { targetId: string; sourceId: string };
-      return this.mergeBlockContent(
-        commandString(data.targetId, "targetId"),
-        commandString(data.sourceId, "sourceId"),
-      );
-    }));
-    register("block.move", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as {
-        id: string;
-        targetId?: string | null;
-        afterId?: string | null;
-        position?: "before" | "after" | "inside";
-      };
-      const rawTarget = "targetId" in data ? data.targetId : data.afterId;
-      const id = commandString(data.id, "id");
-      const targetId = rawTarget === null ? null : commandString(rawTarget, "targetId");
-      const position = data.position === "before" || data.position === "inside" ? data.position : "after";
-      this.document.blocks.moveBlock(id, targetId, position);
-    }));
-    register("block.move-many", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as {
-        ids: string[];
-        targetId: string | null;
-        position?: "before" | "after" | "inside";
-      };
-      const targetId = data.targetId === null ? null : commandString(data.targetId, "targetId");
-      const position = data.position === "before" || data.position === "inside" ? data.position : "after";
-      this.moveGroupedBlocks(this.requireIds(data.ids), targetId, position);
-    }));
-    register("block.indent", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { ids: string[] };
-      this.applyIndent(this.requireIds(data.ids));
-    }));
-    register("block.outdent", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { ids: string[] };
-      this.applyOutdent(this.requireIds(data.ids));
-    }));
-    register("block.prop.set", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { id: string; key: string; value: unknown };
-      const id = commandString(data.id, "id");
-      const key = commandString(data.key, "key");
-      const [update] = this.processUpdates([{ id, patch: { props: { [key]: data.value } } }]);
-      this.document.blocks.setBlockProp(id, key, update!.patch.props?.[key]);
-    }));
-    register("block.pluginData.set", documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { id: string; pluginId: string; value: unknown };
-      this.document.blocks.setPluginData(
-        commandString(data.id, "id"),
-        commandString(data.pluginId, "pluginId"),
-        data.value,
-      );
-    }));
+      this.editor.blockRegistry.validate(type, props)));
   }
 
   /**
@@ -719,24 +688,11 @@ export class BlockManager {
   }
 
   /**
-   * Processes every record in an inserted forest.
-   * @param block - Root block input.
-   * @returns Processed forest retaining nested structure.
-   */
-  private processForest(block: BlockInput): BlockInput {
-    const processed = this.pipe.process(block);
-    return {
-      ...processed,
-      children: processed.children?.map((child) => this.processForest(child)),
-    };
-  }
-
-  /**
    * Processes one stored or incoming block without its recursive children.
    * @param block - Complete node-level block input.
    * @returns Processed node-level input.
    */
-  private processBlock(block: BlockInput): BlockInput {
+  private runProcessors(block: BlockInput): BlockInput {
     return this.pipe.process(block);
   }
 
@@ -761,7 +717,8 @@ export class BlockManager {
         pluginData: patch.pluginData ? { ...current.pluginData, ...patch.pluginData } : current.pluginData,
         content: patch.content ?? current.content,
       };
-      const processed = patch.props ? this.processBlock(candidate) : candidate;
+      if (patch.listProps) this.editor.blockListProps.prepare(candidate.listProps ?? {});
+      const processed = patch.props ? this.runProcessors(candidate) : candidate;
       simulated.set(id, processed);
       const processedProps = patch.props
         ? Object.fromEntries(Object.keys(patch.props).map((key) => [key, processed.props?.[key]]))
@@ -771,6 +728,22 @@ export class BlockManager {
         patch: processedProps ? { ...patch, props: processedProps } : patch,
       };
     });
+  }
+
+  /**
+   * Validates list-property deletion against the complete resulting record.
+   * @param current - Current or earlier simulated list properties.
+   * @param keys - Property names to remove.
+   * @returns Resulting detached record for later batch simulation.
+   */
+  private validateListPropsDeletion(
+    current: Record<string, unknown>,
+    keys: readonly string[],
+  ): Record<string, unknown> {
+    const next = { ...current };
+    keys.forEach((key) => delete next[key]);
+    this.editor.blockListProps.prepare(next);
+    return next;
   }
 
   /**
@@ -827,16 +800,4 @@ export class BlockManager {
     return [id, ...this.getChildIds(id).flatMap((child) => this.collectTreeIds(child, visited))];
   }
 
-  /**
-   * Validates a command field as a list of block identifiers.
-   *
-   * @param value - Unknown `ids` field from a command payload.
-   * @returns The validated identifier list.
-   */
-  private requireIds(value: unknown): string[] {
-    if (!Array.isArray(value) || value.some((id) => typeof id !== "string")) {
-      throw new Error("ids must be an array of strings");
-    }
-    return value;
-  }
 }

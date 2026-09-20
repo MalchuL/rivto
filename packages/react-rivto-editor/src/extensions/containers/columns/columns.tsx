@@ -213,7 +213,7 @@ export function setColumnsCount(reactEditor: ReactEditor, blockId: string, count
         const insertedId = reactEditor.blocks.insertBlock({
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           content: "",
-        }, afterId === board.id ? undefined : afterId);
+        }, afterId === board.id ? undefined : afterId).id;
         if (afterId === board.id) {
           reactEditor.blocks.moveBlocks([insertedId], board.id, "inside");
         }
@@ -326,7 +326,7 @@ export function columnsExtension(): ReactEditorExtension {
     id: "block.columns",
     setup: (reactEditor) => {
       reactEditor.extensions.mount(ColumnsStyles);
-      reactEditor.blocks.register({
+      reactEditor.blockTypes.register({
         definition: {
           type: COLUMNS_BLOCK_TYPE,
           title: "Columns",
@@ -335,7 +335,7 @@ export function columnsExtension(): ReactEditorExtension {
         render: Columns,
         view: columnsView,
       });
-      reactEditor.blocks.register({
+      reactEditor.blockTypes.register({
         definition: {
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           title: "Column",

@@ -24,7 +24,7 @@ import { selectedMoveRoots } from "../utils/move-roots";
  */
 export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
   const isCollapsed = (block: EditorBlock) => (
-    reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true
+    reactEditor.blockListProps.has("collapse") && block.listProps.collapsed === true
   );
   const move = (root: HTMLElement, direction: VerticalDirection): boolean => {
     const selection = currentNavigationSelection(reactEditor.selection);

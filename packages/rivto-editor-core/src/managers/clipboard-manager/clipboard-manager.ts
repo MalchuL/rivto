@@ -24,9 +24,10 @@ import {
 } from "./strategies";
 import { PasteStrategyRegistry } from "./strategies";
 import type { RivtoEditorApi } from "../../editor/types";
+import type { ClipboardManagerApi } from "../types";
 
 /** Framework-neutral clipboard operations over blocks with per-block offsets. */
-export class ClipboardManager {
+export class ClipboardManager implements ClipboardManagerApi {
   /** Paste algorithms constructed once for this editor and consulted by id. */
   readonly pasteStrategies = new PasteStrategyRegistry();
 
@@ -144,6 +145,7 @@ export class ClipboardManager {
       text: input.text,
       defaultBlockType: input.defaultBlockType,
       selection: input.textTarget ?? this.editor.selection.get(),
+      onPrepareError: input.onPrepareError,
     };
   }
 }

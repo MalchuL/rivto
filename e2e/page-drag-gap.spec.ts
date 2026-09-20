@@ -40,8 +40,8 @@ test.beforeEach(async ({ page }) => {
     const editor = (window as unknown as {
       __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
-    const alpha = editor.blocks.insertBlock({ type: "paragraph", content: "Alpha" });
-    const beta = editor.blocks.insertBlock({ type: "paragraph", content: "Beta" });
+    const alpha = editor.blocks.insertBlock({ type: "paragraph", content: "Alpha" }).id;
+    const beta = editor.blocks.insertBlock({ type: "paragraph", content: "Beta" }).id;
     const board = editor.blocks.insertBlock({
       type: "kanban",
       content: "Board",
@@ -49,7 +49,7 @@ test.beforeEach(async ({ page }) => {
         { type: "kanban-column", content: "To do" },
         { type: "kanban-column", content: "Empty" },
       ],
-    });
+    }).id;
     editor.load({
       ...editor.dump(),
       blocks: [
@@ -354,7 +354,7 @@ for (const mode of ["block", "edgeless"] as const) {
           }],
         },
       ];
-      const roots = inputs.map((input) => editor.blocks.insertBlock(input));
+      const roots = inputs.map((input) => editor.blocks.insertBlock(input)).id;
       editor.load({
         ...editor.dump(),
         blocks: roots.map((id) => editor.blocks.getBlock(id)!),

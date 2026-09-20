@@ -1,4 +1,5 @@
 import type { BlockDefinition } from "./types";
+import type { BlockRegistryManagerApi } from "../types";
 import type { EditorBlockInput } from "../../editor/model";
 import { Listeners } from "../../utils";
 import type { ZodType } from "zod";
@@ -83,7 +84,7 @@ const validateProps = (
  * ownership, prepares editor-level creation data, and publishes definition
  * lifecycle changes to its own subscribers.
  */
-export class BlockRegistryManager {
+export class BlockRegistryManager implements BlockRegistryManagerApi {
   // Block name to definition
   private readonly definitions = new Map<string, BlockDefinition>();
 

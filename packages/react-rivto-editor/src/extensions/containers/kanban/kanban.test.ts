@@ -16,7 +16,7 @@ test("moves existing subtrees into, between and out of Kanban columns with undo"
     editor,
     extensions: [defaultWritingBlockExtension(), kanbanExtension()],
   });
-  const boardId = editor.blocks.insertBlock({ type: "paragraph", content: "" });
+  const boardId = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
   reactEditor.slashCommands.execute("block.kanban.insert", { blockId: boardId });
   const board = editor.blocks.getBlock(boardId)!;
   expect(board.id).toBe(boardId);
@@ -24,7 +24,7 @@ test("moves existing subtrees into, between and out of Kanban columns with undo"
   expect(board.children.map((block) => block.content)).toEqual(["To do", "In progress", "Done"]);
   const card = editor.blocks.insertBlock({
     type: "paragraph", content: "Card", children: [{ type: "paragraph", content: "Detail" }],
-  }, board.id);
+  }, board.id).id;
   const original = editor.blocks.getBlock(card);
   editor.blocks.moveBlocks([card], board.children[0]!.id, "inside");
   expect(editor.blocks.getBlock(board.children[0]!.id)!.children).toEqual([original]);
@@ -38,7 +38,7 @@ test("moves existing subtrees into, between and out of Kanban columns with undo"
   expect(editor.blocks.getBlock(board.children[1]!.id)!.children).toEqual([original]);
   outdentBlocks(reactEditor, [card]);
   expect(editor.blocks.getParentId(card)).toBe(board.children[1]!.id);
-  const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Nested" }, card);
+  const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Nested" }, card).id;
   indentBlocks(reactEditor, [nested]);
   expect(editor.blocks.getParentId(nested)).toBe(card);
   outdentBlocks(reactEditor, [nested]);

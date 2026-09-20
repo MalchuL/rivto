@@ -39,7 +39,7 @@ export function registerDefaultWritingBlock(
       ? (props) => createElement(MarkdownContent, { ...props, onLinkClick: options.onMarkdownLinkClick })
       : MarkdownContent);
   const restoreWriting = reactEditor.installDefaultWriting({ createDefaultBlock, isEmptyBlock });
-  const unregisterBlock = reactEditor.blocks.register({
+  const unregisterBlock = reactEditor.blockTypes.register({
     definition: { type, title },
     render,
     slashCommand,

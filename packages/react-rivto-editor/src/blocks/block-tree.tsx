@@ -76,7 +76,7 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   if (!block) return null;
   const Content = reactEditor.renderers.get(block.type) ?? UnknownBlock;
   const childrenId = `block-children-${block.id}`;
-  const collapseActive = reactEditor.blocks.hasListProps("collapse");
+  const collapseActive = reactEditor.blockListProps.has("collapse");
 
   return (
     <BlockWrapper

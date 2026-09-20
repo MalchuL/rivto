@@ -5,7 +5,7 @@ import { createReactEditor } from "../../react-editor";
 describe("ReactSelectionManager", () => {
   test("delegates text deletion and whole-block selection to core", () => {
     const editor = createEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "BeforeAfter" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "BeforeAfter" }).id;
     const reactEditor = createReactEditor({ editor });
     const text = createTextSelection(
       [{ id, length: 11 }],
@@ -38,7 +38,7 @@ describe("ReactSelectionManager", () => {
 
   test("shares text editing with core and tolerates a missing active surface", () => {
     const editor = createEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "text" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "text" }).id;
     const reactEditor = createReactEditor({ editor });
     const manager = reactEditor.selection;
     const selection = createCaretSelection(id, 1);

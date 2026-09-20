@@ -7,9 +7,8 @@ import {
   getSelectedBlockIds,
   createStructuralSelection,
   RIVTO_CLIPBOARD_MIME,
-  validateBlockListProps,
   validateClipboardBundle,
-  type EditorBlock,
+  type BlockPrepareErrorHandler,
   type EditorBlockInput,
   type ClipboardBundle,
   type Selection,
@@ -37,13 +36,13 @@ export interface ClipboardExtensionOptions {
    */
   readonly defaultBlockType?: string;
   /**
-   * Replaces an invalid structured block, or skips its subtree when nullish.
+   * Replaces one block rejected during core import preparation.
    *
    * @param block - Complete rejected block and nested data from the clipboard.
    * @param error - Validation error that caused rejection.
-   * @returns A replacement block input, or a nullish value to skip the subtree.
+   * @returns A replacement block input that core prepares once more.
    */
-  readonly onBlockError?: (block: EditorBlock, error: unknown) => EditorBlockInput | null | undefined;
+  readonly onPrepareError?: BlockPrepareErrorHandler;
 }
 
 /**
@@ -147,7 +146,11 @@ export function registerClipboard(
         || fallbackStructuredClipboard(event);
     }
     const canvas = canvasSelection();
+    // Paste has only two outcomes:
+    // 1. Text is written into the current text selection.
+    // 2. Complete blocks are inserted beside or inside the current block.
     let sourceBundle: ClipboardBundle | undefined;
+    let parsedBlocks: EditorBlockInput[] | undefined;
     if (structured) {
       try {
         const parsed = JSON.parse(structured) as unknown;
@@ -158,107 +161,65 @@ export function registerClipboard(
       }
     }
     if (!sourceBundle && !plainText) {
+      // HTML and Markdown parsers return complete blocks. They do not describe
+      // a text selection, so their blocks are inserted as new blocks.
       const parsed = reactEditor.clipboard.parse({
         html: event.clipboardData?.getData("text/html") ?? "",
         text: event.clipboardData?.getData("text/plain") ?? "",
       });
-      if (parsed) {
-        const materialize = (input: EditorBlockInput): EditorBlock => {
-          const prepared = reactEditor.blocks.prepareBlock(input);
-          return {
-            id: prepared.id ?? crypto.randomUUID(),
-            type: prepared.type,
-            listProps: prepared.listProps ?? {},
-            props: prepared.props ?? {},
-            pluginData: prepared.pluginData ?? {},
-            content: prepared.content ?? "",
-            children: (prepared.children ?? []).map(materialize),
-          };
-        };
-        sourceBundle = { version: 4, blocks: parsed.map(materialize) };
-      }
+      parsedBlocks = parsed;
     }
-    if (sourceBundle) {
-      const validateBlock = (block: EditorBlock): void => {
-        if (
-          typeof block.id !== "string" ||
-          typeof block.type !== "string" ||
-          typeof block.content !== "string" ||
-          !Array.isArray(block.children)
-        ) throw new TypeError("Invalid clipboard block");
-        validateBlockListProps(block.listProps);
-        validateBlockListProps(block.props);
-        validateBlockListProps(block.pluginData);
-        reactEditor.blocks.validateBlockProps(block.type, block.props);
-      };
-      const materializeReplacement = (input: EditorBlockInput): EditorBlock | undefined => {
-        const prepared = reactEditor.blocks.prepareBlock({ ...input, children: [] });
-        const replacement = {
-          id: prepared.id ?? crypto.randomUUID(),
-          type: prepared.type,
-          listProps: prepared.listProps ?? {},
-          props: prepared.props ?? {},
-          pluginData: prepared.pluginData ?? {},
-          content: prepared.content ?? "",
-          children: [],
-        } satisfies EditorBlock;
-        let result: EditorBlock | undefined;
-        try {
-          validateBlock(replacement);
-          result = reactEditor.blocks.validateListProps(replacement.listProps) ? replacement : undefined;
-        } catch {
-          result = undefined;
-        }
-        return result;
-      };
-      const prepare = (block: EditorBlock): EditorBlock | undefined => {
-        let result: EditorBlock | undefined;
-        try {
-          validateBlock(block);
-          const candidate = {
-            ...block,
-            listProps: reactEditor.blocks.prepareBlock({ ...block, children: [] }).listProps ?? {},
-          };
-          if (!reactEditor.blocks.validateListProps(candidate.listProps)) {
-            throw new TypeError("Invalid block list properties");
-          }
-          result = { ...candidate, children: block.children.flatMap((child) => prepare(child) ?? []) };
-        } catch (error) {
-          const replacement = options.onBlockError?.(block, error);
-          result = replacement ? materializeReplacement(replacement) : undefined;
-        }
-        return result;
-      };
-      sourceBundle = { ...sourceBundle, blocks: sourceBundle.blocks.flatMap((block) => prepare(block) ?? []) };
-      structured = JSON.stringify(sourceBundle);
-    }
-    // Temporarily project canvas block references into the core clipboard
-    // placement API. Paste strategies replace it with their proposed selection.
+    // Use the canvas selection while calculating where pasted content belongs.
+    // The completed paste replaces it with the newly selected content.
     if (canvas) reactEditor.selection.set(canvas);
     const active = reactEditor.selection.get();
     const lengthOf = (id: string) => reactEditor.blocks.getBlock(id)?.content.length ?? 0;
     const ends = active ? resolveSelectionEndpoints(active, lengthOf) : undefined;
     const activeId = ends?.head.blockId ?? active?.focusBlockId;
     const activeBlock = activeId ? reactEditor.blocks.getBlock(activeId) : undefined;
-    const expanded = reactEditor.blocks.hasListProps("collapse") && activeBlock?.listProps.collapsed !== true;
-    const placement = activeBlock && sourceBundle && sourceBundle.startsWithText !== true
+    const expanded = reactEditor.blockListProps.has("collapse") && activeBlock?.listProps.collapsed !== true;
+    // Only whole-block paste needs a parent and sibling insertion position.
+    // A native bundle marked `startsWithText` is pasted into text instead.
+    const structuralSource = Boolean(parsedBlocks?.length)
+      || Boolean(sourceBundle?.blocks.length && sourceBundle.startsWithText !== true);
+    const placement = activeBlock && structuralSource
       ? expanded && activeBlock.children.length
         ? { parentId: activeBlock.id, afterId: null }
         : { parentId: reactEditor.blocks.getParentId(activeBlock.id) ?? null, afterId: activeBlock.id }
       : undefined;
-    reactEditor.clipboard.paste({
-      textTarget: !canvas && active && hasBlockRanges(active)
-        && !isStructuralSelection(active) ? active : undefined,
-      defaultBlockType: resolveDefaultBlockType(),
-      structured,
-      text: event.clipboardData?.getData("text/plain"),
-      bundle: sourceBundle,
-      placement: {
-        ...placement,
-        mergeText: canvas ? false : undefined,
-        preserveNewlines: plainText || undefined,
-      },
-    });
+    if (parsedBlocks?.length) {
+      // Parsed blocks do not need IDs. importForest validates them, assigns IDs,
+      // inserts them, and returns the complete stored blocks.
+      reactEditor.history.batchUpdates(() => {
+        const imported = reactEditor.blocks.importForest(
+          parsedBlocks,
+          placement?.afterId ?? undefined,
+          options.onPrepareError,
+        );
+        const insertedIds = imported.roots.map(({ id }) => id);
+        if (placement?.parentId && placement.afterId === null && insertedIds.length) {
+          reactEditor.blocks.moveBlocks(insertedIds, placement.parentId, "inside");
+        }
+        if (insertedIds.length) reactEditor.selection.set(createStructuralSelection(insertedIds));
+      });
+    } else {
+      // Plain text and native Rivto clipboard data share this path. Text updates
+      // the current text selection; a bundle of whole blocks inserts new blocks.
+      reactEditor.clipboard.paste({
+        textTarget: !canvas && active && hasBlockRanges(active)
+          && !isStructuralSelection(active) ? active : undefined,
+        defaultBlockType: resolveDefaultBlockType(),
+        structured,
+        text: event.clipboardData?.getData("text/plain"),
+        bundle: sourceBundle,
+        onPrepareError: options.onPrepareError,
+        placement: {
+          ...placement,
+          mergeText: canvas ? false : undefined,
+          preserveNewlines: plainText || undefined,
+        },
+      });
+    }
     if (!canvas && isStructuralSelection(reactEditor.selection.get())) {
       const root = reactEditor.events.getRoot();
       // The paste event started in the old contenteditable, whose native caret

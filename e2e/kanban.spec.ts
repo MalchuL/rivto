@@ -123,7 +123,7 @@ for (const mode of ["block", "edgeless"] as const) {
       editor.load({ ...editor.dump(), blocks: [board], elements: [] });
       const column = board.children[0]!;
       for (const content of ["Second card", "Third card"]) {
-        const id = editor.blocks.insertBlock({ type: "paragraph", content }, board.id);
+        const id = editor.blocks.insertBlock({ type: "paragraph", content }, board.id).id;
         editor.blocks.moveBlocks([id], column.id, "inside");
       }
       if (mode === "edgeless") editor.elements.insertElement({

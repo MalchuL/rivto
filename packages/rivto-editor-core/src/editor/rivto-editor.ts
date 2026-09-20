@@ -1,16 +1,12 @@
 /**
  * Editor runtime coordinating document mutations and focused public managers.
  */
-import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, HistoryManager, ModeManager, SelectionManager } from "../managers";
+import { BlockListPropsManager, BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, HistoryManager, ModeManager, SelectionManager } from "../managers";
 import {
   type Block,
   type DocumentModel,
-  type Snapshot,
-  type SnapshotUpdate,
 } from "@chulane/document-model";
-import type { ClipboardBundle } from "../managers/clipboard-manager";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
-import { commandPayload } from "../managers/utils";
 import type { CreateRivtoEditorOptions, RivtoEditorApi } from "./types";
 import type { Selection } from "../managers/selection-manager";
 import { Listeners } from "../utils";
@@ -25,10 +21,12 @@ import { Listeners } from "../utils";
 export class EditorRuntime implements RivtoEditorApi {
   /** Caller-owned block, element, and snapshot store currently presented by this runtime. */
   private document?: DocumentModel;
-  /** Public owner of block commands and typed block operations. */
+  /** Public owner of typed block operations. */
   readonly blocks: BlockManager;
+  /** Public owner of list-property defaults and semantic validation. */
+  readonly blockListProps: BlockListPropsManager;
   /** Public owner of native block definitions and property validation. */
-  readonly blocksRegistry: BlockRegistryManager;
+  readonly blockRegistry: BlockRegistryManager;
   /** Public owner of first-class canvas element commands. */
   readonly elements: ElementManager;
   /** Named command handlers exposed to integrations and focused managers. */
@@ -58,15 +56,14 @@ export class EditorRuntime implements RivtoEditorApi {
   constructor(options: CreateRivtoEditorOptions = {}) {
     this.mode = new ModeManager(options.mode ?? "block");
     this.history = new HistoryManager();
-    this.blocksRegistry = new BlockRegistryManager();
-    const unsubscribeFromBlockRegistryChanges = this.blocksRegistry.subscribe(() => this.notifyChanges());
+    this.blockRegistry = new BlockRegistryManager();
+    this.blockListProps = new BlockListPropsManager();
+    const unsubscribeFromBlockRegistryChanges = this.blockRegistry.subscribe(() => this.notifyChanges());
     this.unsubscribeFns.push(unsubscribeFromBlockRegistryChanges);
     this.blocks = new BlockManager(this);
     this.elements = new ElementManager(this);
     this.selection = new SelectionManager(this);
     this.clipboard = new ClipboardManager(this);
-    this.registerRuntimeCommands();
-    this.registerClipboardCommands();
 
     // Keep the compatibility revision broad, but reserve expensive selection
     // reconciliation for mutations that can invalidate IDs or document order.
@@ -144,8 +141,8 @@ export class EditorRuntime implements RivtoEditorApi {
    * @returns No value.
    */
   load(snapshot: EditorSnapshotUpdate): void {
-    const command = { snapshot } satisfies { snapshot: SnapshotUpdate };
-    this.commands.execute("document.load", command);
+    this.requireDocument().loadSnapshot(snapshot);
+    this.history.clear();
   }
 
   /**
@@ -154,100 +151,7 @@ export class EditorRuntime implements RivtoEditorApi {
    * @returns Detached snapshot v6 suitable for persistence or transfer.
    */
   dump(): EditorSnapshot {
-    const snapshot = this.requireDocument().getSnapshot() satisfies Snapshot;
-    return snapshot satisfies EditorSnapshot;
-  }
-
-  /**
-   * Registers document-, selection-, and history-level runtime commands.
-   *
-   * Block command ownership belongs to the public block manager.
-   *
-   * @returns No value.
-   */
-  private registerRuntimeCommands(): void {
-    this.commands.register("document.load", (value) => {
-      const data = commandPayload(value) as unknown as { snapshot: SnapshotUpdate };
-      const snapshot: SnapshotUpdate = {
-        ...data.snapshot,
-        blocks: data.snapshot.blocks
-          ? this.blocks.processSnapshotBlocks(data.snapshot.blocks)
-          : undefined,
-        elements: data.snapshot.elements
-          ? this.elements.processSnapshotElements(data.snapshot.elements)
-          : undefined,
-      };
-      this.requireDocument().loadSnapshot(snapshot);
-      this.history.clear();
-    });
-    this.commands.register("selection.set", (value) => {
-      const data = commandPayload(value) as unknown as {
-        selection: Parameters<SelectionManager["set"]>[0];
-      };
-      this.selection.set(data.selection);
-    });
-    this.commands.register("selection.delete", () => this.selection.delete());
-    this.commands.register("selection.clear", () => this.selection.clear());
-    this.commands.register("history.undo", () => this.history.undo());
-    this.commands.register("history.redo", () => this.history.redo());
-  }
-
-  /**
-   * Registers data-only clipboard commands used by integrations and tests.
-   *
-   * ClipboardManager owns typed behavior; browser hosts own native events and
-   * transfer the serialized string returned by copy and cut.
-   * @returns No value.
-   */
-  private registerClipboardCommands(): void {
-    type CopyPayload = { textTarget?: Selection };
-    type PastePayload = {
-      textTarget?: Selection;
-      bundle?: ClipboardBundle;
-      structured?: string;
-      mergeText?: boolean;
-      preserveNewlines?: boolean;
-      defaultBlockType?: string;
-      text?: string;
-      placement?: { parentId: string | null; afterId: string | null; mergeText?: boolean; preserveNewlines?: boolean };
-    };
-    const payload = <Payload>(value: unknown): Partial<Payload> => value && typeof value === "object" && !Array.isArray(value)
-      ? value as unknown as Partial<Payload>
-      : {};
-    const text = (value: unknown): string | undefined => typeof value === "string" ? value : undefined;
-    this.commands.register("clipboard.copy", (value) => {
-      const data = payload<CopyPayload>(value);
-      const bundle = data.textTarget ? this.clipboard.copyText(data.textTarget) : this.clipboard.copy();
-      return bundle ? JSON.stringify(bundle) : "";
-    });
-
-    this.commands.register("clipboard.cut", () => {
-      const bundle = this.clipboard.cut();
-      return bundle ? JSON.stringify(bundle) : "";
-    });
-
-    this.commands.register("clipboard.paste", (value) => {
-      const data = payload<PastePayload>(value);
-      const defaultBlockType = text(data.defaultBlockType);
-      const structured = text(data.structured);
-      const bundle = data.bundle;
-      const hostPlacement = data.placement && typeof data.placement === "object"
-        ? data.placement
-        : {} as NonNullable<PastePayload["placement"]>;
-      return this.clipboard.paste({
-        textTarget: data.textTarget,
-        bundle,
-        structured,
-        defaultBlockType,
-        text: text(data.text),
-        placement: {
-          parentId: hostPlacement.parentId,
-          afterId: hostPlacement.afterId,
-          mergeText: data.mergeText ?? hostPlacement.mergeText,
-          preserveNewlines: data.preserveNewlines ?? hostPlacement.preserveNewlines,
-        },
-      });
-    });
+    return this.requireDocument().getSnapshot();
   }
 
   /**
@@ -329,7 +233,8 @@ export class EditorRuntime implements RivtoEditorApi {
     this.unsubscribeFns.splice(0).forEach((unsubscribe) => run(unsubscribe));
     run(() => this.elements.destroy());
     run(() => this.blocks.destroy());
-    run(() => this.blocksRegistry.destroy());
+    run(() => this.blockListProps.destroy());
+    run(() => this.blockRegistry.destroy());
     run(() => this.commands.clear());
     run(() => this.listeners.clear());
     if (errors.length === 1) throw errors[0];

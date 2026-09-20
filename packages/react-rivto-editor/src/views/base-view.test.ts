@@ -27,8 +27,8 @@ test("resolve falls back to BaseBlockView and indent stays free at the root", ()
     editor,
     extensions: [defaultWritingBlockExtension()],
   });
-  const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-  const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first);
+  const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+  const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first).id;
   expect(reactEditor.views.resolve(second)).toBeInstanceOf(BaseBlockView);
   expect(reactEditor.views.has("paragraph")).toBe(false);
   editor.blocks.indentBlock(second);
@@ -52,7 +52,7 @@ test("asks the resolved view whether a drop is accepted", () => {
       },
     ],
   });
-  const targetId = editor.blocks.insertBlock({ type: "paragraph" });
+  const targetId = editor.blocks.insertBlock({ type: "paragraph" }).id;
 
   expect(reactEditor.views.acceptsDrop(targetId, ["source"])).toBe(false);
 

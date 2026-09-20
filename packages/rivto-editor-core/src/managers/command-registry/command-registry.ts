@@ -1,22 +1,5 @@
 import { Listeners } from "../../utils";
-
-/** Function shape accepted by this editor's command registry. */
-export type CommandHandler = (payload?: unknown) => unknown;
-
-/**
- * Ownership token for one registered command.
- *
- * The handle can execute or dispose only the exact command registration that
- * created it.
- */
-export interface RegisteredCommand {
-  /** Stable registered command ID. */
-  readonly name: string;
-  /** Executes this command through the registry. */
-  execute(payload?: unknown): unknown;
-  /** Removes this exact registration; repeated calls are harmless. */
-  dispose(): void;
-}
+import type { CommandHandler, CommandRegistryApi, RegisteredCommand } from "../types";
 
 /**
  * Owns command handlers available to views, integrations, and later plugins.
@@ -25,7 +8,7 @@ export interface RegisteredCommand {
  * string ID and receive one optional payload. Individual commands own their
  * payload validation because external callers are not guaranteed to be typed.
  */
-export class CommandRegistry {
+export class CommandRegistry implements CommandRegistryApi {
   private readonly handlers = new Map<string, CommandHandler>();
   private readonly listeners = new Listeners<{ commandExecuted: void }>();
   private currentLastExecuted: string | null = null;

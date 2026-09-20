@@ -10,7 +10,7 @@
 import { createCaretSelection } from "@chulane/rivto";
 import type { EditorBlockInput } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
-import { getBlockContainment } from "../../managers/blocks/block-types";
+import { getBlockContainment } from "../../managers/blocks/types";
 
 /**
  * Reads the outline policy of a placed block's parent.
@@ -22,7 +22,7 @@ import { getBlockContainment } from "../../managers/blocks/block-types";
 function parentContainment(reactEditor: ReactEditor, id: string) {
   const parentId = reactEditor.blocks.getParentId(id);
   const parentType = parentId ? reactEditor.blocks.getBlock(parentId)?.type : undefined;
-  return parentType ? getBlockContainment(reactEditor.blocks.getDefinition(parentType)) : undefined;
+  return parentType ? getBlockContainment(reactEditor.blockTypes.getDefinition(parentType)) : undefined;
 }
 
 /**
@@ -85,7 +85,7 @@ export function insertFirstChild(reactEditor: ReactEditor, parentId: string): st
   let childId = "";
   reactEditor.history.batchUpdates(() => {
     reactEditor.blocks.updateBlock(parentId, { listProps: { collapsed: false } });
-    childId = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock());
+    childId = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock()).id;
     reactEditor.blocks.moveBlocks([childId], parentId, "inside");
     reactEditor.selection.set(createCaretSelection(childId, 0));
   });
@@ -112,7 +112,7 @@ export function convertLeafToContainer(
   const block = reactEditor.blocks.getBlock(blockId);
   if (!block || block.children.length) return;
   reactEditor.history.batchUpdates(() => {
-    const templateId = reactEditor.blocks.insertBlock(input, blockId);
+    const templateId = reactEditor.blocks.insertBlock(input, blockId).id;
     const childIds = reactEditor.blocks.getBlock(templateId)?.children.map((child) => child.id) ?? [];
     reactEditor.blocks.setBlockType(blockId, input.type);
     if (childIds.length) reactEditor.blocks.moveBlocks(childIds, blockId, "inside");

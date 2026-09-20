@@ -19,10 +19,10 @@ import { collapseTargets } from "./utils";
  * @returns Cleanup for document and selection reconciliation subscriptions.
  */
 export function registerCollapse(reactEditor: ReactEditor): () => void {
-  reactEditor.blocks.registerListProps({
+  reactEditor.blockListProps.register({
     id: "collapse",
     defaults: { collapsed: false },
-    validate: (candidate) => typeof candidate.collapsed === "boolean",
+    isValid: (candidate) => typeof candidate.collapsed === "boolean",
   });
   reactEditor.surfaces.registerBlockSlot({
     position: "left-top",

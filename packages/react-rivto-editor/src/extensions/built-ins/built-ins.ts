@@ -213,7 +213,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         id: `list.${type}`,
         title,
         group: "Lists",
-        isAvailable: ({ blockId }) => reactEditor.blocks.hasListProps("list") &&
+        isAvailable: ({ blockId }) => reactEditor.blockListProps.has("list") &&
           reactEditor.blocks.getBlock(blockId)?.listProps.type !== type,
         execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
       })),
@@ -237,7 +237,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
             const afterId = isEdgelessRoot
               ? insertBlockElementSeparator(reactEditor, reactEditor.blocks.getRootIds().at(-1)!)
               : block.id;
-            duplicateId = reactEditor.blocks.insertBlock(input, afterId);
+            duplicateId = reactEditor.blocks.insertBlock(input, afterId).id;
             if (isEdgelessRoot) reactEditor.elements.insertElement({
               id: duplicateId,
               type: "block",
@@ -270,7 +270,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         keywords: ["fold", "hide"],
         isAvailable: ({ blockId }) => {
           const block = reactEditor.blocks.getBlock(blockId);
-          return reactEditor.blocks.hasListProps("collapse") &&
+          return reactEditor.blockListProps.has("collapse") &&
             Boolean(block?.children.length && block.listProps.collapsed !== true);
         },
         execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
@@ -282,7 +282,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         keywords: ["unfold", "show"],
         isAvailable: ({ blockId }) => {
           const block = reactEditor.blocks.getBlock(blockId);
-          return reactEditor.blocks.hasListProps("collapse") &&
+          return reactEditor.blockListProps.has("collapse") &&
             Boolean(block?.children.length && block.listProps.collapsed === true);
         },
         execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
@@ -319,7 +319,7 @@ export const blockExtension = (
 ): ReactEditorExtension => ({
   id: `block.${registration.definition.type}`,
   setup: (reactEditor) => {
-    reactEditor.blocks.register(registration);
+    reactEditor.blockTypes.register(registration);
   },
 });
 
@@ -353,7 +353,7 @@ export const standardPreset = (
     textSelectionExtension(),
     slashCommandExtension(),
     listShortcutsExtension(),
-    clipboardExtension({ onBlockError: createErrorBlockInput }),
+    clipboardExtension({ onPrepareError: createErrorBlockInput }),
     blockSelectionExtension(),
     collapseExtension(),
     caretNavigationExtension(),

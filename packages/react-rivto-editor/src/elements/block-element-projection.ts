@@ -7,7 +7,7 @@
  *
  * @module
  */
-import type { EditorBlock, EditorElement } from "@chulane/rivto";
+import type { BlockManager, EditorBlock, EditorElement } from "@chulane/rivto";
 import type { ReactEditor } from "../types";
 
 export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
@@ -191,7 +191,7 @@ export function blockIdsOf(element: EditorElement, rootIds: readonly string[]): 
  * alone only lists roots and would reject every child hit.
  */
 export function elementContainsBlock(
-  editor: { readonly blocks: Pick<ReactEditor["blocks"], "getParentId"> },
+  editor: { readonly blocks: Pick<BlockManager, "getParentId"> },
   element: EditorElement,
   rootIds: readonly string[],
   blockId: string,
@@ -225,9 +225,9 @@ export function blockRangeProps(blockIds: readonly string[]): BlockElementProps 
  * @throws When the active preset provides no separator block plugin.
  */
 export function insertBlockElementSeparator(reactEditor: ReactEditor, afterId: string): string {
-  const type = reactEditor.blocks.getDefaultBlockElementSeparatorType();
+  const type = reactEditor.blockTypes.getDefaultBlockElementSeparatorType();
   if (!type) throw new Error("No block element separator type is registered");
-  return reactEditor.blocks.insertBlock({ type, content: "" }, afterId);
+  return reactEditor.blocks.insertBlock({ type, content: "" }, afterId).id;
 }
 
 /**
@@ -265,7 +265,7 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
   const segments: EditorBlock[][] = [];
   let segment: EditorBlock[] = [];
   roots.forEach((block) => {
-    if (reactEditor.blocks.separatesBlockElements(block.type)) {
+    if (reactEditor.blockTypes.separatesBlockElements(block.type)) {
       if (segment.length) segments.push(segment);
       segment = [];
     } else segment.push(block);

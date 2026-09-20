@@ -9,7 +9,7 @@ import { EdgelessVisualController } from "./controller";
 describe("edgelessVisualsExtension", () => {
   test("stores canvas selection in generic core selection and persists visuals", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
-    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Page" });
+    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Page" }).id;
     const extension = edgelessVisualsExtension({ toolbar: false });
     const reactEditor = createReactEditor({ editor, extensions: [
       edgelessSelectionExtension(),
@@ -104,7 +104,7 @@ describe("edgelessVisualsExtension", () => {
 
   test("aligns and reorders a mixed block and visual selection", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
-    const blockId = editor.blocks.insertBlock({ type: "paragraph" });
+    const blockId = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const blockElementId = editor.elements.insertElement({ type: "block", frame: { x: 100, y: 30, width: 100, height: 80 }, zIndex: 0, props: { startBlockId: blockId, endBlockId: blockId } });
     const reactEditor = createReactEditor({ editor, extensions: [separatorBlockExtension(), edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })] });
     const visualId = editor.commands.execute("edgeless.visual.create", { kind: "rectangle", frame: { x: 10, y: 80, width: 20, height: 20 } }) as string;
@@ -213,7 +213,7 @@ describe("edgelessVisualsExtension", () => {
 
   test("duplicates a mixed nested group and block element through clipboard remapping", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
-    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Card" });
+    const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Card" }).id;
     const blockElementId = editor.elements.insertElement({
       type: "block",
       frame: { x: 200, y: 80, width: 240, height: 120 },

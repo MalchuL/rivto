@@ -20,7 +20,7 @@ import { createRivtoEditor, DocumentModelImpl, YjsDoc } from "@chulane/rivto";
 const document = new DocumentModelImpl(new YjsDoc("document-id"));
 const editor = createRivtoEditor();
 editor.setDocument(document);
-editor.blocksRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
+editor.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
 const blockId = editor.blocks.insertBlock({
   type: "paragraph",
   content: "Hello from Rivto",
@@ -34,7 +34,7 @@ editor.destroy();
 The runtime exposes focused owners rather than forwarding every operation through the editor object:
 
 - `editor.blocks`
-- `editor.blocksRegistry`
+- `editor.blockRegistry`
 - `editor.links`
 - `editor.elements`
 - `editor.commands`

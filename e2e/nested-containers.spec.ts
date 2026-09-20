@@ -43,7 +43,7 @@ for (const mode of ["block", "edgeless"] as const) {
             { type: "kanban-column", content: "Other" },
           ],
         }],
-      });
+      }).id;
       const keep = editor.blocks.getBlock(bento)!;
       editor.load({ ...editor.dump(), blocks: [keep], elements: [] });
       if (nextMode === "edgeless") {

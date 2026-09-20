@@ -51,9 +51,6 @@ export class ReactSelectionManager implements SelectionCapability {
     return this.editor.selection.subscribe(listener);
   }
 
-  /** Releases no resources because core owns the only subscription store. */
-  destroy(): void {}
-
   /** Deletes the current selection through core. */
   delete(): void {
     this.editor.selection.delete();

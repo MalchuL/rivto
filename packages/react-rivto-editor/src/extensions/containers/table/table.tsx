@@ -242,7 +242,7 @@ export function insertTableRow(reactEditor: ReactEditor, rowId: string): string 
   let insertedId = "";
   reactEditor.history.batchUpdates(() => {
     reactEditor.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
-    insertedId = reactEditor.blocks.insertBlock(createTableRowInput(widths), rowId);
+    insertedId = reactEditor.blocks.insertBlock(createTableRowInput(widths), rowId).id;
   });
   return insertedId;
 }
@@ -267,7 +267,7 @@ export function insertTableColumn(reactEditor: ReactEditor, cellId: string): rea
     table.children.forEach((tableRow) => {
       reactEditor.blocks.updateBlock(tableRow.id, { listProps: { collapsed: false } });
       const anchor = tableRow.children[column] ?? tableRow.children.at(-1);
-      const insertedId = reactEditor.blocks.insertBlock(createTableCellInput(width), anchor?.id);
+      const insertedId = reactEditor.blocks.insertBlock(createTableCellInput(width), anchor?.id).id;
       if (!anchor) reactEditor.blocks.moveBlocks([insertedId], tableRow.id, "inside");
       insertedIds.push(insertedId);
     });
@@ -534,7 +534,7 @@ export function tableExtension(): ReactEditorExtension {
     id: "block.table",
     setup: (reactEditor) => {
       reactEditor.extensions.mount(TableStyles);
-      reactEditor.blocks.register({
+      reactEditor.blockTypes.register({
         definition: {
           type: TABLE_BLOCK_TYPE,
           title: "Table",
@@ -543,7 +543,7 @@ export function tableExtension(): ReactEditorExtension {
         render: Table,
         view: tableView,
       });
-      reactEditor.blocks.register({
+      reactEditor.blockTypes.register({
         definition: {
           type: TABLE_ROW_BLOCK_TYPE,
           title: "Table row",
@@ -552,7 +552,7 @@ export function tableExtension(): ReactEditorExtension {
         render: TableRow,
         view: tableRowView,
       });
-      reactEditor.blocks.register({
+      reactEditor.blockTypes.register({
         definition: {
           type: TABLE_CELL_BLOCK_TYPE,
           title: "Table cell",

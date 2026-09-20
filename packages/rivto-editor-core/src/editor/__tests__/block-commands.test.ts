@@ -4,7 +4,7 @@ import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl } from "@chulane/document-model";
 import { createTestEditor as createRivtoEditor } from "../test-utils";
 
-describe("EditorRuntime block commands", () => {
+describe("EditorRuntime block manager", () => {
   const expectOneUpdate = (editor: ReturnType<typeof createRivtoEditor>, action: () => void): void => {
     const calls: number[] = [];
     const unsubscribe = editor.subscribe(() => calls.push(editor.revision));
@@ -21,8 +21,8 @@ describe("EditorRuntime block commands", () => {
   it("mutates blocks through registered commands", () => {
     const editor = createRivtoEditor();
 
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
 
     editor.blocks.setBlockProp(firstId, "tone", "info");
     editor.blocks.indentBlock(secondId);
@@ -56,14 +56,14 @@ describe("EditorRuntime block commands", () => {
 
   it("converts a block without losing identity or nested data", () => {
     const editor = createRivtoEditor();
-    editor.blocksRegistry.defineBlock({ type: "heading2" });
+    editor.blockRegistry.defineBlock({ type: "heading2" });
     const id = editor.blocks.insertBlock({
       type: "paragraph",
       props: { old: true },
       pluginData: { demo: { pinned: true } },
       content: "Title",
       children: [{ type: "paragraph", content: "Child" }],
-    });
+    }).id;
 
     editor.blocks.setBlockType(id, "heading2");
 
@@ -83,7 +83,7 @@ describe("EditorRuntime block commands", () => {
 
   it("merges and repairs destination properties when changing type", () => {
     const editor = createRivtoEditor();
-    editor.blocksRegistry.defineBlock({
+    editor.blockRegistry.defineBlock({
       type: "card",
       defaultProps: {
         count: 1,
@@ -106,7 +106,7 @@ describe("EditorRuntime block commands", () => {
         required: "Present",
         extensionValue: { enabled: true },
       },
-    });
+    }).id;
     editor.history.clear();
 
     editor.blocks.setBlockType(id, "card");
@@ -125,7 +125,7 @@ describe("EditorRuntime block commands", () => {
     editor.history.redo();
     expect(editor.blocks.getBlock(id)).toMatchObject({ type: "card", props: { count: 1 } });
 
-    const failing = editor.blocks.insertBlock({ type: "paragraph", props: { required: 3 } });
+    const failing = editor.blocks.insertBlock({ type: "paragraph", props: { required: 3 } }).id;
     expect(() => editor.blocks.setBlockType(failing, "card")).toThrow();
     expect(editor.blocks.getBlock(failing)).toMatchObject({ type: "paragraph", props: { required: 3 } });
     editor.destroy();
@@ -134,15 +134,15 @@ describe("EditorRuntime block commands", () => {
   it("evaluates dynamic defaults once per creation and conversion", () => {
     const editor = createRivtoEditor();
     let sequence = 0;
-    editor.blocksRegistry.defineBlock({
+    editor.blockRegistry.defineBlock({
       type: "dynamic",
       defaultProps: () => ({ sequence: ++sequence, repaired: sequence }),
       propSchema: z.object({ sequence: z.number(), repaired: z.number() }),
     });
 
-    const first = editor.blocks.insertBlock({ type: "dynamic" });
-    const second = editor.blocks.insertBlock({ type: "dynamic" });
-    const converted = editor.blocks.insertBlock({ type: "paragraph", props: { repaired: "invalid", extra: true } });
+    const first = editor.blocks.insertBlock({ type: "dynamic" }).id;
+    const second = editor.blocks.insertBlock({ type: "dynamic" }).id;
+    const converted = editor.blocks.insertBlock({ type: "paragraph", props: { repaired: "invalid", extra: true } }).id;
     editor.blocks.setBlockType(converted, "dynamic");
 
     expect(editor.blocks.getBlock(first)?.props).toEqual({ sequence: 1, repaired: 1 });
@@ -165,9 +165,9 @@ describe("EditorRuntime block commands", () => {
         content: "Child",
         children: [{ type: "paragraph", content: "Grandchild" }],
       }],
-    });
+    }).id;
     const childId = editor.blocks.getChildIds(id)[0]!;
-    const outsideId = editor.blocks.insertBlock({ type: "paragraph", content: "Outside" }, id);
+    const outsideId = editor.blocks.insertBlock({ type: "paragraph", content: "Outside" }, id).id;
     editor.history.clear();
 
     expectOneUpdate(editor, () => editor.blocks.clearBlock(id));
@@ -200,12 +200,12 @@ describe("EditorRuntime block commands", () => {
       type: "paragraph",
       content: "First",
       children: [{ type: "paragraph", content: "First child" }],
-    });
+    }).id;
     const second = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Second",
       children: [{ type: "paragraph", content: "Second child" }],
-    }, first);
+    }, first).id;
     editor.history.clear();
 
     expectOneUpdate(editor, () => {
@@ -231,8 +231,8 @@ describe("EditorRuntime block commands", () => {
 
   it("preserves opaque list properties across block types", () => {
     const editor = createRivtoEditor();
-    editor.blocksRegistry.defineBlock({ type: "heading2" });
-    editor.blocksRegistry.defineBlock({
+    editor.blockRegistry.defineBlock({ type: "heading2" });
+    editor.blockRegistry.defineBlock({
       type: "strict",
       propSchema: z.object({ tone: z.string().optional() }).strict(),
     });
@@ -240,12 +240,12 @@ describe("EditorRuntime block commands", () => {
       type: "strict",
       props: { tone: "info" },
       children: [{ type: "paragraph", content: "Child" }],
-    });
+    }).id;
     const initiallyCollapsed = editor.blocks.insertBlock({
       type: "paragraph",
       listProps: { collapsed: true },
       children: [{ type: "paragraph" }],
-    }, id);
+    }, id).id;
 
     expect(editor.blocks.getBlock(id)?.listProps.collapsed).toBeUndefined();
     expect(editor.blocks.getBlock(initiallyCollapsed)?.listProps.collapsed).toBe(true);
@@ -267,11 +267,11 @@ describe("EditorRuntime block commands", () => {
 
   it("merges, portability-checks, and undoes opaque list state atomically", () => {
     const editor = createRivtoEditor();
-    const first = editor.blocks.insertBlock({ type: "paragraph" });
+    const first = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const second = editor.blocks.insertBlock({
       type: "paragraph",
       listProps: { type: "checkbox", checked: true },
-    }, first);
+    }, first).id;
 
     expect(editor.blocks.getBlock(first)?.listProps).toEqual({});
     expect(editor.blocks.getBlock(second)?.listProps).toEqual({ type: "checkbox", checked: true });
@@ -283,10 +283,10 @@ describe("EditorRuntime block commands", () => {
     expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
     expect(editor.blocks.getBlock(second)?.listProps.checked).toBe(false);
 
-    expect(() => editor.commands.execute("block.update-many", { updates: [
+    expect(() => editor.blocks.updateBlocks([
       { id: first, patch: { listProps: { type: "list" } } },
       { id: second, patch: { listProps: { checked: Number.POSITIVE_INFINITY } } },
-    ] })).toThrow("block.listProps.checked must be a finite number");
+    ])).toThrow("block.listProps.checked must be a finite number");
     expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
 
     editor.history.undo();
@@ -304,13 +304,13 @@ describe("EditorRuntime block commands", () => {
       type: "paragraph",
       content: "First",
       children: [{ type: "paragraph", content: "First child" }],
-    });
-    const leaf = editor.blocks.insertBlock({ type: "paragraph", content: "Leaf" }, first);
+    }).id;
+    const leaf = editor.blocks.insertBlock({ type: "paragraph", content: "Leaf" }, first).id;
     const second = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Second",
       children: [{ type: "paragraph", content: "Second child" }],
-    }, leaf);
+    }, leaf).id;
     const updates = jest.fn();
     const unsubscribe = editor.subscribe(updates);
 
@@ -351,7 +351,7 @@ describe("EditorRuntime block commands", () => {
       type: "paragraph",
       content: "Parent",
       children: [{ type: "paragraph", content: "Child" }],
-    });
+    }).id;
     Y.applyUpdate(rightDocument.doc, Y.encodeStateAsUpdate(leftDocument.doc));
 
     left.blocks.updateBlocks([{ id: parent, patch: { listProps: { collapsed: true } } }]);
@@ -368,10 +368,10 @@ describe("EditorRuntime block commands", () => {
     let secondId = "";
 
     expectOneUpdate(editor, () => {
-      firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
+      firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     });
     expectOneUpdate(editor, () => {
-      secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+      secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
     });
     expectOneUpdate(editor, () => {
       editor.blocks.updateBlock(firstId, { content: "First updated" });
@@ -400,14 +400,14 @@ describe("EditorRuntime block commands", () => {
 
   it("outdents once and adopts every following sibling after existing children", () => {
     const editor = createRivtoEditor();
-    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" });
-    const beforeId = editor.blocks.insertBlock({ type: "paragraph", content: "Before" }, parentId);
+    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
+    const beforeId = editor.blocks.insertBlock({ type: "paragraph", content: "Before" }, parentId).id;
     editor.blocks.indentBlock(beforeId);
-    const currentId = editor.blocks.insertBlock({ type: "paragraph", content: "Current" }, beforeId);
-    const existingChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Existing child" }, currentId);
+    const currentId = editor.blocks.insertBlock({ type: "paragraph", content: "Current" }, beforeId).id;
+    const existingChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Existing child" }, currentId).id;
     editor.blocks.indentBlock(existingChildId);
-    const followingId = editor.blocks.insertBlock({ type: "paragraph", content: "Following" }, currentId);
-    const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, followingId);
+    const followingId = editor.blocks.insertBlock({ type: "paragraph", content: "Following" }, currentId).id;
+    const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, followingId).id;
 
     expectOneUpdate(editor, () => editor.blocks.outdentBlock(currentId));
 
@@ -438,11 +438,11 @@ describe("EditorRuntime block commands", () => {
 
   it("indents consecutive selected roots as one group without moving descendants twice", () => {
     const editor = createRivtoEditor();
-    const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" });
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId);
-    const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, firstId);
+    const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" }).id;
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId).id;
+    const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, firstId).id;
     editor.blocks.indentBlock(childId);
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
 
     const documentUpdates = jest.fn();
     const unsubscribe = editor.subscribe(documentUpdates);
@@ -468,10 +468,10 @@ describe("EditorRuntime block commands", () => {
 
   it("does not partially indent a non-consecutive selection", () => {
     const editor = createRivtoEditor();
-    const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" });
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId);
-    const gapId = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, firstId);
-    const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, gapId);
+    const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" }).id;
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId).id;
+    const gapId = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, firstId).id;
+    const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, gapId).id;
     const documentUpdates = jest.fn();
     const unsubscribe = editor.subscribe(documentUpdates);
 
@@ -485,8 +485,8 @@ describe("EditorRuntime block commands", () => {
 
   it("rejects moving a block into its own subtree", () => {
     const editor = createRivtoEditor();
-    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" });
-    const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, parentId);
+    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
+    const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, parentId).id;
     editor.blocks.indentBlock(childId);
 
     expect(() => editor.blocks.moveBlock(parentId, childId)).toThrow("relative to its descendant");
@@ -499,10 +499,10 @@ describe("EditorRuntime block commands", () => {
 
   it("moves one block with its nested subtree in one undoable update", () => {
     const editor = createRivtoEditor();
-    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" });
-    const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, parentId);
+    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
+    const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, parentId).id;
     editor.blocks.indentBlock(childId);
-    const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, parentId);
+    const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, parentId).id;
     const documentUpdates = jest.fn();
     const unsubscribe = editor.subscribe(documentUpdates);
 
@@ -524,11 +524,11 @@ describe("EditorRuntime block commands", () => {
 
   it("moves sibling roots in source order as one undoable update", () => {
     const editor = createRivtoEditor();
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const gapId = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, firstId);
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, gapId);
-    const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, secondId);
-    const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, firstId);
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const gapId = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, firstId).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, gapId).id;
+    const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, secondId).id;
+    const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, firstId).id;
     editor.blocks.indentBlock(childId);
     const documentUpdates = jest.fn();
     const unsubscribe = editor.subscribe(documentUpdates);
@@ -546,10 +546,10 @@ describe("EditorRuntime block commands", () => {
 
   it("rejects grouped moves whose roots have different parents", () => {
     const editor = createRivtoEditor();
-    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" });
-    const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, parentId);
+    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
+    const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, parentId).id;
     editor.blocks.indentBlock(childId);
-    const siblingId = editor.blocks.insertBlock({ type: "paragraph", content: "Sibling" }, parentId);
+    const siblingId = editor.blocks.insertBlock({ type: "paragraph", content: "Sibling" }, parentId).id;
 
     expect(() => editor.blocks.moveBlocks([childId, siblingId], parentId, "before")).toThrow("share the same parent");
     expect(editor.blocks.getBlocks()).toMatchObject([
@@ -561,11 +561,11 @@ describe("EditorRuntime block commands", () => {
 
   it("moves a block before a nested sibling", () => {
     const editor = createRivtoEditor();
-    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" });
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, parentId);
+    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, parentId).id;
     editor.blocks.indentBlock(firstId);
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-    const movedId = editor.blocks.insertBlock({ type: "paragraph", content: "Moved" }, parentId);
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
+    const movedId = editor.blocks.insertBlock({ type: "paragraph", content: "Moved" }, parentId).id;
 
     editor.blocks.moveBlock(movedId, secondId, "before");
 
@@ -578,10 +578,10 @@ describe("EditorRuntime block commands", () => {
 
   it("moves a block inside another block as its last child", () => {
     const editor = createRivtoEditor();
-    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" });
-    const existingChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Existing" }, parentId);
+    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
+    const existingChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Existing" }, parentId).id;
     editor.blocks.indentBlock(existingChildId);
-    const movedId = editor.blocks.insertBlock({ type: "paragraph", content: "Moved" }, parentId);
+    const movedId = editor.blocks.insertBlock({ type: "paragraph", content: "Moved" }, parentId).id;
 
     editor.blocks.moveBlock(movedId, parentId, "inside");
 
@@ -594,14 +594,14 @@ describe("EditorRuntime block commands", () => {
 
   it("outdents consecutive selected roots as one group and adopts their following siblings", () => {
     const editor = createRivtoEditor();
-    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" });
-    const beforeId = editor.blocks.insertBlock({ type: "paragraph", content: "Before" }, parentId);
+    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
+    const beforeId = editor.blocks.insertBlock({ type: "paragraph", content: "Before" }, parentId).id;
     editor.blocks.indentBlock(beforeId);
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, beforeId);
-    const existingChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Existing child" }, firstId);
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, beforeId).id;
+    const existingChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Existing child" }, firstId).id;
     editor.blocks.indentBlock(existingChildId);
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-    const followingId = editor.blocks.insertBlock({ type: "paragraph", content: "Following" }, secondId);
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
+    const followingId = editor.blocks.insertBlock({ type: "paragraph", content: "Following" }, secondId).id;
 
     const documentUpdates = jest.fn();
     const unsubscribe = editor.subscribe(documentUpdates);
@@ -629,11 +629,11 @@ describe("EditorRuntime block commands", () => {
 
   it("merges text and descendants in one undoable update", () => {
     const editor = createRivtoEditor();
-    const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Before" });
-    const targetChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Target child" }, targetId);
+    const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Before" }).id;
+    const targetChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Target child" }, targetId).id;
     editor.blocks.indentBlock(targetChildId);
-    const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "After" }, targetId);
-    const sourceChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Source child" }, sourceId);
+    const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "After" }, targetId).id;
+    const sourceChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Source child" }, sourceId).id;
     editor.blocks.indentBlock(sourceChildId);
     let joinOffset = -1;
 
@@ -675,7 +675,7 @@ describe("EditorRuntime block commands", () => {
     editor.subscribe(listener);
     const before = editor.revision;
 
-    expect(() => editor.commands.execute("block.insert", { block: { type: "missing" } })).toThrow("unavailable");
+    expect(() => editor.blocks.insertBlock({ type: "missing" })).toThrow("unavailable");
 
     expect(listener).not.toHaveBeenCalled();
     expect(editor.revision).toBe(before);
@@ -684,8 +684,8 @@ describe("EditorRuntime block commands", () => {
 
   it("loads and dumps snapshots through editor methods", () => {
     const editor = createRivtoEditor();
-    const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Source" });
-    const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, sourceId);
+    const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Source" }).id;
+    const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, sourceId).id;
 
     expect(editor.dump()).toMatchObject({
       version: 6,
@@ -706,23 +706,20 @@ describe("EditorRuntime block commands", () => {
     });
 
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
-    expect(() => editor.commands.execute("document.load", {
-      snapshot: { version: 3, blocks: [] },
-    })).toThrow("Unsupported Rivto document snapshot version: 3");
+    expect(() => editor.load({ version: 3, blocks: [] } as never))
+      .toThrow("Unsupported Rivto document snapshot version: 3");
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
-    expect(() => editor.commands.execute("document.load", {
-      snapshot: {
-        version: 6,
-        blocks: [{
-          id: "invalid",
-          type: "paragraph",
-          props: {},
-          pluginData: {},
-          content: "",
-          children: [],
-        }],
-      },
-    })).toThrow("block.listProps must be an object");
+    expect(() => editor.load({
+      version: 6,
+      blocks: [{
+        id: "invalid",
+        type: "paragraph",
+        props: {},
+        pluginData: {},
+        content: "",
+        children: [],
+      }],
+    } as never)).toThrow("block.listProps must be an object");
     editor.destroy();
   });
 });
