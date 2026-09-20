@@ -1,6 +1,7 @@
 /** Clipboard operations retain hierarchy and handle text ranges explicitly. */
 import { createTestEditor as createRivtoEditor, createStructuralSelection, testCaret, testRange } from "../../editor/test-utils";
 import { PasteStrategyRegistry } from "./strategies";
+import { CLIPBOARD_BUNDLE_VERSION } from "./clipboard-data";
 
 describe("core ClipboardManager", () => {
   it.each(["block", "edgeless"] as const)("replaces an explicit reverse text range in %s mode atomically", (mode) => {
@@ -44,7 +45,7 @@ describe("core ClipboardManager", () => {
   it("imports older partial-text bundles with multiple blocks into an explicit target", () => {
     const editor = createRivtoEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "LeftRight" }).id;
-    const bundle = { version: 4 as const, startsWithText: true, blocks: ["First", "Middle", "Last"].map((content) => ({
+    const bundle = { version: CLIPBOARD_BUNDLE_VERSION, fromTextSelection: true, blocks: ["First", "Middle", "Last"].map((content) => ({
       id: content, type: "paragraph", content, props: {}, listProps: {}, pluginData: {}, children: [],
     })) };
     const caret = editor.clipboard.paste({ bundle, textTarget: testCaret(id, 4) });
@@ -191,7 +192,7 @@ describe("core ClipboardManager", () => {
 
     editor.clipboard.paste({
       bundle: {
-        version: 4,
+        version: CLIPBOARD_BUNDLE_VERSION,
         blocks: [{
           id: "invalid",
           type: "missing",
@@ -227,7 +228,7 @@ describe("core ClipboardManager", () => {
 
     editor.clipboard.paste({
       bundle: {
-        version: 4,
+        version: CLIPBOARD_BUNDLE_VERSION,
         blocks: [{
           id: "clipboard-block",
           type: "paragraph",
@@ -385,7 +386,7 @@ describe("core ClipboardManager", () => {
       { blockId: sourceId, offset: 0 },
       { blockId: sourceId, offset: 3 },
     ))!;
-    expect(bundle.startsWithText).toBe(true);
+    expect(bundle.fromTextSelection).toBe(true);
 
     const target = createRivtoEditor();
     const targetId = target.blocks.insertBlock({ type: "paragraph", content: "AB" }).id;
@@ -424,8 +425,8 @@ describe("core ClipboardManager", () => {
       textTarget: testCaret(id, 2),
       placement: { mergeText: false },
       bundle: {
-        version: 4,
-        startsWithText: true,
+        version: CLIPBOARD_BUNDLE_VERSION,
+        fromTextSelection: true,
         blocks: [{
           id: "clip", type: "paragraph", content: "Clip", props: {}, listProps: {}, pluginData: {}, children: [],
         }],

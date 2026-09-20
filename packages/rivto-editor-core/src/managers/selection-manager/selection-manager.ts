@@ -97,7 +97,7 @@ export class SelectionManager implements SelectionManagerApi {
       end: { blockId: last.block.id, offset: last.range.endOffset },
       blocks: members.map(({ block }) => block),
       ranges,
-      startsWithText,
+      fromTextSelection: startsWithText,
     };
   }
 
