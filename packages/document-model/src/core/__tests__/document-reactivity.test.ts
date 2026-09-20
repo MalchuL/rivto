@@ -160,7 +160,7 @@ describe("document reactivity", () => {
 
     expect(calls).toBe(1);
     expect(right.blocks.getBlock("remote")).not.toBe(before);
-    expect(right.blocks.getBlock("remote")?.content).toBe("after");
+    expect(right.blocks.getBlockNode("remote")?.content).toBe("after");
     void leftDoc.destroy();
     void rightDoc.destroy();
   });

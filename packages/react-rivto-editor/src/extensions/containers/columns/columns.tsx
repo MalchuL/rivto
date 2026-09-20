@@ -354,7 +354,7 @@ export function columnsExtension(): ReactEditorExtension {
         title: "Columns",
         group: "Turn into",
         keywords: ["layout", "split", "grid"],
-        isAvailable: ({ blockId }) => reactEditor.blocks.getBlock(blockId)?.children.length === 0,
+        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId),
         execute: ({ blockId }) => {
           convertLeafToContainer(reactEditor, blockId, createColumnsBlockInput());
         },

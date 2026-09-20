@@ -124,6 +124,8 @@ export interface DocumentBlockManagerApi {
   subscribeStructure(listener: () => void): () => void;
   /** @param id - Parent block identifier. @returns Ordered direct-child identifiers. */
   getChildIds(id: string): string[];
+  /** @param id - Parent block identifier. @returns True when the block has at least one child. */
+  hasChildren(id: string): boolean;
   /** @param id - Block identifier. @returns Parent ID, null for roots, or undefined when absent. */
   getParentId(id: string): string | null | undefined;
   /** @param id - Block identifier. @returns True when the block exists and has no parent. */

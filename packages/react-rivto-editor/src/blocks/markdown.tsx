@@ -75,7 +75,7 @@ export function MarkdownContent({
   const source = editing.block?.content ?? "";
 
   const updateCode = useCallback((node: PositionedNode, value: string) => {
-    const current = reactEditor.blocks.getBlock(blockId)?.content ?? "";
+    const current = reactEditor.blocks.getBlockNode(blockId)?.content ?? "";
     reactEditor.blocks.updateBlock(blockId, { content: replaceMarkdownCode(current, node, value) });
   }, [blockId, reactEditor]);
   const transformUrl = useCallback<UrlTransform>((url) => {

@@ -48,10 +48,9 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     expect(batch).not.toContainEqual(expect.objectContaining({ children: expect.anything() }));
     expect(getBlock).not.toHaveBeenCalled();
     getBlock.mockRestore();
-    expect(editor.blocks.getBlock(first.id)).toMatchObject({
+    expect(editor.blocks.getBlockNode(first.id)).toMatchObject({
       content: "Updated",
       props: { tone: "info" },
-      children: [{ content: "Child" }],
     });
     editor.destroy();
   });
@@ -83,7 +82,7 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
       { id: rootId, keys: ["collapsed"] },
       { id: "missing", keys: ["collapsed"] },
     ])).toThrow("Block missing not found");
-    expect(editor.blocks.getBlock(rootId)?.listProps).toEqual({ collapsed: false });
+    expect(editor.blocks.getBlockNode(rootId)?.listProps).toEqual({ collapsed: false });
     editor.destroy();
   });
 
@@ -184,7 +183,7 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     const exposesDocument: "document" extends keyof typeof editor ? true : false = false;
     expect(exposesDocument).toBe(false);
     expect(editor.blocks.mergeBlocks(target, source)).toBe(6);
-    expect(editor.blocks.getBlock(target)?.content).toBe("Hello world");
+    expect(editor.blocks.getBlockNode(target)?.content).toBe("Hello world");
     expect(editor.blocks.getChildIds(target)).toEqual(["child"]);
     editor.history.undo();
     expect(editor.dump()).toEqual(before);

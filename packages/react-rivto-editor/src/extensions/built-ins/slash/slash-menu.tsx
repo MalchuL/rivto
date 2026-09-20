@@ -216,7 +216,7 @@ export function SlashMenu() {
   const execute = useCallback((command: SlashCommand) => {
     const current = sessionRef.current;
     if (!current || !root) return;
-    const block = reactEditor.blocks.getBlock(current.blockId);
+    const block = reactEditor.blocks.getBlockNode(current.blockId);
     if (!block) return close();
     const caret = current.slashOffset + current.query.length + 1;
     if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();

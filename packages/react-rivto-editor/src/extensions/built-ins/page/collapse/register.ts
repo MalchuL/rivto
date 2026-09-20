@@ -54,15 +54,17 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     const selection = nativeSelection ?? current;
     const ids = collapseTargets(selection);
     if (!ids.length) return false;
-    const blocks = [...new Set(ids)].map((id) => reactEditor.blocks.getBlock(id));
-    if (blocks.some((block) => !block)) return false;
-    const first = blocks[0]!;
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.some((id) => !reactEditor.blocks.hasBlock(id))) return false;
+    const first = reactEditor.blocks.getBlockNode(uniqueIds[0]!);
+    if (!first) return false;
     const collapsed = value === "toggle" ? first.listProps.collapsed !== true : value;
-    const updates = blocks.flatMap((block) => (
-      block && (!collapsed || block.children.length > 0) && block.listProps.collapsed !== collapsed
-        ? [{ id: block.id, patch: { listProps: { collapsed } } }]
-        : []
-    ));
+    const updates = uniqueIds.flatMap((id) => {
+      const block = reactEditor.blocks.getBlockNode(id);
+      return block && (!collapsed || reactEditor.blocks.hasChildren(id)) && block.listProps.collapsed !== collapsed
+        ? [{ id, patch: { listProps: { collapsed } } }]
+        : [];
+    });
     if (updates.length) reactEditor.blocks.updateBlocks(updates);
     return true;
   };

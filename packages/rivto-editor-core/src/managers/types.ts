@@ -74,6 +74,8 @@ export interface BlockManagerApi {
   hasBlock(id: string): boolean;
   /** @param id - Block ID. @returns Detached subtree or undefined. */
   getBlock(id: string): EditorBlock | undefined;
+  /** @param id - Block ID. @returns Detached non-recursive block fields or undefined. */
+  getBlockNode(id: string): EditorBlockNode | undefined;
   /** @returns Complete detached root forest. */
   getBlocks(): EditorBlock[];
   /** @returns Root block IDs in document order. */
@@ -95,6 +97,8 @@ export interface BlockManagerApi {
   ): EditorBlockInput[];
   /** @param id - Parent ID. @returns Direct child IDs. */
   getChildIds(id: string): string[];
+  /** @param id - Parent ID. @returns True when the block has at least one child. */
+  hasChildren(id: string): boolean;
   /** @param id - Block ID. @returns Parent ID, null, or undefined. */
   getParentId(id: string): string | null | undefined;
   /** @param id - Block ID. @returns True when the block exists and has no parent. */

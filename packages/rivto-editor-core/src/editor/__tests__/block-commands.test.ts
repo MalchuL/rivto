@@ -76,7 +76,7 @@ describe("EditorRuntime block manager", () => {
       children: [{ content: "Child" }],
     });
     editor.history.undo();
-    expect(editor.blocks.getBlock(id)).toMatchObject({ type: "paragraph", props: { old: true } });
+    expect(editor.blocks.getBlockNode(id)).toMatchObject({ type: "paragraph", props: { old: true } });
     expect(() => editor.blocks.setBlockType(id, "missing")).toThrow("Unknown block type missing");
     editor.destroy();
   });
@@ -110,7 +110,7 @@ describe("EditorRuntime block manager", () => {
     editor.history.clear();
 
     editor.blocks.setBlockType(id, "card");
-    expect(editor.blocks.getBlock(id)?.props).toEqual({
+    expect(editor.blocks.getBlockNode(id)?.props).toEqual({
       count: 1,
       title: "Preserved",
       style: { color: "black", size: 12 },
@@ -118,16 +118,16 @@ describe("EditorRuntime block manager", () => {
       extensionValue: { enabled: true },
     });
     editor.history.undo();
-    expect(editor.blocks.getBlock(id)).toMatchObject({
+    expect(editor.blocks.getBlockNode(id)).toMatchObject({
       type: "paragraph",
       props: { count: "invalid", title: "Preserved", required: "Present" },
     });
     editor.history.redo();
-    expect(editor.blocks.getBlock(id)).toMatchObject({ type: "card", props: { count: 1 } });
+    expect(editor.blocks.getBlockNode(id)).toMatchObject({ type: "card", props: { count: 1 } });
 
     const failing = editor.blocks.insertBlock({ type: "paragraph", props: { required: 3 } }).id;
     expect(() => editor.blocks.setBlockType(failing, "card")).toThrow();
-    expect(editor.blocks.getBlock(failing)).toMatchObject({ type: "paragraph", props: { required: 3 } });
+    expect(editor.blocks.getBlockNode(failing)).toMatchObject({ type: "paragraph", props: { required: 3 } });
     editor.destroy();
   });
 
@@ -145,9 +145,9 @@ describe("EditorRuntime block manager", () => {
     const converted = editor.blocks.insertBlock({ type: "paragraph", props: { repaired: "invalid", extra: true } }).id;
     editor.blocks.setBlockType(converted, "dynamic");
 
-    expect(editor.blocks.getBlock(first)?.props).toEqual({ sequence: 1, repaired: 1 });
-    expect(editor.blocks.getBlock(second)?.props).toEqual({ sequence: 2, repaired: 2 });
-    expect(editor.blocks.getBlock(converted)?.props).toEqual({ sequence: 3, repaired: 3, extra: true });
+    expect(editor.blocks.getBlockNode(first)?.props).toEqual({ sequence: 1, repaired: 1 });
+    expect(editor.blocks.getBlockNode(second)?.props).toEqual({ sequence: 2, repaired: 2 });
+    expect(editor.blocks.getBlockNode(converted)?.props).toEqual({ sequence: 3, repaired: 3, extra: true });
     expect(sequence).toBe(3);
     editor.destroy();
   });
@@ -181,8 +181,8 @@ describe("EditorRuntime block manager", () => {
       content: "",
       children: [],
     });
-    expect(editor.blocks.getBlock(childId)).toBeUndefined();
-    expect(editor.blocks.getBlock(outsideId)?.content).toBe("Outside");
+    expect(editor.blocks.hasBlock(childId)).toBe(false);
+    expect(editor.blocks.getBlockNode(outsideId)?.content).toBe("Outside");
 
     editor.history.undo();
     expect(editor.blocks.getBlock(id)).toMatchObject({
@@ -247,21 +247,21 @@ describe("EditorRuntime block manager", () => {
       children: [{ type: "paragraph" }],
     }, id).id;
 
-    expect(editor.blocks.getBlock(id)?.listProps.collapsed).toBeUndefined();
-    expect(editor.blocks.getBlock(initiallyCollapsed)?.listProps.collapsed).toBe(true);
+    expect(editor.blocks.getBlockNode(id)?.listProps.collapsed).toBeUndefined();
+    expect(editor.blocks.getBlockNode(initiallyCollapsed)?.listProps.collapsed).toBe(true);
     editor.blocks.updateBlock(id, { listProps: { collapsed: true } });
-    expect(editor.blocks.getBlock(id)).toMatchObject({
+    expect(editor.blocks.getBlockNode(id)).toMatchObject({
       listProps: { collapsed: true },
       props: { tone: "info" },
     });
     editor.blocks.updateBlock(id, { listProps: { collapsed: "yes" } });
-    expect(editor.blocks.getBlock(id)?.listProps.collapsed).toBe("yes");
+    expect(editor.blocks.getBlockNode(id)?.listProps.collapsed).toBe("yes");
     editor.blocks.updateBlock(id, { listProps: { collapsed: true } });
-    expect(editor.blocks.getBlock(id)?.listProps.collapsed).toBe(true);
+    expect(editor.blocks.getBlockNode(id)?.listProps.collapsed).toBe(true);
 
     editor.blocks.setBlockType(id, "heading2");
-    expect(editor.blocks.getBlock(id)?.props).toEqual({ tone: "info" });
-    expect(editor.blocks.getBlock(id)?.listProps.collapsed).toBe(true);
+    expect(editor.blocks.getBlockNode(id)?.props).toEqual({ tone: "info" });
+    expect(editor.blocks.getBlockNode(id)?.listProps.collapsed).toBe(true);
     editor.destroy();
   });
 
@@ -273,28 +273,28 @@ describe("EditorRuntime block manager", () => {
       listProps: { type: "checkbox", checked: true },
     }, first).id;
 
-    expect(editor.blocks.getBlock(first)?.listProps).toEqual({});
-    expect(editor.blocks.getBlock(second)?.listProps).toEqual({ type: "checkbox", checked: true });
+    expect(editor.blocks.getBlockNode(first)?.listProps).toEqual({});
+    expect(editor.blocks.getBlockNode(second)?.listProps).toEqual({ type: "checkbox", checked: true });
 
     editor.blocks.updateBlocks([
       { id: first, patch: { listProps: { type: "start_numbered_list" } } },
       { id: second, patch: { listProps: { checked: false } } },
     ]);
-    expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
-    expect(editor.blocks.getBlock(second)?.listProps.checked).toBe(false);
+    expect(editor.blocks.getBlockNode(first)?.listProps.type).toBe("start_numbered_list");
+    expect(editor.blocks.getBlockNode(second)?.listProps.checked).toBe(false);
 
     expect(() => editor.blocks.updateBlocks([
       { id: first, patch: { listProps: { type: "list" } } },
       { id: second, patch: { listProps: { checked: Number.POSITIVE_INFINITY } } },
     ])).toThrow("block.listProps.checked must be a finite number");
-    expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
+    expect(editor.blocks.getBlockNode(first)?.listProps.type).toBe("start_numbered_list");
 
     editor.history.undo();
-    expect(editor.blocks.getBlock(first)?.listProps.type).toBeUndefined();
-    expect(editor.blocks.getBlock(second)?.listProps.checked).toBe(true);
+    expect(editor.blocks.getBlockNode(first)?.listProps.type).toBeUndefined();
+    expect(editor.blocks.getBlockNode(second)?.listProps.checked).toBe(true);
     editor.history.redo();
-    expect(editor.blocks.getBlock(first)?.listProps.type).toBe("start_numbered_list");
-    expect(editor.blocks.getBlock(second)?.listProps.checked).toBe(false);
+    expect(editor.blocks.getBlockNode(first)?.listProps.type).toBe("start_numbered_list");
+    expect(editor.blocks.getBlockNode(second)?.listProps.checked).toBe(false);
     editor.destroy();
   });
 
@@ -322,20 +322,20 @@ describe("EditorRuntime block manager", () => {
     ]);
 
     expect(updates).toHaveBeenCalledTimes(1);
-    expect(editor.blocks.getBlock(first)).toMatchObject({ listProps: { collapsed: true }, props: { order: "last" } });
-    expect(editor.blocks.getBlock(second)?.listProps.collapsed).toBe(true);
-    expect(editor.blocks.getBlock(leaf)?.listProps.collapsed).toBe(true);
+    expect(editor.blocks.getBlockNode(first)).toMatchObject({ listProps: { collapsed: true }, props: { order: "last" } });
+    expect(editor.blocks.getBlockNode(second)?.listProps.collapsed).toBe(true);
+    expect(editor.blocks.getBlockNode(leaf)?.listProps.collapsed).toBe(true);
     expect(() => editor.blocks.updateBlocks([
       { id: first, patch: { listProps: { collapsed: false } } },
       { id: "missing", patch: { listProps: { collapsed: true } } },
     ])).toThrow("Block missing not found");
-    expect(editor.blocks.getBlock(first)?.listProps.collapsed).toBe(true);
+    expect(editor.blocks.getBlockNode(first)?.listProps.collapsed).toBe(true);
     expect(updates).toHaveBeenCalledTimes(1);
 
     editor.history.undo();
-    expect(editor.blocks.getBlock(first)).toMatchObject({ listProps: {}, props: {} });
-    expect(editor.blocks.getBlock(second)?.listProps.collapsed).toBeUndefined();
-    expect(editor.blocks.getBlock(leaf)?.listProps.collapsed).toBeUndefined();
+    expect(editor.blocks.getBlockNode(first)).toMatchObject({ listProps: {}, props: {} });
+    expect(editor.blocks.getBlockNode(second)?.listProps.collapsed).toBeUndefined();
+    expect(editor.blocks.getBlockNode(leaf)?.listProps.collapsed).toBeUndefined();
     unsubscribe();
     editor.destroy();
   });
@@ -357,7 +357,7 @@ describe("EditorRuntime block manager", () => {
     left.blocks.updateBlocks([{ id: parent, patch: { listProps: { collapsed: true } } }]);
     Y.applyUpdate(rightDocument.doc, Y.encodeStateAsUpdate(leftDocument.doc));
 
-    expect(right.blocks.getBlock(parent)?.listProps.collapsed).toBe(true);
+    expect(right.blocks.getBlockNode(parent)?.listProps.collapsed).toBe(true);
     left.destroy();
     right.destroy();
   });
@@ -647,7 +647,7 @@ describe("EditorRuntime block manager", () => {
       content: "BeforeAfter",
       children: [{ id: targetChildId }, { id: sourceChildId }],
     }]);
-    expect(editor.blocks.getBlock(sourceId)).toBeUndefined();
+    expect(editor.blocks.hasBlock(sourceId)).toBe(false);
 
     editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([

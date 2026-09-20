@@ -72,6 +72,8 @@ export interface BlocksCapability {
   hasBlock(id: string): boolean;
   /** @param id - Block identifier. @returns Detached subtree, or undefined when absent. */
   getBlock(id: string): EditorBlock | undefined;
+  /** @param id - Block identifier. @returns Detached non-recursive block fields, or undefined when absent. */
+  getBlockNode(id: string): EditorBlockNode | undefined;
   /** @returns The complete detached root forest. */
   getBlocks(): EditorBlock[];
   /** @returns Root block identifiers in document order. */
@@ -97,6 +99,8 @@ export interface BlocksCapability {
   subscribeStructure(listener: () => void): () => void;
   /** @param id - Parent block identifier. @returns Direct child identifiers in document order. */
   getChildIds(id: string): string[];
+  /** @param id - Parent block identifier. @returns True when the block has at least one child. */
+  hasChildren(id: string): boolean;
   /** @param id - Block identifier. @returns Parent ID, null at root, or undefined when absent. */
   getParentId(id: string): string | null | undefined;
   /** @param id - Block identifier. @returns True when the block exists and has no parent. */

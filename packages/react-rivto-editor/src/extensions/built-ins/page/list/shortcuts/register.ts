@@ -87,7 +87,7 @@ export function registerListShortcuts(reactEditor: ReactEditor): void {
       return false;
     }
     queueMicrotask(() => {
-      const block = reactEditor.blocks.getBlock(blockId);
+      const block = reactEditor.blocks.getBlockNode(blockId);
       const shortcut = block ? listShortcutPatch(block.content.replaceAll("\u00a0", " ")) : undefined;
       if (!shortcut) return;
       convert(blockId, root, shortcut);

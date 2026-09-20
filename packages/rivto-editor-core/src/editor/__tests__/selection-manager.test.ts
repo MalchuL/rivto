@@ -259,7 +259,7 @@ describe("EditorRuntime selection", () => {
       startOffset: 2, endOffset: 2, invalid: true,
     });
     editor.selection.delete();
-    expect(editor.blocks.getBlock(id)?.content).toBe("Hello");
+    expect(editor.blocks.getBlockNode(id)?.content).toBe("Hello");
     expect(editor.selection.get()).toMatchObject({
       type: "selection",
       blocks: [{ id, start: 2, end: 2 }],
@@ -271,7 +271,7 @@ describe("EditorRuntime selection", () => {
       focusBlockId: id,
     });
     const caret = editor.clipboard.paste({ text: "X", defaultBlockType: "paragraph" });
-    expect(editor.blocks.getBlock(id)?.content).toBe("HeXllo");
+    expect(editor.blocks.getBlockNode(id)?.content).toBe("HeXllo");
     expect(caret).toEqual({ blockId: id, offset: 3 });
     editor.destroy();
   });

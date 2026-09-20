@@ -116,7 +116,7 @@ describe("edgelessVisualsExtension", () => {
     expect(editor.elements.getElement(visualId)?.frame.x).toBe(10);
     expect(Math.min(editor.elements.getElement(blockElementId)!.zIndex, editor.elements.getElement(visualId)!.zIndex)).toBeGreaterThanOrEqual(0);
     editor.commands.execute("edgeless.visual.delete", { selection: true });
-    expect(editor.blocks.getBlock(blockId)).toBeUndefined();
+    expect(editor.blocks.hasBlock(blockId)).toBe(false);
     expect(editor.elements.getElement(visualId)).toBeUndefined();
     reactEditor.destroy();
     editor.destroy();

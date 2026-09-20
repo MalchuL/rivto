@@ -40,10 +40,10 @@ describe("separator block extension", () => {
 
     const roots = editor.blocks.getRootIds();
     expect(roots).toHaveLength(3);
-    expect(editor.blocks.getBlock(roots[0]!)?.content).toBe("Keep me");
-    expect(editor.blocks.getBlock(roots[1]!)?.type).toBe(SEPARATOR_BLOCK_TYPE);
-    expect(editor.blocks.getBlock(roots[2]!)?.type).toBe("paragraph");
-    expect(editor.blocks.getBlock(roots[2]!)?.content).toBe("");
+    expect(editor.blocks.getBlockNode(roots[0]!)?.content).toBe("Keep me");
+    expect(editor.blocks.getBlockNode(roots[1]!)?.type).toBe(SEPARATOR_BLOCK_TYPE);
+    expect(editor.blocks.getBlockNode(roots[2]!)?.type).toBe("paragraph");
+    expect(editor.blocks.getBlockNode(roots[2]!)?.content).toBe("");
 
     reactEditor.destroy();
     editor.destroy();
@@ -60,10 +60,10 @@ describe("separator block extension", () => {
 
     reactEditor.slashCommands.execute("block.separator.insert", { blockId: empty });
 
-    expect(editor.blocks.getBlock(empty)?.type).toBe(SEPARATOR_BLOCK_TYPE);
+    expect(editor.blocks.getBlockNode(empty)?.type).toBe(SEPARATOR_BLOCK_TYPE);
     const roots = editor.blocks.getRootIds();
     expect(roots[0]).toBe(empty);
-    expect(editor.blocks.getBlock(roots[1]!)?.type).toBe("paragraph");
+    expect(editor.blocks.getBlockNode(roots[1]!)?.type).toBe("paragraph");
 
     reactEditor.destroy();
     editor.destroy();

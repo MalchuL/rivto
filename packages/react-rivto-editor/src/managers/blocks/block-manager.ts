@@ -100,6 +100,9 @@ export class BlockManager implements BlocksCapability {
   /** @returns One detached block, when present. */
   getBlock(id: string): ReturnType<CoreBlockManager["getBlock"]> { return this.editor.blocks.getBlock(id); }
 
+  /** @returns Detached non-recursive block fields, when present. */
+  getBlockNode(id: string): ReturnType<CoreBlockManager["getBlockNode"]> { return this.editor.blocks.getBlockNode(id); }
+
   /** @returns The complete detached root forest. */
   getBlocks(): ReturnType<CoreBlockManager["getBlocks"]> { return this.editor.blocks.getBlocks(); }
 
@@ -117,6 +120,9 @@ export class BlockManager implements BlocksCapability {
 
   /** @returns Direct child identifiers for a block. */
   getChildIds(id: string): string[] { return this.editor.blocks.getChildIds(id); }
+
+  /** @returns True when the block has at least one child. */
+  hasChildren(id: string): boolean { return this.editor.blocks.hasChildren(id); }
 
   /** @returns A block's parent, root marker, or missing marker. */
   getParentId(id: string): string | null | undefined { return this.editor.blocks.getParentId(id); }

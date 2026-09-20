@@ -260,14 +260,24 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * @param id - Parent block identifier to inspect.
      * @returns Child identifiers in collaborative order, or an empty list when absent.
      */
-    getChildIds(id: string): string[] {
+  getChildIds(id: string): string[] {
         if (!this.findContainer(id)) return [];
         const value = this.storage.get(id);
         return isCRDTMap(value) ? strings(this.requiredArray(value, "children")) : [];
     }
 
-  /**
-   * Resolves one block's current structural parent.
+    /**
+     * Reports whether one placed block currently has direct children.
+     *
+     * @param id - Parent block identifier to inspect.
+     * @returns True when the block is placed and its child list is nonempty.
+     */
+    hasChildren(id: string): boolean {
+        return this.getChildIds(id).length > 0;
+    }
+
+    /**
+     * Resolves one block's current structural parent.
    *
    * @param id - Block identifier to locate in the tree.
    * @returns Parent identifier, null for a root, or undefined when absent.

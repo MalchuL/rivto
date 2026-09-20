@@ -100,7 +100,7 @@ export class ViewManager implements ViewsCapability {
    * @returns A specialized view or the shared generic fallback.
    */
   resolve(blockId: string): BlockViewBehavior {
-    const type = this.reactEditor.blocks.getBlock(blockId)?.type;
+    const type = this.reactEditor.blocks.getBlockNode(blockId)?.type;
     return (type && this.views.get(type)?.view) || this.fallback;
   }
 

@@ -264,7 +264,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   }, []);
 
   const getProps = useCallback((): Readonly<Props> | undefined => (
-    reactEditor.blocks.getBlock(blockId)?.props as Props | undefined
+    reactEditor.blocks.getBlockNode(blockId)?.props as Props | undefined
   ), [blockId, reactEditor]);
 
   const getProp = useCallback(<Key extends keyof Props,>(key: Key): Props[Key] | undefined => (

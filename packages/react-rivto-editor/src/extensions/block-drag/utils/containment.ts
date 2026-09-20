@@ -10,6 +10,6 @@ import type { ReactEditor } from "../../../types";
  * @returns Registered containment, or `undefined` when unconstrained.
  */
 export function blockContainment(reactEditor: ReactEditor, blockId: string) {
-  const type = reactEditor.blocks.getBlock(blockId)?.type;
+  const type = reactEditor.blocks.getBlockNode(blockId)?.type;
   return type ? getBlockContainment(reactEditor.blockTypes.getDefinition(type)) : undefined;
 }

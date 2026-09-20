@@ -257,7 +257,7 @@ const commitPropertiesPatch = (
   blockId: string,
   patch?: TodoItemPropertiesPatch,
 ): boolean => {
-  const block = reactEditor.blocks.getBlock(blockId);
+  const block = reactEditor.blocks.getBlockNode(blockId);
   if (!block || block.type !== TODO_ITEM_BLOCK_TYPE || !patch) return false;
   const changed = Object.fromEntries(
     Object.entries(patch).filter(([key, value]) => block.props[key] !== value),
@@ -512,7 +512,7 @@ export function todoItemExtension(
         const current = candidate;
         if (!current) return;
         candidate = undefined;
-        const block = reactEditor.blocks.getBlock(current.blockId);
+        const block = reactEditor.blocks.getBlockNode(current.blockId);
         const match = block ? matchPrompt(block.content, prompts) : undefined;
         if (!block || block.type === TODO_ITEM_BLOCK_TYPE || !match) {
           decoratePrompt(current.contentElement);
@@ -545,7 +545,7 @@ export function todoItemExtension(
             group: "Turn into",
             keywords: ["tasks", "todos"],
             isAvailable: ({ blockId }) => (
-              reactEditor.blocks.getBlock(blockId)?.children.length === 0
+              reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId)
             ),
           },
         }),
@@ -569,7 +569,7 @@ export function todoItemExtension(
         }, ({ blockId, contentElement }) => {
           if (!blockId || !contentElement) return false;
           queueMicrotask(() => {
-            const block = reactEditor.blocks.getBlock(blockId);
+            const block = reactEditor.blocks.getBlockNode(blockId);
             if (!block || block.type === TODO_ITEM_BLOCK_TYPE) return;
             const match = matchPrompt(contentElement.textContent ?? "", prompts);
             if (!match) {

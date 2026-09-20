@@ -109,6 +109,16 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
+   * Resolves one placed block without recursively materializing descendants.
+   *
+   * @param id - Persisted block identifier to resolve.
+   * @returns Detached non-recursive block fields, or undefined when absent.
+   */
+  getBlockNode(id: string): EditorBlockNode | undefined {
+    return this.document.blocks.getBlockNode(id) satisfies EditorBlockNode | undefined;
+  }
+
+  /**
    * Materializes the complete ordered root block tree.
    *
    * @returns Detached root blocks with recursively materialized children.
@@ -257,6 +267,16 @@ export class BlockManager implements BlockManagerApi {
    */
   getChildIds(id: string): string[] {
     return this.document.blocks.getChildIds(id);
+  }
+
+  /**
+   * Reports whether one placed block currently has direct children.
+   *
+   * @param id - Parent block identifier to inspect.
+   * @returns True when the block is placed and its child list is nonempty.
+   */
+  hasChildren(id: string): boolean {
+    return this.document.blocks.hasChildren(id);
   }
 
   /**

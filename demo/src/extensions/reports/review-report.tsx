@@ -162,7 +162,7 @@ function ReviewBlock({
     setSaving(true);
     setError(null);
     try {
-      const live = editor.blocks.getBlock(blockId);
+      const live = editor.blocks.getBlockNode(blockId);
       if (!live) throw new Error("Review block no longer exists");
       const liveProps = reviewBlockPropsSchema.parse(live.props);
       const capture = captureBlockReview(

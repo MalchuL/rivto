@@ -74,7 +74,7 @@ export function readKeyboardSelection(
   emptyBlockId?: string,
 ): Selection | undefined {
   const nativeSelection = selectionManager.readDOM();
-  const emptyBlock = emptyBlockId ? reactEditor.blocks.getBlock(emptyBlockId) : undefined;
+  const emptyBlock = emptyBlockId ? reactEditor.blocks.getBlockNode(emptyBlockId) : undefined;
   const focusedEmptySelection: Selection | undefined = !nativeSelection && emptyBlock?.content === ""
     ? createCaretSelection(emptyBlock.id, 0)
     : undefined;

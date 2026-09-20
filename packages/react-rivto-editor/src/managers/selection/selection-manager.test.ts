@@ -15,13 +15,13 @@ describe("ReactSelectionManager", () => {
     reactEditor.selection.set(text);
     expect(reactEditor.selection.get()).toEqual(editor.selection.get());
     reactEditor.selection.delete();
-    expect(editor.blocks.getBlock(id)?.content).toBe("After");
+    expect(editor.blocks.getBlockNode(id)?.content).toBe("After");
     expect(reactEditor.selection.get()).toMatchObject({
       type: "selection",
       blocks: [{ id, start: 0, end: 0 }],
     });
     editor.history.undo();
-    expect(editor.blocks.getBlock(id)?.content).toBe("BeforeAfter");
+    expect(editor.blocks.getBlockNode(id)?.content).toBe("BeforeAfter");
     const block = createStructuralSelection([id]);
     reactEditor.selection.set(block);
     expect(editor.selection.get()).toMatchObject({

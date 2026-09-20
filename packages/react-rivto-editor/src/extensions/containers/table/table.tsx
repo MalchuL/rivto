@@ -423,7 +423,7 @@ function resolveCellColumn(
   const rowId = reactEditor.blocks.getParentId(cellId);
   const tableId = rowId ? reactEditor.blocks.getParentId(rowId) : undefined;
   const row = rowId ? reactEditor.blocks.getBlock(rowId) : undefined;
-  const table = tableId ? reactEditor.blocks.getBlock(tableId) : undefined;
+  const table = tableId ? reactEditor.blocks.getBlockNode(tableId) : undefined;
   const column = row?.children.findIndex((cell) => cell.id === cellId) ?? -1;
   return row?.type === TABLE_ROW_BLOCK_TYPE && table?.type === TABLE_BLOCK_TYPE && column >= 0
     ? { tableId: table.id, column, width: columnWidth(row.children[column]?.props.tableColumnWidth) }
@@ -441,7 +441,7 @@ function TableCell({ blockId }: { readonly blockId: string }) {
   const reactEditor = useReactEditor();
   const { marker, host } = useBlockHost();
   const resize = useRef<ColumnResizeGesture | null>(null);
-  const currentWidth = columnWidth(reactEditor.blocks.getBlock(blockId)?.props.tableColumnWidth);
+  const currentWidth = columnWidth(reactEditor.blocks.getBlockNode(blockId)?.props.tableColumnWidth);
   /**
    * Starts a column resize from the hovered vertical boundary.
    * @param event - Primary pointer press on the resize separator.
@@ -575,7 +575,7 @@ export function tableExtension(): ReactEditorExtension {
         title: "Table",
         group: "Turn into",
         keywords: ["grid", "rows", "columns", "cells"],
-        isAvailable: ({ blockId }) => reactEditor.blocks.getBlock(blockId)?.children.length === 0,
+        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId),
         execute: ({ blockId }) => { convertLeafToContainer(reactEditor, blockId, createTableBlockInput()); },
       });
     },

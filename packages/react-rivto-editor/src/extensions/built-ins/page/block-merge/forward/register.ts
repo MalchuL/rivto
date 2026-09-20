@@ -32,7 +32,7 @@ export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
       !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, reactEditor, blockId)),
   }, ({ root, blockId }) => {
     const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, reactEditor, blockId));
-    const block = target?.collapsed ? reactEditor.blocks.getBlock(target.blockId) : undefined;
+    const block = target?.collapsed ? reactEditor.blocks.getBlockNode(target.blockId) : undefined;
     if (!target?.collapsed || !block || target.offset !== block.content.length) return false;
     const context = createBlockViewContext(reactEditor, target.blockId, root, reactEditor.selection.get());
     if (!context) return false;

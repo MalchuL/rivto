@@ -37,7 +37,7 @@ describe("core ClipboardManager", () => {
     expect(editor.clipboard.copyText(textTarget)?.blocks[0]?.content).toBe("");
     expect(editor.clipboard.paste({ textTarget, text: "Replacement", defaultBlockType: "paragraph" }))
       .toEqual({ blockId: first, offset: 11 });
-    expect(editor.blocks.getBlock(first)?.content).toBe("ReplacementFirst");
+    expect(editor.blocks.getBlockNode(first)?.content).toBe("ReplacementFirst");
     editor.destroy();
   });
 
@@ -162,7 +162,7 @@ describe("core ClipboardManager", () => {
 
 
     target.clipboard.paste({ textTarget, text: "plain", defaultBlockType: "paragraph" });
-    expect(target.blocks.getBlock(targetId)?.content).toBe("plain");
+    expect(target.blocks.getBlockNode(targetId)?.content).toBe("plain");
     target.clipboard.paste({
       textTarget: testCaret(targetId, 5),
       structured: JSON.stringify({ ...payload, version: 1 }),
@@ -351,7 +351,7 @@ describe("core ClipboardManager", () => {
     });
 
     expect(editor.blocks.getRootIds()).toEqual([id]);
-    expect(editor.blocks.getBlock(id)?.content).toBe("Before first\n    second");
+    expect(editor.blocks.getBlockNode(id)?.content).toBe("Before first\n    second");
     editor.destroy();
   });
 
@@ -362,7 +362,7 @@ describe("core ClipboardManager", () => {
 
     expect(editor.clipboard.copyText(textTarget)).toBeUndefined();
     expect(editor.clipboard.cut()).toBeUndefined();
-    expect(editor.blocks.getBlock(id)?.content).toBe("Hello");
+    expect(editor.blocks.getBlockNode(id)?.content).toBe("Hello");
     editor.destroy();
   });
 
@@ -373,7 +373,7 @@ describe("core ClipboardManager", () => {
 
     expect(editor.clipboard.copy()?.blocks).toMatchObject([{ id, content: "" }]);
     editor.selection.delete();
-    expect(editor.blocks.getBlock(id)).toBeUndefined();
+    expect(editor.blocks.hasBlock(id)).toBe(false);
     editor.destroy();
   });
 
@@ -390,7 +390,7 @@ describe("core ClipboardManager", () => {
     const target = createRivtoEditor();
     const targetId = target.blocks.insertBlock({ type: "paragraph", content: "AB" }).id;
     target.clipboard.paste({ bundle, textTarget: testCaret(targetId, 1) });
-    expect(target.blocks.getBlock(targetId)?.content).toBe("AHelB");
+    expect(target.blocks.getBlockNode(targetId)?.content).toBe("AHelB");
     source.destroy();
     target.destroy();
   });
@@ -413,7 +413,7 @@ describe("core ClipboardManager", () => {
       bundle: { version: 4, blocks: [cyclic] } as never,
     });
     expect(editor.blocks.getRootIds()).toEqual([id]);
-    expect(editor.blocks.getBlock(id)?.content).toBe("Kept");
+    expect(editor.blocks.getBlockNode(id)?.content).toBe("Kept");
     editor.destroy();
   });
 
