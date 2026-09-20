@@ -266,19 +266,29 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         return isCRDTMap(value) ? strings(this.requiredArray(value, "children")) : [];
     }
 
-    /**
-     * Resolves one block's current structural parent.
-     *
-     * @param id - Block identifier to locate in the tree.
-     * @returns Parent identifier, null for a root, or undefined when absent.
-     */
-    getParentId(id: string): string | null | undefined {
-        if (this.crdt.isTransacting) {
-            const found = this.findContainer(id);
-            return found ? found.parentId ?? null : undefined;
-        }
-        return this.blockParents.get(id);
+  /**
+   * Resolves one block's current structural parent.
+   *
+   * @param id - Block identifier to locate in the tree.
+   * @returns Parent identifier, null for a root, or undefined when absent.
+   */
+  getParentId(id: string): string | null | undefined {
+    if (this.crdt.isTransacting) {
+      const found = this.findContainer(id);
+      return found ? found.parentId ?? null : undefined;
     }
+    return this.blockParents.get(id);
+  }
+
+  /**
+   * Reports whether a block is at the root level.
+   *
+   * @param id - Block identifier to check.
+   * @returns True when the block exists and has no parent.
+   */
+  isRootBlock(id: string): boolean {
+    return this.getParentId(id) === null;
+  }
 
     /**
      * Inserts a block into an ordered root or sibling list.

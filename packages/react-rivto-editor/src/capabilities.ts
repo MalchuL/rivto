@@ -99,6 +99,8 @@ export interface BlocksCapability {
   getChildIds(id: string): string[];
   /** @param id - Block identifier. @returns Parent ID, null at root, or undefined when absent. */
   getParentId(id: string): string | null | undefined;
+  /** @param id - Block identifier. @returns True when the block exists and has no parent. */
+  isRootBlock(id: string): boolean;
   /**
    * Imports a detached forest and reports its destination identities.
    * @param blocks - Complete copied roots or creation inputs to import.

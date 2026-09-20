@@ -121,6 +121,9 @@ export class BlockManager implements BlocksCapability {
   /** @returns A block's parent, root marker, or missing marker. */
   getParentId(id: string): string | null | undefined { return this.editor.blocks.getParentId(id); }
 
+  /** @returns True when the block exists and has no parent. */
+  isRootBlock(id: string): boolean { return this.editor.blocks.isRootBlock(id); }
+
   /** Imports a detached block forest with collision remapping. */
   importForest(...args: Parameters<CoreBlockManager["importForest"]>): ReturnType<CoreBlockManager["importForest"]> {
     return this.editor.blocks.importForest(...args);

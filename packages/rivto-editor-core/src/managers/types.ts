@@ -97,6 +97,8 @@ export interface BlockManagerApi {
   getChildIds(id: string): string[];
   /** @param id - Block ID. @returns Parent ID, null, or undefined. */
   getParentId(id: string): string | null | undefined;
+  /** @param id - Block ID. @returns True when the block exists and has no parent. */
+  isRootBlock(id: string): boolean;
   /** @param block - Creation input. @param afterId - Placement anchor. @returns Complete persisted block. */
   insertBlock(block: EditorBlockInput, afterId?: string | null): EditorBlock;
   /** @param blocks - Complete copied roots or creation inputs. @param afterId - Placement anchor. @param onError - Optional one-shot node recovery. @returns Imported roots and identities. */

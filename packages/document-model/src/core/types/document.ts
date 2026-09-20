@@ -126,6 +126,8 @@ export interface DocumentBlockManagerApi {
   getChildIds(id: string): string[];
   /** @param id - Block identifier. @returns Parent ID, null for roots, or undefined when absent. */
   getParentId(id: string): string | null | undefined;
+  /** @param id - Block identifier. @returns True when the block exists and has no parent. */
+  isRootBlock(id: string): boolean;
   /**
    * Creates a source-to-destination ID map for an immediate import.
    * Available source IDs are preserved, while IDs already used by this document

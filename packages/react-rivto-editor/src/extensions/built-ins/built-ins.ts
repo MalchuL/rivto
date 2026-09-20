@@ -228,7 +228,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
           const block = reactEditor.blocks.getBlock(blockId);
           if (!block) return;
           const input = duplicateBlockInput(block);
-          const isEdgelessRoot = reactEditor.mode.get() === "edgeless" && reactEditor.blocks.getParentId(blockId) === null;
+          const isEdgelessRoot = reactEditor.mode.get() === "edgeless" && reactEditor.blocks.isRootBlock(blockId);
           const sourceElement = isEdgelessRoot
             ? reactEditor.elements.getElements().find((element) => element.type === "block" && blockIdsOf(element, reactEditor.blocks.getRootIds()).includes(blockId))
             : undefined;

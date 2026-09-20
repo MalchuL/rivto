@@ -70,7 +70,7 @@ export class BaseBlockView implements BlockViewBehavior {
       // new writing block as the first visible child.
       reactEditor.blocks.indentBlock(nextBlock.id);
       reactEditor.blocks.moveBlock(nextBlock.id, null);
-    } else if (reactEditor.mode.get() === "edgeless" && reactEditor.blocks.getParentId(block.id) === null) {
+    } else if (reactEditor.mode.get() === "edgeless" && reactEditor.blocks.isRootBlock(block.id)) {
       const element = reactEditor.elements.getElements().find((candidate) =>
         candidate.type === "block" && candidate.props.endBlockId === block.id,
       );

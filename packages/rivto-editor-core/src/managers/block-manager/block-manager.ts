@@ -270,6 +270,16 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
+   * Reports whether a block is at the root level.
+   *
+   * @param id - Block identifier to check.
+   * @returns True when the block exists and has no parent.
+   */
+  isRootBlock(id: string): boolean {
+    return this.document.blocks.isRootBlock(id);
+  }
+
+  /**
    * Inserts a validated block through the typed manager path.
    * The batch separates creation from the next captured editor action.
    *
