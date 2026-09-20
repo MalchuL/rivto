@@ -179,9 +179,9 @@ export function registerClipboard(
     const activeBlock = activeId ? reactEditor.blocks.getBlockNode(activeId) : undefined;
     const expanded = reactEditor.blockListProps.has("collapse") && activeBlock?.listProps.collapsed !== true;
     // Only whole-block paste needs a parent and sibling insertion position.
-    // A native bundle marked `startsWithText` is pasted into text instead.
+    // A native bundle marked `fromTextSelection` is pasted into text instead.
     const structuralSource = Boolean(parsedBlocks?.length)
-      || Boolean(sourceBundle?.blocks.length && sourceBundle.startsWithText !== true);
+      || Boolean(sourceBundle?.blocks.length && sourceBundle.fromTextSelection !== true);
     const placement = activeBlock && structuralSource
       ? expanded && reactEditor.blocks.hasChildren(activeBlock.id)
         ? { parentId: activeBlock.id, afterId: null }

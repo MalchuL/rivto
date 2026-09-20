@@ -59,20 +59,6 @@ export function flattenBlocks(blocks: Block[]): Block[] {
 }
 
 /**
- * Deep-clones one portable block subtree.
- *
- * Copy preparation trims text at selection boundaries. Cloning prevents those
- * changes from mutating document snapshots or sharing mutable props, plugin
- * data and child arrays with the source.
- *
- * @param block - Detached source block to clone.
- * @returns An identity-preserving deep clone safe for clipboard modification.
- */
-function cloneBlock(block: Block): Block {
-  return structuredClone(block);
-}
-
-/**
  * Finds a block inside a detached forest by its stable document ID.
  *
  * @param blocks - Roots to search recursively in document order.

@@ -103,47 +103,44 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
       const root = reactEditor.events.getRoot();
       if (writing && root) requestAnimationFrame(() => focusBlock(root, writing.id, 0));
     };
-    const disposers = [
-      reactEditor.blockTypes.register({
-        definition: {
-          type: SEPARATOR_BLOCK_TYPE,
-          title: "Separator",
-        },
-        render: SeparatorBlock,
-        separatesBlockElements: true,
-      }),
-      reactEditor.clipboard.registerFormatter({
-        id: "separator",
-        matches: ({ block }) => block.type === SEPARATOR_BLOCK_TYPE,
-        format: () => ({ plain: "---", markdown: "---", html: "<hr>" }),
-      }),
-      reactEditor.slashCommands.register({
-        id: "block.separator.insert",
+    reactEditor.blockTypes.register({
+      definition: {
+        type: SEPARATOR_BLOCK_TYPE,
         title: "Separator",
-        group: "Insert",
-        keywords: ["divider", "split"],
-        execute: ({ blockId }) => focusInserted(blockId),
-      }),
-      reactEditor.keyboard.register({
-        id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,
-        keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSeparatorCreate],
-        when: ({ raw: event }) => isEditableKeyboardEvent(event),
-      }, ({ root }) => {
-        const nativeSelection = reactEditor.selection.readDOM();
-        if (nativeSelection) reactEditor.selection.set(nativeSelection);
-        const target = firstKeyboardTarget(nativeSelection ?? reactEditor.selection.get());
-        if (!target) return false;
-        const writing = insertSeparator(
-          reactEditor,
-          target.blockId,
-          SEPARATOR_BLOCK_TYPE,
-          createDefaultBlock,
-        );
-        if (!writing) return false;
-        requestAnimationFrame(() => focusBlock(root, writing.id, 0));
-        return true;
-      }),
-    ];
-    return () => disposers.reverse().forEach((dispose) => dispose());
+      },
+      render: SeparatorBlock,
+      separatesBlockElements: true,
+    });
+    reactEditor.clipboard.registerFormatter({
+      id: "separator",
+      matches: ({ block }) => block.type === SEPARATOR_BLOCK_TYPE,
+      format: () => ({ plain: "---", markdown: "---", html: "<hr>" }),
+    });
+    reactEditor.slashCommands.register({
+      id: "block.separator.insert",
+      title: "Separator",
+      group: "Insert",
+      keywords: ["divider", "split"],
+      execute: ({ blockId }) => focusInserted(blockId),
+    });
+    reactEditor.keyboard.register({
+      id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSeparatorCreate],
+      when: ({ raw: event }) => isEditableKeyboardEvent(event),
+    }, ({ root }) => {
+      const nativeSelection = reactEditor.selection.readDOM();
+      if (nativeSelection) reactEditor.selection.set(nativeSelection);
+      const target = firstKeyboardTarget(nativeSelection ?? reactEditor.selection.get());
+      if (!target) return false;
+      const writing = insertSeparator(
+        reactEditor,
+        target.blockId,
+        SEPARATOR_BLOCK_TYPE,
+        createDefaultBlock,
+      );
+      if (!writing) return false;
+      requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+      return true;
+    });
   },
 });
