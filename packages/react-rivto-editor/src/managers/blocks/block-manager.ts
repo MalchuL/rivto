@@ -94,6 +94,9 @@ export class BlockManager implements BlocksCapability {
   /** @returns Current core block revision. */
   get revision(): number { return this.editor.blocks.revision; }
 
+  /** @param id - Block identifier. @returns Whether the block exists. */
+  hasBlock(id: string): boolean { return this.editor.blocks.hasBlock(id); }
+
   /** @returns One detached block, when present. */
   getBlock(id: string): ReturnType<CoreBlockManager["getBlock"]> { return this.editor.blocks.getBlock(id); }
 

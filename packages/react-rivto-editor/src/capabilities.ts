@@ -68,6 +68,8 @@ export interface BlocksCapability {
   deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void;
   /** Current block revision used by React subscriptions. */
   readonly revision: number;
+  /** @param id - Block identifier. @returns Whether the block exists. */
+  hasBlock(id: string): boolean;
   /** @param id - Block identifier. @returns Detached subtree, or undefined when absent. */
   getBlock(id: string): EditorBlock | undefined;
   /** @returns The complete detached root forest. */

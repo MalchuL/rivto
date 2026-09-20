@@ -53,6 +53,16 @@ export class ElementManager implements ElementManagerApi {
     };
   }
 
+  /**
+   * Reports whether the document contains one element record.
+   *
+   * @param id - Stable element ID to inspect.
+   * @returns True when the element exists.
+   */
+  hasElement(id: string): boolean {
+    return this.document.elements.hasElement(id);
+  }
+
   /** @param id - Stable element ID. @returns Detached element or undefined. */
   getElement(id: string): EditorElement | undefined {
     return this.document.elements.getElement(id);

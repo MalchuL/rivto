@@ -176,6 +176,8 @@ export interface DocumentBlockManagerApi {
 
 /** Public element-store capabilities required by editors and extensions. */
 export interface DocumentElementManagerApi {
+  /** @param id - Element identifier. @returns Whether the element exists. */
+  hasElement(id: string): boolean;
   /** @param id - Element identifier. @returns Detached element when present. */
   getElement(id: string): DocumentElement | undefined;
   /** @returns Detached elements in storage order. */

@@ -101,6 +101,14 @@ document.elements.updateElement("shape-1", {
 
 ## Чтение
 
+### `hasElement(id)`
+
+- **Аргументы:** `id: string`.
+- **Возвращает:** `boolean` по наличию record в `storage`.
+- **Исключения:** ошибки `CRDTMap.has`.
+
+Метод не проверяет валидность element record, только его присутствие в storage. Malformed record считается существующим.
+
 ### `getElement(id)`
 
 - **Аргументы:** `id: string`.

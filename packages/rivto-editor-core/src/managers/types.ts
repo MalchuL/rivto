@@ -70,6 +70,8 @@ export interface BlockManagerApi {
   readonly revision: number;
   /** @param processor - Editor-owned processor. @returns Its disposer. */
   registerProcessor(processor: BlockProcessor): () => void;
+  /** @param id - Block ID. @returns Whether the block exists. */
+  hasBlock(id: string): boolean;
   /** @param id - Block ID. @returns Detached subtree or undefined. */
   getBlock(id: string): EditorBlock | undefined;
   /** @returns Complete detached root forest. */
@@ -167,6 +169,8 @@ export interface BlockRegistryManagerApi {
 export interface ElementManagerApi {
   /** @param processor - Editor-owned processor. @returns Its disposer. */
   registerProcessor(processor: ElementProcessor): () => void;
+  /** @param id - Element ID. @returns Whether the element exists. */
+  hasElement(id: string): boolean;
   /** @param id - Element ID. @returns Detached element or undefined. */
   getElement(id: string): EditorElement | undefined;
   /** @returns Every detached element. */

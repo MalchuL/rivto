@@ -89,6 +89,16 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
+   * Reports whether the document contains one block record.
+   *
+   * @param id - Persisted block identifier to inspect.
+   * @returns True when the block exists.
+   */
+  hasBlock(id: string): boolean {
+    return this.document.blocks.hasBlock(id);
+  }
+
+  /**
    * Resolves one placed block by its stable identifier.
    *
    * @param id - Persisted block identifier to resolve.

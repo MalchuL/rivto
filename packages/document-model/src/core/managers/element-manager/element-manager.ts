@@ -72,6 +72,16 @@ export class DocumentElementManager implements DocumentElementManagerApi {
   }
 
   /**
+   * Reports whether canonical storage contains one element record.
+   *
+   * @param id - Stable element identifier to inspect.
+   * @returns True when the element record exists.
+   */
+  hasElement(id: string): boolean {
+    return this.storage.has(id);
+  }
+
+  /**
    * Reads one placed element.
    *
    * @param id - Stable element ID.
