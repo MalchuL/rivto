@@ -7,6 +7,7 @@ import type { DocumentHistoryManagerApi, DocumentModel } from "@chulane/document
 import type {
   EditorBlock,
   EditorBlockInput,
+  EditorBlockNode,
   EditorBlockPatch,
   EditorBlockUpdate,
   EditorElement,
@@ -102,10 +103,10 @@ export interface BlockManagerApi {
     afterId?: string | null,
     onError?: BlockPrepareErrorHandler,
   ): ImportedBlockForest;
-  /** @param id - Block ID. @param patch - Mutable fields. @returns Complete persisted block. */
-  updateBlock(id: string, patch: EditorBlockPatch): EditorBlock;
-  /** @param updates - Identified patches. @returns Complete persisted blocks in input order. */
-  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlock[];
+  /** @param id - Block ID. @param patch - Mutable fields. @returns Updated non-recursive block fields. */
+  updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;
+  /** @param updates - Identified patches. @returns Updated non-recursive block fields in input order. */
+  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlockNode[];
   /** @param id - Block ID. @param keys - Keys to delete. @returns Whether deletion applied. */
   deleteListProps(id: string, keys: readonly string[]): boolean;
   /** @param updates - Identified key deletions. @returns No value. */
@@ -180,14 +181,14 @@ export interface ElementManagerApi {
   setDocument(document: DocumentModel): void;
   /** @returns No value after refreshing retained subscriptions. */
   refreshSubscriptions(): void;
-  /** @param input - Creation input. @returns New element ID. */
-  insertElement(input: EditorElementInput): string;
+  /** @param input - Creation input. @returns Complete persisted element. */
+  insertElement(input: EditorElementInput): EditorElement;
   /** @param sourceIds - Source IDs. @returns Destination identity map. */
   createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string>;
-  /** @param id - Element ID. @param patch - Mutable fields. @returns No value. */
-  updateElement(id: string, patch: EditorElementPatch): void;
-  /** @param updates - Identified patches. @returns No value. */
-  updateElements(updates: readonly EditorElementUpdate[]): void;
+  /** @param id - Element ID. @param patch - Mutable fields. @returns Complete persisted element. */
+  updateElement(id: string, patch: EditorElementPatch): EditorElement;
+  /** @param updates - Identified patches. @returns Complete persisted elements in input order. */
+  updateElements(updates: readonly EditorElementUpdate[]): EditorElement[];
   /** @param id - Element ID. @returns No value. */
   removeElement(id: string): void;
   /** @param ids - Element IDs. @returns No value. */

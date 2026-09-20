@@ -21,17 +21,17 @@ import type { ReactEditor } from "../../types";
  * @param reactEditor - Runtime providing writing factories and list-prop flags.
  * @param block - Source block whose content is split.
  * @param splitAt - Inclusive UTF-16 offset kept on the source block.
- * @returns Identifier of the inserted following block.
+ * @returns Complete inserted block.
  */
 export function splitBlockAt(
   reactEditor: ReactEditor,
   block: EditorBlock,
   splitAt: number,
-): string {
+): EditorBlock {
   const listActive = reactEditor.blockListProps.has("list");
   const clamped = Math.max(0, Math.min(splitAt, block.content.length));
   reactEditor.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
-  const nextBlockId = reactEditor.blocks.insertBlock({
+  const nextBlock = reactEditor.blocks.insertBlock({
     ...reactEditor.createDefaultBlock(),
     ...(listActive ? { listProps: {
       type: block.listProps.type === "checkbox"
@@ -40,9 +40,9 @@ export function splitBlockAt(
       checked: false,
     } } : {}),
     content: block.content.slice(clamped),
-  }, block.id).id;
-  reactEditor.selection.set(createCaretSelection(nextBlockId, 0));
-  return nextBlockId;
+  }, block.id);
+  reactEditor.selection.set(createCaretSelection(nextBlock.id, 0));
+  return nextBlock;
 }
 
 /**

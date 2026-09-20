@@ -6,7 +6,7 @@
 import { createTestEditor, createStructuralSelection } from "../../editor/test-utils";
 
 describe.each(["block", "edgeless"] as const)("block feature ownership in %s mode", (mode) => {
-  it("returns the complete persisted block after insertion", () => {
+  it("returns the complete block assembled during insertion", () => {
     const editor = createTestEditor({ mode });
 
     const inserted = editor.blocks.insertBlock({
@@ -20,12 +20,10 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
       content: "Root",
       children: [{ type: "paragraph", content: "Child" }],
     });
-    expect(inserted.id).toEqual(expect.any(String));
-    expect(inserted.children[0]?.id).toEqual(expect.any(String));
     editor.destroy();
   });
 
-  it("returns complete persisted blocks after single and batch updates", () => {
+  it("returns lightweight identities after single and batch updates", () => {
     const editor = createTestEditor({ mode });
     const first = editor.blocks.insertBlock({
       type: "paragraph",
@@ -33,6 +31,7 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
       children: [{ type: "paragraph", content: "Child" }],
     });
     const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first.id);
+    const getBlock = jest.spyOn(editor.blocks, "getBlock");
 
     const updated = editor.blocks.updateBlock(first.id, { content: "Updated" });
     const batch = editor.blocks.updateBlocks([
@@ -40,16 +39,20 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
       { id: first.id, patch: { props: { tone: "info" } } },
     ]);
 
-    expect(updated).toMatchObject({
-      id: first.id,
+    expect(updated).toMatchObject({ id: first.id, content: "Updated" });
+    expect(updated).not.toHaveProperty("children");
+    expect(batch).toMatchObject([
+      { id: second.id, content: "Second updated" },
+      { id: first.id, content: "Updated", props: { tone: "info" } },
+    ]);
+    expect(batch).not.toContainEqual(expect.objectContaining({ children: expect.anything() }));
+    expect(getBlock).not.toHaveBeenCalled();
+    getBlock.mockRestore();
+    expect(editor.blocks.getBlock(first.id)).toMatchObject({
       content: "Updated",
+      props: { tone: "info" },
       children: [{ content: "Child" }],
     });
-    expect(batch.map(({ id }) => id)).toEqual([second.id, first.id]);
-    expect(batch).toMatchObject([
-      { content: "Second updated" },
-      { content: "Updated", props: { tone: "info" }, children: [{ content: "Child" }] },
-    ]);
     editor.destroy();
   });
 
@@ -228,8 +231,9 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     editor.destroy();
   });
 
-  it("imports ID-less inputs and returns their complete persisted roots", () => {
+  it("imports ID-less inputs and returns complete persisted roots", () => {
     const editor = createTestEditor({ mode });
+    const getBlock = jest.spyOn(editor.blocks, "getBlock");
 
     const imported = editor.blocks.importForest([{
       type: "paragraph",
@@ -239,12 +243,13 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
 
     expect(imported.idMap.size).toBe(0);
     expect(imported.roots).toMatchObject([{
+      id: expect.any(String),
       type: "paragraph",
       content: "Parsed externally",
       children: [{ type: "paragraph", content: "Child" }],
     }]);
-    expect(imported.roots[0]?.id).toEqual(expect.any(String));
-    expect(imported.roots[0]?.children[0]?.id).toEqual(expect.any(String));
+    expect(getBlock).not.toHaveBeenCalled();
+    getBlock.mockRestore();
     editor.destroy();
   });
 

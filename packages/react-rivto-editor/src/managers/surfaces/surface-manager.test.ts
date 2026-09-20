@@ -48,12 +48,12 @@ describe("SurfaceManager", () => {
     const manager = reactEditor.surfaces;
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Slot owner" }).id;
     const block = editor.blocks.getBlock(blockId)!;
-    const elementId = editor.elements.insertElement({
+    const elementResult = editor.elements.insertElement({
       type: "rectangle",
       frame: { x: 0, y: 0, width: 100, height: 80 },
       zIndex: 1,
     });
-    const element = editor.elements.getElement(elementId)!;
+    const element = editor.elements.getElement(elementResult.id)!;
 
     expect(SLOT_POSITIONS).toHaveLength(12);
     expect(new Set(SLOT_POSITIONS).size).toBe(12);

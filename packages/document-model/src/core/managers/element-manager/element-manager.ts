@@ -186,10 +186,10 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * Inserts one element after portable invariant validation.
    *
    * @param input - Complete type, geometry, layer, and optional props.
-   * @returns Stable element ID, either supplied or generated internally.
+   * @returns Complete normalized inserted element.
    * @throws {Error} When the ID exists, the type is empty, or the record is invalid.
    */
-  insertElement(input: ElementInput): string {
+  insertElement(input: ElementInput): DocumentElement {
     const id = requireNonemptyId(input.id ?? this.generateId(), "Element");
     if (this.storage.has(id)) throw new Error(`Element ${id} already exists`);
     const validated = this.processElement({ ...input, id });
@@ -206,7 +206,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
       assignMap(frameMap, validated.frame as ElementFrameStorage);
       assignMap(props, validated.props ?? {});
     });
-    return id;
+    return this.result(id, validated);
   }
 
   /**
@@ -214,10 +214,10 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    *
    * @param id - Element to patch.
    * @param patch - Mutable geometry, layer, and props.
-   * @returns No value.
+   * @returns Complete normalized updated element.
    */
-  updateElement(id: string, patch: ElementPatch): void {
-    this.updateElements([{ id, patch }]);
+  updateElement(id: string, patch: ElementPatch): DocumentElement {
+    return this.updateElements([{ id, patch }])[0]!;
   }
 
   /**
@@ -227,10 +227,10 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * observe preceding patches in the batch.
    *
    * @param updates - Ordered element IDs and partial field updates.
-   * @returns No value.
+   * @returns Complete normalized updated elements in input order.
    * @throws {Error} When a target is missing or the record is invalid.
    */
-  updateElements(updates: readonly ElementUpdate[]): void {
+  updateElements(updates: readonly ElementUpdate[]): DocumentElement[] {
     const simulated = new Map<string, ElementInput>();
     const prepared = updates.map(({ id, patch }) => {
       const element = this.required(id);
@@ -258,6 +258,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
         }
       }
     }));
+    return prepared.map(({ validated }, index) => this.result(updates[index]!.id, validated));
   }
 
   /**
@@ -315,6 +316,23 @@ export class DocumentElementManager implements DocumentElementManagerApi {
       frame: normalizeElementFrame(element.frame),
       zIndex: normalizeElementZIndex(element.zIndex),
       props: normalizeElementProps(element.props),
+    };
+  }
+
+  /**
+   * Detaches one already-normalized mutation value without rereading storage.
+   *
+   * @param id - Stable stored identity.
+   * @param element - Complete normalized mutation value.
+   * @returns Complete detached element matching the persisted record.
+   */
+  private result(id: string, element: ElementInput): DocumentElement {
+    return {
+      id,
+      type: element.type,
+      frame: { ...element.frame },
+      zIndex: element.zIndex,
+      props: clone(element.props ?? {}) as Record<string, unknown>,
     };
   }
 

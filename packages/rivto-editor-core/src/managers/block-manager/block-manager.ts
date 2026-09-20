@@ -20,6 +20,7 @@ import {
 import type {
   EditorBlock,
   EditorBlockInput,
+  EditorBlockNode,
   EditorBlockPatch,
   EditorBlockUpdate,
 } from "../../editor/model";
@@ -264,16 +265,13 @@ export class BlockManager implements BlockManagerApi {
    *
    * @param block - Native type and initial persisted values.
    * @param afterId - Sibling to follow, null to prepend, or undefined to append.
-   * @returns Complete detached block after persistence assigns every identity.
+   * @returns Complete persisted block assembled during insertion.
    */
   insertBlock(block: EditorBlockInput, afterId?: string | null): EditorBlock {
     const prepared = this.prepareInput([block])[0]!;
     // Storage insertion is already transactional; this wrapper creates undo
     // capture breakpoints so the following action does not merge with creation.
-    const id = this.editor.history.batchUpdates(() => this.document.blocks.insertBlock(prepared, afterId));
-    const inserted = this.getBlock(id);
-    if (!inserted) throw new Error(`Inserted block ${id} not found`);
-    return inserted;
+    return this.editor.history.batchUpdates(() => this.document.blocks.insertBlock(prepared, afterId));
   }
 
   /**
@@ -288,7 +286,7 @@ export class BlockManager implements BlockManagerApi {
    * @param blocks - Complete copied roots or creation inputs to insert recursively.
    * @param afterId - Existing sibling after which roots are inserted.
    * @param onError - Optional handler that supplies one replacement for a failed node.
-   * @returns Complete persisted roots and mappings for supplied source identities.
+   * @returns Complete persisted roots and source mappings.
    */
   importForest(
     blocks: readonly (EditorBlock | EditorBlockInput)[],
@@ -311,18 +309,14 @@ export class BlockManager implements BlockManagerApi {
       return { ...block, id, children: block.children?.map(remap) };
     };
     const prepared = this.prepareInput(blocks.map(remap), onError);
-    const rootIds: string[] = [];
+    const roots: EditorBlock[] = [];
     this.editor.history.batchUpdates(() => {
       let previous = afterId;
       prepared.forEach((block) => {
-        previous = this.document.blocks.insertBlock(block, previous);
-        rootIds.push(previous);
+        const inserted = this.document.blocks.insertBlock(block, previous);
+        previous = inserted.id;
+        roots.push(inserted);
       });
-    });
-    const roots = rootIds.map((id) => {
-      const root = this.getBlock(id);
-      if (!root) throw new Error(`Inserted block ${id} not found`);
-      return root;
     });
     return { roots, idMap };
   }
@@ -332,35 +326,27 @@ export class BlockManager implements BlockManagerApi {
    *
    * @param id - Block identifier to update.
    * @param patch - Mutable fields to validate and apply.
-   * @returns Complete detached block after applying the processed patch.
+   * @returns Updated persisted fields without recursively materializing descendants.
    */
-  updateBlock(id: string, patch: EditorBlockPatch): EditorBlock {
+  updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode {
     const [update] = this.processUpdates([{ id, patch }]);
-    this.document.blocks.updateBlock(update!.id, update!.patch);
-    const updated = this.getBlock(id);
-    if (!updated) throw new Error(`Updated block ${id} not found`);
-    return updated;
+    return this.document.blocks.updateBlock(update!.id, update!.patch);
   }
 
   /**
    * Applies several identified block patches atomically.
    *
    * @param updates - Ordered block identifiers and patches.
-   * @returns Complete detached blocks in the same order as the supplied updates.
+   * @returns Updated persisted fields without descendants, in input order.
    */
-  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlock[] {
+  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlockNode[] {
     const processed = this.processUpdates(updates);
-    this.editor.history.batchUpdates(() => this.document.blocks.updateBlocks(processed));
-    return processed.map(({ id }) => {
-      const updated = this.getBlock(id);
-      if (!updated) throw new Error(`Updated block ${id} not found`);
-      return updated;
-    });
+    return this.editor.history.batchUpdates(() => this.document.blocks.updateBlocks(processed));
   }
 
   /** Deletes list-property keys from one block. */
   deleteListProps(id: string, keys: readonly string[]): boolean {
-    const block = this.getBlock(id);
+    const block = this.document.blocks.getBlockNode(id);
     if (!block) throw new Error(`Block ${id} not found`);
     this.validateListPropsDeletion(block.listProps, keys);
     return this.editor.history.batchUpdates(() => this.document.blocks.deleteListProps(id, keys));
@@ -370,7 +356,7 @@ export class BlockManager implements BlockManagerApi {
   deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void {
     const simulated = new Map<string, Record<string, unknown>>();
     updates.forEach(({ id, keys }) => {
-      const block = this.getBlock(id);
+      const block = this.document.blocks.getBlockNode(id);
       if (!block) throw new Error(`Block ${id} not found`);
       const next = this.validateListPropsDeletion(simulated.get(id) ?? block.listProps, keys);
       simulated.set(id, next);
@@ -399,7 +385,7 @@ export class BlockManager implements BlockManagerApi {
    * @returns No value.
    */
   setBlockType(id: string, type: string): void {
-    const current = this.getBlock(id);
+    const current = this.document.blocks.getBlockNode(id);
     if (!current) throw new Error(`Block ${id} not found`);
     const props = this.editor.blockRegistry.prepareTypeChange(type, current.props);
     const processed = this.runProcessors({ ...current, type, props, children: undefined });
@@ -602,15 +588,15 @@ export class BlockManager implements BlockManagerApi {
    */
   private mergeBlockContent(targetId: string, sourceId: string): number {
     if (targetId === sourceId) throw new Error("Cannot merge a block into itself");
-    const target = this.getBlock(targetId);
-    const source = this.getBlock(sourceId);
+    const target = this.document.blocks.getBlockNode(targetId);
+    const source = this.document.blocks.getBlockNode(sourceId);
     if (!source) throw new Error(`Block ${sourceId} not found`);
     if (!target) throw new Error(`Block ${targetId} not found`);
     if (this.collectTreeIds(sourceId).includes(targetId)) {
       throw new Error(`Cannot merge block ${sourceId} into its descendant ${targetId}`);
     }
     const blocks = this.document.blocks;
-    blocks.moveBlocks(source.children.map(({ id }) => ({ id, targetId, position: "inside" })));
+    blocks.moveBlocks(blocks.getChildIds(sourceId).map((id) => ({ id, targetId, position: "inside" })));
     if (source.content) blocks.insertText(targetId, target.content.length, source.content);
     blocks.removeBlock(sourceId);
     return target.content.length;
@@ -706,7 +692,7 @@ export class BlockManager implements BlockManagerApi {
   private processUpdates(updates: readonly BlockUpdate[]): BlockUpdate[] {
     const simulated = new Map<string, BlockInput>();
     return updates.map(({ id, patch }) => {
-      const stored = this.getBlock(id);
+      const stored = this.document.blocks.getBlockNode(id);
       if (!stored) throw new Error(`Block ${id} not found`);
       const current = simulated.get(id) ?? stored;
       const candidate: BlockInput = {

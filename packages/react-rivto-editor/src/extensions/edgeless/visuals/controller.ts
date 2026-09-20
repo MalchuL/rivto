@@ -264,8 +264,12 @@ export class EdgelessVisualController {
     this.listeners.clear();
   }
 
-  /** Creates one validated visual element and selects it. */
-  create(payload: CreateVisualPayload): string {
+  /**
+   * Creates one validated visual element and selects it.
+   * @param payload - Visual kind and persisted values.
+   * @returns Complete normalized created element.
+   */
+  create(payload: CreateVisualPayload): EditorElement {
     if (!payload || !VISUAL_TYPES.has(payload.kind)) throw new Error("Unsupported edgeless visual kind");
     let frame = this.frame({ ...DEFAULT_FRAME, ...payload.frame });
     const zIndex = Math.max(0, ...this.reactEditor.elements.getElements().map((element) => element.zIndex)) + 1;
@@ -329,13 +333,17 @@ export class EdgelessVisualController {
         verticalAlign: payload.verticalAlign ?? this.defaults.shape.verticalAlign,
       };
     }
-    const id = this.reactEditor.elements.insertElement({ type: payload.kind, frame, zIndex, props });
-    this.selection.set([id]);
-    return id;
+    const element = this.reactEditor.elements.insertElement({ type: payload.kind, frame, zIndex, props });
+    this.selection.set([element.id]);
+    return element;
   }
 
-  /** Patches one visual while keeping identity and type immutable. */
-  update({ id, patch }: UpdateVisualPayload): void {
+  /**
+   * Patches one visual while keeping identity and type immutable.
+   * @param payload - Element identity and mutable visual fields.
+   * @returns Complete normalized updated element.
+   */
+  update({ id, patch }: UpdateVisualPayload): EditorElement {
     const current = this.visual(id);
     if (!current) throw new Error(`Edgeless visual ${id} not found`);
     const safe = copy(patch) as Record<string, unknown>;
@@ -345,11 +353,12 @@ export class EdgelessVisualController {
     const framePatch = isRecord(safe.frame) ? safe.frame as Partial<VisualFrame> : undefined;
     delete safe.frame;
     delete safe.zIndex;
-    this.reactEditor.elements.updateElement(id, {
+    const updated = this.reactEditor.elements.updateElement(id, {
       frame: framePatch,
       props: safe,
     });
     this.remember(current.kind, safe);
+    return updated;
   }
 
   /** Applies one property patch to an exact-type selection in one undo step. */
@@ -390,8 +399,8 @@ export class EdgelessVisualController {
     }));
   }
 
-  /** Creates one nested-capable group from same-parent selected elements. */
-  group(): string {
+  /** @returns Complete group created from the same-parent selection. */
+  group(): EditorElement {
     const selected = [...this.selection.get().items];
     const internalConnectors = this.internalConnectorIds(selected);
     const items = [...selected, ...internalConnectors];
@@ -411,12 +420,12 @@ export class EdgelessVisualController {
       });
       if (groupParentId) {
         const parent = this.groupRecord(groupParentId)!;
-        const children = parent.children.map((child) => items.includes(child) ? created : child).filter((child, index, all) => all.indexOf(child) === index);
+        const children = parent.children.map((child) => items.includes(child) ? created.id : child).filter((child, index, all) => all.indexOf(child) === index);
         this.reactEditor.elements.updateElement(groupParentId, { props: { children } });
       }
       return created;
     });
-    this.selection.set([id]);
+    this.selection.set([id.id]);
     return id;
   }
 
@@ -659,7 +668,7 @@ export class EdgelessVisualController {
     };
   }
 
-  private pasteClipboardBundle(bundle: ClipboardBundle): void {
+  private pasteClipboardBundle(bundle: ClipboardBundle): EditorElement[] {
     validateClipboardBundle(bundle);
     if (!Array.isArray(bundle.elements)) throw new Error("Invalid edgeless clipboard payload");
     const elementMap = this.reactEditor.elements.createImportIdMap(
@@ -669,6 +678,7 @@ export class EdgelessVisualController {
     const sourceElements = bundle.elements.map((element) => this.validateElement(element));
     const selected = (bundle.selectedElementIds ?? []).flatMap((id) => elementMap.get(id) ?? []);
     let elements: EditorElement[] = [];
+    const results: EditorElement[] = [];
     this.reactEditor.history.batchUpdates(() => {
       const afterId = this.reactEditor.blocks.getBlocks().at(-1)?.id;
       const blockMap = this.reactEditor.blocks.importForest(bundle.blocks, afterId).idMap;
@@ -697,13 +707,14 @@ export class EdgelessVisualController {
       });
       elements.forEach((element) => {
         try {
-          this.reactEditor.elements.insertElement(element);
+          results.push(this.reactEditor.elements.insertElement(element));
         } catch (error) {
           throw new Error(`Failed to paste ${element.type} element ${element.id}`, { cause: error });
         }
       });
     });
-    this.selection.set(selected.length ? selected : elements.map((element) => element.id));
+    this.selection.set(selected.length ? selected : results.map(({ id }) => id));
+    return results;
   }
 
   private clipboardText(bundle: ClipboardBundle): string {
@@ -768,8 +779,14 @@ export class EdgelessVisualController {
   /** Clears the active canvas selection. */
   clearSelection(): void { this.selection.clear(); }
 
-  /** Duplicates the active selection and returns the new top-level references. */
-  duplicateSelection(): EdgelessSelectionRef[] { const items = this.selection.get().items; if (!items.length) return []; this.pasteClipboardBundle(this.createClipboardBundle(items)); return [...this.selection.get().items]; }
+  /** @returns Complete top-level elements created from the active selection. */
+  duplicateSelection(): EditorElement[] {
+    const items = this.selection.get().items;
+    if (!items.length) return [];
+    const created = this.pasteClipboardBundle(this.createClipboardBundle(items));
+    const createdById = new Map(created.map((element) => [element.id, element]));
+    return this.selection.get().items.flatMap((id) => createdById.get(id) ?? []);
+  }
 
   private translate(items: readonly string[], dx: number, dy: number): void {
     this.reactEditor.history.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.element(id)?.frame; if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));

@@ -59,7 +59,7 @@ export class ElementPasteStrategy implements PasteStrategy {
           frame: { x: 60, y: 60, width: 320, height: 120 },
           zIndex: topLayer + 1,
           props: blockRangeProps(pastedRootIds),
-        }));
+        }).id);
       }
       sources.forEach((source, index) => {
         const id = elementIdMap.get(source.id)!;
@@ -70,25 +70,25 @@ export class ElementPasteStrategy implements PasteStrategy {
           const roots = this.reactEditor.blocks.getRootIds();
           const before = first ? roots[roots.indexOf(first) - 1] : undefined;
           if (before) insertBlockElementSeparator(this.reactEditor, before);
-          const createdId = this.reactEditor.elements.insertElement({
+          const createdElement = this.reactEditor.elements.insertElement({
             id,
             type: "block",
             frame: { ...source.frame, x: source.frame.x + 24, y: source.frame.y + 24 },
             zIndex: topLayer + index + 1,
             props: blockRangeProps(blockIds),
           });
-          created.push(createdId);
-          importedElementIds.set(source.id, createdId);
+          created.push(createdElement.id);
+          importedElementIds.set(source.id, createdElement.id);
         } else {
-          const createdId = this.reactEditor.elements.insertElement({
+          const createdElement = this.reactEditor.elements.insertElement({
             id,
             type: source.type,
             frame: { ...source.frame, x: source.frame.x + 24, y: source.frame.y + 24 },
             zIndex: topLayer + index + 1,
             props: structuredClone(source.props),
           });
-          created.push(createdId);
-          importedElementIds.set(source.id, createdId);
+          created.push(createdElement.id);
+          importedElementIds.set(source.id, createdElement.id);
         }
       });
     });

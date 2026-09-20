@@ -221,13 +221,13 @@ export function blockRangeProps(blockIds: readonly string[]): BlockElementProps 
  *
  * @param reactEditor - Runtime whose first separator registration is preferred.
  * @param afterId - Root block after which the separator is inserted.
- * @returns ID of the inserted separator block.
+ * @returns Complete inserted separator block.
  * @throws When the active preset provides no separator block plugin.
  */
-export function insertBlockElementSeparator(reactEditor: ReactEditor, afterId: string): string {
+export function insertBlockElementSeparator(reactEditor: ReactEditor, afterId: string): EditorBlock {
   const type = reactEditor.blockTypes.getDefaultBlockElementSeparatorType();
   if (!type) throw new Error("No block element separator type is registered");
-  return reactEditor.blocks.insertBlock({ type, content: "" }, afterId).id;
+  return reactEditor.blocks.insertBlock({ type, content: "" }, afterId);
 }
 
 /**

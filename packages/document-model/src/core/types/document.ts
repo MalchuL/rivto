@@ -70,6 +70,9 @@ export interface Block {
   children: Block[];
 }
 
+/** Detached block fields excluding the recursively materialized child tree. */
+export type BlockNode = Omit<Block, "children">;
+
 /** Complete input accepted when creating a block. */
 export interface BlockInput {
   type: string;
@@ -107,6 +110,8 @@ export interface DocumentBlockManagerApi {
   hasBlock(id: string): boolean;
   /** @param id - Block identifier. @returns Detached block subtree when present. */
   getBlock(id: string): Block | undefined;
+  /** @param id - Block identifier. @returns Detached non-recursive block fields when present. */
+  getBlockNode(id: string): BlockNode | undefined;
   /** @returns Detached root block trees. */
   getBlocks(): Block[];
   /** @returns Ordered root block identifiers. */
@@ -129,12 +134,12 @@ export interface DocumentBlockManagerApi {
    * @returns Destination ID for every source ID.
    */
   createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string>;
-  /** @param block - Block to insert. @param afterId - Optional sibling anchor. @returns Inserted block ID. */
-  insertBlock(block: BlockInput, afterId?: string | null): string;
-  /** @param id - Block identifier. @param patch - Fields to update. @returns No value. */
-  updateBlock(id: string, patch: BlockPatch): void;
-  /** @param updates - Ordered block patches. @returns No value. */
-  updateBlocks(updates: readonly BlockUpdate[]): void;
+  /** @param block - Block to insert. @param afterId - Optional sibling anchor. @returns Complete inserted block. */
+  insertBlock(block: BlockInput, afterId?: string | null): Block;
+  /** @param id - Block identifier. @param patch - Fields to update. @returns Updated non-recursive block fields. */
+  updateBlock(id: string, patch: BlockPatch): BlockNode;
+  /** @param updates - Ordered block patches. @returns Updated non-recursive block fields in input order. */
+  updateBlocks(updates: readonly BlockUpdate[]): BlockNode[];
   /** @param id - Block identifier. @param type - New block type. @param props - Complete new properties. @returns No value. */
   setBlockType(id: string, type: string, props?: Record<string, unknown>): void;
   /** @param id - Block identifier. @param key - Property name. @param value - Portable value or undefined to delete. @returns No value. */
@@ -189,12 +194,12 @@ export interface DocumentElementManagerApi {
    * @returns Destination ID for every source ID.
    */
   createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string>;
-  /** @param input - Element to insert. @returns Inserted element ID. */
-  insertElement(input: ElementInput): string;
-  /** @param id - Element identifier. @param patch - Fields to update. @returns No value. */
-  updateElement(id: string, patch: ElementPatch): void;
-  /** @param updates - Ordered element patches. @returns No value. */
-  updateElements(updates: readonly ElementUpdate[]): void;
+  /** @param input - Element to insert. @returns Complete inserted element. */
+  insertElement(input: ElementInput): DocumentElement;
+  /** @param id - Element identifier. @param patch - Fields to update. @returns Complete updated element. */
+  updateElement(id: string, patch: ElementPatch): DocumentElement;
+  /** @param updates - Ordered element patches. @returns Complete updated elements in input order. */
+  updateElements(updates: readonly ElementUpdate[]): DocumentElement[];
   /** @param id - Element identifier. @returns No value. */
   removeElement(id: string): void;
   /** @param ids - Element identifiers. @returns No value. */

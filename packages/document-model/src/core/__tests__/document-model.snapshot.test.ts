@@ -75,21 +75,97 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
     const doc = new YjsDoc("private-ids");
     const model = new DocumentModelImpl(doc);
 
-    const rootId = model.blocks.insertBlock({ type: "paragraph", content: "Root" });
-    const parentId = model.blocks.insertBlock({
+    const root = model.blocks.insertBlock({ type: "paragraph", content: "Root" });
+    const parent = model.blocks.insertBlock({
       type: "paragraph",
       children: [{ type: "paragraph", content: "Nested" }],
     });
-    const childId = model.blocks.getBlock(parentId)?.children[0]?.id;
-    const elementId = model.elements.insertElement({
+    const childId = parent.children[0]?.id;
+    const element = model.elements.insertElement({
       type: "note",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
     });
 
     expect(childId).toBeDefined();
-    expect(new Set([rootId, parentId, childId, elementId]).size).toBe(4);
-    expect(model.blocks.insertBlock({ id: "explicit", type: "paragraph" })).toBe("explicit");
+    expect(new Set([root.id, parent.id, childId, element.id]).size).toBe(4);
+    expect(model.blocks.insertBlock({ id: "explicit", type: "paragraph" }).id).toBe("explicit");
+    void doc.destroy();
+  });
+
+  it("reuses normalized mutation values without rereading snapshots", () => {
+    const doc = new YjsDoc("lightweight-mutation-results");
+    const model = new DocumentModelImpl(doc);
+    const getBlock = jest.spyOn(model.blocks, "getBlock");
+    const getElement = jest.spyOn(model.elements, "getElement");
+
+    expect(model.blocks.insertBlock({
+      id: "block",
+      type: "paragraph",
+      children: [{ id: "child", type: "paragraph", content: "nested" }],
+    })).toEqual({
+      id: "block",
+      type: "paragraph",
+      listProps: {},
+      props: {},
+      pluginData: {},
+      content: "",
+      children: [{
+        id: "child",
+        type: "paragraph",
+        listProps: {},
+        props: {},
+        pluginData: {},
+        content: "nested",
+        children: [],
+      }],
+    });
+    expect(model.blocks.updateBlock("block", { content: "updated" })).toEqual({
+      id: "block",
+      type: "paragraph",
+      listProps: {},
+      props: {},
+      pluginData: {},
+      content: "updated",
+    });
+    expect(model.blocks.updateBlocks([{ id: "block", patch: { props: { done: true } } }]))
+      .toEqual([{
+        id: "block",
+        type: "paragraph",
+        listProps: {},
+        props: { done: true },
+        pluginData: {},
+        content: "updated",
+      }]);
+    expect(model.elements.insertElement({
+      id: "element",
+      type: "note",
+      frame: { x: 0, y: 0, width: 10, height: 10 },
+      zIndex: 0,
+    })).toEqual({
+      id: "element",
+      type: "note",
+      frame: { x: 0, y: 0, width: 10, height: 10 },
+      zIndex: 0,
+      props: {},
+    });
+    expect(model.elements.updateElement("element", { zIndex: 1 })).toEqual({
+      id: "element",
+      type: "note",
+      frame: { x: 0, y: 0, width: 10, height: 10 },
+      zIndex: 1,
+      props: {},
+    });
+    expect(model.elements.updateElements([{ id: "element", patch: { props: { done: true } } }]))
+      .toEqual([{
+        id: "element",
+        type: "note",
+        frame: { x: 0, y: 0, width: 10, height: 10 },
+        zIndex: 1,
+        props: { done: true },
+      }]);
+    expect(getBlock).not.toHaveBeenCalled();
+    expect(getElement).not.toHaveBeenCalled();
     void doc.destroy();
   });
 

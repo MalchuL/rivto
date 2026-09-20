@@ -16,6 +16,7 @@ import type {
     Block,
     BlockInput,
     BlockListProps,
+    BlockNode,
     BlockPatch,
     BlockUpdate,
     DocumentBlockManagerApi,
@@ -173,6 +174,19 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     }
 
     /**
+     * Returns one placed block without recursively materializing descendants.
+     *
+     * @param id - Stable block identifier to resolve.
+     * @returns Detached node fields, or undefined when the block is absent.
+     */
+    getBlockNode(id: string): BlockNode | undefined {
+        if (!this.findContainer(id)) return undefined;
+        const value = this.storage.get(id);
+        if (!isCRDTMap(value)) return undefined;
+        return this.readBlockNode(value, id);
+    }
+
+    /**
      * Materializes the complete ordered root tree.
      *
      * @returns Detached root blocks with recursively materialized children.
@@ -271,18 +285,18 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      *
      * @param block - Initial portable block data including its required native type.
      * @param afterId - Sibling to insert after block id, `null` for first, or omitted for last.
-     * @returns Stable ID of the inserted block, either supplied or generated internally.
+     * @returns Complete inserted block assembled during storage creation.
      * @throws If the ID already exists or the requested sibling is missing.
      */
-    insertBlock(block: BlockInput, afterId?: string | null): string {
+    insertBlock(block: BlockInput, afterId?: string | null): Block {
         if (!block.type) throw new Error("Block type is required");
         const container = this.resolveInsertContainer(afterId);
         this.validateInsertedForest([block]);
-        let id = "";
+        let inserted: Block | undefined;
         this.crdt.transact(() => {
-            id = this.insertInto(block, container, afterId);
+            inserted = this.insertInto(block, container, afterId);
         });
-        return id;
+        return inserted!;
     }
 
     /**
@@ -292,10 +306,10 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * @param id - ID of the block to update.
      * @param patch - Fields to validate and apply.
      * @throws If the block does not exist.
-     * @returns No value.
+     * @returns Updated block fields without recursively materializing descendants.
      */
-    updateBlock(id: string, patch: BlockPatch): void {
-        this.updateBlocks([{ id, patch }]);
+    updateBlock(id: string, patch: BlockPatch): BlockNode {
+        return this.updateBlocks([{ id, patch }])[0]!;
     }
 
     /**
@@ -307,9 +321,9 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      *
      * @param updates - Ordered block IDs and partial field updates.
      * @throws If a target is missing or a supplied value fails validation.
-     * @returns No value.
+     * @returns Updated block fields without descendants, in input order.
      */
-    updateBlocks(updates: readonly BlockUpdate[]): void {
+    updateBlocks(updates: readonly BlockUpdate[]): BlockNode[] {
         const simulatedListProps = new Map<string, BlockListProps>();
         const prepared = updates.map(({ id, patch }) => {
             const block = this.requiredBlock(id);
@@ -326,11 +340,12 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 });
             }
             if (patch.pluginData) assertPortableRecord(patch.pluginData, "block.pluginData");
-            return { block, patch, validatedListProps };
+            return { id, block, patch, validatedListProps };
         });
 
+        const results: BlockNode[] = [];
         this.crdt.transact(() => {
-            prepared.forEach(({ block, patch, validatedListProps }) => {
+            prepared.forEach(({ id, block, patch, validatedListProps }) => {
                 if (validatedListProps && patch.listProps) {
                     assignMap(this.requiredMap(block, "listProps"), { ...patch.listProps }, false);
                 }
@@ -343,8 +358,10 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 }
                 if (patch.pluginData) assignMap(this.requiredMap(block, "pluginData"), patch.pluginData, false);
                 if (patch.content !== undefined) assignText(this.requiredText(block, "content"), patch.content);
+                results.push(this.readBlockNode(block, id));
             });
         });
+        return results;
     }
 
     /**
@@ -701,14 +718,14 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * @param block - Portable block data, including its type and optional descendants.
      * @param container - Root or child array that receives the block ID.
      * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
-     * @returns Stable ID assigned to the block, either supplied or generated internally.
+     * @returns Complete inserted block assembled from the normalized stored values.
      * @throws If the ID already exists or the requested sibling is missing.
      */
     private insertInto(
         block: BlockInput,
         container: CRDTArray<string>,
         afterId?: string | null,
-    ): string {
+    ): Block {
         if (!block.type) throw new Error("Block type is required");
         const listProps = validateBlockListProps(block.listProps ?? {});
         const id = requireNonemptyId(block.id ?? this.generateId(), "Block");
@@ -732,9 +749,17 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         assignMap(props, block.props ?? {});
         assignText(content, contentFrom(block.content));
         assignMap(pluginData, block.pluginData ?? {});
-        block.children?.forEach((child) => this.insertInto(child, children));
+        const insertedChildren = block.children?.map((child) => this.insertInto(child, children)) ?? [];
         container.insert(index, id);
-        return id;
+        return {
+            id,
+            type: block.type,
+            listProps,
+            props: props.toObject() as Record<IDProp, unknown>,
+            pluginData: pluginData.toObject() as Record<IDPlugin, unknown>,
+            content: content.toString(),
+            children: insertedChildren,
+        };
     }
 
     /**
@@ -792,24 +817,35 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         visited.add(id);
         const cached = this.crdt.isTransacting ? undefined : this.blockSnapshots.get(id);
         if (cached) return cached;
-        const props = this.requiredMap(value, "props").toObject() as Record<IDProp, unknown>;
-        const pluginData = this.requiredMap(value, "pluginData").toObject() as Record<IDPlugin, unknown>;
-        const content = this.requiredText(value, "content").toString();
+        const node = this.readBlockNode(value, id);
         const children = strings(this.requiredArray(value, "children")).flatMap((childId: IDBlock) => {
             const child = this.readBlock(childId, visited);
             return child ? [child] : [];
         });
         const snapshot = {
-            id,
-            type: this.requiredType(value, id),
-            listProps: validateBlockListProps(this.requiredMap(value, "listProps").toObject()),
-            props,
-            pluginData,
-            content,
+            ...node,
             children,
         };
         if (!this.crdt.isTransacting) this.blockSnapshots.set(id, snapshot);
         return snapshot;
+    }
+
+    /**
+     * Materializes one stored block record without walking its child IDs.
+     *
+     * @param value - Stored block map already resolved by the caller.
+     * @param id - Stable block identity used for validation and the result.
+     * @returns Detached non-recursive block fields.
+     */
+    private readBlockNode(value: CRDTMap<BlockStorage>, id: IDBlock): BlockNode {
+        return {
+            id,
+            type: this.requiredType(value, id),
+            listProps: validateBlockListProps(this.requiredMap(value, "listProps").toObject()),
+            props: this.requiredMap(value, "props").toObject() as Record<IDProp, unknown>,
+            pluginData: this.requiredMap(value, "pluginData").toObject() as Record<IDPlugin, unknown>,
+            content: this.requiredText(value, "content").toString(),
+        };
     }
 
     /**

@@ -52,7 +52,7 @@ export class BlockManager implements BlocksCapability {
    *
    * @param id - Identifier of the block to update.
    * @param patch - Partial block fields to pass to the core manager.
-   * @returns The complete persisted block after applying the patch.
+   * @returns The lightweight persisted block identity.
    * @throws {Error} When the block is missing or the operation is invalid.
    */
   updateBlock(id: string, patch: EditorBlockPatch): ReturnType<CoreBlockManager["updateBlock"]> {
@@ -62,7 +62,7 @@ export class BlockManager implements BlocksCapability {
   /**
    * Applies an ordered patch batch through core validation.
    * @param updates - Ordered identified patches to validate and apply atomically.
-   * @returns Complete persisted blocks in the same order as the supplied updates.
+   * @returns Lightweight persisted identities in input order.
    * @throws {Error} When any block is missing or any operation is invalid.
    */
   updateBlocks(updates: readonly EditorBlockUpdate[]): ReturnType<CoreBlockManager["updateBlocks"]> {

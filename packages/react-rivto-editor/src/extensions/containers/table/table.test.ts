@@ -40,8 +40,8 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", () => 
   expect(setTableColumnWidth(reactEditor, table.id, 1, 260)).toBe(true);
   expect(editor.blocks.getBlock(table.id)?.children.every((row) => row.children[1]?.props.tableColumnWidth === 260)).toBe(true);
   const addedRow = insertTableRow(reactEditor, rowId)!;
-  expect(editor.blocks.getBlock(addedRow)?.children).toHaveLength(3);
-  expect(editor.blocks.getBlock(addedRow)?.children[1]?.props.tableColumnWidth).toBe(260);
+  expect(editor.blocks.getBlock(addedRow.id)?.children).toHaveLength(3);
+  expect(editor.blocks.getBlock(addedRow.id)?.children[1]?.props.tableColumnWidth).toBe(260);
 
   editor.history.clear();
   const addedCells = insertTableColumn(reactEditor, cellId);

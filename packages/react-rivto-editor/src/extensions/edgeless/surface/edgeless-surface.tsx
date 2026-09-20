@@ -264,7 +264,7 @@ export function EdgelessSurface({
       let afterId = roots.at(-1)?.id;
       const last = roots.at(-1);
       if (last && !reactEditor.blockTypes.separatesBlockElements(last.type)) {
-        afterId = insertBlockElementSeparator(reactEditor, last.id);
+        afterId = insertBlockElementSeparator(reactEditor, last.id).id;
       }
       id = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock(), afterId).id;
       reactEditor.elements.insertElement({

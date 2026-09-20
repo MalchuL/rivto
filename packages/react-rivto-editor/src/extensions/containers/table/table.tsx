@@ -229,9 +229,9 @@ function useBlockHost(): { readonly marker: RefObject<HTMLDivElement | null>; re
  * Inserts a same-width row after an existing row in one undo transaction.
  * @param reactEditor - Active React editor runtime.
  * @param rowId - Existing row that owns the hovered lower boundary.
- * @returns The new row ID, or undefined when the row is no longer in a table.
+ * @returns The complete new row, or undefined outside a table.
  */
-export function insertTableRow(reactEditor: ReactEditor, rowId: string): string | undefined {
+export function insertTableRow(reactEditor: ReactEditor, rowId: string): EditorBlock | undefined {
   const tableId = reactEditor.blocks.getParentId(rowId);
   const table = tableId ? reactEditor.blocks.getBlock(tableId) : undefined;
   if (table?.type !== TABLE_BLOCK_TYPE) return undefined;
@@ -239,21 +239,21 @@ export function insertTableRow(reactEditor: ReactEditor, rowId: string): string 
   const widths = Array.from({ length: columns }, (_, column) => columnWidth(
     table.children.find((row) => row.children[column])?.children[column]?.props.tableColumnWidth,
   ));
-  let insertedId = "";
+  let inserted: EditorBlock | undefined;
   reactEditor.history.batchUpdates(() => {
     reactEditor.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
-    insertedId = reactEditor.blocks.insertBlock(createTableRowInput(widths), rowId).id;
+    inserted = reactEditor.blocks.insertBlock(createTableRowInput(widths), rowId);
   });
-  return insertedId;
+  return inserted;
 }
 
 /**
  * Inserts one cell at the same boundary in every row, preserving a rectangle.
  * @param reactEditor - Active React editor runtime.
  * @param cellId - Cell that owns the hovered right boundary.
- * @returns IDs of the inserted cells, or an empty list outside a table.
+ * @returns Complete inserted cells, or an empty list outside a table.
  */
-export function insertTableColumn(reactEditor: ReactEditor, cellId: string): readonly string[] {
+export function insertTableColumn(reactEditor: ReactEditor, cellId: string): readonly EditorBlock[] {
   const rowId = reactEditor.blocks.getParentId(cellId);
   const tableId = rowId ? reactEditor.blocks.getParentId(rowId) : undefined;
   const row = rowId ? reactEditor.blocks.getBlock(rowId) : undefined;
@@ -261,18 +261,18 @@ export function insertTableColumn(reactEditor: ReactEditor, cellId: string): rea
   const column = row?.children.findIndex((cell) => cell.id === cellId) ?? -1;
   if (row?.type !== TABLE_ROW_BLOCK_TYPE || table?.type !== TABLE_BLOCK_TYPE || column < 0) return [];
   const width = columnWidth(row.children[column]?.props.tableColumnWidth);
-  const insertedIds: string[] = [];
+  const inserted: EditorBlock[] = [];
   reactEditor.history.batchUpdates(() => {
     reactEditor.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
     table.children.forEach((tableRow) => {
       reactEditor.blocks.updateBlock(tableRow.id, { listProps: { collapsed: false } });
       const anchor = tableRow.children[column] ?? tableRow.children.at(-1);
-      const insertedId = reactEditor.blocks.insertBlock(createTableCellInput(width), anchor?.id).id;
-      if (!anchor) reactEditor.blocks.moveBlocks([insertedId], tableRow.id, "inside");
-      insertedIds.push(insertedId);
+      const cell = reactEditor.blocks.insertBlock(createTableCellInput(width), anchor?.id);
+      if (!anchor) reactEditor.blocks.moveBlocks([cell.id], tableRow.id, "inside");
+      inserted.push(cell);
     });
   });
-  return insertedIds;
+  return inserted;
 }
 
 /**

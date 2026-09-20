@@ -51,7 +51,7 @@ export function SeparatorBlock() {
  * @param blockId - Active block before which editing should continue.
  * @param separatorType - Plugin-owned persisted separator type.
  * @param createDefaultBlock - Factory for the follow-up writing block.
- * @returns Complete new writing block focused after the separator, or undefined when the active block is missing.
+ * @returns Complete new writing block, or undefined when the active block is missing.
  */
 function insertSeparator(
   reactEditor: ReactEditor,

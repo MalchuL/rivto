@@ -14,7 +14,7 @@ function element(editor: ReturnType<typeof createTestCoreEditor>): string {
     frame: { x: 0, y: 0, width: 10, height: 10 },
     zIndex: editor.elements.getElements().length,
     props: {},
-  });
+  }).id;
 }
 
 describe("EdgelessSelectionRuntime", () => {

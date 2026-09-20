@@ -96,8 +96,8 @@ export class ElementManager implements ElementManagerApi {
     [...this.subscriptions].forEach(({ listener }) => listener());
   }
 
-  /** @param input - Complete element creation data. @returns Stable new ID. */
-  insertElement(input: EditorElementInput): string {
+  /** @param input - Complete element creation data. @returns Complete persisted element. */
+  insertElement(input: EditorElementInput): EditorElement {
     return this.editor.history.batchUpdates(() => this.document.elements.insertElement(this.pipe.process(input)));
   }
 
@@ -117,15 +117,15 @@ export class ElementManager implements ElementManagerApi {
     return this.document.elements.createImportIdMap(sourceIds);
   }
 
-  /** @param id - Element to patch. @param patch - Geometry, layer, or props changes. */
-  updateElement(id: string, patch: EditorElementPatch): void {
+  /** @param id - Element to patch. @param patch - Geometry, layer, or props changes. @returns Complete persisted element. */
+  updateElement(id: string, patch: EditorElementPatch): EditorElement {
     const [update] = this.processUpdates([{ id, patch }]);
-    this.document.elements.updateElement(update!.id, update!.patch);
+    return this.document.elements.updateElement(update!.id, update!.patch);
   }
 
-  /** Applies identified element patches atomically. */
-  updateElements(updates: readonly EditorElementUpdate[]): void {
-    this.editor.history.batchUpdates(() => this.document.elements.updateElements(this.processUpdates(updates)));
+  /** Applies identified element patches atomically and returns complete elements in input order. */
+  updateElements(updates: readonly EditorElementUpdate[]): EditorElement[] {
+    return this.editor.history.batchUpdates(() => this.document.elements.updateElements(this.processUpdates(updates)));
   }
 
   /** Removes one element without implicit cascading. */

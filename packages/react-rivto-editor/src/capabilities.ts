@@ -9,6 +9,7 @@ import type {
   ClipboardPasteInput,
   EditorBlock,
   EditorBlockInput,
+  EditorBlockNode,
   EditorBlockPatch,
   EditorBlockUpdate,
   EditorMode,
@@ -55,12 +56,12 @@ export interface BlocksCapability {
     input: readonly (EditorBlock | EditorBlockInput)[],
     onError?: BlockPrepareErrorHandler,
   ): EditorBlockInput[];
-  /** Prepares and inserts a block, returning its complete persisted root. */
+  /** Prepares and inserts a block, returning the complete persisted subtree. */
   insertBlock(input: EditorBlockInput, afterId?: string | null): EditorBlock;
-  /** Applies one valid patch and returns the complete persisted block, or throws. */
-  updateBlock(id: string, patch: EditorBlockPatch): EditorBlock;
-  /** Applies an entire valid patch batch and returns complete persisted blocks in input order, or throws. */
-  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlock[];
+  /** Applies one valid patch and returns updated fields without descendants, or throws. */
+  updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;
+  /** Applies an entire valid patch batch and returns updated fields without descendants in input order, or throws. */
+  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlockNode[];
   /** Deletes list-property keys and returns whether the mutation was applied. */
   deleteListProps(id: string, keys: readonly string[]): boolean;
   /** Deletes an entire valid key batch or throws. */

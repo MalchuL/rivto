@@ -189,7 +189,7 @@ export function registerClipboard(
       : undefined;
     if (parsedBlocks?.length) {
       // Parsed blocks do not need IDs. importForest validates them, assigns IDs,
-      // inserts them, and returns the complete stored blocks.
+      // inserts them, and returns the complete inserted roots.
       reactEditor.history.batchUpdates(() => {
         const imported = reactEditor.blocks.importForest(
           parsedBlocks,

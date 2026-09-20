@@ -278,7 +278,7 @@ describe("EditorRuntime selection", () => {
 
   it("stores element IDs and plugin data in the generic selection", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
-    const elementId = editor.elements.insertElement({
+    const element = editor.elements.insertElement({
       type: "rectangle",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
@@ -287,23 +287,23 @@ describe("EditorRuntime selection", () => {
     editor.selection.set({
       type: "selection",
       blocks: [],
-      elements: [elementId],
+      elements: [element.id],
       pluginData: { comment: { id: "thread-1" } },
     });
 
     const detached = editor.selection.get()!;
-    expect(editor.selection.isElementSelected(elementId)).toBe(true);
+    expect(editor.selection.isElementSelected(element.id)).toBe(true);
     expect(detached).toMatchObject({
       type: "selection",
       blocks: [],
-      elements: [elementId],
+      elements: [element.id],
       pluginData: { comment: { id: "thread-1" } },
     });
     detached.elements!.length = 0;
-    expect(editor.selection.get()?.elements).toEqual([elementId]);
+    expect(editor.selection.get()?.elements).toEqual([element.id]);
 
     editor.selection.delete();
-    expect(editor.elements.getElement(elementId)).toBeUndefined();
+    expect(editor.elements.getElement(element.id)).toBeUndefined();
     expect(editor.selection.get()).toBeUndefined();
     editor.destroy();
   });

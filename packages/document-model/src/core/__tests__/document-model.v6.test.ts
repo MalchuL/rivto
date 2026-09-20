@@ -38,13 +38,13 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     expect(model.blocks.getRootIds()).toEqual([]);
 
     model.loadSnapshot({ version: 6, blocks: [] });
-    const id = model.blocks.insertBlock({ id: "only", type: "paragraph", content: "Only" });
-    model.blocks.removeBlock(id);
+    const block = model.blocks.insertBlock({ id: "only", type: "paragraph", content: "Only" });
+    model.blocks.removeBlock(block.id);
 
     expect(model.blocks.getBlocks()).toEqual([]);
     expect(model.blocks.getRootIds()).toEqual([]);
     expect(model.getSnapshot()).toMatchObject({ version: 6, blocks: [] });
-    expect(model.blocks.insertBlock({ id: "later", type: "paragraph" })).toBe("later");
+    expect(model.blocks.insertBlock({ id: "later", type: "paragraph" }).id).toBe("later");
     doc.destroy();
   });
 

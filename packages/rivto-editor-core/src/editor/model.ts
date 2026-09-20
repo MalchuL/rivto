@@ -1,6 +1,7 @@
 import type {
   Block,
   BlockInput,
+  BlockNode,
   BlockPatch,
   BlockUpdate,
   DocumentElement,
@@ -35,6 +36,9 @@ export type EditorBlockInput = BlockInput;
 export type EditorBlockPatch = BlockPatch;
 /** Canonical identified block patch. */
 export type EditorBlockUpdate = BlockUpdate;
+
+/** Detached block fields excluding the recursively materialized child tree. */
+export type EditorBlockNode = BlockNode;
 
 /** Lossless editor document value used for persistence. */
 export type EditorSnapshot = Snapshot;

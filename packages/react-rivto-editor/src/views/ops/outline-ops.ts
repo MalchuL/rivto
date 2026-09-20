@@ -8,7 +8,7 @@
  * @module
  */
 import { createCaretSelection } from "@chulane/rivto";
-import type { EditorBlockInput } from "@chulane/rivto";
+import type { EditorBlock, EditorBlockInput } from "@chulane/rivto";
 import type { ReactEditor } from "../../types";
 import { getBlockContainment } from "../../managers/blocks/types";
 
@@ -79,17 +79,17 @@ export function outdentUntilBoundary(reactEditor: ReactEditor, id: string): void
  *
  * @param reactEditor - Runtime providing writing factories and selection.
  * @param parentId - Container that receives the new child.
- * @returns Identifier of the inserted writing block.
+ * @returns Complete inserted writing block.
  */
-export function insertFirstChild(reactEditor: ReactEditor, parentId: string): string {
-  let childId = "";
+export function insertFirstChild(reactEditor: ReactEditor, parentId: string): EditorBlock {
+  let child: EditorBlock | undefined;
   reactEditor.history.batchUpdates(() => {
     reactEditor.blocks.updateBlock(parentId, { listProps: { collapsed: false } });
-    childId = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock()).id;
-    reactEditor.blocks.moveBlocks([childId], parentId, "inside");
-    reactEditor.selection.set(createCaretSelection(childId, 0));
+    child = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock());
+    reactEditor.blocks.moveBlocks([child.id], parentId, "inside");
+    reactEditor.selection.set(createCaretSelection(child.id, 0));
   });
-  return childId;
+  return child!;
 }
 
 /**

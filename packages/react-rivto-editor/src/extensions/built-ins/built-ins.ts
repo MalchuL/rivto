@@ -235,7 +235,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
           let duplicateId = "";
           reactEditor.history.batchUpdates(() => {
             const afterId = isEdgelessRoot
-              ? insertBlockElementSeparator(reactEditor, reactEditor.blocks.getRootIds().at(-1)!)
+              ? insertBlockElementSeparator(reactEditor, reactEditor.blocks.getRootIds().at(-1)!).id
               : block.id;
             duplicateId = reactEditor.blocks.insertBlock(input, afterId).id;
             if (isEdgelessRoot) reactEditor.elements.insertElement({

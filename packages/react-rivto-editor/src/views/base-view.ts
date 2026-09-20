@@ -64,19 +64,19 @@ export class BaseBlockView implements BlockViewBehavior {
     const splitAt = target.collapsed
       ? Math.min(target.offset ?? 0, block.content.length)
       : block.content.length;
-    const nextBlockId = splitBlockAt(reactEditor, block, splitAt);
+    const nextBlock = splitBlockAt(reactEditor, block, splitAt);
     if (block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true)) {
       // Insertion created a sibling. Indent then prepend so Enter places the
       // new writing block as the first visible child.
-      reactEditor.blocks.indentBlock(nextBlockId);
-      reactEditor.blocks.moveBlock(nextBlockId, null);
+      reactEditor.blocks.indentBlock(nextBlock.id);
+      reactEditor.blocks.moveBlock(nextBlock.id, null);
     } else if (reactEditor.mode.get() === "edgeless" && reactEditor.blocks.getParentId(block.id) === null) {
       const element = reactEditor.elements.getElements().find((candidate) =>
         candidate.type === "block" && candidate.props.endBlockId === block.id,
       );
-      if (element) reactEditor.elements.updateElement(element.id, { props: { endBlockId: nextBlockId } });
+      if (element) reactEditor.elements.updateElement(element.id, { props: { endBlockId: nextBlock.id } });
     }
-    focusBlockLater(root, nextBlockId, 0);
+    focusBlockLater(root, nextBlock.id, 0);
     return "handled";
   }
 

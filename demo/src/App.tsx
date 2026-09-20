@@ -144,8 +144,8 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
   });
   visuals.createConnector({
     route: "orthogonal",
-    source: { elementId: rect, anchor: { x: 1, y: 0.5 }, position: { x: 190, y: 575 } },
-    target: { elementId: ellipse, anchor: { x: 0, y: 0.5 }, position: { x: 240, y: 585 } },
+    source: { elementId: rect.id, anchor: { x: 1, y: 0.5 }, position: { x: 190, y: 575 } },
+    target: { elementId: ellipse.id, anchor: { x: 0, y: 0.5 }, position: { x: 240, y: 585 } },
     stroke: "#495057",
     lineStyle: "dashed",
     endStyle: "arrow",
@@ -153,7 +153,7 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
     textRotation: "along",
   });
 
-  visuals.select([rect, ellipse]);
+  visuals.select([rect.id, ellipse.id]);
   const shapeGroup = visuals.group();
 
   const sticky = visuals.createSticker({
@@ -166,8 +166,8 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
   // Second connector: animated dashes flow toward the sticky.
   visuals.createConnector({
     route: "curve",
-    source: { elementId: ellipse, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
-    target: { elementId: sticky, anchor: { x: 0, y: 0.5 }, position: { x: 420, y: 595 } },
+    source: { elementId: ellipse.id, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
+    target: { elementId: sticky.id, anchor: { x: 0, y: 0.5 }, position: { x: 420, y: 595 } },
     stroke: "#868e96",
     lineStyle: "dashed-animated",
     endStyle: "arrow",
@@ -175,7 +175,7 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
   });
 
   // Nested group: existing group + sticky (Primary-click / Group again in the UI).
-  visuals.select([shapeGroup, sticky]);
+  visuals.select([shapeGroup.id, sticky.id]);
   visuals.group();
 
   visuals.createDrawing({

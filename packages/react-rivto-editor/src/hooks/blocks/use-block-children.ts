@@ -17,9 +17,9 @@ export interface BlockChildrenOperations {
    *
    * Omitting `afterId` appends the child. Passing `null` inserts it first.
    *
-   * @returns The new child's stable block ID.
+   * @returns The complete new-child subtree.
    */
-  add(block: BlockInput, afterId?: string | null): string;
+  add(block: BlockInput, afterId?: string | null): Block;
   /** Removes a direct child and its descendants. */
   remove(childId: string): void;
   /** Moves a direct child after a sibling, or first when `afterId` is null. */
@@ -72,17 +72,17 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
         const children = getChildren();
         if (afterId !== undefined && afterId !== null) requireChild(afterId);
 
-        let childId: string;
+        let child: Block;
         if (children.length === 0) {
-          childId = reactEditor.blocks.insertBlock(block, blockId).id;
-          reactEditor.blocks.indentBlock(childId);
+          child = reactEditor.blocks.insertBlock(block, blockId);
+          reactEditor.blocks.indentBlock(child.id);
         } else if (afterId === null) {
-          childId = reactEditor.blocks.insertBlock(block, children[0].id).id;
-          reactEditor.blocks.moveBlock(childId, null);
+          child = reactEditor.blocks.insertBlock(block, children[0].id);
+          reactEditor.blocks.moveBlock(child.id, null);
         } else {
-          childId = reactEditor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id).id;
+          child = reactEditor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
         }
-        return childId;
+        return child;
       },
       remove: (childId) => {
         requireChild(childId);
