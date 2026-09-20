@@ -229,7 +229,7 @@ export function captureBlockReview(
   blocksBelow: number,
   includeReportBlock = false,
 ): { snapshot: EditorSnapshot } & ReviewBlockPlacement {
-  if (!editor.blocks.getBlock(reviewId)) {
+  if (!editor.blocks.hasBlock(reviewId)) {
     throw new Error(`Review block ${reviewId} is not in the document`);
   }
   const parentReportId = editor.blocks.getParentId(reviewId) ?? null;

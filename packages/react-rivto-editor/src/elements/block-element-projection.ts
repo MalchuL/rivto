@@ -324,7 +324,7 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
   // limited to range boundaries so reconciliation never resets card geometry.
   const desiredIds = new Set(desired.map((element) => element.id));
   const remove = existing.filter((element) => !desiredIds.has(element.id)).map((element) => element.id);
-  const insert = desired.filter((element) => !reactEditor.elements.getElement(element.id));
+  const insert = desired.filter((element) => !reactEditor.elements.hasElement(element.id));
   const update = desired.flatMap((element) => {
     const current = reactEditor.elements.getElement(element.id);
     return current && (current.props.startBlockId !== element.props.startBlockId || current.props.endBlockId !== element.props.endBlockId)

@@ -196,7 +196,7 @@ export function SlashMenu() {
   });
 
   useEffect(() => {
-    if (session && !reactEditor.blocks.getBlock(session.blockId)) close();
+    if (session && !reactEditor.blocks.hasBlock(session.blockId)) close();
   }, [close, reactEditor, roots, session]);
 
   useDOMEvent({

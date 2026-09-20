@@ -223,7 +223,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         title: "Duplicate block",
         group: "Actions",
         keywords: ["copy", "clone"],
-        isAvailable: ({ blockId }) => Boolean(reactEditor.blocks.getBlock(blockId)),
+        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId),
         execute: ({ blockId }) => {
           const block = reactEditor.blocks.getBlock(blockId);
           if (!block) return;
@@ -257,7 +257,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         title: "Delete block",
         group: "Actions",
         keywords: ["remove"],
-        isAvailable: ({ blockId }) => Boolean(reactEditor.blocks.getBlock(blockId)),
+        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId),
         execute: ({ blockId }) => {
           reactEditor.selection.set(createStructuralSelection([blockId]));
           reactEditor.selection.delete();

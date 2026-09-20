@@ -111,7 +111,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     if (seen.has(id)) return [];
     seen.add(id);
     const children = groupChildren(id);
-    return children.length ? leaves(children, seen) : reactEditor.elements.getElement(id) ? [id] : [];
+    return children.length ? leaves(children, seen) : reactEditor.elements.hasElement(id) ? [id] : [];
   });
   const bounds = (id: string): EditorElementFrame | undefined => {
     const children = groupChildren(id);
