@@ -66,7 +66,7 @@ export class ClipboardManager implements ClipboardManagerApi {
         copy.content = invalid ? "" : block.content.slice(startOffset, endOffset);
       });
     }
-    return { version: CLIPBOARD_BUNDLE_VERSION, startsWithText: range.startsWithText || undefined, blocks };
+    return { version: CLIPBOARD_BUNDLE_VERSION, fromTextSelection: range.fromTextSelection || undefined, blocks };
   }
 
   /**

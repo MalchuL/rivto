@@ -65,7 +65,7 @@ export interface BlockPastePlacement {
    */
   readonly parentId?: string | null;
   /**
-   * Whether a `startsWithText` bundle may merge into the selected text range.
+   * Whether a `fromTextSelection` bundle may merge into the selected text range.
    * Omitted or true merges; false inserts the forest as blocks.
    */
   readonly mergeText?: boolean;

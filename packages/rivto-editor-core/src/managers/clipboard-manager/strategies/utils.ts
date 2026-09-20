@@ -51,7 +51,7 @@ export function isTextPasteContext(
 ): boolean {
   if (isPreserveNewlinesPaste(context, placement)) return false;
   if (context.bundle?.blocks.length) {
-    return Boolean(range && context.bundle.startsWithText === true && placement.mergeText !== false);
+    return Boolean(range && context.bundle.fromTextSelection === true && placement.mergeText !== false);
   }
   return Boolean(context.text);
 }
