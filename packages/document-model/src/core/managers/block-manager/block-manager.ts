@@ -56,20 +56,6 @@ interface LocatedBlock {
 }
 
 /**
- * Protects a detached snapshot and its nested portable values from mutation.
- *
- * @param value - Detached value to protect.
- * @returns The same value with every nested object and array frozen.
- */
-function freezeSnapshot<T>(value: T): T {
-    if (value !== null && typeof value === "object") {
-        Object.values(value).forEach(freezeSnapshot);
-        Object.freeze(value);
-    }
-    return value;
-}
-
-/**
  * Owns block records, collaborative text, and ordered tree placement.
  *
  * The manager is exposed as `document.blocks`. It preserves stable CRDT
@@ -81,9 +67,17 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     private readonly generateId = (): string => crypto.randomUUID();
     /** Cached block paths for each block. */
     private readonly blockPaths = new Map<IDBlock, readonly number[]>();
-    /** Stable detached snapshots reused until their record or a descendant changes. */
+    /**
+     * At most one recursive snapshot per read block ID. Parent `children`
+     * arrays reference those same child objects, so retained memory is linear
+     * in cached blocks rather than copying each descendant for every ancestor.
+     */
     private readonly blockSnapshots = new Map<IDBlock, Block>();
-    /** Non-recursive snapshots, invalidated when their own fields change. */
+    /**
+     * Stable own-field snapshots for `getBlockNode` and React `useBlock`.
+     * Child-list and descendant edits replace recursive blocks but leave these
+     * identities intact until the block's own fields change.
+     */
     private readonly blockNodeSnapshots = new Map<IDBlock, BlockNode>();
     /** Direct-child ID snapshots, invalidated when their child array changes. */
     private readonly childIdsSnapshots = new Map<IDBlock, string[]>();
@@ -101,7 +95,11 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     private lastStructureTransaction?: unknown;
     /** Current structural parent by placed block ID. */
     private readonly blockParents = new Map<IDBlock, IDBlock | null>();
-    /** Last transaction already reflected in `blockParents`. */
+    /** Previous direct memberships needed to identify IDs removed from an observed array. */
+    private readonly indexedChildren = new Map<IDBlock | null, readonly IDBlock[]>();
+    /** A duplicate placement needs the full traversal's first-visit ordering. */
+    private hasDuplicatePlacements = false;
+    /** Last transaction that rebuilt the complete parent index. */
     private lastParentTransaction?: unknown;
     /** Root blocks. */
     private readonly roots: CRDTArray<IDBlock>;
@@ -124,48 +122,81 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         // are dropped through `invalidateBlocks` without a parent-map diff.
         this.storage.observe((events, transaction) => {
             this.currentRevision += 1;
-            const changedIds = new Set<string>();
-            const nodeChangedIds = new Set<string>();
+            // Start points for recursive snapshot invalidation up the tree.
+            const changedBlockIds = new Set<string>();
+            // Blocks whose own-field node snapshots must be rebuilt.
+            const nodeFieldChangedIds = new Set<string>();
+            // Parents whose direct child-ID snapshots must be rebuilt.
             const childListChangedIds = new Set<string>();
             let structureChanged = false;
+            let recordReplaced = false;
             events.forEach(({ path, keys }) => {
-                // A top-level set/delete replaces the whole block record.
+                // storage.set/delete("b1") -> path: [], keys: ["b1"].
+                // The whole record changed, so both focused caches are stale.
                 if (path.length === 0) {
                     keys.forEach((id) => {
-                        changedIds.add(id);
-                        nodeChangedIds.add(id);
+                        changedBlockIds.add(id);
+                        nodeFieldChangedIds.add(id);
                         childListChangedIds.add(id);
+                        if (this.blockParents.has(id)) recordReplaced = true;
                     });
                     return;
                 }
                 const id = path[0];
                 if (typeof id !== "string") return;
-                changedIds.add(id);
+                changedBlockIds.add(id);
+                // block.set("type", ...): path ["b1"], keys ["type"].
+                // block.set("children", ...): path ["b1"], keys ["children"].
+                // content.insert(...): path ["b1", "content"], keys [].
+                // props.set("color", ...): path ["b1", "props"], keys ["color"].
+                // children.push("c1"): path ["b1", "children"], keys [].
                 const childrenChanged = path[1] === "children"
                     || (path.length === 1 && keys.includes("children"));
                 const nodeChanged = path.length === 1
                     ? keys.some((key) => key !== "children")
                     : path[1] !== "children";
                 if (childrenChanged) childListChangedIds.add(id);
-                if (nodeChanged) nodeChangedIds.add(id);
+                if (nodeChanged) nodeFieldChangedIds.add(id);
                 structureChanged ||= childrenChanged;
             });
-            if (structureChanged) this.refreshParents(transaction);
-            this.invalidateBlocks(changedIds, nodeChangedIds, childListChangedIds);
-            if (structureChanged) this.emitStructure(transaction);
+            if (structureChanged || recordReplaced) {
+                this.refreshParents(recordReplaced ? undefined : childListChangedIds, transaction);
+            }
+            this.invalidateBlocks(changedBlockIds, nodeFieldChangedIds, childListChangedIds);
+            if (structureChanged || recordReplaced) this.emitStructure(transaction);
         });
         // The roots array is not a field on any block, so these events have an
         // empty path and cannot name a parent for `invalidateBlocks`.
         this.roots.observe((_events, transaction) => {
             this.currentRevision += 1;
             this.rootIdsSnapshot = undefined;
-            const previousParents = new Map(this.blockParents);
-            this.refreshParents(transaction);
-            // Reordering roots does not change any block snapshot (parent stays
-            // null; snapshots omit sibling order). A root/child transfer changes
-            // only the recursive snapshots of the old and new parents, which
-            // `invalidateChangedParents` finds by diffing the parent index.
-            this.invalidateChangedParents(previousParents);
+            const previousParents = this.hasDuplicatePlacements ? new Map(this.blockParents) : undefined;
+            const oldRoots = new Set(this.indexedChildren.get(null) ?? []);
+            const newRoots = new Set(strings(this.roots));
+            const changedRoots = new Set([...oldRoots, ...newRoots].filter((id) => oldRoots.has(id) !== newRoots.has(id)));
+            const affected = new Set<string>();
+            /**
+             * Collects the current ancestors of one changed root membership.
+             *
+             * @param id - ID that entered or left the root array.
+             * @returns No value.
+             */
+            const addAncestors = (id: string): void => {
+                let parent = this.blockParents.get(id);
+                while (parent != null && !affected.has(parent)) {
+                    affected.add(parent);
+                    parent = this.blockParents.get(parent);
+                }
+            };
+            changedRoots.forEach(addAncestors);
+            this.refreshParents(new Set([null]), transaction);
+            // Valid trees need only the parent chains of IDs entering/leaving
+            // roots. Duplicate references can change the first winner on reorder.
+            if (previousParents) this.invalidateChangedParents(previousParents);
+            else {
+                changedRoots.forEach(addAncestors);
+                this.invalidateSnapshotIds(affected);
+            }
             this.emit(this.rootListeners);
             this.emitStructure(transaction);
         });
@@ -243,7 +274,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      */
     getRootIds(): string[] {
         if (this.crdt.isTransacting) return strings(this.roots);
-        this.rootIdsSnapshot ??= freezeSnapshot(strings(this.roots));
+        this.rootIdsSnapshot ??= this.freezeSnapshot(strings(this.roots));
         return this.rootIdsSnapshot;
     }
 
@@ -878,9 +909,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         visited.add(id);
         const cached = this.crdt.isTransacting ? undefined : this.blockSnapshots.get(id);
         if (cached) return cached;
-        // Rebuild the recursive snapshot from the two focused caches so a
-        // child-list-only edit can reuse the same node object, and a
-        // content-only edit can reuse the same child-id list.
+        // Each child read returns its cached object, so parent snapshots link to
+        // the same child objects rather than copying their subtrees.
         const node = this.readCachedBlockNode(value, id);
         const children = this.readCachedChildIds(value, id).flatMap((childId: IDBlock) => {
             const child = this.readBlock(childId, visited);
@@ -937,7 +967,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         }
         const node = this.readBlockNode(value, id);
         if (this.crdt.isTransacting) return node;
-        const snapshot = freezeSnapshot(node);
+        const snapshot = this.freezeSnapshot(node);
         this.blockNodeSnapshots.set(id, snapshot);
         return snapshot;
     }
@@ -959,7 +989,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         }
         const ids = strings(this.requiredArray(value, "children"));
         // Cache the real array, including `[]`, under this parent ID only.
-        if (!this.crdt.isTransacting) this.childIdsSnapshots.set(id, freezeSnapshot(ids));
+        if (!this.crdt.isTransacting) this.childIdsSnapshots.set(id, this.freezeSnapshot(ids));
         return ids;
     }
 
@@ -1022,16 +1052,12 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     }
 
     /**
-     * Drops and publishes the exact recursive block snapshots supplied.
+     * Drops all affected recursive snapshots before notifying subscribers.
      *
-     * Every snapshot is dropped before any listener runs. Notification is
-     * synchronous and a listener typically re-reads its block, which re-caches
-     * the whole ancestor chain. Interleaving deletion with notification would
-     * therefore rebuild an ancestor from a descendant snapshot still waiting
-     * its turn in this same set, re-caching the pre-mutation subtree and
-     * leaving the block reachable by ID but absent from the materialized tree.
+     * Listeners read synchronously. If an ancestor were rebuilt before its old
+     * child snapshot was evicted, the ancestor could retain a stale child link.
      *
-     * @param ids - Exact block snapshots to evict and notify.
+     * @param ids - Block snapshots to evict and subscribers to notify.
      * @returns No value.
      */
     private invalidateSnapshotIds(ids: ReadonlySet<string>): void {
@@ -1065,24 +1091,151 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     }
 
     /**
-     * Rebuilds the cheap parent index after hierarchy transactions only.
+     * Protects a detached snapshot and its nested portable values from mutation.
      *
-     * @param transaction - Optional adapter transaction identity used to skip repeated work.
+     * @param value - Detached value to protect.
+     * @returns The same value with every nested object and array frozen.
+     */
+    private freezeSnapshot<T>(value: T): T {
+        if (value !== null && typeof value === "object") {
+            Object.values(value).forEach((nested) => this.freezeSnapshot(nested));
+            Object.freeze(value);
+        }
+        return value;
+    }
+
+    /**
+     * Updates parent links from observed arrays, rebuilding if their changes
+     * cannot be resolved independently (for example a root/child transfer).
+     *
+     * @param changedParents - Parents whose child arrays changed, or omitted to rebuild.
+     * @param transaction - Adapter transaction identity used to skip a second full rebuild.
      * @returns No value.
      */
-    private refreshParents(transaction?: unknown): void {
+    private refreshParents(changedParents?: ReadonlySet<string | null>, transaction?: unknown): void {
         if (transaction !== undefined && this.lastParentTransaction === transaction) return;
+        if (changedParents && this.refreshChangedParents(changedParents)) return;
+
         this.lastParentTransaction = transaction;
         this.blockParents.clear();
-        const visited = new Set<string>();
-        const visit = (ids: readonly string[], parentId: string | null): void => ids.forEach((id) => {
-            if (visited.has(id)) return;
-            visited.add(id);
-            this.blockParents.set(id, parentId);
+        this.indexedChildren.clear();
+        this.hasDuplicatePlacements = false;
+        /**
+         * Indexes one placed sibling array in depth-first order.
+         *
+         * @param ids - Array of placed IDs to visit.
+         * @param parentId - Owner of that array, or null for roots.
+         * @returns No value.
+         */
+        const visit = (ids: CRDTArray<string>, parentId: string | null): void => {
+            const children: string[] = [];
+            ids.forEach((value) => {
+                const id = String(value);
+                children.push(id);
+                // A full walk resolves duplicate references in tree order.
+                if (this.blockParents.has(id)) {
+                    this.hasDuplicatePlacements = true;
+                    return;
+                }
+                this.blockParents.set(id, parentId);
+                const block = this.storage.get(id);
+                if (isCRDTMap(block)) visit(this.requiredArray(block, "children"), id);
+            });
+            this.indexedChildren.set(parentId, children);
+        };
+        visit(this.roots, null);
+    }
+
+    /**
+     * Reconciles only the direct arrays named by an observer and any newly
+     * attached or detached subtrees. Ambiguous placements request a full walk.
+     *
+     * @param changedParents - Root or block IDs owning changed arrays.
+     * @returns True when the parent index was updated without a full traversal.
+     */
+    private refreshChangedParents(changedParents: ReadonlySet<string | null>): boolean {
+        if (this.hasDuplicatePlacements) return false;
+        const current = new Map<string | null, string[]>();
+        const nextParents = new Map<string, string | null>();
+        const previousChildren = new Set<string>();
+        let currentCount = 0;
+        for (const parentId of changedParents) {
+            const block = parentId === null ? undefined : this.storage.get(parentId);
+            if (parentId !== null && (!this.blockParents.has(parentId) || !isCRDTMap(block))) return false;
+            const ids: string[] = [];
+            const array = parentId === null ? this.roots : this.requiredArray(block as CRDTMap<BlockStorage>, "children");
+            array.forEach((value) => {
+                const id = String(value);
+                ids.push(id);
+                nextParents.set(id, parentId);
+                currentCount += 1;
+            });
+            current.set(parentId, ids);
+            (this.indexedChildren.get(parentId) ?? []).forEach((id) => previousChildren.add(id));
+        }
+        // Duplicate references, a source outside these arrays, or a detached
+        // ID placed elsewhere cannot be reconciled from the named arrays alone.
+        if (currentCount !== nextParents.size) return false;
+        const reparented: string[] = [];
+        for (const [id, parentId] of nextParents) {
+            const oldParent = this.blockParents.get(id);
+            if (oldParent !== undefined && !changedParents.has(oldParent)) return false;
+            if (oldParent !== parentId) reparented.push(id);
+        }
+        for (const id of previousChildren) {
+            if (!nextParents.has(id) && this.storage.has(id)) return false;
+        }
+
+        /**
+         * Drops a subtree that was removed from the named arrays.
+         *
+         * @param id - Root ID of the removed subtree.
+         * @returns No value.
+         */
+        const drop = (id: string): void => {
+            for (const childId of this.indexedChildren.get(id) ?? []) {
+                if (!nextParents.has(childId)) drop(childId);
+            }
+            this.indexedChildren.delete(id);
+            this.blockParents.delete(id);
+        };
+        for (const id of previousChildren) {
+            if (!nextParents.has(id)) drop(id);
+        }
+        current.forEach((ids, parentId) => this.indexedChildren.set(parentId, ids));
+        const added = [...nextParents.keys()].filter((id) => !this.blockParents.has(id));
+        nextParents.forEach((parentId, id) => this.blockParents.set(id, parentId));
+
+        /**
+         * Indexes descendants of a newly placed subtree without visiting other branches.
+         *
+         * @param id - Newly placed subtree root.
+         * @returns False when a duplicate or cycle requires a complete rebuild.
+         */
+        const addDescendants = (id: string): boolean => {
             const block = this.storage.get(id);
-            if (isCRDTMap(block)) visit(strings(this.requiredArray(block, "children")), id);
-        });
-        visit(strings(this.roots), null);
+            if (!isCRDTMap(block)) return true;
+            const children: string[] = [];
+            this.requiredArray(block as CRDTMap<BlockStorage>, "children").forEach((value) => children.push(String(value)));
+            this.indexedChildren.set(id, children);
+            for (const childId of children) {
+                if (this.blockParents.has(childId)) return false;
+                this.blockParents.set(childId, id);
+                if (!addDescendants(childId)) return false;
+            }
+            return true;
+        };
+        for (const id of added) if (!addDescendants(id)) return false;
+        for (const id of reparented) {
+            const seen = new Set<string>();
+            let currentId: string | null | undefined = id;
+            while (currentId != null) {
+                if (seen.has(currentId)) return false;
+                seen.add(currentId);
+                currentId = this.blockParents.get(currentId);
+            }
+        }
+        return true;
     }
 
     /**
