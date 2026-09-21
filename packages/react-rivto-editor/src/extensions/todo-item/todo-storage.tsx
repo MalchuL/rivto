@@ -18,7 +18,6 @@ import {
   type ChangeEvent,
   type KeyboardEvent,
   type MouseEvent,
-  type ReactNode,
 } from "react";
 import type { EditorBlock, EditorBlockNode } from "@chulane/rivto";
 import { z } from "zod";
