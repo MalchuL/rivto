@@ -74,15 +74,19 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      */
     private readonly blockSnapshots = new Map<IDBlock, Block>();
     /**
-     * Stable own-field snapshots for `getBlockNode` and React `useBlock`.
-     * Child-list and descendant edits replace recursive blocks but leave these
-     * identities intact until the block's own fields change.
+     * Stable node snapshots for `getBlockNode` and React `useBlockNode`.
+     * Descendant edits leave these identities intact; own fields and direct
+     * child-list edits replace them.
      */
     private readonly blockNodeSnapshots = new Map<IDBlock, BlockNode>();
     /** Direct-child ID snapshots, invalidated when their child array changes. */
     private readonly childIdsSnapshots = new Map<IDBlock, string[]>();
     /** Per-block subscribers, including recursive snapshot consumers on ancestors. */
     private readonly blockListeners = new Map<IDBlock, Set<() => void>>();
+    /** Subscribers for own fields and direct child IDs only. */
+    private readonly blockNodeListeners = new Map<IDBlock, Set<() => void>>();
+    /** Subscribers for direct child IDs only. */
+    private readonly childIdsListeners = new Map<IDBlock, Set<() => void>>();
     /** Subscribers interested only in the ordered root identifier list. */
     private readonly rootListeners = new Set<() => void>();
     /** Subscribers interested in root or child ordering changes. */
@@ -128,6 +132,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             const nodeFieldChangedIds = new Set<string>();
             // Parents whose direct child-ID snapshots must be rebuilt.
             const childListChangedIds = new Set<string>();
+            const placementChangedIds = new Set<string>();
             let structureChanged = false;
             let recordReplaced = false;
             events.forEach(({ path, keys }) => {
@@ -160,9 +165,16 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 structureChanged ||= childrenChanged;
             });
             if (structureChanged || recordReplaced) {
+                childListChangedIds.forEach((parentId) => {
+                    const previous = new Set(this.indexedChildren.get(parentId) ?? []);
+                    const parent = this.storage.get(parentId);
+                    const next = new Set(isCRDTMap(parent) ? strings(this.requiredArray(parent, "children")) : []);
+                    previous.forEach((id) => { if (!next.has(id)) placementChangedIds.add(id); });
+                    next.forEach((id) => { if (!previous.has(id)) placementChangedIds.add(id); });
+                });
                 this.refreshParents(recordReplaced ? undefined : childListChangedIds, transaction);
             }
-            this.invalidateBlocks(changedBlockIds, nodeFieldChangedIds, childListChangedIds);
+            this.invalidateBlocks(changedBlockIds, nodeFieldChangedIds, childListChangedIds, placementChangedIds);
             if (structureChanged || recordReplaced) this.emitStructure(transaction);
         });
         // The roots array is not a field on any block, so these events have an
@@ -197,6 +209,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 changedRoots.forEach(addAncestors);
                 this.invalidateSnapshotIds(affected);
             }
+            this.emitFocused(changedRoots, this.blockNodeListeners);
+            this.emitFocused(changedRoots, this.childIdsListeners);
             this.emit(this.rootListeners);
             this.emitStructure(transaction);
         });
@@ -235,21 +249,21 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * @returns Detached block subtree, or undefined when the block is absent.
      */
     getBlock(id: string): Block | undefined {
-        if (!this.findContainer(id)) return undefined;
+        if (!this.isPlaced(id)) return undefined;
         return this.readBlock(id, new Set());
     }
 
     /**
      * Returns one placed block without recursively materializing descendants.
      *
-     * Identity stays stable until this block's own fields change; child-list
-     * and descendant edits leave this snapshot intact.
+     * Identity stays stable until own fields or direct child IDs change;
+     * descendant edits leave this snapshot intact.
      *
      * @param id - Stable block identifier to resolve.
      * @returns Detached node fields, or undefined when the block is absent.
      */
     getBlockNode(id: string): BlockNode | undefined {
-        if (!this.findContainer(id)) return undefined;
+        if (!this.isPlaced(id)) return undefined;
         const value = this.storage.get(id);
         if (!isCRDTMap(value)) return undefined;
         return this.readCachedBlockNode(value, id);
@@ -289,16 +303,27 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * @returns Function that removes this exact listener.
      */
     subscribeBlock(id: string, listener: () => void): () => void {
-        let listeners = this.blockListeners.get(id);
-        if (!listeners) {
-            listeners = new Set();
-            this.blockListeners.set(id, listeners);
-        }
-        listeners.add(listener);
-        return () => {
-            listeners!.delete(listener);
-            if (!listeners!.size) this.blockListeners.delete(id);
-        };
+        return this.subscribeById(this.blockListeners, id, listener);
+    }
+
+    /**
+     * Subscribes to a block's own fields and direct child identifiers.
+     * @param id - Block identifier to observe.
+     * @param listener - Callback invoked after node changes.
+     * @returns Function that removes this listener.
+     */
+    subscribeBlockNode(id: string, listener: () => void): () => void {
+        return this.subscribeById(this.blockNodeListeners, id, listener);
+    }
+
+    /**
+     * Subscribes only to one block's direct child identifiers.
+     * @param id - Parent identifier to observe.
+     * @param listener - Callback invoked after direct child-list changes.
+     * @returns Function that removes this listener.
+     */
+    subscribeChildIds(id: string, listener: () => void): () => void {
+        return this.subscribeById(this.childIdsListeners, id, listener);
     }
 
     /**
@@ -332,7 +357,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * @returns Child identifiers in collaborative order, or an empty list when absent.
      */
     getChildIds(id: string): string[] {
-        if (!this.findContainer(id)) return [];
+        if (!this.isPlaced(id)) return [];
         const value = this.storage.get(id);
         return isCRDTMap(value) ? this.readCachedChildIds(value, id) : [];
     }
@@ -911,8 +936,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         if (cached) return cached;
         // Each child read returns its cached object, so parent snapshots link to
         // the same child objects rather than copying their subtrees.
-        const node = this.readCachedBlockNode(value, id);
-        const children = this.readCachedChildIds(value, id).flatMap((childId: IDBlock) => {
+        const { childIds, ...node } = this.readCachedBlockNode(value, id);
+        const children = childIds.flatMap((childId: IDBlock) => {
             const child = this.readBlock(childId, visited);
             return child ? [child] : [];
         });
@@ -928,7 +953,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     }
 
     /**
-     * Materializes one stored block record without walking its child IDs.
+     * Materializes one stored block record and its direct child IDs.
      *
      * @param value - Stored block map already resolved by the caller.
      * @param id - Stable block identity used for validation and the result.
@@ -937,7 +962,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     private readBlockNode(value: CRDTMap<BlockStorage>, id: IDBlock): BlockNode {
         // The adapter can expose plain nested property values by reference.
         // Detach them before callers receive or cache the node.
-        return clone({
+        const fields = clone({
             id,
             type: this.requiredType(value, id),
             listProps: validateBlockListProps(this.requiredMap(value, "listProps").toObject()),
@@ -945,6 +970,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             pluginData: this.requiredMap(value, "pluginData").toObject() as Record<IDPlugin, unknown>,
             content: this.requiredText(value, "content").toString(),
         });
+        return { ...fields, childIds: this.readCachedChildIds(value, id) };
     }
 
     /**
@@ -1008,6 +1034,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         ids: ReadonlySet<string>,
         nodeIds: ReadonlySet<string>,
         childListIds: ReadonlySet<string>,
+        placementIds: ReadonlySet<string>,
     ): void {
         const affected = new Set<string>();
         ids.forEach((id) => {
@@ -1018,8 +1045,44 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             }
         });
         nodeIds.forEach((id) => this.blockNodeSnapshots.delete(id));
+        childListIds.forEach((id) => this.blockNodeSnapshots.delete(id));
         childListIds.forEach((id) => this.childIdsSnapshots.delete(id));
         this.invalidateSnapshotIds(affected);
+        this.emitFocused(new Set([...nodeIds, ...childListIds, ...placementIds]), this.blockNodeListeners);
+        this.emitFocused(new Set([...childListIds, ...placementIds]), this.childIdsListeners);
+    }
+
+    /**
+     * Adds a listener to one keyed channel.
+     * @param registry - Listener registry for the requested snapshot kind.
+     * @param id - Block identifier to observe.
+     * @param listener - Callback to register.
+     * @returns Function that removes this listener.
+     */
+    private subscribeById(registry: Map<IDBlock, Set<() => void>>, id: string, listener: () => void): () => void {
+        let listeners = registry.get(id);
+        if (!listeners) {
+            listeners = new Set();
+            registry.set(id, listeners);
+        }
+        listeners.add(listener);
+        return () => {
+            listeners!.delete(listener);
+            if (!listeners!.size) registry.delete(id);
+        };
+    }
+
+    /**
+     * Notifies only listeners whose requested ID is in a changed set.
+     * @param ids - Changed block identifiers.
+     * @param registry - Listener registry for one snapshot kind.
+     * @returns No value.
+     */
+    private emitFocused(ids: ReadonlySet<string>, registry: ReadonlyMap<IDBlock, Set<() => void>>): void {
+        ids.forEach((id) => {
+            const listeners = registry.get(id);
+            if (listeners) this.emit(listeners);
+        });
     }
 
     /**
@@ -1236,6 +1299,17 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             }
         }
         return true;
+    }
+
+    /**
+     * Checks placement through the maintained index outside transactions.
+     * Reads inside a transaction inspect live arrays because observers update
+     * the index only after the transaction commits.
+     * @param id - Block identifier to locate.
+     * @returns Whether the block is currently placed in the tree.
+     */
+    private isPlaced(id: string): boolean {
+        return this.crdt.isTransacting ? Boolean(this.findContainer(id)) : this.blockParents.has(id);
     }
 
     /**

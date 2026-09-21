@@ -9,7 +9,7 @@
  */
 import { memo, useCallback, useSyncExternalStore, type ComponentType } from "react";
 import { BLOCK_ROW_CLASS } from "../constants";
-import { useBlock, useBlockChildren, useBlockSelected, useReactEditor } from "../hooks";
+import { useBlockNode, useBlockSelected, useReactEditor } from "../hooks";
 import {
   BlockElementRefBoundary,
   BlockWrapper,
@@ -60,8 +60,7 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
  * @returns The block shell and expanded children, or null after deletion.
  */
 function BlockTreeNode({ blockId }: { readonly blockId: string }) {
-  const { block } = useBlock(blockId);
-  const { children: childIds } = useBlockChildren(blockId);
+  const { block } = useBlockNode(blockId);
   const reactEditor = useReactEditor();
   const selected = useBlockSelected(blockId);
   const subscribeRenderers = useCallback(
@@ -75,6 +74,7 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   );
 
   if (!block) return null;
+  const childIds = block.childIds;
   const Content = reactEditor.renderers.get(block.type) ?? UnknownBlock;
   const childrenId = `block-children-${block.id}`;
   const collapseActive = reactEditor.blockListProps.has("collapse");

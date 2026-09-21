@@ -127,6 +127,7 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
       props: {},
       pluginData: {},
       content: "updated",
+      childIds: ["child"],
     });
     expect(model.blocks.updateBlocks([{ id: "block", patch: { props: { done: true } } }]))
       .toEqual([{
@@ -136,6 +137,7 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
         props: { done: true },
         pluginData: {},
         content: "updated",
+        childIds: ["child"],
       }]);
     expect(model.elements.insertElement({
       id: "element",

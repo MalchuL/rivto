@@ -148,6 +148,26 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
+   * Subscribes to one block's own fields and direct child IDs.
+   * @param id - Block identifier to observe.
+   * @param listener - Callback invoked after relevant changes.
+   * @returns Function that removes the subscription.
+   */
+  subscribeBlockNode(id: string, listener: () => void): () => void {
+    return this.subscribe(listener, (document) => document.blocks.subscribeBlockNode(id, listener));
+  }
+
+  /**
+   * Subscribes to one block's direct child IDs.
+   * @param id - Parent identifier to observe.
+   * @param listener - Callback invoked after child-list changes.
+   * @returns Function that removes the subscription.
+   */
+  subscribeChildIds(id: string, listener: () => void): () => void {
+    return this.subscribe(listener, (document) => document.blocks.subscribeChildIds(id, listener));
+  }
+
+  /**
    * Subscribes to ordered root identifier changes.
    *
    * @param listener - Callback invoked after root insertion, removal, or reorder.

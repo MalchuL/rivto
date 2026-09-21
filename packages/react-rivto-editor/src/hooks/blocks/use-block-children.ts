@@ -60,7 +60,7 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
   const { reactEditor } = useEditorContext();
   const snapshotRef = useRef<readonly string[]>([]);
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.blocks.subscribeBlock(blockId, listener),
+    (listener: () => void) => reactEditor.blocks.subscribeChildIds(blockId, listener),
     [blockId, reactEditor],
   );
   const getSnapshot = useCallback(() => {

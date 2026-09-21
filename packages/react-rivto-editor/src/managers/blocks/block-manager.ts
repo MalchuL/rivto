@@ -112,6 +112,12 @@ export class BlockManager implements BlocksCapability {
   /** Subscribes to one recursive block snapshot. */
   subscribeBlock(id: string, listener: () => void): () => void { return this.editor.blocks.subscribeBlock(id, listener); }
 
+  /** Subscribes to one block's own fields and direct child IDs. */
+  subscribeBlockNode(id: string, listener: () => void): () => void { return this.editor.blocks.subscribeBlockNode(id, listener); }
+
+  /** Subscribes to one block's direct child IDs. */
+  subscribeChildIds(id: string, listener: () => void): () => void { return this.editor.blocks.subscribeChildIds(id, listener); }
+
   /** Subscribes to ordered root identifiers. */
   subscribeRootIds(listener: () => void): () => void { return this.editor.blocks.subscribeRootIds(listener); }
 

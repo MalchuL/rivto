@@ -206,7 +206,53 @@ describe("document reactivity", () => {
     void doc.destroy();
   });
 
-  test("replaces child IDs but keeps node fields when a child list changes", () => {
+  test("notifies only subscribers whose snapshot includes the change", () => {
+    const doc = new YjsDoc("focused-block-listeners");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({
+      id: "parent",
+      type: "paragraph",
+      children: [{ id: "child", type: "paragraph" }],
+    });
+    const calls = { tree: 0, node: 0, children: 0 };
+    const disposers = [
+      model.blocks.subscribeBlock("parent", () => { calls.tree += 1; }),
+      model.blocks.subscribeBlockNode("parent", () => { calls.node += 1; }),
+      model.blocks.subscribeChildIds("parent", () => { calls.children += 1; }),
+    ];
+
+    model.blocks.updateBlock("child", { content: "after" });
+    expect(calls).toEqual({ tree: 1, node: 0, children: 0 });
+    model.blocks.updateBlock("parent", { content: "parent" });
+    expect(calls).toEqual({ tree: 2, node: 1, children: 0 });
+    model.blocks.insertBlock({ id: "extra", type: "paragraph" }, "child");
+    expect(calls).toEqual({ tree: 3, node: 2, children: 1 });
+
+    disposers.forEach((dispose) => dispose());
+    void doc.destroy();
+  });
+
+  test("notifies focused listeners when a placed block is removed", () => {
+    const doc = new YjsDoc("focused-block-removal");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({ id: "parent", type: "paragraph", children: [{ id: "child", type: "paragraph" }] });
+    const calls = { node: 0, children: 0 };
+    const disposers = [
+      model.blocks.subscribeBlockNode("child", () => { calls.node += 1; }),
+      model.blocks.subscribeChildIds("child", () => { calls.children += 1; }),
+    ];
+
+    model.blocks.removeBlock("child");
+    expect(model.blocks.getBlockNode("child")).toBeUndefined();
+    expect(model.blocks.getChildIds("child")).toEqual([]);
+    expect(calls.node).toBeGreaterThan(0);
+    expect(calls.children).toBeGreaterThan(0);
+
+    disposers.forEach((dispose) => dispose());
+    void doc.destroy();
+  });
+
+  test("replaces node and child-ID snapshots when a child list changes", () => {
     const doc = new YjsDoc("child-id-reactivity");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({
@@ -216,11 +262,12 @@ describe("document reactivity", () => {
     });
     const parentNode = model.blocks.getBlockNode("parent");
     const parentChildren = model.blocks.getChildIds("parent");
+    expect(parentNode?.childIds).toEqual(["child"]);
     const emptyLeaf = model.blocks.getChildIds("child");
 
     model.blocks.insertBlock({ id: "extra", type: "paragraph" }, "child");
 
-    expect(model.blocks.getBlockNode("parent")).toBe(parentNode);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["child", "extra"]);
     expect(model.blocks.getChildIds("parent")).not.toBe(parentChildren);
     expect(model.blocks.getChildIds("parent")).toEqual(["child", "extra"]);
     expect(model.blocks.getChildIds("parent")).toBe(model.blocks.getChildIds("parent"));
@@ -340,7 +387,7 @@ describe("document reactivity", () => {
     void doc.destroy();
   });
 
-  test("moves between roots and children without changing node fields", () => {
+  test("moves between roots and children without changing unrelated node fields", () => {
     const doc = new YjsDoc("root-child-transfer");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "parent", type: "paragraph" });
@@ -351,7 +398,8 @@ describe("document reactivity", () => {
     const roots = model.blocks.getRootIds();
 
     model.blocks.moveBlock("moving", "parent", "inside");
-    expect(model.blocks.getBlockNode("parent")).toBe(parentNode);
+    expect(model.blocks.getBlockNode("parent")).not.toBe(parentNode);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["moving"]);
     expect(model.blocks.getBlockNode("moving")).toBe(movingNode);
     expect(model.blocks.getChildIds("parent")).not.toBe(emptyChildren);
     expect(model.blocks.getChildIds("parent")).toEqual(["moving"]);
@@ -360,7 +408,7 @@ describe("document reactivity", () => {
     expect(model.blocks.getBlock("parent")?.children.map(({ id }) => id)).toEqual(["moving"]);
 
     model.blocks.moveBlock("moving", "parent", "after");
-    expect(model.blocks.getBlockNode("parent")).toBe(parentNode);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toEqual([]);
     expect(model.blocks.getBlockNode("moving")).toBe(movingNode);
     expect(model.blocks.getChildIds("parent")).toEqual([]);
     expect(model.blocks.getRootIds()).toEqual(["parent", "moving"]);
@@ -518,7 +566,7 @@ describe("document reactivity", () => {
     void rightDoc.destroy();
   });
 
-  test("updates child IDs but retains node fields after a remote insertion", () => {
+  test("updates node child IDs after a remote insertion", () => {
     const leftDoc = new YjsDoc("remote-child-left");
     const left = new DocumentModelImpl(leftDoc);
     left.blocks.insertBlock({
@@ -538,7 +586,8 @@ describe("document reactivity", () => {
       Y.encodeStateAsUpdate(leftDoc.doc, Y.encodeStateVector(rightDoc.doc)),
     );
 
-    expect(right.blocks.getBlockNode("parent")).toBe(node);
+    expect(right.blocks.getBlockNode("parent")).not.toBe(node);
+    expect(right.blocks.getBlockNode("parent")?.childIds).toEqual(["first", "second"]);
     expect(right.blocks.getChildIds("parent")).not.toBe(children);
     expect(right.blocks.getChildIds("parent")).toEqual(["first", "second"]);
     void leftDoc.destroy();

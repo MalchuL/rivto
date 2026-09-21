@@ -282,12 +282,15 @@ export function insertTableColumn(reactEditor: ReactEditor, cellId: string): rea
  * @param reactEditor - Active React editor runtime.
  * @param tableId - Candidate table block ID.
  * @param column - Zero-based column index.
- * @returns Current cells in row order, or an empty list for invalid input.
+ * @returns Current cell IDs in row order, or an empty list for invalid input.
  */
-function tableColumnCells(reactEditor: ReactEditor, tableId: string, column: number): EditorBlock[] {
-  const table = reactEditor.blocks.getBlock(tableId);
+function tableColumnCells(reactEditor: ReactEditor, tableId: string, column: number): string[] {
+  const table = reactEditor.blocks.getBlockNode(tableId);
   return table?.type === TABLE_BLOCK_TYPE && Number.isInteger(column) && column >= 0
-    ? table.children.flatMap((row) => row.children[column] ? [row.children[column]!] : [])
+    ? table.childIds.flatMap((rowId) => {
+      const cellId = reactEditor.blocks.getChildIds(rowId)[column];
+      return cellId ? [cellId] : [];
+    })
     : [];
 }
 
@@ -302,8 +305,8 @@ function tableColumnCells(reactEditor: ReactEditor, tableId: string, column: num
 function previewTableColumnWidth(reactEditor: ReactEditor, tableId: string, column: number, width: number): void {
   const root = reactEditor.events.getRoot();
   if (!root) return;
-  tableColumnCells(reactEditor, tableId, column).forEach((cell) => {
-    root.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(cell.id)}"]`)
+  tableColumnCells(reactEditor, tableId, column).forEach((cellId) => {
+    root.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(cellId)}"]`)
       ?.style.setProperty(COLUMN_WIDTH_PROPERTY, `${columnWidth(width)}px`);
   });
 }
@@ -325,9 +328,9 @@ export function setTableColumnWidth(
   const cells = tableColumnCells(reactEditor, tableId, column);
   if (cells.length === 0 || !Number.isFinite(width)) return false;
   const tableColumnWidth = columnWidth(width);
-  reactEditor.blocks.updateBlocks(cells.map((cell) => ({
-    id: cell.id,
-    patch: { props: { ...cell.props, tableColumnWidth } },
+  reactEditor.blocks.updateBlocks(cells.map((id) => ({
+    id,
+    patch: { props: { tableColumnWidth } },
   })));
   return true;
 }
@@ -370,8 +373,7 @@ function TableDialog({ block, children }: BlockWrapperProps) {
 
 /**
  * Reads row count and the widest nested cell count without materializing the
- * recursive table tree. `subscribeBlock` still fires for descendant edits;
- * the primitive snapshot keeps identity when those counts do not change.
+ * recursive table tree. Structure changes refresh the primitive snapshot.
  *
  * @param tableId - Persisted table identifier.
  * @returns Current row count and maximum cells in any row.
@@ -379,8 +381,8 @@ function TableDialog({ block, children }: BlockWrapperProps) {
 function useTableDimensions(tableId: string): { readonly rows: number; readonly columns: number } {
   const reactEditor = useReactEditor();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.blocks.subscribeBlock(tableId, listener),
-    [tableId, reactEditor],
+    (listener: () => void) => reactEditor.blocks.subscribeStructure(listener),
+    [reactEditor],
   );
   const getSnapshot = useCallback(() => {
     const rowIds = reactEditor.blocks.getChildIds(tableId);
@@ -453,11 +455,11 @@ function resolveCellColumn(
 ): { readonly tableId: string; readonly column: number; readonly width: number } | undefined {
   const rowId = reactEditor.blocks.getParentId(cellId);
   const tableId = rowId ? reactEditor.blocks.getParentId(rowId) : undefined;
-  const row = rowId ? reactEditor.blocks.getBlock(rowId) : undefined;
+  const row = rowId ? reactEditor.blocks.getBlockNode(rowId) : undefined;
   const table = tableId ? reactEditor.blocks.getBlockNode(tableId) : undefined;
-  const column = row?.children.findIndex((cell) => cell.id === cellId) ?? -1;
+  const column = row?.childIds.indexOf(cellId) ?? -1;
   return row?.type === TABLE_ROW_BLOCK_TYPE && table?.type === TABLE_BLOCK_TYPE && column >= 0
-    ? { tableId: table.id, column, width: columnWidth(row.children[column]?.props.tableColumnWidth) }
+    ? { tableId: table.id, column, width: columnWidth(reactEditor.blocks.getBlockNode(cellId)?.props.tableColumnWidth) }
     : undefined;
 }
 

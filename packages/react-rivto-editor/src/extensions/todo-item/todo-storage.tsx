@@ -8,20 +8,18 @@
  */
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type ChangeEvent,
   type KeyboardEvent,
   type MouseEvent,
 } from "react";
 import type { EditorBlock, EditorBlockNode } from "@chulane/rivto";
 import { z } from "zod";
-import { useBlockChildren, useBlockEditing, useReactEditor } from "../../hooks";
+import { useBlock, useBlockEditing, useReactEditor } from "../../hooks";
 import type { BlockWrapperProps } from "../../blocks";
 import { ContainerBlockView } from "../../views";
 import { createBlockViewContext } from "../../views/context";
@@ -107,7 +105,7 @@ export function normalizeTodoSearch(value: string): string {
 
 /** Reports whether one TODO satisfies search plus every active filter category. */
 export function matchesTodoStorage(
-  block: EditorBlockNode,
+  block: Pick<EditorBlockNode, "type" | "props" | "content">,
   query: string,
   filters: TodoStorageFilters,
 ): boolean {
@@ -161,15 +159,7 @@ function toggleFilter<T>(current: ReadonlySet<T>, value: T): ReadonlySet<T> {
 /** Supplies local storage state and a card boundary around the shared subtree. */
 function TodoStorageState({ block, children }: BlockWrapperProps) {
   const reactEditor = useReactEditor();
-  const subscribe = useCallback(
-    (listener: () => void) => reactEditor.blocks.subscribeBlock(block.id, listener),
-    [block.id, reactEditor],
-  );
-  const getSnapshot = useCallback(
-    () => reactEditor.blocks.getBlock(block.id),
-    [block.id, reactEditor],
-  );
-  const tree = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const { block: tree } = useBlock(block.id);
   const childBlocks = tree?.children ?? NO_CHILD_BLOCKS;
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<TodoStorageFilters>({
@@ -229,7 +219,6 @@ export function TodoStorageBlockWrapper({ block, children }: BlockWrapperProps) 
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   const reactEditor = useReactEditor();
   const editing = useBlockEditing<TodoStorageProps>(blockId, { textEdit: false });
-  const { children: childIds } = useBlockChildren(blockId);
   const block = editing.block;
   const context = useContext(TodoStorageContext);
   const filterMenu = useRef<HTMLDetailsElement>(null);
@@ -251,6 +240,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   }, [reactEditor]);
 
   if (!block || !context) return null;
+  const childIds = block.childIds;
   const props = block.props as TodoStorageProps;
 
   /** Persists a validated ordering-property patch. */

@@ -28,7 +28,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     position: "left-top",
     priority: 100,
     component: BlockCollapseSlot,
-    when: ({ block }) => reactEditor.blocks.hasChildren(block.id),
+    when: ({ block }) => block.childIds.length > 0,
   });
   const reconcile = () => {
     const root = reactEditor.events.getRoot();
@@ -61,7 +61,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     const collapsed = value === "toggle" ? first.listProps.collapsed !== true : value;
     const updates = uniqueIds.flatMap((id) => {
       const block = reactEditor.blocks.getBlockNode(id);
-      return block && (!collapsed || reactEditor.blocks.hasChildren(id)) && block.listProps.collapsed !== collapsed
+      return block && (!collapsed || block.childIds.length > 0) && block.listProps.collapsed !== collapsed
         ? [{ id, patch: { listProps: { collapsed } } }]
         : [];
     });

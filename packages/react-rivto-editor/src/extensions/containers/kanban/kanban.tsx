@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import type { BlockWrapperProps } from "../../../blocks";
 import type { EditorBlockInput } from "@chulane/rivto";
 import { createCaretSelection } from "@chulane/rivto";
-import { useBlockChildren, useBlockEditing, useReactEditor } from "../../../hooks";
+import { useBlockEditing, useReactEditor } from "../../../hooks";
 import { focusBlock, type ReactEditorExtension } from "../../../managers";
 import { kanbanColumnView, kanbanView } from "./kanban-view";
 import { convertLeafToContainer } from "../../../views/ops/outline-ops";
@@ -43,7 +43,8 @@ export function createKanbanBlockInput(): EditorBlockInput {
 }
 
 /**
- * Reads column and nested card counts without materializing the board tree.
+ * Reads column and nested card counts after hierarchy changes without
+ * materializing the board tree or waking for text edits.
  *
  * @param boardId - Persisted kanban identifier.
  * @returns Direct column count and the sum of cards in those columns.
@@ -51,8 +52,8 @@ export function createKanbanBlockInput(): EditorBlockInput {
 function useKanbanCounts(boardId: string): { readonly columnCount: number; readonly cardCount: number } {
   const reactEditor = useReactEditor();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.blocks.subscribeBlock(boardId, listener),
-    [boardId, reactEditor],
+    (listener: () => void) => reactEditor.blocks.subscribeStructure(listener),
+    [reactEditor],
   );
   const getSnapshot = useCallback(() => {
     const columnIds = reactEditor.blocks.getChildIds(boardId);
@@ -126,7 +127,7 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
  */
 function KanbanColumn({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId);
-  const { children: cardIds } = useBlockChildren(blockId);
+  const cardCount = editing.block?.childIds.length ?? 0;
   const reactEditor = useReactEditor();
   /**
    * Appends an editable card in one undo step and places the caret inside it.
@@ -147,8 +148,8 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
   return (
     <div className={COLUMN_HEADER_CLASS}>
       <div className={COLUMN_TITLE_CLASS} {...editing.attributes} aria-label="Kanban column title" />
-      <span className={COLUMN_COUNT_CLASS} aria-label={`${cardIds.length} cards`}>
-        {cardIds.length}
+      <span className={COLUMN_COUNT_CLASS} aria-label={`${cardCount} cards`}>
+        {cardCount}
       </span>
       {editing.block?.listProps.collapsed !== true && (
         // Collapse hides cards; keep the header compact without a dangling add control.

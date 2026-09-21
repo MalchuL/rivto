@@ -126,7 +126,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     docB.destroy();
   });
 
-  it("lazily caches and repairs nested block paths", () => {
+  it("uses the placement index for reads and lazily repairs nested block paths", () => {
     const doc = new YjsDoc("lazy-paths");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({
@@ -141,15 +141,15 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     const findPath = jest.spyOn(blockManager, "findPath");
 
     expect(model.blocks.getBlockNode("child")?.content).toBe("Child");
-    expect(findPath).toHaveBeenCalledTimes(1);
+    expect(findPath).not.toHaveBeenCalled();
     expect(model.blocks.getBlockNode("child")?.id).toBe("child");
-    expect(findPath).toHaveBeenCalledTimes(1);
+    expect(findPath).not.toHaveBeenCalled();
 
     model.blocks.moveBlock("child", "target", "inside");
     const searchesBeforeRepair = findPath.mock.calls.length;
     expect(model.blocks.getParentId("child")).toBe("target");
-    // Parent reads use the focused hierarchy index and do not repair the
-    // independent block-location cache until a full block read needs it.
+    // Parent and child reads use the focused hierarchy index; location paths
+    // are repaired only by operations that need a containing array.
     expect(findPath).toHaveBeenCalledTimes(searchesBeforeRepair);
     expect(model.blocks.getRootIds()).toEqual(["parent", "target"]);
     expect(model.blocks.getChildIds("target")).toEqual(["child"]);

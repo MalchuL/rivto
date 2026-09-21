@@ -70,8 +70,8 @@ export interface Block {
   children: Block[];
 }
 
-/** Detached block fields excluding the recursively materialized child tree. */
-export type BlockNode = Omit<Block, "children">;
+/** Detached block fields with direct child IDs instead of child subtrees. */
+export type BlockNode = Omit<Block, "children"> & { readonly childIds: readonly string[] };
 
 /** Complete input accepted when creating a block. */
 export interface BlockInput {
@@ -118,6 +118,10 @@ export interface DocumentBlockManagerApi {
   getRootIds(): string[];
   /** @param id - Block identifier. @param listener - Change callback. @returns Unsubscribe callback. */
   subscribeBlock(id: string, listener: () => void): () => void;
+  /** @param id - Block identifier. @param listener - Node change callback. @returns Unsubscribe callback. */
+  subscribeBlockNode(id: string, listener: () => void): () => void;
+  /** @param id - Parent identifier. @param listener - Direct child-ID change callback. @returns Unsubscribe callback. */
+  subscribeChildIds(id: string, listener: () => void): () => void;
   /** @param listener - Root-list callback. @returns Unsubscribe callback. */
   subscribeRootIds(listener: () => void): () => void;
   /** @param listener - Hierarchy callback. @returns Unsubscribe callback. */

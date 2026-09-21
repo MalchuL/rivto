@@ -82,6 +82,10 @@ export interface BlockManagerApi {
   getRootIds(): string[];
   /** @param id - Block ID. @param listener - Change listener. @returns Its disposer. */
   subscribeBlock(id: string, listener: () => void): () => void;
+  /** @param id - Block ID. @param listener - Node change listener. @returns Its disposer. */
+  subscribeBlockNode(id: string, listener: () => void): () => void;
+  /** @param id - Parent ID. @param listener - Direct child-ID listener. @returns Its disposer. */
+  subscribeChildIds(id: string, listener: () => void): () => void;
   /** @param listener - Root-list listener. @returns Its disposer. */
   subscribeRootIds(listener: () => void): () => void;
   /** @param listener - Structure listener. @returns Its disposer. */

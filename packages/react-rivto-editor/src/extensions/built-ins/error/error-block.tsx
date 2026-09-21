@@ -1,5 +1,5 @@
 import type { EditorBlockInput } from "@chulane/rivto";
-import { useBlock } from "../../../hooks";
+import { useBlockNode } from "../../../hooks";
 import type { ReactEditorExtension } from "../../../managers";
 
 export const ERROR_BLOCK_TYPE = "rivto.error";
@@ -16,7 +16,7 @@ const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (charact
  * block is no longer present.
  */
 export function ErrorBlock({ blockId }: { readonly blockId: string }) {
-  const { block } = useBlock(blockId);
+  const { block } = useBlockNode(blockId);
   if (!block) return null;
   return (
     <div role="alert" data-error-block="true">

@@ -3,11 +3,11 @@
  *
  * These controls interpret extension-owned list properties but do not own
  * traversal or persistence. BlockTree remains responsible for descendants,
- * while useBlock supplies transactional mutations for the current row.
+ * while the editor manager supplies transactional mutations for the current row.
  *
  * @module
  */
-import { useBlock, useReactEditor } from "../hooks";
+import { useReactEditor } from "../hooks";
 import type { BlockSlotProps } from "../managers";
 
 const LIST_CHECKBOX_CLASS = "page-list-checkbox";
@@ -21,7 +21,7 @@ const COLLAPSE_TOGGLE_CLASS = "page-collapse-toggle";
  * @returns Interactive checkbox, numeric marker, or nothing for ordinary lists.
  */
 export function BlockListSlot({ block }: BlockSlotProps) {
-  const { operations } = useBlock(block.id);
+  const reactEditor = useReactEditor();
 
   if (block.listProps.type === "checkbox") {
     return (
@@ -31,7 +31,7 @@ export function BlockListSlot({ block }: BlockSlotProps) {
         aria-label={`Mark block as ${block.listProps.checked ? "incomplete" : "complete"}: ${block.content || block.type}`}
         checked={block.listProps.checked === true}
         onPointerDown={(event) => event.stopPropagation()}
-        onChange={(event) => operations.update({ listProps: { checked: event.currentTarget.checked } })}
+        onChange={(event) => reactEditor.blocks.updateBlock(block.id, { listProps: { checked: event.currentTarget.checked } })}
       />
     );
   }
@@ -52,8 +52,7 @@ export function BlockListSlot({ block }: BlockSlotProps) {
  */
 export function BlockCollapseSlot({ block }: BlockSlotProps) {
   const reactEditor = useReactEditor();
-  const { operations } = useBlock(block.id);
-  if (!reactEditor.blocks.hasChildren(block.id)) return null;
+  if (!block.childIds.length) return null;
   const childrenId = `block-children-${block.id}`;
   return (
     <button
@@ -67,7 +66,7 @@ export function BlockCollapseSlot({ block }: BlockSlotProps) {
         event.preventDefault();
         event.stopPropagation();
       }}
-      onClick={() => operations.update({ listProps: { collapsed: block.listProps.collapsed !== true } })}
+      onClick={() => reactEditor.blocks.updateBlock(block.id, { listProps: { collapsed: block.listProps.collapsed !== true } })}
     >
       {block.listProps.collapsed === true ? "▸" : "▾"}
     </button>

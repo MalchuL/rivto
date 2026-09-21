@@ -85,6 +85,10 @@ export interface BlocksCapability {
    * @returns Function that removes the subscription.
    */
   subscribeBlock(id: string, listener: () => void): () => void;
+  /** Subscribes to one block's own fields and direct child IDs. */
+  subscribeBlockNode(id: string, listener: () => void): () => void;
+  /** Subscribes to one block's direct child IDs. */
+  subscribeChildIds(id: string, listener: () => void): () => void;
   /**
    * Subscribes to ordered root identifier changes.
    * @param listener - Callback invoked after root changes.

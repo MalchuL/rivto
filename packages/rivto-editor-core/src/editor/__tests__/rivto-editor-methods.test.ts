@@ -108,9 +108,12 @@ describe("EditorRuntime methods", () => {
     const blocks = editor.blocks;
     const elements = editor.elements;
     const calls = { editor: 0, block: 0, roots: 0, structure: 0, elements: 0, element: 0, membership: 0 };
+    const focusedCalls = { node: 0, children: 0 };
     const disposers = [
       editor.subscribe(() => { calls.editor += 1; }),
       editor.blocks.subscribeBlock("shared", () => { calls.block += 1; }),
+      editor.blocks.subscribeBlockNode("shared", () => { focusedCalls.node += 1; }),
+      editor.blocks.subscribeChildIds("shared", () => { focusedCalls.children += 1; }),
       editor.blocks.subscribeRootIds(() => { calls.roots += 1; }),
       editor.blocks.subscribeStructure(() => { calls.structure += 1; }),
       editor.elements.subscribe(() => { calls.elements += 1; }),
@@ -137,14 +140,17 @@ describe("EditorRuntime methods", () => {
     expect(editor.blocks.getBlockNode("shared")?.content).toBe("Second");
     expect(editor.selection.get()).toBeUndefined();
     expect(calls).toEqual({ editor: 1, block: 1, roots: 1, structure: 1, elements: 1, element: 1, membership: 1 });
+    expect(focusedCalls).toEqual({ node: 1, children: 1 });
 
     first.blocks.updateBlock("shared", { content: "Detached" });
     expect(calls).toEqual({ editor: 1, block: 1, roots: 1, structure: 1, elements: 1, element: 1, membership: 1 });
+    expect(focusedCalls).toEqual({ node: 1, children: 1 });
 
     second.blocks.updateBlock("shared", { content: "Active" });
     expect(editor.blocks.getBlockNode("shared")?.content).toBe("Active");
     expect(calls.block).toBe(2);
     expect(calls.editor).toBe(2);
+    expect(focusedCalls).toEqual({ node: 2, children: 1 });
     editor.elements.updateElement("shape", { props: { active: true } });
     expect(editor.elements.getElement("shape")?.props).toMatchObject({ active: true });
     expect(calls.element).toBe(2);

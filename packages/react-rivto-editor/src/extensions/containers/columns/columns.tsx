@@ -235,10 +235,9 @@ export function setColumnsCount(reactEditor: ReactEditor, blockId: string, count
  */
 export function Columns({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId, { textEdit: false });
-  const { children: columnIds } = useBlockChildren(blockId);
   const block = editing.block;
   if (!block) return null;
-  const count = columnIds.length;
+  const count = block.childIds.length;
   return <div {...editing.attributes} className={COLUMNS_CLASS}>
     {block.listProps.collapsed === true && <>
       <strong>Columns</strong>
@@ -290,7 +289,7 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
 function ColumnsControls({ block }: BlockSlotProps) {
   const reactEditor = useReactEditor();
   const [open, setOpen] = useState(false);
-  const count = reactEditor.blocks.getChildIds(block.id).filter((childId) => (
+  const count = block.childIds.filter((childId) => (
     reactEditor.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE
   )).length;
   return (

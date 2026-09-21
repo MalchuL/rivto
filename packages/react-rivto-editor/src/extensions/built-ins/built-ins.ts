@@ -271,7 +271,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         isAvailable: ({ blockId }) => {
           const block = reactEditor.blocks.getBlockNode(blockId);
           return reactEditor.blockListProps.has("collapse") &&
-            Boolean(block && reactEditor.blocks.hasChildren(blockId) && block.listProps.collapsed !== true);
+            Boolean(block?.childIds.length && block.listProps.collapsed !== true);
         },
         execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
       }),
@@ -283,7 +283,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         isAvailable: ({ blockId }) => {
           const block = reactEditor.blocks.getBlockNode(blockId);
           return reactEditor.blockListProps.has("collapse") &&
-            Boolean(block && reactEditor.blocks.hasChildren(blockId) && block.listProps.collapsed === true);
+            Boolean(block?.childIds.length && block.listProps.collapsed === true);
         },
         execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
       }),
