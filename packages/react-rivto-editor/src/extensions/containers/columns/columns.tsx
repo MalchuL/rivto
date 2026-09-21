@@ -7,7 +7,7 @@
  */
 import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { type EditorBlockInput } from "@chulane/rivto";
-import { useBlock, useBlockEditing, useReactEditor } from "../../../hooks";
+import { useBlockChildren, useBlockEditing, useReactEditor } from "../../../hooks";
 import {
   type BlockSlotProps,
   type ReactEditorExtension,
@@ -235,9 +235,10 @@ export function setColumnsCount(reactEditor: ReactEditor, blockId: string, count
  */
 export function Columns({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId, { textEdit: false });
+  const { children: columnIds } = useBlockChildren(blockId);
   const block = editing.block;
   if (!block) return null;
-  const count = block.children.length;
+  const count = columnIds.length;
   return <div {...editing.attributes} className={COLUMNS_CLASS}>
     {block.listProps.collapsed === true && <>
       <strong>Columns</strong>
@@ -253,8 +254,8 @@ export function Columns({ blockId }: { readonly blockId: string }) {
  */
 function ColumnsColumn({ blockId }: { readonly blockId: string }) {
   const reactEditor = useReactEditor();
-  const { block } = useBlock(blockId);
-  const empty = (block?.children.length ?? 0) === 0;
+  const { children: childIds } = useBlockChildren(blockId);
+  const empty = childIds.length === 0;
   /**
    * Creates the first writing block when the column has no nested content.
    * @param event - Click or keyboard activation of the empty column.
@@ -289,7 +290,9 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
 function ColumnsControls({ block }: BlockSlotProps) {
   const reactEditor = useReactEditor();
   const [open, setOpen] = useState(false);
-  const count = block.children.filter((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE).length;
+  const count = reactEditor.blocks.getChildIds(block.id).filter((childId) => (
+    reactEditor.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE
+  )).length;
   return (
     <div className={SETTINGS_CLASS}>
       <button type="button" aria-label="Columns settings" aria-expanded={open} onClick={() => setOpen(!open)}>⚙</button>

@@ -9,7 +9,7 @@
  */
 import { memo, useCallback, useSyncExternalStore, type ComponentType } from "react";
 import { BLOCK_ROW_CLASS } from "../constants";
-import { useBlock, useBlockSelected, useReactEditor } from "../hooks";
+import { useBlock, useBlockChildren, useBlockSelected, useReactEditor } from "../hooks";
 import {
   BlockElementRefBoundary,
   BlockWrapper,
@@ -61,6 +61,7 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
  */
 function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   const { block } = useBlock(blockId);
+  const { children: childIds } = useBlockChildren(blockId);
   const reactEditor = useReactEditor();
   const selected = useBlockSelected(blockId);
   const subscribeRenderers = useCallback(
@@ -85,10 +86,10 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
       isSelected={selected}
       content={<BlockContent renderer={Content} blockId={block.id} />}
     >
-      {block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true) && (
+      {childIds.length > 0 && (!collapseActive || block.listProps.collapsed !== true) && (
         <div id={childrenId} className="page-block-children">
-          {block.children.map((child) => (
-            <MemoBlockTreeNode key={child.id} blockId={child.id} />
+          {childIds.map((childId) => (
+            <MemoBlockTreeNode key={childId} blockId={childId} />
           ))}
         </div>
       )}

@@ -1,6 +1,17 @@
+/**
+ * Resolves one block's non-recursive snapshot and ID-bound commands.
+ *
+ * Renderers, wrappers, and slots subscribe through this hook for the block's
+ * own fields. Descendant trees stay out of the snapshot so a nested edit does
+ * not rewrite ancestor identity. `BlockTree` reads child IDs from
+ * `useBlockChildren`; callers that need a materialized forest still call
+ * `getBlock` directly.
+ *
+ * @module
+ */
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type {
-  EditorBlock as Block,
+  EditorBlockNode as BlockNode,
   EditorBlockPatch as BlockPatch,
 } from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
@@ -33,24 +44,26 @@ export interface BlockOperations {
   outdent(): void;
 }
 
-/** Reactive block snapshot and stable commands returned by useBlock. */
+/** Reactive block node snapshot and stable commands returned by useBlock. */
 export interface UseBlockResult {
-  /** Current detached block value, or undefined after deletion/for unknown IDs. */
-  readonly block: Block | undefined;
+  /** Current detached node fields, or undefined after deletion/for unknown IDs. */
+  readonly block: BlockNode | undefined;
   /** Memoized commands permanently bound to the requested block ID. */
   readonly operations: BlockOperations;
 }
 
 /**
- * Resolves one block and its bound operations from the current editor.
+ * Resolves one block's own fields and bound operations from the current editor.
  *
- * `block` is a stable detached snapshot, not a live or mutable CRDT object.
- * Only changes to this block or its descendants replace its identity. Deletion
- * changes it to undefined. `operations` remains stable until either the editor
- * instance or block ID changes.
+ * `block` is a stable detached node snapshot, not a live CRDT object and not a
+ * recursive tree. Only changes to this record's fields replace its identity.
+ * Descendant edits still notify `subscribeBlock`, but the cached node keeps
+ * `Object.is` equality so the hook does not re-render. Deletion changes it to
+ * undefined. `operations` remains stable until either the editor instance or
+ * block ID changes.
  *
  * @param blockId - Stable persisted ID of the block to resolve.
- * @returns Current block snapshot together with commands bound to its ID.
+ * @returns Current node snapshot together with commands bound to its ID.
  * @throws If called outside an EditorView subtree.
  */
 export function useBlock(blockId: string): UseBlockResult {
@@ -59,7 +72,10 @@ export function useBlock(blockId: string): UseBlockResult {
     (listener: () => void) => reactEditor.blocks.subscribeBlock(blockId, listener),
     [blockId, reactEditor],
   );
-  const getSnapshot = useCallback(() => reactEditor.blocks.getBlock(blockId), [blockId, reactEditor]);
+  const getSnapshot = useCallback(
+    () => reactEditor.blocks.getBlockNode(blockId),
+    [blockId, reactEditor],
+  );
   const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   // Commands target the ID rather than the detached snapshot, so they always
   // operate on the latest document state. Memoization keeps their references

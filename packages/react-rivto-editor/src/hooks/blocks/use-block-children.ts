@@ -1,14 +1,19 @@
-import { useMemo } from "react";
+/**
+ * Resolves one block's direct child identifiers and child-list commands.
+ *
+ * `BlockTree` is the only renderer that walks descendants. This hook supplies
+ * the cached ID list those nodes need without materializing recursive `Block`
+ * snapshots. Commands resolve the live child list at call time so a stale
+ * render cannot mutate another parent.
+ *
+ * @module
+ */
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type {
   EditorBlock as Block,
   EditorBlockInput as BlockInput,
 } from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
-import { useBlock } from "./use-block";
-
-// Reuse one immutable-by-contract empty value so a missing/leaf block does not
-// create a new array identity on every render.
-const NO_CHILDREN: readonly Block[] = [];
 
 /** Commands that mutate the direct children of one parent block. */
 export interface BlockChildrenOperations {
@@ -26,20 +31,20 @@ export interface BlockChildrenOperations {
   move(childId: string, afterId: string | null): void;
 }
 
-/** Reactive child snapshots and stable commands returned by useBlockChildren. */
+/** Reactive child identifiers and stable commands returned by useBlockChildren. */
 export interface UseBlockChildrenResult {
-  /** Current direct children in persisted sibling order. */
-  readonly children: readonly Block[];
+  /** Current direct-child identifiers in persisted sibling order. */
+  readonly children: readonly string[];
   /** Memoized commands bound to the requested parent ID. */
   readonly operations: BlockChildrenOperations;
 }
 
 /**
- * Resolves the direct children of one block and commands for changing them.
+ * Resolves the direct child IDs of one block and commands for changing them.
  *
- * Child values come from the parent's focused recursive snapshot. Operations
- * resolve the parent at call time and only accept its
- * current direct children, so stale rendered IDs cannot mutate another subtree.
+ * Child identifiers come from the cached `getChildIds` snapshot. Operations
+ * resolve the parent at call time and only accept its current direct children,
+ * so stale rendered IDs cannot mutate another subtree.
  *
  * Adding to a parent with no children uses the editor's existing insert and
  * indent commands. The hook owns no tree state and performs no optimistic
@@ -47,40 +52,47 @@ export interface UseBlockChildrenResult {
  * editor runtime.
  *
  * @param blockId - Stable ID of the parent block.
- * @returns Current child snapshots and commands bound to the parent ID.
+ * @returns Current child identifiers and commands bound to the parent ID.
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockChildren(blockId: string): UseBlockChildrenResult {
   const { reactEditor } = useEditorContext();
-  const { block: parent } = useBlock(blockId);
+  const subscribe = useCallback(
+    (listener: () => void) => reactEditor.blocks.subscribeBlock(blockId, listener),
+    [blockId, reactEditor],
+  );
+  const getSnapshot = useCallback(
+    () => reactEditor.blocks.getChildIds(blockId),
+    [blockId, reactEditor],
+  );
+  const children = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   const operations = useMemo<BlockChildrenOperations>(() => {
-    const getChildren = (): Block[] => {
-      const currentParent = reactEditor.blocks.getBlock(blockId);
-      if (!currentParent) throw new Error(`Block ${blockId} not found`);
-      return currentParent.children;
+    const getChildIds = (): readonly string[] => {
+      if (!reactEditor.blocks.hasBlock(blockId)) throw new Error(`Block ${blockId} not found`);
+      return reactEditor.blocks.getChildIds(blockId);
     };
 
     const requireChild = (childId: string): void => {
-      if (!getChildren().some((child) => child.id === childId)) {
+      if (!getChildIds().includes(childId)) {
         throw new Error(`Block ${childId} is not a direct child of ${blockId}`);
       }
     };
 
     return {
       add: (block, afterId) => {
-        const children = getChildren();
+        const childIds = getChildIds();
         if (afterId !== undefined && afterId !== null) requireChild(afterId);
 
         let child: Block;
-        if (children.length === 0) {
+        if (childIds.length === 0) {
           child = reactEditor.blocks.insertBlock(block, blockId);
           reactEditor.blocks.indentBlock(child.id);
         } else if (afterId === null) {
-          child = reactEditor.blocks.insertBlock(block, children[0].id);
+          child = reactEditor.blocks.insertBlock(block, childIds[0]!);
           reactEditor.blocks.moveBlock(child.id, null);
         } else {
-          child = reactEditor.blocks.insertBlock(block, afterId ?? children.at(-1)?.id);
+          child = reactEditor.blocks.insertBlock(block, afterId ?? childIds.at(-1));
         }
         return child;
       },
@@ -97,7 +109,7 @@ export function useBlockChildren(blockId: string): UseBlockChildrenResult {
   }, [blockId, reactEditor]);
 
   return {
-    children: parent?.children ?? NO_CHILDREN,
+    children,
     operations,
   };
 }

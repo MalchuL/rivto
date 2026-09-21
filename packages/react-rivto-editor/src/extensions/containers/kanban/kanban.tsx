@@ -5,12 +5,12 @@
  * The shared block tree and drag extension render and move every card in both modes.
  * @module
  */
-import { useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { BlockWrapperProps } from "../../../blocks";
 import type { EditorBlockInput } from "@chulane/rivto";
 import { createCaretSelection } from "@chulane/rivto";
-import { useBlockEditing, useReactEditor } from "../../../hooks";
+import { useBlockChildren, useBlockEditing, useReactEditor } from "../../../hooks";
 import { focusBlock, type ReactEditorExtension } from "../../../managers";
 import { kanbanColumnView, kanbanView } from "./kanban-view";
 import { convertLeafToContainer } from "../../../views/ops/outline-ops";
@@ -43,6 +43,34 @@ export function createKanbanBlockInput(): EditorBlockInput {
 }
 
 /**
+ * Reads column and nested card counts without materializing the board tree.
+ *
+ * @param boardId - Persisted kanban identifier.
+ * @returns Direct column count and the sum of cards in those columns.
+ */
+function useKanbanCounts(boardId: string): { readonly columnCount: number; readonly cardCount: number } {
+  const reactEditor = useReactEditor();
+  const subscribe = useCallback(
+    (listener: () => void) => reactEditor.blocks.subscribeBlock(boardId, listener),
+    [boardId, reactEditor],
+  );
+  const getSnapshot = useCallback(() => {
+    const columnIds = reactEditor.blocks.getChildIds(boardId);
+    let cardCount = 0;
+    columnIds.forEach((columnId) => {
+      cardCount += reactEditor.blocks.getChildIds(columnId).length;
+    });
+    return `${columnIds.length}:${cardCount}`;
+  }, [boardId, reactEditor]);
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const separator = snapshot.indexOf(":");
+  return {
+    columnCount: Number(snapshot.slice(0, separator)),
+    cardCount: Number(snapshot.slice(separator + 1)),
+  };
+}
+
+/**
  * Renders the contentless board header; the shared tree renders its columns.
  * The add-column control lives in the lane container and is omitted while collapsed.
  * @param props - Identity of the persisted board.
@@ -51,12 +79,11 @@ export function createKanbanBlockInput(): EditorBlockInput {
 export function Kanban({ blockId }: { readonly blockId: string }) {
   const reactEditor = useReactEditor();
   const editing = useBlockEditing(blockId, { textEdit: false });
+  const { columnCount, cardCount } = useKanbanCounts(blockId);
   const block = editing.block;
   const title = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState<HTMLElement | null>(null);
   const collapsed = block?.listProps.collapsed === true;
-  const columnCount = block?.children.length ?? 0;
-  const cardCount = block?.children.reduce((count, column) => count + column.children.length, 0) ?? 0;
   // The shared tree owns the lane container. A portal adds chrome without
   // persisting a fake column or mounting duplicate blocks and drag targets.
   // Collapse unmounts that container, so the button must not fall back into
@@ -99,6 +126,7 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
  */
 function KanbanColumn({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId);
+  const { children: cardIds } = useBlockChildren(blockId);
   const reactEditor = useReactEditor();
   /**
    * Appends an editable card in one undo step and places the caret inside it.
@@ -119,8 +147,8 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
   return (
     <div className={COLUMN_HEADER_CLASS}>
       <div className={COLUMN_TITLE_CLASS} {...editing.attributes} aria-label="Kanban column title" />
-      <span className={COLUMN_COUNT_CLASS} aria-label={`${editing.block?.children.length ?? 0} cards`}>
-        {editing.block?.children.length ?? 0}
+      <span className={COLUMN_COUNT_CLASS} aria-label={`${cardIds.length} cards`}>
+        {cardIds.length}
       </span>
       {editing.block?.listProps.collapsed !== true && (
         // Collapse hides cards; keep the header compact without a dangling add control.

@@ -141,6 +141,55 @@ describe("document reactivity", () => {
     void doc.destroy();
   });
 
+  test("keeps node and child-id snapshots stable across descendant content edits", () => {
+    const doc = new YjsDoc("node-reactivity");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({
+      id: "parent",
+      type: "paragraph",
+      children: [{ id: "child", type: "paragraph", content: "before" }],
+    });
+    const parentNode = model.blocks.getBlockNode("parent");
+    const parentChildren = model.blocks.getChildIds("parent");
+    const childNode = model.blocks.getBlockNode("child");
+    const parentTree = model.blocks.getBlock("parent");
+
+    model.blocks.updateBlock("child", { content: "after" });
+
+    expect(model.blocks.getBlockNode("parent")).toBe(parentNode);
+    expect(model.blocks.getChildIds("parent")).toBe(parentChildren);
+    expect(model.blocks.getBlock("parent")).not.toBe(parentTree);
+    expect(model.blocks.getBlockNode("child")).not.toBe(childNode);
+    expect(model.blocks.getBlockNode("child")?.content).toBe("after");
+    expect(model.blocks.getBlockNode("child")).toBe(model.blocks.getBlockNode("child"));
+    expect(model.blocks.getChildIds("parent")).toBe(model.blocks.getChildIds("parent"));
+    void doc.destroy();
+  });
+
+  test("replaces child-id snapshots without rewriting parent node fields", () => {
+    const doc = new YjsDoc("child-id-reactivity");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({
+      id: "parent",
+      type: "paragraph",
+      children: [{ id: "child", type: "paragraph" }],
+    });
+    const parentNode = model.blocks.getBlockNode("parent");
+    const parentChildren = model.blocks.getChildIds("parent");
+    const emptyLeaf = model.blocks.getChildIds("child");
+
+    model.blocks.insertBlock({ id: "extra", type: "paragraph" }, "child");
+
+    expect(model.blocks.getBlockNode("parent")).toBe(parentNode);
+    expect(model.blocks.getChildIds("parent")).not.toBe(parentChildren);
+    expect(model.blocks.getChildIds("parent")).toEqual(["child", "extra"]);
+    expect(model.blocks.getChildIds("parent")).toBe(model.blocks.getChildIds("parent"));
+    expect(emptyLeaf).toEqual([]);
+    expect(model.blocks.getChildIds("child")).toBe(emptyLeaf);
+    expect(model.blocks.getChildIds("missing")).toBe(model.blocks.getChildIds("missing"));
+    void doc.destroy();
+  });
+
   test("publishes focused snapshots for remote block updates", () => {
     const leftDoc = new YjsDoc("remote-left");
     const left = new DocumentModelImpl(leftDoc);

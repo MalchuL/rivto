@@ -19,7 +19,7 @@ import type { EditorBlockInput } from "@chulane/rivto";
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal";
 import { BLOCK_ID_ATTRIBUTE } from "../../../constants";
-import { useBlockEditing, useReactEditor } from "../../../hooks";
+import { useBlockChildren, useBlockEditing, useReactEditor } from "../../../hooks";
 import type { ReactEditorExtension } from "../../../managers";
 import { bentoView } from "./bento-view";
 import type { ReactEditor } from "../../../types";
@@ -166,9 +166,10 @@ export function createBentoBlockInput(): EditorBlockInput {
  */
 export function Bento({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId, { textEdit: false });
+  const { children: tileIds } = useBlockChildren(blockId);
   const block = editing.block;
   if (!block) return null;
-  const tileCount = block.children.length;
+  const tileCount = tileIds.length;
   return (
     <div {...editing.attributes} className={SUMMARY_CLASS}>
       {block.listProps.collapsed === true && <>

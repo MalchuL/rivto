@@ -110,7 +110,7 @@ export interface DocumentBlockManagerApi {
   hasBlock(id: string): boolean;
   /** @param id - Block identifier. @returns Detached block subtree when present. */
   getBlock(id: string): Block | undefined;
-  /** @param id - Block identifier. @returns Detached non-recursive block fields when present. */
+  /** @param id - Block identifier. @returns Detached non-recursive node fields when present. Identity is stable until this record's own fields change. */
   getBlockNode(id: string): BlockNode | undefined;
   /** @returns Detached root block trees. */
   getBlocks(): Block[];
@@ -122,7 +122,7 @@ export interface DocumentBlockManagerApi {
   subscribeRootIds(listener: () => void): () => void;
   /** @param listener - Hierarchy callback. @returns Unsubscribe callback. */
   subscribeStructure(listener: () => void): () => void;
-  /** @param id - Parent block identifier. @returns Ordered direct-child identifiers. */
+  /** @param id - Parent block identifier. @returns Ordered direct-child identifiers. Identity is stable until this block's child array changes. */
   getChildIds(id: string): string[];
   /** @param id - Parent block identifier. @returns True when the block has at least one child. */
   hasChildren(id: string): boolean;

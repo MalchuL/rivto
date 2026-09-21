@@ -8,9 +8,11 @@
 import { type EditorBlock, type EditorBlockInput } from "@chulane/rivto";
 import { createPortal } from "react-dom";
 import {
+  useCallback,
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type KeyboardEvent,
   type PointerEvent,
   type RefObject,
@@ -367,16 +369,45 @@ function TableDialog({ block, children }: BlockWrapperProps) {
 }
 
 /**
+ * Reads row count and the widest nested cell count without materializing the
+ * recursive table tree. `subscribeBlock` still fires for descendant edits;
+ * the primitive snapshot keeps identity when those counts do not change.
+ *
+ * @param tableId - Persisted table identifier.
+ * @returns Current row count and maximum cells in any row.
+ */
+function useTableDimensions(tableId: string): { readonly rows: number; readonly columns: number } {
+  const reactEditor = useReactEditor();
+  const subscribe = useCallback(
+    (listener: () => void) => reactEditor.blocks.subscribeBlock(tableId, listener),
+    [tableId, reactEditor],
+  );
+  const getSnapshot = useCallback(() => {
+    const rowIds = reactEditor.blocks.getChildIds(tableId);
+    let columns = 0;
+    rowIds.forEach((rowId) => {
+      columns = Math.max(columns, reactEditor.blocks.getChildIds(rowId).length);
+    });
+    return `${rowIds.length}:${columns}`;
+  }, [tableId, reactEditor]);
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const separator = snapshot.indexOf(":");
+  return {
+    rows: Number(snapshot.slice(0, separator)),
+    columns: Number(snapshot.slice(separator + 1)),
+  };
+}
+
+/**
  * Renders a structural selection region with table dimensions when collapsed.
  * @param props - Stable table identity.
  * @returns Contentless table header; the shared tree renders its rows.
  */
 export function Table({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId, { textEdit: false });
+  const { rows, columns } = useTableDimensions(blockId);
   const block = editing.block;
   if (!block) return null;
-  const rows = block.children.length;
-  const columns = block.children.reduce((count, row) => Math.max(count, row.children.length), 0);
   return <div {...editing.attributes} className={`${TABLE_CLASS} ${TABLE_SUMMARY_CLASS}`}>
     {block.listProps.collapsed === true && <>
       <strong>Table</strong>

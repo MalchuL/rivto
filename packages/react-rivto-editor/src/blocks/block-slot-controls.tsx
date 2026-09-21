@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { useBlock } from "../hooks";
+import { useBlock, useReactEditor } from "../hooks";
 import type { BlockSlotProps } from "../managers";
 
 const LIST_CHECKBOX_CLASS = "page-list-checkbox";
@@ -51,8 +51,9 @@ export function BlockListSlot({ block }: BlockSlotProps) {
  * @returns Collapse toggle for a branch block, otherwise nothing.
  */
 export function BlockCollapseSlot({ block }: BlockSlotProps) {
+  const reactEditor = useReactEditor();
   const { operations } = useBlock(block.id);
-  if (!block.children.length) return null;
+  if (!reactEditor.blocks.hasChildren(block.id)) return null;
   const childrenId = `block-children-${block.id}`;
   return (
     <button

@@ -263,7 +263,7 @@ describe("ReactEditor", () => {
   test("composes the first registered block wrapper outermost", () => {
     const editor = createEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Order" }).id;
-    const block = editor.blocks.getBlock(blockId)!;
+    const block = editor.blocks.getBlockNode(blockId)!;
     const Shell: ComponentType<BlockShellProps> = () => createElement("span", { "data-layer": "shell" });
     const Outer: ComponentType<BlockWrapperProps> = ({ children }) => (
       createElement("div", { "data-layer": "outer" }, children)

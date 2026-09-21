@@ -85,9 +85,9 @@ export type BlockEditingAttributes<TextEdit extends boolean> = TextEdit extends 
 /**
  * Renderer-facing block state, property methods, commands, and DOM attributes.
  *
- * `block` is the reactive detached snapshot from `useBlock`. Imperative getters
- * resolve the latest editor state when called, which makes them safe inside
- * callbacks created during an older render.
+ * `block` is the reactive node snapshot from `useBlock` and does not include
+ * descendants. Imperative getters resolve the latest editor state when called,
+ * which makes them safe inside callbacks created during an older render.
  */
 export interface UseBlockEditingResult<
   Props extends object,

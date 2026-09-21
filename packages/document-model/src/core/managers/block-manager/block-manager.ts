@@ -48,6 +48,8 @@ import {
 
 const ROOTS_KEY = "rivto.editor.roots";
 const BLOCKS_KEY = "rivto.editor.blocks";
+/** Shared empty child-id snapshot so missing and leaf blocks stay identity-stable. */
+const EMPTY_CHILD_IDS: string[] = [];
 interface LocatedBlock {
     array: CRDTArray<string>;
     index: number;
@@ -69,6 +71,10 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     private readonly blockPaths = new Map<IDBlock, readonly number[]>();
     /** Stable detached snapshots reused until their record or a descendant changes. */
     private readonly blockSnapshots = new Map<IDBlock, Block>();
+    /** Stable non-recursive field snapshots reused until that record's own fields change. */
+    private readonly blockNodeSnapshots = new Map<IDBlock, BlockNode>();
+    /** Stable direct-child identifier lists reused until that block's child array changes. */
+    private readonly childIdsSnapshots = new Map<IDBlock, string[]>();
     /** Per-block subscribers, including recursive snapshot consumers on ancestors. */
     private readonly blockListeners = new Map<IDBlock, Set<() => void>>();
     /** Subscribers interested only in the ordered root identifier list. */
@@ -107,16 +113,39 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         this.storage.observe((events, transaction) => {
             this.currentRevision += 1;
             const changedIds = new Set<string>();
+            const nodeChangedIds = new Set<string>();
+            const childrenChangedIds = new Set<string>();
             let structureChanged = false;
             events.forEach(({ path, keys }) => {
+                if (path.length === 0) {
+                    keys.forEach((key) => {
+                        changedIds.add(key);
+                        nodeChangedIds.add(key);
+                        childrenChangedIds.add(key);
+                    });
+                    return;
+                }
                 const id = path[0];
-                if (typeof id === "string") changedIds.add(id);
-                if (path.length === 0) keys.forEach((key) => changedIds.add(key));
-                structureChanged ||= path[1] === "children"
-                    || (path.length === 1 && keys.includes("children"));
+                if (typeof id !== "string") return;
+                changedIds.add(id);
+                const field = path[1];
+                if (field === "children") {
+                    childrenChangedIds.add(id);
+                    structureChanged = true;
+                    return;
+                }
+                if (typeof field === "string") {
+                    nodeChangedIds.add(id);
+                    return;
+                }
+                if (keys.includes("children")) {
+                    childrenChangedIds.add(id);
+                    structureChanged = true;
+                }
+                if (keys.some((key) => key !== "children")) nodeChangedIds.add(id);
             });
             if (structureChanged) this.refreshParents(transaction);
-            this.invalidateBlocks(changedIds);
+            this.invalidateBlocks(changedIds, nodeChangedIds, childrenChangedIds);
             if (structureChanged) this.emitStructure(transaction);
         });
         // The roots array is not a field on any block, so these events have an
@@ -176,6 +205,11 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     /**
      * Returns one placed block without recursively materializing descendants.
      *
+     * Cached identity is reused until this record's own fields change. Child-list
+     * edits and descendant content keep the same node snapshot, so React
+     * external-store consumers can subscribe through `subscribeBlock` without
+     * re-rendering when only the subtree changed.
+     *
      * @param id - Stable block identifier to resolve.
      * @returns Detached node fields, or undefined when the block is absent.
      */
@@ -183,7 +217,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         if (!this.findContainer(id)) return undefined;
         const value = this.storage.get(id);
         if (!isCRDTMap(value)) return undefined;
-        return this.readBlockNode(value, id);
+        return this.readCachedBlockNode(value, id);
     }
 
     /**
@@ -213,7 +247,9 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * Subscribes to changes that can alter one recursive block snapshot.
      *
      * Descendant changes also notify ancestor IDs because `getBlock` includes
-     * the complete subtree. Unrelated branches retain their snapshot identity.
+     * the complete subtree. Node and child-id snapshots keep identity unless
+     * that record's own fields or child array changed, so `useBlock` can share
+     * this subscription without re-rendering on descendant edits.
      *
      * @param id - Block identifier whose recursive value is observed.
      * @param listener - Callback invoked after that value becomes stale.
@@ -257,13 +293,17 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     /**
      * Reads one block's direct child identifiers.
      *
+     * Cached identity is reused until this block's child array changes. Missing
+     * blocks share one empty snapshot so `useSyncExternalStore` can observe
+     * `getChildIds` without allocating a new array on every read.
+     *
      * @param id - Parent block identifier to inspect.
      * @returns Child identifiers in collaborative order, or an empty list when absent.
      */
-  getChildIds(id: string): string[] {
-        if (!this.findContainer(id)) return [];
+    getChildIds(id: string): string[] {
+        if (!this.findContainer(id)) return EMPTY_CHILD_IDS;
         const value = this.storage.get(id);
-        return isCRDTMap(value) ? strings(this.requiredArray(value, "children")) : [];
+        return isCRDTMap(value) ? this.readCachedChildIds(value, id) : EMPTY_CHILD_IDS;
     }
 
     /**
@@ -837,8 +877,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         visited.add(id);
         const cached = this.crdt.isTransacting ? undefined : this.blockSnapshots.get(id);
         if (cached) return cached;
-        const node = this.readBlockNode(value, id);
-        const children = strings(this.requiredArray(value, "children")).flatMap((childId: IDBlock) => {
+        const node = this.readCachedBlockNode(value, id);
+        const children = this.readCachedChildIds(value, id).flatMap((childId: IDBlock) => {
             const child = this.readBlock(childId, visited);
             return child ? [child] : [];
         });
@@ -869,15 +909,65 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     }
 
     /**
+     * Returns the cached node snapshot, materializing and storing it when needed.
+     *
+     * Transactions always read a fresh node so in-flight writes cannot publish a
+     * half-updated cache. Outside a transaction the same object is reused until
+     * this record's own fields are invalidated.
+     *
+     * @param value - Stored block map already resolved by the caller.
+     * @param id - Stable block identity used for validation and the result.
+     * @returns Detached non-recursive block fields.
+     */
+    private readCachedBlockNode(value: CRDTMap<BlockStorage>, id: IDBlock): BlockNode {
+        if (!this.crdt.isTransacting) {
+            const cached = this.blockNodeSnapshots.get(id);
+            if (cached) return cached;
+        }
+        const node = this.readBlockNode(value, id);
+        if (!this.crdt.isTransacting) this.blockNodeSnapshots.set(id, node);
+        return node;
+    }
+
+    /**
+     * Returns the cached direct-child identifier list, materializing when needed.
+     *
+     * Empty lists reuse the module-level snapshot so every leaf shares one
+     * identity. Transactions skip the cache for the same reason as node reads.
+     *
+     * @param value - Stored block map already resolved by the caller.
+     * @param id - Parent block identity whose child array is read.
+     * @returns Child identifiers in collaborative order.
+     */
+    private readCachedChildIds(value: CRDTMap<BlockStorage>, id: IDBlock): string[] {
+        if (!this.crdt.isTransacting) {
+            const cached = this.childIdsSnapshots.get(id);
+            if (cached) return cached;
+        }
+        const ids = strings(this.requiredArray(value, "children"));
+        const snapshot = ids.length === 0 ? EMPTY_CHILD_IDS : ids;
+        if (!this.crdt.isTransacting) this.childIdsSnapshots.set(id, snapshot);
+        return snapshot;
+    }
+
+    /**
      * Invalidates changed blocks and recursive snapshots of their live ancestors.
      *
-     * Used from storage observation, where the event already lists the mutated
-     * record or the parent whose `children` array changed.
+     * Recursive `getBlock` snapshots walk the ancestor chain because they embed
+     * descendant trees. Node and child-id caches stay on the exact records whose
+     * own fields or child arrays changed, so ancestor `useBlock` snapshots keep
+     * identity when only a descendant mutated.
      *
      * @param ids - Changed block IDs whose cached ancestor chains are stale.
+     * @param nodeIds - Records whose non-child fields changed.
+     * @param childListIds - Records whose direct child arrays changed.
      * @returns No value.
      */
-    private invalidateBlocks(ids: ReadonlySet<string>): void {
+    private invalidateBlocks(
+        ids: ReadonlySet<string>,
+        nodeIds: ReadonlySet<string>,
+        childListIds: ReadonlySet<string>,
+    ): void {
         const affected = new Set<string>();
         ids.forEach((id) => {
             let current: string | undefined | null = id;
@@ -886,6 +976,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 current = this.blockParents.get(current);
             }
         });
+        nodeIds.forEach((id) => this.blockNodeSnapshots.delete(id));
+        childListIds.forEach((id) => this.childIdsSnapshots.delete(id));
         this.invalidateSnapshotIds(affected);
     }
 

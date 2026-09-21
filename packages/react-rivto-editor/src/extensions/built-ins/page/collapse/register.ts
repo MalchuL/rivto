@@ -28,7 +28,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     position: "left-top",
     priority: 100,
     component: BlockCollapseSlot,
-    when: ({ block }) => block.children.length > 0,
+    when: ({ block }) => reactEditor.blocks.hasChildren(block.id),
   });
   const reconcile = () => {
     const root = reactEditor.events.getRoot();
