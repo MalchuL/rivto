@@ -69,9 +69,20 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     private readonly blockPaths = new Map<IDBlock, readonly number[]>();
     /** Stable detached snapshots reused until their record or a descendant changes. */
     private readonly blockSnapshots = new Map<IDBlock, Block>();
-    /** Stable non-recursive field snapshots reused until that record's own fields change. */
+    /**
+     * Own-field snapshots for `getBlockNode` / `useBlock`.
+     *
+     * Unlike `blockSnapshots`, a descendant edit does not drop these. React
+     * can keep an ancestor node identity while `subscribeBlock` still fires.
+     */
     private readonly blockNodeSnapshots = new Map<IDBlock, BlockNode>();
-    /** Stable direct-child identifier lists reused until that block's child array changes. */
+    /**
+     * Direct-child ID lists for `getChildIds` / `useBlockChildren`.
+     *
+     * Dropped only when that block's `children` array changes. Each placed
+     * parent has its own array, empty or not, so mutating one result cannot
+     * change another block's snapshot.
+     */
     private readonly childIdsSnapshots = new Map<IDBlock, string[]>();
     /** Per-block subscribers, including recursive snapshot consumers on ancestors. */
     private readonly blockListeners = new Map<IDBlock, Set<() => void>>();
@@ -115,7 +126,14 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             const childrenChangedIds = new Set<string>();
             let structureChanged = false;
             events.forEach(({ path, keys }) => {
+                // Classify each nested CRDT event into the caches it dirties.
+                // `changedIds` always walk ancestors for recursive `getBlock`.
+                // Node and child-id caches stay on the exact record so a nested
+                // content edit does not rewrite ancestor `useBlock` snapshots.
                 if (path.length === 0) {
+                    // `storage.set(id, record)` / `storage.delete(id)`: the
+                    // block map itself changed, so every cache for those IDs
+                    // is stale.
                     keys.forEach((key) => {
                         changedIds.add(key);
                         nodeChangedIds.add(key);
@@ -128,14 +146,21 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 changedIds.add(id);
                 const field = path[1];
                 if (field === "children") {
+                    // Nested array edit: `blocks.get(id).get("children").push`.
+                    // Sibling order changed; type/content/props did not.
                     childrenChangedIds.add(id);
                     structureChanged = true;
                     return;
                 }
                 if (typeof field === "string") {
+                    // Nested field edit: content text, a props key, listProps.
+                    // Child IDs are unchanged.
                     nodeChangedIds.add(id);
                     return;
                 }
+                // `path` is `[id]`: keys are field names on the block map.
+                // One transaction can replace `children` together with other
+                // fields, so those flags are independent.
                 if (keys.includes("children")) {
                     childrenChangedIds.add(id);
                     structureChanged = true;
@@ -296,9 +321,11 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * caller cannot mutate one empty snapshot and poison every leaf.
      *
      * @param id - Parent block identifier to inspect.
-     * @returns Child identifiers in collaborative order, or an empty list when absent.
+     * @returns Child identifiers in collaborative order, or a fresh empty list when absent.
      */
     getChildIds(id: string): string[] {
+        // Unplaced or unknown IDs are not cached. Returning a fresh `[]`
+        // keeps missing reads from sharing one mutable empty array.
         if (!this.findContainer(id)) return [];
         const value = this.storage.get(id);
         return isCRDTMap(value) ? this.readCachedChildIds(value, id) : [];
@@ -875,6 +902,9 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         visited.add(id);
         const cached = this.crdt.isTransacting ? undefined : this.blockSnapshots.get(id);
         if (cached) return cached;
+        // Rebuild the recursive snapshot from the two focused caches so a
+        // child-list-only edit can reuse the same node object, and a
+        // content-only edit can reuse the same child-id list.
         const node = this.readCachedBlockNode(value, id);
         const children = this.readCachedChildIds(value, id).flatMap((childId: IDBlock) => {
             const child = this.readBlock(childId, visited);
@@ -918,6 +948,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * @returns Detached non-recursive block fields.
      */
     private readCachedBlockNode(value: CRDTMap<BlockStorage>, id: IDBlock): BlockNode {
+        // Mid-transaction reads must not populate the cache: a later field in
+        // the same commit would otherwise publish a half-updated node.
         if (!this.crdt.isTransacting) {
             const cached = this.blockNodeSnapshots.get(id);
             if (cached) return cached;
@@ -943,6 +975,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             if (cached) return cached;
         }
         const ids = strings(this.requiredArray(value, "children"));
+        // Cache the real array, including `[]`, under this parent ID only.
         if (!this.crdt.isTransacting) this.childIdsSnapshots.set(id, ids);
         return ids;
     }
@@ -973,8 +1006,14 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 current = this.blockParents.get(current);
             }
         });
+        // Node and child-id maps are not ancestor-walked. A child's content
+        // change must rebuild that child's node and every recursive ancestor
+        // snapshot, but the parent's node object and child-id list stay valid.
         nodeIds.forEach((id) => this.blockNodeSnapshots.delete(id));
         childListIds.forEach((id) => this.childIdsSnapshots.delete(id));
+        // Ancestor listeners still run so `getBlock` consumers refresh. Node
+        // and child-id callers compare `Object.is` against the kept snapshot
+        // and do not re-render.
         this.invalidateSnapshotIds(affected);
     }
 
