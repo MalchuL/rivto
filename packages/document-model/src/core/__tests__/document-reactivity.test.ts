@@ -188,9 +188,50 @@ describe("document reactivity", () => {
     expect(model.blocks.getChildIds("child")).toBe(emptyLeaf);
     expect(model.blocks.getChildIds("extra")).toEqual([]);
     expect(model.blocks.getChildIds("extra")).not.toBe(emptyLeaf);
-    emptyLeaf.push("poison");
+    expect(() => emptyLeaf.push("poison")).toThrow();
+    expect(model.blocks.getChildIds("child")).toEqual([]);
     expect(model.blocks.getChildIds("extra")).toEqual([]);
     expect(model.blocks.getChildIds("missing")).toEqual([]);
+    void doc.destroy();
+  });
+
+  test("does not let callers mutate cached node fields or nested properties", () => {
+    const doc = new YjsDoc("node-snapshot-immutability");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({
+      id: "block",
+      type: "paragraph",
+      props: { nested: { values: ["stored"] } },
+    });
+    const node = model.blocks.getBlockNode("block")!;
+    const nested = node.props.nested as { values: string[] };
+
+    expect(() => { node.type = "heading"; }).toThrow();
+    expect(() => nested.values.push("poison")).toThrow();
+    expect(model.blocks.getBlockNode("block")?.type).toBe("paragraph");
+    expect(model.blocks.getBlockNode("block")?.props.nested).toEqual({ values: ["stored"] });
+    const updated = model.blocks.updateBlock("block", { props: { nested: { values: ["updated"] } } });
+    (updated.props.nested as { values: string[] }).values.push("local-only");
+    expect(model.blocks.getBlockNode("block")?.props.nested).toEqual({ values: ["updated"] });
+    void doc.destroy();
+  });
+
+  test("does not let callers mutate cached roots or recursive blocks", () => {
+    const doc = new YjsDoc("tree-snapshot-immutability");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({
+      id: "parent",
+      type: "paragraph",
+      children: [{ id: "child", type: "paragraph" }],
+    });
+    const roots = model.blocks.getRootIds();
+    const tree = model.blocks.getBlock("parent")!;
+
+    expect(() => roots.push("poison")).toThrow();
+    expect(() => tree.children.push(tree)).toThrow();
+    expect(() => { tree.type = "heading"; }).toThrow();
+    expect(model.blocks.getRootIds()).toEqual(["parent"]);
+    expect(model.blocks.getBlock("parent")?.children.map(({ id }) => id)).toEqual(["child"]);
     void doc.destroy();
   });
 

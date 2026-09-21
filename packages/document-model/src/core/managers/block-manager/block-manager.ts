@@ -56,6 +56,23 @@ interface LocatedBlock {
 }
 
 /**
+ * Makes a detached snapshot safe to share by identity across public reads.
+ *
+ * Portable properties can contain nested records and arrays, so freezing only
+ * the outer node would still let a caller change later reads without a write.
+ *
+ * @param value - Detached portable value to protect.
+ * @returns The same value with every nested object and array frozen.
+ */
+function freezeSnapshot<T>(value: T): T {
+    if (value !== null && typeof value === "object") {
+        Object.values(value).forEach(freezeSnapshot);
+        Object.freeze(value);
+    }
+    return value;
+}
+
+/**
  * Owns block records, collaborative text, and ordered tree placement.
  *
  * The manager is exposed as `document.blocks`. It preserves stable CRDT
@@ -262,7 +279,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      */
     getRootIds(): string[] {
         if (this.crdt.isTransacting) return strings(this.roots);
-        this.rootIdsSnapshot ??= strings(this.roots);
+        this.rootIdsSnapshot ??= freezeSnapshot(strings(this.roots));
         return this.rootIdsSnapshot;
     }
 
@@ -317,8 +334,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * Reads one block's direct child identifiers.
      *
      * Cached identity is reused until this block's child array changes. Each
-     * placed block owns its own list, including when it has no children, so a
-     * caller cannot mutate one empty snapshot and poison every leaf.
+     * placed block owns its own frozen list, including when it has no children,
+     * so a caller cannot change the cached value without a document write.
      *
      * @param id - Parent block identifier to inspect.
      * @returns Child identifiers in collaborative order, or a fresh empty list when absent.
@@ -914,6 +931,9 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             ...node,
             children,
         };
+        // The node and each child are already frozen by their own reads.
+        Object.freeze(children);
+        Object.freeze(snapshot);
         if (!this.crdt.isTransacting) this.blockSnapshots.set(id, snapshot);
         return snapshot;
     }
@@ -926,14 +946,16 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * @returns Detached non-recursive block fields.
      */
     private readBlockNode(value: CRDTMap<BlockStorage>, id: IDBlock): BlockNode {
-        return {
+        // The adapter can expose plain nested property values by reference.
+        // Detach them before callers receive or cache the node.
+        return clone({
             id,
             type: this.requiredType(value, id),
             listProps: validateBlockListProps(this.requiredMap(value, "listProps").toObject()),
             props: this.requiredMap(value, "props").toObject() as Record<IDProp, unknown>,
             pluginData: this.requiredMap(value, "pluginData").toObject() as Record<IDPlugin, unknown>,
             content: this.requiredText(value, "content").toString(),
-        };
+        });
     }
 
     /**
@@ -955,8 +977,10 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             if (cached) return cached;
         }
         const node = this.readBlockNode(value, id);
-        if (!this.crdt.isTransacting) this.blockNodeSnapshots.set(id, node);
-        return node;
+        if (this.crdt.isTransacting) return node;
+        const snapshot = freezeSnapshot(node);
+        this.blockNodeSnapshots.set(id, snapshot);
+        return snapshot;
     }
 
     /**
@@ -976,7 +1000,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         }
         const ids = strings(this.requiredArray(value, "children"));
         // Cache the real array, including `[]`, under this parent ID only.
-        if (!this.crdt.isTransacting) this.childIdsSnapshots.set(id, ids);
+        if (!this.crdt.isTransacting) this.childIdsSnapshots.set(id, freezeSnapshot(ids));
         return ids;
     }
 
