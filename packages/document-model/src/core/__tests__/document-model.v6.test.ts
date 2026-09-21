@@ -152,7 +152,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     // are repaired only by operations that need a containing array.
     expect(findPath).toHaveBeenCalledTimes(searchesBeforeRepair);
     expect(model.blocks.getRootIds()).toEqual(["parent", "target"]);
-    expect(model.blocks.getChildIds("target")).toEqual(["child"]);
+    expect(model.blocks.getBlockNode("target")?.childIds).toEqual(["child"]);
     model.blocks.updateBlock("target", { listProps: { collapsed: true } });
     expect(model.blocks.getBlockNode("target")?.listProps.collapsed).toBe(true);
     model.blocks.updateBlock("target", { listProps: { collapsed: false } });
@@ -243,7 +243,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
       { id: "child", targetId: "parent", position: "inside" },
       { id: "extra", targetId: "child", position: "after" },
     ]);
-    expect(model.blocks.getChildIds("parent")).toEqual(["child", "extra"]);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["child", "extra"]);
     expect(model.blocks.getRootIds()).toEqual(["parent"]);
     doc.destroy();
   });

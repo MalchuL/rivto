@@ -115,17 +115,11 @@ export class BlockManager implements BlocksCapability {
   /** Subscribes to one block's own fields and direct child IDs. */
   subscribeBlockNode(id: string, listener: () => void): () => void { return this.editor.blocks.subscribeBlockNode(id, listener); }
 
-  /** Subscribes to one block's direct child IDs. */
-  subscribeChildIds(id: string, listener: () => void): () => void { return this.editor.blocks.subscribeChildIds(id, listener); }
-
   /** Subscribes to ordered root identifiers. */
   subscribeRootIds(listener: () => void): () => void { return this.editor.blocks.subscribeRootIds(listener); }
 
   /** Subscribes to hierarchy changes. */
   subscribeStructure(listener: () => void): () => void { return this.editor.blocks.subscribeStructure(listener); }
-
-  /** @returns Direct child identifiers for a block. */
-  getChildIds(id: string): string[] { return this.editor.blocks.getChildIds(id); }
 
   /** @returns True when the block has at least one child. */
   hasChildren(id: string): boolean { return this.editor.blocks.hasChildren(id); }

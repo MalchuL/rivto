@@ -166,7 +166,7 @@ describe("EditorRuntime block manager", () => {
         children: [{ type: "paragraph", content: "Grandchild" }],
       }],
     }).id;
-    const childId = editor.blocks.getChildIds(id)[0]!;
+    const childId = editor.blocks.getBlockNode(id)!.childIds[0]!;
     const outsideId = editor.blocks.insertBlock({ type: "paragraph", content: "Outside" }, id).id;
     editor.history.clear();
 

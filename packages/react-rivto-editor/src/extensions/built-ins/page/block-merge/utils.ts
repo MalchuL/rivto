@@ -56,7 +56,7 @@ export function removeEmptyBlockAfterStructuralPredecessor(
   if (!previous || hasOwnedEditableContent(previous.element)) return false;
 
   reactEditor.history.batchUpdates(() => {
-    const firstChildId = reactEditor.blocks.getChildIds(block.id)[0];
+    const firstChildId = reactEditor.blocks.getBlockNode(block.id)?.childIds[0];
     if (firstChildId) reactEditor.blocks.outdentBlock(firstChildId);
     reactEditor.blocks.removeBlock(block.id);
     reactEditor.selection.set(createStructuralSelection([previous.id]));

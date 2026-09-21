@@ -221,7 +221,7 @@ describe("core ClipboardManager", () => {
       content: "Parent",
       children: [{ type: "paragraph", content: "Child" }],
     }).id;
-    const child = editor.blocks.getChildIds(parent)[0]!;
+    const child = editor.blocks.getBlockNode(parent)!.childIds[0]!;
     const tail = editor.blocks.insertBlock({ type: "paragraph", content: "Tail" }, parent).id;
     editor.selection.set(createStructuralSelection([parent, child], parent, child));
 

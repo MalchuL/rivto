@@ -189,20 +189,20 @@ describe("document reactivity", () => {
       children: [{ id: "child", type: "paragraph", content: "before" }],
     });
     const parentNode = model.blocks.getBlockNode("parent");
-    const parentChildren = model.blocks.getChildIds("parent");
+    const parentChildren = model.blocks.getBlockNode("parent")?.childIds;
     const childNode = model.blocks.getBlockNode("child");
     const parentTree = model.blocks.getBlock("parent");
 
     model.blocks.updateBlock("child", { content: "after" });
 
     expect(model.blocks.getBlockNode("parent")).toBe(parentNode);
-    expect(model.blocks.getChildIds("parent")).toBe(parentChildren);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toBe(parentChildren);
     expect(model.blocks.getBlock("parent")).not.toBe(parentTree);
     expect(model.blocks.getBlock("parent")?.children[0]?.content).toBe("after");
     expect(model.blocks.getBlockNode("child")).not.toBe(childNode);
     expect(model.blocks.getBlockNode("child")?.content).toBe("after");
     expect(model.blocks.getBlockNode("child")).toBe(model.blocks.getBlockNode("child"));
-    expect(model.blocks.getChildIds("parent")).toBe(model.blocks.getChildIds("parent"));
+    expect(model.blocks.getBlockNode("parent")?.childIds).toBe(model.blocks.getBlockNode("parent")?.childIds);
     void doc.destroy();
   });
 
@@ -214,19 +214,18 @@ describe("document reactivity", () => {
       type: "paragraph",
       children: [{ id: "child", type: "paragraph" }],
     });
-    const calls = { tree: 0, node: 0, children: 0 };
+    const calls = { tree: 0, node: 0 };
     const disposers = [
       model.blocks.subscribeBlock("parent", () => { calls.tree += 1; }),
       model.blocks.subscribeBlockNode("parent", () => { calls.node += 1; }),
-      model.blocks.subscribeChildIds("parent", () => { calls.children += 1; }),
     ];
 
     model.blocks.updateBlock("child", { content: "after" });
-    expect(calls).toEqual({ tree: 1, node: 0, children: 0 });
+    expect(calls).toEqual({ tree: 1, node: 0 });
     model.blocks.updateBlock("parent", { content: "parent" });
-    expect(calls).toEqual({ tree: 2, node: 1, children: 0 });
+    expect(calls).toEqual({ tree: 2, node: 1 });
     model.blocks.insertBlock({ id: "extra", type: "paragraph" }, "child");
-    expect(calls).toEqual({ tree: 3, node: 2, children: 1 });
+    expect(calls).toEqual({ tree: 3, node: 2 });
 
     disposers.forEach((dispose) => dispose());
     void doc.destroy();
@@ -236,17 +235,14 @@ describe("document reactivity", () => {
     const doc = new YjsDoc("focused-block-removal");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "parent", type: "paragraph", children: [{ id: "child", type: "paragraph" }] });
-    const calls = { node: 0, children: 0 };
+    const calls = { node: 0 };
     const disposers = [
       model.blocks.subscribeBlockNode("child", () => { calls.node += 1; }),
-      model.blocks.subscribeChildIds("child", () => { calls.children += 1; }),
     ];
 
     model.blocks.removeBlock("child");
     expect(model.blocks.getBlockNode("child")).toBeUndefined();
-    expect(model.blocks.getChildIds("child")).toEqual([]);
     expect(calls.node).toBeGreaterThan(0);
-    expect(calls.children).toBeGreaterThan(0);
 
     disposers.forEach((dispose) => dispose());
     void doc.destroy();
@@ -261,24 +257,24 @@ describe("document reactivity", () => {
       children: [{ id: "child", type: "paragraph" }],
     });
     const parentNode = model.blocks.getBlockNode("parent");
-    const parentChildren = model.blocks.getChildIds("parent");
+    const parentChildren = model.blocks.getBlockNode("parent")?.childIds;
     expect(parentNode?.childIds).toEqual(["child"]);
-    const emptyLeaf = model.blocks.getChildIds("child");
+    const emptyLeaf = model.blocks.getBlockNode("child")?.childIds;
 
     model.blocks.insertBlock({ id: "extra", type: "paragraph" }, "child");
 
     expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["child", "extra"]);
-    expect(model.blocks.getChildIds("parent")).not.toBe(parentChildren);
-    expect(model.blocks.getChildIds("parent")).toEqual(["child", "extra"]);
-    expect(model.blocks.getChildIds("parent")).toBe(model.blocks.getChildIds("parent"));
+    expect(model.blocks.getBlockNode("parent")?.childIds).not.toBe(parentChildren);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["child", "extra"]);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toBe(model.blocks.getBlockNode("parent")?.childIds);
     expect(emptyLeaf).toEqual([]);
-    expect(model.blocks.getChildIds("child")).toBe(emptyLeaf);
-    expect(model.blocks.getChildIds("extra")).toEqual([]);
-    expect(model.blocks.getChildIds("extra")).not.toBe(emptyLeaf);
-    expect(() => emptyLeaf.push("poison")).toThrow();
-    expect(model.blocks.getChildIds("child")).toEqual([]);
-    expect(model.blocks.getChildIds("extra")).toEqual([]);
-    expect(model.blocks.getChildIds("missing")).toEqual([]);
+    expect(model.blocks.getBlockNode("child")?.childIds).toBe(emptyLeaf);
+    expect(model.blocks.getBlockNode("extra")?.childIds).toEqual([]);
+    expect(model.blocks.getBlockNode("extra")?.childIds).not.toBe(emptyLeaf);
+    expect(() => (emptyLeaf! as string[]).push("poison")).toThrow();
+    expect(model.blocks.getBlockNode("child")?.childIds).toEqual([]);
+    expect(model.blocks.getBlockNode("extra")?.childIds).toEqual([]);
+    expect(model.blocks.getBlockNode("missing")).toBeUndefined();
     void doc.destroy();
   });
 
@@ -287,17 +283,17 @@ describe("document reactivity", () => {
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "block", type: "paragraph", content: "before" });
     const node = model.blocks.getBlockNode("block");
-    const children = model.blocks.getChildIds("block");
+    const children = model.blocks.getBlockNode("block")?.childIds;
 
     model.blocks.setBlockType("block", "heading");
     expect(model.blocks.getBlockNode("block")).not.toBe(node);
     expect(model.blocks.getBlockNode("block")?.type).toBe("heading");
-    expect(model.blocks.getChildIds("block")).toBe(children);
+    expect(model.blocks.getBlockNode("block")?.childIds).toBe(children);
     const afterType = model.blocks.getBlockNode("block");
     model.blocks.setBlockText("block", "after");
     expect(model.blocks.getBlockNode("block")).not.toBe(afterType);
     expect(model.blocks.getBlockNode("block")?.content).toBe("after");
-    expect(model.blocks.getChildIds("block")).toBe(children);
+    expect(model.blocks.getBlockNode("block")?.childIds).toBe(children);
     void doc.destroy();
   });
 
@@ -310,7 +306,7 @@ describe("document reactivity", () => {
       children: [{ id: "first", type: "paragraph" }],
     });
     const node = model.blocks.getBlockNode("parent");
-    const children = model.blocks.getChildIds("parent");
+    const children = model.blocks.getBlockNode("parent")?.childIds;
     const roots = model.blocks.getRootIds();
     let blockChanges = 0;
     let structureChanges = 0;
@@ -324,8 +320,8 @@ describe("document reactivity", () => {
 
     expect(model.blocks.getBlockNode("parent")).not.toBe(node);
     expect(model.blocks.getBlockNode("parent")?.type).toBe("heading");
-    expect(model.blocks.getChildIds("parent")).not.toBe(children);
-    expect(model.blocks.getChildIds("parent")).toEqual(["first", "second"]);
+    expect(model.blocks.getBlockNode("parent")?.childIds).not.toBe(children);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["first", "second"]);
     expect(model.blocks.getBlock("parent")?.children.map(({ id }) => id)).toEqual(["first", "second"]);
     expect(model.blocks.getRootIds()).toBe(roots);
     expect({ blockChanges, structureChanges }).toEqual({ blockChanges: 1, structureChanges: 1 });
@@ -341,7 +337,7 @@ describe("document reactivity", () => {
       children: [{ id: "child", type: "paragraph" }],
     });
     const node = model.blocks.getBlockNode("parent");
-    const children = model.blocks.getChildIds("parent");
+    const children = model.blocks.getBlockNode("parent")?.childIds;
     const stored = doc.doc.getMap("rivto.editor.blocks").get("parent") as Y.Map<unknown>;
     const replacement = new Y.Array<string>();
     replacement.insert(0, ["child"]);
@@ -353,8 +349,8 @@ describe("document reactivity", () => {
 
     expect(model.blocks.getBlockNode("parent")).not.toBe(node);
     expect(model.blocks.getBlockNode("parent")?.type).toBe("heading");
-    expect(model.blocks.getChildIds("parent")).not.toBe(children);
-    expect(model.blocks.getChildIds("parent")).toEqual(["child"]);
+    expect(model.blocks.getBlockNode("parent")?.childIds).not.toBe(children);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["child"]);
     void doc.destroy();
   });
 
@@ -362,7 +358,7 @@ describe("document reactivity", () => {
     const doc = new YjsDoc("nested-field-changes");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "block", type: "paragraph" });
-    const children = model.blocks.getChildIds("block");
+    const children = model.blocks.getBlockNode("block")?.childIds;
     let node = model.blocks.getBlockNode("block");
     let structureChanges = 0;
     model.blocks.subscribeStructure(() => { structureChanges += 1; });
@@ -370,19 +366,19 @@ describe("document reactivity", () => {
     model.blocks.setBlockProp("block", "color", "red");
     expect(model.blocks.getBlockNode("block")).not.toBe(node);
     expect(model.blocks.getBlockNode("block")?.props.color).toBe("red");
-    expect(model.blocks.getChildIds("block")).toBe(children);
+    expect(model.blocks.getBlockNode("block")?.childIds).toBe(children);
     node = model.blocks.getBlockNode("block");
 
     model.blocks.setPluginData("block", "notes", { labels: ["review"] });
     expect(model.blocks.getBlockNode("block")).not.toBe(node);
     expect(model.blocks.getBlockNode("block")?.pluginData.notes).toEqual({ labels: ["review"] });
-    expect(model.blocks.getChildIds("block")).toBe(children);
+    expect(model.blocks.getBlockNode("block")?.childIds).toBe(children);
     node = model.blocks.getBlockNode("block");
 
     model.blocks.updateBlock("block", { listProps: { collapsed: true } });
     expect(model.blocks.getBlockNode("block")).not.toBe(node);
     expect(model.blocks.getBlockNode("block")?.listProps.collapsed).toBe(true);
-    expect(model.blocks.getChildIds("block")).toBe(children);
+    expect(model.blocks.getBlockNode("block")?.childIds).toBe(children);
     expect(structureChanges).toBe(0);
     void doc.destroy();
   });
@@ -394,15 +390,15 @@ describe("document reactivity", () => {
     model.blocks.insertBlock({ id: "moving", type: "paragraph" }, "parent");
     const parentNode = model.blocks.getBlockNode("parent");
     const movingNode = model.blocks.getBlockNode("moving");
-    const emptyChildren = model.blocks.getChildIds("parent");
+    const emptyChildren = model.blocks.getBlockNode("parent")?.childIds;
     const roots = model.blocks.getRootIds();
 
     model.blocks.moveBlock("moving", "parent", "inside");
     expect(model.blocks.getBlockNode("parent")).not.toBe(parentNode);
     expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["moving"]);
     expect(model.blocks.getBlockNode("moving")).toBe(movingNode);
-    expect(model.blocks.getChildIds("parent")).not.toBe(emptyChildren);
-    expect(model.blocks.getChildIds("parent")).toEqual(["moving"]);
+    expect(model.blocks.getBlockNode("parent")?.childIds).not.toBe(emptyChildren);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["moving"]);
     expect(model.blocks.getRootIds()).not.toBe(roots);
     expect(model.blocks.getRootIds()).toEqual(["parent"]);
     expect(model.blocks.getBlock("parent")?.children.map(({ id }) => id)).toEqual(["moving"]);
@@ -410,7 +406,7 @@ describe("document reactivity", () => {
     model.blocks.moveBlock("moving", "parent", "after");
     expect(model.blocks.getBlockNode("parent")?.childIds).toEqual([]);
     expect(model.blocks.getBlockNode("moving")).toBe(movingNode);
-    expect(model.blocks.getChildIds("parent")).toEqual([]);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toEqual([]);
     expect(model.blocks.getRootIds()).toEqual(["parent", "moving"]);
     void doc.destroy();
   });
@@ -463,7 +459,7 @@ describe("document reactivity", () => {
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "reused", type: "paragraph", content: "old" });
     const node = model.blocks.getBlockNode("reused");
-    const children = model.blocks.getChildIds("reused");
+    const children = model.blocks.getBlockNode("reused")?.childIds;
 
     model.blocks.removeBlock("reused");
     expect(model.blocks.getBlockNode("reused")).toBeUndefined();
@@ -476,8 +472,8 @@ describe("document reactivity", () => {
 
     expect(model.blocks.getBlockNode("reused")).not.toBe(node);
     expect(model.blocks.getBlockNode("reused")?.content).toBe("new");
-    expect(model.blocks.getChildIds("reused")).not.toBe(children);
-    expect(model.blocks.getChildIds("reused")).toEqual(["new-child"]);
+    expect(model.blocks.getBlockNode("reused")?.childIds).not.toBe(children);
+    expect(model.blocks.getBlockNode("reused")?.childIds).toEqual(["new-child"]);
     expect(model.blocks.getBlock("reused")?.children.map(({ id }) => id)).toEqual(["new-child"]);
     void doc.destroy();
   });
@@ -578,7 +574,7 @@ describe("document reactivity", () => {
     Y.applyUpdate(rightDoc.doc, Y.encodeStateAsUpdate(leftDoc.doc));
     const right = new DocumentModelImpl(rightDoc);
     const node = right.blocks.getBlockNode("parent");
-    const children = right.blocks.getChildIds("parent");
+    const children = right.blocks.getBlockNode("parent")?.childIds;
 
     left.blocks.insertBlock({ id: "second", type: "paragraph" }, "first");
     Y.applyUpdate(
@@ -588,8 +584,8 @@ describe("document reactivity", () => {
 
     expect(right.blocks.getBlockNode("parent")).not.toBe(node);
     expect(right.blocks.getBlockNode("parent")?.childIds).toEqual(["first", "second"]);
-    expect(right.blocks.getChildIds("parent")).not.toBe(children);
-    expect(right.blocks.getChildIds("parent")).toEqual(["first", "second"]);
+    expect(right.blocks.getBlockNode("parent")?.childIds).not.toBe(children);
+    expect(right.blocks.getBlockNode("parent")?.childIds).toEqual(["first", "second"]);
     void leftDoc.destroy();
     void rightDoc.destroy();
   });

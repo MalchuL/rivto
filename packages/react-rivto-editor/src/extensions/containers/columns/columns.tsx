@@ -7,7 +7,7 @@
  */
 import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { type EditorBlockInput } from "@chulane/rivto";
-import { useBlockChildren, useBlockEditing, useReactEditor } from "../../../hooks";
+import { useBlockEditing, useBlockNode, useReactEditor } from "../../../hooks";
 import {
   type BlockSlotProps,
   type ReactEditorExtension,
@@ -253,8 +253,8 @@ export function Columns({ blockId }: { readonly blockId: string }) {
  */
 function ColumnsColumn({ blockId }: { readonly blockId: string }) {
   const reactEditor = useReactEditor();
-  const { children: childIds } = useBlockChildren(blockId);
-  const empty = childIds.length === 0;
+  const { block } = useBlockNode(blockId);
+  const empty = block?.childIds.length === 0;
   /**
    * Creates the first writing block when the column has no nested content.
    * @param event - Click or keyboard activation of the empty column.

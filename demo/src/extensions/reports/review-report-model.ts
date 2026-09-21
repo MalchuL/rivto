@@ -242,7 +242,7 @@ export function captureBlockReview(
   const rootIds = editor.blocks.getRootIds();
   const siblingIds = parentReportId === null
     ? rootIds
-    : editor.blocks.getChildIds(parentReportId);
+    : (editor.blocks.getBlockNode(parentReportId)?.childIds ?? []);
   const siblingIndex = siblingIds.indexOf(reviewId);
   const anchorIndex = rootIds.indexOf(anchorRootId);
   if (anchorIndex < 0) throw new Error(`Review block ${reviewId} is not in the document`);

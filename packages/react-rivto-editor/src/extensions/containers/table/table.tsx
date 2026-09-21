@@ -288,7 +288,7 @@ function tableColumnCells(reactEditor: ReactEditor, tableId: string, column: num
   const table = reactEditor.blocks.getBlockNode(tableId);
   return table?.type === TABLE_BLOCK_TYPE && Number.isInteger(column) && column >= 0
     ? table.childIds.flatMap((rowId) => {
-      const cellId = reactEditor.blocks.getChildIds(rowId)[column];
+      const cellId = reactEditor.blocks.getBlockNode(rowId)?.childIds[column];
       return cellId ? [cellId] : [];
     })
     : [];
@@ -385,10 +385,10 @@ function useTableDimensions(tableId: string): { readonly rows: number; readonly 
     [reactEditor],
   );
   const getSnapshot = useCallback(() => {
-    const rowIds = reactEditor.blocks.getChildIds(tableId);
+    const rowIds = reactEditor.blocks.getBlockNode(tableId)?.childIds ?? [];
     let columns = 0;
     rowIds.forEach((rowId) => {
-      columns = Math.max(columns, reactEditor.blocks.getChildIds(rowId).length);
+      columns = Math.max(columns, (reactEditor.blocks.getBlockNode(rowId)?.childIds.length ?? 0));
     });
     return `${rowIds.length}:${columns}`;
   }, [tableId, reactEditor]);

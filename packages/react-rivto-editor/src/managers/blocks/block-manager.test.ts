@@ -71,7 +71,7 @@ describe("BlockManager", () => {
     expect(editor.blocks.getBlocks()).toEqual([]);
 
     const parent = reactEditor.blocks.insertBlock(prepared).id;
-    const child = editor.blocks.getChildIds(parent)[0]!;
+    const child = editor.blocks.getBlockNode(parent)!.childIds[0]!;
     expect(editor.blocks.getBlockNode(parent)?.listProps).toEqual({ collapsed: false });
     expect(editor.blocks.getBlockNode(child)?.listProps).toEqual({ collapsed: false, custom: "kept" });
 

@@ -120,14 +120,10 @@ export interface DocumentBlockManagerApi {
   subscribeBlock(id: string, listener: () => void): () => void;
   /** @param id - Block identifier. @param listener - Node change callback. @returns Unsubscribe callback. */
   subscribeBlockNode(id: string, listener: () => void): () => void;
-  /** @param id - Parent identifier. @param listener - Direct child-ID change callback. @returns Unsubscribe callback. */
-  subscribeChildIds(id: string, listener: () => void): () => void;
   /** @param listener - Root-list callback. @returns Unsubscribe callback. */
   subscribeRootIds(listener: () => void): () => void;
   /** @param listener - Hierarchy callback. @returns Unsubscribe callback. */
   subscribeStructure(listener: () => void): () => void;
-  /** @param id - Parent block identifier. @returns Ordered direct-child identifiers. Identity is stable for a placed block until its child array changes. */
-  getChildIds(id: string): string[];
   /** @param id - Parent block identifier. @returns True when the block has at least one child. */
   hasChildren(id: string): boolean;
   /** @param id - Block identifier. @returns Parent ID, null for roots, or undefined when absent. */

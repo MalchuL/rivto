@@ -59,14 +59,6 @@ Detached `block` обновляется по подписке на его subtre
 
 `block.childIds` содержит прямые дочерние ID; данные потомков не материализуются. Узел обновляется при изменении своих полей или списка прямых детей.
 
-### `useBlockChildren(blockId)`
-
-- **Аргументы:** parent `blockId`.
-- **Возвращает:** `{ children: readonly string[]; operations: { add, remove, move } }`.
-- **Исключения:** missing parent, non-direct child и core errors.
-
-`add(block, afterId?)` возвращает созданный блок; `undefined` означает append, `null` — first. Остальные operations принимают только direct child ID.
-
 ### `useBlockSelection(blockId)`
 
 - **Аргументы:** `blockId`.

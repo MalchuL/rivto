@@ -56,10 +56,10 @@ function useKanbanCounts(boardId: string): { readonly columnCount: number; reado
     [reactEditor],
   );
   const getSnapshot = useCallback(() => {
-    const columnIds = reactEditor.blocks.getChildIds(boardId);
+    const columnIds = reactEditor.blocks.getBlockNode(boardId)?.childIds ?? [];
     let cardCount = 0;
     columnIds.forEach((columnId) => {
-      cardCount += reactEditor.blocks.getChildIds(columnId).length;
+      cardCount += (reactEditor.blocks.getBlockNode(columnId)?.childIds.length ?? 0);
     });
     return `${columnIds.length}:${cardCount}`;
   }, [boardId, reactEditor]);

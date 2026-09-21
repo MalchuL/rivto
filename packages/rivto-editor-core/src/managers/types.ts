@@ -84,8 +84,6 @@ export interface BlockManagerApi {
   subscribeBlock(id: string, listener: () => void): () => void;
   /** @param id - Block ID. @param listener - Node change listener. @returns Its disposer. */
   subscribeBlockNode(id: string, listener: () => void): () => void;
-  /** @param id - Parent ID. @param listener - Direct child-ID listener. @returns Its disposer. */
-  subscribeChildIds(id: string, listener: () => void): () => void;
   /** @param listener - Root-list listener. @returns Its disposer. */
   subscribeRootIds(listener: () => void): () => void;
   /** @param listener - Structure listener. @returns Its disposer. */
@@ -99,8 +97,6 @@ export interface BlockManagerApi {
     input: readonly (EditorBlock | EditorBlockInput)[],
     onError?: BlockPrepareErrorHandler,
   ): EditorBlockInput[];
-  /** @param id - Parent ID. @returns Direct child IDs. */
-  getChildIds(id: string): string[];
   /** @param id - Parent ID. @returns True when the block has at least one child. */
   hasChildren(id: string): boolean;
   /** @param id - Block ID. @returns Parent ID, null, or undefined. */

@@ -85,8 +85,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     private readonly blockListeners = new Map<IDBlock, Set<() => void>>();
     /** Subscribers for own fields and direct child IDs only. */
     private readonly blockNodeListeners = new Map<IDBlock, Set<() => void>>();
-    /** Subscribers for direct child IDs only. */
-    private readonly childIdsListeners = new Map<IDBlock, Set<() => void>>();
     /** Subscribers interested only in the ordered root identifier list. */
     private readonly rootListeners = new Set<() => void>();
     /** Subscribers interested in root or child ordering changes. */
@@ -210,7 +208,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 this.invalidateSnapshotIds(affected);
             }
             this.emitFocused(changedRoots, this.blockNodeListeners);
-            this.emitFocused(changedRoots, this.childIdsListeners);
             this.emit(this.rootListeners);
             this.emitStructure(transaction);
         });
@@ -317,16 +314,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     }
 
     /**
-     * Subscribes only to one block's direct child identifiers.
-     * @param id - Parent identifier to observe.
-     * @param listener - Callback invoked after direct child-list changes.
-     * @returns Function that removes this listener.
-     */
-    subscribeChildIds(id: string, listener: () => void): () => void {
-        return this.subscribeById(this.childIdsListeners, id, listener);
-    }
-
-    /**
      * Subscribes only to changes in the ordered root identifier array.
      *
      * @param listener - Callback invoked after roots are inserted, removed, or reordered.
@@ -346,20 +333,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     subscribeStructure(listener: () => void): () => void {
         this.structureListeners.add(listener);
         return () => this.structureListeners.delete(listener);
-    }
-
-    /**
-     * Reads one block's direct child identifiers.
-     *
-     * Identity stays stable until this block's child array changes.
-     *
-     * @param id - Parent block identifier to inspect.
-     * @returns Child identifiers in collaborative order, or an empty list when absent.
-     */
-    getChildIds(id: string): string[] {
-        if (!this.isPlaced(id)) return [];
-        const value = this.storage.get(id);
-        return isCRDTMap(value) ? this.readCachedChildIds(value, id) : [];
     }
 
     /**
@@ -1049,7 +1022,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         childListIds.forEach((id) => this.childIdsSnapshots.delete(id));
         this.invalidateSnapshotIds(affected);
         this.emitFocused(new Set([...nodeIds, ...childListIds, ...placementIds]), this.blockNodeListeners);
-        this.emitFocused(new Set([...childListIds, ...placementIds]), this.childIdsListeners);
     }
 
     /**

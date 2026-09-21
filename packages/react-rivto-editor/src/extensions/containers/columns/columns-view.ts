@@ -32,13 +32,13 @@ export function relocateColumnContents(editor: ReactEditor | RivtoEditorApi, col
   unique.forEach((id) => {
     const parentId = editor.blocks.getParentId(id);
     if (!parentId || editor.blocks.getBlockNode(parentId)?.type !== COLUMNS_BLOCK_TYPE) return;
-    const keep = editor.blocks.getChildIds(parentId).filter((childId) => (
+    const keep = (editor.blocks.getBlockNode(parentId)?.childIds ?? []).filter((childId) => (
       editor.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE && !unique.includes(childId)
     ));
-    const childIds = editor.blocks.getChildIds(id);
+    const childIds = editor.blocks.getBlockNode(id)?.childIds ?? [];
     if (!childIds.length) return;
-    if (keep.length) editor.blocks.moveBlocks(childIds, keep.at(-1)!, "inside");
-    else editor.blocks.moveBlocks(childIds, parentId, "after");
+    if (keep.length) editor.blocks.moveBlocks([...childIds], keep.at(-1)!, "inside");
+    else editor.blocks.moveBlocks([...childIds], parentId, "after");
   });
 }
 

@@ -87,8 +87,6 @@ export interface BlocksCapability {
   subscribeBlock(id: string, listener: () => void): () => void;
   /** Subscribes to one block's own fields and direct child IDs. */
   subscribeBlockNode(id: string, listener: () => void): () => void;
-  /** Subscribes to one block's direct child IDs. */
-  subscribeChildIds(id: string, listener: () => void): () => void;
   /**
    * Subscribes to ordered root identifier changes.
    * @param listener - Callback invoked after root changes.
@@ -101,8 +99,6 @@ export interface BlocksCapability {
    * @returns Function that removes the subscription.
    */
   subscribeStructure(listener: () => void): () => void;
-  /** @param id - Parent block identifier. @returns Direct child identifiers in document order. */
-  getChildIds(id: string): string[];
   /** @param id - Parent block identifier. @returns True when the block has at least one child. */
   hasChildren(id: string): boolean;
   /** @param id - Block identifier. @returns Parent ID, null at root, or undefined when absent. */

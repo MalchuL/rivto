@@ -142,7 +142,7 @@ Useful direct queries are:
 ```ts
 editor.getBlock(id);
 editor.getRootIds();
-editor.getChildIds(id);
+editor.blocks.getBlockNode(id)?.childIds;
 editor.getParentId(id);
 ```
 
@@ -162,7 +162,6 @@ Hooks resolve current values through public getters:
 | --- | --- |
 | `useBlock(id)` | One detached recursive block snapshot |
 | `useBlockNode(id)` | One detached node with direct `childIds` |
-| `useBlockChildren(id)` | Direct child IDs and operations |
 | `useRootBlockIds()` | Ordered root IDs |
 | `useReactEditor()` | Focused React runtime managers |
 | `useEditorMode()` | Mode manager |

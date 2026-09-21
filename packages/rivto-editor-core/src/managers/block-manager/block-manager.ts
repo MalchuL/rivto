@@ -158,16 +158,6 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
-   * Subscribes to one block's direct child IDs.
-   * @param id - Parent identifier to observe.
-   * @param listener - Callback invoked after child-list changes.
-   * @returns Function that removes the subscription.
-   */
-  subscribeChildIds(id: string, listener: () => void): () => void {
-    return this.subscribe(listener, (document) => document.blocks.subscribeChildIds(id, listener));
-  }
-
-  /**
    * Subscribes to ordered root identifier changes.
    *
    * @param listener - Callback invoked after root insertion, removal, or reorder.
@@ -277,16 +267,6 @@ export class BlockManager implements BlockManagerApi {
     // recursion; this pass verifies all other complete-forest postconditions.
     validateBlockForest(prepared);
     return prepared;
-  }
-
-  /**
-   * Reads one block's direct child identifiers.
-   *
-   * @param id - Parent block identifier.
-   * @returns Child identifiers in collaborative order, or an empty list when absent.
-   */
-  getChildIds(id: string): string[] {
-    return this.document.blocks.getChildIds(id);
   }
 
   /**
@@ -433,7 +413,7 @@ export class BlockManager implements BlockManagerApi {
   clearBlock(id: string): void {
     this.editor.history.batchUpdates(() => {
       this.document.blocks.updateBlock(id, { content: "" });
-      this.document.blocks.getChildIds(id).forEach((childId) => this.document.blocks.removeBlock(childId));
+      (this.document.blocks.getBlockNode(id)?.childIds ?? []).forEach((childId) => this.document.blocks.removeBlock(childId));
     });
   }
 
@@ -656,7 +636,7 @@ export class BlockManager implements BlockManagerApi {
       throw new Error(`Cannot merge block ${sourceId} into its descendant ${targetId}`);
     }
     const blocks = this.document.blocks;
-    blocks.moveBlocks(blocks.getChildIds(sourceId).map((id) => ({ id, targetId, position: "inside" })));
+    blocks.moveBlocks(source.childIds.map((id) => ({ id, targetId, position: "inside" })));
     if (source.content) blocks.insertText(targetId, target.content.length, source.content);
     blocks.removeBlock(sourceId);
     return target.content.length;
@@ -797,9 +777,9 @@ export class BlockManager implements BlockManagerApi {
    * @param id - Placed block whose sibling list is needed.
    * @returns Sibling identifiers in document order.
    */
-  private siblingIds(id: string): string[] {
+  private siblingIds(id: string): readonly string[] {
     const parentId = this.getParentId(id);
-    return parentId == null ? this.getRootIds() : this.getChildIds(parentId);
+    return parentId == null ? this.getRootIds() : (this.getBlockNode(parentId)?.childIds ?? []);
   }
 
   /**
@@ -843,7 +823,7 @@ export class BlockManager implements BlockManagerApi {
   private collectTreeIds(id: string, visited = new Set<string>()): string[] {
     if (visited.has(id)) return [];
     visited.add(id);
-    return [id, ...this.getChildIds(id).flatMap((child) => this.collectTreeIds(child, visited))];
+    return [id, ...(this.getBlockNode(id)?.childIds ?? []).flatMap((child) => this.collectTreeIds(child, visited))];
   }
 
 }

@@ -184,7 +184,7 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     expect(exposesDocument).toBe(false);
     expect(editor.blocks.mergeBlocks(target, source)).toBe(6);
     expect(editor.blocks.getBlockNode(target)?.content).toBe("Hello world");
-    expect(editor.blocks.getChildIds(target)).toEqual(["child"]);
+    expect(editor.blocks.getBlockNode(target)?.childIds).toEqual(["child"]);
     editor.history.undo();
     expect(editor.dump()).toEqual(before);
     editor.destroy();

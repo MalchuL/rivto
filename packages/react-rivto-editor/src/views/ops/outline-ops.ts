@@ -113,7 +113,7 @@ export function convertLeafToContainer(
   if (!block || reactEditor.blocks.hasChildren(blockId)) return;
   reactEditor.history.batchUpdates(() => {
     const templateId = reactEditor.blocks.insertBlock(input, blockId).id;
-    const childIds = reactEditor.blocks.getChildIds(templateId);
+    const childIds = reactEditor.blocks.getBlockNode(templateId)?.childIds ?? [];
     reactEditor.blocks.setBlockType(blockId, input.type);
     if (childIds.length) reactEditor.blocks.moveBlocks(childIds, blockId, "inside");
     reactEditor.blocks.removeBlock(templateId);

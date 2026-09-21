@@ -29,7 +29,7 @@ describe("cross-document block transfer", () => {
     crossDocumentBlockTransfer(source, destination, [first, second], { targetId: target, position: "inside" });
 
     expect(source.blocks.getRootIds()).toEqual([outside]);
-    expect(destination.blocks.getChildIds(target)).toEqual([first, second]);
+    expect(destination.blocks.getBlockNode(target)?.childIds).toEqual([first, second]);
     expect(destination.blocks.getBlock(first)).toMatchObject({
       id: first,
       listProps: { collapsed: true, type: "checkbox", checked: true },

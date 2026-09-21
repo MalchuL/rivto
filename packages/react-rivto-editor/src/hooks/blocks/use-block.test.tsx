@@ -12,22 +12,19 @@ import { EditorView } from "../../editor-view";
 import { createReactEditor } from "../../react-editor";
 import { BlockCollapseSlot } from "../../blocks/block-slot-controls";
 import { useBlock, useBlockNode, type UseBlockResult, type UseBlockNodeResult } from "./use-block";
-import { useBlockChildren, type UseBlockChildrenResult } from "./use-block-children";
 
 describe("useBlock", () => {
-  test("returns full blocks, node child IDs, and a child-only list", () => {
+  test("returns full blocks and node child IDs", () => {
     const editor = createEditor();
     const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
     const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }).id;
     editor.blocks.moveBlock(childId, parentId, "inside");
     let blockResult: UseBlockResult | undefined;
     let nodeResult: UseBlockNodeResult | undefined;
-    let childResult: UseBlockChildrenResult | undefined;
 
     const Surface = () => {
       blockResult = useBlock(parentId);
       nodeResult = useBlockNode(parentId);
-      childResult = useBlockChildren(parentId);
       return null;
     };
     const reactEditor = createReactEditor({ editor });
@@ -38,17 +35,14 @@ describe("useBlock", () => {
     expect(blockResult?.block?.children.map((child) => child.id)).toEqual([childId]);
     expect(nodeResult?.block?.childIds).toEqual([childId]);
     expect(nodeResult?.block && "children" in nodeResult.block).toBe(false);
-    expect(childResult?.children).toEqual([childId]);
 
     editor.blocks.updateBlock(childId, { content: "After" });
     renderToStaticMarkup(createElement(EditorView, { reactEditor }));
     expect(blockResult?.block?.children[0]?.content).toBe("After");
     expect(nodeResult?.block?.childIds).toEqual([childId]);
-    expect(childResult?.children).toEqual([childId]);
 
     const extraId = editor.blocks.insertBlock({ type: "paragraph", content: "Extra" }, childId).id;
     renderToStaticMarkup(createElement(EditorView, { reactEditor }));
-    expect(childResult?.children).toEqual([childId, extraId]);
     expect(nodeResult?.block?.childIds).toEqual([childId, extraId]);
 
     reactEditor.destroy();
