@@ -56,9 +56,9 @@ export interface UseBlockResult {
  * Resolves one block's own fields and bound operations from the current editor.
  *
  * `block` is a stable detached node snapshot, not a live CRDT object and not a
- * recursive tree. Only changes to this record's fields replace its identity.
- * Descendant edits still notify `subscribeBlock`, but the cached node keeps
- * `Object.is` equality so the hook does not re-render. Deletion changes it to
+ * recursive tree. Changes to this record's own fields replace its identity.
+ * Child-list and descendant edits still notify `subscribeBlock`, but the
+ * cached node keeps `Object.is` equality. Deletion changes it to
  * undefined. `operations` remains stable until either the editor instance or
  * block ID changes.
  *

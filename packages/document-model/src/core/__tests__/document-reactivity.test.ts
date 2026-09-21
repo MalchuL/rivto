@@ -10,6 +10,26 @@ import * as Y from "yjs";
 import { DocumentModelImpl } from "../document-model";
 
 describe("document reactivity", () => {
+  test("checks child presence directly in stored records", () => {
+    const doc = new YjsDoc("has-children-reactivity");
+    const model = new DocumentModelImpl(doc);
+
+    expect(model.blocks.hasChildren("missing")).toBe(false);
+    doc.transact(() => {
+      model.blocks.insertBlock({
+        id: "parent",
+        type: "paragraph",
+        children: [{ id: "child", type: "paragraph" }],
+      });
+      expect(model.blocks.hasChildren("parent")).toBe(true);
+      expect(model.blocks.hasChildren("child")).toBe(false);
+    });
+    expect(model.blocks.hasChildren("parent")).toBe(true);
+    model.blocks.removeBlock("child");
+    expect(model.blocks.hasChildren("parent")).toBe(false);
+    void doc.destroy();
+  });
+
   test("invalidates a changed block and its ancestors but preserves siblings", () => {
     const doc = new YjsDoc("block-reactivity");
     const model = new DocumentModelImpl(doc);
@@ -166,7 +186,7 @@ describe("document reactivity", () => {
     void doc.destroy();
   });
 
-  test("replaces child-id snapshots without rewriting parent node fields", () => {
+  test("replaces child IDs but keeps node fields when a child list changes", () => {
     const doc = new YjsDoc("child-id-reactivity");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({
@@ -192,6 +212,25 @@ describe("document reactivity", () => {
     expect(model.blocks.getChildIds("child")).toEqual([]);
     expect(model.blocks.getChildIds("extra")).toEqual([]);
     expect(model.blocks.getChildIds("missing")).toEqual([]);
+    void doc.destroy();
+  });
+
+  test("replaces node fields but keeps child IDs on type and text changes", () => {
+    const doc = new YjsDoc("own-block-invalidation");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({ id: "block", type: "paragraph", content: "before" });
+    const node = model.blocks.getBlockNode("block");
+    const children = model.blocks.getChildIds("block");
+
+    model.blocks.setBlockType("block", "heading");
+    expect(model.blocks.getBlockNode("block")).not.toBe(node);
+    expect(model.blocks.getBlockNode("block")?.type).toBe("heading");
+    expect(model.blocks.getChildIds("block")).toBe(children);
+    const afterType = model.blocks.getBlockNode("block");
+    model.blocks.setBlockText("block", "after");
+    expect(model.blocks.getBlockNode("block")).not.toBe(afterType);
+    expect(model.blocks.getBlockNode("block")?.content).toBe("after");
+    expect(model.blocks.getChildIds("block")).toBe(children);
     void doc.destroy();
   });
 

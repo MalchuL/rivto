@@ -42,8 +42,9 @@ export interface UseBlockChildrenResult {
 /**
  * Resolves the direct child IDs of one block and commands for changing them.
  *
- * Child identifiers come from the cached `getChildIds` snapshot. Operations
- * resolve the parent at call time and only accept its current direct children,
+ * Child identifiers come from the cached `getChildIds` snapshot, which changes
+ * only with the direct child list. Operations resolve the parent at call time
+ * and only accept its current direct children,
  * so stale rendered IDs cannot mutate another subtree.
  *
  * Adding to a parent with no children uses the editor's existing insert and

@@ -56,12 +56,9 @@ interface LocatedBlock {
 }
 
 /**
- * Makes a detached snapshot safe to share by identity across public reads.
+ * Protects a detached snapshot and its nested portable values from mutation.
  *
- * Portable properties can contain nested records and arrays, so freezing only
- * the outer node would still let a caller change later reads without a write.
- *
- * @param value - Detached portable value to protect.
+ * @param value - Detached value to protect.
  * @returns The same value with every nested object and array frozen.
  */
 function freezeSnapshot<T>(value: T): T {
@@ -86,20 +83,9 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     private readonly blockPaths = new Map<IDBlock, readonly number[]>();
     /** Stable detached snapshots reused until their record or a descendant changes. */
     private readonly blockSnapshots = new Map<IDBlock, Block>();
-    /**
-     * Own-field snapshots for `getBlockNode` / `useBlock`.
-     *
-     * Unlike `blockSnapshots`, a descendant edit does not drop these. React
-     * can keep an ancestor node identity while `subscribeBlock` still fires.
-     */
+    /** Non-recursive snapshots, invalidated when their own fields change. */
     private readonly blockNodeSnapshots = new Map<IDBlock, BlockNode>();
-    /**
-     * Direct-child ID lists for `getChildIds` / `useBlockChildren`.
-     *
-     * Dropped only when that block's `children` array changes. Each placed
-     * parent has its own array, empty or not, so mutating one result cannot
-     * change another block's snapshot.
-     */
+    /** Direct-child ID snapshots, invalidated when their child array changes. */
     private readonly childIdsSnapshots = new Map<IDBlock, string[]>();
     /** Per-block subscribers, including recursive snapshot consumers on ancestors. */
     private readonly blockListeners = new Map<IDBlock, Set<() => void>>();
@@ -140,52 +126,32 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             this.currentRevision += 1;
             const changedIds = new Set<string>();
             const nodeChangedIds = new Set<string>();
-            const childrenChangedIds = new Set<string>();
+            const childListChangedIds = new Set<string>();
             let structureChanged = false;
             events.forEach(({ path, keys }) => {
-                // Classify each nested CRDT event into the caches it dirties.
-                // `changedIds` always walk ancestors for recursive `getBlock`.
-                // Node and child-id caches stay on the exact record so a nested
-                // content edit does not rewrite ancestor `useBlock` snapshots.
+                // A top-level set/delete replaces the whole block record.
                 if (path.length === 0) {
-                    // `storage.set(id, record)` / `storage.delete(id)`: the
-                    // block map itself changed, so every cache for those IDs
-                    // is stale.
-                    keys.forEach((key) => {
-                        changedIds.add(key);
-                        nodeChangedIds.add(key);
-                        childrenChangedIds.add(key);
+                    keys.forEach((id) => {
+                        changedIds.add(id);
+                        nodeChangedIds.add(id);
+                        childListChangedIds.add(id);
                     });
                     return;
                 }
                 const id = path[0];
                 if (typeof id !== "string") return;
                 changedIds.add(id);
-                const field = path[1];
-                if (field === "children") {
-                    // Nested array edit: `blocks.get(id).get("children").push`.
-                    // Sibling order changed; type/content/props did not.
-                    childrenChangedIds.add(id);
-                    structureChanged = true;
-                    return;
-                }
-                if (typeof field === "string") {
-                    // Nested field edit: content text, a props key, listProps.
-                    // Child IDs are unchanged.
-                    nodeChangedIds.add(id);
-                    return;
-                }
-                // `path` is `[id]`: keys are field names on the block map.
-                // One transaction can replace `children` together with other
-                // fields, so those flags are independent.
-                if (keys.includes("children")) {
-                    childrenChangedIds.add(id);
-                    structureChanged = true;
-                }
-                if (keys.some((key) => key !== "children")) nodeChangedIds.add(id);
+                const childrenChanged = path[1] === "children"
+                    || (path.length === 1 && keys.includes("children"));
+                const nodeChanged = path.length === 1
+                    ? keys.some((key) => key !== "children")
+                    : path[1] !== "children";
+                if (childrenChanged) childListChangedIds.add(id);
+                if (nodeChanged) nodeChangedIds.add(id);
+                structureChanged ||= childrenChanged;
             });
             if (structureChanged) this.refreshParents(transaction);
-            this.invalidateBlocks(changedIds, nodeChangedIds, childrenChangedIds);
+            this.invalidateBlocks(changedIds, nodeChangedIds, childListChangedIds);
             if (structureChanged) this.emitStructure(transaction);
         });
         // The roots array is not a field on any block, so these events have an
@@ -245,10 +211,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     /**
      * Returns one placed block without recursively materializing descendants.
      *
-     * Cached identity is reused until this record's own fields change. Child-list
-     * edits and descendant content keep the same node snapshot, so React
-     * external-store consumers can subscribe through `subscribeBlock` without
-     * re-rendering when only the subtree changed.
+     * Identity stays stable until this block's own fields change; child-list
+     * and descendant edits leave this snapshot intact.
      *
      * @param id - Stable block identifier to resolve.
      * @returns Detached node fields, or undefined when the block is absent.
@@ -287,9 +251,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * Subscribes to changes that can alter one recursive block snapshot.
      *
      * Descendant changes also notify ancestor IDs because `getBlock` includes
-     * the complete subtree. Node and child-id snapshots keep identity unless
-     * that record's own fields or child array changed, so `useBlock` can share
-     * this subscription without re-rendering on descendant edits.
+     * the complete subtree. Unrelated branches retain their snapshot identity.
      *
      * @param id - Block identifier whose recursive value is observed.
      * @param listener - Callback invoked after that value becomes stale.
@@ -333,29 +295,26 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     /**
      * Reads one block's direct child identifiers.
      *
-     * Cached identity is reused until this block's child array changes. Each
-     * placed block owns its own frozen list, including when it has no children,
-     * so a caller cannot change the cached value without a document write.
+     * Identity stays stable until this block's child array changes.
      *
      * @param id - Parent block identifier to inspect.
-     * @returns Child identifiers in collaborative order, or a fresh empty list when absent.
+     * @returns Child identifiers in collaborative order, or an empty list when absent.
      */
     getChildIds(id: string): string[] {
-        // Unplaced or unknown IDs are not cached. Returning a fresh `[]`
-        // keeps missing reads from sharing one mutable empty array.
         if (!this.findContainer(id)) return [];
         const value = this.storage.get(id);
         return isCRDTMap(value) ? this.readCachedChildIds(value, id) : [];
     }
 
     /**
-     * Reports whether one placed block currently has direct children.
+     * Reports whether a stored block currently has direct children.
      *
      * @param id - Parent block identifier to inspect.
-     * @returns True when the block is placed and its child list is nonempty.
+     * @returns True when the block exists and its child list is nonempty.
      */
     hasChildren(id: string): boolean {
-        return this.getChildIds(id).length > 0;
+        const value = this.storage.get(id);
+        return isCRDTMap(value) && this.requiredArray(value, "children").length > 0;
     }
 
     /**
@@ -931,7 +890,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             ...node,
             children,
         };
-        // The node and each child are already frozen by their own reads.
+        // Cached nodes and children are already protected by their own reads.
         Object.freeze(children);
         Object.freeze(snapshot);
         if (!this.crdt.isTransacting) this.blockSnapshots.set(id, snapshot);
@@ -1007,14 +966,12 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     /**
      * Invalidates changed blocks and recursive snapshots of their live ancestors.
      *
-     * Recursive `getBlock` snapshots walk the ancestor chain because they embed
-     * descendant trees. Node and child-id caches stay on the exact records whose
-     * own fields or child arrays changed, so ancestor `useBlock` snapshots keep
-     * identity when only a descendant mutated.
+     * Recursive snapshots include descendants, so they follow the ancestor
+     * chain. Focused caches are dropped only for their relevant record changes.
      *
      * @param ids - Changed block IDs whose cached ancestor chains are stale.
-     * @param nodeIds - Records whose non-child fields changed.
-     * @param childListIds - Records whose direct child arrays changed.
+     * @param nodeIds - Blocks whose own node fields changed.
+     * @param childListIds - Blocks whose direct child array changed.
      * @returns No value.
      */
     private invalidateBlocks(
@@ -1030,14 +987,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 current = this.blockParents.get(current);
             }
         });
-        // Node and child-id maps are not ancestor-walked. A child's content
-        // change must rebuild that child's node and every recursive ancestor
-        // snapshot, but the parent's node object and child-id list stay valid.
         nodeIds.forEach((id) => this.blockNodeSnapshots.delete(id));
         childListIds.forEach((id) => this.childIdsSnapshots.delete(id));
-        // Ancestor listeners still run so `getBlock` consumers refresh. Node
-        // and child-id callers compare `Object.is` against the kept snapshot
-        // and do not re-render.
         this.invalidateSnapshotIds(affected);
     }
 
