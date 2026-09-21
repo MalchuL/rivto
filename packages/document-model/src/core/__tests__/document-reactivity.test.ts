@@ -186,7 +186,11 @@ describe("document reactivity", () => {
     expect(model.blocks.getChildIds("parent")).toBe(model.blocks.getChildIds("parent"));
     expect(emptyLeaf).toEqual([]);
     expect(model.blocks.getChildIds("child")).toBe(emptyLeaf);
-    expect(model.blocks.getChildIds("missing")).toBe(model.blocks.getChildIds("missing"));
+    expect(model.blocks.getChildIds("extra")).toEqual([]);
+    expect(model.blocks.getChildIds("extra")).not.toBe(emptyLeaf);
+    emptyLeaf.push("poison");
+    expect(model.blocks.getChildIds("extra")).toEqual([]);
+    expect(model.blocks.getChildIds("missing")).toEqual([]);
     void doc.destroy();
   });
 

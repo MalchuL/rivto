@@ -48,8 +48,6 @@ import {
 
 const ROOTS_KEY = "rivto.editor.roots";
 const BLOCKS_KEY = "rivto.editor.blocks";
-/** Shared empty child-id snapshot so missing and leaf blocks stay identity-stable. */
-const EMPTY_CHILD_IDS: string[] = [];
 interface LocatedBlock {
     array: CRDTArray<string>;
     index: number;
@@ -293,17 +291,17 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     /**
      * Reads one block's direct child identifiers.
      *
-     * Cached identity is reused until this block's child array changes. Missing
-     * blocks share one empty snapshot so `useSyncExternalStore` can observe
-     * `getChildIds` without allocating a new array on every read.
+     * Cached identity is reused until this block's child array changes. Each
+     * placed block owns its own list, including when it has no children, so a
+     * caller cannot mutate one empty snapshot and poison every leaf.
      *
      * @param id - Parent block identifier to inspect.
      * @returns Child identifiers in collaborative order, or an empty list when absent.
      */
     getChildIds(id: string): string[] {
-        if (!this.findContainer(id)) return EMPTY_CHILD_IDS;
+        if (!this.findContainer(id)) return [];
         const value = this.storage.get(id);
-        return isCRDTMap(value) ? this.readCachedChildIds(value, id) : EMPTY_CHILD_IDS;
+        return isCRDTMap(value) ? this.readCachedChildIds(value, id) : [];
     }
 
     /**
@@ -932,8 +930,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     /**
      * Returns the cached direct-child identifier list, materializing when needed.
      *
-     * Empty lists reuse the module-level snapshot so every leaf shares one
-     * identity. Transactions skip the cache for the same reason as node reads.
+     * Empty child arrays are cached per parent like nonempty ones. Transactions
+     * skip the cache for the same reason as node reads.
      *
      * @param value - Stored block map already resolved by the caller.
      * @param id - Parent block identity whose child array is read.
@@ -945,9 +943,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             if (cached) return cached;
         }
         const ids = strings(this.requiredArray(value, "children"));
-        const snapshot = ids.length === 0 ? EMPTY_CHILD_IDS : ids;
-        if (!this.crdt.isTransacting) this.childIdsSnapshots.set(id, snapshot);
-        return snapshot;
+        if (!this.crdt.isTransacting) this.childIdsSnapshots.set(id, ids);
+        return ids;
     }
 
     /**

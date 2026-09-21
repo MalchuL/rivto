@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import type {
   EditorBlock as Block,
   EditorBlockInput as BlockInput,
@@ -57,14 +57,20 @@ export interface UseBlockChildrenResult {
  */
 export function useBlockChildren(blockId: string): UseBlockChildrenResult {
   const { reactEditor } = useEditorContext();
+  const snapshotRef = useRef<readonly string[]>([]);
   const subscribe = useCallback(
     (listener: () => void) => reactEditor.blocks.subscribeBlock(blockId, listener),
     [blockId, reactEditor],
   );
-  const getSnapshot = useCallback(
-    () => reactEditor.blocks.getChildIds(blockId),
-    [blockId, reactEditor],
-  );
+  const getSnapshot = useCallback(() => {
+    const next = reactEditor.blocks.getChildIds(blockId);
+    const prev = snapshotRef.current;
+    // Missing blocks return a fresh empty list. Reuse the previous snapshot when
+    // the IDs did not change so `useSyncExternalStore` does not loop.
+    if (prev.length === next.length && prev.every((id, index) => id === next[index])) return prev;
+    snapshotRef.current = next;
+    return next;
+  }, [blockId, reactEditor]);
   const children = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   const operations = useMemo<BlockChildrenOperations>(() => {

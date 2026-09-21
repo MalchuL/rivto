@@ -122,7 +122,7 @@ export interface DocumentBlockManagerApi {
   subscribeRootIds(listener: () => void): () => void;
   /** @param listener - Hierarchy callback. @returns Unsubscribe callback. */
   subscribeStructure(listener: () => void): () => void;
-  /** @param id - Parent block identifier. @returns Ordered direct-child identifiers. Identity is stable until this block's child array changes. */
+  /** @param id - Parent block identifier. @returns Ordered direct-child identifiers. Identity is stable for a placed block until its child array changes. */
   getChildIds(id: string): string[];
   /** @param id - Parent block identifier. @returns True when the block has at least one child. */
   hasChildren(id: string): boolean;
