@@ -88,7 +88,6 @@ interface TodoStorageContextValue {
 }
 
 const TodoStorageContext = createContext<TodoStorageContextValue | undefined>(undefined);
-const NO_CHILD_BLOCKS: EditorBlock[] = [];
 
 /** Shared vertical-container behavior used by keyboard and drag dispatchers. */
 export const todoStorageView = new ContainerBlockView();
@@ -160,7 +159,7 @@ function toggleFilter<T>(current: ReadonlySet<T>, value: T): ReadonlySet<T> {
 function TodoStorageState({ block, children }: BlockWrapperProps) {
   const reactEditor = useReactEditor();
   const { block: tree } = useBlock(block.id);
-  const childBlocks = tree?.children ?? NO_CHILD_BLOCKS;
+  const childBlocks = tree?.children ?? [];
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<TodoStorageFilters>({
     statuses: new Set(),

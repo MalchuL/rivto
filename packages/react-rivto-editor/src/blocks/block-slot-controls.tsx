@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { useReactEditor } from "../hooks";
+import { useBlockNode } from "../hooks";
 import type { BlockSlotProps } from "../managers";
 
 const LIST_CHECKBOX_CLASS = "page-list-checkbox";
@@ -21,7 +21,7 @@ const COLLAPSE_TOGGLE_CLASS = "page-collapse-toggle";
  * @returns Interactive checkbox, numeric marker, or nothing for ordinary lists.
  */
 export function BlockListSlot({ block }: BlockSlotProps) {
-  const reactEditor = useReactEditor();
+  const { operations } = useBlockNode(block.id);
 
   if (block.listProps.type === "checkbox") {
     return (
@@ -31,7 +31,7 @@ export function BlockListSlot({ block }: BlockSlotProps) {
         aria-label={`Mark block as ${block.listProps.checked ? "incomplete" : "complete"}: ${block.content || block.type}`}
         checked={block.listProps.checked === true}
         onPointerDown={(event) => event.stopPropagation()}
-        onChange={(event) => reactEditor.blocks.updateBlock(block.id, { listProps: { checked: event.currentTarget.checked } })}
+        onChange={(event) => operations.update({ listProps: { checked: event.currentTarget.checked } })}
       />
     );
   }
@@ -51,7 +51,7 @@ export function BlockListSlot({ block }: BlockSlotProps) {
  * @returns Collapse toggle for a branch block, otherwise nothing.
  */
 export function BlockCollapseSlot({ block }: BlockSlotProps) {
-  const reactEditor = useReactEditor();
+  const { operations } = useBlockNode(block.id);
   if (!block.childIds.length) return null;
   const childrenId = `block-children-${block.id}`;
   return (
@@ -66,7 +66,7 @@ export function BlockCollapseSlot({ block }: BlockSlotProps) {
         event.preventDefault();
         event.stopPropagation();
       }}
-      onClick={() => reactEditor.blocks.updateBlock(block.id, { listProps: { collapsed: block.listProps.collapsed !== true } })}
+      onClick={() => operations.update({ listProps: { collapsed: block.listProps.collapsed !== true } })}
     >
       {block.listProps.collapsed === true ? "▸" : "▾"}
     </button>

@@ -1,7 +1,7 @@
 /**
  * Stores first-class canvas elements in adapter-neutral collaborative maps.
- * The manager validates portable records, maintains detached snapshot caches,
- * and exposes the element scopes tracked by history.
+ * The manager validates portable records, observes changes, delegates snapshot
+ * caching, and exposes the element scopes tracked by history.
  */
 import type { CRDTDoc, CRDTType, CRDTMap, CRDTUndoScope } from "@chulane/crdt-doc";
 import type {
@@ -20,6 +20,7 @@ import {
   normalizeElementZIndex,
   validateElementCollection,
 } from "./utils";
+import { ElementCache } from "./cache";
 
 const ELEMENTS_KEY = "rivto.editor.elements";
 /**
@@ -34,12 +35,13 @@ export class DocumentElementManager implements DocumentElementManagerApi {
   private readonly storage: CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>;
   /** Adapter roots tracked by document-owned history. */
   readonly historyScopes: readonly CRDTUndoScope[];
-  /** Stable element snapshots invalidated by observed record changes. */
-  private readonly snapshots = new Map<IDElement, DocumentElement>();
-  /** Stable complete collection invalidated by any element change. */
-  private elementsSnapshot?: DocumentElement[];
+  /** Detached element and collection snapshot identities. */
+  private readonly cache = new ElementCache();
+  /** Subscribers to any element record or collection change. */
   private readonly listeners = new Set<() => void>();
+  /** Subscribers to element insertion or deletion. */
   private readonly membershipListeners = new Set<() => void>();
+  /** Subscribers to individual element records. */
   private readonly elementListeners = new Map<IDElement, Set<() => void>>();
 
   /**
@@ -61,11 +63,8 @@ export class DocumentElementManager implements DocumentElementManagerApi {
           keys.forEach((key) => changedIds.add(key));
         }
       });
-      changedIds.forEach((id) => {
-        this.snapshots.delete(id);
-        this.emit(this.elementListeners.get(id));
-      });
-      this.elementsSnapshot = undefined;
+      this.cache.invalidate(changedIds);
+      changedIds.forEach((id) => this.emit(this.elementListeners.get(id)));
       this.emit(this.listeners);
       if (membershipChanged) this.emit(this.membershipListeners);
     });
@@ -88,12 +87,10 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Detached element, or undefined when absent.
    */
   getElement(id: string): DocumentElement | undefined {
-    const cached = this.crdt.isTransacting ? undefined : this.snapshots.get(id);
-    if (cached) return cached;
-    const value = this.storage.get(id);
-    const snapshot = isCRDTMap(value) ? this.read(value) : undefined;
-    if (snapshot && !this.crdt.isTransacting) this.snapshots.set(id, snapshot);
-    return snapshot;
+    return this.cache.readElement(id, this.crdt.isTransacting, () => {
+      const value = this.storage.get(id);
+      return isCRDTMap(value) ? this.read(value) : undefined;
+    });
   }
 
   /**
@@ -102,17 +99,10 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Every detached element in collaborative map iteration order.
    */
   getElements(): DocumentElement[] {
-    if (this.crdt.isTransacting) {
-      return [...this.storage.keys()].flatMap((id) => {
-        const element = this.getElement(id);
-        return element ? [element] : [];
-      });
-    }
-    this.elementsSnapshot ??= [...this.storage.keys()].flatMap((id) => {
+    return this.cache.readCollection(this.crdt.isTransacting, () => [...this.storage.keys()].flatMap((id) => {
       const element = this.getElement(id);
       return element ? [element] : [];
-    });
-    return this.elementsSnapshot;
+    }));
   }
 
   /**
@@ -158,6 +148,15 @@ export class DocumentElementManager implements DocumentElementManagerApi {
   }
 
   /**
+   * Publishes to a stable listener snapshot so callbacks may unsubscribe safely.
+   * @param listeners - Subscribers for one change channel.
+   * @returns No value.
+   */
+  private emit(listeners: ReadonlySet<() => void> | undefined): void {
+    if (listeners) [...listeners].forEach((listener) => listener());
+  }
+
+  /**
    * Creates the element ID map used by an immediate import.
    *
    * Available source IDs survive cut/paste. IDs already present in this
@@ -180,16 +179,6 @@ export class DocumentElementManager implements DocumentElementManagerApi {
       assigned.add(id);
       return [sourceId, id];
     }));
-  }
-
-  /**
-   * Calls a stable listener snapshot when the optional set exists.
-   *
-   * @param listeners - Optional callbacks to invoke once.
-   * @returns No value.
-   */
-  private emit(listeners: ReadonlySet<() => void> | undefined): void {
-    if (listeners) [...listeners].forEach((listener) => listener());
   }
 
   /**

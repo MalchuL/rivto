@@ -124,6 +124,33 @@ describe("document reactivity", () => {
     void doc.destroy();
   });
 
+  test("rebuilds duplicate placements in root tree order", () => {
+    const doc = new YjsDoc("duplicate-placement-index");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({
+      id: "parent",
+      type: "paragraph",
+      children: [{ id: "child", type: "paragraph" }],
+    });
+    expect(model.blocks.getParentId("child")).toBe("parent");
+    const roots = doc.doc.getArray<string>("rivto.editor.roots");
+    // Keep this malformed local placement long enough to exercise the cache;
+    // foreign writes are normalized by the document model after each update.
+    doc.transact(() => roots.push(["child"]));
+    expect(roots.toArray()).toEqual(["parent", "child"]);
+    expect(model.blocks.getParentId("child")).toBe("parent");
+
+    doc.transact(() => {
+      roots.delete(0, 1);
+      roots.push(["parent"]);
+    });
+    expect(model.blocks.getParentId("child")).toBeNull();
+
+    doc.transact(() => roots.delete(0, 1));
+    expect(model.blocks.getParentId("child")).toBe("parent");
+    void doc.destroy();
+  });
+
   test("keeps the materialized tree consistent when a listener reads mid-invalidation", () => {
     const doc = new YjsDoc("nested-move-reactivity");
     const model = new DocumentModelImpl(doc);
