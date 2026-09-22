@@ -1,5 +1,5 @@
 export { clone } from "./clone";
-export { assignMap, assignText, isCRDTArray, isCRDTMap, isCRDTText } from "./crdt";
+export { assignArray, assignMap, assignText, isCRDTArray, isCRDTMap, isCRDTText } from "./crdt";
 export {
   assertPortableRecord,
   assertPortableValue,

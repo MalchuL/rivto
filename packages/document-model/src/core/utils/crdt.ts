@@ -63,3 +63,21 @@ export function assignText(text: CRDTText, content: string): void {
     if (text.length) text.delete(0, text.length);
     if (content) text.insert(0, content);
 }
+
+/**
+ * Copies portable array items into a shared array.
+ * Values are stored as plain objects without CRDT wrapping (changing values doesn't trigger CRDT updates).
+ *
+ * @param array - Collaborative array receiving portable values.
+ * @param values - Ordered portable items to copy.
+ * @param clear - Whether to remove existing items before insertion.
+ * @returns No value.
+ */
+export function assignArray<Item extends CRDTType>(
+    array: CRDTArray<Item>,
+    values: readonly Item[],
+    clear = true,
+): void {
+    if (clear) array.delete(0, array.length);
+    if (values.length) array.insert(clear ? 0 : array.length, ...values);
+}
