@@ -314,6 +314,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * @returns True when the block exists and its child list is nonempty.
      */
     hasChildren(id: string): boolean {
+        if (!this.isPlaced(id)) return false;
         const value = this.storage.get(id);
         return isCRDTMap(value) && this.requiredArray(value, "children").length > 0;
     }

@@ -10,7 +10,7 @@ import * as Y from "yjs";
 import { DocumentModelImpl } from "../document-model";
 
 describe("document reactivity", () => {
-  test("checks child presence directly in stored records", () => {
+  test("checks child presence for placed blocks", () => {
     const doc = new YjsDoc("has-children-reactivity");
     const model = new DocumentModelImpl(doc);
 
@@ -26,6 +26,22 @@ describe("document reactivity", () => {
     });
     expect(model.blocks.hasChildren("parent")).toBe(true);
     model.blocks.removeBlock("child");
+    expect(model.blocks.hasChildren("parent")).toBe(false);
+    void doc.destroy();
+  });
+
+  test("does not report children for an unplaced block record", () => {
+    const doc = new YjsDoc("unplaced-parent-children");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({
+      id: "parent",
+      type: "paragraph",
+      children: [{ id: "child", type: "paragraph" }],
+    });
+
+    doc.transact(() => doc.doc.getArray<string>("rivto.editor.roots").delete(0, 1));
+
+    expect(model.blocks.getBlockNode("parent")).toBeUndefined();
     expect(model.blocks.hasChildren("parent")).toBe(false);
     void doc.destroy();
   });
