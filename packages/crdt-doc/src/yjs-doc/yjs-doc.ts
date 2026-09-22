@@ -134,6 +134,23 @@ export class YjsDoc implements CRDTDoc {
     }
 
     /**
+     * Subscribes to Yjs `beforeObserverCalls`.
+     *
+     * The document already contains the transaction's integrated values, and
+     * shared-type observers have not run yet.
+     *
+     * @param handler - Receives the Yjs transaction origin.
+     * @returns Function that removes this subscription.
+     */
+    onBeforeObservers(handler: (origin: unknown) => void): Unsubscribe {
+        const wrapped = (transaction: { origin: unknown }): void => {
+            handler(transaction.origin);
+        };
+        this.doc.on("beforeObserverCalls", wrapped);
+        return () => { this.doc.off("beforeObserverCalls", wrapped); };
+    }
+
+    /**
      * Gets a snapshot of the YjsDoc.
      * @returns The snapshot.
      */

@@ -1,11 +1,31 @@
 /**
- * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ * Page collapse controls, shortcuts, and optional session-local presentation.
+ *
+ * Collapse state is stored in `listProps.collapsed` and always replicates.
+ * When `syncView` is false, this editor keeps the expand/collapse state from
+ * load plus its own edits until the page is reloaded. Navigation and rendering
+ * read that session value through the core block manager.
+ *
+ * @module
  */
 import { BlockCollapseSlot } from "../../../../blocks/block-slot-controls";
 import type { ReactEditor } from "../../../../types";
 import { reconcileCollapsedSelection } from "../navigation";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../managers";
 import { collapseTargets } from "./utils";
+
+/**
+ * Controls whether this editor follows remote collapse changes immediately.
+ */
+export interface CollapseExtensionOptions {
+  /**
+   * When `false`, `listProps.collapsed` still replicates, but this editor
+   * keeps each block's expand/collapse state from when the block was loaded.
+   * Local edits and undo/redo update the view. Reloading the page reads the
+   * replicated value. Defaults to `true`.
+   */
+  readonly syncView?: boolean;
+}
 
 /**
  * Installs outliner collapse shortcuts and repairs selections after any
@@ -16,9 +36,13 @@ import { collapseTargets } from "./utils";
  * atomic block-update command rather than producing one undo item per block.
  *
  * @param reactEditor - Runtime receiving collapse state and keyboard registrations.
+ * @param options - Whether remote collapse changes move this editor immediately.
  * @returns Cleanup for document and selection reconciliation subscriptions.
  */
-export function registerCollapse(reactEditor: ReactEditor): () => void {
+export function registerCollapse(
+  reactEditor: ReactEditor,
+  options: CollapseExtensionOptions = {},
+): () => void {
   const { editor } = reactEditor;
   reactEditor.blocks.registerListProps({
     id: "collapse",
@@ -84,8 +108,15 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
   }, () => setCollapsed("toggle"));
 
+  // Pin after the other registrations so a setup failure does not leave a
+  // session view attached to an editor whose collapse extension did not finish.
+  const releasePin = options.syncView === false
+    ? editor.blocks.pinListProp("collapsed")
+    : undefined;
+
   return () => {
     unsubscribeSelection();
     unsubscribeDocument();
+    releasePin?.();
   };
 }

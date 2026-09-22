@@ -207,6 +207,26 @@ export class DocumentBlockManager {
     }
 
     /**
+     * Reads one boolean list property from live storage for every block.
+     *
+     * The detached snapshot cache is skipped. A caller running before observer
+     * publication therefore sees values already integrated by the active
+     * transaction, instead of the snapshot those observers are about to drop.
+     *
+     * @param key - List-property name to read.
+     * @returns Each stored block id mapped to whether its value is strictly `true`.
+     */
+    readListPropFlags(key: string): Map<string, boolean> {
+        const flags = new Map<string, boolean>();
+        for (const id of this.storage.keys()) {
+            const value = this.storage.get(id);
+            if (!isCRDTMap(value)) continue;
+            flags.set(id, this.requiredMap(value, "listProps").get(key) === true);
+        }
+        return flags;
+    }
+
+    /**
      * Reads root identifiers without materializing block records.
      *
      * @returns Root identifiers in collaborative array order.

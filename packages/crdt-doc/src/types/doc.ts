@@ -73,6 +73,20 @@ export interface CRDTDoc extends Serializible {
     on(event: 'update' | 'sync', handler: (event: any) => void): Unsubscribe;
 
     /**
+     * Subscribes to a transaction after its writes are integrated and before
+     * container observers run.
+     *
+     * Session views use this moment to record replicated values before React
+     * and other listeners read freshly invalidated snapshots.
+     *
+     * @param handler - Receives the transaction origin. Local editor writes use
+     * the document origin. Remote provider writes use the provider, or `null`
+     * when the update was applied without one.
+     * @returns Function that removes this subscription.
+     */
+    onBeforeObservers(handler: (origin: unknown) => void): Unsubscribe;
+
+    /**
      * Get a serializable snapshot of the document state.
      */
     getSnapshot(): any;

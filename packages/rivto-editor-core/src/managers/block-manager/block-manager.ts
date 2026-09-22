@@ -23,6 +23,7 @@ import type {
 } from "../../editor/model";
 import type { RivtoEditorApi } from "../../editor/types";
 import { commandPayload, commandString } from "../utils";
+import { PinnedListProps } from "./pinned-list-props";
 
 /** Result of importing a detached block forest into one editor. */
 export interface ImportedBlockForest {
@@ -42,6 +43,8 @@ export interface ImportedBlockForest {
  */
 export class BlockManager {
   private readonly registrations: RegisteredCommand[] = [];
+  /** Session view for list-property flags that should not follow remote updates. */
+  private readonly pinnedListProps: PinnedListProps;
 
   /**
    * Creates the public block manager and installs its built-in commands.
@@ -49,6 +52,7 @@ export class BlockManager {
    * @param editor - Owning editor interface providing document and runtime capabilities.
    */
   constructor(private readonly editor: RivtoEditorApi) {
+    this.pinnedListProps = new PinnedListProps(editor);
     this.registerRequiredCommands();
   }
 
@@ -58,20 +62,45 @@ export class BlockManager {
   /**
    * Resolves one placed block by its stable identifier.
    *
+   * Pinned list-property flags are reported from this editor session. The
+   * document snapshot still carries the replicated value.
+   *
    * @param id - Persisted block identifier to resolve.
    * @returns Detached block subtree, or undefined when absent.
    */
   getBlock(id: string): EditorBlock | undefined {
-    return this.editor.document.blocks.getBlock(id) satisfies EditorBlock | undefined;
+    const block = this.editor.document.blocks.getBlock(id) satisfies EditorBlock | undefined;
+    return block ? this.pinnedListProps.project(block) : undefined;
   }
 
   /**
    * Materializes the complete ordered root block tree.
    *
+   * Pinned list-property flags match `getBlock`. The returned array is the
+   * document's array when nothing is pinned.
+   *
    * @returns Detached root blocks with recursively materialized children.
    */
   getBlocks(): EditorBlock[] {
-    return this.editor.document.blocks.getBlocks() satisfies EditorBlock[];
+    const blocks = this.editor.document.blocks.getBlocks() satisfies EditorBlock[];
+    return this.pinnedListProps.active ? blocks.map((block) => this.pinnedListProps.project(block)) : blocks;
+  }
+
+  /**
+   * Pins a boolean list property to this editor session.
+   *
+   * The key still replicates. Editor reads keep the value first observed for
+   * each block, then follow this editor's writes and its undo/redo. Remote
+   * updates stay in the document until a new editor session reads them, which
+   * is what a page reload does. Releasing the pin makes the next read return
+   * the replicated value.
+   *
+   * @param key - List-property name to pin, such as `collapsed`.
+   * @returns Disposer that restores live reads for the key.
+   * @throws {Error} When `key` is empty or already pinned.
+   */
+  pinListProp(key: string): () => void {
+    return this.pinnedListProps.pin(key);
   }
 
   /**
@@ -360,11 +389,27 @@ export class BlockManager {
   }
 
   /**
+   * Records a local list-property write on any pinned key.
+   *
+   * @param id - Block updated by the local command.
+   * @param listProps - List-property fields included in that command.
+   * @returns No value.
+   */
+  private holdPinnedListProps(id: string, listProps: BlockPatch["listProps"]): void {
+    if (!listProps || !this.pinnedListProps.active) return;
+    for (const [key, value] of Object.entries(listProps)) {
+      if (value === undefined) continue;
+      this.pinnedListProps.holdLocal(key, id, value === true);
+    }
+  }
+
+  /**
    * Releases the built-in block command registrations.
    *
    * @returns No value.
    */
   destroy(): void {
+    this.pinnedListProps.destroy();
     this.registrations.splice(0).reverse().forEach((registration) => registration.dispose());
   }
 
@@ -396,18 +441,23 @@ export class BlockManager {
     }));
     register("block.update", (value) => {
       const data = commandPayload(value) as unknown as { id: string; patch: BlockPatch };
-      this.editor.document.blocks.updateBlock(commandString(data.id, "id"), commandPayload(data.patch) as BlockPatch);
+      const id = commandString(data.id, "id");
+      const patch = commandPayload(data.patch) as BlockPatch;
+      this.editor.document.blocks.updateBlock(id, patch);
+      this.holdPinnedListProps(id, patch.listProps);
     });
     register("block.update-many", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { updates: readonly BlockUpdate[] };
       if (!Array.isArray(data.updates)) throw new Error("updates must be an array");
-      this.editor.document.blocks.updateBlocks(data.updates.map((item) => {
+      const updates = data.updates.map((item) => {
         const update = commandPayload(item);
         return {
           id: commandString(update.id, "id"),
           patch: commandPayload(update.patch) as BlockPatch,
         };
-      }));
+      });
+      this.editor.document.blocks.updateBlocks(updates);
+      updates.forEach((update) => this.holdPinnedListProps(update.id, update.patch.listProps));
     }));
     register("block.clear", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { id: string };

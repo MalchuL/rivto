@@ -24,7 +24,7 @@ import { registerBlockMerge } from "./page/block-merge";
 import { registerBlockOutdent } from "./page/block-outdent";
 import { registerEmptyBlockReset } from "./page/empty-block-reset";
 import { registerBlockSelection } from "./selection/block-selection";
-import { registerCollapse } from "./page/collapse";
+import { registerCollapse, type CollapseExtensionOptions } from "./page/collapse";
 import { registerBlockCreation } from "./page/block-creation";
 import { SlashMenu } from "./slash/slash-menu";
 import { registerSelectionDeletion } from "./selection/selection-deletion";
@@ -183,10 +183,23 @@ export const indentExtension = (options: IndentExtensionOptions = {}): ReactEdit
   };
 };
 
-/** @returns Shared persisted collapse controls and keyboard actions. */
-export const collapseExtension = (): ReactEditorExtension => ({
+export type { CollapseExtensionOptions } from "./page/collapse";
+
+/**
+ * Installs shared persisted collapse controls and keyboard actions.
+ *
+ * `syncView: false` keeps this editor's expand/collapse presentation stable
+ * across remote updates. The property itself still replicates and is read
+ * again when the page reloads.
+ *
+ * @param options - Whether this editor follows remote collapse immediately.
+ * @returns The collapse extension.
+ */
+export const collapseExtension = (
+  options: CollapseExtensionOptions = {},
+): ReactEditorExtension => ({
   id: "block.collapse",
-  setup: registerCollapse,
+  setup: (reactEditor) => registerCollapse(reactEditor, options),
 });
 
 /**
@@ -330,6 +343,11 @@ export interface StandardPresetOptions {
   readonly trailingBlockCount?: number;
   /** Host overrides for the default writing block extension. */
   readonly writing?: DefaultWritingBlockOptions;
+  /**
+   * Collapse presentation. Set `syncView: false` to keep this editor's
+   * expand/collapse state stable until reload while the property still replicates.
+   */
+  readonly collapse?: CollapseExtensionOptions;
 }
 
 /**
@@ -338,7 +356,7 @@ export interface StandardPresetOptions {
  * Installs `defaultWritingBlockExtension` first so writing factories exist
  * before separator, clipboard, Enter, and related paths run.
  *
- * @param options - Trailing-block count and optional writing overrides.
+ * @param options - Trailing-block count, writing overrides, and collapse sync.
  * @returns The standard page extension preset without optional drag or canvas features.
  */
 export const standardPreset = (
@@ -356,7 +374,7 @@ export const standardPreset = (
     listShortcutsExtension(),
     clipboardExtension({ onBlockError: createErrorBlockInput }),
     blockSelectionExtension(),
-    collapseExtension(),
+    collapseExtension(options.collapse),
     caretNavigationExtension(),
     blockSelectionNavigationExtension(),
     keyboardBlockMoveExtension(),
