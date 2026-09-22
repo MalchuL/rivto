@@ -49,5 +49,5 @@ export interface ResolvedSelection {
    * - `{ id: "jumps_over", start: 0, end: 11 }`
    * - `{ id: "the_lazy_dog", start: 0, end: 8 }`
    */
-  startsWithText: boolean;
+  fromTextSelection: boolean;
 }

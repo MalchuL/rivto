@@ -56,7 +56,7 @@ export class TextPasteStrategy implements PasteStrategy {
    */
   paste(context: PasteContext, placement: PastePlacement): PasteResult | undefined {
     const range = textRangeFromSelection(this.editor, context.selection);
-    if (context.bundle?.blocks.length && range && context.bundle.startsWithText === true
+    if (context.bundle?.blocks.length && range && context.bundle.fromTextSelection === true
       && placement.mergeText !== false
     ) return this.pasteBundle(context.bundle, range, context.onPrepareError);
     const caret = this.pastePlainText(context, placement, range);

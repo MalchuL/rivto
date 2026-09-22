@@ -8,6 +8,9 @@ import type { Selection } from "../selection-manager";
 import type { Block, DocumentElement } from "@chulane/document-model";
 import type { BlockPrepareErrorHandler } from "../block-manager/types";
 
+/** Clipboard schema version, independent from document snapshot versions. */
+export const CLIPBOARD_BUNDLE_VERSION = 4 as const;
+
 /**
  * Lossless Rivto clipboard representation.
  *
@@ -17,9 +20,9 @@ import type { BlockPrepareErrorHandler } from "../block-manager/types";
  */
 export interface ClipboardBundle {
   /** Clipboard schema version, independent from document snapshot versions. */
-  version: 4;
-  /** Whether copied content begins with partial text; omission denotes structural blocks. */
-  startsWithText?: boolean;
+  version: typeof CLIPBOARD_BUNDLE_VERSION;
+  /** Whether copied content originates from text/caret selection; omission denotes structural blocks. */
+  fromTextSelection?: boolean;
   /** Selected block subtrees preserving native types, props, and plugin data. */
   blocks: Block[];
   /** Optional first-class canvas elements contributed by an edgeless host. */
@@ -62,7 +65,7 @@ export interface BlockPastePlacement {
    */
   readonly parentId?: string | null;
   /**
-   * Whether a `startsWithText` bundle may merge into the selected text range.
+   * Whether a `fromTextSelection` bundle may merge into the selected text range.
    * Omitted or true merges; false inserts the forest as blocks.
    */
   readonly mergeText?: boolean;

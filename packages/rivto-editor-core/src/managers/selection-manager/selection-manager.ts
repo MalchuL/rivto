@@ -91,13 +91,13 @@ export class SelectionManager implements SelectionManagerApi {
     }));
     // Classify from stored sentinels. Resolved ranges always use concrete
     // lengths, so `{ start: 0, end: -1 }` would look like a full-text range.
-    const startsWithText = !isStructuralSelection(selection);
+    const fromTextSelection = !isStructuralSelection(selection);
     return {
       start: { blockId: first.block.id, offset: first.range.startOffset },
       end: { blockId: last.block.id, offset: last.range.endOffset },
       blocks: members.map(({ block }) => block),
       ranges,
-      startsWithText,
+      fromTextSelection,
     };
   }
 
