@@ -8,7 +8,18 @@
  * extension owns. Chrome the extension renders itself (column header, add
  * controls, collapsed summary) is styled with Tailwind utilities in
  * `kanban.tsx`; only rules needing structural or `:has()` selectors live here.
+ * Public Kanban defaults are declared here for host overrides.
  */
+:root {
+  --rivto-kanban-board-background: linear-gradient(125deg, #e9eefc, #e8f4f5);
+  --rivto-kanban-lane-background: #f1f2f4;
+  --rivto-kanban-card-foreground: #172b4d;
+  --rivto-kanban-card-hover-border: #85b8ff;
+  --rivto-kanban-drag-background: #dce6f5;
+  --rivto-kanban-muted-foreground: #626f86;
+  --rivto-kanban-accent: #0c66e4;
+}
+
 [data-block-type="kanban"] {
   min-width: 0;
   max-width: 100%;

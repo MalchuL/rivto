@@ -8,6 +8,12 @@
  * They depend on structural selectors (`:has()`, descendant state, pseudo
  * elements) that cannot be expressed as per-element utilities.
  */
+:root {
+  /* Keep selection darker than the subtle hover tint. */
+  --rivto-block-selection-background: #e5dfff;
+  --rivto-block-selection-outline: #cfc4ff;
+}
+
 .page-block {
   margin: 4px 0;
   padding: 2px 8px;

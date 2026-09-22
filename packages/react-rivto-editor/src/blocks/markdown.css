@@ -5,7 +5,22 @@
  * elements the package does not author (`code`, `a`, highlight.js tokens).
  * The code editor overlays a transparent contenteditable on top of the
  * highlighted preview; both must share exact geometry.
+ * Public code and link defaults are declared here for host overrides.
  */
+:root {
+  --rivto-code-border: #dedede;
+  --rivto-code-background: #f6f7f8;
+  --rivto-code-label-color: #555555;
+  --rivto-code-language-color: #777777;
+  --rivto-code-scrollbar: #aaaaaa;
+  --rivto-code-keyword: #a626a4;
+  --rivto-code-string: #50a14f;
+  --rivto-code-number: #986801;
+  --rivto-code-title: #4078f2;
+  --rivto-code-comment: #7f848e;
+  --rivto-link-color: #5b4bd8;
+}
+
 .markdown-content {
   position: relative;
   min-height: var(--rivto-default-block-height);

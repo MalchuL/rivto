@@ -13,7 +13,7 @@
  * rules live here. Chrome such as toolbars, popovers, and property panels is
  * Tailwind-styled in `components/`; only the mixed-color swatch checkerboard
  * stays here because its layered gradient cannot be written as a utility.
- * Colors reference the `--rivto-*` tokens declared in `styles/tokens.css`.
+ * Colors reference shared and edgeless `--rivto-*` tokens.
  */
 .edgeless-visual-layer {
   display: contents;

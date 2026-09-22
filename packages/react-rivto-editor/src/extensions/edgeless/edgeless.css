@@ -10,6 +10,18 @@
  * elements can express. Toolbars, zoom controls, popovers, and property panels
  * are Tailwind-styled in their components under `visuals/components/`.
  */
+:root {
+  --rivto-edgeless-background: #f7f6fa;
+  --rivto-edgeless-grid-dot: #c8c3d3;
+  --rivto-edgeless-grid-dot-strong: #81798f;
+  --rivto-edgeless-snap-guide: #ef3f87;
+  --rivto-edgeless-chrome-shadow: 0 8px 24px rgb(42 34 72 / 12%);
+  --rivto-edgeless-panel-shadow: 0 12px 32px rgb(42 34 72 / 14%);
+  --rivto-edgeless-panel-divider: #ece8f2;
+  --rivto-edgeless-panel-header: linear-gradient(180deg, #faf8ff 0%, #ffffff 100%);
+  --rivto-edgeless-sticker-shadow: 0 6px 14px rgb(35 30 20 / 14%);
+}
+
 .edgeless-viewport {
   /* Public host override for the cursor-reactive dot field. */
   --rivto-edgeless-spotlight-radius: 90px;

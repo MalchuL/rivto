@@ -8,6 +8,10 @@
  * Chrome the extension renders itself (collapsed summary) is styled with
  * Tailwind utilities in `bento.tsx`.
  */
+:root {
+  --rivto-bento-background: #f4f5f7;
+}
+
 
 /* Bento widths are fixed: tiles keep their preferred size and wrap instead of growing. */
 [data-block-type="bento"] > .page-block-children {

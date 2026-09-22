@@ -7,8 +7,26 @@
  * text, storage card chrome applied to the shared block tree's `.page-block`
  * and `.page-block-children`, hover and drop feedback that depends on
  * `:has()` over sibling structure, and the empty-storage minimum height.
- * Colors reference the `--rivto-todo-*` tokens declared in `tokens.css`.
+ * Public TODO color defaults are declared here for host overrides.
  */
+:root {
+  --rivto-todo-accent: #1971c2;
+  --rivto-todo-focus: #74c0fc;
+  --rivto-todo-done: #2f9e44;
+  --rivto-todo-foreground: #212529;
+  --rivto-todo-muted-foreground: #495057;
+  --rivto-todo-item-border: #e9ecef;
+  --rivto-todo-control-border: #ced4da;
+  --rivto-todo-control-border-strong: #adb5bd;
+  --rivto-todo-chip: #f1f3f5;
+  --rivto-todo-chip-foreground: #6c757d;
+  --rivto-todo-storage-border: #dee2e6;
+  --rivto-todo-storage-background: #f8f9fa;
+  --rivto-todo-priority-1: #fff0f0;
+  --rivto-todo-priority-2: #fff9db;
+  --rivto-todo-priority-3: #edf2ff;
+}
+
 .rivto-todo-prompt {
   color: var(--rivto-todo-accent);
   font-weight: 700;
