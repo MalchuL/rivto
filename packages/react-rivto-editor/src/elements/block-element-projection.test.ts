@@ -88,7 +88,7 @@ describe("edgeless block element reconciliation", () => {
 
     editor.history.undo();
     await Promise.resolve();
-    expect(editor.blocks.getBlock(separator)).toBeUndefined();
+    expect(editor.blocks.hasBlock(separator)).toBe(false);
     expect(ranges(editor)).toEqual([[first, last]]);
     reactEditor.destroy();
     editor.destroy();

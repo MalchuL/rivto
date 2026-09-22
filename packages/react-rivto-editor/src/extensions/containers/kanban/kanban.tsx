@@ -5,7 +5,7 @@
  * The shared block tree and drag extension render and move every card in both modes.
  * @module
  */
-import { useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { BlockWrapperProps } from "../../../blocks";
 import type { EditorBlockInput } from "@chulane/rivto";
@@ -43,6 +43,35 @@ export function createKanbanBlockInput(): EditorBlockInput {
 }
 
 /**
+ * Reads column and nested card counts after hierarchy changes without
+ * materializing the board tree or waking for text edits.
+ *
+ * @param boardId - Persisted kanban identifier.
+ * @returns Direct column count and the sum of cards in those columns.
+ */
+function useKanbanCounts(boardId: string): { readonly columnCount: number; readonly cardCount: number } {
+  const reactEditor = useReactEditor();
+  const subscribe = useCallback(
+    (listener: () => void) => reactEditor.blocks.subscribeStructure(listener),
+    [reactEditor],
+  );
+  const getSnapshot = useCallback(() => {
+    const columnIds = reactEditor.blocks.getBlockNode(boardId)?.childIds ?? [];
+    let cardCount = 0;
+    columnIds.forEach((columnId) => {
+      cardCount += (reactEditor.blocks.getBlockNode(columnId)?.childIds.length ?? 0);
+    });
+    return `${columnIds.length}:${cardCount}`;
+  }, [boardId, reactEditor]);
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const separator = snapshot.indexOf(":");
+  return {
+    columnCount: Number(snapshot.slice(0, separator)),
+    cardCount: Number(snapshot.slice(separator + 1)),
+  };
+}
+
+/**
  * Renders the contentless board header; the shared tree renders its columns.
  * The add-column control lives in the lane container and is omitted while collapsed.
  * @param props - Identity of the persisted board.
@@ -51,12 +80,11 @@ export function createKanbanBlockInput(): EditorBlockInput {
 export function Kanban({ blockId }: { readonly blockId: string }) {
   const reactEditor = useReactEditor();
   const editing = useBlockEditing(blockId, { textEdit: false });
+  const { columnCount, cardCount } = useKanbanCounts(blockId);
   const block = editing.block;
   const title = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState<HTMLElement | null>(null);
   const collapsed = block?.listProps.collapsed === true;
-  const columnCount = block?.children.length ?? 0;
-  const cardCount = block?.children.reduce((count, column) => count + column.children.length, 0) ?? 0;
   // The shared tree owns the lane container. A portal adds chrome without
   // persisting a fake column or mounting duplicate blocks and drag targets.
   // Collapse unmounts that container, so the button must not fall back into
@@ -99,6 +127,7 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
  */
 function KanbanColumn({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId);
+  const cardCount = editing.block?.childIds.length ?? 0;
   const reactEditor = useReactEditor();
   /**
    * Appends an editable card in one undo step and places the caret inside it.
@@ -119,8 +148,8 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
   return (
     <div className={COLUMN_HEADER_CLASS}>
       <div className={COLUMN_TITLE_CLASS} {...editing.attributes} aria-label="Kanban column title" />
-      <span className={COLUMN_COUNT_CLASS} aria-label={`${editing.block?.children.length ?? 0} cards`}>
-        {editing.block?.children.length ?? 0}
+      <span className={COLUMN_COUNT_CLASS} aria-label={`${cardCount} cards`}>
+        {cardCount}
       </span>
       {editing.block?.listProps.collapsed !== true && (
         // Collapse hides cards; keep the header compact without a dangling add control.
@@ -178,7 +207,7 @@ export function kanbanExtension(): ReactEditorExtension {
           title: "Kanban",
           group: "Turn into",
           keywords: ["board", "cards", "tasks"],
-          isAvailable: ({ blockId }) => reactEditor.blocks.getBlock(blockId)?.children.length === 0,
+          isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId),
           execute: ({ blockId }) => {
             convertLeafToContainer(reactEditor, blockId, createKanbanBlockInput());
           },

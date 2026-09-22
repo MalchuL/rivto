@@ -89,6 +89,16 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
+   * Reports whether the document contains one block record.
+   *
+   * @param id - Persisted block identifier to inspect.
+   * @returns True when the block exists.
+   */
+  hasBlock(id: string): boolean {
+    return this.document.blocks.hasBlock(id);
+  }
+
+  /**
    * Resolves one placed block by its stable identifier.
    *
    * @param id - Persisted block identifier to resolve.
@@ -96,6 +106,16 @@ export class BlockManager implements BlockManagerApi {
    */
   getBlock(id: string): EditorBlock | undefined {
     return this.document.blocks.getBlock(id) satisfies EditorBlock | undefined;
+  }
+
+  /**
+   * Resolves one placed block without recursively materializing descendants.
+   *
+   * @param id - Persisted block identifier to resolve.
+   * @returns Detached non-recursive block fields, or undefined when absent.
+   */
+  getBlockNode(id: string): EditorBlockNode | undefined {
+    return this.document.blocks.getBlockNode(id) satisfies EditorBlockNode | undefined;
   }
 
   /**
@@ -125,6 +145,16 @@ export class BlockManager implements BlockManagerApi {
    */
   subscribeBlock(id: string, listener: () => void): () => void {
     return this.subscribe(listener, (document) => document.blocks.subscribeBlock(id, listener));
+  }
+
+  /**
+   * Subscribes to one block's own fields and direct child IDs.
+   * @param id - Block identifier to observe.
+   * @param listener - Callback invoked after relevant changes.
+   * @returns Function that removes the subscription.
+   */
+  subscribeBlockNode(id: string, listener: () => void): () => void {
+    return this.subscribe(listener, (document) => document.blocks.subscribeBlockNode(id, listener));
   }
 
   /**
@@ -240,13 +270,13 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
-   * Reads one block's direct child identifiers.
+   * Reports whether one placed block currently has direct children.
    *
-   * @param id - Parent block identifier.
-   * @returns Child identifiers in collaborative order, or an empty list when absent.
+   * @param id - Parent block identifier to inspect.
+   * @returns True when the block is placed and its child list is nonempty.
    */
-  getChildIds(id: string): string[] {
-    return this.document.blocks.getChildIds(id);
+  hasChildren(id: string): boolean {
+    return this.document.blocks.hasChildren(id);
   }
 
   /**
@@ -257,6 +287,16 @@ export class BlockManager implements BlockManagerApi {
    */
   getParentId(id: string): string | null | undefined {
     return this.document.blocks.getParentId(id);
+  }
+
+  /**
+   * Reports whether a block is at the root level.
+   *
+   * @param id - Block identifier to check.
+   * @returns True when the block exists and has no parent.
+   */
+  isRootBlock(id: string): boolean {
+    return this.document.blocks.isRootBlock(id);
   }
 
   /**
@@ -373,7 +413,7 @@ export class BlockManager implements BlockManagerApi {
   clearBlock(id: string): void {
     this.editor.history.batchUpdates(() => {
       this.document.blocks.updateBlock(id, { content: "" });
-      this.document.blocks.getChildIds(id).forEach((childId) => this.document.blocks.removeBlock(childId));
+      (this.document.blocks.getBlockNode(id)?.childIds ?? []).forEach((childId) => this.document.blocks.removeBlock(childId));
     });
   }
 
@@ -596,7 +636,7 @@ export class BlockManager implements BlockManagerApi {
       throw new Error(`Cannot merge block ${sourceId} into its descendant ${targetId}`);
     }
     const blocks = this.document.blocks;
-    blocks.moveBlocks(blocks.getChildIds(sourceId).map((id) => ({ id, targetId, position: "inside" })));
+    blocks.moveBlocks(source.childIds.map((id) => ({ id, targetId, position: "inside" })));
     if (source.content) blocks.insertText(targetId, target.content.length, source.content);
     blocks.removeBlock(sourceId);
     return target.content.length;
@@ -737,9 +777,9 @@ export class BlockManager implements BlockManagerApi {
    * @param id - Placed block whose sibling list is needed.
    * @returns Sibling identifiers in document order.
    */
-  private siblingIds(id: string): string[] {
+  private siblingIds(id: string): readonly string[] {
     const parentId = this.getParentId(id);
-    return parentId == null ? this.getRootIds() : this.getChildIds(parentId);
+    return parentId == null ? this.getRootIds() : (this.getBlockNode(parentId)?.childIds ?? []);
   }
 
   /**
@@ -783,7 +823,7 @@ export class BlockManager implements BlockManagerApi {
   private collectTreeIds(id: string, visited = new Set<string>()): string[] {
     if (visited.has(id)) return [];
     visited.add(id);
-    return [id, ...this.getChildIds(id).flatMap((child) => this.collectTreeIds(child, visited))];
+    return [id, ...(this.getBlockNode(id)?.childIds ?? []).flatMap((child) => this.collectTreeIds(child, visited))];
   }
 
 }

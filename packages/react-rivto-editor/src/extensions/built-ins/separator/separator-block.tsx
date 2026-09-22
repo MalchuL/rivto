@@ -59,12 +59,12 @@ function insertSeparator(
   separatorType: string,
   createDefaultBlock: CreateDefaultBlock,
 ): EditorBlock | undefined {
-  const block = reactEditor.blocks.getBlock(blockId);
+  const block = reactEditor.blocks.getBlockNode(blockId);
   if (!block) return undefined;
   let separatorId = "";
   let writing: EditorBlock | undefined;
   reactEditor.history.batchUpdates(() => {
-    if (!block.content && !block.children.length) {
+    if (!block.content && !reactEditor.blocks.hasChildren(blockId)) {
       separatorId = block.id;
       reactEditor.blocks.setBlockType(separatorId, separatorType);
       reactEditor.blocks.updateBlock(separatorId, {

@@ -94,8 +94,14 @@ export class BlockManager implements BlocksCapability {
   /** @returns Current core block revision. */
   get revision(): number { return this.editor.blocks.revision; }
 
+  /** @param id - Block identifier. @returns Whether the block exists. */
+  hasBlock(id: string): boolean { return this.editor.blocks.hasBlock(id); }
+
   /** @returns One detached block, when present. */
   getBlock(id: string): ReturnType<CoreBlockManager["getBlock"]> { return this.editor.blocks.getBlock(id); }
+
+  /** @returns Detached non-recursive block fields, when present. */
+  getBlockNode(id: string): ReturnType<CoreBlockManager["getBlockNode"]> { return this.editor.blocks.getBlockNode(id); }
 
   /** @returns The complete detached root forest. */
   getBlocks(): ReturnType<CoreBlockManager["getBlocks"]> { return this.editor.blocks.getBlocks(); }
@@ -106,17 +112,23 @@ export class BlockManager implements BlocksCapability {
   /** Subscribes to one recursive block snapshot. */
   subscribeBlock(id: string, listener: () => void): () => void { return this.editor.blocks.subscribeBlock(id, listener); }
 
+  /** Subscribes to one block's own fields and direct child IDs. */
+  subscribeBlockNode(id: string, listener: () => void): () => void { return this.editor.blocks.subscribeBlockNode(id, listener); }
+
   /** Subscribes to ordered root identifiers. */
   subscribeRootIds(listener: () => void): () => void { return this.editor.blocks.subscribeRootIds(listener); }
 
   /** Subscribes to hierarchy changes. */
   subscribeStructure(listener: () => void): () => void { return this.editor.blocks.subscribeStructure(listener); }
 
-  /** @returns Direct child identifiers for a block. */
-  getChildIds(id: string): string[] { return this.editor.blocks.getChildIds(id); }
+  /** @returns True when the block has at least one child. */
+  hasChildren(id: string): boolean { return this.editor.blocks.hasChildren(id); }
 
   /** @returns A block's parent, root marker, or missing marker. */
   getParentId(id: string): string | null | undefined { return this.editor.blocks.getParentId(id); }
+
+  /** @returns True when the block exists and has no parent. */
+  isRootBlock(id: string): boolean { return this.editor.blocks.isRootBlock(id); }
 
   /** Imports a detached block forest with collision remapping. */
   importForest(...args: Parameters<CoreBlockManager["importForest"]>): ReturnType<CoreBlockManager["importForest"]> {

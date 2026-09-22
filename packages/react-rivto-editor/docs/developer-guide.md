@@ -142,7 +142,7 @@ Useful direct queries are:
 ```ts
 editor.getBlock(id);
 editor.getRootIds();
-editor.getChildIds(id);
+editor.blocks.getBlockNode(id)?.childIds;
 editor.getParentId(id);
 ```
 
@@ -152,27 +152,24 @@ produce one collaborative update and one undo step.
 
 ## Rendering and subscriptions
 
-`EditorView` is the global core invalidation boundary. Its context contains
-only the stable React runtime, while the provider subscribes to the
-`RivtoEditorApi` revision stream. Document, selection, and mode changes rerender
-the active editor tree. Surface and extension registries keep their own
-React-only revision streams.
+`EditorView` provides a stable React runtime. Block hooks subscribe to their
+focused document snapshots, while the view subscribes to surface, extension,
+and mode changes. A block edit therefore does not invalidate the whole tree.
 
 Hooks resolve current values through public getters:
 
 | Hook | Value |
 | --- | --- |
-| `useBlock(id)` | One detached block snapshot |
-| `useBlockChildren(id)` | Direct child snapshots |
+| `useBlock(id)` | One detached recursive block snapshot |
+| `useBlockNode(id)` | One detached node with direct `childIds` |
 | `useRootBlockIds()` | Ordered root IDs |
 | `useReactEditor()` | Focused React runtime managers |
 | `useEditorMode()` | Mode manager |
 | `useEditorSelection()` / selection hooks | Detached selection |
 | slash hooks | Slash-command manager |
 
-Global document rendering is intentional in this restored architecture.
-Renderer, surface, and extension registries still keep independent ownership
-and lifecycle state.
+Renderer, surface, and extension registries keep independent ownership and
+lifecycle state.
 
 The shared block render stack is:
 
@@ -180,7 +177,7 @@ The shared block render stack is:
 PageSurface or EdgelessBlockElement
   → ordered root block IDs
   → BlockTree(blockIds)
-    → useBlock(blockId)
+    → useBlockNode(blockId)
     → renderer for block.type
     → ordered BlockWrapper decorators
     → one BlockView DOM boundary

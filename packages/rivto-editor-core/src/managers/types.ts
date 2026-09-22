@@ -70,14 +70,20 @@ export interface BlockManagerApi {
   readonly revision: number;
   /** @param processor - Editor-owned processor. @returns Its disposer. */
   registerProcessor(processor: BlockProcessor): () => void;
+  /** @param id - Block ID. @returns Whether the block exists. */
+  hasBlock(id: string): boolean;
   /** @param id - Block ID. @returns Detached subtree or undefined. */
   getBlock(id: string): EditorBlock | undefined;
+  /** @param id - Block ID. @returns Detached non-recursive block fields or undefined. */
+  getBlockNode(id: string): EditorBlockNode | undefined;
   /** @returns Complete detached root forest. */
   getBlocks(): EditorBlock[];
   /** @returns Root block IDs in document order. */
   getRootIds(): string[];
   /** @param id - Block ID. @param listener - Change listener. @returns Its disposer. */
   subscribeBlock(id: string, listener: () => void): () => void;
+  /** @param id - Block ID. @param listener - Node change listener. @returns Its disposer. */
+  subscribeBlockNode(id: string, listener: () => void): () => void;
   /** @param listener - Root-list listener. @returns Its disposer. */
   subscribeRootIds(listener: () => void): () => void;
   /** @param listener - Structure listener. @returns Its disposer. */
@@ -91,10 +97,12 @@ export interface BlockManagerApi {
     input: readonly (EditorBlock | EditorBlockInput)[],
     onError?: BlockPrepareErrorHandler,
   ): EditorBlockInput[];
-  /** @param id - Parent ID. @returns Direct child IDs. */
-  getChildIds(id: string): string[];
+  /** @param id - Parent ID. @returns True when the block has at least one child. */
+  hasChildren(id: string): boolean;
   /** @param id - Block ID. @returns Parent ID, null, or undefined. */
   getParentId(id: string): string | null | undefined;
+  /** @param id - Block ID. @returns True when the block exists and has no parent. */
+  isRootBlock(id: string): boolean;
   /** @param block - Creation input. @param afterId - Placement anchor. @returns Complete persisted block. */
   insertBlock(block: EditorBlockInput, afterId?: string | null): EditorBlock;
   /** @param blocks - Complete copied roots or creation inputs. @param afterId - Placement anchor. @param onError - Optional one-shot node recovery. @returns Imported roots and identities. */
@@ -167,6 +175,8 @@ export interface BlockRegistryManagerApi {
 export interface ElementManagerApi {
   /** @param processor - Editor-owned processor. @returns Its disposer. */
   registerProcessor(processor: ElementProcessor): () => void;
+  /** @param id - Element ID. @returns Whether the element exists. */
+  hasElement(id: string): boolean;
   /** @param id - Element ID. @returns Detached element or undefined. */
   getElement(id: string): EditorElement | undefined;
   /** @returns Every detached element. */

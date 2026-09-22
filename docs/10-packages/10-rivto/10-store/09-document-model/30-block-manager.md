@@ -194,14 +194,6 @@ Orphaned или отсутствующий block возвращает `undefined
 
 Это дешёвое структурное чтение: payload, content и descendants не materialize-ятся. Метод подходит для navigation и incremental UI, когда consumer-у нужен только top-level order. Каждый item проходит `String()`, поэтому malformed non-string adapter value будет coerced, а не отброшен.
 
-### `getChildIds(id)`
-
-- **Аргументы:** `id: string` parent block.
-- **Возвращает:** ordered `string[]`; `[]`, если block отсутствует или не размещён.
-- **Исключения:** `Error("Expected CRDTArray at children")` для malformed placed block; также ошибки CRDT reads.
-
-Как и `getRootIds()`, метод возвращает только detached IDs и не читает payload children. Сначала проверяется placement parent через `findContainer()`; orphaned payload поэтому даёт `[]`, даже если его own `children` map существует.
-
 ### `getParentId(id)`
 
 - **Аргументы:** `id: string`.

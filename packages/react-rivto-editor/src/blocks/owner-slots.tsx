@@ -7,7 +7,7 @@
  *
  * @module
  */
-import type { EditorBlock, EditorElement } from "@chulane/rivto";
+import type { EditorBlockNode, EditorElement } from "@chulane/rivto";
 import { Fragment, type ComponentType, type ReactNode } from "react";
 import { useEditorMode, useReactEditor } from "../hooks";
 import {
@@ -58,7 +58,7 @@ export function BlockSlots({
   selected,
   children,
 }: {
-  readonly block: EditorBlock;
+  readonly block: EditorBlockNode;
   readonly selected: boolean;
   readonly children: ReactNode;
 }) {

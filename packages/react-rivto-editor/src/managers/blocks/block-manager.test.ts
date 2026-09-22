@@ -18,7 +18,7 @@ describe("BlockManager", () => {
     });
 
     reactEditor.slashCommands.execute("type.test.manager-block", { blockId: id });
-    expect(editor.blocks.getBlock(id)?.type).toBe("test.manager-block");
+    expect(editor.blocks.getBlockNode(id)?.type).toBe("test.manager-block");
     expect(reactEditor.renderers.get("test.manager-block")).toBe(Renderer);
     expect(reactEditor.blockTypes.separatesBlockElements("test.manager-block")).toBe(true);
     expect(reactEditor.blockTypes.getDefaultBlockElementSeparatorType()).toBe("test.manager-block");
@@ -71,9 +71,9 @@ describe("BlockManager", () => {
     expect(editor.blocks.getBlocks()).toEqual([]);
 
     const parent = reactEditor.blocks.insertBlock(prepared).id;
-    const child = editor.blocks.getChildIds(parent)[0]!;
-    expect(editor.blocks.getBlock(parent)?.listProps).toEqual({ collapsed: false });
-    expect(editor.blocks.getBlock(child)?.listProps).toEqual({ collapsed: false, custom: "kept" });
+    const child = editor.blocks.getBlockNode(parent)!.childIds[0]!;
+    expect(editor.blocks.getBlockNode(parent)?.listProps).toEqual({ collapsed: false });
+    expect(editor.blocks.getBlockNode(child)?.listProps).toEqual({ collapsed: false, custom: "kept" });
 
     expect(() => reactEditor.blocks.updateBlocks([
       { id: parent, patch: { listProps: { collapsed: true } } },
@@ -81,10 +81,10 @@ describe("BlockManager", () => {
       { id: "missing", patch: { listProps: { collapsed: true } } },
       { id: child, patch: { listProps: { custom: Number.POSITIVE_INFINITY } } },
     ])).toThrow("Invalid block list properties");
-    expect(editor.blocks.getBlock(parent)?.listProps.collapsed).toBe(false);
+    expect(editor.blocks.getBlockNode(parent)?.listProps.collapsed).toBe(false);
     expect(() => reactEditor.blocks.updateBlock("missing", {})).toThrow("Block missing not found");
     expect(reactEditor.blocks.deleteListProps(parent, ["collapsed"])).toBe(true);
-    expect(editor.blocks.getBlock(parent)?.listProps).toEqual({});
+    expect(editor.blocks.getBlockNode(parent)?.listProps).toEqual({});
 
     reactEditor.destroy();
     expect(editor.blockListProps.has("collapse")).toBe(false);
@@ -117,7 +117,7 @@ describe("BlockManager", () => {
       { id, keys: ["left"] },
       { id, keys: ["right"] },
     ])).toThrow("Invalid block list properties");
-    expect(editor.blocks.getBlock(id)?.listProps).toEqual({ left: true, right: true });
+    expect(editor.blocks.getBlockNode(id)?.listProps).toEqual({ left: true, right: true });
 
     reactEditor.destroy();
     editor.destroy();

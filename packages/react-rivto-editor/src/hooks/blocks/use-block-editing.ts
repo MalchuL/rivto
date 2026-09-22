@@ -18,8 +18,8 @@ import {
   saveDOMSelection,
 } from "../../managers";
 import {
-  useBlock,
-  type UseBlockResult,
+  useBlockNode,
+  type UseBlockNodeResult,
 } from "./use-block";
 
 /** Selects which browser interaction attributes the hook returns. */
@@ -85,14 +85,14 @@ export type BlockEditingAttributes<TextEdit extends boolean> = TextEdit extends 
 /**
  * Renderer-facing block state, property methods, commands, and DOM attributes.
  *
- * `block` is the reactive detached snapshot from `useBlock`. Imperative getters
- * resolve the latest editor state when called, which makes them safe inside
- * callbacks created during an older render.
+ * `block` is the reactive node snapshot from `useBlockNode` and does not include
+ * descendants. Imperative getters resolve the latest editor state when called,
+ * which makes them safe inside callbacks created during an older render.
  */
 export interface UseBlockEditingResult<
   Props extends object,
   TextEdit extends boolean,
-> extends UseBlockResult {
+> extends UseBlockNodeResult {
   /** Reads the latest complete property object, or undefined after deletion. */
   readonly getProps: () => Readonly<Props> | undefined;
   /** Reads one latest property value, or undefined after deletion/removal. */
@@ -158,7 +158,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   options: UseBlockEditingOptions = {},
 ): UseBlockEditingResult<Props, boolean> {
   const { reactEditor } = useEditorContext();
-  const blockResult = useBlock(blockId);
+  const blockResult = useBlockNode(blockId);
   const elementRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);
   const pointerCleanupRef = useRef<(() => void) | undefined>(undefined);
@@ -264,7 +264,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   }, []);
 
   const getProps = useCallback((): Readonly<Props> | undefined => (
-    reactEditor.blocks.getBlock(blockId)?.props as Props | undefined
+    reactEditor.blocks.getBlockNode(blockId)?.props as Props | undefined
   ), [blockId, reactEditor]);
 
   const getProp = useCallback(<Key extends keyof Props,>(key: Key): Props[Key] | undefined => (

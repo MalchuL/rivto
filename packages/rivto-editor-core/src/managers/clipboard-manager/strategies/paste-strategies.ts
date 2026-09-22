@@ -237,7 +237,7 @@ export class BlockPasteStrategy implements PasteStrategy {
       ? (multiAfterId ? { afterId: multiAfterId } : placement)
       : { afterId };
     const beforeChildId = resolved.parentId && resolved.afterId === null
-      ? this.editor.blocks.getChildIds(resolved.parentId)[0]
+      ? this.editor.blocks.getBlockNode(resolved.parentId)?.childIds[0]
       : undefined;
     return { ...resolved, beforeChildId };
   }

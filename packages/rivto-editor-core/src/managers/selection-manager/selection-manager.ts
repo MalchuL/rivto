@@ -113,7 +113,7 @@ export class SelectionManager implements SelectionManagerApi {
     if (!item || item.type !== "selection" || !Array.isArray(item.blocks)) throw new Error("Invalid selection");
     if (item.blocks.length) {
       assertBlockRangeEndpoints(item);
-      if (!this.editor.blocks.getBlock(item.anchorBlockId) || !this.editor.blocks.getBlock(item.focusBlockId)) {
+      if (!this.editor.blocks.hasBlock(item.anchorBlockId) || !this.editor.blocks.hasBlock(item.focusBlockId)) {
         throw new Error(`Selection block ${item.anchorBlockId} not found`);
       }
       const ids = getSelectedBlockIds(item);
@@ -122,7 +122,7 @@ export class SelectionManager implements SelectionManagerApi {
       }
     }
     item.blocks.forEach((block) => {
-      if (!this.editor.blocks.getBlock(block.id)) throw new Error(`Selection block ${block.id} not found`);
+      if (!this.editor.blocks.hasBlock(block.id)) throw new Error(`Selection block ${block.id} not found`);
     });
     const byId = new Map(item.blocks.map((block) => [block.id, block]));
     const blocks = all.flatMap((block) => {
@@ -130,7 +130,7 @@ export class SelectionManager implements SelectionManagerApi {
       return entry ? [{ id: block.id, start: entry.start, end: entry.end }] : [];
     });
     (item.elements ?? []).forEach((id) => {
-      if (!this.editor.elements.getElement(id)) throw new Error(`Selection element ${id} not found`);
+      if (!this.editor.elements.hasElement(id)) throw new Error(`Selection element ${id} not found`);
     });
     const elements = [...(item.elements ?? [])];
     if (!blocks.length && !elements.length && !Object.keys(item.pluginData ?? {}).length) {

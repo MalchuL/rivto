@@ -214,7 +214,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
           // Shift extends the existing selection instead of replacing its anchor.
           if (event.shiftKey && clickedPosition) {
             const item = current;
-            const lengthOf = (id: string) => reactEditor.blocks.getBlock(id)?.content.length ?? 0;
+            const lengthOf = (id: string) => reactEditor.blocks.getBlockNode(id)?.content.length ?? 0;
             const ends = item ? resolveSelectionEndpoints(item, lengthOf) : undefined;
             const originId = ends?.anchor.blockId ?? item?.anchorBlockId;
             const wholeBlocks = originId
@@ -235,7 +235,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
               const originIndex = originFromBlock ? ids.indexOf(originFromBlock) : -1;
               const clickIndex = originFromBlock ? ids.indexOf(clickedPosition.blockId) : -1;
               const originContentLength = originFromBlock
-                ? (reactEditor.blocks.getBlock(originFromBlock)?.content.length ?? 0)
+                ? (reactEditor.blocks.getBlockNode(originFromBlock)?.content.length ?? 0)
                 : 0;
               const anchorPosition = ends?.anchor ?? (originFromBlock
                 ? {

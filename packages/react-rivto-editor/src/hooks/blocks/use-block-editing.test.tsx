@@ -61,7 +61,7 @@ describe("useBlockEditing", () => {
     expect(structural && "getters" in structural).toBe(false);
     expect(structural && "setCollapsed" in structural.operations).toBe(false);
     structural?.operations.update({ listProps: { collapsed: true } });
-    expect(editor.blocks.getBlock(blockId)?.listProps.collapsed).toBe(true);
+    expect(editor.blocks.getBlockNode(blockId)?.listProps.collapsed).toBe(true);
     expect(structural?.getProps()).toEqual({ count: 1, label: "Initial" });
     expect(structural?.getProp("count")).toBe(1);
 

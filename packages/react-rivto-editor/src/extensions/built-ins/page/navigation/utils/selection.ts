@@ -70,7 +70,7 @@ export function textSelectionEdge(
   edge: "start" | "end",
 ): EditorPosition {
   assertBlockRangeEndpoints(selection);
-  const lengthOf = (id: string) => editor.blocks.getBlock(id)?.content.length ?? 0;
+  const lengthOf = (id: string) => editor.blocks.getBlockNode(id)?.content.length ?? 0;
   const ends = resolveSelectionEndpoints(selection, lengthOf);
   if (!ends) return { blockId: selection.focusBlockId, offset: 0 };
   const ids = pageEntries(

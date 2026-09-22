@@ -6,7 +6,7 @@
  *
  * @module
  */
-import type { EditorBlock as Block } from "@chulane/rivto";
+import type { EditorBlockNode as Block } from "@chulane/rivto";
 import {
   createContext,
   useContext,
@@ -24,7 +24,7 @@ import { useEditorMode, useReactEditor } from "../hooks";
  * created exactly once, beneath every registered decorator.
  */
 export interface BlockShellProps {
-  /** Latest detached block snapshot resolved by BlockTree. */
+  /** Latest detached node snapshot resolved by BlockTree. */
   readonly block: Block;
   /** Presentation state forwarded only to the shared BlockView shell. */
   readonly isSelected: boolean;
@@ -44,7 +44,7 @@ export interface BlockShellProps {
  * traverse descendants.
  */
 export interface BlockWrapperProps {
-  /** Latest detached block snapshot resolved by BlockTree. */
+  /** Latest detached node snapshot resolved by BlockTree. */
   readonly block: Block;
   /** Next decorator, or the shared block shell at the end of the chain. */
   readonly children: ReactNode;

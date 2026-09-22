@@ -1,9 +1,19 @@
+/**
+ * Resolves recursive or node block snapshots and ID-bound commands.
+ *
+ * Use the node hook for ordinary renderers and the full hook when a consumer
+ * needs materialized descendants.
+ *
+ * @module
+ */
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type {
   EditorBlock as Block,
+  EditorBlockNode as BlockNode,
   EditorBlockPatch as BlockPatch,
 } from "@chulane/rivto";
 import { useEditorContext } from "../../editor-context";
+import type { ReactEditor } from "../../types";
 
 /** Commands bound to one stable block ID. */
 export interface BlockOperations {
@@ -33,38 +43,30 @@ export interface BlockOperations {
   outdent(): void;
 }
 
-/** Reactive block snapshot and stable commands returned by useBlock. */
+/** Reactive complete block snapshot and stable commands returned by useBlock. */
 export interface UseBlockResult {
-  /** Current detached block value, or undefined after deletion/for unknown IDs. */
+  /** Current detached subtree, or undefined after deletion/for unknown IDs. */
   readonly block: Block | undefined;
   /** Memoized commands permanently bound to the requested block ID. */
   readonly operations: BlockOperations;
 }
 
+/** Reactive node snapshot and stable commands returned by useBlockNode. */
+export interface UseBlockNodeResult {
+  /** Current own fields and direct child IDs, or undefined after deletion. */
+  readonly block: BlockNode | undefined;
+  /** Memoized commands permanently bound to the requested block ID. */
+  readonly operations: BlockOperations;
+}
+
 /**
- * Resolves one block and its bound operations from the current editor.
- *
- * `block` is a stable detached snapshot, not a live or mutable CRDT object.
- * Only changes to this block or its descendants replace its identity. Deletion
- * changes it to undefined. `operations` remains stable until either the editor
- * instance or block ID changes.
- *
- * @param blockId - Stable persisted ID of the block to resolve.
- * @returns Current block snapshot together with commands bound to its ID.
- * @throws If called outside an EditorView subtree.
+ * Creates stable ID-bound commands without subscribing to document values.
+ * @param reactEditor - Active editor runtime.
+ * @param blockId - Stable block ID.
+ * @returns Commands that read current document state when invoked.
  */
-export function useBlock(blockId: string): UseBlockResult {
-  const { reactEditor } = useEditorContext();
-  const subscribe = useCallback(
-    (listener: () => void) => reactEditor.blocks.subscribeBlock(blockId, listener),
-    [blockId, reactEditor],
-  );
-  const getSnapshot = useCallback(() => reactEditor.blocks.getBlock(blockId), [blockId, reactEditor]);
-  const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  // Commands target the ID rather than the detached snapshot, so they always
-  // operate on the latest document state. Memoization keeps their references
-  // stable for consumers that pass them into memoized child components.
-  const operations = useMemo<BlockOperations>(() => ({
+function useBlockOperations(reactEditor: ReactEditor, blockId: string): BlockOperations {
+  return useMemo<BlockOperations>(() => ({
     update: (patch) => reactEditor.blocks.updateBlock(blockId, patch),
     setContent: (content) => reactEditor.blocks.updateBlock(blockId, { content }),
     setType: (type) => reactEditor.blocks.setBlockType(blockId, type),
@@ -78,9 +80,45 @@ export function useBlock(blockId: string): UseBlockResult {
     indent: () => reactEditor.blocks.indentBlock(blockId),
     outdent: () => reactEditor.blocks.outdentBlock(blockId),
   }), [blockId, reactEditor]);
+}
 
-  return {
-    block,
-    operations,
-  };
+/**
+ * Resolves a complete reactive block subtree and its bound operations.
+ *
+ * @param blockId - Stable persisted ID of the block to resolve.
+ * @returns Current recursive snapshot and commands bound to its ID.
+ * @throws If called outside an EditorView subtree.
+ */
+export function useBlock(blockId: string): UseBlockResult {
+  const { reactEditor } = useEditorContext();
+  const subscribe = useCallback(
+    (listener: () => void) => reactEditor.blocks.subscribeBlock(blockId, listener),
+    [blockId, reactEditor],
+  );
+  const getSnapshot = useCallback(
+    () => reactEditor.blocks.getBlock(blockId),
+    [blockId, reactEditor],
+  );
+  const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return { block, operations: useBlockOperations(reactEditor, blockId) };
+}
+
+/**
+ * Resolves one block's own fields and direct child IDs without descendants.
+ * @param blockId - Stable persisted ID of the block to resolve.
+ * @returns Current node snapshot and commands bound to its ID.
+ * @throws If called outside an EditorView subtree.
+ */
+export function useBlockNode(blockId: string): UseBlockNodeResult {
+  const { reactEditor } = useEditorContext();
+  const subscribe = useCallback(
+    (listener: () => void) => reactEditor.blocks.subscribeBlockNode(blockId, listener),
+    [blockId, reactEditor],
+  );
+  const getSnapshot = useCallback(
+    () => reactEditor.blocks.getBlockNode(blockId),
+    [blockId, reactEditor],
+  );
+  const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return { block, operations: useBlockOperations(reactEditor, blockId) };
 }

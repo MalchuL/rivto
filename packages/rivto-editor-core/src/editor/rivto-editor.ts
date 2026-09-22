@@ -179,10 +179,10 @@ export class EditorRuntime implements RivtoEditorApi {
       const selected = new Map(item.blocks.map((block) => [block.id, block]));
       const blocks = visibleIds.flatMap((id) => {
         const entry = selected.get(id);
-        return entry ? [{ id: entry.id, start: entry.start, end: entry.end }] : [];
-      });
-      const elements = (item.elements ?? []).filter((id) => Boolean(this.elements.getElement(id)));
-      const hasPluginData = Object.keys(item.pluginData ?? {}).length > 0;
+      return entry ? [{ id: entry.id, start: entry.start, end: entry.end }] : [];
+    });
+    const elements = (item.elements ?? []).filter((id) => this.elements.hasElement(id));
+    const hasPluginData = Object.keys(item.pluginData ?? {}).length > 0;
       if (!blocks.length && !elements.length && !hasPluginData) {
         changed = true;
         return undefined;

@@ -3,11 +3,11 @@
  *
  * These controls interpret extension-owned list properties but do not own
  * traversal or persistence. BlockTree remains responsible for descendants,
- * while useBlock supplies transactional mutations for the current row.
+ * while the editor manager supplies transactional mutations for the current row.
  *
  * @module
  */
-import { useBlock } from "../hooks";
+import { useBlockNode } from "../hooks";
 import type { BlockSlotProps } from "../managers";
 
 const LIST_CHECKBOX_CLASS = "page-list-checkbox";
@@ -21,7 +21,7 @@ const COLLAPSE_TOGGLE_CLASS = "page-collapse-toggle";
  * @returns Interactive checkbox, numeric marker, or nothing for ordinary lists.
  */
 export function BlockListSlot({ block }: BlockSlotProps) {
-  const { operations } = useBlock(block.id);
+  const { operations } = useBlockNode(block.id);
 
   if (block.listProps.type === "checkbox") {
     return (
@@ -51,8 +51,8 @@ export function BlockListSlot({ block }: BlockSlotProps) {
  * @returns Collapse toggle for a branch block, otherwise nothing.
  */
 export function BlockCollapseSlot({ block }: BlockSlotProps) {
-  const { operations } = useBlock(block.id);
-  if (!block.children.length) return null;
+  const { operations } = useBlockNode(block.id);
+  if (!block.childIds.length) return null;
   const childrenId = `block-children-${block.id}`;
   return (
     <button

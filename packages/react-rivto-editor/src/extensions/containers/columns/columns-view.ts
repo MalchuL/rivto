@@ -28,16 +28,17 @@ export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
  * @returns Nothing; callers delete the empty shells afterwards.
  */
 export function relocateColumnContents(editor: ReactEditor | RivtoEditorApi, columnIds: readonly string[]): void {
-  const unique = [...new Set(columnIds)].filter((id) => editor.blocks.getBlock(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE);
+  const unique = [...new Set(columnIds)].filter((id) => editor.blocks.getBlockNode(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE);
   unique.forEach((id) => {
     const parentId = editor.blocks.getParentId(id);
-    const parent = parentId ? editor.blocks.getBlock(parentId) : undefined;
-    if (!parentId || parent?.type !== COLUMNS_BLOCK_TYPE) return;
-    const keep = parent.children.filter((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE && !unique.includes(child.id));
-    const childIds = editor.blocks.getBlock(id)?.children.map((child) => child.id) ?? [];
+    if (!parentId || editor.blocks.getBlockNode(parentId)?.type !== COLUMNS_BLOCK_TYPE) return;
+    const keep = (editor.blocks.getBlockNode(parentId)?.childIds ?? []).filter((childId) => (
+      editor.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE && !unique.includes(childId)
+    ));
+    const childIds = editor.blocks.getBlockNode(id)?.childIds ?? [];
     if (!childIds.length) return;
-    if (keep.length) editor.blocks.moveBlocks(childIds, keep.at(-1)!.id, "inside");
-    else editor.blocks.moveBlocks(childIds, parentId, "after");
+    if (keep.length) editor.blocks.moveBlocks([...childIds], keep.at(-1)!, "inside");
+    else editor.blocks.moveBlocks([...childIds], parentId, "after");
   });
 }
 
@@ -64,7 +65,7 @@ export class ColumnsColumnView extends ContainerBlockView {
    */
   override onStructuralDelete(context: BlockViewContext, ids: readonly string[]): BlockViewOutcome {
     const columnIds = ids.filter((id) => (
-      context.reactEditor.blocks.getBlock(id)?.type === context.block.type
+      context.reactEditor.blocks.getBlockNode(id)?.type === context.block.type
     ));
     if (columnIds.length) relocateColumnContents(context.reactEditor, columnIds);
     return "default";

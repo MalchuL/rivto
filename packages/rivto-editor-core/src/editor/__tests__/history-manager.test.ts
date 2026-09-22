@@ -102,7 +102,7 @@ describe("EditorRuntime history manager", () => {
     });
     editor.history.undo();
 
-    expect(editor.blocks.getBlock(blockId)).toBeUndefined();
+    expect(editor.blocks.hasBlock(blockId)).toBe(false);
     expect(editor.elements.getElement("derived")).toBeDefined();
     editor.destroy();
   });

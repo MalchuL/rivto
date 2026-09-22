@@ -23,8 +23,8 @@ describe("todoItemExtension", () => {
 
     const first = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "First" }).id;
     const second = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "Second" }).id;
-    const firstProps = editor.blocks.getBlock(first)?.props;
-    const secondProps = editor.blocks.getBlock(second)?.props;
+    const firstProps = editor.blocks.getBlockNode(first)?.props;
+    const secondProps = editor.blocks.getBlockNode(second)?.props;
 
     expect(firstProps).toMatchObject({
       status: "todo",
@@ -54,7 +54,7 @@ describe("todoItemExtension", () => {
     const reactEditor = createReactEditor({ editor, extensions: [todoItemExtension()] });
     const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
     reactEditor.slashCommands.execute("type.todo-storage", { blockId: empty });
-    expect(editor.blocks.getBlock(empty)?.type).toBe(TODO_STORAGE_BLOCK_TYPE);
+    expect(editor.blocks.getBlockNode(empty)?.type).toBe(TODO_STORAGE_BLOCK_TYPE);
 
     const populated = editor.blocks.insertBlock({
       type: "paragraph",
@@ -68,7 +68,7 @@ describe("todoItemExtension", () => {
       content: "Keep me",
       children: [{ content: "Keep child" }],
     });
-    expect(editor.blocks.getRootIds().map((id) => editor.blocks.getBlock(id)?.type)).toEqual([
+    expect(editor.blocks.getRootIds().map((id) => editor.blocks.getBlockNode(id)?.type)).toEqual([
       TODO_STORAGE_BLOCK_TYPE,
       "paragraph",
     ]);

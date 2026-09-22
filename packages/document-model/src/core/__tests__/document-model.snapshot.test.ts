@@ -42,13 +42,13 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
 
     expect(() => model.loadSnapshot({ version: 6, blocks: [cyclic] }))
       .toThrow("Block forest must be acyclic");
-    expect(model.blocks.getBlock("kept")?.content).toBe("Safe");
+    expect(model.blocks.getBlockNode("kept")?.content).toBe("Safe");
 
     expect(() => model.loadSnapshot({
       version: 6,
       blocks: [paragraph("dup"), paragraph("dup")],
     })).toThrow("Duplicate block dup");
-    expect(model.blocks.getBlock("kept")).toBeDefined();
+    expect(model.blocks.hasBlock("kept")).toBe(true);
     void doc.destroy();
   });
 
@@ -127,6 +127,7 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
       props: {},
       pluginData: {},
       content: "updated",
+      childIds: ["child"],
     });
     expect(model.blocks.updateBlocks([{ id: "block", patch: { props: { done: true } } }]))
       .toEqual([{
@@ -136,6 +137,7 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
         props: { done: true },
         pluginData: {},
         content: "updated",
+        childIds: ["child"],
       }]);
     expect(model.elements.insertElement({
       id: "element",

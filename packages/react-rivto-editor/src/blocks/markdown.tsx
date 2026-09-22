@@ -1,3 +1,10 @@
+/**
+ * Renders editable block text with an idle Markdown preview.
+ * The shared editing hook owns DOM text synchronization, while node operations
+ * persist code edits through the core block manager.
+ *
+ * @module
+ */
 import {
   useCallback,
   memo,
@@ -7,7 +14,7 @@ import {
 import type { MarkdownLinkClick } from "../types";
 import {
   useBlockEditing,
-  useReactEditor,
+  useBlockNode,
 } from "../hooks";
 import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
@@ -18,6 +25,11 @@ import {
   replaceMarkdownCode,
   type PositionedNode,
 } from "./markdown-code";
+
+const MARKDOWN_CONTENT_CLASS = "markdown-content";
+const PAGE_BLOCK_CONTENT_CLASS = "page-block-content";
+const MARKDOWN_EDITOR_CLASS = "markdown-editor";
+const MARKDOWN_PREVIEW_CLASS = "markdown-preview";
 
 /** Memoized expensive Markdown parser boundary keyed by source and renderer options. */
 const MarkdownPreview = memo(function MarkdownPreview({
@@ -69,15 +81,14 @@ export function MarkdownContent({
   readonly blockId: string;
   readonly onLinkClick?: (context: MarkdownLinkClick) => void;
 }) {
-  const reactEditor = useReactEditor();
   const editing = useBlockEditing(blockId);
+  const { block, operations } = useBlockNode(blockId);
   const [isEditing, setIsEditing] = useState(false);
-  const source = editing.block?.content ?? "";
+  const source = block?.content ?? "";
 
   const updateCode = useCallback((node: PositionedNode, value: string) => {
-    const current = reactEditor.blocks.getBlock(blockId)?.content ?? "";
-    reactEditor.blocks.updateBlock(blockId, { content: replaceMarkdownCode(current, node, value) });
-  }, [blockId, reactEditor]);
+    operations.setContent(replaceMarkdownCode(source, node, value));
+  }, [operations, source]);
   const transformUrl = useCallback<UrlTransform>((url) => {
     const safe = defaultUrlTransform(url);
     if (safe || !onLinkClick) return safe;
@@ -102,10 +113,10 @@ export function MarkdownContent({
   }), [blockId, editing.preventTextEditingAttributes, onLinkClick, updateCode]);
 
   return (
-    <div className="markdown-content">
+    <div className={MARKDOWN_CONTENT_CLASS}>
       <div
         {...editing.attributes}
-        className="page-block-content markdown-editor"
+        className={`${PAGE_BLOCK_CONTENT_CLASS} ${MARKDOWN_EDITOR_CLASS}`}
         role="textbox"
         aria-label="Markdown block content"
         aria-multiline="true"
@@ -126,7 +137,7 @@ export function MarkdownContent({
       />
       {!isEditing && (
         <div
-          className="page-block-content markdown-preview"
+          className={`${PAGE_BLOCK_CONTENT_CLASS} ${MARKDOWN_PREVIEW_CLASS}`}
         >
           <MarkdownPreview components={components} source={source} transformUrl={transformUrl} />
         </div>

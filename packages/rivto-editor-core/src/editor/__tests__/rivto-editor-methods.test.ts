@@ -29,7 +29,7 @@ describe("EditorRuntime methods", () => {
     expect(roots).toBe(1);
     expect(elements).toBe(1);
     const id = editor.blocks.insertBlock({ type: "paragraph" }).id;
-    expect(editor.blocks.getBlock(id)?.props).toMatchObject({ attached: true });
+    expect(editor.blocks.getBlockNode(id)?.props).toMatchObject({ attached: true });
     await editor.destroy();
     await document.destroy();
   });
@@ -72,7 +72,7 @@ describe("EditorRuntime methods", () => {
     editor.blocks.removeBlock(id);
     expect(editor.blocks.getBlocks()).toEqual([]);
     editor.history.undo();
-    expect(editor.blocks.getBlock(id)?.content).toBe("Created later");
+    expect(editor.blocks.getBlockNode(id)?.content).toBe("Created later");
     editor.history.redo();
     expect(editor.blocks.getBlocks()).toEqual([]);
     editor.destroy();
@@ -108,9 +108,11 @@ describe("EditorRuntime methods", () => {
     const blocks = editor.blocks;
     const elements = editor.elements;
     const calls = { editor: 0, block: 0, roots: 0, structure: 0, elements: 0, element: 0, membership: 0 };
+    const focusedCalls = { node: 0 };
     const disposers = [
       editor.subscribe(() => { calls.editor += 1; }),
       editor.blocks.subscribeBlock("shared", () => { calls.block += 1; }),
+      editor.blocks.subscribeBlockNode("shared", () => { focusedCalls.node += 1; }),
       editor.blocks.subscribeRootIds(() => { calls.roots += 1; }),
       editor.blocks.subscribeStructure(() => { calls.structure += 1; }),
       editor.elements.subscribe(() => { calls.elements += 1; }),
@@ -134,17 +136,20 @@ describe("EditorRuntime methods", () => {
     expect(editor.getDocument()).toBe(second);
     expect(editor.blocks).toBe(blocks);
     expect(editor.elements).toBe(elements);
-    expect(editor.blocks.getBlock("shared")?.content).toBe("Second");
+    expect(editor.blocks.getBlockNode("shared")?.content).toBe("Second");
     expect(editor.selection.get()).toBeUndefined();
     expect(calls).toEqual({ editor: 1, block: 1, roots: 1, structure: 1, elements: 1, element: 1, membership: 1 });
+    expect(focusedCalls).toEqual({ node: 1 });
 
     first.blocks.updateBlock("shared", { content: "Detached" });
     expect(calls).toEqual({ editor: 1, block: 1, roots: 1, structure: 1, elements: 1, element: 1, membership: 1 });
+    expect(focusedCalls).toEqual({ node: 1 });
 
     second.blocks.updateBlock("shared", { content: "Active" });
-    expect(editor.blocks.getBlock("shared")?.content).toBe("Active");
+    expect(editor.blocks.getBlockNode("shared")?.content).toBe("Active");
     expect(calls.block).toBe(2);
     expect(calls.editor).toBe(2);
+    expect(focusedCalls).toEqual({ node: 2 });
     editor.elements.updateElement("shape", { props: { active: true } });
     expect(editor.elements.getElement("shape")?.props).toMatchObject({ active: true });
     expect(calls.element).toBe(2);
@@ -157,15 +162,15 @@ describe("EditorRuntime methods", () => {
     expect(editor.elements.getElement("processed-shape")?.props).toMatchObject({ swapped: true });
 
     const inserted = editor.blocks.insertBlock({ type: "paragraph", content: "Processed" }).id;
-    expect(editor.blocks.getBlock(inserted)?.props).toMatchObject({ swapped: true });
+    expect(editor.blocks.getBlockNode(inserted)?.props).toMatchObject({ swapped: true });
     editor.history.undo();
-    expect(editor.blocks.getBlock(inserted)).toBeUndefined();
-    expect(first.blocks.getBlock("shared")?.content).toBe("Detached");
+    expect(editor.blocks.hasBlock(inserted)).toBe(false);
+    expect(first.blocks.getBlockNode("shared")?.content).toBe("Detached");
 
     editor.setDocument(first);
     editor.setDocument(second);
     const afterRoundTrip = editor.blocks.insertBlock({ type: "paragraph" }).id;
-    expect(editor.blocks.getBlock(afterRoundTrip)?.props).toMatchObject({ swapped: true });
+    expect(editor.blocks.getBlockNode(afterRoundTrip)?.props).toMatchObject({ swapped: true });
 
     const callsBeforeNoop = { ...calls };
     editor.setDocument(second);
@@ -207,7 +212,7 @@ describe("EditorRuntime methods", () => {
     });
 
     const whileBoth = first.blocks.insertBlock({ type: "paragraph" }).id;
-    expect(document.blocks.getBlock(whileBoth)?.props).toMatchObject({ owner: "first" });
+    expect(document.blocks.getBlockNode(whileBoth)?.props).toMatchObject({ owner: "first" });
     second.elements.insertElement({
       id: "while-both",
       type: "shape",
@@ -216,7 +221,7 @@ describe("EditorRuntime methods", () => {
     });
     expect(document.elements.getElement("while-both")?.props).toMatchObject({ owner: "second" });
     second.blocks.updateBlock(whileBoth, { props: { owner: "input", updated: true } });
-    expect(document.blocks.getBlock(whileBoth)?.props).toMatchObject({ owner: "second", updated: true });
+    expect(document.blocks.getBlockNode(whileBoth)?.props).toMatchObject({ owner: "second", updated: true });
     first.elements.updateElement("while-both", { props: { owner: "input", updated: true } });
     expect(document.elements.getElement("while-both")?.props).toMatchObject({ owner: "first", updated: true });
 
@@ -239,13 +244,13 @@ describe("EditorRuntime methods", () => {
         props: {},
       }],
     });
-    expect(document.blocks.getBlock("loaded")?.props).toEqual({});
+    expect(document.blocks.getBlockNode("loaded")?.props).toEqual({});
     expect(document.elements.getElement("loaded-element")?.props).toEqual({});
 
     await second.destroy();
 
     const afterSecondDestroy = first.blocks.insertBlock({ type: "paragraph" }).id;
-    expect(document.blocks.getBlock(afterSecondDestroy)?.props).toMatchObject({ owner: "first" });
+    expect(document.blocks.getBlockNode(afterSecondDestroy)?.props).toMatchObject({ owner: "first" });
     first.elements.insertElement({
       id: "after-second-destroy",
       type: "shape",
@@ -298,7 +303,7 @@ describe("EditorRuntime methods", () => {
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
     });
-    expect(document.blocks.getBlock("direct-while-registered")?.props).not.toHaveProperty("owner");
+    expect(document.blocks.getBlockNode("direct-while-registered")?.props).not.toHaveProperty("owner");
     expect(document.elements.getElement("direct-element-while-registered")?.props).not.toHaveProperty("owner");
 
     const firstBlock = first.blocks.insertBlock({ type: "paragraph" }).id;
@@ -315,8 +320,8 @@ describe("EditorRuntime methods", () => {
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 1,
     });
-    expect(document.blocks.getBlock(firstBlock)?.props).toMatchObject({ owner: "first" });
-    expect(document.blocks.getBlock(secondBlock)?.props).toMatchObject({ owner: "second" });
+    expect(document.blocks.getBlockNode(firstBlock)?.props).toMatchObject({ owner: "first" });
+    expect(document.blocks.getBlockNode(secondBlock)?.props).toMatchObject({ owner: "second" });
     expect(document.elements.getElement("first-element")?.props).toMatchObject({ owner: "first" });
     expect(document.elements.getElement("second-element")?.props).toMatchObject({ owner: "second" });
 
@@ -330,8 +335,8 @@ describe("EditorRuntime methods", () => {
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 2,
     });
-    expect(document.blocks.getBlock(firstUnregistered)?.props).not.toHaveProperty("owner");
-    expect(document.blocks.getBlock(secondStillRegistered)?.props).toMatchObject({ owner: "second" });
+    expect(document.blocks.getBlockNode(firstUnregistered)?.props).not.toHaveProperty("owner");
+    expect(document.blocks.getBlockNode(secondStillRegistered)?.props).toMatchObject({ owner: "second" });
     expect(document.elements.getElement("first-unregistered-element")?.props).not.toHaveProperty("owner");
 
     disposeSecondBlock();
@@ -344,9 +349,9 @@ describe("EditorRuntime methods", () => {
       zIndex: 3,
     });
     document.blocks.insertBlock({ id: "direct-document-block", type: "paragraph" });
-    expect(document.blocks.getBlock(secondUnregistered)?.props).not.toHaveProperty("owner");
+    expect(document.blocks.getBlockNode(secondUnregistered)?.props).not.toHaveProperty("owner");
     expect(document.elements.getElement("unowned-element")?.props).not.toHaveProperty("owner");
-    expect(document.blocks.getBlock("direct-document-block")?.props).not.toHaveProperty("owner");
+    expect(document.blocks.getBlockNode("direct-document-block")?.props).not.toHaveProperty("owner");
 
     await first.destroy();
     await second.destroy();
@@ -371,13 +376,13 @@ describe("EditorRuntime methods", () => {
     first.selection.set(createStructuralSelection(["shared"]));
     expect(second.selection.get()).toBeUndefined();
     second.blocks.updateBlock("shared", { content: "From second" });
-    expect(first.blocks.getBlock("shared")?.content).toBe("From second");
+    expect(first.blocks.getBlockNode("shared")?.content).toBe("From second");
     expect(calls).toEqual({ first: 1, second: 1 });
 
     first.history.stopCapturing();
     first.blocks.updateBlock("shared", { content: "Undo me" });
     second.history.undo();
-    expect(first.blocks.getBlock("shared")?.content).toBe("From second");
+    expect(first.blocks.getBlockNode("shared")?.content).toBe("From second");
 
     first.setDocument(alternate);
     expect(first.selection.get()).toBeUndefined();
@@ -385,10 +390,10 @@ describe("EditorRuntime methods", () => {
     second.blocks.updateBlock("shared", { content: "Second only" });
     expect(calls.first).toBe(callsAfterSwap.first);
     expect(calls.second).toBe(callsAfterSwap.second + 1);
-    expect(first.blocks.getBlock("alternate")?.content).toBe("Alternate");
+    expect(first.blocks.getBlockNode("alternate")?.content).toBe("Alternate");
 
     first.blocks.updateBlock("alternate", { content: "First only" });
-    expect(second.blocks.getBlock("shared")?.content).toBe("Second only");
+    expect(second.blocks.getBlockNode("shared")?.content).toBe("Second only");
     await first.destroy();
     await second.destroy();
     await shared.destroy();

@@ -70,8 +70,8 @@ export interface Block {
   children: Block[];
 }
 
-/** Detached block fields excluding the recursively materialized child tree. */
-export type BlockNode = Omit<Block, "children">;
+/** Detached block fields with direct child IDs instead of child subtrees. */
+export type BlockNode = Omit<Block, "children"> & { readonly childIds: readonly string[] };
 
 /** Complete input accepted when creating a block. */
 export interface BlockInput {
@@ -110,7 +110,7 @@ export interface DocumentBlockManagerApi {
   hasBlock(id: string): boolean;
   /** @param id - Block identifier. @returns Detached block subtree when present. */
   getBlock(id: string): Block | undefined;
-  /** @param id - Block identifier. @returns Detached non-recursive block fields when present. */
+  /** @param id - Block identifier. @returns Detached non-recursive node fields when present. Identity is stable until this record's own fields change. */
   getBlockNode(id: string): BlockNode | undefined;
   /** @returns Detached root block trees. */
   getBlocks(): Block[];
@@ -118,14 +118,18 @@ export interface DocumentBlockManagerApi {
   getRootIds(): string[];
   /** @param id - Block identifier. @param listener - Change callback. @returns Unsubscribe callback. */
   subscribeBlock(id: string, listener: () => void): () => void;
+  /** @param id - Block identifier. @param listener - Node change callback. @returns Unsubscribe callback. */
+  subscribeBlockNode(id: string, listener: () => void): () => void;
   /** @param listener - Root-list callback. @returns Unsubscribe callback. */
   subscribeRootIds(listener: () => void): () => void;
   /** @param listener - Hierarchy callback. @returns Unsubscribe callback. */
   subscribeStructure(listener: () => void): () => void;
-  /** @param id - Parent block identifier. @returns Ordered direct-child identifiers. */
-  getChildIds(id: string): string[];
+  /** @param id - Parent block identifier. @returns True when the block has at least one child. */
+  hasChildren(id: string): boolean;
   /** @param id - Block identifier. @returns Parent ID, null for roots, or undefined when absent. */
   getParentId(id: string): string | null | undefined;
+  /** @param id - Block identifier. @returns True when the block exists and has no parent. */
+  isRootBlock(id: string): boolean;
   /**
    * Creates a source-to-destination ID map for an immediate import.
    * Available source IDs are preserved, while IDs already used by this document
@@ -176,6 +180,8 @@ export interface DocumentBlockManagerApi {
 
 /** Public element-store capabilities required by editors and extensions. */
 export interface DocumentElementManagerApi {
+  /** @param id - Element identifier. @returns Whether the element exists. */
+  hasElement(id: string): boolean;
   /** @param id - Element identifier. @returns Detached element when present. */
   getElement(id: string): DocumentElement | undefined;
   /** @returns Detached elements in storage order. */

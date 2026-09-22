@@ -147,9 +147,9 @@ test("table inside a bento tile and bento inside a table cell compose floors", (
   expect(editor.blocks.getParentId(cell.id)).toBe(row.id);
   expect(reactEditor.views.resolve(table).dropAxis).toBe("vertical");
   expect(getBlockContainment(editor.blockRegistry.get(TABLE_CELL_BLOCK_TYPE))?.outlineFloor).toBe(true);
-  expect(editor.blocks.getBlock(bento)?.type).toBe(BENTO_BLOCK_TYPE);
-  expect(editor.blocks.getBlock(table)?.type).toBe(TABLE_BLOCK_TYPE);
-  expect(editor.blocks.getBlock(cell.id)?.type).toBe(TABLE_CELL_BLOCK_TYPE);
+  expect(editor.blocks.getBlockNode(bento)?.type).toBe(BENTO_BLOCK_TYPE);
+  expect(editor.blocks.getBlockNode(table)?.type).toBe(TABLE_BLOCK_TYPE);
+  expect(editor.blocks.getBlockNode(cell.id)?.type).toBe(TABLE_CELL_BLOCK_TYPE);
   reactEditor.destroy();
   editor.destroy();
 });

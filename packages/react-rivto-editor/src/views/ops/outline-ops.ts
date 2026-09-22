@@ -21,7 +21,7 @@ import { getBlockContainment } from "../../managers/blocks/types";
  */
 function parentContainment(reactEditor: ReactEditor, id: string) {
   const parentId = reactEditor.blocks.getParentId(id);
-  const parentType = parentId ? reactEditor.blocks.getBlock(parentId)?.type : undefined;
+  const parentType = parentId ? reactEditor.blocks.getBlockNode(parentId)?.type : undefined;
   return parentType ? getBlockContainment(reactEditor.blockTypes.getDefinition(parentType)) : undefined;
 }
 
@@ -109,11 +109,11 @@ export function convertLeafToContainer(
   blockId: string,
   input: EditorBlockInput,
 ): void {
-  const block = reactEditor.blocks.getBlock(blockId);
-  if (!block || block.children.length) return;
+  const block = reactEditor.blocks.getBlockNode(blockId);
+  if (!block || reactEditor.blocks.hasChildren(blockId)) return;
   reactEditor.history.batchUpdates(() => {
     const templateId = reactEditor.blocks.insertBlock(input, blockId).id;
-    const childIds = reactEditor.blocks.getBlock(templateId)?.children.map((child) => child.id) ?? [];
+    const childIds = reactEditor.blocks.getBlockNode(templateId)?.childIds ?? [];
     reactEditor.blocks.setBlockType(blockId, input.type);
     if (childIds.length) reactEditor.blocks.moveBlocks(childIds, blockId, "inside");
     reactEditor.blocks.removeBlock(templateId);

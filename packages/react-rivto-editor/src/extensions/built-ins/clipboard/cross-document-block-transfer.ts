@@ -56,7 +56,7 @@ function createCrossDocumentBlockTransferBundle(
   placement: CrossDocumentBlockTransferPlacement,
 ): CrossDocumentBlockTransferBundle {
   if (source === destination) throw new Error("Cross-document transfer requires different editors");
-  if (placement.targetId !== null && !destination.blocks.getBlock(placement.targetId)) {
+  if (placement.targetId !== null && !destination.blocks.hasBlock(placement.targetId)) {
     throw new Error(`Destination block ${placement.targetId} does not exist`);
   }
 
@@ -68,7 +68,7 @@ function createCrossDocumentBlockTransferBundle(
   const blockIds = new Set<string>();
   roots.forEach((block) => collectBlockIds(block, blockIds));
   for (const id of blockIds) {
-    if (destination.blocks.getBlock(id)) throw new Error(`Destination already contains block ${id}`);
+    if (destination.blocks.hasBlock(id)) throw new Error(`Destination already contains block ${id}`);
   }
 
   return {

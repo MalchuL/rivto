@@ -66,7 +66,7 @@ export class BlockTypeManager implements BlockTypesCapability {
           ...slashCommand,
           id: slashCommand.id ?? `type.${definition.type}`,
           isAvailable: (context) => {
-            const block = core.getBlock(context.blockId);
+            const block = core.getBlockNode(context.blockId);
             return Boolean(
               block
               && block.type !== definition.type

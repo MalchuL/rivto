@@ -3,11 +3,11 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
-import type { EditorBlock as Block } from "@chulane/rivto";
+import type { EditorBlockNode as Block } from "@chulane/rivto";
 
 /** Properties accepted by the stable DOM container for one editor block. */
 export interface BlockViewProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
-  /** Detached block snapshot whose identity and native type mark the container. */
+  /** Detached node snapshot whose identity and native type mark the container. */
   readonly block: Block;
   /** Content and nested block containers chosen by the active surface. */
   readonly children?: ReactNode;

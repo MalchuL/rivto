@@ -14,7 +14,7 @@ describe("editor block managers", () => {
     const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, sourceId).id;
     editor.blocks.updateBlock(sourceId, { props: { tone: "info" } });
 
-    expect(editor.blocks.getBlock(sourceId)?.props).toEqual({ tone: "info" });
+    expect(editor.blocks.getBlockNode(sourceId)?.props).toEqual({ tone: "info" });
 
     editor.blocks.removeBlock(targetId);
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([sourceId]);

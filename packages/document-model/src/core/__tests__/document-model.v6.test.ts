@@ -24,7 +24,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     expect(() => model.loadSnapshot({ version: 5, blocks: [] } as never)).toThrow(
       "Unsupported Rivto document snapshot version: 5",
     );
-    expect(model.blocks.getBlock("preserved")).toBeDefined();
+    expect(model.blocks.hasBlock("preserved")).toBe(true);
     void doc.destroy();
   });
 
@@ -63,12 +63,12 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
         children: [],
       }],
     });
-    expect(source.blocks.getBlock("listed")?.listProps).toEqual({ collapsed: false, type: "checkbox", checked: true });
+    expect(source.blocks.getBlockNode("listed")?.listProps).toEqual({ collapsed: false, type: "checkbox", checked: true });
 
     const targetDoc = new YjsDoc("list-snapshot-target");
     const target = new DocumentModelImpl(targetDoc);
     target.loadSnapshot(source.getSnapshot());
-    expect(target.blocks.getBlock("listed")?.listProps).toEqual({ collapsed: false, type: "checkbox", checked: true });
+    expect(target.blocks.getBlockNode("listed")?.listProps).toEqual({ collapsed: false, type: "checkbox", checked: true });
     sourceDoc.destroy();
     targetDoc.destroy();
   });
@@ -126,7 +126,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     docB.destroy();
   });
 
-  it("lazily caches and repairs nested block paths", () => {
+  it("uses the placement index for reads and lazily repairs nested block paths", () => {
     const doc = new YjsDoc("lazy-paths");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({
@@ -140,25 +140,25 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     };
     const findPath = jest.spyOn(blockManager, "findPath");
 
-    expect(model.blocks.getBlock("child")?.content).toBe("Child");
-    expect(findPath).toHaveBeenCalledTimes(1);
-    expect(model.blocks.getBlock("child")?.id).toBe("child");
-    expect(findPath).toHaveBeenCalledTimes(1);
+    expect(model.blocks.getBlockNode("child")?.content).toBe("Child");
+    expect(findPath).not.toHaveBeenCalled();
+    expect(model.blocks.getBlockNode("child")?.id).toBe("child");
+    expect(findPath).not.toHaveBeenCalled();
 
     model.blocks.moveBlock("child", "target", "inside");
     const searchesBeforeRepair = findPath.mock.calls.length;
     expect(model.blocks.getParentId("child")).toBe("target");
-    // Parent reads use the focused hierarchy index and do not repair the
-    // independent block-location cache until a full block read needs it.
+    // Parent and child reads use the focused hierarchy index; location paths
+    // are repaired only by operations that need a containing array.
     expect(findPath).toHaveBeenCalledTimes(searchesBeforeRepair);
     expect(model.blocks.getRootIds()).toEqual(["parent", "target"]);
-    expect(model.blocks.getChildIds("target")).toEqual(["child"]);
+    expect(model.blocks.getBlockNode("target")?.childIds).toEqual(["child"]);
     model.blocks.updateBlock("target", { listProps: { collapsed: true } });
-    expect(model.blocks.getBlock("target")?.listProps.collapsed).toBe(true);
+    expect(model.blocks.getBlockNode("target")?.listProps.collapsed).toBe(true);
     model.blocks.updateBlock("target", { listProps: { collapsed: false } });
 
     model.blocks.removeBlock("child");
-    expect(model.blocks.getBlock("child")).toBeUndefined();
+    expect(model.blocks.hasBlock("child")).toBe(false);
     doc.destroy();
   });
 
@@ -178,7 +178,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     Y.applyUpdate(docA.doc, Y.encodeStateAsUpdate(docB.doc));
 
     expect(modelA.blocks.getParentId("child")).toBe("right");
-    expect(modelA.blocks.getBlock("child")?.id).toBe("child");
+    expect(modelA.blocks.getBlockNode("child")?.id).toBe("child");
     docA.destroy();
     docB.destroy();
   });
@@ -207,7 +207,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
 
     history.clear();
     model.blocks.removeBlock("child");
-    expect(model.blocks.getBlock("child")).toBeUndefined();
+    expect(model.blocks.hasBlock("child")).toBe(false);
     history.undo();
     expect(model.blocks.getParentId("child")).toBe("parent");
 
@@ -243,7 +243,7 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
       { id: "child", targetId: "parent", position: "inside" },
       { id: "extra", targetId: "child", position: "after" },
     ]);
-    expect(model.blocks.getChildIds("parent")).toEqual(["child", "extra"]);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["child", "extra"]);
     expect(model.blocks.getRootIds()).toEqual(["parent"]);
     doc.destroy();
   });
@@ -267,13 +267,13 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
       { id: "target", patch: { props: { count: 1, remove: undefined } } },
       { id: "target", patch: { props: { count: 2 } } },
     ]);
-    expect(model.blocks.getBlock("target")?.props).toEqual({ keep: true, count: 2 });
+    expect(model.blocks.getBlockNode("target")?.props).toEqual({ keep: true, count: 2 });
 
     expect(() => model.blocks.updateBlocks([
       { id: "target", patch: { props: { keep: false } } },
       { id: "target", patch: { props: { invalid: 1n } } },
     ])).toThrow("block.props.invalid");
-    expect(model.blocks.getBlock("target")?.props).toEqual({ keep: true, count: 2 });
+    expect(model.blocks.getBlockNode("target")?.props).toEqual({ keep: true, count: 2 });
     doc.destroy();
   });
 

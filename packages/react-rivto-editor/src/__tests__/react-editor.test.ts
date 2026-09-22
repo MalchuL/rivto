@@ -73,7 +73,7 @@ describe("ReactEditor", () => {
     second.subscribe(() => { secondUpdates += 1; });
 
     const sharedId = firstCore.blocks.insertBlock({ type: "paragraph", content: "Shared" }).id;
-    expect(secondCore.blocks.getBlock(sharedId)?.content).toBe("Shared");
+    expect(secondCore.blocks.getBlockNode(sharedId)?.content).toBe("Shared");
     expect(firstUpdates).toBeGreaterThan(0);
     expect(secondUpdates).toBeGreaterThan(0);
 
@@ -82,7 +82,7 @@ describe("ReactEditor", () => {
     const secondUpdatesAfterDestroy = secondUpdates;
     const survivingId = firstCore.blocks.insertBlock({ type: "paragraph", content: "Surviving" }).id;
 
-    expect(firstCore.blocks.getBlock(survivingId)?.content).toBe("Surviving");
+    expect(firstCore.blocks.getBlockNode(survivingId)?.content).toBe("Surviving");
     expect(secondUpdates).toBe(secondUpdatesAfterDestroy);
     first.destroy();
     await firstCore.destroy();
@@ -192,7 +192,7 @@ describe("ReactEditor", () => {
       ]),
     );
     reactEditor.slashCommands.execute("list.start_numbered_list", { blockId });
-    expect(editor.blocks.getBlock(blockId)).toMatchObject({
+    expect(editor.blocks.getBlockNode(blockId)).toMatchObject({
       listProps: { type: "start_numbered_list", checked: false },
     });
     reactEditor.destroy();
@@ -263,7 +263,7 @@ describe("ReactEditor", () => {
   test("composes the first registered block wrapper outermost", () => {
     const editor = createEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Order" }).id;
-    const block = editor.blocks.getBlock(blockId)!;
+    const block = editor.blocks.getBlockNode(blockId)!;
     const Shell: ComponentType<BlockShellProps> = () => createElement("span", { "data-layer": "shell" });
     const Outer: ComponentType<BlockWrapperProps> = ({ children }) => (
       createElement("div", { "data-layer": "outer" }, children)

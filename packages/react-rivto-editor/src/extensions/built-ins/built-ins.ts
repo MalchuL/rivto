@@ -214,7 +214,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         title,
         group: "Lists",
         isAvailable: ({ blockId }) => reactEditor.blockListProps.has("list") &&
-          reactEditor.blocks.getBlock(blockId)?.listProps.type !== type,
+          reactEditor.blocks.getBlockNode(blockId)?.listProps.type !== type,
         execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
       })),
       // Clone the complete subtree while leaving persisted IDs for the store to generate.
@@ -223,12 +223,12 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         title: "Duplicate block",
         group: "Actions",
         keywords: ["copy", "clone"],
-        isAvailable: ({ blockId }) => Boolean(reactEditor.blocks.getBlock(blockId)),
+        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId),
         execute: ({ blockId }) => {
           const block = reactEditor.blocks.getBlock(blockId);
           if (!block) return;
           const input = duplicateBlockInput(block);
-          const isEdgelessRoot = reactEditor.mode.get() === "edgeless" && reactEditor.blocks.getParentId(blockId) === null;
+          const isEdgelessRoot = reactEditor.mode.get() === "edgeless" && reactEditor.blocks.isRootBlock(blockId);
           const sourceElement = isEdgelessRoot
             ? reactEditor.elements.getElements().find((element) => element.type === "block" && blockIdsOf(element, reactEditor.blocks.getRootIds()).includes(blockId))
             : undefined;
@@ -257,7 +257,7 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         title: "Delete block",
         group: "Actions",
         keywords: ["remove"],
-        isAvailable: ({ blockId }) => Boolean(reactEditor.blocks.getBlock(blockId)),
+        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId),
         execute: ({ blockId }) => {
           reactEditor.selection.set(createStructuralSelection([blockId]));
           reactEditor.selection.delete();
@@ -269,9 +269,9 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         group: "Actions",
         keywords: ["fold", "hide"],
         isAvailable: ({ blockId }) => {
-          const block = reactEditor.blocks.getBlock(blockId);
+          const block = reactEditor.blocks.getBlockNode(blockId);
           return reactEditor.blockListProps.has("collapse") &&
-            Boolean(block?.children.length && block.listProps.collapsed !== true);
+            Boolean(block?.childIds.length && block.listProps.collapsed !== true);
         },
         execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
       }),
@@ -281,9 +281,9 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         group: "Actions",
         keywords: ["unfold", "show"],
         isAvailable: ({ blockId }) => {
-          const block = reactEditor.blocks.getBlock(blockId);
+          const block = reactEditor.blocks.getBlockNode(blockId);
           return reactEditor.blockListProps.has("collapse") &&
-            Boolean(block?.children.length && block.listProps.collapsed === true);
+            Boolean(block?.childIds.length && block.listProps.collapsed === true);
         },
         execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
       }),

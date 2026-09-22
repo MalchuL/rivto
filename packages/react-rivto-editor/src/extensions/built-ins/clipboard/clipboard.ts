@@ -173,17 +173,17 @@ export function registerClipboard(
     // The completed paste replaces it with the newly selected content.
     if (canvas) reactEditor.selection.set(canvas);
     const active = reactEditor.selection.get();
-    const lengthOf = (id: string) => reactEditor.blocks.getBlock(id)?.content.length ?? 0;
+    const lengthOf = (id: string) => reactEditor.blocks.getBlockNode(id)?.content.length ?? 0;
     const ends = active ? resolveSelectionEndpoints(active, lengthOf) : undefined;
     const activeId = ends?.head.blockId ?? active?.focusBlockId;
-    const activeBlock = activeId ? reactEditor.blocks.getBlock(activeId) : undefined;
+    const activeBlock = activeId ? reactEditor.blocks.getBlockNode(activeId) : undefined;
     const expanded = reactEditor.blockListProps.has("collapse") && activeBlock?.listProps.collapsed !== true;
     // Only whole-block paste needs a parent and sibling insertion position.
     // A native bundle marked `startsWithText` is pasted into text instead.
     const structuralSource = Boolean(parsedBlocks?.length)
       || Boolean(sourceBundle?.blocks.length && sourceBundle.startsWithText !== true);
     const placement = activeBlock && structuralSource
-      ? expanded && activeBlock.children.length
+      ? expanded && reactEditor.blocks.hasChildren(activeBlock.id)
         ? { parentId: activeBlock.id, afterId: null }
         : { parentId: reactEditor.blocks.getParentId(activeBlock.id) ?? null, afterId: activeBlock.id }
       : undefined;

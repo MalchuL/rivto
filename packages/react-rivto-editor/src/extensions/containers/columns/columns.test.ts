@@ -65,7 +65,7 @@ test("inserts equally sized columns and relocates nested blocks when a column is
   expect(editor.blocks.getBlock(board.id)?.children).toHaveLength(1);
   expect(editor.blocks.getBlock(left.id)?.children.map((child) => child.id)).toEqual([keep, moving]);
   expect(editor.blocks.getBlock(moving)).toEqual(original);
-  expect(editor.blocks.getBlock(right.id)).toBeUndefined();
+  expect(editor.blocks.hasBlock(right.id)).toBe(false);
 
   editor.history.undo();
   expect(editor.blocks.getBlock(board.id)?.children.map((child) => child.id)).toEqual([left.id, right.id]);
@@ -95,7 +95,7 @@ test("structural column deletion moves nested blocks instead of removing them", 
   relocateColumnContents(editor, [right!.id]);
   editor.blocks.removeBlock(right!.id);
   expect(editor.blocks.getBlock(left!.id)?.children.map((child) => child.id)).toEqual([nested]);
-  expect(editor.blocks.getBlock(nested)?.content).toBe("Survive");
+  expect(editor.blocks.getBlockNode(nested)?.content).toBe("Survive");
 
   reactEditor.destroy();
   editor.destroy();
