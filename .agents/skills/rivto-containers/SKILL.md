@@ -1,6 +1,6 @@
 ---
 name: rivto-containers
-description: Implement or review native layout-container blocks in the Rivto repository, including boards, lanes, grids, columns, tables, cells, nested content, collapse summaries, slash conversion, drag/drop, resizing, and structural deletion. Use for container work in packages/react-rivto-editor; do not use for ordinary leaf-only blocks.
+description: Implement or review Rivto blocks that own child layout, such as boards, columns, and tables. Use for native containers in packages/react-rivto-editor; use rivto-blocks for leaf blocks.
 ---
 
 # Rivto Containers
@@ -12,10 +12,8 @@ tree renderer, or container-specific drag system.
 
 ## Start from the current implementation
 
-Patterns can evolve. Before changing code, trace the complete path and all
-callers with `rg`; do not rely only on this guide.
-
-Read these shared owners first:
+Patterns can evolve. Trace the affected behavior and inspect relevant shared
+owners; do not rely only on this guide:
 
 - `packages/react-rivto-editor/src/blocks/block-tree.tsx` — recursive rendering,
   collapse visibility, slots, wrappers, and stable DOM shells.
@@ -79,7 +77,8 @@ document type.
 
 ## Register through one React extension
 
-Return a `ReactEditorExtension` whose `setup` registers the complete feature:
+Use a `ReactEditorExtension` when the feature needs coordinated registrations;
+its `setup` can register:
 
 - `runtime.blocks.register` for every native type, renderer, optional behavior
   view, and simple slash conversion.
@@ -91,10 +90,8 @@ Return a `ReactEditorExtension` whose `setup` registers the complete feature:
 Let runtime registration own cleanup. When collecting explicit disposers, return
 one cleanup that invokes them in reverse order. Export the public extension,
 factory, constants, operations, and public prop types from `src/extensions.ts`
-and `src/index.ts`; add the extension to a preset only when that preset is meant
-to include the feature. Follow repository documentation rules: detailed
-module-level JSDoc on every source file and semantic JSDoc on every function or
-method, including `@param` and applicable `@returns` tags.
+and `src/index.ts` when consumers need them; add the extension to a preset only
+when that preset is meant to include the feature.
 
 ## Render content, never the subtree
 
@@ -232,8 +229,7 @@ Prefer extension-local mounted CSS for a new container. Change global
 `styles.css` only for a rule that genuinely belongs to every block tree or when
 maintaining an existing globally styled extension.
 
-Use named constants for every HTML class referenced by JSX, selectors, or
-`classList`, following the repository rule. Prefer stable attributes such as
+Keep repeated or cross-file HTML class names in named constants. Prefer stable attributes such as
 `[data-block-type]`, direct-child selectors, and slot ownership attributes for
 structural relationships.
 
@@ -279,8 +275,7 @@ wrappers and available width.
 
 ## Test the invariant, then the browser
 
-Add one focused colocated Jest test for model and operation behavior. Cover the
-parts that apply:
+Add focused checks for the behavior changed. Model or operation checks may cover:
 
 - factory shape and property validation;
 - exact structural types and parent restrictions;
@@ -301,12 +296,9 @@ Use Playwright only for browser/cross-layer behavior:
   slots, or modal behavior;
 - page and edgeless parity when the feature supports both.
 
-Block dragging is an optional React extension, but its container integration is
-still mandatory browser coverage. Exercise every layout-root type in a realistic
-runtime that explicitly installs `pageDragExtension()`. A host that intentionally
-omits the extension should render no handle; that does not replace the installed
-integration test. Add each new container root to the shared full-height lateral
-hover implementation and the parameterized root-handle test in the same change.
+When changing container drag behavior, test it in a runtime with
+`pageDragExtension()` installed. Add a new container root to the shared
+full-height lateral hover implementation and its parameterized handle test.
 
 For drag-handle regressions, test interaction rather than computed visibility
 alone. Start outside the container, verify the root handle is transparent but
@@ -322,9 +314,7 @@ handle X positions plus no control-width content offset. Build the demo and use
 a fresh or isolated preview; `reuseExistingServer` can otherwise serve stale CSS
 and produce a false result.
 
-Run the narrowest relevant tests first, then React type checking, lint for touched
-files, the affected build, and focused E2E. Check `git diff --check` and preserve
-the dirty worktree; never rewrite unrelated changes.
+Run the narrowest relevant checks first and `git diff --check`.
 
 ## Reject these shortcuts
 

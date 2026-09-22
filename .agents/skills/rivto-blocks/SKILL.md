@@ -1,6 +1,6 @@
 ---
 name: rivto-blocks
-description: Implement or review native Rivto block types and renderers, including text, contentless controls, sizing and spacing, selection anchors, drag readiness, registration, properties, and behavior inside containers. Use for ordinary or generic blocks in packages/react-rivto-editor and host extensions; use rivto-containers when the new block itself owns a child layout.
+description: Implement or review ordinary Rivto block types and renderers. Use for leaf blocks in packages/react-rivto-editor or host extensions; use rivto-containers when the block owns child layout.
 ---
 
 # Rivto Blocks
@@ -12,8 +12,8 @@ drop target.
 
 ## Start from the current contract
 
-Patterns can evolve. Before editing, trace the requested type and every caller
-with `rg`. Read the owners relevant to the change:
+Patterns can evolve. Trace the requested behavior and inspect the owners relevant
+to the change:
 
 - `packages/react-rivto-editor/src/blocks/block-tree/block-tree.tsx` — stable shell,
   renderer lookup, slots, collapse visibility, and recursive children.
@@ -188,8 +188,8 @@ anchor and do not spread a second editing attribute set.
 - Export public block types and factories from the package entry points only when
   consumers need them.
 
-Use a named class constant on the owning element, with a stable `rivto-*`,
-`page-*`, or `edgeless-*` hook first and Tailwind utilities after it. Keep
+Use a stable `rivto-*`, `page-*`, or `edgeless-*` hook on the owning element,
+with Tailwind utilities after it. Keep
 utilities in the component; add a colocated feature `.css` file only for rules
 utilities cannot express, such as recursive geometry, structural `:has()`,
 pseudo-elements, counters, or imperatively created elements. Import package
@@ -204,9 +204,7 @@ files in `src/components/ui/`. Use `lucide-react` icons with
 `aria-hidden="true"` inside labelled controls; add `pointer-events-none` to an
 icon inside a plain button so the button remains the pointer target.
 
-Use named constants for every HTML class referenced from JSX, selectors, or
-`classList`. Follow the repository JSDoc requirements for every source file,
-function, and method.
+Keep repeated or cross-file HTML class names in named constants.
 
 ## Keep behavior in the owning layer
 
@@ -253,7 +251,7 @@ content. Preserve authored descendants before deleting a structural shell.
 
 ## Verify the contract
 
-Add the narrowest regression check that would fail if the new behavior broke:
+Choose a regression check for the behavior changed:
 
 - definition defaults, prop validation, parent restrictions, or factories: a
   colocated core/React Jest test;
@@ -262,12 +260,9 @@ Add the narrowest regression check that would fail if the new behavior broke:
 - pointer selection, real drag/drop, layout geometry, or page/edgeless parity:
   focused Playwright coverage with `pageDragExtension()` installed explicitly.
 
-For contentless blocks, verify the selection anchor exists on the full renderer
-region and a native control still activates on an unclaimed click. For blocks
-used in containers, verify narrow width, long content, selection, and dragging
-inside at least the closest layout example. Run focused tests first, then React
-type checking, lint for touched files, affected build/tests, and
-`git diff --check`.
+For contentless blocks, verify the selection anchor and any native control
+interaction. For blocks used in containers, check the affected layout and
+interaction. Run relevant focused checks and `git diff --check`.
 
 ## Reject these shortcuts
 
