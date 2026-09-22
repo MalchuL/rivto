@@ -257,7 +257,7 @@ const commitPropertiesPatch = (
   blockId: string,
   patch?: TodoItemPropertiesPatch,
 ): boolean => {
-  const block = reactEditor.blocks.getBlock(blockId);
+  const block = reactEditor.blocks.getBlockNode(blockId);
   if (!block || block.type !== TODO_ITEM_BLOCK_TYPE || !patch) return false;
   const changed = Object.fromEntries(
     Object.entries(patch).filter(([key, value]) => block.props[key] !== value),
@@ -512,7 +512,7 @@ export function todoItemExtension(
         const current = candidate;
         if (!current) return;
         candidate = undefined;
-        const block = reactEditor.blocks.getBlock(current.blockId);
+        const block = reactEditor.blocks.getBlockNode(current.blockId);
         const match = block ? matchPrompt(block.content, prompts) : undefined;
         if (!block || block.type === TODO_ITEM_BLOCK_TYPE || !match) {
           decoratePrompt(current.contentElement);
@@ -528,93 +528,97 @@ export function todoItemExtension(
         });
       };
 
-      reactEditor.blockTypes.register({
-        definition: {
-          type: TODO_STORAGE_BLOCK_TYPE,
-          title: "TODO storage",
-          defaultProps: createTodoStorageProps,
-          propSchema: todoStoragePropsSchema,
-          metadata: { containment: { childOutline: "free", outlineFloor: true } },
-        },
-        render: TodoStorage,
-        view: todoStorageView,
-        slashCommand: {
-          id: "type.todo-storage",
-          title: "TODO storage",
-          group: "Turn into",
-          keywords: ["tasks", "todos"],
-          isAvailable: ({ blockId }) => (
-            reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId)
-          ),
-        },
-      });
-      reactEditor.blockTypes.register({
-        definition: {
-          type: TODO_ITEM_BLOCK_TYPE,
-          title: "TODO item",
-          defaultProps: createTodoItemProps,
-          propSchema: todoItemPropsSchema,
-        },
-        render: ({ blockId }) => <TodoItem blockId={blockId} propertiesModal={PropertiesModal} />,
-      });
-      reactEditor.surfaces.registerBlockWrapper("block", TodoStorageVisibility);
-      reactEditor.surfaces.registerBlockWrapper("edgeless", TodoStorageVisibility);
-      reactEditor.surfaces.registerBlockWrapper("block", TodoStorageBlockWrapper);
-      reactEditor.surfaces.registerBlockWrapper("edgeless", TodoStorageBlockWrapper);
-      reactEditor.events.register({
-        id: "todo-item.input",
-        type: "input",
-        scope: "content",
-      }, ({ blockId, contentElement }) => {
-        if (!blockId || !contentElement) return false;
-        queueMicrotask(() => {
-          const block = reactEditor.blocks.getBlockNode(blockId);
-          if (!block || block.type === TODO_ITEM_BLOCK_TYPE) return;
-          const match = matchPrompt(contentElement.textContent ?? "", prompts);
-          if (!match) {
-            if (candidate?.blockId === blockId) clearCandidate();
-            return;
-          }
+      const disposers = [
+        reactEditor.blockTypes.register({
+          definition: {
+            type: TODO_STORAGE_BLOCK_TYPE,
+            title: "TODO storage",
+            defaultProps: createTodoStorageProps,
+            propSchema: todoStoragePropsSchema,
+            metadata: { containment: { childOutline: "free", outlineFloor: true } },
+          },
+          render: TodoStorage,
+          view: todoStorageView,
+          slashCommand: {
+            id: "type.todo-storage",
+            title: "TODO storage",
+            group: "Turn into",
+            keywords: ["tasks", "todos"],
+            isAvailable: ({ blockId }) => (
+              reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId)
+            ),
+          },
+        }),
+        reactEditor.blockTypes.register({
+          definition: {
+            type: TODO_ITEM_BLOCK_TYPE,
+            title: "TODO item",
+            defaultProps: createTodoItemProps,
+            propSchema: todoItemPropsSchema,
+          },
+          render: ({ blockId }) => <TodoItem blockId={blockId} propertiesModal={PropertiesModal} />,
+        }),
+        reactEditor.surfaces.registerBlockWrapper("block", TodoStorageVisibility),
+        reactEditor.surfaces.registerBlockWrapper("edgeless", TodoStorageVisibility),
+        reactEditor.surfaces.registerBlockWrapper("block", TodoStorageBlockWrapper),
+        reactEditor.surfaces.registerBlockWrapper("edgeless", TodoStorageBlockWrapper),
+        reactEditor.events.register({
+          id: "todo-item.input",
+          type: "input",
+          scope: "content",
+        }, ({ blockId, contentElement }) => {
+          if (!blockId || !contentElement) return false;
+          queueMicrotask(() => {
+            const block = reactEditor.blocks.getBlockNode(blockId);
+            if (!block || block.type === TODO_ITEM_BLOCK_TYPE) return;
+            const match = matchPrompt(contentElement.textContent ?? "", prompts);
+            if (!match) {
+              if (candidate?.blockId === blockId) clearCandidate();
+              return;
+            }
+            if (candidate && candidate.blockId !== blockId) convertCandidate();
+            candidate = { blockId, contentElement, ...match };
+            decoratePrompt(contentElement, match.prompt);
+          });
+          return false;
+        }),
+        reactEditor.events.register({
+          id: "todo-item.focus-out",
+          type: "focusout",
+          scope: "content",
+        }, ({ raw: event, root, blockId, blockElement }) => {
+          // OS overlays such as Win+Space can transiently blur the document.
+          if (!root.ownerDocument.hasFocus()) return false;
+          if (candidate?.blockId !== blockId) return false;
+          const next = event.relatedTarget;
+          if (!(next instanceof Node) || !blockElement?.contains(next)) convertCandidate();
+          return false;
+        }),
+        reactEditor.events.register({
+          id: "todo-item.pointer-down",
+          type: "pointerdown",
+          target: "document",
+          capture: true,
+        }, ({ blockId }) => {
           if (candidate && candidate.blockId !== blockId) convertCandidate();
-          candidate = { blockId, contentElement, ...match };
-          decoratePrompt(contentElement, match.prompt);
-        });
-        return false;
-      });
-      reactEditor.events.register({
-        id: "todo-item.focus-out",
-        type: "focusout",
-        scope: "content",
-      }, ({ raw: event, root, blockId, blockElement }) => {
-        // OS overlays such as Win+Space can transiently blur the document.
-        if (!root.ownerDocument.hasFocus()) return false;
-        if (candidate?.blockId !== blockId) return false;
-        const next = event.relatedTarget;
-        if (!(next instanceof Node) || !blockElement?.contains(next)) convertCandidate();
-        return false;
-      });
-      reactEditor.events.register({
-        id: "todo-item.pointer-down",
-        type: "pointerdown",
-        target: "document",
-        capture: true,
-      }, ({ blockId }) => {
-        if (candidate && candidate.blockId !== blockId) convertCandidate();
-        return false;
-      });
-      reactEditor.events.register({
-        id: "todo-item.selection-change",
-        type: "selectionchange",
-        target: "document",
-      }, ({ root }) => {
-        // A lost browser range is not an editor navigation while the OS owns focus.
-        if (!root.ownerDocument.hasFocus()) return false;
-        const activeBlockId = reactEditor.selection.readDOM()?.focusBlockId;
-        if (candidate && activeBlockId !== candidate.blockId) convertCandidate();
-        return false;
-      });
-
-      return () => clearCandidate();
+          return false;
+        }),
+        reactEditor.events.register({
+          id: "todo-item.selection-change",
+          type: "selectionchange",
+          target: "document",
+        }, ({ root }) => {
+          // A lost browser range is not an editor navigation while the OS owns focus.
+          if (!root.ownerDocument.hasFocus()) return false;
+          const activeBlockId = reactEditor.selection.readDOM()?.focusBlockId;
+          if (candidate && activeBlockId !== candidate.blockId) convertCandidate();
+          return false;
+        }),
+      ];
+      return () => {
+        clearCandidate();
+        disposers.reverse().forEach((dispose) => dispose());
+      };
     },
   };
 }

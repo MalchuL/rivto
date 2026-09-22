@@ -37,11 +37,17 @@ export interface ResolvedSelection {
   /** Resolved text coverage for every selected block. */
   ranges: ResolvedBlockRange[];
   /**
-   * Whether the selection originated from text/caret rather than structural selection.
+   * Whether this is a text-range selection rather than a wholly structural one.
    *
-   * Derived from `!isStructuralSelection(selection)`. Returned by copy() operations
-   * to guide paste strategies: text selections enable text-merge paste, structural
-   * selections insert as complete block subtrees.
+   * True unless every stored member is `{ start: 0, end: -1 }`. Carets, partial
+   * blocks, and multi-block text ranges all count. Interior text members use
+   * concrete lengths, not the live-end sentinel.
+   *
+   * Example — blocks "The fox", "jumps over", "the lazy dog"; anchor in "fox",
+   * head in "dog":
+   * - `{ id: "the_fox", start: 4, end: 8 }`
+   * - `{ id: "jumps_over", start: 0, end: 11 }`
+   * - `{ id: "the_lazy_dog", start: 0, end: 8 }`
    */
   fromTextSelection: boolean;
 }

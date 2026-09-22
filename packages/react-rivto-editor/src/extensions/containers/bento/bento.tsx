@@ -353,28 +353,31 @@ export function bentoExtension(): ReactEditorExtension {
   return {
     id: "block.bento",
     setup: (reactEditor) => {
-      reactEditor.blockTypes.register({
-        definition: {
-          type: BENTO_BLOCK_TYPE,
-          title: "Bento",
-          metadata: { containment: { childOutline: "fixed", outlineFloor: true } },
-        },
-        render: Bento,
-        view: bentoView,
-        slashCommand: {
-          id: "block.bento.insert",
-          title: "Bento",
-          group: "Turn into",
-          keywords: ["grid", "tiles"],
-        },
-      });
-      reactEditor.surfaces.registerBlockWrapper("block", BentoWrapper);
-      reactEditor.surfaces.registerBlockWrapper("edgeless", BentoWrapper);
-      reactEditor.surfaces.registerBlockSlot({
-        position: "right",
-        component: BlockModalButton,
-        when: ({ block }) => block.type === BENTO_BLOCK_TYPE,
-      });
+      const disposers = [
+        reactEditor.blockTypes.register({
+          definition: {
+            type: BENTO_BLOCK_TYPE,
+            title: "Bento",
+            metadata: { containment: { childOutline: "fixed", outlineFloor: true } },
+          },
+          render: Bento,
+          view: bentoView,
+          slashCommand: {
+            id: "block.bento.insert",
+            title: "Bento",
+            group: "Turn into",
+            keywords: ["grid", "tiles"],
+          },
+        }),
+        reactEditor.surfaces.registerBlockWrapper("block", BentoWrapper),
+        reactEditor.surfaces.registerBlockWrapper("edgeless", BentoWrapper),
+        reactEditor.surfaces.registerBlockSlot({
+          position: "right",
+          component: BlockModalButton,
+          when: ({ block }) => block.type === BENTO_BLOCK_TYPE,
+        }),
+      ];
+      return () => disposers.reverse().forEach((dispose) => dispose());
     },
   };
 }

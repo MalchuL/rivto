@@ -178,39 +178,42 @@ export function kanbanExtension(): ReactEditorExtension {
   return {
     id: "block.kanban",
     setup: (reactEditor) => {
-      reactEditor.surfaces.registerBlockWrapper("block", KanbanDialog);
-      reactEditor.surfaces.registerBlockWrapper("edgeless", KanbanDialog);
-      reactEditor.surfaces.registerBlockSlot({
-        position: "right", component: BlockModalButton, when: ({ block }) => block.type === KANBAN_BLOCK_TYPE,
-      });
-      reactEditor.blockTypes.register({
-        definition: {
-          type: KANBAN_BLOCK_TYPE,
+      const disposers = [
+        reactEditor.surfaces.registerBlockWrapper("block", KanbanDialog),
+        reactEditor.surfaces.registerBlockWrapper("edgeless", KanbanDialog),
+        reactEditor.surfaces.registerBlockSlot({
+          position: "right", component: BlockModalButton, when: ({ block }) => block.type === KANBAN_BLOCK_TYPE,
+        }),
+        reactEditor.blockTypes.register({
+          definition: {
+            type: KANBAN_BLOCK_TYPE,
+            title: "Kanban",
+            metadata: { containment: { childOutline: "fixed" } },
+          },
+          render: Kanban,
+          view: kanbanView,
+        }),
+        reactEditor.blockTypes.register({
+          definition: {
+            type: KANBAN_COLUMN_BLOCK_TYPE,
+            title: "Kanban column",
+            metadata: { containment: { childOutline: "free", outlineFloor: true } },
+          },
+          render: KanbanColumn,
+          view: kanbanColumnView,
+        }),
+        reactEditor.slashCommands.register({
+          id: "block.kanban.insert",
           title: "Kanban",
-          metadata: { containment: { childOutline: "fixed" } },
-        },
-        render: Kanban,
-        view: kanbanView,
-      });
-      reactEditor.blockTypes.register({
-        definition: {
-          type: KANBAN_COLUMN_BLOCK_TYPE,
-          title: "Kanban column",
-          metadata: { containment: { childOutline: "free", outlineFloor: true } },
-        },
-        render: KanbanColumn,
-        view: kanbanColumnView,
-      });
-      reactEditor.slashCommands.register({
-        id: "block.kanban.insert",
-        title: "Kanban",
-        group: "Turn into",
-        keywords: ["board", "cards", "tasks"],
-        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId),
-        execute: ({ blockId }) => {
-          convertLeafToContainer(reactEditor, blockId, createKanbanBlockInput());
-        },
-      });
+          group: "Turn into",
+          keywords: ["board", "cards", "tasks"],
+          isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId),
+          execute: ({ blockId }) => {
+            convertLeafToContainer(reactEditor, blockId, createKanbanBlockInput());
+          },
+        }),
+      ];
+      return () => disposers.reverse().forEach((dispose) => dispose());
     },
   };
 }
