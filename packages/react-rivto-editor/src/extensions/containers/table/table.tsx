@@ -19,9 +19,9 @@ import {
   type PointerEvent,
   type RefObject,
 } from "react";
-import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper";
-import { BlockModal, BlockModalButton } from "../../../blocks/block-modal";
-import { MarkdownContent } from "../../../blocks/markdown";
+import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
+import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
+import { MarkdownContent } from "../../../blocks/markdown/markdown";
 import { useBlockEditing, useReactEditor } from "../../../hooks";
 import { type ReactEditorExtension } from "../../../managers";
 import type { ReactEditor } from "../../../types";

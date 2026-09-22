@@ -15,7 +15,7 @@ import { focusBlock, type ReactEditorExtension } from "../../../managers";
 import { kanbanColumnView, kanbanView } from "./kanban-view";
 import { convertLeafToContainer } from "../../../views/ops/outline-ops";
 
-import { BlockModal, BlockModalButton } from "../../../blocks/block-modal";
+import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { PlusIcon } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 

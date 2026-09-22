@@ -1,7 +1,7 @@
 import {
   replaceMarkdownCode,
   resolveCodeFenceInfo,
-} from "../blocks/markdown-code";
+} from "../blocks/markdown/markdown-code";
 
 describe("resolveCodeFenceInfo", () => {
   it("preserves direct language labels", () => {

@@ -2,7 +2,7 @@
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import { createCaretSelection } from "@chulane/rivto";
-import { BlockListSlot } from "../../../../../blocks/block-slot-controls";
+import { BlockListSlot } from "../../../../../blocks/block-slot-controls/block-slot-controls";
 import { focusBlock } from "../../../../../managers";
 import type { ReactEditor } from "../../../../../types";
 import type { BlockListType, ListShortcutPatch } from "../types";

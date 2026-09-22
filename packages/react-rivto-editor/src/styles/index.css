@@ -28,11 +28,11 @@
 
 /* Page surface and recursive block tree. */
 @import "../surfaces/page/page-surface.css" layer(components);
-@import "../blocks/block-tree.css" layer(components);
-@import "../blocks/owner-slots.css" layer(components);
-@import "../blocks/block-slot-controls.css" layer(components);
-@import "../blocks/block-modal.css" layer(components);
-@import "../blocks/markdown.css" layer(components);
+@import "../blocks/block-tree/block-tree.css" layer(components);
+@import "../blocks/owner-slots/owner-slots.css" layer(components);
+@import "../blocks/block-slot-controls/block-slot-controls.css" layer(components);
+@import "../blocks/block-modal/block-modal.css" layer(components);
+@import "../blocks/markdown/markdown.css" layer(components);
 
 /* Optional page interaction extensions. */
 @import "../extensions/block-drag/block-drag.css" layer(components);

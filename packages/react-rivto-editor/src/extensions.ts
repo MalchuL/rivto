@@ -59,7 +59,7 @@ export {
   TABLE_DEFAULT_COLUMN_WIDTH,
   type TableCellProps,
 } from "./extensions/containers/table/table";
-export { BlockModal, BlockModalButton } from "./blocks/block-modal";
+export { BlockModal, BlockModalButton } from "./blocks/block-modal/block-modal";
 export { BaseBlockView, ContainerBlockView } from "./views";
 export type {
   BlockDropPlacementOptions,

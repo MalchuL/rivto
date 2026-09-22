@@ -16,8 +16,8 @@ import {
   type PointerEvent,
 } from "react";
 import type { EditorBlockInput } from "@chulane/rivto";
-import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper";
-import { BlockModal, BlockModalButton } from "../../../blocks/block-modal";
+import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
+import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { BLOCK_ID_ATTRIBUTE } from "../../../constants";
 import { useBlockEditing, useReactEditor } from "../../../hooks";
 import type { ReactEditorExtension } from "../../../managers";
