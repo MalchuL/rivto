@@ -9,7 +9,7 @@ export {
   validateBlockListProps,
 } from "./block-manager";
 export type { BlockPipe, BlockPipeContext, BlockProcessor } from "./block-manager";
-export type { BlockListProps } from "./block-manager";
+export type { BlockFieldValue, BlockListProps, BlockPayloadField } from "./block-manager";
 export { DocumentElementManager } from "./element-manager";
 export type { ElementPipe, ElementPipeContext, ElementProcessor } from "./element-manager";
 export {

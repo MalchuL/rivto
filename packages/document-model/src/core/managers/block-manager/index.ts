@@ -1,4 +1,5 @@
 export { DocumentBlockManager } from "./block-manager";
+export type { BlockFieldValue, BlockPayloadField } from "./block-manager";
 export type { BlockPipe, BlockPipeContext, BlockProcessor } from "./block-pipe";
 export {
   BLOCK_PARENT_CONSTRAINT_PROCESSOR_ID,

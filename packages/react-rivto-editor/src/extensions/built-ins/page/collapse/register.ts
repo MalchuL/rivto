@@ -111,7 +111,7 @@ export function registerCollapse(
   // Pin after the other registrations so a setup failure does not leave a
   // session view attached to an editor whose collapse extension did not finish.
   const releasePin = options.syncView === false
-    ? editor.blocks.pinListProp("collapsed")
+    ? editor.blocks.pinBlockField({ field: "listProps", key: "collapsed" })
     : undefined;
 
   return () => {
