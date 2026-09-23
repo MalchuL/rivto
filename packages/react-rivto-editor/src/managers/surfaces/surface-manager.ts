@@ -1,6 +1,6 @@
 import type { EditorMode } from "@chulane/rivto";
 import type { ComponentType } from "react";
-import type { BlockWrapperComponent } from "../../blocks/block-wrapper";
+import type { BlockWrapperComponent } from "../../blocks/block-wrapper/block-wrapper";
 import type { SurfacesCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
 import type { ReactEditorImpl } from "../../react-editor";

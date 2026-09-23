@@ -10,7 +10,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EditorView } from "../../editor-view";
 import { createReactEditor } from "../../react-editor";
-import { BlockCollapseSlot } from "../../blocks/block-slot-controls";
+import { BlockCollapseSlot } from "../../blocks/block-slot-controls/block-slot-controls";
 import { useBlock, useBlockNode, type UseBlockResult, type UseBlockNodeResult } from "./use-block";
 
 describe("useBlock", () => {

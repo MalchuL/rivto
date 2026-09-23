@@ -7,6 +7,8 @@
  */
 import { type EditorBlock, type EditorBlockInput } from "@chulane/rivto";
 import { createPortal } from "react-dom";
+import { PlusIcon } from "lucide-react";
+import { Button } from "../../../components/ui/button";
 import {
   useCallback,
   useLayoutEffect,
@@ -17,9 +19,9 @@ import {
   type PointerEvent,
   type RefObject,
 } from "react";
-import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper";
-import { BlockModal, BlockModalButton } from "../../../blocks/block-modal";
-import { MarkdownContent } from "../../../blocks/markdown";
+import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
+import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
+import { MarkdownContent } from "../../../blocks/markdown/markdown";
 import { useBlockEditing, useReactEditor } from "../../../hooks";
 import { type ReactEditorExtension } from "../../../managers";
 import type { ReactEditor } from "../../../types";
@@ -32,9 +34,12 @@ export const TABLE_CELL_BLOCK_TYPE = "table-cell";
 export const TABLE_DEFAULT_COLUMN_WIDTH = 180;
 
 const TABLE_CLASS = "rivto-table";
-const TABLE_SUMMARY_CLASS = "rivto-table-summary";
+const TABLE_SUMMARY_CLASS = "rivto-table-summary flex items-center gap-2";
+const TABLE_SUMMARY_STATS_CLASS = "text-xs tabular-nums text-muted-foreground";
 const ROW_CLASS = "rivto-table-row";
 const CELL_CLASS = "rivto-table-cell";
+/** Placement and hover reveal live in table.css; the round badge look is utility-based. */
+const BOUNDARY_BUTTON_CLASS = "size-[22px] rounded-full border-input bg-background text-primary shadow-sm hover:bg-background hover:text-primary [&_svg]:size-3.5";
 const ADD_ROW_CLASS = "rivto-table-add-row";
 const ADD_COLUMN_CLASS = "rivto-table-add-column";
 const RESIZE_COLUMN_CLASS = "rivto-table-resize-column";
@@ -48,103 +53,6 @@ export interface TableCellProps {
   readonly tableColumnWidth?: number;
 }
 
-const TABLE_STYLES = `
-[data-block-type="${TABLE_BLOCK_TYPE}"] > .page-block-children {
-  margin: 0;
-  overflow-x: auto;
-  border: 1px solid #dcdfe4;
-  border-radius: 10px;
-}
-[data-block-type="${TABLE_BLOCK_TYPE}"]:not(:has(> .page-block-children)):has(.${TABLE_SUMMARY_CLASS}:empty) {
-  box-sizing: border-box;
-  min-height: 96px;
-  border: 1px solid #dcdfe4;
-  border-radius: 10px;
-}
-[data-block-type="${TABLE_ROW_BLOCK_TYPE}"] { position: relative; width: max-content; min-width: 100%; }
-[data-block-type="${TABLE_ROW_BLOCK_TYPE}"] > .page-block-row { min-height: 0; }
-[data-block-type="${TABLE_ROW_BLOCK_TYPE}"] > .page-block-children {
-  display: flex;
-  align-items: stretch;
-  width: max-content;
-  min-width: 100%;
-  margin: 0;
-}
-[data-block-type="${TABLE_ROW_BLOCK_TYPE}"] + [data-block-type="${TABLE_ROW_BLOCK_TYPE}"] {
-  border-top: 1px solid #dcdfe4;
-}
-[data-block-type="${TABLE_CELL_BLOCK_TYPE}"] {
-  position: relative;
-  flex: 0 0 var(${COLUMN_WIDTH_PROPERTY}, ${TABLE_DEFAULT_COLUMN_WIDTH}px);
-  width: var(${COLUMN_WIDTH_PROPERTY}, ${TABLE_DEFAULT_COLUMN_WIDTH}px);
-  min-width: ${MIN_COLUMN_WIDTH}px;
-  padding: 10px 12px;
-  box-sizing: border-box;
-  /* Width reflow is not a reorder; suppress the shared FLIP move animation. */
-  transform: none !important;
-}
-[data-block-type="${TABLE_CELL_BLOCK_TYPE}"] + [data-block-type="${TABLE_CELL_BLOCK_TYPE}"] {
-  border-left: 1px solid #dcdfe4;
-}
-[data-block-type="${TABLE_CELL_BLOCK_TYPE}"] > .page-block-children { margin: 8px 0 0 16px; }
-[data-block-type="${TABLE_BLOCK_TYPE}"] > .page-block-children .page-block-row::before { inset: 0; width: auto; }
-[data-block-type="${TABLE_BLOCK_TYPE}"] > .page-block-children .rivto-slot[data-slot-position="left-top"] {
-  position: relative;
-  inset: auto;
-  transform: none;
-  order: -1;
-}
-.${ROW_CLASS} { min-height: 1px; }
-.${TABLE_SUMMARY_CLASS} {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.${TABLE_SUMMARY_CLASS}:not(:empty) {
-  min-height: var(--rivto-default-block-height);
-}
-.${TABLE_SUMMARY_CLASS} span { color: #626f86; font-size: 12px; font-variant-numeric: tabular-nums; }
-.${ADD_ROW_CLASS}, .${ADD_COLUMN_CLASS} {
-  position: absolute;
-  z-index: 5;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid #c7c2d1;
-  border-radius: 50%;
-  color: var(--rivto-accent, #6c5ce7);
-  background: white;
-  box-shadow: 0 1px 4px rgb(9 30 66 / 20%);
-  cursor: pointer;
-  opacity: 0;
-}
-.${ADD_ROW_CLASS} { left: 50%; bottom: -11px; translate: -50% 0; }
-.${ADD_COLUMN_CLASS} { top: 50%; right: -11px; translate: 0 -50%; }
-.${ADD_ROW_CLASS}:hover, .${ADD_COLUMN_CLASS}:hover,
-.${ADD_ROW_CLASS}:focus-visible, .${ADD_COLUMN_CLASS}:focus-visible { opacity: 1; }
-.${ADD_ROW_CLASS}:focus-visible, .${ADD_COLUMN_CLASS}:focus-visible {
-  outline: 2px solid var(--rivto-accent, #6c5ce7);
-  outline-offset: 2px;
-}
-.${RESIZE_COLUMN_CLASS} {
-  position: absolute;
-  z-index: 4;
-  top: 0;
-  right: -4px;
-  bottom: 0;
-  width: 8px;
-  background: linear-gradient(90deg, transparent 3px, var(--rivto-accent, #6c5ce7) 3px 5px, transparent 5px);
-  cursor: col-resize;
-  opacity: 0;
-  touch-action: none;
-}
-.${RESIZE_COLUMN_CLASS}:hover,
-.${RESIZE_COLUMN_CLASS}:focus-visible,
-.${RESIZE_COLUMN_CLASS}[data-resizing="true"] { opacity: 1; }
-.${RESIZE_COLUMN_CLASS}:focus-visible { outline: 2px solid var(--rivto-accent, #6c5ce7); outline-offset: 1px; }
-`;
 
 /**
  * Rejects dimensions that would create a malformed or unexpectedly huge grid.
@@ -336,14 +244,6 @@ export function setTableColumnWidth(
 }
 
 /**
- * Supplies extension-local CSS without requiring changes to the package stylesheet.
- * @returns One scoped style element mounted with the extension lifecycle.
- */
-function TableStyles() {
-  return <style>{TABLE_STYLES}</style>;
-}
-
-/**
  * Applies a cell's persisted pixel width to its shared BlockView without
  * replacing the recursive block shell used by selection and drag behavior.
  * @param props - Current block snapshot and remaining wrapper chain.
@@ -413,7 +313,7 @@ export function Table({ blockId }: { readonly blockId: string }) {
   return <div {...editing.attributes} className={`${TABLE_CLASS} ${TABLE_SUMMARY_CLASS}`}>
     {block.listProps.collapsed === true && <>
       <strong>Table</strong>
-      <span>{rows} × {columns}</span>
+      <span className={TABLE_SUMMARY_STATS_CLASS}>{rows} × {columns}</span>
     </>}
   </div>;
 }
@@ -428,8 +328,8 @@ function TableRow({ blockId }: { readonly blockId: string }) {
   const { marker, host } = useBlockHost();
   return <>
     <div ref={marker} className={ROW_CLASS} />
-    {host && createPortal(<button className={ADD_ROW_CLASS} type="button" aria-label="Add table row below"
-      onClick={() => insertTableRow(reactEditor, blockId)}>+</button>, host)}
+    {host && createPortal(<Button variant="outline" size="icon-xs" className={`${ADD_ROW_CLASS} ${BOUNDARY_BUTTON_CLASS}`} type="button"
+      aria-label="Add table row below" onClick={() => insertTableRow(reactEditor, blockId)}><PlusIcon /></Button>, host)}
   </>;
 }
 
@@ -546,8 +446,8 @@ function TableCell({ blockId }: { readonly blockId: string }) {
     <div ref={marker} className={CELL_CLASS}>
       <MarkdownContent blockId={blockId} />
     </div>
-    {host && createPortal(<button className={ADD_COLUMN_CLASS} type="button" aria-label="Add table column to the right"
-      onClick={() => insertTableColumn(reactEditor, blockId)}>+</button>, host)}
+    {host && createPortal(<Button variant="outline" size="icon-xs" className={`${ADD_COLUMN_CLASS} ${BOUNDARY_BUTTON_CLASS}`} type="button"
+      aria-label="Add table column to the right" onClick={() => insertTableColumn(reactEditor, blockId)}><PlusIcon /></Button>, host)}
     {host && createPortal(<div className={RESIZE_COLUMN_CLASS} role="separator" tabIndex={0}
       aria-label="Resize table column" aria-orientation="vertical"
       aria-valuemin={MIN_COLUMN_WIDTH} aria-valuemax={MAX_COLUMN_WIDTH} aria-valuenow={currentWidth}
@@ -566,7 +466,6 @@ export function tableExtension(): ReactEditorExtension {
   return {
     id: "block.table",
     setup: (reactEditor) => {
-      reactEditor.extensions.mount(TableStyles);
       reactEditor.blockTypes.register({
         definition: {
           type: TABLE_BLOCK_TYPE,

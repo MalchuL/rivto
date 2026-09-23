@@ -1,7 +1,7 @@
 /**
  * Behavior contract for one block type's outline and drop semantics.
  *
- * A view is not the DOM shell in `blocks/block-view.tsx`. It is the bridge
+ * A view is not the DOM shell in `blocks/block-view/block-view.tsx`. It is the bridge
  * that page Enter/Tab/Backspace/drag dispatchers consult so container
  * extensions can override split, indent, and drop without type switches in
  * those modules. Views call `views/ops` primitives and never touch

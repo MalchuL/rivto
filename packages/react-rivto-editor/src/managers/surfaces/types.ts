@@ -1,6 +1,6 @@
 import type { EditorBlockNode, EditorElement, EditorMode } from "@chulane/rivto";
 import type { ComponentType, ReactNode } from "react";
-import type { BlockWrapperComponent } from "../../blocks/block-wrapper";
+import type { BlockWrapperComponent } from "../../blocks/block-wrapper/block-wrapper";
 
 /** Root React component rendering one complete presentation mode. */
 export type SurfaceComponent = ComponentType;

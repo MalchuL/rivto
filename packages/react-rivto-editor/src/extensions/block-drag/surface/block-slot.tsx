@@ -5,10 +5,13 @@
  * listeners through the handle ref supplied by the armed registration, and its
  * accessibility plugin decorates the same element with role description,
  * description, and pressed state, so no legacy attribute spreading remains.
+ * Reveal-on-hover geometry lives in `block-drag.css` because it depends on
+ * ancestor row and container state.
  *
  * @module
  */
 import { useCallback, useContext, useSyncExternalStore } from "react";
+import { GripVerticalIcon } from "lucide-react";
 import type { BlockSlotProps } from "../../../managers";
 import { PageDragItemContext } from "../state";
 
@@ -37,13 +40,14 @@ export function PageDragBlockSlot({ block }: BlockSlotProps) {
     <button
       ref={draggable?.handleRef}
       type="button"
-      className={PAGE_DRAG_HANDLE_CLASS}
+      className={`${PAGE_DRAG_HANDLE_CLASS} inline-flex items-center justify-center`}
       aria-label={`Move block: ${block.content || block.type}`}
       contentEditable={false}
       onPointerEnter={arm}
       onFocus={arm}
     >
-      ⋮⋮
+      {/* The button must stay the hit target so hit testing and dnd-kit see one activator. */}
+      <GripVerticalIcon aria-hidden="true" className="pointer-events-none size-4" />
     </button>
   );
 }

@@ -4,11 +4,23 @@
     "rootDir": "../..",
     "baseUrl": ".",
     "paths": {
-      "@chulane/crdt-doc": ["../crdt-doc/src/index.ts"],
-      "@chulane/document-model": ["../document-model/src/index.ts"],
-      "@chulane/rivto": ["../rivto-editor-core/src/index.ts"]
+      "@chulane/crdt-doc": [
+        "../crdt-doc/src/index.ts"
+      ],
+      "@chulane/document-model": [
+        "../document-model/src/index.ts"
+      ],
+      "@chulane/rivto": [
+        "../rivto-editor-core/src/index.ts"
+      ],
+      "@/*": [
+        "./src/*"
+      ]
     },
     "jsx": "react-jsx"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ]
 }

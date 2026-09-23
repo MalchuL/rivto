@@ -11,11 +11,11 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { MarkdownLinkClick } from "../types";
+import type { MarkdownLinkClick } from "../../types";
 import {
   useBlockEditing,
   useBlockNode,
-} from "../hooks";
+} from "../../hooks";
 import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";

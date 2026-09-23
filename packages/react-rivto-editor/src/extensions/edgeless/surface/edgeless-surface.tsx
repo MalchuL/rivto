@@ -25,6 +25,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createCaretSelection } from "@chulane/rivto";
+import { UI_SCOPE_CLASS } from "../../../components/ui-scope";
+import { ToolBarDivider } from "../visuals/components/tool-bar";
 import { EdgelessToolButton } from "../visuals/components/tool-button";
 import { EDGELESS_GRID_SIZE } from "../visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
@@ -42,6 +44,9 @@ const MAX_ZOOM = 2;
 /** Strongest background-dot fade at minimum zoom; keeps a faint residual grid. */
 const MAX_GRID_DOT_FADE = 0.7;
 const GRID_SPOTLIGHT_CLASS = "edgeless-grid-spotlight";
+/** Bottom-left zoom and snapping cluster; `edgeless-zoom-controls` is a stable hook. */
+const ZOOM_CONTROLS_CLASS = `${UI_SCOPE_CLASS} edgeless-zoom-controls absolute bottom-3.5 left-3 z-20 flex w-max items-center gap-0.5 rounded-[11px] border border-border bg-background/95 p-1 shadow-(--rivto-edgeless-chrome-shadow)`;
+const ZOOM_VALUE_CLASS = "w-13 min-w-13";
 
 interface PanGesture {
   readonly x: number;
@@ -364,21 +369,21 @@ export function EdgelessSurface({
       } as CSSProperties}
     >
       <div ref={spotlightOverlay} className={GRID_SPOTLIGHT_CLASS} aria-hidden="true" />
-      <div className="edgeless-zoom-controls" data-edgeless-ui="true" role="toolbar" aria-label="Canvas zoom">
+      <div className={ZOOM_CONTROLS_CLASS} data-edgeless-ui="true" role="toolbar" aria-label="Canvas zoom">
         <EdgelessToolButton label="Zoom out" icon="zoom-out" onClick={() => zoomAt(zoom - 0.1)} />
-        <EdgelessToolButton label="Reset zoom" className="edgeless-zoom-value" onClick={() => zoomAt(1)}>{Math.round(zoom * 100)}%</EdgelessToolButton>
+        <EdgelessToolButton label="Reset zoom" className={ZOOM_VALUE_CLASS} onClick={() => zoomAt(1)}>{Math.round(zoom * 100)}%</EdgelessToolButton>
         <EdgelessToolButton label="Zoom in" icon="zoom-in" onClick={() => zoomAt(zoom + 0.1)} />
-        <span className="edgeless-tool-bar-divider" aria-hidden="true" />
+        <ToolBarDivider />
         <EdgelessToolButton
           label={snap.snapToGrid ? "Disable snap to grid" : "Enable snap to grid"}
           icon="snap"
-          aria-pressed={snap.snapToGrid}
+          pressed={snap.snapToGrid}
           onClick={() => snapping.set({ snapToGrid: !snap.snapToGrid })}
         />
         <EdgelessToolButton
           label={snap.alignObjects ? "Disable object alignment" : "Enable object alignment"}
           icon="align-objects"
-          aria-pressed={snap.alignObjects}
+          pressed={snap.alignObjects}
           onClick={() => snapping.set({ alignObjects: !snap.alignObjects })}
         />
       </div>

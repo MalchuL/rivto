@@ -4,7 +4,7 @@
  * This class holds the page Enter/Tab/Backspace/Delete semantics previously
  * registered by the focused modules under `extensions/built-ins/page`. Container views override individual methods
  * and return `"default"` to reuse this implementation. The DOM shell component
- * `blocks/block-view.tsx` is unrelated presentation.
+ * `blocks/block-view/block-view.tsx` is unrelated presentation.
  *
  * @module
  */

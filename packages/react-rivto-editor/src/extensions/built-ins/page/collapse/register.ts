@@ -1,7 +1,7 @@
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
-import { BlockCollapseSlot } from "../../../../blocks/block-slot-controls";
+import { BlockCollapseSlot } from "../../../../blocks/block-slot-controls/block-slot-controls";
 import type { ReactEditor } from "../../../../types";
 import { reconcileCollapsedSelection } from "../navigation";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../managers";

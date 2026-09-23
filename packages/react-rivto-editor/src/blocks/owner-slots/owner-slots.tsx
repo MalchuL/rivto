@@ -9,13 +9,13 @@
  */
 import type { EditorBlockNode, EditorElement } from "@chulane/rivto";
 import { Fragment, type ComponentType, type ReactNode } from "react";
-import { useEditorMode, useReactEditor } from "../hooks";
+import { useEditorMode, useReactEditor } from "../../hooks";
 import {
   SLOT_POSITIONS,
   type BlockSlotPosition,
   type BlockSlotProps,
   type ElementSlotProps,
-} from "../managers";
+} from "../../managers";
 
 const SLOT_CLASS = "rivto-slot";
 

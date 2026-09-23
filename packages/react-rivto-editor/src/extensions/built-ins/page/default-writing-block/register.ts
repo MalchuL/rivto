@@ -5,7 +5,7 @@
  */
 import type { EditorBlockInput } from "@chulane/rivto";
 import { createElement } from "react";
-import { MarkdownContent } from "../../../../blocks/markdown";
+import { MarkdownContent } from "../../../../blocks/markdown/markdown";
 import type { BlockRenderer, ReactBlockSlashCommand } from "../../../../managers";
 import type { ReactEditor } from "../../../../types";
 import { DEFAULT_WRITING_BLOCK_TYPE } from "./constants";

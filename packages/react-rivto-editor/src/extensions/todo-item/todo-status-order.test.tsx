@@ -19,7 +19,7 @@ describe("TodoStatusOrder", () => {
     expect(markup).toContain("Done status order. Position 1 of 3");
     expect(markup).toContain("Todo status order. Position 2 of 3");
     expect(markup).toContain("Doing status order. Position 3 of 3");
-    expect(markup.indexOf("↕ Done")).toBeLessThan(markup.indexOf("↕ Todo"));
+    expect(markup.indexOf("Done status order")).toBeLessThan(markup.indexOf("Todo status order"));
   });
 
   test("moves the source status to its final sortable index without mutating input", () => {

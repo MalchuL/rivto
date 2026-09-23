@@ -15,7 +15,7 @@ import {
   type ReactNode,
   type RefCallback,
 } from "react";
-import { useEditorMode, useReactEditor } from "../hooks";
+import { useEditorMode, useReactEditor } from "../../hooks";
 
 /**
  * Stable slots used by BlockTree to render one block shell.

@@ -8,17 +8,17 @@
  * @module
  */
 import { memo, useCallback, useSyncExternalStore, type ComponentType } from "react";
-import { BLOCK_ROW_CLASS } from "../constants";
-import { useBlockNode, useBlockSelected, useReactEditor } from "../hooks";
+import { BLOCK_ROW_CLASS } from "../../constants";
+import { useBlockNode, useBlockSelected, useReactEditor } from "../../hooks";
 import {
   BlockElementRefBoundary,
   BlockWrapper,
   useBlockElementRef,
   type BlockShellProps,
-} from "./block-wrapper";
-import { BlockView } from "./block-view";
-import { UnknownBlock } from "./unknown-block";
-import { BlockSlots } from "./owner-slots";
+} from "../block-wrapper/block-wrapper";
+import { BlockView } from "../block-view/block-view";
+import { UnknownBlock } from "../unknown-block/unknown-block";
+import { BlockSlots } from "../owner-slots/owner-slots";
 
 const BLOCK_CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 

@@ -1,11 +1,19 @@
 /**
  * Shared native modal presentation for container blocks. The subtree stays mounted
  * so selection, editing and drag registrations survive expansion and collapse.
+ *
+ * The host element intentionally remains a native `<dialog>` rather than a
+ * portal-based dialog primitive: switching between `show()` and `showModal()`
+ * keeps one DOM subtree alive, which portal rendering would remount. Only the
+ * toggle button uses the shared shadcn `Button` primitive. Structural rules for
+ * the dialog element live in the colocated `block-modal.css`.
  * @module
  */
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
-const DIALOG_CLASS = "rivto-kanban-dialog";
-const EXPAND_CLASS = "rivto-kanban-expand";
+import { Maximize2Icon, Minimize2Icon } from "lucide-react";
+import { Button } from "../../components/ui/button";
+const DIALOG_CLASS = "rivto-block-modal";
+const EXPAND_CLASS = "rivto-block-modal-expand";
 const ExpandContext = createContext<{ expanded: boolean; label: string; toggle: () => void } | null>(null);
 
 /**
@@ -49,9 +57,10 @@ export function BlockModal({ children, label }: { children: ReactNode; label: st
 export function BlockModalButton() {
   const state = useContext(ExpandContext);
   if (!state) return null;
-  return <button className={EXPAND_CLASS} type="button" onClick={state.toggle}
-    aria-label={state.expanded ? `Collapse ${state.label}` : `Expand ${state.label}`} aria-expanded={state.expanded}>
-    {state.expanded ? "↙" : "↗"}
-  </button>;
+  return (
+    <Button variant="outline" size="icon-sm" className={`${EXPAND_CLASS} ml-2`} type="button" onClick={state.toggle}
+      aria-label={state.expanded ? `Collapse ${state.label}` : `Expand ${state.label}`} aria-expanded={state.expanded}>
+      {state.expanded ? <Minimize2Icon /> : <Maximize2Icon />}
+    </Button>
+  );
 }
-
