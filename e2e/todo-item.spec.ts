@@ -11,6 +11,20 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
+test("aligns the inline priority with the project chip without an arrow", async ({ page }) => {
+  const todo = page.locator('[data-journal-document="today"] [data-block-type="todo-item"]').first();
+  const priority = todo.getByRole("combobox", { name: "Priority" });
+  const project = todo.getByRole("textbox", { name: "Project" });
+  const priorityBox = await priority.boundingBox();
+  const projectBox = await project.boundingBox();
+  expect(priorityBox).not.toBeNull();
+  expect(projectBox).not.toBeNull();
+  expect(priorityBox!.y).toBe(projectBox!.y);
+  expect(priorityBox!.height).toBe(projectBox!.height);
+  await expect(priority.locator("xpath=following-sibling::*[@data-slot='native-select-icon']"))
+    .toBeHidden();
+});
+
 test("highlights a prompt and converts it when editing leaves the block", async ({ page }) => {
   const document = page.locator('[data-journal-document="today"]');
   const seeded = document.locator('[data-block-type="todo-item"]');

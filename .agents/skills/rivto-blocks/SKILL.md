@@ -15,25 +15,27 @@ drop target.
 Patterns can evolve. Before editing, trace the requested type and every caller
 with `rg`. Read the owners relevant to the change:
 
-- `packages/react-rivto-editor/src/blocks/block-tree.tsx` — stable shell,
+- `packages/react-rivto-editor/src/blocks/block-tree/block-tree.tsx` — stable shell,
   renderer lookup, slots, collapse visibility, and recursive children.
-- `packages/react-rivto-editor/src/blocks/block-view.tsx` — `data-block-id`,
+- `packages/react-rivto-editor/src/blocks/block-view/block-view.tsx` — `data-block-id`,
   `data-block-type`, selection state, and measured outer boundary.
 - `packages/react-rivto-editor/src/hooks/blocks/use-block-editing.ts` — text
   synchronization, structural selection anchors, property access, and nested
   interactive-control opt-out.
-- `packages/react-rivto-editor/src/managers/blocks/block-types.ts` and
+- `packages/react-rivto-editor/src/managers/blocks/types.ts` and
   `packages/rivto-editor-core/src/managers/block-registry-manager/types.ts` —
   registration, defaults, schemas, parent restrictions, and containment metadata.
 - `packages/react-rivto-editor/src/extensions/block-drag/` — shared handles,
   hit testing, drop geometry, and placement. Do not build another drag path.
-- `packages/react-rivto-editor/styles.css` — shared block geometry.
+- `packages/react-rivto-editor/src/blocks/block-tree/block-tree.css` — shared
+  block geometry. Read `packages/react-rivto-editor/docs/styling.md` before
+  styling a renderer or adding a feature stylesheet.
 
 Use the closest complete example:
 
 | Block shape | Example |
 | --- | --- |
-| Normal editable text | `src/blocks/markdown.tsx` and default-writing registration |
+| Normal editable text | `src/blocks/markdown/markdown.tsx` and default-writing registration |
 | Contentless visual leaf | `src/extensions/built-ins/separator/separator-block.tsx` |
 | Contentless interactive leaf | `demo/src/blocks/custom-blocks.tsx` Counter |
 | Text plus native control | `demo/src/blocks/custom-blocks.tsx` Slider |
@@ -92,22 +94,11 @@ block:
 - Keep overflow on the component that owns it. Do not clip the shared row or
   outer `.page-block`; handles, indicators, and selection outlines extend there.
 
-Use this baseline for a full-row non-text selection region; omit properties
-already supplied by a more specific shared class:
-
-```css
-.my-block-region {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  min-height: var(--rivto-default-block-height);
-  box-sizing: border-box;
-}
-```
-
-Do not add `margin` or outer `padding` to that baseline. This is the generic
-geometry for ordinary blocks; specialize shell geometry only when the block is
-a demonstrated layout container.
+For a full-row non-text selection region, use utilities on its owning element:
+`w-full min-w-0 max-w-full min-h-(--rivto-default-block-height) box-border`.
+Omit properties a more specific shared class already supplies. Do not add
+outer margin or padding. Specialize shell geometry only for a demonstrated
+layout container.
 
 There is intentionally no universal decorative padding for custom controls.
 Use the native control size or the minimum internal padding its design requires;
@@ -197,11 +188,25 @@ anchor and do not spread a second editing attribute set.
 - Export public block types and factories from the package entry points only when
   consumers need them.
 
+Use a named class constant on the owning element, with a stable `rivto-*`,
+`page-*`, or `edgeless-*` hook first and Tailwind utilities after it. Keep
+utilities in the component; add a colocated feature `.css` file only for rules
+utilities cannot express, such as recursive geometry, structural `:has()`,
+pseudo-elements, counters, or imperatively created elements. Import package
+feature CSS from `src/styles/index.css` into `layer(components)` and start it
+with a comment explaining why CSS is needed. Keep block content outside the
+`rivto-ui` scoped reset so document typography retains host defaults. Add a
+`--rivto-*` token in `src/styles/tokens.css` only for a color or dimension hosts
+should be able to override. For package chrome, reuse installed shadcn/ui
+primitives where they fit; add a missing one with
+`pnpm --filter @chulane/rivto-react ui:add <name>` rather than editing generated
+files in `src/components/ui/`. Use `lucide-react` icons with
+`aria-hidden="true"` inside labelled controls; add `pointer-events-none` to an
+icon inside a plain button so the button remains the pointer target.
+
 Use named constants for every HTML class referenced from JSX, selectors, or
-`classList`. New extension-specific CSS should be mounted by that extension;
-change global `styles.css` only when the rule truly belongs to every block.
-Follow the repository JSDoc requirements for every source file, function, and
-method.
+`classList`. Follow the repository JSDoc requirements for every source file,
+function, and method.
 
 ## Keep behavior in the owning layer
 
