@@ -49,6 +49,21 @@ import {
 const ROOTS_KEY = "rivto.editor.roots";
 const BLOCKS_KEY = "rivto.editor.blocks";
 
+/** Collaborative payload fields that can be read without the snapshot cache. */
+export type BlockPayloadField = "content" | "type" | "listProps" | "props" | "pluginData";
+
+/**
+ * One live payload value.
+ *
+ * `present` is false when a map entry is absent. Scalar fields are always present.
+ */
+export interface BlockFieldValue {
+    /** Whether storage currently contains the requested field or map entry. */
+    readonly present: boolean;
+    /** Detached portable value, or `undefined` when `present` is false. */
+    readonly value: unknown;
+}
+
 interface LocatedBlock {
     array: CRDTArray<string>;
     index: number;
@@ -204,6 +219,44 @@ export class DocumentBlockManager {
             const block = this.readBlock(id, new Set());
             return block ? [block] : [];
         });
+    }
+
+    /**
+     * Reads one payload field from live storage for every block.
+     *
+     * The detached snapshot cache is skipped. A caller running before observer
+     * publication therefore sees values already integrated by the active
+     * transaction, instead of the snapshot those observers are about to drop.
+     *
+     * @param field - Payload field to read.
+     * @param key - Map entry inside `listProps`, `props`, or `pluginData`.
+     * Omit to read the whole map. Scalar fields reject a key.
+     * @returns Each stored block id mapped to its detached field value.
+     * @throws {Error} When a key is supplied for `content` or `type`.
+     */
+    readBlockFields(field: BlockPayloadField, key?: string): Map<string, BlockFieldValue> {
+        const readings = new Map<string, BlockFieldValue>();
+        for (const id of this.storage.keys()) {
+            const value = this.storage.get(id);
+            if (!isCRDTMap(value)) continue;
+            readings.set(id, this.readStoredField(id, value, field, key));
+        }
+        return readings;
+    }
+
+    /**
+     * Reads one payload field from live storage for a single block.
+     *
+     * @param id - Stored block identifier.
+     * @param field - Payload field to read.
+     * @param key - Map entry inside a map field, or omitted for the whole map.
+     * @returns The detached field value, or `undefined` when the block is absent.
+     * @throws {Error} When a key is supplied for `content` or `type`.
+     */
+    readBlockField(id: string, field: BlockPayloadField, key?: string): BlockFieldValue | undefined {
+        const value = this.storage.get(id);
+        if (!isCRDTMap(value)) return undefined;
+        return this.readStoredField(id, value, field, key);
     }
 
     /**
@@ -1117,6 +1170,48 @@ export class DocumentBlockManager {
             if (value === undefined) props.delete(key);
             else props.set(key, clone(value) as CRDTType);
         }
+    }
+
+    /**
+     * Reads one stored payload field, skipping the detached snapshot cache.
+     *
+     * @param id - Block identifier used when a missing type must be reported.
+     * @param block - Live block map.
+     * @param field - Payload field to read.
+     * @param key - Optional map entry. Scalar fields reject it.
+     * @returns Detached field value.
+     * @throws {Error} When a key is supplied for `content` or `type`.
+     */
+    private readStoredField(
+        id: string,
+        block: CRDTMap<BlockStorage>,
+        field: BlockPayloadField,
+        key: string | undefined,
+    ): BlockFieldValue {
+        if ((field === "content" || field === "type") && key !== undefined) {
+            throw new Error(`${field} cannot be read by key`);
+        }
+        if (field === "content") return { present: true, value: this.requiredText(block, "content").toString() };
+        if (field === "type") return { present: true, value: this.requiredType(block, id) };
+        const map = field === "listProps"
+            ? this.requiredMap(block, "listProps")
+            : field === "props"
+                ? this.requiredMap(block, "props")
+                : this.requiredMap(block, "pluginData");
+        return this.readMapField(map as CRDTMap<Record<string, unknown>>, key);
+    }
+
+    /**
+     * Reads a whole map or one of its entries as a detached portable value.
+     *
+     * @param map - Live list, prop, or plugin-data map.
+     * @param key - Entry to read, or omitted for the whole map.
+     * @returns The cloned value, with `present` false when the entry is absent.
+     */
+    private readMapField(map: CRDTMap<Record<string, unknown>>, key: string | undefined): BlockFieldValue {
+        if (key === undefined) return { present: true, value: clone(map.toObject()) };
+        if (!map.has(key)) return { present: false, value: undefined };
+        return { present: true, value: clone(map.get(key)) };
     }
 
     /**

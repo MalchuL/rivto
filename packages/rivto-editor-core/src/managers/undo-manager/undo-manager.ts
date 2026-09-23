@@ -12,6 +12,22 @@ import type { DocumentModel } from "@chulane/document-model";
  */
 export class UndoManager {
   private readonly manager: CRDTUndoManager;
+  /** Nested undo/redo depth so observers can tell history from remote updates. */
+  private historyDepth = 0;
+
+  /**
+   * Reports whether undo or redo is applying a history transaction.
+   *
+   * Yjs history transactions and origin-less remote updates both surface as a
+   * `null` origin. This flag is set for the whole undo/redo call, including
+   * observer callbacks, so a session view can follow history without treating
+   * every `null` origin as local.
+   *
+   * @returns `true` while `undo` or `redo` is on the stack.
+   */
+  get isApplyingHistory(): boolean {
+    return this.historyDepth > 0;
+  }
 
   /**
    * Creates an undo stack for local mutations in the supplied document.
@@ -29,7 +45,12 @@ export class UndoManager {
    * tracked by this manager, so undo remains scoped to this editor runtime.
    */
   undo(): void {
-    this.manager.undo();
+    this.historyDepth += 1;
+    try {
+      this.manager.undo();
+    } finally {
+      this.historyDepth -= 1;
+    }
   }
 
   /**
@@ -39,7 +60,12 @@ export class UndoManager {
    * is expected to be a harmless no-op.
    */
   redo(): void {
-    this.manager.redo();
+    this.historyDepth += 1;
+    try {
+      this.manager.redo();
+    } finally {
+      this.historyDepth -= 1;
+    }
   }
 
   /**

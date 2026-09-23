@@ -189,6 +189,20 @@ describe('YjsDoc', () => {
       
       expect(handler).toHaveBeenCalledTimes(callCount);
     });
+
+    it('onBeforeObservers runs after integration and before map observers', () => {
+      const order: string[] = [];
+      const map = yjsDoc.getMap('map');
+      map.observe(() => { order.push('observe'); });
+      yjsDoc.onBeforeObservers((origin) => {
+        order.push(`before:${String(map.get('key'))}:${String(origin)}`);
+      });
+
+      const origin = Symbol('local');
+      yjsDoc.transact(() => { map.set('key', 'ready'); }, origin);
+
+      expect(order).toEqual([`before:ready:${String(origin)}`, 'observe']);
+    });
   });
 
   describe('Lifecycle', () => {

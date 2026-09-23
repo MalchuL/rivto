@@ -18,7 +18,7 @@ export {
   defaultWritingBlockExtension,
   standardPreset,
 } from "./extensions/built-ins/built-ins";
-export type { StandardPresetOptions } from "./extensions/built-ins/built-ins";
+export type { CollapseExtensionOptions, StandardPresetOptions } from "./extensions/built-ins/built-ins";
 export { pageDragExtension } from "./extensions/block-drag";
 export type { PageDragOptions } from "./extensions/block-drag";
 export {

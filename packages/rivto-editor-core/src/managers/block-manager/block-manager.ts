@@ -23,6 +23,7 @@ import type {
 } from "../../editor/model";
 import type { RivtoEditorApi } from "../../editor/types";
 import { commandPayload, commandString } from "../utils";
+import { PinnedBlockFields, type BlockFieldPin } from "./pinned-block-fields";
 
 /** Result of importing a detached block forest into one editor. */
 export interface ImportedBlockForest {
@@ -42,6 +43,8 @@ export interface ImportedBlockForest {
  */
 export class BlockManager {
   private readonly registrations: RegisteredCommand[] = [];
+  /** Session view for payload fields that should not follow remote updates. */
+  private readonly pinnedFields: PinnedBlockFields;
 
   /**
    * Creates the public block manager and installs its built-in commands.
@@ -49,6 +52,7 @@ export class BlockManager {
    * @param editor - Owning editor interface providing document and runtime capabilities.
    */
   constructor(private readonly editor: RivtoEditorApi) {
+    this.pinnedFields = new PinnedBlockFields(editor);
     this.registerRequiredCommands();
   }
 
@@ -58,20 +62,49 @@ export class BlockManager {
   /**
    * Resolves one placed block by its stable identifier.
    *
+   * Pinned payload fields are reported from this editor session. The
+   * document snapshot still carries the replicated value.
+   *
    * @param id - Persisted block identifier to resolve.
    * @returns Detached block subtree, or undefined when absent.
    */
   getBlock(id: string): EditorBlock | undefined {
-    return this.editor.document.blocks.getBlock(id) satisfies EditorBlock | undefined;
+    const block = this.editor.document.blocks.getBlock(id) satisfies EditorBlock | undefined;
+    return block ? this.pinnedFields.project(block) : undefined;
   }
 
   /**
    * Materializes the complete ordered root block tree.
    *
+   * Pinned payload fields match `getBlock`. The returned array keeps its
+   * identity until a pinned field or the document tree changes.
+   *
    * @returns Detached root blocks with recursively materialized children.
    */
   getBlocks(): EditorBlock[] {
-    return this.editor.document.blocks.getBlocks() satisfies EditorBlock[];
+    const blocks = this.editor.document.blocks.getBlocks() satisfies EditorBlock[];
+    return this.pinnedFields.projectAll(blocks);
+  }
+
+  /**
+   * Pins a block payload field to this editor session.
+   *
+   * The field still replicates. Editor reads keep the value first observed for
+   * each block, then follow this editor's writes and its undo/redo. Remote
+   * updates stay in the document until a new editor session reads them, which
+   * is what a page reload does. Releasing the pin makes the next read return
+   * the replicated value.
+   *
+   * `content` and `type` are pinned whole. `listProps`, `props`, and
+   * `pluginData` can be pinned whole or by one key, such as
+   * `{ field: "listProps", key: "collapsed" }`.
+   *
+   * @param target - Payload field to keep session-local.
+   * @returns Disposer that restores live reads for the field.
+   * @throws {Error} When the field cannot be pinned or is already pinned.
+   */
+  pinBlockField(target: BlockFieldPin): () => void {
+    return this.pinnedFields.pin(target);
   }
 
   /**
@@ -365,6 +398,7 @@ export class BlockManager {
    * @returns No value.
    */
   destroy(): void {
+    this.pinnedFields.destroy();
     this.registrations.splice(0).reverse().forEach((registration) => registration.dispose());
   }
 
@@ -396,18 +430,23 @@ export class BlockManager {
     }));
     register("block.update", (value) => {
       const data = commandPayload(value) as unknown as { id: string; patch: BlockPatch };
-      this.editor.document.blocks.updateBlock(commandString(data.id, "id"), commandPayload(data.patch) as BlockPatch);
+      const id = commandString(data.id, "id");
+      const patch = commandPayload(data.patch) as BlockPatch;
+      this.editor.document.blocks.updateBlock(id, patch);
+      this.pinnedFields.holdPatch(id, patch);
     });
     register("block.update-many", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { updates: readonly BlockUpdate[] };
       if (!Array.isArray(data.updates)) throw new Error("updates must be an array");
-      this.editor.document.blocks.updateBlocks(data.updates.map((item) => {
+      const updates = data.updates.map((item) => {
         const update = commandPayload(item);
         return {
           id: commandString(update.id, "id"),
           patch: commandPayload(update.patch) as BlockPatch,
         };
-      }));
+      });
+      this.editor.document.blocks.updateBlocks(updates);
+      updates.forEach((update) => this.pinnedFields.holdPatch(update.id, update.patch));
     }));
     register("block.clear", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { id: string };
@@ -416,15 +455,20 @@ export class BlockManager {
         this.editor.document.blocks.updateBlock(id, { content: "" });
         this.editor.document.blocks.getChildIds(id).forEach((childId) => this.editor.document.blocks.removeBlock(childId));
       });
+      this.pinnedFields.holdContent(id);
     }));
     register("block.type.set", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { id: string; type: string };
       const id = commandString(data.id, "id");
       const type = commandString(data.type, "type");
+      // Conversion starts from the props this editor is showing. Pinned props
+      // stay in that view, so a type change does not copy a hidden remote prop
+      // map into the block the user is editing.
       const current = this.getBlock(id);
       if (!current) throw new Error(`Block ${id} not found`);
       const props = this.editor.blocksRegistry.prepareTypeChange(type, current.props);
       this.editor.document.blocks.setBlockType(id, type, props);
+      this.pinnedFields.holdType(id);
     }));
     register("block.remove", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { id: string };
@@ -477,15 +521,17 @@ export class BlockManager {
     }));
     register("block.prop.set", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { id: string; key: string; value: unknown };
-      this.editor.document.blocks.setBlockProp(commandString(data.id, "id"), commandString(data.key, "key"), data.value);
+      const id = commandString(data.id, "id");
+      const key = commandString(data.key, "key");
+      this.editor.document.blocks.setBlockProp(id, key, data.value);
+      this.pinnedFields.holdProp(id, key);
     }));
     register("block.pluginData.set", documentCommand((value) => {
       const data = commandPayload(value) as unknown as { id: string; pluginId: string; value: unknown };
-      this.editor.document.blocks.setPluginData(
-        commandString(data.id, "id"),
-        commandString(data.pluginId, "pluginId"),
-        data.value,
-      );
+      const id = commandString(data.id, "id");
+      const pluginId = commandString(data.pluginId, "pluginId");
+      this.editor.document.blocks.setPluginData(id, pluginId, data.value);
+      this.pinnedFields.holdPluginData(id, pluginId);
     }));
   }
 
@@ -508,9 +554,14 @@ export class BlockManager {
     // Validate and transfer children before text changes so a forbidden parent
     // cannot leave a partially merged document when validation throws.
     blocks.moveBlocks(source.children.map(({ id }) => ({ id, targetId, position: "inside" })));
-    if (source.content) blocks.insertText(targetId, target.content.length, source.content);
+    // Text placement uses replicated content. A pinned content view can differ
+    // from storage, and inserting at the session length would corrupt the CRDT.
+    const storedTarget = blocks.getBlock(targetId);
+    const storedSource = blocks.getBlock(sourceId);
+    if (storedSource?.content) blocks.insertText(targetId, storedTarget?.content.length ?? 0, storedSource.content);
     blocks.removeBlock(sourceId);
-    return target.content.length;
+    this.pinnedFields.holdContent(targetId);
+    return storedTarget?.content.length ?? target.content.length;
   }
 
   /**
