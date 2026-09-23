@@ -347,6 +347,7 @@ export class PinnedBlockFields {
         }
         continue;
       }
+      if (!isMapPin(pin)) continue;
       const overlaid = overlayMap(
         pin.field === "listProps" ? listProps : pin.field === "props" ? props : pluginData,
         pin,
@@ -461,6 +462,20 @@ function isPayloadField(field: string): field is BlockPayloadField {
     || field === "listProps"
     || field === "props"
     || field === "pluginData";
+}
+
+/**
+ * Reports whether a pin targets a map payload field.
+ *
+ * Content and type are handled before this check. The predicate lets the
+ * map overlay receive a pin whose field is only `listProps`, `props`, or
+ * `pluginData`.
+ *
+ * @param pin - Pin being projected onto one block.
+ * @returns `true` when the pin reads or replaces a map.
+ */
+function isMapPin(pin: BlockFieldPin): pin is BlockFieldPin & { field: MapField } {
+  return pin.field === "listProps" || pin.field === "props" || pin.field === "pluginData";
 }
 
 /**
