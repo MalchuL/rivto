@@ -1,6 +1,6 @@
 ---
 name: rivto-review-reports
-description: Reproduce, diagnose, test, and close Rivto editor failures captured as JSON Review reports in reports/. Use when investigating report fixtures, loading their v6 snapshots, converting a report into a regression test, or marking a verified problem solved.
+description: Reproduce and resolve Rivto editor failures captured as JSON Review reports in reports/. Use when investigating a report or marking it solved.
 ---
 
 # Rivto Review Reports

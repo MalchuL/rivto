@@ -1,6 +1,6 @@
 ---
 name: backend-architecture
-description: Organize a FastAPI backend with DDD domain slices (controller, service, repository, dto, mapper, error), central DI, camelCase DTOs, async SQLAlchemy + Alembic, RBAC, satellite HTTP clients with Protocol/NoOp, pagination, uv, and Docker. Use when adding or changing API routes, domain logic, persistence, authz, outbound clients, settings, migrations, or backend tests.
+description: Maintain the FastAPI backend architecture described here. Use only for work in a FastAPI service using this stack; the Rivto app/server uses Encore and does not use this skill.
 ---
 
 # Backend architecture

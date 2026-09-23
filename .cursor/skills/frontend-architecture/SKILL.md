@@ -1,6 +1,6 @@
 ---
 name: frontend-architecture
-description: Organize a Next.js frontend with DDD domain folders, axios services, TanStack Query hooks, Zustand client state, App Router route groups, runtime-editable API base URLs (not NEXT_PUBLIC build-time), and a standalone Docker web image. Use when adding or changing UI features, pages, components, API clients, auth, env config, or the frontend container.
+description: Apply this Next.js, Axios, and TanStack Query architecture when explicitly extending that stack. Do not assume every Rivto frontend feature uses these patterns; inspect app/web first.
 ---
 
 # Frontend architecture
