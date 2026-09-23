@@ -1,4 +1,5 @@
 import type { EdgelessSelectionRef } from "../../built-ins/selection/edgeless-runtime";
+import type { EditorElement } from "@chulane/rivto";
 export type { EdgelessSelectionRef } from "../../built-ins/selection/edgeless-runtime";
 
 /** Axis-aligned canvas geometry shared by every visual leaf. */
@@ -173,16 +174,16 @@ export type EdgelessVisualTool =
   | { tool: "connector"; route: ConnectorRoute };
 
 export interface EdgelessVisualCommandMap {
-  "edgeless.visual.create": { payload: CreateVisualPayload; result: string };
-  "edgeless.visual.update": { payload: UpdateVisualPayload; result: void };
-  "edgeless.visual.duplicate": { payload: undefined; result: EdgelessSelectionRef[] };
+  "edgeless.visual.create": { payload: CreateVisualPayload; result: EditorElement };
+  "edgeless.visual.update": { payload: UpdateVisualPayload; result: EditorElement };
+  "edgeless.visual.duplicate": { payload: undefined; result: EditorElement[] };
   "edgeless.visual.delete": { payload: undefined; result: void };
   "edgeless.selection.get": { payload: undefined; result: { active: boolean; items: readonly EdgelessSelectionRef[] } };
   "edgeless.selection.set": { payload: readonly EdgelessSelectionRef[] | { items: readonly EdgelessSelectionRef[] }; result: void };
   "edgeless.selection.clear": { payload: undefined; result: void };
   "edgeless.selection.move": { payload: { dx: number; dy: number }; result: void };
   "edgeless.selection.resize": { payload: { width: number; height: number }; result: void };
-  "edgeless.selection.group": { payload: undefined; result: string };
+  "edgeless.selection.group": { payload: undefined; result: EditorElement };
   "edgeless.selection.ungroup": { payload: undefined; result: void };
   "edgeless.selection.align": { payload: EdgelessAlignment | { alignment: EdgelessAlignment }; result: void };
   "edgeless.selection.distribute": { payload: "horizontal" | "vertical" | { axis: "horizontal" | "vertical" }; result: void };

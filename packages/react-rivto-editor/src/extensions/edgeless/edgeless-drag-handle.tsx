@@ -5,9 +5,12 @@
  * (block card, visual, or group bound) so transform preview moves it with
  * the parent and nothing else has to reconcile its position.
  */
+import { GripVerticalIcon } from "lucide-react";
 import type { ElementSlotProps } from "../../managers";
 
 const EDGELESS_DRAG_HANDLE_CLASS = "edgeless-drag-handle";
+/* The button stays the sole hit target; the icon must not intercept pointer hit testing. */
+const EDGELESS_DRAG_HANDLE_ICON_CLASS = "pointer-events-none size-3.5";
 
 /**
  * Renders one canvas drag handle with an explicit accessible label.
@@ -23,7 +26,7 @@ export function EdgelessDragHandle({ label }: { readonly label: string }) {
       data-edgeless-drag-handle="true"
       aria-label={label}
     >
-      <span aria-hidden="true">⠿</span>
+      <GripVerticalIcon aria-hidden="true" className={EDGELESS_DRAG_HANDLE_ICON_CLASS} />
     </button>
   );
 }

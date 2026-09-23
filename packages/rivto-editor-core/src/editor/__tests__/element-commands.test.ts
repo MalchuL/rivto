@@ -11,8 +11,13 @@ describe("EditorRuntime element commands", () => {
 
   it("creates, patches, snapshots, and removes generic elements", () => {
     const editor = createRivtoEditor();
-    expect(editor.elements.insertElement(input)).toBe("shape");
-    editor.elements.updateElement("shape", { frame: { x: 30 }, props: { stroke: "blue" } });
+    expect(editor.elements.insertElement(input)).toEqual(input);
+    const updated = editor.elements.updateElement("shape", { frame: { x: 30 }, props: { stroke: "blue" } });
+    expect(updated).toEqual({
+      ...input,
+      frame: { ...input.frame, x: 30 },
+      props: { ...input.props, stroke: "blue" },
+    });
     expect(editor.elements.getElement("shape")).toEqual({
       ...input,
       frame: { ...input.frame, x: 30 },
@@ -35,9 +40,9 @@ describe("EditorRuntime element commands", () => {
     expect(editor.elements.getElement("shape")?.frame.x).toBe(10);
 
     editor.elements.updateElement("shape", { frame: { x: 40 } });
-    editor.undo();
+    editor.history.undo();
     expect(editor.elements.getElement("shape")?.frame.x).toBe(10);
-    editor.redo();
+    editor.history.redo();
     expect(editor.elements.getElement("shape")?.frame.x).toBe(40);
     editor.destroy();
   });
@@ -55,7 +60,7 @@ describe("EditorRuntime element commands", () => {
 
   it("runs registered element processors before insert and update", () => {
     const editor = createRivtoEditor();
-    const dispose = editor.document.elements.pipe.register({
+    const dispose = editor.elements.registerProcessor({
       id: "test.element.tag",
       priority: 30,
       processor: (element) => ({

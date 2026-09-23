@@ -54,7 +54,7 @@ the active surface across root/document/window realms and resolves DOM markers
 centrally. Keyboard plugins define semantic actions and conditions; the event
 runtime alone parses keys and modifiers.
 
-`reactEditor.blocks.register` is the normal React block-extension entry point. It
+`reactEditor.blockTypes.register` is the normal React block-extension entry point. It
 atomically connects one core `BlockDefinition`, one renderer, and an optional
 slash conversion command. `reactEditor.renderers.register` is the lower-level
 escape hatch for a persisted type whose core definition is owned elsewhere.

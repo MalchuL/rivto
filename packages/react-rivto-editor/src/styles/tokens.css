@@ -1,0 +1,68 @@
+/*
+ * Shared design tokens for @chulane/rivto-react.
+ *
+ * Shared tokens are `--rivto-*` custom properties on `:root`; feature-specific
+ * defaults live beside their styles. Hosts can retheme
+ * the editor by redefining a handful of variables on any ancestor. The
+ * `@theme inline` block maps those tokens onto the shadcn/ui semantic palette
+ * (`bg-background`, `text-muted-foreground`, `ring-ring`, ...) used by the
+ * package's Tailwind utilities and UI primitives. `inline` makes utilities
+ * reference the `--rivto-*` variables directly, so portalled chrome (slash
+ * menu, dialogs, popovers) resolves the same values as content inside the
+ * editor root.
+ */
+:root {
+  /* Brand accent shared by selection, focus rings, and primary actions. */
+  --rivto-accent: #6c5ce7;
+
+  /* Semantic surface palette consumed through the Tailwind theme below. */
+  --rivto-background: #ffffff;
+  --rivto-foreground: #1f1d2b;
+  --rivto-card: #ffffff;
+  --rivto-card-foreground: #1f1d2b;
+  --rivto-popover: #ffffff;
+  --rivto-popover-foreground: #1f1d2b;
+  --rivto-primary: var(--rivto-accent);
+  --rivto-primary-foreground: #ffffff;
+  --rivto-secondary: #f4f2f8;
+  --rivto-secondary-foreground: #514a61;
+  --rivto-muted: #f4f5f7;
+  --rivto-muted-foreground: #6b6478;
+  --rivto-subtle: #eeeaff;
+  --rivto-subtle-foreground: #4c3fc9;
+  --rivto-destructive: #d64545;
+  --rivto-border: #dedbe7;
+  --rivto-input: #d8d4e2;
+  --rivto-ring: var(--rivto-accent);
+  --rivto-radius: 0.5rem;
+
+  /* Block geometry shared by the page and edgeless block trees. */
+  --rivto-default-block-height: 1.5em;
+  --rivto-block-surface-padding: 56px 64px;
+
+}
+
+@theme inline {
+  --color-background: var(--rivto-background);
+  --color-foreground: var(--rivto-foreground);
+  --color-card: var(--rivto-card);
+  --color-card-foreground: var(--rivto-card-foreground);
+  --color-popover: var(--rivto-popover);
+  --color-popover-foreground: var(--rivto-popover-foreground);
+  --color-primary: var(--rivto-primary);
+  --color-primary-foreground: var(--rivto-primary-foreground);
+  --color-secondary: var(--rivto-secondary);
+  --color-secondary-foreground: var(--rivto-secondary-foreground);
+  --color-muted: var(--rivto-muted);
+  --color-muted-foreground: var(--rivto-muted-foreground);
+  --color-accent: var(--rivto-subtle);
+  --color-accent-foreground: var(--rivto-subtle-foreground);
+  --color-destructive: var(--rivto-destructive);
+  --color-border: var(--rivto-border);
+  --color-input: var(--rivto-input);
+  --color-ring: var(--rivto-ring);
+  --radius-sm: calc(var(--rivto-radius) - 4px);
+  --radius-md: calc(var(--rivto-radius) - 2px);
+  --radius-lg: var(--rivto-radius);
+  --radius-xl: calc(var(--rivto-radius) + 4px);
+}

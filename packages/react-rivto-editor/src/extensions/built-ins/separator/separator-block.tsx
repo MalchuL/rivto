@@ -5,7 +5,8 @@
  *
  * @module
  */
-import { createCaretSelection } from "@chulane/rivto";
+import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
+import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -25,19 +26,27 @@ const SEPARATOR_LINE_CLASS = "rivto-separator-line";
 const SEPARATOR_ARROW_CLASS = "rivto-separator-arrow";
 const SEPARATOR_SELECTION_ATTRIBUTES = { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
 
-/** Contentless divider renderer shared by page and nested edgeless block trees. */
+/**
+ * Contentless divider renderer shared by page and nested edgeless block trees.
+ *
+ * @returns A three-row grid: an upward arrow, the rule, and a downward arrow.
+ */
 export function SeparatorBlock() {
   return (
     <div
       {...SEPARATOR_SELECTION_ATTRIBUTES}
-      className={SEPARATOR_BLOCK_CLASS}
+      className={`${SEPARATOR_BLOCK_CLASS} grid min-h-[21px] w-full grid-rows-[10px_1px_10px] place-items-center text-muted-foreground select-none`}
       data-separator-block="true"
       role="separator"
       aria-label="Block element separator"
     >
-      <span className={SEPARATOR_ARROW_CLASS} aria-hidden="true">↑</span>
-      <span className={SEPARATOR_LINE_CLASS} aria-hidden="true" />
-      <span className={SEPARATOR_ARROW_CLASS} aria-hidden="true">↓</span>
+      <span className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`} aria-hidden="true">
+        <ArrowUpIcon strokeWidth={2.5} />
+      </span>
+      <span className={`${SEPARATOR_LINE_CLASS} w-full border-t border-border`} aria-hidden="true" />
+      <span className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`} aria-hidden="true">
+        <ArrowDownIcon strokeWidth={2.5} />
+      </span>
     </div>
   );
 }
@@ -51,23 +60,22 @@ export function SeparatorBlock() {
  * @param blockId - Active block before which editing should continue.
  * @param separatorType - Plugin-owned persisted separator type.
  * @param createDefaultBlock - Factory for the follow-up writing block.
- * @returns ID of the new writing block focused after the separator.
+ * @returns Complete new writing block, or undefined when the active block is missing.
  */
 function insertSeparator(
   reactEditor: ReactEditor,
   blockId: string,
   separatorType: string,
   createDefaultBlock: CreateDefaultBlock,
-): string | undefined {
-  const { editor } = reactEditor;
-  const block = editor.blocks.getBlock(blockId);
+): EditorBlock | undefined {
+  const block = reactEditor.blocks.getBlockNode(blockId);
   if (!block) return undefined;
   let separatorId = "";
-  let writingId = "";
-  editor.batchUpdates(() => {
-    if (!block.content && !block.children.length) {
+  let writing: EditorBlock | undefined;
+  reactEditor.history.batchUpdates(() => {
+    if (!block.content && !reactEditor.blocks.hasChildren(blockId)) {
       separatorId = block.id;
-      editor.blocks.setBlockType(separatorId, separatorType);
+      reactEditor.blocks.setBlockType(separatorId, separatorType);
       reactEditor.blocks.updateBlock(separatorId, {
         listProps: { collapsed: false, type: "list", checked: false },
       });
@@ -76,12 +84,12 @@ function insertSeparator(
         type: separatorType,
         content: "",
         listProps: { type: "list", checked: false },
-      }, block.id);
+      }, block.id).id;
     }
-    writingId = reactEditor.blocks.insertBlock(createDefaultBlock(), separatorId);
-    reactEditor.selection.set(createCaretSelection(writingId, 0));
+    writing = reactEditor.blocks.insertBlock(createDefaultBlock(), separatorId);
+    reactEditor.selection.set(createCaretSelection(writing.id, 0));
   });
-  return writingId;
+  return writing;
 }
 
 /**
@@ -95,17 +103,17 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
   setup: (reactEditor) => {
     const createDefaultBlock = () => reactEditor.createDefaultBlock();
     const focusInserted = (blockId: string): void => {
-      const writingId = insertSeparator(
+      const writing = insertSeparator(
         reactEditor,
         blockId,
         SEPARATOR_BLOCK_TYPE,
         createDefaultBlock,
       );
       const root = reactEditor.events.getRoot();
-      if (writingId && root) requestAnimationFrame(() => focusBlock(root, writingId, 0));
+      if (writing && root) requestAnimationFrame(() => focusBlock(root, writing.id, 0));
     };
     const disposers = [
-      reactEditor.blocks.register({
+      reactEditor.blockTypes.register({
         definition: {
           type: SEPARATOR_BLOCK_TYPE,
           title: "Separator",
@@ -134,14 +142,14 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         if (nativeSelection) reactEditor.selection.set(nativeSelection);
         const target = firstKeyboardTarget(nativeSelection ?? reactEditor.selection.get());
         if (!target) return false;
-        const writingId = insertSeparator(
+        const writing = insertSeparator(
           reactEditor,
           target.blockId,
           SEPARATOR_BLOCK_TYPE,
           createDefaultBlock,
         );
-        if (!writingId) return false;
-        requestAnimationFrame(() => focusBlock(root, writingId, 0));
+        if (!writing) return false;
+        requestAnimationFrame(() => focusBlock(root, writing.id, 0));
         return true;
       }),
     ];

@@ -4,17 +4,17 @@ describe("editor block managers", () => {
   it("exposes separate registry and block managers", () => {
     const editor = createRivtoEditor();
 
-    expect(editor.blocksRegistry.has("paragraph")).toBe(true);
-    expect(editor.commands.has("block.insert")).toBe(true);
+    expect(editor.blockRegistry.has("paragraph")).toBe(true);
+    expect(editor.commands.has("block.insert")).toBe(false);
     expect(editor.commands.has("link.create")).toBe(false);
     expect("getBlock" in editor).toBe(false);
     expect("createLink" in editor).toBe(false);
 
-    const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Source" });
-    const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, sourceId);
+    const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Source" }).id;
+    const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, sourceId).id;
     editor.blocks.updateBlock(sourceId, { props: { tone: "info" } });
 
-    expect(editor.blocks.getBlock(sourceId)?.props).toEqual({ tone: "info" });
+    expect(editor.blocks.getBlockNode(sourceId)?.props).toEqual({ tone: "info" });
 
     editor.blocks.removeBlock(targetId);
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([sourceId]);
@@ -23,8 +23,8 @@ describe("editor block managers", () => {
 
   it("removes only the requested blocks and ignores an unrelated selection", () => {
     const editor = createRivtoEditor();
-    const firstId = editor.blocks.insertBlock({ type: "paragraph" });
-    const secondId = editor.blocks.insertBlock({ type: "paragraph" }, firstId);
+    const firstId = editor.blocks.insertBlock({ type: "paragraph" }).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph" }, firstId).id;
 
     editor.selection.set(createStructuralSelection([firstId, secondId], firstId, secondId));
     editor.blocks.removeBlock(firstId);

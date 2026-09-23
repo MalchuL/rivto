@@ -49,11 +49,11 @@ describe("edgeless outline scope", () => {
       editor,
       extensions: [separatorBlockExtension()],
     });
-    const leftA = editor.blocks.insertBlock({ type: "paragraph", content: "Left A" });
-    const leftB = editor.blocks.insertBlock({ type: "paragraph", content: "Left B" }, leftA);
-    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, leftB);
-    const rightA = editor.blocks.insertBlock({ type: "paragraph", content: "Right A" }, separator);
-    const rightB = editor.blocks.insertBlock({ type: "paragraph", content: "Right B" }, rightA);
+    const leftA = editor.blocks.insertBlock({ type: "paragraph", content: "Left A" }).id;
+    const leftB = editor.blocks.insertBlock({ type: "paragraph", content: "Left B" }, leftA).id;
+    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, leftB).id;
+    const rightA = editor.blocks.insertBlock({ type: "paragraph", content: "Right A" }, separator).id;
+    const rightB = editor.blocks.insertBlock({ type: "paragraph", content: "Right B" }, rightA).id;
     editor.elements.insertElement({
       id: "left",
       type: "block",
@@ -73,8 +73,8 @@ describe("edgeless outline scope", () => {
 
   test("navigationOutlineBlocks keeps page mode as the full document", () => {
     const editor = createRivtoEditor({ mode: "block" });
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "A" });
-    const second = editor.blocks.insertBlock({ type: "paragraph", content: "B" }, first);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "A" }).id;
+    const second = editor.blocks.insertBlock({ type: "paragraph", content: "B" }, first).id;
     expect(navigationOutlineBlocks(editor, first).map((block) => block.id)).toEqual([first, second]);
     editor.destroy();
   });

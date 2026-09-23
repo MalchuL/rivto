@@ -23,26 +23,26 @@ class RejectingBlockView extends BaseBlockView {
 
 test("resolve falls back to BaseBlockView and indent stays free at the root", () => {
   const editor = createTestCoreEditor();
-  const runtime = createReactEditor({
+  const reactEditor = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension()],
   });
-  const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-  const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first);
-  expect(runtime.views.resolve(second)).toBeInstanceOf(BaseBlockView);
-  expect(runtime.views.has("paragraph")).toBe(false);
+  const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+  const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first).id;
+  expect(reactEditor.views.resolve(second)).toBeInstanceOf(BaseBlockView);
+  expect(reactEditor.views.has("paragraph")).toBe(false);
   editor.blocks.indentBlock(second);
   expect(editor.blocks.getParentId(second)).toBe(first);
   editor.blocks.outdentBlock(second);
   expect(editor.blocks.getParentId(second)).toBeNull();
-  runtime.destroy();
+  reactEditor.destroy();
   editor.destroy();
 });
 
 test("asks the resolved view whether a drop is accepted", () => {
   const editor = createTestCoreEditor();
   const rejectingView = new RejectingBlockView();
-  const runtime = createReactEditor({
+  const reactEditor = createReactEditor({
     editor,
     extensions: [
       defaultWritingBlockExtension(),
@@ -52,10 +52,10 @@ test("asks the resolved view whether a drop is accepted", () => {
       },
     ],
   });
-  const targetId = editor.blocks.insertBlock({ type: "paragraph" });
+  const targetId = editor.blocks.insertBlock({ type: "paragraph" }).id;
 
-  expect(runtime.views.acceptsDrop(targetId, ["source"])).toBe(false);
+  expect(reactEditor.views.acceptsDrop(targetId, ["source"])).toBe(false);
 
-  runtime.destroy();
+  reactEditor.destroy();
   editor.destroy();
 });

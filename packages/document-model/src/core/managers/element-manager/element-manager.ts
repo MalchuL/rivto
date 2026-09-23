@@ -1,70 +1,57 @@
-import type { CRDTType, CRDTMap } from "@chulane/crdt-doc";
+/**
+ * Stores first-class canvas elements in adapter-neutral collaborative maps.
+ * The manager validates portable records, observes changes, delegates snapshot
+ * caching, and exposes the element scopes tracked by history.
+ */
+import type { CRDTDoc, CRDTType, CRDTMap, CRDTUndoScope } from "@chulane/crdt-doc";
 import type {
   DocumentElement,
-  DocumentModel,
+  DocumentElementManagerApi,
   ElementFrame,
   ElementInput,
   ElementPatch,
   ElementUpdate,
-  GenerateId,
 } from "../../types";
 import type { ElementFrameStorage, ElementStorage, IDElement, IDProp } from "../../types/storage";
 import { assignMap, clone, isCRDTMap, requireNonemptyId } from "../../utils";
-import { Pipe } from "../../../utils/pipe";
-import {
-  ELEMENT_FRAME_PROCESSOR,
-  ELEMENT_PROPS_PROCESSOR,
-  ELEMENT_Z_INDEX_PROCESSOR,
-  type ElementPipeContext,
-} from "./element-pipe";
 import {
   normalizeElementFrame,
+  normalizeElementProps,
   normalizeElementZIndex,
   validateElementCollection,
 } from "./utils";
+import { ElementCache } from "./cache";
 
 const ELEMENTS_KEY = "rivto.editor.elements";
-
 /**
  * Owns generic first-class canvas records without interpreting element types.
  *
- * Geometry, layer, and props envelopes run through `pipe` before writes so
- * plugins can add or replace processors without the storage layer importing
- * registries. Built-in frame, z-index, and props steps are registered at
- * construction and remain replaceable by id.
+ * Geometry, layer, and props envelopes are normalized as document invariants.
+ * Editor-specific processors run before values cross this storage boundary.
  */
-export class DocumentElementManager {
-  /** Collaborative element container included in document undo history. */
-  readonly undoScopes: readonly [CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>];
-  /** Priority-ordered processors applied to portable elements before writes. */
-  readonly pipe = new Pipe<ElementInput, ElementPipeContext>();
-  /**
-   * Creates an element identity when an insert omits `id`.
-   *
-   * Replace this per manager; it is independent of block identity generation.
-   * The default uses `crypto.randomUUID`.
-   */
-  generateId: GenerateId = () => crypto.randomUUID();
+export class DocumentElementManager implements DocumentElementManagerApi {
+  /** Creates element identities without exposing generator configuration. */
+  private readonly generateId = (): string => crypto.randomUUID();
   private readonly storage: CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>;
-  /** Stable element snapshots invalidated by observed record changes. */
-  private readonly snapshots = new Map<IDElement, DocumentElement>();
-  /** Stable complete collection invalidated by any element change. */
-  private elementsSnapshot?: DocumentElement[];
+  /** Adapter roots tracked by document-owned history. */
+  readonly historyScopes: readonly CRDTUndoScope[];
+  /** Detached element and collection snapshot identities. */
+  private readonly cache = new ElementCache();
+  /** Subscribers to any element record or collection change. */
   private readonly listeners = new Set<() => void>();
+  /** Subscribers to element insertion or deletion. */
   private readonly membershipListeners = new Set<() => void>();
+  /** Subscribers to individual element records. */
   private readonly elementListeners = new Map<IDElement, Set<() => void>>();
 
   /**
    * Creates an element manager over existing collaborative document storage.
    *
-   * @param document - Owning document providing CRDT storage and transactions.
+   * @param crdt - Collaborative storage adapter.
    */
-  constructor(private readonly document: DocumentModel) {
-    this.storage = document.crdt.getMap<Record<IDElement, CRDTMap<ElementStorage>>>(ELEMENTS_KEY);
-    this.undoScopes = [this.storage];
-    this.pipe.register(ELEMENT_FRAME_PROCESSOR);
-    this.pipe.register(ELEMENT_Z_INDEX_PROCESSOR);
-    this.pipe.register(ELEMENT_PROPS_PROCESSOR);
+  constructor(private readonly crdt: CRDTDoc) {
+    this.storage = crdt.getMap<Record<IDElement, CRDTMap<ElementStorage>>>(ELEMENTS_KEY);
+    this.historyScopes = [this.storage];
     this.storage.observe((events) => {
       const changedIds = new Set<string>();
       let membershipChanged = false;
@@ -76,14 +63,21 @@ export class DocumentElementManager {
           keys.forEach((key) => changedIds.add(key));
         }
       });
-      changedIds.forEach((id) => {
-        this.snapshots.delete(id);
-        this.emit(this.elementListeners.get(id));
-      });
-      this.elementsSnapshot = undefined;
+      this.cache.invalidate(changedIds);
+      changedIds.forEach((id) => this.emit(this.elementListeners.get(id)));
       this.emit(this.listeners);
       if (membershipChanged) this.emit(this.membershipListeners);
     });
+  }
+
+  /**
+   * Reports whether canonical storage contains one element record.
+   *
+   * @param id - Stable element identifier to inspect.
+   * @returns True when the element record exists.
+   */
+  hasElement(id: string): boolean {
+    return this.storage.has(id);
   }
 
   /**
@@ -93,12 +87,10 @@ export class DocumentElementManager {
    * @returns Detached element, or undefined when absent.
    */
   getElement(id: string): DocumentElement | undefined {
-    const cached = this.document.isTransacting ? undefined : this.snapshots.get(id);
-    if (cached) return cached;
-    const value = this.storage.get(id);
-    const snapshot = isCRDTMap(value) ? this.read(value) : undefined;
-    if (snapshot && !this.document.isTransacting) this.snapshots.set(id, snapshot);
-    return snapshot;
+    return this.cache.readElement(id, this.crdt.isTransacting, () => {
+      const value = this.storage.get(id);
+      return isCRDTMap(value) ? this.read(value) : undefined;
+    });
   }
 
   /**
@@ -107,17 +99,10 @@ export class DocumentElementManager {
    * @returns Every detached element in collaborative map iteration order.
    */
   getElements(): DocumentElement[] {
-    if (this.document.isTransacting) {
-      return [...this.storage.keys()].flatMap((id) => {
-        const element = this.getElement(id);
-        return element ? [element] : [];
-      });
-    }
-    this.elementsSnapshot ??= [...this.storage.keys()].flatMap((id) => {
+    return this.cache.readCollection(this.crdt.isTransacting, () => [...this.storage.keys()].flatMap((id) => {
       const element = this.getElement(id);
       return element ? [element] : [];
-    });
-    return this.elementsSnapshot;
+    }));
   }
 
   /**
@@ -162,26 +147,55 @@ export class DocumentElementManager {
     return () => this.membershipListeners.delete(listener);
   }
 
-  /** Calls a stable listener snapshot when the optional set exists. */
+  /**
+   * Publishes to a stable listener snapshot so callbacks may unsubscribe safely.
+   * @param listeners - Subscribers for one change channel.
+   * @returns No value.
+   */
   private emit(listeners: ReadonlySet<() => void> | undefined): void {
     if (listeners) [...listeners].forEach((listener) => listener());
   }
 
   /**
-   * Inserts one element after pipe processing.
+   * Creates the element ID map used by an immediate import.
+   *
+   * Available source IDs survive cut/paste. IDs already present in this
+   * document receive generated replacements so copied elements cannot overwrite
+   * existing data. The returned IDs are not inserted or reserved.
+   *
+   * @param sourceIds - Stable source IDs in import order.
+   * @returns Destination ID for every source element ID.
+   */
+  createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string> {
+    const assigned = new Set<string>();
+    return new Map(sourceIds.map((sourceId) => {
+      // A free identity survives cut/paste. Copying into a document that still
+      // owns it needs a fresh identity to avoid replacing data.
+      const reusable = !this.storage.has(sourceId) && !assigned.has(sourceId);
+      let id = reusable ? sourceId : this.generateId();
+      // Generated collisions are improbable, but the document boundary still
+      // guarantees a usable mapping rather than relying on chance.
+      while (this.storage.has(id) || assigned.has(id)) id = this.generateId();
+      assigned.add(id);
+      return [sourceId, id];
+    }));
+  }
+
+  /**
+   * Inserts one element after portable invariant validation.
    *
    * @param input - Complete type, geometry, layer, and optional props.
-   * @returns Stable element ID, either supplied or from `generateId`.
-   * @throws {Error} When the ID exists, the type is empty, or a processor rejects the record.
+   * @returns Complete normalized inserted element.
+   * @throws {Error} When the ID exists, the type is empty, or the record is invalid.
    */
-  insertElement(input: ElementInput): string {
+  insertElement(input: ElementInput): DocumentElement {
     const id = requireNonemptyId(input.id ?? this.generateId(), "Element");
     if (this.storage.has(id)) throw new Error(`Element ${id} already exists`);
     const validated = this.processElement({ ...input, id });
-    this.document.transact(() => {
-      const model = this.document.crdt.instantiator.createMap<ElementStorage>();
-      const frameMap = this.document.crdt.instantiator.createMap<ElementFrameStorage>();
-      const props = this.document.crdt.instantiator.createMap<Record<string, CRDTType>>();
+    this.crdt.transact(() => {
+      const model = this.crdt.createDetachedMap<ElementStorage>();
+      const frameMap = this.crdt.createDetachedMap<ElementFrameStorage>();
+      const props = this.crdt.createDetachedMap<Record<string, CRDTType>>();
       model.set("id", id);
       model.set("type", validated.type);
       model.set("frame", frameMap);
@@ -191,7 +205,7 @@ export class DocumentElementManager {
       assignMap(frameMap, validated.frame as ElementFrameStorage);
       assignMap(props, validated.props ?? {});
     });
-    return id;
+    return this.result(id, validated);
   }
 
   /**
@@ -199,23 +213,23 @@ export class DocumentElementManager {
    *
    * @param id - Element to patch.
    * @param patch - Mutable geometry, layer, and props.
-   * @returns No value.
+   * @returns Complete normalized updated element.
    */
-  updateElement(id: string, patch: ElementPatch): void {
-    this.updateElements([{ id, patch }]);
+  updateElement(id: string, patch: ElementPatch): DocumentElement {
+    return this.updateElements([{ id, patch }])[0]!;
   }
 
   /**
    * Prevalidates and applies multiple element patches in one transaction.
    *
-   * Each target is processed as a complete portable element so pipe steps see
-   * the post-patch record. Duplicate IDs observe preceding patches in the batch.
+   * Each target is validated as a complete portable element. Duplicate IDs
+   * observe preceding patches in the batch.
    *
    * @param updates - Ordered element IDs and partial field updates.
-   * @returns No value.
-   * @throws {Error} When a target is missing or a processor rejects the record.
+   * @returns Complete normalized updated elements in input order.
+   * @throws {Error} When a target is missing or the record is invalid.
    */
-  updateElements(updates: readonly ElementUpdate[]): void {
+  updateElements(updates: readonly ElementUpdate[]): DocumentElement[] {
     const simulated = new Map<string, ElementInput>();
     const prepared = updates.map(({ id, patch }) => {
       const element = this.required(id);
@@ -229,7 +243,7 @@ export class DocumentElementManager {
       simulated.set(id, validated);
       return { element, patch, validated };
     });
-    this.document.transact(() => prepared.forEach(({ element, patch, validated }) => {
+    this.crdt.transact(() => prepared.forEach(({ element, patch, validated }) => {
       if (patch.frame) {
         assignMap(this.requiredMap<ElementFrameStorage>(element, "frame"), validated.frame as ElementFrameStorage, false);
       }
@@ -243,6 +257,7 @@ export class DocumentElementManager {
         }
       }
     }));
+    return prepared.map(({ validated }, index) => this.result(updates[index]!.id, validated));
   }
 
   /**
@@ -260,7 +275,7 @@ export class DocumentElementManager {
    * @returns No value.
    */
   removeElements(ids: readonly string[]): void {
-    this.document.transact(() => ids.forEach((id) => this.storage.delete(id)));
+    this.crdt.transact(() => ids.forEach((id) => this.storage.delete(id)));
   }
 
   /**
@@ -271,7 +286,7 @@ export class DocumentElementManager {
    * @throws {Error} When any element is malformed or duplicated.
    */
   validateElements(elements: readonly DocumentElement[]): void {
-    validateElementCollection(elements, { pipe: this.pipe });
+    validateElementCollection(elements);
   }
 
   /**
@@ -287,19 +302,41 @@ export class DocumentElementManager {
   }
 
   /**
-   * Runs the element pipe against one portable record.
+   * Normalizes one portable element record.
    *
    * @param element - Candidate insert input or reconstructed update.
-   * @returns The original element or a processor-normalized replacement.
-   * @throws {Error} When the type is empty or a processor rejects the record.
+   * @returns Detached element containing normalized generic fields.
+   * @throws {Error} When the type is empty or the record is invalid.
    */
   private processElement(element: ElementInput): ElementInput {
     if (!element.type) throw new Error("Element type is required");
-    return this.pipe.process(element, {});
+    return {
+      ...element,
+      frame: normalizeElementFrame(element.frame),
+      zIndex: normalizeElementZIndex(element.zIndex),
+      props: normalizeElementProps(element.props),
+    };
   }
 
   /**
-   * Converts a detached element into pipe input without dropping identity.
+   * Detaches one already-normalized mutation value without rereading storage.
+   *
+   * @param id - Stable stored identity.
+   * @param element - Complete normalized mutation value.
+   * @returns Complete detached element matching the persisted record.
+   */
+  private result(id: string, element: ElementInput): DocumentElement {
+    return {
+      id,
+      type: element.type,
+      frame: { ...element.frame },
+      zIndex: element.zIndex,
+      props: clone(element.props ?? {}) as Record<string, unknown>,
+    };
+  }
+
+  /**
+   * Converts a detached element into mutation input without dropping identity.
    *
    * @param element - Materialized element record.
    * @returns Portable input used for update reconstruction.

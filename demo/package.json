@@ -11,6 +11,8 @@
     "test": "node --test --experimental-strip-types tests/*.test.mjs"
   },
   "dependencies": {
+    "@chulane/crdt-doc": "workspace:*",
+    "@chulane/document-model": "workspace:*",
     "@chulane/rivto": "workspace:*",
     "@chulane/rivto-react": "workspace:*",
     "react": "^19.2.0",
@@ -18,8 +20,10 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "5.8.3",
     "vite": "^7.2.0"
   }

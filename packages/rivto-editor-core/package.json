@@ -22,11 +22,9 @@
     "test": "../../scripts/run-test.sh",
     "check-types": "tsc --noEmit"
   },
-  "peerDependencies": {
-    "yjs": "^13.0.0"
-  },
   "devDependencies": {
     "@types/jest": "^29.5.14",
+    "@chulane/crdt-doc": "workspace:*",
     "jest": "^29.7.0",
     "resolve": "1.22.12",
     "ts-jest": "^29.4.5",
@@ -35,7 +33,6 @@
     "yjs": "^13.0.0"
   },
   "dependencies": {
-    "@chulane/crdt-doc": "workspace:*",
     "@chulane/document-model": "workspace:*",
     "zod": "^4.1.13"
   }

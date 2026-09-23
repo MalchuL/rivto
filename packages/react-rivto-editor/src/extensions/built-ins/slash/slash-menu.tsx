@@ -10,10 +10,9 @@ import {
 } from "../../../constants";
 import {
   useDOMEvent,
-  useEditor,
+  useReactEditor,
   useEditorRoot,
   useKeyboardEvent,
-  useReactEditor,
 } from "../../../hooks";
 import {
   useCallback,
@@ -30,6 +29,14 @@ import {
   KEYBOARD_BINDING_IDS,
 } from "../../../managers";
 import { keepNoResultMenuOpen, rankSlashCommands } from "./slash-search";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "../../../components/ui/command";
+
+/**
+ * Floating menu chrome. The root is the scroll container so long command lists
+ * scroll while the highlighted item stays visible; cmdk's own list keeps no
+ * height limit of its own.
+ */
+const SLASH_MENU_CLASS = "slash-menu fixed z-[1000] h-auto w-[min(280px,calc(100vw-24px))] max-h-80 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg";
 
 interface SlashSession {
   readonly blockId: string;
@@ -103,14 +110,13 @@ function groupCommands(commands: readonly SlashCommand[]): Array<{ group: string
  * step while the preceding typing stays a separate capture.
  */
 export function SlashMenu() {
-  const editor = useEditor();
-  const roots = editor.blocks.getBlocks();
   const reactEditor = useReactEditor();
+  const roots = reactEditor.blocks.getBlocks();
   const slashCommands = reactEditor.slashCommands;
   const { element: root } = useEditorRoot();
   const [session, setSession] = useState<SlashSession | null>(null);
   const sessionRef = useRef(session);
-  const activeItemRef = useRef<HTMLButtonElement | null>(null);
+  const activeItemRef = useRef<HTMLDivElement | null>(null);
   const ignoredTrigger = useRef<string | undefined>(undefined);
   sessionRef.current = session;
 
@@ -198,8 +204,8 @@ export function SlashMenu() {
   });
 
   useEffect(() => {
-    if (session && !editor.blocks.getBlock(session.blockId)) close();
-  }, [close, editor, roots, session]);
+    if (session && !reactEditor.blocks.hasBlock(session.blockId)) close();
+  }, [close, reactEditor, roots, session]);
 
   useDOMEvent({
     id: "slash.selection-change",
@@ -218,14 +224,14 @@ export function SlashMenu() {
   const execute = useCallback((command: SlashCommand) => {
     const current = sessionRef.current;
     if (!current || !root) return;
-    const block = editor.blocks.getBlock(current.blockId);
+    const block = reactEditor.blocks.getBlockNode(current.blockId);
     if (!block) return close();
     const caret = current.slashOffset + current.query.length + 1;
     if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
 
-    editor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
-      editor.blocks.updateBlock(current.blockId, { content: next });
+      reactEditor.blocks.updateBlock(current.blockId, { content: next });
       reactEditor.selection.set(createCaretSelection(current.blockId, current.slashOffset));
       slashCommands.execute(command.id, { blockId: current.blockId });
     });
@@ -236,7 +242,7 @@ export function SlashMenu() {
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });
     });
-  }, [close, editor, reactEditor, root, slashCommands]);
+  }, [close, reactEditor, root, slashCommands]);
 
   const currentResults = useCallback(() => {
     const current = sessionRef.current;
@@ -297,40 +303,55 @@ export function SlashMenu() {
     return true;
   });
 
+  /** Syncs cmdk pointer highlighting back into the session's active index. */
+  const selectByValue = useCallback((value: string) => {
+    const index = currentResults().findIndex((command) => command.id === value);
+    if (index < 0) return;
+    setSession((current) => current && current.activeIndex !== index
+      ? { ...current, activeIndex: index }
+      : current);
+  }, [currentResults]);
+
   if (!root || !session) return null;
+  const flat = groups.flatMap(({ commands }) => commands);
+  const activeCommand = flat[session.activeIndex] ?? flat[0];
   let resultIndex = 0;
+  // cmdk provides list semantics and pointer highlighting only. Filtering is
+  // disabled because ranking already happened, and keyboard navigation stays
+  // with the editor keymap so focus never leaves the editable block.
   return createPortal(
-    <div
-      className="slash-menu"
+    <Command
+      shouldFilter={false}
+      value={activeCommand?.id ?? ""}
+      onValueChange={selectByValue}
+      className={SLASH_MENU_CLASS}
       data-slash-menu="true"
-      role="menu"
       aria-label="Slash commands"
       style={{ left: session.left, top: session.top }}
       onPointerDown={(event) => event.preventDefault()}
     >
-      {ranked.length ? groups.map(({ group, commands }) => (
-        <div key={group} role="group" aria-label={group}>
-          <div className="slash-menu-group">{group}</div>
-          {commands.map((command) => {
-            const index = resultIndex++;
-            return (
-              <button
-                key={command.id}
-                type="button"
-                role="menuitem"
-                className="slash-menu-item"
-                data-slash-command={command.id}
-                data-active={index === session.activeIndex || undefined}
-                ref={index === session.activeIndex ? activeItemRef : undefined}
-                onClick={() => execute(command)}
-              >
-                {command.title}
-              </button>
-            );
-          })}
-        </div>
-      )) : <div className="slash-menu-empty">No matching commands</div>}
-    </div>,
+      <CommandList className="max-h-none overflow-visible">
+        {ranked.length ? groups.map(({ group, commands }) => (
+          <CommandGroup key={group} heading={group}>
+            {commands.map((command) => {
+              const index = resultIndex++;
+              return (
+                <CommandItem
+                  key={command.id}
+                  value={command.id}
+                  data-slash-command={command.id}
+                  data-active={index === session.activeIndex || undefined}
+                  ref={index === session.activeIndex ? activeItemRef : undefined}
+                  onSelect={() => execute(command)}
+                >
+                  {command.title}
+                </CommandItem>
+              );
+            })}
+          </CommandGroup>
+        )) : <CommandEmpty className="px-2 py-2.5 text-sm text-muted-foreground">No matching commands</CommandEmpty>}
+      </CommandList>
+    </Command>,
     root.ownerDocument.body,
   );
 }

@@ -4,7 +4,7 @@
 
 Все публичные React `subscribe(listener)` capabilities используют один stream на manager и Set-семантику: разрешено несколько distinct callbacks, новый callback не заменяет старые, одинаковая function reference имеет одну effective registration, returned unsubscribe idempotent, immediate вызова нет. После notification consumer читает соответствующий `revision`/snapshot/getter. Исключения listener не перехватываются.
 
-## `blocks`
+## `blockTypes`
 
 ### `register(registration)`
 
@@ -12,47 +12,57 @@
 - **Возвращает:** idempotent disposer.
 - **Исключения:** invalid/duplicate definition, renderer или slash command; partial registration откатывается.
 
-### `registerListProps(registration)`
+## `blockListProps`
+
+Это lifecycle adapter к core `editor.blockListProps`: registry, defaults и validation принадлежат core, а React автоматически освобождает registrations extension при teardown.
+
+### `register(registration)`
 
 - **Аргументы:** `{ id; defaults?; validate? }`.
 - **Возвращает:** disposer.
 - **Исключения:** empty/duplicate ID или invalid registration.
 
-### `hasListProps(id)` / `validateListProps(candidate)`
+### `has(id)` / `validate(candidate)`
 
 - **Аргументы:** registration ID либо complete `BlockListProps`.
 - **Возвращают:** `boolean`.
 - **Исключения:** отсутствуют в обычном manager path; ошибки custom validator превращаются в `false`.
 
-### `prepareBlock(input)`
+### `prepare(candidate)`
 
-- **Аргументы:** recursive `EditorBlockInput`.
-- **Возвращает:** новый recursive input с shallowly merged active list defaults; вложенные `props` не deep-clone.
-- **Исключения:** метод сам не валидирует type/schema; возможны только ошибки чтения malformed/Proxy input или чрезмерной recursion.
+- **Аргументы:** `BlockListProps` candidate.
+- **Возвращает:** новый record с shallowly merged defaults.
+- **Исключения:** invalid portable или semantic list properties.
+
+## `blocks` mutations
+
+`prepareInput(inputs)` принимает root forest и без изменения document рекурсивно применяет core block definitions, list-property policy, processors и portable validation.
 
 ### `insertBlock(input, afterId?)`
 
 - **Аргументы:** input; optional sibling `afterId`, где `null` означает начало.
-- **Возвращает:** stable block ID.
+- **Возвращает:** complete persisted block.
 - **Исключения:** preparation/core insertion errors.
 
 ### `updateBlock(id, patch)`
 
 - **Аргументы:** block ID и `EditorBlockPatch`.
-- **Возвращает:** `boolean`, был ли target обновлён.
-- **Исключения:** invalid props/list/type patch.
+- **Возвращает:** complete persisted block.
+- **Исключения:** missing block или invalid props/list/type patch.
 
 ### `updateBlocks(updates)`
 
 - **Аргументы:** readonly `{ id, patch }[]`.
-- **Возвращает:** positional `BlockMutationResult` со status `applied | skipped` и reason `missing | invalid`.
-- **Исключения:** infrastructure/core transaction errors; invalid entries обычно отражаются как skipped.
+- **Возвращает:** complete persisted blocks in input order.
+- **Исключения:** missing block или invalid entry; batch не записывается частично.
 
 ### `deleteListProps(id, keys)` / `deleteListPropsBatch(updates)`
 
 - **Аргументы:** block ID + property keys либо batch таких записей.
-- **Возвращают:** `boolean` либо `BlockMutationResult`.
-- **Исключения:** store/transaction errors; invalid result обычно skipped/false.
+- **Возвращают:** single operation возвращает change `boolean`, batch — `void`.
+- **Исключения:** missing block или invalid resulting list properties.
+
+## `blockTypes` cleanup
 
 ### `delete(type)`
 

@@ -1,6 +1,10 @@
+/**
+ * Validates and normalizes detached element data before collaborative writes.
+ * Snapshot loading and element mutations share these helpers so both paths
+ * enforce identical geometry, layer, identity, and portability invariants.
+ */
 import type { ElementFrame, ElementInput } from "../../types";
 import { assertPortableRecord, requireNonemptyId } from "../../utils/portable";
-import type { ElementPipe } from "./element-pipe";
 
 /**
  * Validates and detaches complete canvas geometry.
@@ -48,17 +52,14 @@ export function normalizeElementProps(value: unknown): Record<string, unknown> {
  * Validates a portable element collection before a destructive write or paste.
  *
  * Unique nonempty IDs and nonempty types are always required. Geometry, layer,
- * and props are checked either by the supplied pipe or by the built-in
- * normalizers when no pipe is present.
+ * and props are checked by document-owned normalizers.
  *
  * @param elements - Candidate element records.
- * @param options - Optional pipe used in place of the built-in normalizers.
  * @returns Collected IDs after a successful preflight.
  * @throws {Error} When any element is malformed or duplicated.
  */
 export function validateElementCollection(
   elements: readonly ElementInput[],
-  options: { pipe?: ElementPipe } = {},
 ): Set<string> {
   if (!Array.isArray(elements)) throw new Error("Snapshot elements must be an array");
   const ids = new Set<string>();
@@ -70,12 +71,9 @@ export function validateElementCollection(
     const id = requireNonemptyId(element.id, "Element");
     if (ids.has(id)) throw new Error(`Duplicate element ${id}`);
     ids.add(id);
-    if (options.pipe) options.pipe.process(element, {});
-    else {
-      normalizeElementFrame(element.frame);
-      normalizeElementZIndex(element.zIndex);
-      normalizeElementProps(element.props);
-    }
+    normalizeElementFrame(element.frame);
+    normalizeElementZIndex(element.zIndex);
+    normalizeElementProps(element.props);
   });
   return ids;
 }

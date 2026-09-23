@@ -11,7 +11,7 @@ describe("ClipboardManager", () => {
       content: "Parent",
       listProps: { type: "checkbox" },
       children: [{ type: "paragraph", content: "Child" }],
-    });
+    }).id;
     const block = editor.blocks.getBlock(id)!;
 
     expect(reactEditor.clipboard.format([block])).toEqual({

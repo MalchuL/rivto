@@ -1,0 +1,125 @@
+/*
+ * Page drag extension presentation.
+ *
+ * The drag handle is revealed by ancestor state (row hover, focus-within,
+ * container hover) and container roots extend that hover across full-height
+ * side strips, so its resting and revealed states live here rather than in
+ * utilities that would outrank the structural selectors. Drop indicators and
+ * the drag overlay are positioned by data attributes written by the drag
+ * placement resolver.
+ */
+:root {
+  --rivto-drop-indicator-thickness: 4px;
+  --rivto-drop-indicator-color: var(--rivto-accent);
+  --rivto-drop-indicator-radius: 4px;
+  --rivto-drop-inside-background: color-mix(in srgb, var(--rivto-drop-indicator-color) 8%, transparent);
+}
+
+.page-drag-handle {
+  position: absolute;
+  top: 0;
+  left: -28px;
+  /* Reach the block edge so the handle stays visible while the pointer moves
+     from the row onto the button. */
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--rivto-muted-foreground);
+  background: transparent;
+  cursor: grab;
+  opacity: 0;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Children live outside their parent's row, so only the line under the cursor
+   or owning the caret reveals its handle. */
+.page-block-row:hover .page-drag-handle,
+.page-block-row:focus-within .page-drag-handle,
+.page-drag-handle:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.page-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Layout roots keep only their direct handle's hitbox pointer-active while
+   transparent so re-entering the handle recovers hover without a fast move. */
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])
+  > .page-block-row > .rivto-slot > .page-drag-handle {
+  pointer-events: auto;
+}
+
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"]) {
+  position: relative;
+}
+
+/* Root rows are only one line tall; side strips extend their hover behavior
+   beside the full container without covering its interactive body. */
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::before,
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::after {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  width: 100vw;
+  background: transparent;
+  content: "";
+}
+
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::before {
+  right: 100%;
+}
+
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"])::after {
+  left: 100%;
+}
+
+:is([data-block-type="bento"], [data-block-type="table"], [data-block-type="columns"], [data-block-type="kanban"], [data-block-type="todo-storage"]):hover
+  > .page-block-row > .rivto-slot > .page-drag-handle {
+  opacity: 1;
+}
+
+[data-dragging] {
+  opacity: 0.45;
+}
+
+.page-drop-indicator {
+  position: absolute;
+  z-index: 2;
+  border-radius: var(--rivto-drop-indicator-radius);
+  background: var(--rivto-drop-indicator-color);
+  pointer-events: none;
+}
+
+.page-drop-indicator[data-kind="between"][data-axis="horizontal"] {
+  height: var(--rivto-drop-indicator-thickness);
+  transform: translateY(-50%);
+}
+
+.page-drop-indicator[data-kind="between"][data-axis="vertical"] {
+  width: var(--rivto-drop-indicator-thickness);
+  transform: translateX(-50%);
+}
+
+.page-drop-indicator[data-kind="inside"] {
+  inset: 0;
+  box-sizing: border-box;
+  background: var(--rivto-drop-inside-background);
+  outline: var(--rivto-drop-indicator-thickness) solid var(--rivto-drop-indicator-color);
+  outline-offset: calc(-1 * var(--rivto-drop-indicator-thickness));
+}
+
+/* The overlay is a detached dnd-kit preview; nested preview rows reuse the
+   block-content class for identical typography. */
+.page-drag-preview-block > .page-block-content {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

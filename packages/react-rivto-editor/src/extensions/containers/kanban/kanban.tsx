@@ -5,7 +5,7 @@
  * The shared block tree and drag extension render and move every card in both modes.
  * @module
  */
-import { useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { BlockWrapperProps } from "../../../blocks";
 import type { EditorBlockInput } from "@chulane/rivto";
@@ -15,14 +15,18 @@ import { focusBlock, type ReactEditorExtension } from "../../../managers";
 import { kanbanColumnView, kanbanView } from "./kanban-view";
 import { convertLeafToContainer } from "../../../views/ops/outline-ops";
 
-import { BlockModal, BlockModalButton } from "../../../blocks/block-modal";
+import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
+import { PlusIcon } from "lucide-react";
+import { Button } from "../../../components/ui/button";
 
-const COLUMN_HEADER_CLASS = "rivto-kanban-column-header";
-const COLUMN_TITLE_CLASS = "rivto-kanban-column-title";
-const COLUMN_COUNT_CLASS = "rivto-kanban-column-count";
-const ADD_COLUMN_CLASS = "rivto-kanban-add-column";
-const ADD_CARD_CLASS = "rivto-kanban-add-card";
-const BOARD_SUMMARY_CLASS = "rivto-kanban-summary";
+const COLUMN_HEADER_CLASS = "rivto-kanban-column-header flex min-h-8 items-center gap-2 text-(--rivto-kanban-card-foreground)";
+const COLUMN_TITLE_CLASS = "rivto-kanban-column-title min-w-0 flex-1 rounded text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--rivto-kanban-accent)";
+const COLUMN_COUNT_CLASS = "rivto-kanban-column-count text-xs tabular-nums text-(--rivto-kanban-muted-foreground)";
+/** Structural sizing and flex order live in kanban.css; the dashed tile look is utility-based. */
+const ADD_COLUMN_CLASS = "rivto-kanban-add-column h-auto grid place-items-center rounded-xl border-2 border-dashed border-(--rivto-kanban-card-hover-border)/60 bg-white/45 p-3 text-(--rivto-kanban-muted-foreground) hover:bg-white hover:text-(--rivto-kanban-accent) [&_svg]:size-10";
+const ADD_CARD_CLASS = "rivto-kanban-add-card size-7 flex-none text-(--rivto-kanban-card-foreground)/80 hover:bg-[#dcdfe4] [&_svg]:size-5";
+const BOARD_SUMMARY_CLASS = "rivto-kanban-summary flex items-center gap-2";
+const BOARD_SUMMARY_STATS_CLASS = "text-xs tabular-nums text-(--rivto-kanban-muted-foreground)";
 
 export const KANBAN_BLOCK_TYPE = "kanban";
 export const KANBAN_COLUMN_BLOCK_TYPE = "kanban-column";
@@ -43,20 +47,48 @@ export function createKanbanBlockInput(): EditorBlockInput {
 }
 
 /**
+ * Reads column and nested card counts after hierarchy changes without
+ * materializing the board tree or waking for text edits.
+ *
+ * @param boardId - Persisted kanban identifier.
+ * @returns Direct column count and the sum of cards in those columns.
+ */
+function useKanbanCounts(boardId: string): { readonly columnCount: number; readonly cardCount: number } {
+  const reactEditor = useReactEditor();
+  const subscribe = useCallback(
+    (listener: () => void) => reactEditor.blocks.subscribeStructure(listener),
+    [reactEditor],
+  );
+  const getSnapshot = useCallback(() => {
+    const columnIds = reactEditor.blocks.getBlockNode(boardId)?.childIds ?? [];
+    let cardCount = 0;
+    columnIds.forEach((columnId) => {
+      cardCount += (reactEditor.blocks.getBlockNode(columnId)?.childIds.length ?? 0);
+    });
+    return `${columnIds.length}:${cardCount}`;
+  }, [boardId, reactEditor]);
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const separator = snapshot.indexOf(":");
+  return {
+    columnCount: Number(snapshot.slice(0, separator)),
+    cardCount: Number(snapshot.slice(separator + 1)),
+  };
+}
+
+/**
  * Renders the contentless board header; the shared tree renders its columns.
  * The add-column control lives in the lane container and is omitted while collapsed.
  * @param props - Identity of the persisted board.
  * @returns Structural selection region and a compact collapsed summary.
  */
 export function Kanban({ blockId }: { readonly blockId: string }) {
-  const runtime = useReactEditor();
+  const reactEditor = useReactEditor();
   const editing = useBlockEditing(blockId, { textEdit: false });
+  const { columnCount, cardCount } = useKanbanCounts(blockId);
   const block = editing.block;
   const title = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState<HTMLElement | null>(null);
   const collapsed = block?.listProps.collapsed === true;
-  const columnCount = block?.children.length ?? 0;
-  const cardCount = block?.children.reduce((count, column) => count + column.children.length, 0) ?? 0;
   // The shared tree owns the lane container. A portal adds chrome without
   // persisting a fake column or mounting duplicate blocks and drag targets.
   // Collapse unmounts that container, so the button must not fall back into
@@ -70,22 +102,26 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
    */
   const addColumn = () => {
     let columnId = "";
-    runtime.editor.batchUpdates(() => {
-      runtime.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
-      columnId = runtime.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" });
-      runtime.editor.blocks.moveBlocks([columnId], blockId, "inside");
+    reactEditor.history.batchUpdates(() => {
+      reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
+      columnId = reactEditor.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" }).id;
+      reactEditor.blocks.moveBlocks([columnId], blockId, "inside");
     });
     requestAnimationFrame(() => {
-      const root = runtime.events.getRoot();
+      const root = reactEditor.events.getRoot();
       if (root) focusBlock(root, columnId, 0);
     });
   };
-  const addButton = <button className={ADD_COLUMN_CLASS} type="button" aria-label="Add Kanban column" onClick={addColumn}>+</button>;
+  const addButton = (
+    <Button variant="ghost" className={ADD_COLUMN_CLASS} type="button" aria-label="Add Kanban column" onClick={addColumn}>
+      <PlusIcon />
+    </Button>
+  );
   if (!block) return null;
   return <div ref={title} {...editing.attributes} className={BOARD_SUMMARY_CLASS}>
     {collapsed && <>
       <strong>Kanban</strong>
-      <span>{columnCount} {columnCount === 1 ? "column" : "columns"} · {cardCount} {cardCount === 1 ? "card" : "cards"}</span>
+      <span className={BOARD_SUMMARY_STATS_CLASS}>{columnCount} {columnCount === 1 ? "column" : "columns"} · {cardCount} {cardCount === 1 ? "card" : "cards"}</span>
     </>}
     {columns && !collapsed ? createPortal(addButton, columns) : null}
   </div>;
@@ -99,34 +135,35 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
  */
 function KanbanColumn({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId);
-  const runtime = useReactEditor();
+  const cardCount = editing.block?.childIds.length ?? 0;
+  const reactEditor = useReactEditor();
   /**
    * Appends an editable card in one undo step and places the caret inside it.
    * @returns Nothing; the shared block tree mounts the new card.
    */
   const addCard = () => {
     let cardId = "";
-    runtime.editor.batchUpdates(() => {
-      cardId = runtime.blocks.insertBlock(runtime.createDefaultBlock());
-      runtime.editor.blocks.moveBlocks([cardId], blockId, "inside");
-      runtime.selection.set(createCaretSelection(cardId, 0));
+    reactEditor.history.batchUpdates(() => {
+      cardId = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock()).id;
+      reactEditor.blocks.moveBlocks([cardId], blockId, "inside");
+      reactEditor.selection.set(createCaretSelection(cardId, 0));
     });
     requestAnimationFrame(() => {
-      const root = runtime.events.getRoot();
+      const root = reactEditor.events.getRoot();
       if (root) focusBlock(root, cardId, 0);
     });
   };
   return (
     <div className={COLUMN_HEADER_CLASS}>
       <div className={COLUMN_TITLE_CLASS} {...editing.attributes} aria-label="Kanban column title" />
-      <span className={COLUMN_COUNT_CLASS} aria-label={`${editing.block?.children.length ?? 0} cards`}>
-        {editing.block?.children.length ?? 0}
+      <span className={COLUMN_COUNT_CLASS} aria-label={`${cardCount} cards`}>
+        {cardCount}
       </span>
       {editing.block?.listProps.collapsed !== true && (
         // Collapse hides cards; keep the header compact without a dangling add control.
-        <button className={ADD_CARD_CLASS} type="button" aria-label={`Add card to ${editing.block?.content ?? "column"}`} onClick={addCard}>
-          +
-        </button>
+        <Button variant="ghost" size="icon-sm" className={ADD_CARD_CLASS} type="button" aria-label={`Add card to ${editing.block?.content ?? "column"}`} onClick={addCard}>
+          <PlusIcon />
+        </Button>
       )}
     </div>
   );
@@ -155,7 +192,7 @@ export function kanbanExtension(): ReactEditorExtension {
         reactEditor.surfaces.registerBlockSlot({
           position: "right", component: BlockModalButton, when: ({ block }) => block.type === KANBAN_BLOCK_TYPE,
         }),
-        reactEditor.blocks.register({
+        reactEditor.blockTypes.register({
           definition: {
             type: KANBAN_BLOCK_TYPE,
             title: "Kanban",
@@ -164,7 +201,7 @@ export function kanbanExtension(): ReactEditorExtension {
           render: Kanban,
           view: kanbanView,
         }),
-        reactEditor.blocks.register({
+        reactEditor.blockTypes.register({
           definition: {
             type: KANBAN_COLUMN_BLOCK_TYPE,
             title: "Kanban column",
@@ -178,7 +215,7 @@ export function kanbanExtension(): ReactEditorExtension {
           title: "Kanban",
           group: "Turn into",
           keywords: ["board", "cards", "tasks"],
-          isAvailable: ({ blockId }) => reactEditor.editor.blocks.getBlock(blockId)?.children.length === 0,
+          isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId),
           execute: ({ blockId }) => {
             convertLeafToContainer(reactEditor, blockId, createKanbanBlockInput());
           },

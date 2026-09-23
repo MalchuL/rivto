@@ -1,10 +1,19 @@
-import type { RivtoEditorApi as Editor } from "@chulane/rivto";
+import type {
+  CommandRegistryApi,
+  ElementManagerApi,
+  ModeManagerApi,
+  RivtoEditorApi,
+  HistoryManagerApi,
+} from "@chulane/rivto";
+import type { DocumentModel } from "@chulane/document-model";
 import type {
   BlockRenderer,
   KeymapOverrides,
   ReactEditorExtension,
 } from "./managers";
 import type {
+  BlockListPropsCapability,
+  BlockTypesCapability,
   BlocksCapability,
   ClipboardCapability,
   EventsCapability,
@@ -32,7 +41,7 @@ export interface MarkdownLinkClick {
 /** Creation options for the React presentation runtime. */
 export interface CreateReactEditorOptions {
   /** Existing framework-neutral editor; ReactEditor never destroys it. */
-  readonly editor: Editor;
+  readonly editor: RivtoEditorApi;
   /** Functional extensions installed synchronously in declaration order. */
   readonly extensions?: readonly ReactEditorExtension[];
   /** Stable binding-ID overrides; empty arrays disable matching bindings. */
@@ -53,7 +62,14 @@ export interface CreateReactEditorOptions {
  * (or a host equivalent) via {@link installDefaultWriting}.
  */
 export interface ReactEditor {
-  readonly editor: Editor;
+  /** Core first-class element operations. */
+  readonly elements: ElementManagerApi;
+  /** Local presentation mode. */
+  readonly mode: ModeManagerApi;
+  /** Named command registry used by extensions. */
+  readonly commands: CommandRegistryApi;
+  /** Local history and transaction batching. */
+  readonly history: HistoryManagerApi;
   /** Core editor revision forwarded for React's global invalidation boundary. */
   readonly revision: number;
   /**
@@ -80,7 +96,12 @@ export interface ReactEditor {
   readonly renderers: RenderersCapability;
   /** Per-type outline and drop behavior resolved by page dispatchers. */
   readonly views: ViewsCapability;
+  /** Guarded mutations and delegated core block operations. */
   readonly blocks: BlocksCapability;
+  /** Atomic React block-type and presentation registration. */
+  readonly blockTypes: BlockTypesCapability;
+  /** Core list-property policy registered with React extension lifecycle ownership. */
+  readonly blockListProps: BlockListPropsCapability;
   /** React-owned portable clipboard formatter and parser registry. */
   readonly clipboard: ClipboardCapability;
   readonly surfaces: SurfacesCapability;
@@ -93,5 +114,15 @@ export interface ReactEditor {
   readonly slashCommands: SlashCommandsCapability;
   /** Subscribes to document, mode, and selection changes from the core editor. */
   subscribe(listener: () => void): () => void;
+  /**
+   * @returns The document model currently presented by the core editor, or undefined while unbound.
+   */
+  getDocument(): DocumentModel | undefined;
+  /**
+   * Replaces the active document without recreating the React runtime.
+   * @param document - Caller-owned model to present.
+   * @returns No value.
+   */
+  setDocument(document: DocumentModel): void;
   destroy(): void;
 }

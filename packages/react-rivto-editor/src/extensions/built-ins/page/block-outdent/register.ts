@@ -18,15 +18,14 @@ import { dispatchViewAction } from "../../../../views/dispatch";
  * @returns No value.
  */
 export function registerBlockOutdent(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockOutdentAtStart,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockOutdentAtStart],
     when: ({ raw: event, blockId }) =>
       isEditableKeyboardEvent(event) &&
-      !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, editor, blockId)),
+      !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, reactEditor, blockId)),
   }, ({ root, blockId }) => {
-    const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, editor, blockId));
+    const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, reactEditor, blockId));
     if (!target?.collapsed || target.offset !== 0) return false;
     const context = createBlockViewContext(reactEditor, target.blockId, root, reactEditor.selection.get());
     if (!context) return false;

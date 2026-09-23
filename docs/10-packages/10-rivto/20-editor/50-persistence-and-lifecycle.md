@@ -14,9 +14,9 @@ Editor runtime соединяет versioned document snapshots с local history 
 
 - **Аргументы:** `EditorSnapshotUpdate` version 6.
 - **Возвращает:** `void`.
-- **Исключения:** command отсутствует, invalid command payload, validation supplied sections, manager или CRDT write errors.
+- **Исключения:** document-model validation или CRDT write errors.
 
-Built-in `document.load` заменяет только supplied sections, затем вызывает `history.clear()`. Поэтому state до load нельзя вернуть через `editor.undo()`.
+`load()` передаёт snapshot напрямую в document-model, не запускает editor processors, заменяет только supplied sections, затем вызывает `history.clear()`. Поэтому state до load нельзя вернуть через `editor.history.undo()`. Migration, remapping и repair выполняются явно до вызова `load()`.
 
 Public TypeScript shape и runtime loader требуют `version: 6`. Другая версия отклоняется до document mutations.
 
@@ -31,15 +31,15 @@ editor.load({
 
 В примере links, elements и pluginData не меняются.
 
-## `undo()` и `redo()`
+## `history.undo()` и `history.redo()`
 
 - **Аргументы:** отсутствуют.
 - **Возвращают:** `void`.
-- **Исключения:** missing command или CRDT history errors.
+- **Исключения:** CRDT history errors.
 
-History отслеживает `document.undoScopes` только с `document.origin`. Remote updates и mutations с другим origin не становятся локальными history items.
+History отслеживает собранные managers CRDT scopes только с приватным runtime origin. Remote updates и mutations с другим origin не становятся локальными history items.
 
-Standalone document commands разделяются через `documentCommand()`. `batchUpdates()` объединяет несколько commands в один capture step.
+Typed manager mutations создают собственные capture steps. `history.batchUpdates()` объединяет несколько mutations в один capture step.
 
 ## `destroy()` порядок
 
@@ -47,36 +47,40 @@ Standalone document commands разделяются через `documentCommand(
 2. `links.destroy()`.
 3. `elements.destroy()`.
 4. `blocks.destroy()`.
-5. `blocksRegistry.destroy()`.
-6. `history.destroy()`.
-7. `commands.clear()`.
-8. `listeners.clear()`.
-9. `await document.crdt.destroy()`, который отключает все providers и уничтожает CRDT state.
-
-Метод возвращает `Promise<void>`. Caller должен использовать `await`, чтобы дождаться асинхронного отключения providers. Если синхронный manager cleanup выбросил исключение, последующие manager steps не гарантированы, однако CRDT destroy всё равно выполняется через `finally`. После destroy runtime и его document считаются непригодными для дальнейшего использования.
+5. `blockRegistry.destroy()`.
+6. `commands.clear()`.
+7. `listeners.clear()`.
+Document model не уничтожается. Метод возвращает `Promise<void>` только для совместимости lifecycle API; после destroy runtime непригоден, а caller-owned document остаётся доступен.
 
 ## CRDT ownership
 
-Runtime владеет переданным `CRDTDoc`. Отдельного `DocumentModelImpl.destroy()` нет: lifecycle завершается через CRDT adapter.
+Host владеет переданным `DocumentModel`. Document model, в свою очередь, владеет CRDT adapter и его lifecycle.
 
 ```ts
-const document = new YjsDoc("shared");
-const editor = createRivtoEditor({ document });
+const crdt = new YjsDoc("shared");
+const document = new DocumentModelImpl(crdt);
+const editor = createRivtoEditor();
+editor.setDocument(document);
 
 // ...работа...
 
 await editor.destroy();
+await document.destroy();
 ```
 
 `YjsDoc.destroy()` сам отключает все зарегистрированные providers, ждёт их завершения и после этого уничтожает `Y.Doc`. Ручной `detachProvider()` нужен только для отключения отдельного provider до завершения всего editor lifecycle.
 
 ## Factory `createRivtoEditor()`
 
-- **Аргументы:** optional `{ document?: CRDTDoc; mode?: EditorMode }`.
-- **Возвращает:** owned `EditorRuntime`.
+- **Аргументы:** optional `{ mode?: EditorMode }`.
+- **Возвращает:** `EditorRuntime`, который использует, но не уничтожает переданный document.
 - **Исключения:** constructor initialization errors.
 
-Без внешнего adapter factory создаёт `YjsDoc` автоматически. И автоматически созданный, и переданный document уничтожаются одним `await editor.destroy()`.
+Host создаёт runtime, присоединяет model через `setDocument()` и отдельно вызывает `document.destroy()` после уничтожения всех использующих его editors.
+
+## `getDocument()` и `setDocument(document)`
+
+`getDocument()` возвращает active caller-owned model либо `undefined` до первого attachment. `setDocument()` сохраняет identity managers, extensions и editor-owned processors, переподключает document subscriptions/history, очищает selection и публикует новый runtime revision. Повторная установка того же instance — no-op. Старый model не уничтожается и больше не уведомляет editor.
 
 ## Test helper `createTestEditor()`
 

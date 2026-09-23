@@ -21,7 +21,7 @@ function whole(
 describe("EditorRuntime selection", () => {
   it("does not traverse the document to reconcile selection after property-only updates", () => {
     const editor = createRivtoEditor();
-    const selected = editor.blocks.insertBlock({ type: "paragraph", content: "Task" });
+    const selected = editor.blocks.insertBlock({ type: "paragraph", content: "Task" }).id;
     editor.selection.set(testCaret(selected, 0));
     const getBlocks = jest.spyOn(editor.blocks, "getBlocks");
 
@@ -35,9 +35,9 @@ describe("EditorRuntime selection", () => {
 
   it.each(["block", "edgeless"] as const)("validates block-only state in %s mode", (mode) => {
     const editor = createRivtoEditor({ mode });
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const gap = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, first);
-    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, gap);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const gap = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, first).id;
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, gap).id;
     const selection = createStructuralSelection([first, last], last, first);
     const listener = jest.fn();
     const runtime = jest.fn();
@@ -73,9 +73,9 @@ describe("EditorRuntime selection", () => {
 
   it("resolves cross-block text into per-block offsets without rejecting invalid offsets", () => {
     const editor = createRivtoEditor();
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first);
-    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middle);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first).id;
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middle).id;
     editor.selection.set(testRange(editor, { blockId: last, offset: 2 }, { blockId: first, offset: 1 }));
 
     expect(editor.selection.resolveBlockSelection()?.ranges.map(({ block, startOffset, endOffset, invalid }) => ({
@@ -104,23 +104,23 @@ describe("EditorRuntime selection", () => {
 
   it("deletes every selected block without creating a fallback", () => {
     const editor = createRivtoEditor();
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
     editor.selection.set(createStructuralSelection([firstId, secondId], firstId, secondId));
     const documentUpdates = jest.fn();
-    const unsubscribe = editor.document.subscribe(documentUpdates);
+    const unsubscribe = editor.subscribe(documentUpdates);
 
     editor.selection.delete();
 
     expect(documentUpdates).toHaveBeenCalledTimes(1);
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.selection.get()).toBeUndefined();
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks()).toMatchObject([
       { id: firstId, content: "First" },
       { id: secondId, content: "Second" },
     ]);
-    editor.redo();
+    editor.history.redo();
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.selection.get()).toBeUndefined();
     unsubscribe();
@@ -129,18 +129,16 @@ describe("EditorRuntime selection", () => {
 
   it("clears deleted selections but preserves block selection across modes", () => {
     const editor = createRivtoEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph" });
+    const id = editor.blocks.insertBlock({ type: "paragraph" }).id;
 
-    editor.execute("selection.set", { selection: createStructuralSelection([id], id, id) });
+    editor.selection.set(createStructuralSelection([id], id, id));
     editor.blocks.removeBlock(id);
 
     expect(editor.selection.get()).toBeUndefined();
 
-    const nextId = editor.blocks.insertBlock({ type: "paragraph" });
+    const nextId = editor.blocks.insertBlock({ type: "paragraph" }).id;
     editor.mode.set("edgeless");
-    editor.execute("selection.set", {
-      selection: createStructuralSelection([nextId], nextId, nextId),
-    });
+    editor.selection.set(createStructuralSelection([nextId], nextId, nextId),);
     editor.mode.set("block");
 
     expect(editor.selection.get()).toEqual(whole([nextId], nextId, nextId));
@@ -149,14 +147,12 @@ describe("EditorRuntime selection", () => {
 
   it("keeps surviving IDs and direction when history removes selected blocks", () => {
     const editor = createRivtoEditor();
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-    const thirdId = editor.blocks.insertBlock({ type: "paragraph", content: "Third" }, secondId);
-    editor.execute("selection.set", {
-      selection: createStructuralSelection([firstId, secondId, thirdId], thirdId, firstId),
-    });
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
+    const thirdId = editor.blocks.insertBlock({ type: "paragraph", content: "Third" }, secondId).id;
+    editor.selection.set(createStructuralSelection([firstId, secondId, thirdId], thirdId, firstId),);
 
-    editor.undo();
+    editor.history.undo();
 
     expect(editor.selection.get()).toEqual(whole([firstId, secondId], secondId, firstId));
     editor.destroy();
@@ -164,13 +160,11 @@ describe("EditorRuntime selection", () => {
 
   it("filters deleted IDs and repairs block-selection endpoints", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
-    const firstId = editor.blocks.insertBlock({ type: "paragraph" });
-    const secondId = editor.blocks.insertBlock({ type: "paragraph" }, firstId);
-    editor.execute("selection.set", {
-      selection: createStructuralSelection([firstId, secondId], firstId, secondId),
-    });
+    const firstId = editor.blocks.insertBlock({ type: "paragraph" }).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph" }, firstId).id;
+    editor.selection.set(createStructuralSelection([firstId, secondId], firstId, secondId),);
 
-    editor.document.blocks.removeBlock(secondId);
+    editor.blocks.removeBlock(secondId);
 
     expect(editor.selection.get()).toEqual(whole([firstId], firstId, firstId));
     editor.destroy();
@@ -178,17 +172,15 @@ describe("EditorRuntime selection", () => {
 
   it("applies selected block commands and preserves bottom-to-top outdent order", () => {
     const editor = createRivtoEditor();
-    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" });
-    const firstChildId = editor.blocks.insertBlock({ type: "paragraph", content: "First child" }, parentId);
-    const secondChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Second child" }, firstChildId);
+    const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
+    const firstChildId = editor.blocks.insertBlock({ type: "paragraph", content: "First child" }, parentId).id;
+    const secondChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Second child" }, firstChildId).id;
 
     editor.blocks.indentBlock(firstChildId);
     editor.blocks.indentBlock(secondChildId);
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: parentId, children: [{ id: firstChildId }, { id: secondChildId }] }]);
 
-    editor.execute("selection.set", {
-      selection: createStructuralSelection([firstChildId, secondChildId], secondChildId, firstChildId),
-    });
+    editor.selection.set(createStructuralSelection([firstChildId, secondChildId], secondChildId, firstChildId),);
     editor.blocks.outdentBlocks([firstChildId, secondChildId]);
 
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([parentId, firstChildId, secondChildId]);
@@ -198,11 +190,11 @@ describe("EditorRuntime selection", () => {
 
   it("uses a whole-block selection as one structural Tab range", () => {
     const editor = createRivtoEditor();
-    const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" });
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId);
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" }).id;
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
     const selection = createStructuralSelection([firstId, secondId], firstId, secondId);
-    editor.execute("selection.set", { selection });
+    editor.selection.set(selection);
 
     editor.blocks.indentBlocks([firstId, secondId]);
 
@@ -216,14 +208,14 @@ describe("EditorRuntime selection", () => {
 
   it("indents a bottom-up block range while preserving its direction", () => {
     const editor = createRivtoEditor();
-    const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" });
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId);
-    const middleId = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, firstId);
-    const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middleId);
+    const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" }).id;
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId).id;
+    const middleId = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, firstId).id;
+    const lastId = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middleId).id;
     const selection = createStructuralSelection([firstId, middleId, lastId], lastId, firstId);
-    editor.execute("selection.set", { selection });
+    editor.selection.set(selection);
     const documentUpdates = jest.fn();
-    const unsubscribe = editor.document.subscribe(documentUpdates);
+    const unsubscribe = editor.subscribe(documentUpdates);
 
     editor.blocks.indentBlocks([firstId, middleId, lastId]);
 
@@ -233,7 +225,7 @@ describe("EditorRuntime selection", () => {
       children: [{ id: firstId }, { id: middleId }, { id: lastId }],
     }]);
     expect(editor.selection.get()).toEqual(whole([firstId, middleId, lastId], lastId, firstId));
-    editor.undo();
+    editor.history.undo();
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([previousId, firstId, middleId, lastId]);
     unsubscribe();
     editor.destroy();
@@ -241,24 +233,22 @@ describe("EditorRuntime selection", () => {
 
   it("reorders block selection IDs after moving one selected block", () => {
     const editor = createRivtoEditor();
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
-    editor.execute("selection.set", {
-      selection: createStructuralSelection([firstId, secondId], firstId, secondId),
-    });
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
+    editor.selection.set(createStructuralSelection([firstId, secondId], firstId, secondId),);
 
     editor.blocks.moveBlock(firstId, secondId);
 
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([secondId, firstId]);
     expect(editor.selection.get()).toEqual(whole([secondId, firstId], firstId, secondId));
-    editor.undo();
+    editor.history.undo();
     expect(editor.selection.get()).toEqual(whole([firstId, secondId], firstId, secondId));
     editor.destroy();
   });
 
   it("deletes and pastes overlapping offsets as an empty slice against live length", () => {
     const editor = createRivtoEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Hello" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Hello" }).id;
     editor.selection.set({
       type: "selection",
       blocks: [{ id, start: 2, end: 1 }],
@@ -269,7 +259,7 @@ describe("EditorRuntime selection", () => {
       startOffset: 2, endOffset: 2, invalid: true,
     });
     editor.selection.delete();
-    expect(editor.blocks.getBlock(id)?.content).toBe("Hello");
+    expect(editor.blocks.getBlockNode(id)?.content).toBe("Hello");
     expect(editor.selection.get()).toMatchObject({
       type: "selection",
       blocks: [{ id, start: 2, end: 2 }],
@@ -281,14 +271,14 @@ describe("EditorRuntime selection", () => {
       focusBlockId: id,
     });
     const caret = editor.clipboard.paste({ text: "X", defaultBlockType: "paragraph" });
-    expect(editor.blocks.getBlock(id)?.content).toBe("HeXllo");
+    expect(editor.blocks.getBlockNode(id)?.content).toBe("HeXllo");
     expect(caret).toEqual({ blockId: id, offset: 3 });
     editor.destroy();
   });
 
   it("stores element IDs and plugin data in the generic selection", () => {
     const editor = createRivtoEditor({ mode: "edgeless" });
-    const elementId = editor.elements.insertElement({
+    const element = editor.elements.insertElement({
       type: "rectangle",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
@@ -297,23 +287,23 @@ describe("EditorRuntime selection", () => {
     editor.selection.set({
       type: "selection",
       blocks: [],
-      elements: [elementId],
+      elements: [element.id],
       pluginData: { comment: { id: "thread-1" } },
     });
 
     const detached = editor.selection.get()!;
-    expect(editor.selection.isElementSelected(elementId)).toBe(true);
+    expect(editor.selection.isElementSelected(element.id)).toBe(true);
     expect(detached).toMatchObject({
       type: "selection",
       blocks: [],
-      elements: [elementId],
+      elements: [element.id],
       pluginData: { comment: { id: "thread-1" } },
     });
     detached.elements!.length = 0;
-    expect(editor.selection.get()?.elements).toEqual([elementId]);
+    expect(editor.selection.get()?.elements).toEqual([element.id]);
 
     editor.selection.delete();
-    expect(editor.elements.getElement(elementId)).toBeUndefined();
+    expect(editor.elements.getElement(element.id)).toBeUndefined();
     expect(editor.selection.get()).toBeUndefined();
     editor.destroy();
   });

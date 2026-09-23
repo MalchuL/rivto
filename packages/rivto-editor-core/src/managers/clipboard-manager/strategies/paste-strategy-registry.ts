@@ -5,7 +5,7 @@
  * identity, so strategy implementations contain only paste behavior. Paste
  * calls only supply {@link PasteContext} and {@link PastePlacement}.
  */
-import type { PasteContext, PastePlacement, PasteStrategy } from "./paste-strategies";
+import type { PasteContext, PastePlacement, PasteStrategy } from "./types";
 
 /** Ordered store of paste algorithms consulted during clipboard paste. */
 export class PasteStrategyRegistry {

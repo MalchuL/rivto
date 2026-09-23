@@ -16,7 +16,7 @@
 - `types/text.ts` — совместный текст и delta.
 - `types/provider.ts` — идентичность и connect/disconnect провайдера.
 - `types/undo.ts` — undo scopes и facade менеджера.
-- `types/utils/crdt-instantiator.ts` — независимое создание shared-типов.
+- `types/doc.ts` — document contract и независимое создание detached shared-типов.
 - `types/utils/wrapping-options.ts` — флаги преобразования plain-значений.
 - `types/basic-types.ts` — unions сериализуемых и CRDT-значений.
 - `types/error.ts` — базовая независимая ошибка.
@@ -27,7 +27,7 @@
 ## Файлы Yjs-документа
 
 - `yjs-doc/yjs-doc.ts` — корни, транзакции, события, бинарное состояние, JSON conversion, undo, providers и destroy.
-- `yjs-doc/utils/instantiator.ts` — создание wrapper и преобразование plain input.
+- `yjs-doc/yjs-doc.ts` — document operations и создание detached wrapper.
 - `yjs-doc/error.ts` — ошибки уровня Yjs-документа.
 
 `EditorRuntime` выбирает `YjsDoc` по умолчанию. Провайдерам также нужен его публичный `doc`.

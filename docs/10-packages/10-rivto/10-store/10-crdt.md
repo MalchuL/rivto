@@ -19,7 +19,7 @@ DocumentModelImpl
   -> ElementManager: elements
   -> LinkManager: links
   -> PluginDataManager: plugins
-  -> UndoManager: области CRDT undo
+  -> HistoryManager: области CRDT undo
 
 YjsDoc <-> BroadcastChannelProvider или WebRTCProvider
 ```
@@ -33,7 +33,7 @@ import { YjsDoc } from "@chulane/rivto";
 
 const document = new YjsDoc("example");
 const root = document.getMap("root");
-const title = document.instantiator.createText();
+const title = document.createDetachedText();
 
 root.set("title", title); // Присоединяет detached-текст к документу.
 title.insert(0, "Совместный заголовок");
@@ -46,7 +46,7 @@ unsubscribe();
 await document.destroy();
 ```
 
-Новые массивы, карты и тексты создаются `instantiator` в неприсоединённом состоянии. Перед чтением вставьте их в корневой или другой уже присоединённый CRDT-контейнер. После присоединения изменяйте сам wrapper, чтобы Yjs мог объединять параллельные изменения. Обычный JS-объект внутри контейнера заменяется целиком как атомарное значение.
+Новые массивы, карты и тексты создаются методами `createDetached*()` в неприсоединённом состоянии. Перед чтением вставьте их в корневой или другой уже присоединённый CRDT-контейнер. После присоединения изменяйте сам wrapper, чтобы Yjs мог объединять параллельные изменения. Обычный JS-объект внутри контейнера заменяется целиком как атомарное значение.
 
 ## Две границы снимков
 

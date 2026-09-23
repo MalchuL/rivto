@@ -8,7 +8,8 @@ const rivtoCrdtDocSrc = path.join(repoRoot, "packages/crdt-doc/src/index.ts");
 const rivtoDocumentModelSrc = path.join(repoRoot, "packages/document-model/src/index.ts");
 const rivtoCoreSrc = path.join(repoRoot, "packages/rivto-editor-core/src/index.ts");
 const rivtoReactSrc = path.join(repoRoot, "packages/react-rivto-editor/src/index.ts");
-const rivtoReactCss = path.join(repoRoot, "packages/react-rivto-editor/styles.css");
+// Tailwind source entry; app/web's @tailwindcss/postcss compiles it alongside globals.css.
+const rivtoReactCss = path.join(repoRoot, "packages/react-rivto-editor/src/styles/index.css");
 const webReact = path.join(appDir, "node_modules/react");
 const webReactDom = path.join(appDir, "node_modules/react-dom");
 

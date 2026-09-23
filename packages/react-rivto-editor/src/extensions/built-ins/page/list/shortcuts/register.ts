@@ -2,7 +2,7 @@
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import { createCaretSelection } from "@chulane/rivto";
-import { BlockListSlot } from "../../../../../blocks/block-slot-controls";
+import { BlockListSlot } from "../../../../../blocks/block-slot-controls/block-slot-controls";
 import { focusBlock } from "../../../../../managers";
 import type { ReactEditor } from "../../../../../types";
 import type { BlockListType, ListShortcutPatch } from "../types";
@@ -20,10 +20,10 @@ import { listShortcutPatch } from "./utils";
  * @returns No value.
  */
 export function registerListShortcuts(reactEditor: ReactEditor): void {
-  reactEditor.blocks.registerListProps({
+  reactEditor.blockListProps.register({
     id: "list",
     defaults: { type: "list", checked: false },
-    validate: (candidate) =>
+    isValid: (candidate) =>
       BLOCK_LIST_TYPES.includes(candidate.type as BlockListType) &&
       typeof candidate.checked === "boolean",
   });
@@ -57,7 +57,7 @@ export function registerListShortcuts(reactEditor: ReactEditor): void {
     root: HTMLElement,
     shortcut: ListShortcutPatch,
   ): void => {
-    reactEditor.editor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       reactEditor.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
       reactEditor.selection.set(createCaretSelection(blockId, 0));
     });
@@ -87,7 +87,7 @@ export function registerListShortcuts(reactEditor: ReactEditor): void {
       return false;
     }
     queueMicrotask(() => {
-      const block = reactEditor.editor.blocks.getBlock(blockId);
+      const block = reactEditor.blocks.getBlockNode(blockId);
       const shortcut = block ? listShortcutPatch(block.content.replaceAll("\u00a0", " ")) : undefined;
       if (!shortcut) return;
       convert(blockId, root, shortcut);

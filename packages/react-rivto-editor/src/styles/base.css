@@ -1,0 +1,76 @@
+/*
+ * Scoped element reset for editor chrome.
+ *
+ * The package intentionally does not ship Tailwind preflight: the editor is
+ * embedded in host pages and Markdown previews rely on user-agent margins.
+ * shadcn/ui primitives still assume preflight's border-box sizing and neutral
+ * form controls, so this layer applies the relevant subset only to elements
+ * the package marks as chrome: every primitive (`[data-slot]`) and every
+ * container carrying the `rivto-ui` scope class (toolbars, panels, menus).
+ * Block content and rendered Markdown never receive these resets.
+ */
+@layer base {
+  .rivto-ui,
+  .rivto-ui *,
+  .rivto-ui ::before,
+  .rivto-ui ::after,
+  [data-slot],
+  [data-slot] *,
+  [data-slot]::before,
+  [data-slot]::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid var(--rivto-border);
+  }
+
+  .rivto-ui :is(button, input, select, textarea, optgroup),
+  [data-slot]:is(button, input, select, textarea) {
+    color: inherit;
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    letter-spacing: inherit;
+    background-color: transparent;
+    border-radius: 0;
+  }
+
+  .rivto-ui :is(button, [role="button"], summary, label:has(> input)),
+  [data-slot]:is(button, [role="button"]) {
+    cursor: pointer;
+  }
+
+  .rivto-ui :is(button, input):disabled,
+  [data-slot]:is(button, input):disabled {
+    cursor: default;
+  }
+
+  .rivto-ui :is(h1, h2, h3, h4, h5, h6),
+  [data-slot] :is(h1, h2, h3, h4, h5, h6) {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  .rivto-ui :is(input, textarea)::placeholder,
+  [data-slot]:is(input, textarea)::placeholder {
+    color: var(--rivto-muted-foreground);
+    opacity: 1;
+  }
+
+  .rivto-ui summary {
+    list-style: none;
+  }
+
+  .rivto-ui svg,
+  [data-slot] svg {
+    display: block;
+  }
+
+  /* Radix keeps closed Collapsible/Tabs content mounted behind `hidden`;
+     mirror preflight so display utilities on the same element cannot reveal it. */
+  .rivto-ui [hidden]:where(:not([hidden="until-found"])),
+  [data-slot][hidden]:where(:not([hidden="until-found"])),
+  [data-slot] [hidden]:where(:not([hidden="until-found"])) {
+    display: none !important;
+  }
+}

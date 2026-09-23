@@ -103,7 +103,7 @@ One semantic keydown action sets a closure boolean, while a separately configura
 
 ### 19. Plain-text paste bypasses registry defaults and type availability
 
-Core inserts via `document.blocks.insertBlock` ([clipboard-manager.ts:255](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L255)) instead of the public block manager, bypassing registered/mode-available type validation and `blocksRegistry.prepare`. Missing text also becomes `""` and can create an empty root. Prepare the default input once through the public registry and no-op when no clipboard flavor exists.
+Core inserts via `document.blocks.insertBlock` ([clipboard-manager.ts:255](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L255)) instead of the public block manager, bypassing registered/mode-available type validation and `blockRegistry.prepare`. Missing text also becomes `""` and can create an empty root. Prepare the default input once through the public registry and no-op when no clipboard flavor exists.
 
 ### 20. “Portable” property typing and cloning accept values they corrupt
 

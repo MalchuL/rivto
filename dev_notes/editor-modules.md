@@ -18,7 +18,7 @@ React dependency.
 - `react-editor.tsx` — small coordinator that constructs public managers and
   forwards revisions. Every manager receives this complete owner and lazily
   resolves core or sibling capabilities through it.
-- `managers/blocks` — atomic block registration and renderer lookup.
+- `managers/blocks` — block operations, list-property policy, type registration, and renderer lookup.
 - `managers/events` — separate DOM transport and semantic keyboard managers,
   plus keymap and event-specific utilities.
 - `managers/plugins` — plugin setup, rollback, cleanup, and mounted UI.
@@ -39,4 +39,4 @@ React dependency.
 `demo` is a consumer, not a second editor implementation. It owns initial
 content, the mode toolbar, theme overrides, and the Slider/Counter examples.
 Each example registers its definition, renderer, and slash conversion through
-one `reactEditor.blocks.register` call.
+one `reactEditor.blockTypes.register` call.

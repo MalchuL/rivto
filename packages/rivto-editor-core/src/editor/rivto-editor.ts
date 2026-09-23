@@ -1,20 +1,12 @@
 /**
  * Editor runtime coordinating document mutations and focused public managers.
  */
-import { BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, type CommandHandler, type RegisteredCommand, ModeManager, SelectionManager, UndoManager } from "../managers";
-import { YjsDoc } from "@chulane/crdt-doc";
+import { BlockListPropsManager, BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, HistoryManager, ModeManager, SelectionManager } from "../managers";
 import {
-  DocumentModelImpl,
-  createBlockParentConstraintProcessor,
-  createBlockPropsProcessor,
   type Block,
   type DocumentModel,
-  type Snapshot,
-  type SnapshotUpdate,
 } from "@chulane/document-model";
-import type { ClipboardBundle } from "../managers/clipboard-manager";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
-import { commandPayload } from "../managers/utils";
 import type { CreateRivtoEditorOptions, RivtoEditorApi } from "./types";
 import type { Selection } from "../managers/selection-manager";
 import { Listeners } from "../utils";
@@ -24,76 +16,66 @@ import { Listeners } from "../utils";
  *
  * Block APIs live exclusively on `.blocks`. The runtime
  * owns cross-cutting commands, selection, history, mode, subscriptions,
- * batching, clipboard bridges, and the shared revision stream.
+ * clipboard bridges, and the shared revision stream.
  */
 export class EditorRuntime implements RivtoEditorApi {
-  /** Collaborative block, tree, and snapshot storage owned by this runtime. */
-  readonly document: DocumentModel;
-  /** Public owner of block commands and typed block operations. */
+  /** Caller-owned block, element, and snapshot store currently presented by this runtime. */
+  private document?: DocumentModel;
+  /** Public owner of typed block operations. */
   readonly blocks: BlockManager;
+  /** Public owner of list-property defaults and semantic validation. */
+  readonly blockListProps: BlockListPropsManager;
   /** Public owner of native block definitions and property validation. */
-  readonly blocksRegistry: BlockRegistryManager;
+  readonly blockRegistry: BlockRegistryManager;
   /** Public owner of first-class canvas element commands. */
   readonly elements: ElementManager;
-  /** Named command handlers exposed to integrations and typed runtime methods. */
+  /** Named command handlers exposed to integrations and focused managers. */
   readonly commands = new CommandRegistry();
   /** Local presentation mode shared by views of this runtime. */
   readonly mode: ModeManager;
   /** Local text and structural selection state; never persisted to the document. */
   readonly selection: SelectionManager;
-  /** Local Yjs undo/redo history for document changes made through this runtime. */
-  readonly history: UndoManager;
+  /** Local history and transaction batching for document changes. */
+  readonly history: HistoryManager;
   /** Framework-neutral structured and plain-text clipboard operations. */
   readonly clipboard: ClipboardManager;
   /** Named subscribers notified whenever public runtime state changes. */
   private readonly listeners = new Listeners<{ editorChanged: void }>();
   /** Owned subscription cleanup callbacks called during `destroy()`. */
   private readonly unsubscribeFns: Array<() => void> = [];
+  /** Detaches the broad update stream from the current document. */
+  private unsubscribeFromDocument: () => void = () => undefined;
   /** Monotonic snapshot incremented before notifying runtime subscribers. */
   private currentRevision = 0;
-  /** Zero outside a batch and positive while the outer transaction is active. */
-  private batchDepth = 0;
 
   /**
-   * Creates a runtime with a collaborative document, default blocks, and mode.
+   * Creates an unbound runtime with stable managers and the requested mode.
    *
-   * @param options - Optional document adapter and startup mode.
+   * @param options - Optional startup mode.
    */
   constructor(options: CreateRivtoEditorOptions = {}) {
-    this.document = new DocumentModelImpl(options.document ?? new YjsDoc(`rivto-${crypto.randomUUID()}`));
     this.mode = new ModeManager(options.mode ?? "block");
-    this.selection = new SelectionManager(this);
-    this.history = new UndoManager(this.document);
-    this.blocksRegistry = new BlockRegistryManager();
-    const unsubscribeFromBlockRegistryChanges = this.blocksRegistry.subscribe(() => this.notifyChanges());
+    this.history = new HistoryManager();
+    this.blockRegistry = new BlockRegistryManager();
+    this.blockListProps = new BlockListPropsManager();
+    const unsubscribeFromBlockRegistryChanges = this.blockRegistry.subscribe(() => this.notifyChanges());
     this.unsubscribeFns.push(unsubscribeFromBlockRegistryChanges);
     this.blocks = new BlockManager(this);
     this.elements = new ElementManager(this);
+    this.selection = new SelectionManager(this);
     this.clipboard = new ClipboardManager(this);
-    this.unsubscribeFns.push(this.document.blocks.pipe.register(
-      createBlockParentConstraintProcessor((childType, parentType) => {
-        this.blocksRegistry.assertAllowedParent(childType, parentType);
-      }),
-    ));
-    this.unsubscribeFns.push(this.document.blocks.pipe.register(
-      createBlockPropsProcessor((type, props) => this.blocksRegistry.validate(type, props)),
-    ));
-    this.registerRuntimeCommands();
-    this.registerClipboardCommands();
 
     // Keep the compatibility revision broad, but reserve expensive selection
     // reconciliation for mutations that can invalidate IDs or document order.
-    const unsubscribeFromDocumentChanges = this.document.subscribe(() => this.notifyChanges());
-    this.unsubscribeFns.push(unsubscribeFromDocumentChanges);
     this.unsubscribeFns.push(this.blocks.subscribeStructure(() => this.reconcileSelection()));
     this.unsubscribeFns.push(this.elements.subscribeMembership(() => this.reconcileSelection()));
     // Selection is local view state. React chrome subscribes through
     // `editor.selection`; folding it into `revision` would re-render every block.
     const unsubscribeFromModeChanges = this.mode.subscribe(() => {
-      this.history.stopCapturing();
+      if (this.document) this.history.stopCapturing();
       this.reconcileSelection();
       this.notifyChanges();
-      this.history.stopCapturing();
+      if (this.document) this.history.stopCapturing();
     });
     this.unsubscribeFns.push(unsubscribeFromModeChanges);
   }
@@ -123,75 +105,30 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Groups synchronous editor mutations into one collaborative update and undo step.
-   *
-   * The outermost call owns the CRDT transaction and history boundaries.
-   * Nested calls reuse that active batch, so helpers can compose without
-   * publishing intermediate document revisions or creating extra undo items.
-   *
-   * This is a batching boundary, not a rollback mechanism. Yjs retains writes
-   * already made if `operation` throws; the original error is still propagated.
-   *
-   * @param operation - Synchronous editor work to execute inside the batch.
-   * @returns The value returned by `operation`.
-   * @throws The original error when `operation` fails.
+   * @returns The caller-owned document currently presented by this runtime, or undefined while unbound.
    */
-  batchUpdates<Result>(operation: () => Result): Result {
-    if (this.batchDepth > 0) return operation();
-    this.history.stopCapturing();
-    this.batchDepth += 1;
-    let result!: Result;
-    try {
-      this.document.transact(() => {
-        result = operation();
-      });
-      return result;
-    } finally {
-      this.batchDepth -= 1;
-      this.history.stopCapturing();
-    }
+  getDocument(): DocumentModel | undefined {
+    return this.document;
   }
 
   /**
-   * Registers one command on this runtime.
+   * Atomically switches managers and retained subscriptions to another document.
    *
-   * @param name - Unique, non-empty command ID.
-   * @param handler - Runtime command implementation.
-   * @returns Ownership handle for this exact registration.
-   */
-  register(name: string, handler: CommandHandler): RegisteredCommand {
-    return this.commands.register(name, handler);
-  }
-
-  /**
-   * Executes a registered runtime command.
-   *
-   * @param name - Command ID to execute.
-   * @param payload - Optional runtime payload passed to the handler.
-   * @returns The command handler result.
-   */
-  execute(name: string, payload?: unknown): unknown {
-    return this.commands.execute(name, payload);
-  }
-
-  /**
-   * Removes a command from this runtime by name.
-   *
-   * @param name - Command ID to remove.
+   * @param document - Caller-owned document to present.
    * @returns No value.
    */
-  removeCommand(name: string): void {
-    this.commands.remove(name);
-  }
-
-  /**
-   * Deletes the complete active selection as one undoable operation.
-   *
-   * Text boundaries are preserved according to SelectionManager normalization.
-   * @returns No value.
-   */
-  deleteSelection(): void {
-    this.execute("selection.delete");
+  setDocument(document: DocumentModel): void {
+    if (document === this.document) return;
+    this.unsubscribeFromDocument();
+    this.document = document;
+    this.history.setDocument(document.history);
+    this.blocks.setDocument(document);
+    this.elements.setDocument(document);
+    this.selection.clear();
+    this.unsubscribeFromDocument = document.subscribe(() => this.notifyChanges());
+    this.blocks.refreshSubscriptions();
+    this.elements.refreshSubscriptions();
+    this.notifyChanges();
   }
 
   /**
@@ -204,8 +141,8 @@ export class EditorRuntime implements RivtoEditorApi {
    * @returns No value.
    */
   load(snapshot: EditorSnapshotUpdate): void {
-    const command = { snapshot } satisfies { snapshot: SnapshotUpdate };
-    this.execute("document.load", command);
+    this.requireDocument().loadSnapshot(snapshot);
+    this.history.clear();
   }
 
   /**
@@ -214,130 +151,7 @@ export class EditorRuntime implements RivtoEditorApi {
    * @returns Detached snapshot v6 suitable for persistence or transfer.
    */
   dump(): EditorSnapshot {
-    const snapshot = this.document.getSnapshot() satisfies Snapshot;
-    return snapshot satisfies EditorSnapshot;
-  }
-
-  /**
-   * Reverts the latest captured local document operation.
-   *
-   * Remote collaborator updates are not part of this editor's undo history.
-   * @returns No value.
-   */
-  undo(): void {
-    this.execute("history.undo");
-  }
-
-  /**
-   * Reapplies the latest locally undone document operation.
-   * @returns No value.
-   */
-  redo(): void {
-    this.execute("history.redo");
-  }
-
-  /**
-   * Wraps one document command with the runtime's undo-capture boundary.
-   *
-   * Commands executed inside an explicit batch reuse the outer history scope.
-   * Standalone commands stop capture before and after their mutation.
-   *
-   * @param handler - Command implementation that may mutate the document.
-   * @returns Wrapped command handler preserving history boundaries.
-   */
-  private documentCommand(handler: CommandHandler): CommandHandler {
-    return (value) => {
-      const ownsHistoryBoundary = this.batchDepth === 0;
-      if (ownsHistoryBoundary) this.history.stopCapturing();
-      try {
-        return handler(value);
-      } finally {
-        if (ownsHistoryBoundary) this.history.stopCapturing();
-      }
-    };
-  }
-
-  /**
-   * Registers document-, selection-, and history-level runtime commands.
-   *
-   * Block command ownership belongs to the public block manager.
-   *
-   * @returns No value.
-   */
-  private registerRuntimeCommands(): void {
-    this.commands.register("document.load", this.documentCommand((value) => {
-      const data = commandPayload(value) as unknown as { snapshot: SnapshotUpdate };
-      this.document.loadSnapshot(data.snapshot);
-      this.history.clear();
-    }));
-    this.commands.register("selection.set", (value) => {
-      const data = commandPayload(value) as unknown as {
-        selection: Parameters<SelectionManager["set"]>[0];
-      };
-      this.selection.set(data.selection);
-    });
-    this.commands.register("selection.delete", () => this.selection.delete());
-    this.commands.register("selection.clear", () => this.selection.clear());
-    this.commands.register("history.undo", () => this.history.undo());
-    this.commands.register("history.redo", () => this.history.redo());
-  }
-
-  /**
-   * Registers data-only clipboard commands used by integrations and tests.
-   *
-   * ClipboardManager owns typed behavior; browser hosts own native events and
-   * transfer the serialized string returned by copy and cut.
-   * @returns No value.
-   */
-  private registerClipboardCommands(): void {
-    type CopyPayload = { textTarget?: Selection };
-    type PastePayload = {
-      textTarget?: Selection;
-      bundle?: ClipboardBundle;
-      structured?: string;
-      mergeText?: boolean;
-      preserveNewlines?: boolean;
-      defaultBlockType?: string;
-      text?: string;
-      placement?: { parentId: string | null; afterId: string | null; mergeText?: boolean; preserveNewlines?: boolean };
-    };
-    const payload = <Payload>(value: unknown): Partial<Payload> => value && typeof value === "object" && !Array.isArray(value)
-      ? value as unknown as Partial<Payload>
-      : {};
-    const text = (value: unknown): string | undefined => typeof value === "string" ? value : undefined;
-    this.commands.register("clipboard.copy", (value) => {
-      const data = payload<CopyPayload>(value);
-      const bundle = data.textTarget ? this.clipboard.copyText(data.textTarget) : this.clipboard.copy();
-      return bundle ? JSON.stringify(bundle) : "";
-    });
-
-    this.commands.register("clipboard.cut", () => {
-      const bundle = this.clipboard.cut();
-      return bundle ? JSON.stringify(bundle) : "";
-    });
-
-    this.commands.register("clipboard.paste", (value) => {
-      const data = payload<PastePayload>(value);
-      const defaultBlockType = text(data.defaultBlockType);
-      const structured = text(data.structured);
-      const bundle = data.bundle;
-      const hostPlacement = data.placement && typeof data.placement === "object"
-        ? data.placement
-        : {} as NonNullable<PastePayload["placement"]>;
-      return this.clipboard.paste({
-        textTarget: data.textTarget,
-        bundle,
-        structured,
-        defaultBlockType,
-        text: text(data.text),
-        placement: {
-          parentId: hostPlacement.parentId,
-          afterId: hostPlacement.afterId,
-          mergeText: data.mergeText ?? hostPlacement.mergeText,
-          preserveNewlines: data.preserveNewlines ?? hostPlacement.preserveNewlines,
-        },
-      });
-    });
+    return this.requireDocument().getSnapshot();
   }
 
   /**
@@ -365,10 +179,10 @@ export class EditorRuntime implements RivtoEditorApi {
       const selected = new Map(item.blocks.map((block) => [block.id, block]));
       const blocks = visibleIds.flatMap((id) => {
         const entry = selected.get(id);
-        return entry ? [{ id: entry.id, start: entry.start, end: entry.end }] : [];
-      });
-      const elements = (item.elements ?? []).filter((id) => Boolean(this.elements.getElement(id)));
-      const hasPluginData = Object.keys(item.pluginData ?? {}).length > 0;
+      return entry ? [{ id: entry.id, start: entry.start, end: entry.end }] : [];
+    });
+    const elements = (item.elements ?? []).filter((id) => this.elements.hasElement(id));
+    const hasPluginData = Object.keys(item.pluginData ?? {}).length > 0;
       if (!blocks.length && !elements.length && !hasPluginData) {
         changed = true;
         return undefined;
@@ -399,11 +213,12 @@ export class EditorRuntime implements RivtoEditorApi {
   }
 
   /**
-   * Releases subscriptions owned by the runtime, then destroys its CRDT document.
+   * Releases runtime-owned subscriptions and managers.
    *
    * Registered block definitions are removed in reverse order so callers see a
    * predictable teardown path even when definitions depend on earlier defaults.
-   * @returns A Promise that resolves after providers and CRDT state are destroyed.
+   * The caller-owned document remains usable and must be destroyed separately.
+   * @returns A Promise that resolves after runtime cleanup.
    */
   async destroy(): Promise<void> {
     const errors: unknown[] = [];
@@ -414,18 +229,14 @@ export class EditorRuntime implements RivtoEditorApi {
         errors.push(error);
       }
     };
+    run(this.unsubscribeFromDocument);
     this.unsubscribeFns.splice(0).forEach((unsubscribe) => run(unsubscribe));
     run(() => this.elements.destroy());
     run(() => this.blocks.destroy());
-    run(() => this.blocksRegistry.destroy());
-    run(() => this.history.destroy());
+    run(() => this.blockListProps.destroy());
+    run(() => this.blockRegistry.destroy());
     run(() => this.commands.clear());
     run(() => this.listeners.clear());
-    try {
-      await this.document.crdt.destroy();
-    } catch (error) {
-      errors.push(error);
-    }
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) throw new AggregateError(errors, "Editor teardown failed");
   }
@@ -439,12 +250,18 @@ export class EditorRuntime implements RivtoEditorApi {
     this.currentRevision += 1;
     this.listeners.emit("editorChanged");
   }
+
+  /** @returns The active document or throws while the editor is unbound. */
+  private requireDocument(): DocumentModel {
+    if (!this.document) throw new Error("Document is not set");
+    return this.document;
+  }
 }
 
 /**
- * Creates one editor runtime over an optional collaborative document.
+ * Creates one unbound editor runtime whose document is attached with `setDocument`.
  *
- * @param options - Optional document adapter and initial presentation mode.
+ * @param options - Optional initial presentation mode.
  * @returns Runtime whose lifecycle is owned by the caller.
  */
 export function createRivtoEditor(options: CreateRivtoEditorOptions = {}): EditorRuntime {

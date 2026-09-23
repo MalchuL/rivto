@@ -1,4 +1,5 @@
 import type { ReactEditorExtension } from "../../../managers";
+import type { EditorElement } from "@chulane/rivto";
 import { createElement } from "react";
 import { EdgelessVisualController } from "./controller";
 import { EdgelessVisualLayer } from "./visual-layer";
@@ -39,39 +40,45 @@ export class EdgelessVisualsExtension implements ReactEditorExtension {
     };
   }
 
-  /** Creates any supported visual and returns its first-class element ID. */
-  create(payload: CreateVisualPayload): string { return this.api.create(payload); }
-  createSticker(payload: VisualPayload<"sticker"> = {}): string {
+  /** @param payload - Visual kind and persisted values. @returns Complete created element. */
+  create(payload: CreateVisualPayload): EditorElement { return this.api.create(payload); }
+  /** @param payload - Optional sticky-note values. @returns Complete created element. */
+  createSticker(payload: VisualPayload<"sticker"> = {}): EditorElement {
     return this.create({ kind: "sticker", ...payload });
   }
-  createRectangle(payload: VisualPayload<"rectangle"> = {}): string {
+  /** @param payload - Optional rectangle values. @returns Complete created element. */
+  createRectangle(payload: VisualPayload<"rectangle"> = {}): EditorElement {
     return this.create({ kind: "rectangle", ...payload });
   }
-  createEllipse(payload: VisualPayload<"ellipse"> = {}): string {
+  /** @param payload - Optional ellipse values. @returns Complete created element. */
+  createEllipse(payload: VisualPayload<"ellipse"> = {}): EditorElement {
     return this.create({ kind: "ellipse", ...payload });
   }
-  createText(payload: VisualPayload<"text"> = {}): string {
+  /** @param payload - Optional canvas-text values. @returns Complete created element. */
+  createText(payload: VisualPayload<"text"> = {}): EditorElement {
     return this.create({ kind: "text", ...payload });
   }
-  createDrawing(payload: VisualPayload<"drawing">): string {
+  /** @param payload - Drawing geometry and style. @returns Complete created element. */
+  createDrawing(payload: VisualPayload<"drawing">): EditorElement {
     return this.create({ kind: "drawing", ...payload });
   }
-  createConnector(payload: VisualPayload<"connector">): string {
+  /** @param payload - Connector endpoints and style. @returns Complete created element. */
+  createConnector(payload: VisualPayload<"connector">): EditorElement {
     return this.create({ kind: "connector", ...payload });
   }
 
-  /** Patches one visual while preserving its ID and kind. */
-  update(payload: UpdateVisualPayload): void { this.api.update(payload); }
+  /** @param payload - Element identity and mutable visual fields. @returns Complete updated element. */
+  update(payload: UpdateVisualPayload): EditorElement { return this.api.update(payload); }
   /** @returns Detached active canvas selection. */
   getSelection() { return this.api.getSelection(); }
   /** Replaces the active canvas selection. */
   select(items: readonly EdgelessSelectionRef[]): void { this.api.select(items); }
-  /** Duplicates the active selection and selects the copies. */
-  duplicateSelection(): EdgelessSelectionRef[] { return this.api.duplicateSelection(); }
+  /** @returns Complete duplicated top-level elements. */
+  duplicateSelection(): EditorElement[] { return this.api.duplicateSelection(); }
   /** Deletes the active selection. */
   deleteSelection(): void { this.api.deleteSelection(); }
-  /** Groups the current selection and returns the group ID. */
-  group(): string { return this.api.group(); }
+  /** @returns Complete created group element. */
+  group(): EditorElement { return this.api.group(); }
   /** Replaces selected groups with their direct children. */
   ungroup(): void { this.api.ungroup(); }
   /** Clears the active canvas selection. */

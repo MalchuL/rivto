@@ -11,7 +11,7 @@
 - **Аргументы:** `id: string`; необязательный `doc: Y.Doc`.
 - **Создаёт:** новый `YjsDoc`, использующий переданный `Y.Doc` или новый нативный документ.
 
-Создаёт адаптер с логическим идентификатором `id`. Переданный `Y.Doc` будет обёрнут; без него создаётся новый документ. Конструктор также создаёт `YjsInstantiator` и реестр провайдеров.
+Создаёт адаптер с логическим идентификатором `id`. Переданный `Y.Doc` будет обёрнут; без него создаётся новый документ. Конструктор также создаёт реестр провайдеров.
 
 ```ts
 const fresh = new YjsDoc("fresh-document");
@@ -34,13 +34,13 @@ const wrapped = new YjsDoc("imported-document", existingYDoc);
 
 Возвращает логический ID из конструктора. Если пользователь не передал документ, `EditorRuntime` создаёт ID с префиксом `rivto-`.
 
-### `instantiator`
+### `createDetachedArray()`, `createDetachedMap()`, `createDetachedText()`
 
-- **Тип:** `CRDTInstantiator`, публичное `readonly`-свойство.
-- **Значение:** один экземпляр `YjsInstantiator` на `YjsDoc`.
-- **Исключения при чтении:** отсутствуют.
+- **Аргументы:** отсутствуют; generic-параметры ограничивают item или schema.
+- **Возвращают:** неприсоединённый wrapper соответствующего Yjs-типа.
+- **Исключения:** собственных проверок нет; чтение результата до attachment выбрасывает `YjsNotAttachedError`.
 
-Возвращает `YjsInstantiator` через общий контракт `CRDTInstantiator`. Менеджеры блоков, элементов, связей и плагинов создают через него вложенные shared-типы.
+Создают вложенные shared-типы, совместимые с этим адаптером. Методы не создают именованный root: сначала получите parent через `getMap()` или `getArray()`, затем вставьте detached-значение через `set()`, `push()` или `insert()`.
 
 ## Жизненный цикл провайдера
 
@@ -81,19 +81,19 @@ await document.detachProvider(provider.id); // явный выбор среди 
 - **Возвращает:** `void`.
 - **Исключения:** передаёт исключение callback и ошибки `Y.Doc.transact`.
 
-Вызывает `Y.Doc.transact`. Yjs группирует уведомления наблюдателей и помечает транзакцию значением `origin`. `DocumentModelImpl` передаёт один стабильный origin для всех локальных изменений.
+Вызывает `Y.Doc.transact`. Yjs группирует уведомления наблюдателей и помечает транзакцию значением `origin`. Без явного аргумента `YjsDoc` использует собственный приватный стабильный local origin.
 
 Callback не получает объект транзакции или `meta`: adapter-neutral контракт принимает только `() => void`. Для классификации изменений, включая область локального undo, используется отдельный `origin`.
 
 ### `createUndoManager(scopes, trackedOrigins?)`
 
-- **Аргументы:** `scopes: CRDTUndoScope[]`; `trackedOrigins: unknown[] = []`.
+- **Аргументы:** `scopes: CRDTUndoScope[]`; необязательный `trackedOrigins: unknown[]`.
 - **Возвращает:** объект `CRDTUndoManager` с пятью делегирующими методами.
 - **Исключения:** `unwrapCRDTtoYJS` может выбросить `Error` или `YjsConvertError` для несовместимой области; ошибки конструктора `Y.UndoManager` также передаются.
 
 Разворачивает каждый `CRDTUndoScope` в нативный Yjs-тип и создаёт `Y.UndoManager`. `trackedOrigins` преобразуется в `Set`. Возвращаемый facade делегирует `undo`, `redo`, `clear`, `stopCapturing` и `destroy`, не раскрывая Yjs верхним слоям.
 
-Rivto собирает области хранения в `DocumentModelImpl`. Публичная история отслеживает только локальный origin модели, поэтому удалённые изменения не попадают в локальный undo.
+Если `trackedOrigins` отсутствует, history отслеживает приватный local origin адаптера. Rivto собирает области хранения внутри `DocumentModelImpl`, поэтому удалённые изменения не попадают в локальный undo.
 
 #### Что входит в `scopes`
 
@@ -114,22 +114,21 @@ Rivto собирает области хранения в `DocumentModelImpl`. �
 ```ts
 const document = new YjsDoc("article");
 const article = document.getMap("article");
-const body = document.instantiator.createText();
+const body = document.createDetachedText();
 article.set("body", body); // Сначала присоединяем вложенный scope.
 
-const origin = Symbol("article-editor");
-const history = document.createUndoManager([article], [origin]);
+const history = document.createUndoManager([article]);
 
 document.transact(() => {
   body.insert(0, "Первая версия");
-}, origin);
+});
 
 history.undo();
 ```
 
-`origin` сравнивается по identity, а не по описанию. Сохраните один объект или `Symbol` и повторно используйте его во всех локальных транзакциях. Если `trackedOrigins` оставить пустым, текущий `YjsDoc` передаст Yjs пустой `Set`; для предсказуемой локальной истории Rivto всегда передаёт собственный origin явно.
+Для стандартной локальной истории origin передавать не нужно. Явные `trackedOrigins` нужны только специализированным consumers; они сравниваются по identity и должны повторно использоваться в `transact`.
 
-Создавайте manager после того, как scopes присоединены и известен их окончательный набор. При добавлении новой независимой корневой области создайте history заново либо включите эту область в агрегированный `document.undoScopes` до создания публичного `UndoManager`.
+Создавайте manager после того, как scopes присоединены и известен их окончательный набор. При добавлении новой независимой корневой области создайте history заново либо включите эту область в переданный accumulator до создания публичного `HistoryManager`.
 
 ## Корневые shared-типы
 
@@ -249,21 +248,17 @@ target.applySnapshot(update);
 
 ## Создание в проекте
 
-Если в `createRivtoEditor()` не передан `document`, `EditorRuntime` создаёт `YjsDoc` со случайным ID и передаёт его в `DocumentModelImpl`:
+Host создаёт CRDT adapter и document model до editor runtime:
 
 ```ts
-const editor = createRivtoEditor();
-```
-
-Приложение может внедрить заранее настроенный документ:
-
-```ts
-const document = new YjsDoc("team-handbook");
-const cleanupProvider = await document.attachProvider(
+const crdt = new YjsDoc("team-handbook");
+const cleanupProvider = await crdt.attachProvider(
   new BroadcastChannelProvider("team-handbook"),
 );
 
-const editor = createRivtoEditor({ document });
+const document = new DocumentModelImpl(crdt);
+const editor = createRivtoEditor();
+editor.setDocument(document);
 
 // При завершении жизненного цикла:
 await cleanupProvider();

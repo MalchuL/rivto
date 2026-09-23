@@ -32,12 +32,11 @@ Duck typing требует object с `set` и `entries`. Это сохраняе
 
 ## In-place assignment
 
-Все три helper-а изменяют уже существующий destination CRDT container. Они не превращают произвольный plain object в independently editable CRDT tree. Гранулярность определяется только непосредственным destination container:
+Существующие helper-ы `assignMap()` и `assignText()` изменяют уже существующий destination CRDT container. Они не превращают произвольный plain object в independently editable CRDT tree. Гранулярность определяется только непосредственным destination container:
 
 - у `assignMap()` независимо обновляются top-level keys map;
-- у `assignArray()` независимо обновляются позиции/items array;
 - у `assignText()` обновляются character ranges;
-- поля внутри plain object, помещённого в map или array, не создают updates сами по себе.
+- поля внутри plain object, помещённого в map, не создают updates сами по себе.
 
 Если destination уже attached к document, его операции входят в текущую CRDT transaction и приводят к document update. Если destination ещё detached, изменения только подготавливают его initial state; update появляется при последующем attachment к attached parent.
 
@@ -58,7 +57,7 @@ assignMap(props, {
 }, false);
 ```
 
-Здесь `title` и `style` — два независимо обновляемых map keys. `style.color` и `style.width` — поля одного plain object: присваивание `style.color = "blue"` не является CRDT operation, не вызывает observers и не синхронизируется. Нужно снова вызвать `assignMap(props, { style: { ...oldStyle, color: "blue" } }, false)` либо заранее использовать nested map, созданную через instantiator, но сам `assignMap()` не предназначен для записи CRDT wrappers.
+Здесь `title` и `style` — два независимо обновляемых map keys. `style.color` и `style.width` — поля одного plain object: присваивание `style.color = "blue"` не является CRDT operation, не вызывает observers и не синхронизируется. Нужно снова вызвать `assignMap(props, { style: { ...oldStyle, color: "blue" } }, false)` либо заранее использовать nested map, созданную через `createDetachedMap()`, но сам `assignMap()` не предназначен для записи CRDT wrappers.
 
 Семантика `clear`:
 
@@ -138,10 +137,6 @@ assignText
 
 Вход остаётся plain string в API, но destination является `CRDTText`, поэтому после assignment изменения происходят на уровне text operations.
 
-### `assignArray()`
-
-Прямых или транзитивных callers в текущем `store/document-model` нет.
-
 ## Portable cloning
 
 Исходник: `core/utils/clone.ts`.
@@ -199,6 +194,6 @@ Managers не заменяют nested `CRDTMap`, `CRDTArray` и `CRDTText` пр�
 - concurrent updates к независимым keys;
 - renderer access к тому же live wrapper.
 
-Выбирайте `assignMap`/`assignArray` для полной или partial assignment, `assignText` для unconditional replacement и focused manager methods для domain validation и minimal diffs.
+Выбирайте `assignMap` для полной или partial assignment, `assignText` для unconditional replacement и focused manager methods для domain validation и minimal diffs.
 
-`assignMap` и `assignArray` не являются deep-promotion API. Если внутреннее свойство plain object должно самостоятельно генерировать updates, создайте соответствующий nested `CRDTMap`/`CRDTArray`/`CRDTText` через `document.crdt.instantiator` и присоедините его явной CRDT operation.
+`assignMap` не является deep-promotion API. Если внутреннее свойство plain object должно самостоятельно генерировать updates, создайте соответствующий nested `CRDTMap`/`CRDTArray`/`CRDTText` через `crdt.createDetached*()` и присоедините его явной CRDT operation.

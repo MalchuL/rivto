@@ -26,9 +26,9 @@ Core selection использует один generic item для block ranges, e
 
 - **Аргументы:** отсутствуют.
 - **Возвращает:** `void`.
-- **Исключения:** command/selection normalization и block mutation errors.
+- **Исключения:** selection normalization и block mutation errors.
 
-Исполняет built-in `selection.delete`. `SelectionManager` удаляет structural block subtrees или объединяет границы cross-block text range одной undoable operation, затем очищает selection.
+`SelectionManager` удаляет structural block subtrees или объединяет границы cross-block text range одной undoable operation, затем очищает selection.
 
 ## Property `revision`
 

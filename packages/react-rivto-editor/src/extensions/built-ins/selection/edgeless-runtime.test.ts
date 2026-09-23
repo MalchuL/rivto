@@ -5,16 +5,16 @@ import { EdgelessSelectionRuntime } from "./edgeless-runtime";
 
 /**
  * Creates one valid visual element for selection tests.
- * @param runtime - Core runtime receiving the element.
+ * @param editor - Core editor receiving the element.
  * @returns Stable element ID.
  */
-function element(runtime: ReturnType<typeof createTestCoreEditor>): string {
-  return runtime.elements.insertElement({
+function element(editor: ReturnType<typeof createTestCoreEditor>): string {
+  return editor.elements.insertElement({
     type: "rectangle",
     frame: { x: 0, y: 0, width: 10, height: 10 },
-    zIndex: runtime.elements.getElements().length,
+    zIndex: editor.elements.getElements().length,
     props: {},
-  });
+  }).id;
 }
 
 describe("EdgelessSelectionRuntime", () => {

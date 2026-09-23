@@ -20,7 +20,7 @@ interface TestProps extends Record<string, unknown> {
 describe("useBlockEditing", () => {
   test("returns mode-specific attributes and latest validated property methods", () => {
     const editor = createEditor();
-    editor.blocksRegistry.defineBlock({
+    editor.blockRegistry.defineBlock({
       type: "test.editing",
       defaultProps: { count: 1, label: "Initial" },
       propSchema: {
@@ -34,7 +34,7 @@ describe("useBlockEditing", () => {
         },
       } as never,
     });
-    const blockId = editor.blocks.insertBlock({ type: "test.editing", content: "Text" });
+    const blockId = editor.blocks.insertBlock({ type: "test.editing", content: "Text" }).id;
     let structural: UseBlockEditingResult<TestProps, false> | undefined;
     let text: UseBlockEditingResult<TestProps, true> | undefined;
 
@@ -51,7 +51,7 @@ describe("useBlockEditing", () => {
     const reactEditor = createReactEditor({ editor });
     reactEditor.surfaces.register("block", Surface);
 
-    renderToStaticMarkup(createElement(EditorView, { editor: reactEditor }));
+    renderToStaticMarkup(createElement(EditorView, { reactEditor }));
 
     expect(structural?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
     expect(text?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
@@ -61,7 +61,7 @@ describe("useBlockEditing", () => {
     expect(structural && "getters" in structural).toBe(false);
     expect(structural && "setCollapsed" in structural.operations).toBe(false);
     structural?.operations.update({ listProps: { collapsed: true } });
-    expect(editor.blocks.getBlock(blockId)?.listProps.collapsed).toBe(true);
+    expect(editor.blocks.getBlockNode(blockId)?.listProps.collapsed).toBe(true);
     expect(structural?.getProps()).toEqual({ count: 1, label: "Initial" });
     expect(structural?.getProp("count")).toBe(1);
 

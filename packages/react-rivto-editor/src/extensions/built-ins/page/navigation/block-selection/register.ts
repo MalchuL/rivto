@@ -31,16 +31,15 @@ import {
  * @returns No value.
  */
 export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
   const isCollapsed = (block: EditorBlock) => (
-    reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true
+    reactEditor.blockListProps.has("collapse") && block.listProps.collapsed === true
   );
   const move = (root: HTMLElement, direction: VerticalDirection, extend: boolean): boolean => {
     const selection = currentNavigationSelection(reactEditor.selection);
     if (!isStructuralSelection(selection)) return false;
     const item = selection;
     if (!item || !hasBlockRanges(item)) return false;
-    const outline = navigationOutlineBlocks(editor, item.focusBlockId);
+    const outline = navigationOutlineBlocks(reactEditor, item.focusBlockId);
     const next = extend
       ? extendBlockSelection(outline, item, direction, isCollapsed)
       : adjacentBlockSelection(outline, item, direction, isCollapsed);
@@ -54,7 +53,7 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditor): void
     const selection = currentNavigationSelection(reactEditor.selection);
     const item = selection;
     if (!item || !hasBlockRanges(item)) return false;
-    const outline = navigationOutlineBlocks(editor, item.focusBlockId);
+    const outline = navigationOutlineBlocks(reactEditor, item.focusBlockId);
     const next = isStructuralSelection(selection)
       ? extendBlockSelection(outline, item, direction, isCollapsed)
       : blockSelection(outline, item.focusBlockId, item.focusBlockId, isCollapsed);

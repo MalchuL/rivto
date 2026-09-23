@@ -14,8 +14,8 @@ test("shows checkbox and numbered-list examples in the demo", async ({ page }) =
   const root = (text: string) => page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).filter({
     has: page.getByText(text, { exact: true }),
   });
-  await expect(root("Try the interactive checkbox").locator(":scope > .page-block-row input[type=checkbox]")).not.toBeChecked();
-  await expect(root("Completed checkbox item").locator(":scope > .page-block-row input[type=checkbox]")).toBeChecked();
+  await expect(root("Try the interactive checkbox").locator(":scope > .page-block-row [role=checkbox]")).not.toBeChecked();
+  await expect(root("Completed checkbox item").locator(":scope > .page-block-row [role=checkbox]")).toBeChecked();
   const oneMarker = root("Start a numbered sequence").locator(":scope > .page-block-row .page-list-marker");
   const twoMarker = root("Continue the adjacent sequence").locator(":scope > .page-block-row .page-list-marker");
   const threeMarker = root("Continue numbering across the ordinary block").locator(":scope > .page-block-row .page-list-marker");
@@ -148,8 +148,8 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   if (!startId || !nextId || !gapId) throw new Error("Expected numbered root IDs");
 
   await page.evaluate(({ movingId, targetId }) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, targetId, "before");
   }, { movingId: nextId, targetId: startId });
@@ -159,8 +159,8 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   expect(await continued.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(twoImage);
 
   await page.evaluate((blockId) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.blocks.updateBlock(blockId, { listProps: { type: "numbered_list" } });
   }, gapId);
@@ -169,41 +169,41 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   expect(await continued.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(threeImage);
 
   const nested = await page.evaluate(() => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
-    const leftParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered left parent" });
+    const leftParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered left parent" }).id;
     const leftStart = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested left one",
       listProps: { type: "start_numbered_list" },
-    }, leftParent);
+    }, leftParent).id;
     editor.blocks.indentBlock(leftStart);
     const leftNext = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested left two",
       listProps: { type: "numbered_list" },
-    }, leftStart);
-    const rightParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered right parent" });
+    }, leftStart).id;
+    const rightParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered right parent" }).id;
     const rightStart = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested right one",
       listProps: { type: "start_numbered_list" },
-    }, rightParent);
+    }, rightParent).id;
     editor.blocks.indentBlock(rightStart);
     const rightNext = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested right two",
       listProps: { type: "numbered_list" },
-    }, rightStart);
+    }, rightStart).id;
     return { leftParent, leftStart, leftNext, rightParent, rightNext };
   });
   const nestedNext = page.locator(blockIdSelector(nested.leftNext));
   expect(await nestedNext.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(twoImage);
 
   await page.evaluate(({ movingId, targetId }) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, targetId, "before");
   }, { movingId: nested.leftNext, targetId: nested.leftStart });
@@ -213,8 +213,8 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   expect(await nestedNext.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(oneImage);
 
   await page.evaluate(({ movingId, parentId }) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, parentId, "inside");
   }, { movingId: nested.leftNext, parentId: nested.rightParent });
@@ -230,13 +230,13 @@ test("uses the shared list and checkbox rendering in edgeless cards", async ({ p
     .filter({ hasText: new RegExp(`^${text}$`) })
     .locator("xpath=ancestor::*[@data-block-id][1]");
 
-  const checkbox = block("Try the interactive checkbox").locator(":scope > .page-block-row input[type=checkbox]");
+  const checkbox = block("Try the interactive checkbox").locator(":scope > .page-block-row [role=checkbox]");
   await expect(checkbox).not.toBeChecked();
-  await checkbox.evaluate((element: HTMLInputElement) => element.click());
+  await checkbox.evaluate((element: HTMLElement) => element.click());
   await expect(checkbox).toBeChecked();
   await page.locator('[data-editor-action="undo"]').click();
   await expect(checkbox).not.toBeChecked();
-  await expect(block("Completed checkbox item").locator(":scope > .page-block-row input[type=checkbox]")).toBeChecked();
+  await expect(block("Completed checkbox item").locator(":scope > .page-block-row [role=checkbox]")).toBeChecked();
   const oneImage = await block("Start a numbered sequence").locator(":scope > .page-block-row .page-list-marker").screenshot();
   const twoImage = await block("Continue the adjacent sequence").locator(":scope > .page-block-row .page-list-marker").screenshot();
   const threeImage = await block("Continue numbering across the ordinary block").locator(":scope > .page-block-row .page-list-marker").screenshot();

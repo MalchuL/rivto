@@ -14,9 +14,16 @@ export {
   resolveChromePlacement,
   resolveGridPlacement,
 } from "./intent";
+export { resolveDropPlacement } from "./resolver";
 export type {
   CanonicalDropPlacement,
   DropBlock,
   DropMoveTarget,
+  DropPlacementInput,
+  DropPlacementSource,
+  DropPlacementTarget,
+  PageDragData,
+  PageDropTargetData,
   ResolvedDropPlacementOptions,
+  ViewportRect,
 } from "./types";

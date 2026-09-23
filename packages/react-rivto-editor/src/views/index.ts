@@ -1,7 +1,7 @@
 /**
  * Generic block-view behavior, resolution helpers, and mutation primitives.
  *
- * The DOM shell in `blocks/block-view.tsx` is separate presentation. This
+ * The DOM shell in `blocks/block-view/block-view.tsx` is separate presentation. This
  * folder owns interaction policy that page dispatchers and container
  * extensions share.
  *

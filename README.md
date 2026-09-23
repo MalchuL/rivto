@@ -174,15 +174,15 @@ function CounterBlock({ blockId }: { blockId: string }) {
 const extension = {
   id: "acme.command",
   setup(reactEditor) {
-    const command = reactEditor.editor.register("acme.command.open", () => {
+    const command = reactEditor.commands.register("acme.command.open", () => {
       // Open application UI.
     });
     reactEditor.keyboard.register({
       id: "acme.command.open",
       keys: ["Primary+K"],
       when: ({ selection }) => selection.length > 0,
-    }, ({ editor }) => {
-      editor.execute("acme.command.open");
+    }, ({ reactEditor }) => {
+      reactEditor.commands.execute("acme.command.open");
       return true;
     });
     return () => command.dispose();
@@ -226,7 +226,7 @@ const editor = createRivtoEditor({ document: new YjsDoc("room-id") });
 const id = editor.insertBlock({ type: "paragraph", content: "Hello" });
 editor.updateBlock(id, { content: "Hello world" });
 
-editor.batchUpdates(() => {
+editor.history.batchUpdates(() => {
   editor.updateBlock(id, { content: "Hello again" });
   editor.insertBlock({ type: "paragraph", content: "One undo step" }, id);
 });

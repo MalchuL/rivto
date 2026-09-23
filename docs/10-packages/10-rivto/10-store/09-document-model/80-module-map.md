@@ -43,7 +43,7 @@ React extension / demo / host application
 
 - Domain invariants и persisted shape меняются в `store/document-model/core`.
 - Public user operations проходят через focused core managers, а не через forwarding methods editor.
-- Managers создают shared values только через `document.crdt.instantiator`.
+- Managers создают shared values только через `crdt.createDetached*()`.
 - Mutations используют `document.transact()` и стабильный `origin`.
 - Snapshot validation выполняется до destructive writes, поскольку CRDT transaction не гарантирует rollback.
 - Blocks и elements остаются отдельными entity families.
@@ -61,7 +61,7 @@ React extension / demo / host application
 ## Checklist изменения schema
 
 1. Обновить public input/output и storage types.
-2. Создать новые shared fields через instantiator.
+2. Создать новые shared fields через `CRDTDoc.createDetached*()`.
 3. Добавить validation до первой destructive write.
 4. Сохранить nested container identity при patch/load.
 5. Обновить snapshot version и migration boundary, если форма меняется несовместимо.

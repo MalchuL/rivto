@@ -1,20 +1,17 @@
-import { CRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, ProviderCleanup, CRDTInstantiator, WrapBasicTypeToCRDTOptions } from "../types";
+import { CRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, ProviderCleanup, WrapBasicTypeToCRDTOptions } from "../types";
 import * as utils from "./structures/utils";
 import * as Y from 'yjs';
 import { Storage } from "../utils";
-import { YjsInstantiator } from "./utils/instantiator";
+import { YjsArray, YjsMap, YjsText } from "./structures";
 
 export class YjsDoc implements CRDTDoc {
     public readonly doc: Y.Doc;
+    private transactionDepth = 0;
+    private readonly localOrigin = Symbol("yjs-doc-local");
     /**
      * The storage of the providers.
      */
     private providersStorage: Storage<Provider> = new Storage<Provider>();
-    /**
-     * The instantiator of the YjsDoc.
-     */
-    public readonly instantiator: CRDTInstantiator = new YjsInstantiator();
-
     /**
      * Creates a new YjsDoc.
      * @param id - The id of the YjsDoc.
@@ -22,6 +19,71 @@ export class YjsDoc implements CRDTDoc {
      */
     constructor(private readonly _id: string, doc?: Y.Doc) {
         this.doc = doc || new Y.Doc();
+    }
+
+    /**
+     * Whether this adapter is currently executing or publishing a CRDT transaction.
+     *
+     * True from the start of `transact()` until it returns, including nested
+     * transacts and while observers/`update` events fire. Storage readers skip
+     * snapshot caches and read live CRDT state in this window because the tree
+     * can still be half-written.
+     *
+     * This is the CRDT write window, not an undo-grouping flag. Direct
+     * document-model mutations transact without opening a history batch.
+     *
+     * @returns True while adapter code is inside `transact()`.
+     */
+    get isTransacting(): boolean {
+        return this.transactionDepth > 0;
+    }
+
+    /**
+     * Reports whether an observed transaction used this adapter's private local tag.
+     * @param origin - Origin received from a Yjs update event.
+     * @returns Whether the origin represents a default local transaction.
+     */
+    isLocalOrigin(origin: unknown): boolean {
+        return origin === this.localOrigin;
+    }
+
+    /**
+     * Creates a detached Yjs array for insertion into an attached CRDT container.
+     *
+     * This does not create a named root. Attach the result to a parent obtained
+     * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
+     * Most reads throw until attachment.
+     *
+     * @returns A detached array compatible with this Yjs document.
+     */
+    createDetachedArray<Item extends CRDTType = CRDTType>(): CRDTArray<Item> {
+        return new YjsArray<Item>();
+    }
+
+    /**
+     * Creates a detached Yjs map for insertion into an attached CRDT container.
+     *
+     * This does not create a named root. Attach the result to a parent obtained
+     * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
+     * Most reads throw until attachment.
+     *
+     * @returns A detached map compatible with this Yjs document.
+     */
+    createDetachedMap<Schema extends object = Record<string, CRDTType>>(): CRDTMap<Schema> {
+        return new YjsMap<Schema>();
+    }
+
+    /**
+     * Creates detached Yjs text for insertion into an attached CRDT container.
+     *
+     * This does not create a named root. Attach the result to a parent obtained
+     * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
+     * Reads throw until attachment.
+     *
+     * @returns Detached text compatible with this Yjs document.
+     */
+    createDetachedText(): CRDTText {
+        return new YjsText();
     }
 
     /**
@@ -64,9 +126,16 @@ export class YjsDoc implements CRDTDoc {
     /**
      * Executes a transaction on the YjsDoc.
      * @param fn - The function to execute within the transaction.
+     * @param origin - Optional explicit origin; defaults to this adapter's private local origin.
+     * @returns No value.
      */
     transact(fn: () => void, origin?: unknown): void {
-        this.doc.transact(fn, origin);
+        this.transactionDepth += 1;
+        try {
+            this.doc.transact(fn, origin === undefined ? this.localOrigin : origin);
+        } finally {
+            this.transactionDepth -= 1;
+        }
     }
 
     /**
@@ -78,13 +147,13 @@ export class YjsDoc implements CRDTDoc {
      * undo/redo history.
      *
      * @param scopes The list of CRDT scopes to track for undo/redo operations.
-     * @param trackedOrigins A list of origin objects whose transactions should be tracked.
+     * @param trackedOrigins Optional origin objects to track instead of the private local origin.
      * @returns A `CRDTUndoManager` instance with `undo`, `redo`, `clear`, `stopCapturing`, and `destroy` methods.
      */
-    createUndoManager(scopes: CRDTUndoScope[], trackedOrigins: unknown[] = []): CRDTUndoManager {
+    createUndoManager(scopes: CRDTUndoScope[], trackedOrigins?: unknown[]): CRDTUndoManager {
         const nativeScopes = scopes.map((scope) => utils.unwrapCRDTtoYJS(scope) as Y.AbstractType<any>);
         const manager = new Y.UndoManager(nativeScopes, {
-            trackedOrigins: new Set(trackedOrigins),
+            trackedOrigins: new Set(trackedOrigins ?? [this.localOrigin]),
         });
         return {
             undo: () => manager.undo(),

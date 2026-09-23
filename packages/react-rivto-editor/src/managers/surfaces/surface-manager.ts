@@ -1,9 +1,9 @@
 import type { EditorMode } from "@chulane/rivto";
 import type { ComponentType } from "react";
-import type { BlockWrapperComponent } from "../../blocks/block-wrapper";
+import type { BlockWrapperComponent } from "../../blocks/block-wrapper/block-wrapper";
 import type { SurfacesCapability } from "../../capabilities";
-import type { ReactEditorImpl } from "../../react-editor";
 import { RevisionStore } from "../../internal-store";
+import type { ReactEditorImpl } from "../../react-editor";
 import type {
   BlockWrapperRegistration,
   BlockSlotPosition,
@@ -46,8 +46,7 @@ export class SurfaceManager implements SurfacesCapability {
   /**
    * Creates empty presentation registries.
    *
-   * @param reactEditor - Complete owning runtime used for lifecycle ownership
-   * and React invalidation.
+   * @param reactEditor - Owning React runtime providing extension lifecycle.
    */
   constructor(private readonly reactEditor: ReactEditorImpl) {}
 

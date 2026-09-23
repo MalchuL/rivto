@@ -6,23 +6,25 @@
 
 ## Публичные свойства
 
-### `document`
-
-- **Тип:** `DocumentModel`, публичное `readonly`.
-- **Значение:** canonical collaborative storage и persistence boundary.
-- **Исключения при чтении:** отсутствуют.
-
 ### `blocks`
 
 - **Тип:** `BlockManager`, публичное `readonly`.
 - **Значение:** typed block operations и block command owner.
 - **Исключения при чтении:** отсутствуют.
 
-### `blocksRegistry`
+### `blockRegistry`
 
 - **Тип:** `BlockRegistryManager`, публичное `readonly`.
 - **Значение:** native block definitions, defaults и props validation.
 - **Исключения при чтении:** отсутствуют.
+
+### `blockListProps`
+
+- **Тип:** `BlockListPropsManager`, публичное `readonly`.
+- **Значение:** editor-wide registrations, defaults и semantic validation для persisted `listProps`.
+- **Исключения при чтении:** отсутствуют.
+
+`register({ id, defaults?, isValid? })` возвращает idempotent disposer. `validate(candidate)` ничего не возвращает и выбрасывает ошибку для invalid input; `prepare(candidate)` применяет defaults и validation. `blocks.prepareInput(inputs)` принимает root forest и является complete recursive creation pipeline: применяет block definitions, list policy, processors и portable validation. Core block insertion и import используют этот pipeline перед первой записью. Snapshot loading передаёт данные напрямую в document-model и не запускает editor processors; migration или repair выполняются явно до `load`.
 
 ### `links`
 
@@ -56,7 +58,7 @@
 
 ### `history`
 
-- **Тип:** `UndoManager`, публичное `readonly`.
+- **Тип:** `HistoryManager`, публичное `readonly`.
 - **Значение:** local-origin undo/redo history document scopes.
 - **Исключения при чтении:** отсутствуют.
 
@@ -83,7 +85,7 @@
 ### `unsubscribeFns`
 
 - **Тип:** `Array<() => void>`, приватное `readonly`.
-- **Значение:** cleanup callbacks block registry, document, selection и mode subscriptions.
+- **Значение:** cleanup callbacks block registry, manager subscriptions и mode subscriptions. Active document subscription хранится отдельно для replacement.
 - **Исключения при чтении:** отсутствуют.
 
 ### `currentRevision`
@@ -92,23 +94,21 @@
 - **Значение:** backing value getter `revision`.
 - **Исключения при чтении:** отсутствуют.
 
-### `batchDepth`
-
-- **Тип:** `number`, приватное; initial `0`.
-- **Значение:** nesting depth explicit batch. Положительное значение отключает отдельные history boundaries nested document commands.
-- **Исключения при чтении:** отсутствуют.
-
 ## Создание
 
-### `constructor(options = {})`
+### `constructor(options)`
 
-- **Аргументы:** `options: CreateRivtoEditorOptions` с optional `document` и `mode`.
+- **Аргументы:** optional `CreateRivtoEditorOptions` с `mode`.
 - **Создаёт:** полностью связанный `EditorRuntime`.
-- **Исключения:** передаёт ошибки создания `YjsDoc`, `DocumentModelImpl`, managers, duplicate built-in commands и subscriptions.
+- **Исключения:** передаёт ошибки managers, duplicate built-in commands и subscriptions.
 
-Без document создаётся `YjsDoc("rivto-" + crypto.randomUUID())`. Default mode — `"block"`. Constructor создаёт managers, устанавливает block props validator, регистрирует runtime/clipboard commands и подписывает revision на document, registry, selection и mode changes.
+Default mode — `"block"`. Constructor создаёт unbound managers, устанавливает block props validator и регистрирует runtime/clipboard commands. `setDocument()` позже подключает model subscriptions.
 
 ## Публичные методы
+
+### `getDocument()` / `setDocument(document)`
+
+`getDocument()` возвращает active `DocumentModel` либо `undefined`, пока runtime unbound. `setDocument()` атомарно переключает history и document subscriptions, сохраняя stable managers и editor-owned processors, очищает selection и публикует один global revision. Старый caller-owned document не уничтожается; updates от него больше не доходят до runtime. Повторная установка active instance ничего не делает.
 
 ### `subscribe(listener)`
 
@@ -120,7 +120,7 @@
 
 Возвращённый disposer удаляет этот callback и является idempotent. Подписка не вызывается сразу. Один document update, selection/mode change или block-registry change сначала увеличивает `revision`, затем вызывает snapshot текущих listeners. Вызов disposer во время notification безопасен, но iteration уже использует snapshot текущего списка.
 
-### `blocksRegistry.subscribe(listener)`
+### `blockRegistry.subscribe(listener)`
 
 - **События:** один stream `blockRegistryChanged`, после успешного add/remove definition.
 - **Количество подписчиков:** несколько distinct callbacks одновременно; следующий не заменяет предыдущий.
@@ -152,49 +152,21 @@
 - **Возвращает:** idempotent unsubscribe.
 - **Не уведомляет:** `clear()` при уже пустой selection; initial selection читается через `get()`.
 
-### `batchUpdates(operation)`
+### `history.batchUpdates(operation)`
 
 - **Аргументы:** synchronous `operation: () => Result`.
 - **Возвращает:** generic `Result`, возвращённый callback.
 - **Исключения:** передаёт исходное исключение operation и transaction/history errors; rollback не выполняется.
 
-Outermost batch вызывает `history.stopCapturing()` до и после, а callback выполняет через `document.transact()`. Nested batch сразу вызывает callback внутри текущей boundary.
-
-### `register(name, handler)`
-
-- **Аргументы:** непустой unique `name: string`; `handler: CommandHandler`.
-- **Возвращает:** `RegisteredCommand` ownership handle.
-- **Исключения:** `Error("Command name is required")` или `Error("Command <name> is already registered")`.
-
-### `execute(name, payload?)`
-
-- **Аргументы:** command `name: string`; optional `payload: unknown`.
-- **Возвращает:** `unknown`, фактический result handler.
-- **Исключения:** `Error("Unknown command <name>")` или исходное исключение handler.
-
-Successful execution обновляет `commands.lastExecuted` и уведомляет command subscribers, но общий editor revision меняется только если соответствующее состояние также вызвало runtime notification.
-
-### `removeCommand(name)`
-
-- **Аргументы:** command `name: string`.
-- **Возвращает:** `void`.
-- **Исключения:** отсутствуют; missing name безопасен.
-
-Удаление built-in command разрешено. После этого соответствующий convenience method может выбросить `Unknown command`.
-
-### `deleteSelection()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** errors command `selection.delete`; `Unknown command`, если registration удалена.
+Outermost batch вызывает `stopCapturing()` до и после и выполняет callback в одной CRDT transaction. Nested batch сразу вызывает callback внутри текущей boundary.
 
 ### `load(snapshot)`
 
 - **Аргументы:** `snapshot: EditorSnapshotUpdate` schema version 6.
 - **Возвращает:** `void`.
-- **Исключения:** unknown command, invalid command payload, validation supplied sections и manager/CRDT write errors.
+- **Исключения:** document-model validation и CRDT write errors.
 
-Выполняет `document.load` command. Successful load очищает history, делая загруженное состояние новым baseline.
+Передаёт snapshot напрямую в document-model без block/element processors, затем очищает history и делает загруженное состояние новым baseline. Migration, remapping и repair выполняются явно до `load()`.
 
 Статический и runtime-контракты требуют literal `version: 6`. Любое другое значение отклоняется до записи supplied sections.
 
@@ -204,29 +176,17 @@ Successful execution обновляет `commands.lastExecuted` и уведом�
 - **Возвращает:** complete detached `EditorSnapshot` schema version 6.
 - **Исключения:** document materialization/validation/conversion errors.
 
-### `undo()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** unknown `history.undo` command или CRDT undo errors.
-
-### `redo()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `void`.
-- **Исключения:** unknown `history.redo` command или CRDT redo errors.
-
 ### `destroy()`
 
 - **Аргументы:** отсутствуют.
 - **Возвращает:** `Promise<void>`, завершённый после runtime cleanup, отключения всех providers и уничтожения CRDT document.
 - **Исключения:** передаёт ошибку runtime cleanup, provider disconnect или CRDT destroy; subsequent manager cleanup после синхронной ошибки не гарантирован, но CRDT destroy выполняется через `finally`.
 
-Удаляет owned subscriptions, затем уничтожает links, elements, blocks, block registry и history, очищает commands и listeners и ожидает `document.crdt.destroy()`.
+Удаляет owned subscriptions, затем уничтожает links, elements, blocks, block registry и history, очищает commands и listeners и ожидает `crdt.destroy()`.
 
 ## Factory
 
-### `createRivtoEditor(options = {})`
+### `createRivtoEditor(options)`
 
 - **Аргументы:** optional `CreateRivtoEditorOptions`.
 - **Возвращает:** новый `EditorRuntime`.

@@ -17,7 +17,6 @@ import { findEdgelessRuntime } from "./edgeless-runtime";
  * the next click means "select this block".
  */
 export function registerBlockSelection(reactEditor: ReactEditor): () => void {
-  const { editor } = reactEditor;
   const setModifierDown = (value: boolean) => {
     const root = reactEditor.events.getRoot();
     if (!root) return;
@@ -81,21 +80,21 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     const blockId = block?.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!block || !blockId || !root.contains(block)) return false;
 
-    const selection = editor.selection.get();
+    const selection = reactEditor.selection.get();
     // A caret starts a new block selection; carrying its partial range forward
     // creates a mixed selection that the next native selectionchange clears.
     const current = isStructuralSelection(selection) ? selection : undefined;
     const next = toggleBlockSelection(
-      editor.blocks.getBlocks(),
+      reactEditor.blocks.getBlocks(),
       current,
       blockId,
-      editor.mode.get() === "edgeless",
-      (candidate) => reactEditor.blocks.hasListProps("collapse") && candidate.listProps.collapsed === true,
+      reactEditor.mode.get() === "edgeless",
+      (candidate) => reactEditor.blockListProps.has("collapse") && candidate.listProps.collapsed === true,
     );
-    const canvas = editor.mode.get() === "edgeless" ? findEdgelessRuntime(reactEditor) : undefined;
+    const canvas = reactEditor.mode.get() === "edgeless" ? findEdgelessRuntime(reactEditor) : undefined;
     if (next && canvas) canvas.setBlocks(next);
-    else if (next) editor.selection.set(next);
-    else editor.selection.clear();
+    else if (next) reactEditor.selection.set(next);
+    else reactEditor.selection.clear();
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });
     return true;

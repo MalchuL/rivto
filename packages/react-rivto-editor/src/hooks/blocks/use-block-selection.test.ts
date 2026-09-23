@@ -14,7 +14,7 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
   test("snapshot identity is stable until set actually changes", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" }).id;
     const caret = createCaretSelection(id, 1);
     reactEditor.selection.set(caret);
     const snapshot = editor.selection.snapshot();
@@ -27,7 +27,7 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
   test("caret selection does not mark the block selected", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" }).id;
     reactEditor.selection.set(createCaretSelection(id, 1));
     expect(editor.selection.isBlockSelected(id)).toBe(false);
     expect(editor.selection.snapshot()).toMatchObject({
@@ -41,8 +41,8 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
   test("whole-block selection marks only member ids", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId);
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
     editor.selection.set(createStructuralSelection([firstId]));
     expect(editor.selection.isBlockSelected(firstId)).toBe(true);
     expect(editor.selection.isBlockSelected(secondId)).toBe(false);
@@ -54,7 +54,7 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
   test("selection set does not bump the React editor revision", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" });
+    const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" }).id;
     const before = reactEditor.revision;
     reactEditor.selection.set(
       createTextSelection([{ id, length: 4 }], { blockId: id, offset: 0 }, { blockId: id, offset: 2 })!,

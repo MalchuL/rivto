@@ -2,58 +2,13 @@
 
 Yjs-адаптер хранит правила преобразования в одном месте. Менеджерам документа не приходится использовать `instanceof Y.Map` или зависеть от нативных конструкторов.
 
-## `YjsInstantiator`
+## Detached-конструкторы
 
-Реализует публичный `CRDTInstantiator` и доступен через `YjsDoc.instantiator`.
-
-### `createArray()`
-
-- **Аргументы:** отсутствуют; generic `Item extends CRDTType` задаётся вызывающим кодом.
-- **Возвращает:** `CRDTArray<Item>`, фактически новый detached-`YjsArray<Item>`.
-- **Исключения:** собственных проверок нет; возможная ошибка конструктора Yjs передаётся.
-
-Возвращает detached-`YjsArray` поверх нового `Y.Array`.
-
-### `createMap()`
-
-- **Аргументы:** отсутствуют; generic `Schema extends object` задаётся вызывающим кодом.
-- **Возвращает:** `CRDTMap<Schema>`, фактически новый detached-`YjsMap<Schema>`.
-- **Исключения:** собственных проверок нет; возможная ошибка конструктора Yjs передаётся.
-
-Возвращает detached-`YjsMap` поверх нового `Y.Map`.
-
-### `createText()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** `CRDTText`, фактически новый detached-`YjsText`.
-- **Исключения:** собственных проверок нет; возможная ошибка конструктора Yjs передаётся.
-
-Возвращает detached-`YjsText` поверх нового `Y.Text`.
-
-### `convertBasicToCRDTType(item, options?)`
-
-- **Аргументы:** `item: BasicType`; необязательный `options: WrapBasicTypeToCRDTOptions`.
-- **Возвращает:** `CRDTType`.
-- **Исключения:** `YjsConvertError` для неподдерживаемого значения; также передаёт ошибки нативных Yjs-конструкторов.
-
-Делегирует общему преобразователю `wrapBasicTypeToCRDTType`. По умолчанию все уровни совместные: строки становятся `YjsText`, массивы — `YjsArray`, а JS `Map` и обычные объекты — `YjsMap`.
-
-Флаги wrapping можно отключить для атомарных значений. Если wrapping родительского контейнера отключён, вложенные уровни тоже остаются обычными: нативные Yjs-типы нельзя хранить внутри неинтегрированного plain-контейнера.
-
-```ts
-const value = document.instantiator.convertBasicToCRDTType(
-  { label: "обычная строка", tags: ["one"] },
-  { string2crdttext: false },
-);
-```
-
-### `isPlainRecord(value)`
-
-- **Аргументы:** `value: BasicType`.
-- **Возвращает:** `boolean`.
-- **Исключения:** обычные объекты не приводят к ошибке; exotic object/Proxy может передать ошибку `Object.getPrototypeOf`, `Object.values` или чтения свойства.
-
-Делегирует `isDeepPlainRecord`. Разрешены ациклические объекты из примитивов, массивов и вложенных plain records. Экземпляры классов, функции, символы, `undefined`, неподдерживаемые объекты и циклы запрещены.
+`YjsDoc.createDetachedArray()`, `createDetachedMap()` и `createDetachedText()`
+напрямую создают соответствующие wrapper-классы. Публичная точка входа также
+экспортирует `YjsArray`, `YjsMap` и `YjsText` для кода, который сознательно
+выбирает Yjs. Рекурсивное преобразование basic values остаётся внутренней
+деталью адаптера и используется `YjsDoc.fromJSON()`.
 
 ## Преобразование wrapper
 
@@ -89,7 +44,7 @@ const value = document.instantiator.convertBasicToCRDTType(
 - **Возвращает:** `CRDTType`.
 - **Исключения:** передаёт `YjsConvertError`, ошибки wrapping и ошибки нативных Yjs-конструкторов.
 
-Комбинирует `convertBasicTypeToYJS` и `wrapYJStoCRDT`. Это основная точка входа для `YjsInstantiator` и `YjsDoc.fromJSON()`.
+Комбинирует `convertBasicTypeToYJS` и `wrapYJStoCRDT`. Эту внутреннюю функцию использует `YjsDoc.fromJSON()`.
 
 ### `convertBasicTypeToYJS(item, options?)`
 

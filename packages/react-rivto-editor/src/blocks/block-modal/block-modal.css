@@ -1,0 +1,46 @@
+/*
+ * Structural rules for the shared container block modal (`BlockModal`).
+ *
+ * The modal is a native `<dialog>` that stays mounted while switching between
+ * inline (`show()`) and top-layer (`showModal()`) presentation, so selection,
+ * editing, and drag registrations survive expansion. Tailwind utilities cannot
+ * target the `:modal` and `::backdrop` pseudo-classes of that element or
+ * correct the user-agent dialog centering, so those rules live here. Colors
+ * come from the shared `--rivto-*` tokens.
+ */
+.rivto-block-modal {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  max-height: none;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  overflow: visible;
+}
+
+/* Correct the native dialog's inline centering so root controls align. */
+.page-surface > .rivto-block-modal:not(:modal) > .page-block {
+  position: relative;
+}
+
+.rivto-block-modal:modal {
+  position: fixed;
+  inset: 3vh 3vw;
+  width: 94vw;
+  height: 94vh;
+  /* Extra right padding leaves room for the expand button in the right slot. */
+  padding: 24px 64px 24px 24px;
+  border-radius: 16px;
+  background: var(--rivto-background);
+  overflow: auto;
+  box-shadow: 0 24px 80px rgb(9 30 66 / 30%);
+}
+
+.rivto-block-modal::backdrop {
+  background: rgb(9 30 66 / 55%);
+}

@@ -1,5 +1,5 @@
-import type { EditorBlock, EditorBlockInput } from "@chulane/rivto";
-import { useBlock } from "../../../hooks";
+import type { EditorBlockInput } from "@chulane/rivto";
+import { useBlockNode } from "../../../hooks";
 import type { ReactEditorExtension } from "../../../managers";
 
 export const ERROR_BLOCK_TYPE = "rivto.error";
@@ -16,7 +16,7 @@ const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (charact
  * block is no longer present.
  */
 export function ErrorBlock({ blockId }: { readonly blockId: string }) {
-  const { block } = useBlock(blockId);
+  const { block } = useBlockNode(blockId);
   if (!block) return null;
   return (
     <div role="alert" data-error-block="true">
@@ -29,11 +29,11 @@ export function ErrorBlock({ blockId }: { readonly blockId: string }) {
 /**
  * Creates a visible error-block input while preserving the rejected subtree.
  *
- * @param block - Complete invalid clipboard block to preserve for diagnosis.
+ * @param block - Invalid clipboard input to preserve for diagnosis.
  * @param error - Validation failure reported by clipboard preparation.
  * @returns A new Error block input containing a detached copy of the original.
  */
-export const createErrorBlockInput = (block: EditorBlock, error: unknown): EditorBlockInput => ({
+export const createErrorBlockInput = (block: EditorBlockInput, error: unknown): EditorBlockInput => ({
   type: ERROR_BLOCK_TYPE,
   content: error instanceof Error ? error.message : "Invalid block data",
   props: { originalBlock: structuredClone(block) },
@@ -47,7 +47,7 @@ export const createErrorBlockInput = (block: EditorBlock, error: unknown): Edito
 export const errorBlockExtension = (): ReactEditorExtension => ({
   id: "block.error",
   setup: (reactEditor) => {
-    reactEditor.blocks.register({
+    reactEditor.blockTypes.register({
       definition: { type: ERROR_BLOCK_TYPE, title: "Invalid block" },
       render: ErrorBlock,
     });

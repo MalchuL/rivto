@@ -47,7 +47,7 @@ demo App                  wires presets, seeds data, custom blocks
 **Attention**
 
 - Three factories in App; only some use `edgelessVisualsExtension`.
-- Seed uses `editor.execute("edgeless.visual.*")` and `editor.elements.insertElement` for cards — different APIs, different layers.
+- Seed uses `editor.commands.execute("edgeless.visual.*")` and `editor.elements.insertElement` for cards — different APIs, different layers.
 - `standardPreset` = page + selection/history/slash/…; drag and edgeless are opt-in
 Visual toolbar/controller = separate extension.
 - Ask: what dies if you remove each extension from the array?
@@ -141,7 +141,7 @@ Visual toolbar/controller = separate extension.
 
 **Attention**
 
-- Public API for apps: `editor.execute("edgeless.visual.create", …)`.
+- Public API for apps: `editor.commands.execute("edgeless.visual.create", …)`.
 - Internal UI: `controller.create()` — same method, not exported on editor.
 - Create always: insert element → `selection.set([id])` → return id.
 - Tool state is session-local on controller, not in document snapshot.
@@ -159,7 +159,7 @@ Visual toolbar/controller = separate extension.
 | Layer                                   | Use for                                      |
 | --------------------------------------- | -------------------------------------------- |
 | `editor.blocks.*` / `editor.elements.*` | Raw document CRUD                            |
-| `editor.execute(name, payload)`         | Named behaviors (history-aware when wrapped) |
+| `editor.commands.execute(name, payload)` | Named behaviors (history-aware when wrapped) |
 | `EdgelessVisualController`              | Visual domain inside React extension         |
 | Event/keyboard managers                 | Input routing                                |
 
@@ -306,7 +306,7 @@ Use after each pass. Answers at the bottom — don’t peek.
 
 **A2.** `createFixtureEditor` has no visuals extension. You open `?conflict=block`. Do block cards still move/resize on the edgeless canvas?
 
-**A3.** Why can `editor.elements.insertElement({ type: "block", ... })` work without `edgelessVisualsExtension`, but `editor.execute("edgeless.visual.create", { kind: "rectangle" })` cannot?
+**A3.** Why can `editor.elements.insertElement({ type: "block", ... })` work without `edgelessVisualsExtension`, but `editor.commands.execute("edgeless.visual.create", { kind: "rectangle" })` cannot?
 
 **A4.** Demo seeds cards with explicit `id: listId` on the element. Visual seed uses `execute` and does not pass ids. Who assigns visual ids?
 
@@ -435,7 +435,7 @@ Use after each pass. Answers at the bottom — don’t peek.
 ## E
 
 **E1.** `create` ends with `selection.set([id])`.  
-**E2.** No public controller; use `editor.execute("edgeless.visual.create", payload)`.  
+**E2.** No public controller; use `editor.commands.execute("edgeless.visual.create", payload)`.
 **E3.** No — session defaults, not snapshot.  
 **E4.** First Escape cancels gesture (tool stays place); second (no gesture) → tool select (and related Escape handlers by priority).  
 **E5.** Element exists in data, but without VisualLayer there’s no visual chrome/renderer — you don’t get a normal shape UI to resize.

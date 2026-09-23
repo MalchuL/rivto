@@ -7,6 +7,7 @@ import {
 } from "./dom-markers";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
+const MARKDOWN_CODE_EDITOR_CLASS = "markdown-code-editor";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -127,6 +128,36 @@ test("scrolls Markdown code without opening the raw editor", async ({ page }) =>
   await expect.poll(() => editor.textContent()).toContain("ZABC");
   await expect.poll(async () => (await editor.textContent())?.length)
     .toBeLessThanOrEqual((sourceBeforeEdit?.length ?? 0) + 3);
+});
+
+test("preserves a newer Markdown edit when code input arrives before React rerenders", async ({ page }) => {
+  const block = page.locator(blockTypeSelector("paragraph")).first();
+  const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!id) throw new Error("Expected block ID");
+  const editor = block.locator(":scope > .page-block-row .markdown-editor");
+  const code = block.locator(`.${MARKDOWN_CODE_EDITOR_CLASS}`);
+  const source = "```text\nold\n```\n\nOriginal tail";
+  const newer = "```text\nold\n```\n\nNewer tail";
+
+  await page.evaluate(({ blockId, content }) => {
+    const core = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    core.blocks.updateBlock(blockId, { content });
+  }, { blockId: id, content: source });
+  await expect(code).toHaveText("old");
+
+  // An external write and the existing input handler can run in one browser
+  // turn. React has not committed a new callback yet, so this catches edits
+  // built from the previous render's whole Markdown string.
+  // If this fails, read the current block content inside updateCode before
+  // replacing code; also recheck the fence position if earlier text shifted.
+  await code.evaluate((element, { blockId, content }) => {
+    const core = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    core.blocks.updateBlock(blockId, { content });
+    element.textContent = "edited";
+    element.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  }, { blockId: id, content: newer });
+
+  await expect(editor).toHaveText("```text\nedited\n```\n\nNewer tail");
 });
 
 test("filters typo queries, converts in place, and undoes query removal with conversion", async ({ page }) => {

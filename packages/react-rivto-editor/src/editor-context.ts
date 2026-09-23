@@ -1,5 +1,4 @@
 import { createContext, useContext } from "react";
-import type { RivtoEditorApi as Editor } from "@chulane/rivto";
 import type { ReactEditor } from "./types";
 
 /**
@@ -9,9 +8,7 @@ import type { ReactEditor } from "./types";
  * Both references stay stable for the lifetime of the mounted EditorView.
  */
 export interface EditorContextValue {
-  /** Runtime used for document access, commands, mode, and local selection. */
-  readonly editor: Editor;
-  /** React rendering and extension runtime layered over the core editor. */
+  /** React rendering and extension runtime. */
   readonly reactEditor: ReactEditor;
 }
 
@@ -27,7 +24,7 @@ export const EditorContext = createContext<EditorContextValue | null>(null);
  * Reads the complete internal EditorView context.
  *
  * Public hooks use this helper so the provider requirement and error message
- * stay consistent. Consumers should normally use `useEditor`, `useBlock`, or
+ * stay consistent. Consumers should normally use `useReactEditor`, `useBlock`, or
  * another focused hook rather than depending on the revision implementation.
  *
  * @returns The nearest EditorView's stable editor references.

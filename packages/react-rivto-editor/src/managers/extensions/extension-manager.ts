@@ -30,8 +30,7 @@ export class ExtensionManager implements ExtensionsCapability {
   /**
    * Creates the mode-independent extension lifecycle owner.
    *
-   * @param reactEditor - Complete owning runtime. Manager dependencies are
-   * resolved from this owner when an operation runs.
+   * @param reactEditor - Owning React runtime supplied during extension setup.
    */
   constructor(private readonly reactEditor: ReactEditorImpl) {}
 

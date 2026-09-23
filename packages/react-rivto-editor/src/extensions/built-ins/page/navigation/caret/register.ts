@@ -40,8 +40,7 @@ function isNativeControl(target: EventTarget | null): boolean {
  * @returns No value.
  */
 export function registerCaretNavigation(reactEditor: ReactEditor): void {
-  const { editor } = reactEditor;
-  const lengthOf = (id: string) => editor.blocks.getBlock(id)?.content.length ?? 0;
+  const lengthOf = (id: string) => reactEditor.blocks.getBlockNode(id)?.content.length ?? 0;
   const movePlain = (root: HTMLElement, direction: "left" | "right" | VerticalDirection): boolean => {
     const selection = currentNavigationSelection(reactEditor.selection);
     const item = selection;
@@ -54,13 +53,13 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
       const towardStart = direction === "left" || direction === "up";
       setNavigationCaret(root, reactEditor, textSelectionEdge(
         reactEditor,
-        editor,
+        reactEditor,
         item,
         towardStart ? "start" : "end",
       ));
       handled = true;
     } else if (direction === "left" || direction === "right") {
-      const block = editor.blocks.getBlock(ends.head.blockId);
+      const block = reactEditor.blocks.getBlockNode(ends.head.blockId);
       const adjacent = direction === "left" && ends.head.offset === 0
         ? findPreviousEditableBlock(scope, ends.head.blockId)
         : direction === "right" && ends.head.offset === (block?.content.length ?? -1)
@@ -79,7 +78,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
         setNavigationCaret(root, reactEditor, moved);
         handled = true;
       } else {
-        handled = editor.mode.get() === "block" && focusAdjacentEditor(root, direction);
+        handled = reactEditor.mode.get() === "block" && focusAdjacentEditor(root, direction);
       }
     }
     return handled;
@@ -94,7 +93,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     const scope = navigationDomRoot(root, ends.head.blockId);
     const moved = verticalCaretPosition(scope, ends.head, direction);
     if (!moved) return false;
-    const outline = pageEntries(navigationOutlineBlocks(editor, ends.head.blockId)).map(({ block }) => ({
+    const outline = pageEntries(navigationOutlineBlocks(reactEditor, ends.head.blockId)).map(({ block }) => ({
       id: block.id,
       length: block.content.length,
     }));

@@ -21,18 +21,17 @@ import type { ReactEditor } from "../../types";
  * @param reactEditor - Runtime providing writing factories and list-prop flags.
  * @param block - Source block whose content is split.
  * @param splitAt - Inclusive UTF-16 offset kept on the source block.
- * @returns Identifier of the inserted following block.
+ * @returns Complete inserted block.
  */
 export function splitBlockAt(
   reactEditor: ReactEditor,
   block: EditorBlock,
   splitAt: number,
-): string {
-  const { editor } = reactEditor;
-  const listActive = reactEditor.blocks.hasListProps("list");
+): EditorBlock {
+  const listActive = reactEditor.blockListProps.has("list");
   const clamped = Math.max(0, Math.min(splitAt, block.content.length));
-  editor.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
-  const nextBlockId = reactEditor.blocks.insertBlock({
+  reactEditor.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
+  const nextBlock = reactEditor.blocks.insertBlock({
     ...reactEditor.createDefaultBlock(),
     ...(listActive ? { listProps: {
       type: block.listProps.type === "checkbox"
@@ -42,8 +41,8 @@ export function splitBlockAt(
     } } : {}),
     content: block.content.slice(clamped),
   }, block.id);
-  reactEditor.selection.set(createCaretSelection(nextBlockId, 0));
-  return nextBlockId;
+  reactEditor.selection.set(createCaretSelection(nextBlock.id, 0));
+  return nextBlock;
 }
 
 /**
@@ -71,7 +70,7 @@ export function mergeBlocks(
   targetId: string,
   sourceId: string,
 ): number {
-  const joinOffset = reactEditor.editor.blocks.mergeBlocks(targetId, sourceId);
+  const joinOffset = reactEditor.blocks.mergeBlocks(targetId, sourceId);
   reactEditor.selection.set(createCaretSelection(targetId, joinOffset));
   return joinOffset;
 }
@@ -84,5 +83,5 @@ export function mergeBlocks(
  * @returns Nothing; identity is preserved.
  */
 export function resetToWritingType(reactEditor: ReactEditor, blockId: string): void {
-  reactEditor.editor.blocks.setBlockType(blockId, reactEditor.createDefaultBlock().type);
+  reactEditor.blocks.setBlockType(blockId, reactEditor.createDefaultBlock().type);
 }

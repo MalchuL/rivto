@@ -10,17 +10,21 @@ import {
   createContext,
   useContext,
   useEffect,
+  useId,
   useMemo,
-  useRef,
   useState,
   type ChangeEvent,
   type KeyboardEvent,
   type MouseEvent,
-  type ReactNode,
 } from "react";
-import type { EditorBlock } from "@chulane/rivto";
+import type { EditorBlock, EditorBlockNode } from "@chulane/rivto";
 import { z } from "zod";
-import { useBlockEditing, useReactEditor } from "../../hooks";
+import { ArrowDownIcon } from "lucide-react";
+import { useBlock, useBlockEditing, useReactEditor } from "../../hooks";
+import { Button } from "../../components/ui/button";
+import { Checkbox } from "../../components/ui/checkbox";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
 import type { BlockWrapperProps } from "../../blocks";
 import { ContainerBlockView } from "../../views";
 import { createBlockViewContext } from "../../views/context";
@@ -34,12 +38,14 @@ import {
   TODO_STORAGE_DROP_FIELD_CLASS,
   TODO_STORAGE_DROP_ICON_CLASS,
   TODO_STORAGE_FILTER_GROUP_CLASS,
-  TODO_STORAGE_MENU_CLASS,
-  TODO_STORAGE_MENU_PANEL_CLASS,
+  TODO_STORAGE_FILTER_LEGEND_CLASS,
+  TODO_STORAGE_FILTER_OPTION_CLASS,
   TODO_STORAGE_SEARCH_CLASS,
   TODO_STORAGE_SUMMARY_CLASS,
+  TODO_STORAGE_SUMMARY_STATS_CLASS,
   TODO_STORAGE_TOOLBAR_CLASS,
 } from "./todo-item-classes";
+import { TodoStorageMenu } from "./todo-storage-menu";
 import { TODO_STATUS_LABELS, TodoStatusOrder } from "./todo-status-order";
 
 /** Persisted native type installed by `todoItemExtension`. */
@@ -105,7 +111,7 @@ export function normalizeTodoSearch(value: string): string {
 
 /** Reports whether one TODO satisfies search plus every active filter category. */
 export function matchesTodoStorage(
-  block: EditorBlock,
+  block: Pick<EditorBlockNode, "type" | "props" | "content">,
   query: string,
   filters: TodoStorageFilters,
 ): boolean {
@@ -156,16 +162,42 @@ function toggleFilter<T>(current: ReadonlySet<T>, value: T): ReadonlySet<T> {
   return next;
 }
 
+/**
+ * Renders one labelled filter checkbox using the shadcn Checkbox primitive.
+ *
+ * @param props - Checkbox identity, state, label text, and toggle callback.
+ * @param props.id - Unique DOM id linking the label to the checkbox.
+ * @param props.checked - Whether the option is currently active.
+ * @param props.label - Visible text that also names the checkbox.
+ * @param props.onToggle - Invoked when the user flips the option.
+ * @returns A label row containing an accessible checkbox.
+ */
+function FilterOption({ id, checked, label, onToggle }: {
+  readonly id: string;
+  readonly checked: boolean;
+  readonly label: string;
+  readonly onToggle: () => void;
+}) {
+  return (
+    <Label className={TODO_STORAGE_FILTER_OPTION_CLASS} htmlFor={id}>
+      <Checkbox id={id} checked={checked} onCheckedChange={onToggle} />
+      {label}
+    </Label>
+  );
+}
+
 /** Supplies local storage state and a card boundary around the shared subtree. */
 function TodoStorageState({ block, children }: BlockWrapperProps) {
   const reactEditor = useReactEditor();
+  const { block: tree } = useBlock(block.id);
+  const childBlocks = tree?.children ?? [];
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<TodoStorageFilters>({
     statuses: new Set(),
     priorities: new Set(),
     projects: new Set(),
   });
-  const projects = deriveTodoProjects(block.children);
+  const projects = deriveTodoProjects(childBlocks);
   const projectKey = JSON.stringify(projects);
   useEffect(() => {
     const available = new Set(projects);
@@ -179,17 +211,17 @@ function TodoStorageState({ block, children }: BlockWrapperProps) {
 
   useEffect(() => {
     const props = block.props as TodoStorageProps;
-    if (props.orderMode !== "status") return;
-    const desired = orderTodoStorageChildren(block.children, props.statusOrder);
-    const current = block.children.map(({ id }) => id);
+    if (!tree || props.orderMode !== "status") return;
+    const desired = orderTodoStorageChildren(childBlocks, props.statusOrder);
+    const current = childBlocks.map(({ id }) => id);
     if (desired.some((id, index) => id !== current[index])) {
-      reactEditor.editor.batchUpdates(() => {
+      reactEditor.history.batchUpdates(() => {
         desired.forEach((id, index) => {
-          reactEditor.editor.blocks.moveBlock(id, index ? desired[index - 1]! : null);
+          reactEditor.blocks.moveBlock(id, index ? desired[index - 1]! : null);
         });
       });
     }
-  }, [block.children, block.props.orderMode, block.props.statusOrder, reactEditor]);
+  }, [block.props, childBlocks, reactEditor, tree]);
 
   const value = useMemo<TodoStorageContextValue>(() => ({
     storageId: block.id,
@@ -213,31 +245,16 @@ export function TodoStorageBlockWrapper({ block, children }: BlockWrapperProps) 
     : children;
 }
 
-/** Renders search, native filter menus, and persisted status-order controls. */
+/** Renders search, disclosure filter menus, and persisted status-order controls. */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   const reactEditor = useReactEditor();
   const editing = useBlockEditing<TodoStorageProps>(blockId, { textEdit: false });
   const block = editing.block;
   const context = useContext(TodoStorageContext);
-  const filterMenu = useRef<HTMLDetailsElement>(null);
-  const orderMenu = useRef<HTMLDetailsElement>(null);
-
-  useEffect(() => {
-    const ownerDocument = reactEditor.events.getRoot()?.ownerDocument;
-    if (!ownerDocument) return;
-    /** Closes each open menu when the pointer lands outside that menu. */
-    const closeOutside = (event: PointerEvent): void => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      [filterMenu.current, orderMenu.current].forEach((menu) => {
-        if (menu?.open && !menu.contains(target)) menu.open = false;
-      });
-    };
-    ownerDocument.addEventListener("pointerdown", closeOutside, true);
-    return () => ownerDocument.removeEventListener("pointerdown", closeOutside, true);
-  }, [reactEditor]);
+  const fieldId = useId();
 
   if (!block || !context) return null;
+  const childIds = block.childIds;
   const props = block.props as TodoStorageProps;
 
   /** Persists a validated ordering-property patch. */
@@ -260,7 +277,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
 
   /** Inserts the first writing block through the registered container view. */
   const startWriting = (event: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>): void => {
-    if (block.children.length || event.defaultPrevented) return;
+    if (childIds.length || event.defaultPrevented) return;
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
@@ -270,19 +287,22 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   };
 
   if (block.listProps.collapsed === true) {
-    const itemCount = block.children.length;
+    const itemCount = childIds.length;
     return (
       <div {...editing.attributes} className={TODO_STORAGE_SUMMARY_CLASS}>
         <strong>TODO storage</strong>
-        <span>{itemCount} {itemCount === 1 ? "item" : "items"}</span>
+        <span className={TODO_STORAGE_SUMMARY_STATS_CLASS}>{itemCount} {itemCount === 1 ? "item" : "items"}</span>
       </div>
     );
   }
 
+  // Menus are in-flow disclosure panels rather than portalled popovers so the
+  // sortable status rows keep valid document offsets for keyboard dragging;
+  // see `TodoStorageMenu` for the dnd-kit constraint behind this choice.
   return (
     <div {...editing.attributes} className={TODO_STORAGE_CONTENT_CLASS}>
       <div {...editing.preventTextEditingAttributes} className={TODO_STORAGE_TOOLBAR_CLASS}>
-        <input
+        <Input
           className={TODO_STORAGE_SEARCH_CLASS}
           type="search"
           aria-label="Search TODOs"
@@ -290,58 +310,53 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
           value={context.query}
           onChange={(event: ChangeEvent<HTMLInputElement>) => context.setQuery(event.currentTarget.value)}
         />
-        <details ref={filterMenu} className={TODO_STORAGE_MENU_CLASS}>
-          <summary>Filter</summary>
-          <div className={TODO_STORAGE_MENU_PANEL_CLASS}>
-            <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
-              <legend>Status</legend>
-              {TODO_STATUSES.map((status) => <label key={status}>
-                <input
-                  type="checkbox"
-                  checked={context.filters.statuses.has(status)}
-                  onChange={() => updateFilters("statuses", toggleFilter(context.filters.statuses, status))}
-                /> {TODO_STATUS_LABELS[status]}
-              </label>)}
-            </fieldset>
-            <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
-              <legend>Priority</legend>
-              {PRIORITIES.map((priority) => <label key={priority}>
-                <input
-                  type="checkbox"
-                  checked={context.filters.priorities.has(priority)}
-                  onChange={() => updateFilters("priorities", toggleFilter(context.filters.priorities, priority))}
-                /> P{priority}
-              </label>)}
-            </fieldset>
-            {context.projects.length > 0 && <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
-              <legend>Project</legend>
-              {context.projects.map((project) => <label key={project || "no-project"}>
-                <input
-                  type="checkbox"
-                  checked={context.filters.projects.has(project)}
-                  onChange={() => updateFilters("projects", toggleFilter(context.filters.projects, project))}
-                /> {project || "No project"}
-              </label>)}
-            </fieldset>}
-            <button className={TODO_STORAGE_CLEAR_CLASS} type="button" onClick={clearFilters}>Clear filters</button>
-          </div>
-        </details>
-        <details ref={orderMenu} className={TODO_STORAGE_MENU_CLASS}>
-          <summary>Order</summary>
-          <div className={TODO_STORAGE_MENU_PANEL_CLASS}>
-            <label><input
-              type="checkbox"
-              checked={props.orderMode === "status"}
-              onChange={(event) => updateProps({ orderMode: event.currentTarget.checked ? "status" : "manual" })}
-            /> Status</label>
-            {props.orderMode === "status" && <TodoStatusOrder
-              order={props.statusOrder}
-              onChange={(statusOrder) => updateProps({ statusOrder })}
-            />}
-          </div>
-        </details>
+        <TodoStorageMenu label="Filter" panelLabel="Filters">
+          <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
+            <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Status</legend>
+            {TODO_STATUSES.map((status) => <FilterOption
+              key={status}
+              id={`${fieldId}-status-${status}`}
+              checked={context.filters.statuses.has(status)}
+              label={TODO_STATUS_LABELS[status]}
+              onToggle={() => updateFilters("statuses", toggleFilter(context.filters.statuses, status))}
+            />)}
+          </fieldset>
+          <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
+            <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Priority</legend>
+            {PRIORITIES.map((priority) => <FilterOption
+              key={priority}
+              id={`${fieldId}-priority-${priority}`}
+              checked={context.filters.priorities.has(priority)}
+              label={`P${priority}`}
+              onToggle={() => updateFilters("priorities", toggleFilter(context.filters.priorities, priority))}
+            />)}
+          </fieldset>
+          {context.projects.length > 0 && <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
+            <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Project</legend>
+            {context.projects.map((project, index) => <FilterOption
+              key={project || "no-project"}
+              id={`${fieldId}-project-${index}`}
+              checked={context.filters.projects.has(project)}
+              label={project || "No project"}
+              onToggle={() => updateFilters("projects", toggleFilter(context.filters.projects, project))}
+            />)}
+          </fieldset>}
+          <Button variant="outline" size="sm" className={TODO_STORAGE_CLEAR_CLASS} type="button" onClick={clearFilters}>Clear filters</Button>
+        </TodoStorageMenu>
+        <TodoStorageMenu label="Order" panelLabel="Ordering">
+          <FilterOption
+            id={`${fieldId}-order-status`}
+            checked={props.orderMode === "status"}
+            label="Status"
+            onToggle={() => updateProps({ orderMode: props.orderMode === "status" ? "manual" : "status" })}
+          />
+          {props.orderMode === "status" && <TodoStatusOrder
+            order={props.statusOrder}
+            onChange={(statusOrder) => updateProps({ statusOrder })}
+          />}
+        </TodoStorageMenu>
       </div>
-      {block.children.length === 0 && (
+      {childIds.length === 0 && (
         <div
           {...editing.preventTextEditingAttributes}
           className={TODO_STORAGE_DROP_FIELD_CLASS}
@@ -351,7 +366,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
           onClick={startWriting}
           onKeyDown={startWriting}
         >
-          <span className={TODO_STORAGE_DROP_ICON_CLASS} aria-hidden="true">↓</span>
+          <span className={TODO_STORAGE_DROP_ICON_CLASS} aria-hidden="true"><ArrowDownIcon /></span>
           <span className={TODO_STORAGE_DROP_COPY_CLASS}>
             <strong>Drag a task here</strong>
             <small>Drop it inside this storage</small>
@@ -363,10 +378,10 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
 }
 
 /** Hides a direct TODO child when its owning storage presentation rejects it. */
-export function TodoStorageVisibility({ block, children }: { readonly block: EditorBlock; readonly children: ReactNode }) {
+export function TodoStorageVisibility({ block, children }: BlockWrapperProps) {
   const reactEditor = useReactEditor();
   const context = useContext(TodoStorageContext);
-  const directChild = context && reactEditor.editor.blocks.getParentId(block.id) === context.storageId;
+  const directChild = context && reactEditor.blocks.getParentId(block.id) === context.storageId;
   if (directChild && !matchesTodoStorage(block, context.query, context.filters)) return null;
   return children;
 }

@@ -34,8 +34,8 @@ describe("edgeless block element reconciliation", () => {
   test("avoids only block cards when reconciling new ranges and supports opt-out", () => {
     const editor = createRivtoEditor();
     const reactEditor = createRuntime(editor);
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, first);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, first).id;
     editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, separator);
     editor.elements.insertElement({ type: "rectangle", frame: { x: 60, y: 60, width: 1000, height: 1000 }, zIndex: 0 });
     reconcileBlockElements(reactEditor);
@@ -48,8 +48,8 @@ describe("edgeless block element reconciliation", () => {
 
     const overlapEditor = createRivtoEditor();
     const overlapRuntime = createRuntime(overlapEditor);
-    const left = overlapEditor.blocks.insertBlock({ type: "paragraph" });
-    const split = overlapEditor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, left);
+    const left = overlapEditor.blocks.insertBlock({ type: "paragraph" }).id;
+    const split = overlapEditor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, left).id;
     overlapEditor.blocks.insertBlock({ type: "paragraph" }, split);
     setBlockElementOverlapAvoidance(overlapRuntime, false);
     reconcileBlockElements(overlapRuntime);
@@ -76,19 +76,19 @@ describe("edgeless block element reconciliation", () => {
   test("automatically reconciles block edits without adding derived history steps", async () => {
     const editor = createRivtoEditor();
     const reactEditor = createRuntime(editor);
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, first);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, first).id;
     await Promise.resolve();
     expect(ranges(editor)).toEqual([[first, last]]);
 
     editor.history.clear();
-    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, first);
+    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, first).id;
     await Promise.resolve();
     expect(ranges(editor)).toEqual([[first], [last]]);
 
-    editor.undo();
+    editor.history.undo();
     await Promise.resolve();
-    expect(editor.blocks.getBlock(separator)).toBeUndefined();
+    expect(editor.blocks.hasBlock(separator)).toBe(false);
     expect(ranges(editor)).toEqual([[first, last]]);
     reactEditor.destroy();
     editor.destroy();
@@ -97,10 +97,10 @@ describe("edgeless block element reconciliation", () => {
   test("keeps consecutive empty paragraphs as ordinary card content", () => {
     const editor = createRivtoEditor();
     const reactEditor = createRuntime(editor);
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, first);
-    const secondEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, empty);
-    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, secondEmpty);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, first).id;
+    const secondEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, empty).id;
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, secondEmpty).id;
 
     reconcileBlockElements(reactEditor);
 
@@ -114,8 +114,8 @@ describe("edgeless block element reconciliation", () => {
   test("ignores nested separators when partitioning document roots", () => {
     const editor = createRivtoEditor();
     const reactEditor = createRuntime(editor);
-    const root = editor.blocks.insertBlock({ type: "paragraph", content: "" });
-    const child = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, root);
+    const root = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
+    const child = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, root).id;
     editor.blocks.indentBlock(child);
     editor.elements.insertElement({ id: "card", type: "block", frame: { x: 1, y: 2, width: 300, height: 120 }, zIndex: 0, props: { startBlockId: root, endBlockId: root } });
 
@@ -129,10 +129,10 @@ describe("edgeless block element reconciliation", () => {
 
   test("elementContainsBlock accepts nested descendants of card roots", () => {
     const editor = createRivtoEditor();
-    const root = editor.blocks.insertBlock({ type: "paragraph", content: "Root" });
-    const child = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, root);
+    const root = editor.blocks.insertBlock({ type: "paragraph", content: "Root" }).id;
+    const child = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, root).id;
     editor.blocks.indentBlock(child);
-    const outsider = editor.blocks.insertBlock({ type: "paragraph", content: "Other" }, root);
+    const outsider = editor.blocks.insertBlock({ type: "paragraph", content: "Other" }, root).id;
     const card = {
       id: "card",
       type: "block" as const,
@@ -153,11 +153,11 @@ describe("edgeless block element reconciliation", () => {
   test("keeps several empty roots inside persisted range boundaries", () => {
     const editor = createRivtoEditor();
     const reactEditor = createRuntime(editor);
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, first);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, first).id;
     editor.elements.insertElement({ id: "card", type: "block", frame: { x: 10, y: 20, width: 300, height: 120 }, zIndex: 0, props: { startBlockId: first, endBlockId: last } });
-    const firstEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, first);
-    const secondEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, firstEmpty);
+    const firstEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, first).id;
+    const secondEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, firstEmpty).id;
 
     reconcileBlockElements(reactEditor);
 
@@ -172,14 +172,14 @@ describe("edgeless block element reconciliation", () => {
   test("keeps the first card on split and the earlier card on merge", async () => {
     const editor = createRivtoEditor();
     const reactEditor = createRuntime(editor);
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first);
-    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middle);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first).id;
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middle).id;
     editor.elements.insertElement({ id: "original-card", type: "block", frame: { x: 410, y: 220, width: 360, height: 180 }, zIndex: 4, props: { startBlockId: first, endBlockId: last } });
     reconcileBlockElements(reactEditor);
     await Promise.resolve();
 
-    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, first);
+    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, first).id;
     await Promise.resolve();
 
     expect(blockIdsOf(editor.elements.getElement("original-card")!, editor.blocks.getRootIds())).toEqual([first]);
@@ -199,12 +199,12 @@ describe("edgeless block element reconciliation", () => {
   test("keeps element identity and geometry when the first range block moves across a separator", async () => {
     const editor = createRivtoEditor();
     const reactEditor = createRuntime(editor);
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first);
-    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middle);
-    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, last);
-    const rightFirst = editor.blocks.insertBlock({ type: "paragraph", content: "Right first" }, separator);
-    const rightLast = editor.blocks.insertBlock({ type: "paragraph", content: "Right last" }, rightFirst);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first).id;
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middle).id;
+    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, last).id;
+    const rightFirst = editor.blocks.insertBlock({ type: "paragraph", content: "Right first" }, separator).id;
+    const rightLast = editor.blocks.insertBlock({ type: "paragraph", content: "Right last" }, rightFirst).id;
     editor.elements.insertElement({ id: "left-card", type: "block", frame: { x: 10, y: 20, width: 300, height: 120 }, zIndex: 1, props: { startBlockId: first, endBlockId: last } });
     editor.elements.insertElement({ id: "right-card", type: "block", frame: { x: 500, y: 200, width: 400, height: 180 }, zIndex: 2, props: { startBlockId: rightFirst, endBlockId: rightLast } });
     reconcileBlockElements(reactEditor);
@@ -224,12 +224,12 @@ describe("edgeless block element reconciliation", () => {
   test("keeps element identity and geometry when the last range block moves across a separator", async () => {
     const editor = createRivtoEditor();
     const reactEditor = createRuntime(editor);
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
-    const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first);
-    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middle);
-    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, last);
-    const rightFirst = editor.blocks.insertBlock({ type: "paragraph", content: "Right first" }, separator);
-    const rightLast = editor.blocks.insertBlock({ type: "paragraph", content: "Right last" }, rightFirst);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first).id;
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middle).id;
+    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, last).id;
+    const rightFirst = editor.blocks.insertBlock({ type: "paragraph", content: "Right first" }, separator).id;
+    const rightLast = editor.blocks.insertBlock({ type: "paragraph", content: "Right last" }, rightFirst).id;
     editor.elements.insertElement({ id: "left-card", type: "block", frame: { x: 10, y: 20, width: 300, height: 120 }, zIndex: 1, props: { startBlockId: first, endBlockId: last } });
     editor.elements.insertElement({ id: "right-card", type: "block", frame: { x: 500, y: 200, width: 400, height: 180 }, zIndex: 2, props: { startBlockId: rightFirst, endBlockId: rightLast } });
     reconcileBlockElements(reactEditor);
@@ -250,15 +250,15 @@ describe("edgeless block element reconciliation", () => {
     const editor = createRivtoEditor();
     const reactEditor = createRuntime(editor);
     const leftIds = ["a", "b", "c", "d", "e"].map((id, index, ids) =>
-      editor.blocks.insertBlock({ id, type: "paragraph", content: id }, index ? ids[index - 1] : undefined));
-    const separator = editor.blocks.insertBlock({ id: "separator", type: SEPARATOR_BLOCK_TYPE, content: "" }, leftIds.at(-1));
-    const rightFirst = editor.blocks.insertBlock({ id: "f", type: "paragraph", content: "f" }, separator);
-    const rightLast = editor.blocks.insertBlock({ id: "g", type: "paragraph", content: "g" }, rightFirst);
+      editor.blocks.insertBlock({ id, type: "paragraph", content: id }, index ? ids[index - 1] : undefined).id);
+    const separator = editor.blocks.insertBlock({ id: "separator", type: SEPARATOR_BLOCK_TYPE, content: "" }, leftIds.at(-1)).id;
+    const rightFirst = editor.blocks.insertBlock({ id: "f", type: "paragraph", content: "f" }, separator).id;
+    const rightLast = editor.blocks.insertBlock({ id: "g", type: "paragraph", content: "g" }, rightFirst).id;
     editor.elements.insertElement({ id: "left-card", type: "block", frame: { x: 10, y: 20, width: 300, height: 120 }, zIndex: 1, props: { startBlockId: leftIds[0]!, endBlockId: leftIds.at(-1)! } });
     editor.elements.insertElement({ id: "right-card", type: "block", frame: { x: 500, y: 200, width: 400, height: 180 }, zIndex: 2, props: { startBlockId: rightFirst, endBlockId: rightLast } });
     reconcileBlockElements(reactEditor);
 
-    editor.batchUpdates(() => {
+    editor.history.batchUpdates(() => {
       editor.blocks.moveBlocks([rightFirst, rightLast], leftIds[2]!, "after");
       editor.blocks.moveBlock(separator, rightLast, "after");
     });
@@ -279,8 +279,8 @@ describe("edgeless block element reconciliation", () => {
       editor,
       extensions: [{
         id: "custom-separator",
-        setup: (runtime) => {
-          runtime.blocks.register({
+        setup: (reactEditor) => {
+          reactEditor.blockTypes.register({
             definition: { type: "test.separator" },
             render: () => null,
             separatesBlockElements: true,
@@ -288,9 +288,9 @@ describe("edgeless block element reconciliation", () => {
         },
       }],
     });
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" });
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     editor.blocks.insertBlock({ type: "test.separator" }, first);
-    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getRootIds().at(-1));
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getRootIds().at(-1)).id;
     reconcileBlockElements(reactEditor);
     expect(ranges(editor)).toEqual([[first], [last]]);
     reactEditor.destroy();

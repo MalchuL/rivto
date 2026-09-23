@@ -20,8 +20,8 @@ test("slash converts the current root to each structural container", async ({ pa
     const blockId = await content.locator("xpath=ancestor::*[@data-block-id][1]").getAttribute("data-block-id");
     if (!blockId) throw new Error("Expected an editable root block");
     const before = await page.evaluate(() => {
-      const { editor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
       return editor.blocks.getBlocks().map((block) => block.id);
     });
@@ -32,14 +32,14 @@ test("slash converts the current root to each structural container", async ({ pa
     await page.locator(`[data-slash-command="${command}"]`).click();
     await expect(block).toHaveAttribute("data-block-type", type);
     await expect.poll(() => page.evaluate(() => {
-      const { editor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
       return editor.blocks.getBlocks().map((candidate) => candidate.id);
     })).toEqual(before);
     await page.evaluate(() => {
-      const { editor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
       editor.history.undo();
     });
@@ -88,8 +88,8 @@ test("renders aligned contentless container summaries from reactive block snapsh
   }
 
   await expect.poll(() => page.evaluate(() => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     return ["bento", "table", "kanban", "columns"].map((type) => (
       editor.blocks.getBlocks().find((block) => block.type === type)?.content
@@ -97,18 +97,18 @@ test("renders aligned contentless container summaries from reactive block snapsh
   })).toEqual(["", "", "", ""]);
 
   await page.evaluate(() => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     const bento = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
-    const tile = editor.blocks.insertBlock({ type: "paragraph", content: "Fourth tile" });
+    const tile = editor.blocks.insertBlock({ type: "paragraph", content: "Fourth tile" }).id;
     editor.blocks.moveBlocks([tile], bento.id, "inside");
   });
   await expect(page.locator('[data-block-type="bento"]').first().getByText("4 tiles", { exact: true })).toBeVisible();
 
   await page.evaluate(() => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     for (const type of ["bento", "kanban", "table"]) {
       const block = editor.blocks.getBlocks().find((candidate) => candidate.type === type)!;

@@ -13,7 +13,7 @@ The React package never owns or duplicates document data. It presents a core
 ## Normal setup
 
 ```tsx
-import { createRivtoEditor } from "@chulane/rivto";
+import { createRivtoEditor, DocumentModelImpl, YjsDoc } from "@chulane/rivto";
 import {
   createReactEditor,
   EditorView,
@@ -25,7 +25,9 @@ import {
   standardPreset,
 } from "@chulane/rivto-react/extensions";
 
+const document = new DocumentModelImpl(new YjsDoc("document-id"));
 const editor = createRivtoEditor();
+editor.setDocument(document);
 const reactEditor = createReactEditor({
   editor,
   extensions: [
@@ -44,7 +46,7 @@ const reactEditor = createReactEditor({
   ],
 });
 
-root.render(<EditorView editor={reactEditor} />);
+root.render(<EditorView reactEditor={reactEditor} />);
 
 // Host teardown:
 reactEditor.destroy();
@@ -140,37 +142,34 @@ Useful direct queries are:
 ```ts
 editor.getBlock(id);
 editor.getRootIds();
-editor.getChildIds(id);
+editor.blocks.getBlockNode(id)?.childIds;
 editor.getParentId(id);
 ```
 
 Never walk `editor.getBlocks()` to find one ID and never mutate a snapshot.
-Use `editor.batchUpdates(() => { ... })` when several editor operations must
+Use `editor.history.batchUpdates(() => { ... })` when several editor operations must
 produce one collaborative update and one undo step.
 
 ## Rendering and subscriptions
 
-`EditorView` is the global core invalidation boundary. Its context contains
-stable core and React runtime references, while the provider subscribes to the
-`RivtoEditorApi` revision stream. Document, selection, and mode changes rerender
-the active editor tree. Surface and extension registries keep their own
-React-only revision streams.
+`EditorView` provides a stable React runtime. Block hooks subscribe to their
+focused document snapshots, while the view subscribes to surface, extension,
+and mode changes. A block edit therefore does not invalidate the whole tree.
 
 Hooks resolve current values through public getters:
 
 | Hook | Value |
 | --- | --- |
-| `useBlock(id)` | One detached block snapshot |
-| `useBlockChildren(id)` | Direct child snapshots |
+| `useBlock(id)` | One detached recursive block snapshot |
+| `useBlockNode(id)` | One detached node with direct `childIds` |
 | `useRootBlockIds()` | Ordered root IDs |
-| `useDocument()` | Stable `DocumentModel` interface |
+| `useReactEditor()` | Focused React runtime managers |
 | `useEditorMode()` | Mode manager |
 | `useEditorSelection()` / selection hooks | Detached selection |
 | slash hooks | Slash-command manager |
 
-Global document rendering is intentional in this restored architecture.
-Renderer, surface, and extension registries still keep independent ownership
-and lifecycle state.
+Renderer, surface, and extension registries keep independent ownership and
+lifecycle state.
 
 The shared block render stack is:
 
@@ -178,7 +177,7 @@ The shared block render stack is:
 PageSurface or EdgelessBlockElement
   → ordered root block IDs
   → BlockTree(blockIds)
-    → useBlock(blockId)
+    → useBlockNode(blockId)
     → renderer for block.type
     → ordered BlockWrapper decorators
     → one BlockView DOM boundary
@@ -290,6 +289,7 @@ Recommended reading order:
 6. `src/surfaces/page/page-block.tsx`
 7. `src/managers/events/event-manager.ts`
 8. [`selection.md`](./selection.md) and [`events.md`](./events.md)
+9. [`styling.md`](./styling.md) for the Tailwind stylesheet, tokens, and shadcn/ui workflow
 
 ## Adding behavior
 

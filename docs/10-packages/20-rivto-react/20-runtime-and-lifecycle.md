@@ -19,7 +19,7 @@ Managers создаются до extensions. При ошибке setup уже с
 
 ### Properties
 
-- **`editor: ReactEditor`:** host-owned React runtime.
+- **`reactEditor: ReactEditor`:** host-owned React runtime.
 - **`children?: ReactNode`:** application chrome рядом с extension UI и surface.
 
 ### Вызов
@@ -61,6 +61,10 @@ View подписывается на core revision, mode, surface registry и ex
 Одновременно разрешено несколько distinct listeners; новая подписка не заменяет предыдущую. Поскольку delegation ведёт в core `Listeners` с `Set`, одинаковая function reference регистрируется эффективно один раз. Для разных независимых consumers передавайте разные callbacks и храните каждый returned disposer.
 
 Disposer idempotent и удаляет только соответствующую function. Immediate notification при подписке отсутствует. `ReactEditor.subscribe()` сообщает только core runtime revisions; изменения React-only renderer/surface/extension registries нужно слушать через их собственные `subscribe()` streams.
+
+### `getDocument()` / `setDocument(document)`
+
+Методы forward-ят active model core editor-а. Replacement сохраняет React managers, extensions и mounted views; retained block/element subscriptions получают refresh через core runtime.
 
 ### `destroy()`
 

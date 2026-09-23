@@ -15,7 +15,7 @@ EditorRuntime
         -> CRDTMap / CRDTArray / CRDTText
 ```
 
-`EditorRuntime` создаёт модель и предоставляет более высокий API через публичные editor managers. React-пакет вызывает эти операции, но не меняет persisted storage напрямую.
+Host создаёт модель и передаёт её в `EditorRuntime`, который предоставляет более высокий API через публичные editor managers. React-пакет вызывает эти операции, но не меняет persisted storage напрямую.
 
 ## Основные обязанности
 
@@ -37,7 +37,7 @@ EditorRuntime
 - `rivto.editor.links` — first-class связи;
 - `rivto.editor.plugins` — document-level namespaces плагинов.
 
-Менеджеры получают эти контейнеры через `CRDTDoc`, создают вложения через `document.crdt.instantiator` и не импортируют Yjs.
+Менеджеры получают эти контейнеры через `CRDTDoc`, создают вложения через `crdt.createDetached*()` и не импортируют Yjs.
 
 ## Пример использования
 
@@ -61,6 +61,6 @@ const snapshot = document.getSnapshot();
 document.loadSnapshot(snapshot);
 ```
 
-Обычно приложение не создаёт `DocumentModelImpl` напрямую: `createRivtoEditor()` делает это внутри `EditorRuntime` и предоставляет `editor.blocks`, `editor.elements`, `editor.links` и другие focused managers.
+Приложение создаёт `DocumentModelImpl`, присоединяет её через `editor.setDocument(document)` и работает через focused editor managers.
 
 Вложенные страницы описывают все классы, свойства, методы, аргументы, результаты, исключения, persisted-типы, utilities и реальные consumers модели документа.

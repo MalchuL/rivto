@@ -2,12 +2,19 @@
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import type {
-  BlockListProps,
+  BlockDefinition,
+  BlockListPropsManagerApi,
+  BlockPrepareErrorHandler,
+  ClipboardBundle,
+  ClipboardPasteInput,
   EditorBlock,
   EditorBlockInput,
+  EditorBlockNode,
   EditorBlockPatch,
   EditorBlockUpdate,
   EditorMode,
+  EditorPosition,
+  PasteStrategyRegistry,
   Selection,
 } from "@chulane/rivto";
 import type { ComponentType, ReactNode } from "react";
@@ -29,8 +36,6 @@ import type {
   PortableBlockFormats,
   ReactBlockRegistration,
   ReactEditorExtension,
-  ListPropsRegistration,
-  BlockMutationResult,
   ClipboardFormatter,
   ClipboardParser,
   SlashCommand,
@@ -46,34 +51,158 @@ import type {
 import type { BlockViewBehavior } from "./views/types";
 
 export interface BlocksCapability {
-  register(registration: ReactBlockRegistration): () => void;
-  /** Registers ordered list-property defaults and validation; returns a disposer. */
-  registerListProps(registration: ListPropsRegistration): () => void;
-  /** Returns whether the given list-property registration is active. */
-  hasListProps(id: string): boolean;
-  /** Returns whether core portability and every active validator accept the record. */
-  validateListProps(candidate: BlockListProps): boolean;
-  /** Returns a detached recursive input with active defaults shallowly merged. */
-  prepareBlock(input: EditorBlockInput): EditorBlockInput;
-  /** Inserts a prepared block and returns its stable root identifier. */
-  insertBlock(input: EditorBlockInput, afterId?: string | null): string;
-  /** Applies a valid patch and returns whether the target was updated. */
-  updateBlock(id: string, patch: EditorBlockPatch): boolean;
-  /** Applies valid entries best-effort and returns every positional outcome. */
-  updateBlocks(updates: readonly EditorBlockUpdate[]): BlockMutationResult;
+  /** Applies definitions, list policy, processors, and validation to a detached block-input tree. */
+  prepareInput(
+    input: readonly (EditorBlock | EditorBlockInput)[],
+    onError?: BlockPrepareErrorHandler,
+  ): EditorBlockInput[];
+  /** Prepares and inserts a block, returning the complete persisted subtree. */
+  insertBlock(input: EditorBlockInput, afterId?: string | null): EditorBlock;
+  /** Applies one valid patch and returns updated fields without descendants, or throws. */
+  updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;
+  /** Applies an entire valid patch batch and returns updated fields without descendants in input order, or throws. */
+  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlockNode[];
   /** Deletes list-property keys and returns whether the mutation was applied. */
   deleteListProps(id: string, keys: readonly string[]): boolean;
-  /** Deletes valid key batches best-effort and returns every positional outcome. */
-  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): BlockMutationResult;
+  /** Deletes an entire valid key batch or throws. */
+  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void;
+  /** Current block revision used by React subscriptions. */
+  readonly revision: number;
+  /** @param id - Block identifier. @returns Whether the block exists. */
+  hasBlock(id: string): boolean;
+  /** @param id - Block identifier. @returns Detached subtree, or undefined when absent. */
+  getBlock(id: string): EditorBlock | undefined;
+  /** @param id - Block identifier. @returns Detached non-recursive block fields, or undefined when absent. */
+  getBlockNode(id: string): EditorBlockNode | undefined;
+  /** @returns The complete detached root forest. */
+  getBlocks(): EditorBlock[];
+  /** @returns Root block identifiers in document order. */
+  getRootIds(): string[];
+  /**
+   * Subscribes to one recursive block snapshot.
+   * @param id - Block identifier to observe.
+   * @param listener - Callback invoked after relevant changes.
+   * @returns Function that removes the subscription.
+   */
+  subscribeBlock(id: string, listener: () => void): () => void;
+  /** Subscribes to one block's own fields and direct child IDs. */
+  subscribeBlockNode(id: string, listener: () => void): () => void;
+  /**
+   * Subscribes to ordered root identifier changes.
+   * @param listener - Callback invoked after root changes.
+   * @returns Function that removes the subscription.
+   */
+  subscribeRootIds(listener: () => void): () => void;
+  /**
+   * Subscribes to hierarchy changes.
+   * @param listener - Callback invoked after hierarchy changes.
+   * @returns Function that removes the subscription.
+   */
+  subscribeStructure(listener: () => void): () => void;
+  /** @param id - Parent block identifier. @returns True when the block has at least one child. */
+  hasChildren(id: string): boolean;
+  /** @param id - Block identifier. @returns Parent ID, null at root, or undefined when absent. */
+  getParentId(id: string): string | null | undefined;
+  /** @param id - Block identifier. @returns True when the block exists and has no parent. */
+  isRootBlock(id: string): boolean;
+  /**
+   * Imports a detached forest and reports its destination identities.
+   * @param blocks - Complete copied roots or creation inputs to import.
+   * @param afterId - Existing sibling to follow, null to prepend, or undefined to append.
+   * @param onError - Optional one-shot replacement for a failed block.
+   * @returns Complete persisted roots and source-to-destination ID mapping.
+   */
+  importForest(
+    blocks: readonly (EditorBlock | EditorBlockInput)[],
+    afterId?: string | null,
+    onError?: BlockPrepareErrorHandler,
+  ): { roots: EditorBlock[]; idMap: ReadonlyMap<string, string> };
+  /** @param id - Block identifier to clear. @returns No value. */
+  clearBlock(id: string): void;
+  /** @param id - Block identifier. @param type - Destination block type. @returns No value. */
+  setBlockType(id: string, type: string): void;
+  /** @param id - Block identifier to remove. @returns No value. */
+  removeBlock(id: string): void;
+  /** @param ids - Block subtree roots to remove. @returns No value. */
+  removeBlocks(ids: readonly string[]): void;
+  /**
+   * Merges a source block into a target.
+   * @param targetId - Destination block identifier.
+   * @param sourceId - Source block identifier.
+   * @returns Resulting caret offset in the target.
+   */
+  mergeBlocks(targetId: string, sourceId: string): number;
+  /**
+   * Moves one block relative to a destination.
+   * @param id - Block identifier to move.
+   * @param targetId - Destination block, or null for the list start.
+   * @param position - Relationship to the destination.
+   * @returns No value.
+   */
+  moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
+  /**
+   * Moves several block roots relative to one destination.
+   * @param ids - Ordered block roots to move.
+   * @param targetId - Destination block, or null for the list start.
+   * @param position - Relationship to the destination.
+   * @returns No value.
+   */
+  moveBlocks(ids: readonly string[], targetId: string | null, position?: "before" | "after" | "inside"): void;
+  /** @param id - Block identifier to indent. @returns No value. */
+  indentBlock(id: string): void;
+  /** @param ids - Ordered block roots to indent. @returns No value. */
+  indentBlocks(ids: readonly string[]): void;
+  /** @param id - Block identifier to outdent. @returns No value. */
+  outdentBlock(id: string): void;
+  /** @param ids - Ordered block roots to outdent. @returns No value. */
+  outdentBlocks(ids: readonly string[]): void;
+  /**
+   * Sets or removes one native block property.
+   * @param id - Block identifier.
+   * @param key - Native property name.
+   * @param value - Portable value, or undefined to remove it.
+   * @returns No value.
+   */
+  setBlockProp(id: string, key: string, value: unknown): void;
+  /**
+   * Sets or removes one namespaced block plugin value.
+   * @param id - Block identifier.
+   * @param pluginId - Stable plugin namespace.
+   * @param value - Portable value, or undefined to remove it.
+   * @returns No value.
+   */
+  setBlockPluginData(id: string, pluginId: string, value: unknown): void;
+}
+
+/** Atomic React block-type and presentation registration. */
+export interface BlockTypesCapability {
+  register(registration: ReactBlockRegistration): () => void;
   delete(type: string): boolean;
   /** Reports whether a registered type partitions root block elements. */
   separatesBlockElements(type: string): boolean;
   /** Returns the first separator type registered for automatic card creation. */
   getDefaultBlockElementSeparatorType(): string | undefined;
+  /** Returns one registered native block definition. */
+  getDefinition(type: string): BlockDefinition | undefined;
+  /** Validates and returns native block properties. */
+  validateBlockProps(type: string, props: Record<string, unknown>): Record<string, unknown>;
 }
+
+/** Core list-property policy whose registrations are owned by the active React extension. */
+export type BlockListPropsCapability = Omit<BlockListPropsManagerApi, "destroy">;
 
 /** React-owned registry for portable clipboard formatting and parsing. */
 export interface ClipboardCapability {
+  /** Core paste-strategy registry shared with React clipboard extensions. */
+  readonly pasteStrategies: PasteStrategyRegistry;
+  /** @param selection - Optional selection override. @returns Structured copy data, when available. */
+  copy(selection?: Selection): ClipboardBundle | undefined;
+  /** @param selection - Text selection to copy. @returns Structured copy data, when nonempty. */
+  copyText(selection: Selection): ClipboardBundle | undefined;
+  /** @returns Structured copied data, when a selection exists. */
+  cut(): ClipboardBundle | undefined;
+  /** @param input - Clipboard flavors and placement. @returns Resulting caret, when applicable. */
+  paste(input?: ClipboardPasteInput): EditorPosition | undefined;
   /** Registers an ordered formatter and returns its lifecycle-owned disposer. */
   registerFormatter(formatter: ClipboardFormatter): () => void;
   /** Registers a first-match parser and returns its lifecycle-owned disposer. */
@@ -92,7 +221,6 @@ export interface RenderersCapability {
   readonly revision: number;
   subscribe(listener: () => void): () => void;
 }
-
 /** Per-type outline, split, and drop behavior resolved by page dispatchers. */
 export interface ViewsCapability {
   /** Registers one behavior object for a persisted block type. */
@@ -182,6 +310,12 @@ export interface SelectionCapability {
   clear(): void;
   subscribe(listener: () => void): () => void;
   delete(): void;
+  /** Returns a detached snapshot of the current selection. */
+  snapshot(): Selection | undefined;
+  /** @param id - Block identifier. @returns Whether the block has structural coverage. */
+  isBlockSelected(id: string): boolean;
+  /** @param id - Element identifier. @returns Whether the element is selected. */
+  isElementSelected(id: string): boolean;
   readDOM(): Selection | undefined;
   restoreDOM(selection?: Selection): boolean;
 }

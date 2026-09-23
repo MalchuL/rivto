@@ -21,13 +21,15 @@
 
 ### `@chulane/rivto-react/styles.css`
 
-Готовые base styles и CSS variables. Application может переопределять theme values после этого import.
+Скомпилированный Tailwind v4 bundle (`dist/styles.css`, собирается `pnpm build`) без preflight: chrome стилизован utilities и shadcn/ui primitives, structural rules лежат в colocated CSS per feature. Все правила layered, поэтому unlayered CSS приложения переопределяет их; theme настраивается через `--rivto-*` custom properties. Подробнее: `packages/react-rivto-editor/docs/styling.md`.
 
 ## Capability methods
 
 | Property | Основные methods |
 | --- | --- |
-| `blocks` | `register`, `registerListProps`, `prepareBlock`, `insertBlock`, `updateBlock(s)`, `deleteListProps(Batch)`, `delete` |
+| `blocks` | `prepareInput`, `insertBlock`, `updateBlock(s)`, `deleteListProps(Batch)`, core block delegation |
+| `blockTypes` | `register`, `delete`, `getDefinition`, `validateBlockProps`, separator metadata |
+| `blockListProps` | `register`, `has`, `validate`, `prepare` (core policy lifecycle adapter) |
 | `renderers` | `register`, `get`, `has`, `delete`, `subscribe`, `revision` |
 | `surfaces` | `register/get/delete`, `registerBlockWrapper`, `registerEditorWrapper`, wrapper getters, subscription |
 | `extensions` | `mount`, `getComponents`, `subscribe`, `revision` |

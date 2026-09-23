@@ -1,4 +1,5 @@
 import type { EditorMode } from "../../editor/types";
+import type { ModeManagerApi } from "../types";
 import { Listeners } from "../../utils";
 
 /**
@@ -7,7 +8,7 @@ import { Listeners } from "../../utils";
  * Mode is runtime-only state: it is not persisted in collaborative data and it
  * changes independently from registered block definitions.
  */
-export class ModeManager {
+export class ModeManager implements ModeManagerApi {
   private readonly listeners = new Listeners<{ modeChanged: void }>();
 
   /**

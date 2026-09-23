@@ -4,7 +4,7 @@
  * This class holds the page Enter/Tab/Backspace/Delete semantics previously
  * registered by the focused modules under `extensions/built-ins/page`. Container views override individual methods
  * and return `"default"` to reuse this implementation. The DOM shell component
- * `blocks/block-view.tsx` is unrelated presentation.
+ * `blocks/block-view/block-view.tsx` is unrelated presentation.
  *
  * @module
  */
@@ -48,14 +48,14 @@ export class BaseBlockView implements BlockViewBehavior {
    */
   onSplit(context: BlockViewContext, target: KeyboardSelectionTarget): BlockViewOutcome {
     const { reactEditor, block, root } = context;
-    const { editor, isEmptyBlock } = reactEditor;
-    if (isEmptyBlock(block) && editor.blocks.getParentId(block.id)) {
+    const { isEmptyBlock } = reactEditor;
+    if (isEmptyBlock(block) && reactEditor.blocks.getParentId(block.id)) {
       outdentUntilBoundary(reactEditor, block.id);
       focusCaret(reactEditor, root, block.id, 0);
       return "handled";
     }
-    const listActive = reactEditor.blocks.hasListProps("list");
-    const collapseActive = reactEditor.blocks.hasListProps("collapse");
+    const listActive = reactEditor.blockListProps.has("list");
+    const collapseActive = reactEditor.blockListProps.has("collapse");
     if (listActive && isEmptyBlock(block) && block.listProps.type !== "list") {
       convertEmptyToList(reactEditor, block.id);
       focusBlockLater(root, block.id, 0);
@@ -64,19 +64,19 @@ export class BaseBlockView implements BlockViewBehavior {
     const splitAt = target.collapsed
       ? Math.min(target.offset ?? 0, block.content.length)
       : block.content.length;
-    const nextBlockId = splitBlockAt(reactEditor, block, splitAt);
+    const nextBlock = splitBlockAt(reactEditor, block, splitAt);
     if (block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true)) {
       // Insertion created a sibling. Indent then prepend so Enter places the
       // new writing block as the first visible child.
-      editor.blocks.indentBlock(nextBlockId);
-      editor.blocks.moveBlock(nextBlockId, null);
-    } else if (editor.mode.get() === "edgeless" && editor.blocks.getParentId(block.id) === null) {
-      const element = editor.elements.getElements().find((candidate) =>
+      reactEditor.blocks.indentBlock(nextBlock.id);
+      reactEditor.blocks.moveBlock(nextBlock.id, null);
+    } else if (reactEditor.mode.get() === "edgeless" && reactEditor.blocks.isRootBlock(block.id)) {
+      const element = reactEditor.elements.getElements().find((candidate) =>
         candidate.type === "block" && candidate.props.endBlockId === block.id,
       );
-      if (element) editor.elements.updateElement(element.id, { props: { endBlockId: nextBlockId } });
+      if (element) reactEditor.elements.updateElement(element.id, { props: { endBlockId: nextBlock.id } });
     }
-    focusBlockLater(root, nextBlockId, 0);
+    focusBlockLater(root, nextBlock.id, 0);
     return "handled";
   }
 
@@ -148,7 +148,7 @@ export class BaseBlockView implements BlockViewBehavior {
    */
   onMergeForward(context: BlockViewContext, target: KeyboardSelectionTarget): BlockViewOutcome {
     const { reactEditor, block, root } = context;
-    if (reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true) return "default";
+    if (reactEditor.blockListProps.has("collapse") && block.listProps.collapsed === true) return "default";
     const scope = navigationDomRoot(root, block.id);
     if (removeEmptyBlockAfterStructuralPredecessor(reactEditor, scope, block.id)) return "handled";
     const next = findNextEditableBlock(scope, target.blockId);

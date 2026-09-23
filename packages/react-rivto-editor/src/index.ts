@@ -65,6 +65,7 @@ export type {
   MarkdownLinkClick,
   ReactEditor,
 } from "./types";
+export { isReactEditor, isRivtoEditor } from "./utils";
 export {
   createIsEmptyDefaultBlock,
   resolveIsEmptyBlock,
@@ -74,7 +75,7 @@ export type {
   EmptyBlockCandidate,
   IsEmptyBlock,
 } from "./extensions/built-ins/page/default-writing-block";
-export { MarkdownContent } from "./blocks/markdown";
+export { MarkdownContent } from "./blocks/markdown/markdown";
 export {
   ERROR_BLOCK_TYPE,
   ErrorBlock,
@@ -198,7 +199,7 @@ export {
   TABLE_DEFAULT_COLUMN_WIDTH,
   type TableCellProps,
 } from "./extensions/containers/table/table";
-export { BlockModal, BlockModalButton } from "./blocks/block-modal";
+export { BlockModal, BlockModalButton } from "./blocks/block-modal/block-modal";
 export { BaseBlockView, ContainerBlockView } from "./views";
 export type {
   BlockViewBehavior,

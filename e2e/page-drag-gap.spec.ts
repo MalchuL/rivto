@@ -37,11 +37,11 @@ async function holdDragAt(page: Page, source: Locator, x: number, y: number): Pr
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
-    const alpha = editor.blocks.insertBlock({ type: "paragraph", content: "Alpha" });
-    const beta = editor.blocks.insertBlock({ type: "paragraph", content: "Beta" });
+    const alpha = editor.blocks.insertBlock({ type: "paragraph", content: "Alpha" }).id;
+    const beta = editor.blocks.insertBlock({ type: "paragraph", content: "Beta" }).id;
     const board = editor.blocks.insertBlock({
       type: "kanban",
       content: "Board",
@@ -49,7 +49,7 @@ test.beforeEach(async ({ page }) => {
         { type: "kanban-column", content: "To do" },
         { type: "kanban-column", content: "Empty" },
       ],
-    });
+    }).id;
     editor.load({
       ...editor.dump(),
       blocks: [
@@ -135,8 +135,8 @@ test("drops a block after the last root container", async ({ page }) => {
   await page.mouse.up();
 
   await expect.poll(() => page.evaluate(() => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     return editor.blocks.getBlocks().map((block) => block.id);
   })).toEqual([betaId, boardId, alphaId]);
@@ -151,8 +151,8 @@ test("drops a block before the first root container", async ({ page }) => {
   const betaId = await beta.getAttribute("data-block-id");
   const boardId = await board.getAttribute("data-block-id");
   await page.evaluate(({ alphaId, betaId, boardId }) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.load({
       ...editor.dump(),
@@ -170,8 +170,8 @@ test("drops a block before the first root container", async ({ page }) => {
   await page.mouse.up();
 
   await expect.poll(() => page.evaluate(() => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     return editor.blocks.getBlocks().map((block) => block.id);
   })).toEqual([betaId, boardId, alphaId]);
@@ -188,8 +188,8 @@ for (const mode of ["block", "edgeless"] as const) {
   for (const container of ROOT_CONTAINER_INPUTS) {
     test(`centers the ${container.type} root gap like an ordinary block in ${mode}`, async ({ page }) => {
       const ids = await page.evaluate(({ input, nextMode }) => {
-        const { editor } = (window as unknown as {
-          __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+        const editor = (window as unknown as {
+          __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
         }).__rivtoDemo.editor;
         const roots = [
           editor.blocks.insertBlock({ id: "gap-source", type: "paragraph", content: "Gap source" }),
@@ -228,8 +228,8 @@ for (const mode of ["block", "edgeless"] as const) {
       expect(lineBox.width).toBeCloseTo(previousBox.width, 0);
       await page.mouse.up();
       await expect.poll(() => page.evaluate(() => {
-        const { editor } = (window as unknown as {
-          __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+        const editor = (window as unknown as {
+          __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
         }).__rivtoDemo.editor;
         return editor.blocks.getRootIds();
       })).toEqual([ids[1], ids[2], ids[3], ids[0], ids[4], ids[5]]);
@@ -257,8 +257,8 @@ test("hovering a block in a free container nests inside that block", async ({ pa
   const betaId = await beta.getAttribute("data-block-id");
   const columnId = await page.locator('[data-block-type="kanban-column"]').first().getAttribute("data-block-id");
   await page.evaluate(({ alphaId, betaId, columnId }) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlocks([alphaId!, betaId!], columnId!, "inside");
   }, { alphaId, betaId, columnId });
@@ -271,8 +271,8 @@ test("hovering a block in a free container nests inside that block", async ({ pa
   await expect(betaRow).toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
   await expect.poll(() => page.evaluate(({ sourceId }) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     return editor.blocks.getParentId(sourceId!);
   }, { sourceId: alphaId })).toBe(betaId);
@@ -288,8 +288,8 @@ test("an empty kanban column still accepts an inside drop on its body", async ({
   await expect(empty).toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
   await expect.poll(() => page.evaluate(({ sourceId }) => {
-    const { editor } = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     return sourceId ? editor.blocks.getParentId(sourceId) : undefined;
   }, { sourceId: alphaId })).toBe(emptyId);
@@ -317,8 +317,8 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`appends after final nested subtrees in ordinary and free container outlines in ${mode}`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     const ids = await page.evaluate((nextMode) => {
-      const { editor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
       const inputs = [
         { type: "paragraph", content: "Ordinary source" },
@@ -354,7 +354,7 @@ for (const mode of ["block", "edgeless"] as const) {
           }],
         },
       ];
-      const roots = inputs.map((input) => editor.blocks.insertBlock(input));
+      const roots = inputs.map((input) => editor.blocks.insertBlock(input)).id;
       editor.load({
         ...editor.dump(),
         blocks: roots.map((id) => editor.blocks.getBlock(id)!),
@@ -404,8 +404,8 @@ for (const mode of ["block", "edgeless"] as const) {
       await expect(page.locator(`.${LINE_CLASS}[data-kind="between"]`)).toBeVisible();
       await page.mouse.up();
       await expect.poll(() => page.evaluate((sourceId) => {
-        const { editor } = (window as unknown as {
-          __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
+        const editor = (window as unknown as {
+          __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
         }).__rivtoDemo.editor;
         return editor.blocks.getParentId(sourceId);
       }, dragCase.source)).toBe(dragCase.expectedParent);

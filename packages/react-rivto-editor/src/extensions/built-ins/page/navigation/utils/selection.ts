@@ -7,7 +7,7 @@ import {
   assertBlockRangeEndpoints,
   createCaretSelection,
   type EditorPosition,
-  type RivtoEditorApi as Editor,
+  type RivtoEditorApi,
   type Selection,
 } from "@chulane/rivto";
 import type { SelectionCapability } from "../../../../../capabilities";
@@ -65,19 +65,19 @@ export function setNavigationCaret(
  */
 export function textSelectionEdge(
   reactEditor: ReactEditor,
-  editor: Editor,
+  editor: ReactEditor | RivtoEditorApi,
   selection: Selection,
   edge: "start" | "end",
 ): EditorPosition {
   assertBlockRangeEndpoints(selection);
-  const lengthOf = (id: string) => editor.blocks.getBlock(id)?.content.length ?? 0;
+  const lengthOf = (id: string) => editor.blocks.getBlockNode(id)?.content.length ?? 0;
   const ends = resolveSelectionEndpoints(selection, lengthOf);
   if (!ends) return { blockId: selection.focusBlockId, offset: 0 };
   const ids = pageEntries(
     navigationOutlineBlocks(editor, selection.focusBlockId),
     null,
     false,
-    (block) => reactEditor.blocks.hasListProps("collapse") && block.listProps.collapsed === true,
+    (block) => reactEditor.blockListProps.has("collapse") && block.listProps.collapsed === true,
   ).map(({ block }) => block.id);
   const anchorIndex = ids.indexOf(ends.anchor.blockId);
   const headIndex = ids.indexOf(ends.head.blockId);

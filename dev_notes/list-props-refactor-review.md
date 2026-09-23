@@ -147,7 +147,7 @@ properties, and other raw data for diagnosis.
 - Confirm unknown list properties survive snapshots, duplication, clipboard,
   and cross-document transfer.
 - Confirm invalid values cannot partially apply in strict core batches.
-- Confirm best-effort React batches continue after an invalid or missing block.
+- Confirm React batches reject invalid or missing blocks before any write.
 - Confirm clipboard formatters compose in registration order and parsers use the
   first match.
 - Confirm the clipboard error callback runs only for invalid blocks.

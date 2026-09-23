@@ -1,5 +1,17 @@
+/**
+ * Floating action bar for the current multi-object canvas selection.
+ *
+ * Sits above the create toolbar and exposes grouping, alignment,
+ * distribution, and z-order commands through `EdgelessToolButton`s. Every
+ * action is dispatched as an editor command so undo and collaboration see one
+ * transaction per click.
+ */
+import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
 import type { EdgelessVisualController } from "../controller";
 import { EdgelessToolButton } from "./tool-button";
+
+/** Bottom-centered bar; `edgeless-selection-toolbar` is a stable hook. */
+const SELECTION_TOOLBAR_CLASS = `${UI_SCOPE_CLASS} edgeless-selection-toolbar absolute bottom-[62px] left-1/2 z-21 flex max-w-[calc(100%-48px)] -translate-x-1/2 gap-[3px] overflow-x-auto rounded-xl border border-border bg-background/95 p-[5px] shadow-(--rivto-edgeless-chrome-shadow)`;
 
 const alignments = [
   ["left", "Align left", "align-left"],
@@ -10,19 +22,24 @@ const alignments = [
   ["bottom", "Align bottom", "align-bottom"],
 ] as const;
 
-/** Actions for the current multi-object canvas selection. */
+/**
+ * Renders actions for the current multi-object canvas selection.
+ *
+ * @param props - The visual controller and the selected element IDs.
+ * @returns A toolbar region, or one with only reorder actions for a single item.
+ */
 export function SelectionToolbar({
   controller,
   items,
 }: {
-  controller: EdgelessVisualController;
-  items: readonly string[];
+  readonly controller: EdgelessVisualController;
+  readonly items: readonly string[];
 }) {
-  const execute = (name: string, payload?: unknown) => controller.reactEditor.editor.execute(name, payload);
+  const execute = (name: string, payload?: unknown) => controller.reactEditor.commands.execute(name, payload);
   return (
-    <div className="edgeless-selection-toolbar" data-edgeless-ui="true" role="toolbar" aria-label="Selected objects">
+    <div className={SELECTION_TOOLBAR_CLASS} data-edgeless-ui="true" role="toolbar" aria-label="Selected objects">
       {items.length > 1 && <EdgelessToolButton label="Group" icon="group" onClick={() => execute("edgeless.selection.group")} />}
-      {items.some((id) => controller.reactEditor.editor.elements.getElement(id)?.type === "group") && (
+      {items.some((id) => controller.reactEditor.elements.getElement(id)?.type === "group") && (
         <EdgelessToolButton label="Ungroup" icon="ungroup" onClick={() => execute("edgeless.selection.ungroup")} />
       )}
       {items.length > 1 && alignments.map(([alignment, label, icon]) => (

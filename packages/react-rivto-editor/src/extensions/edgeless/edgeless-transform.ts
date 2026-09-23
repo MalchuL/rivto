@@ -86,7 +86,6 @@ interface ConnectorOverlayNode {
 
 /** Adds one delegated move/resize path for cards, visuals, and nested groups. */
 export function registerEdgelessTransform(reactEditor: ReactEditor): () => void {
-  const { editor } = reactEditor;
   const selection = getEdgelessRuntime(reactEditor);
   let start: TransformStart | null = null;
   let previewTargets: HTMLElement[] | null = null;
@@ -98,12 +97,12 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
   const connectorHosts = new Map<string, HTMLElement | null>();
 
   const groupChildren = (id: string): string[] => {
-    const element = editor.elements.getElement(id);
+    const element = reactEditor.elements.getElement(id);
     return element?.type === "group" && Array.isArray(element.props.children) ? element.props.children.filter((child): child is string => typeof child === "string") : [];
   };
-  const parentId = (id: string): string | undefined => editor.elements.getElements().find((element) => groupChildren(element.id).includes(id))?.id;
+  const parentId = (id: string): string | undefined => reactEditor.elements.getElements().find((element) => groupChildren(element.id).includes(id))?.id;
   const rotation = (id: string): number => {
-    const element = editor.elements.getElement(id);
+    const element = reactEditor.elements.getElement(id);
     return element?.type !== "block" && element?.type !== "connector" && typeof element?.props.rotation === "number"
       ? normalizeRotation(element.props.rotation)
       : 0;
@@ -112,14 +111,14 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     if (seen.has(id)) return [];
     seen.add(id);
     const children = groupChildren(id);
-    return children.length ? leaves(children, seen) : editor.elements.getElement(id) ? [id] : [];
+    return children.length ? leaves(children, seen) : reactEditor.elements.hasElement(id) ? [id] : [];
   });
   const bounds = (id: string): EditorElementFrame | undefined => {
     const children = groupChildren(id);
-    const element = editor.elements.getElement(id);
+    const element = reactEditor.elements.getElement(id);
     return children.length ? unionFrames(children.flatMap((child) => bounds(child) ?? [])) : element ? rotatedFrameBounds(element.frame, rotation(id)) : undefined;
   };
-  const transformFrame = (id: string): EditorElementFrame | undefined => groupChildren(id).length ? bounds(id) : editor.elements.getElement(id)?.frame;
+  const transformFrame = (id: string): EditorElementFrame | undefined => groupChildren(id).length ? bounds(id) : reactEditor.elements.getElement(id)?.frame;
   const rendered = (root: HTMLElement, ids: readonly string[]): HTMLElement[] => {
     const included = new Set([...ids, ...leaves(ids)]);
     return [...root.querySelectorAll<HTMLElement>("[data-edgeless-root], [data-edgeless-object-id], [data-edgeless-group-bound-id]")].filter((element) => {
@@ -128,10 +127,10 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       const id = element.dataset.edgelessRoot ?? element.dataset.edgelessObjectId ?? element.dataset.edgelessGroupBoundId ?? "";
       if (!included.has(id)) return false;
       // Connectors are live-previewed from attachments instead of CSS-translated.
-      return editor.elements.getElement(id)?.type !== "connector";
+      return reactEditor.elements.getElement(id)?.type !== "connector";
     });
   };
-  const minSize = (id: string) => editor.elements.getElement(id)?.type === "block" ? { width: 180, height: 100 } : { width: 1, height: 1 };
+  const minSize = (id: string) => reactEditor.elements.getElement(id)?.type === "block" ? { width: 180, height: 100 } : { width: 1, height: 1 };
   const previewFrame = (id: string, active: TransformStart, dx: number, dy: number): EditorElementFrame | undefined => {
     const base = active.frames.get(id) ?? transformFrame(id);
     if (!base) return undefined;
@@ -266,7 +265,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     const defs = overlay?.querySelector<SVGDefsElement>("defs");
     if (!overlay || !plane || !defs) return;
     for (const item of pathItems) {
-      const element = editor.elements.getElement(item.id);
+      const element = reactEditor.elements.getElement(item.id);
       const source = element?.props.source;
       const target = element?.props.target;
       if (!element || !isConnectorEndpoint(source) || !isConnectorEndpoint(target)) continue;
@@ -498,7 +497,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       } else if (selectedId === childId) {
         // Purpose: allow drag on the drilled child; non-label shapes bounce back to group on click.
         id = childId;
-        const kind = editor.elements.getElement(childId)?.type;
+        const kind = reactEditor.elements.getElement(childId)?.type;
         if (kind !== "text" && kind !== "sticker" && kind !== "rectangle" && kind !== "ellipse" && kind !== "connector") {
           returnToGroup = parent;
         }
@@ -511,14 +510,14 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       }
     }
     const hitBlock = event.target.closest<HTMLElement>(BLOCK_SELECTOR);
-    const element = editor.elements.getElement(id);
+    const element = reactEditor.elements.getElement(id);
     const hitBlockId = hitBlock?.dataset.blockId ?? "";
     // Nested/indented hits must count: card ranges store roots only, and the
     // row hover strip (::before) often lands on a child block, not the root.
     const movable = !event.target.closest(CONTROL_SELECTOR) && (
       !card ||
       !hitBlock ||
-      (element?.type === "block" && elementContainsBlock(editor, element, editor.blocks.getRootIds(), hitBlockId))
+      (element?.type === "block" && elementContainsBlock(reactEditor, element, reactEditor.blocks.getRootIds(), hitBlockId))
     );
     if (!resize && !rotating && !movable) return false;
     event.stopPropagation();
@@ -543,7 +542,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       const frame = transformFrame(item);
       if (frame) frames.set(item, { ...frame });
     });
-    const canvasElements = editor.elements.getElements();
+    const canvasElements = reactEditor.elements.getElements();
     const kind = rotating ? "rotate" as const : resize ? "resize" as const : "move" as const;
     const attachedConnectors = attachedConnectorsForTransform(canvasElements, moving, new Set(ids), kind);
     const snapCandidates = canvasElements
@@ -645,15 +644,15 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       return false;
     }
     if (active.kind === "rotate") {
-      editor.elements.updateElement(active.ids[0]!, { props: { rotation: rotationAt(root, active, active.lastX, active.lastY, active.rotationSnapped) } });
+      reactEditor.elements.updateElement(active.ids[0]!, { props: { rotation: rotationAt(root, active, active.lastX, active.lastY, active.rotationSnapped) } });
       return true;
     }
-    if (active.kind === "move" && editor.commands.has("edgeless.selection.move")) { editor.execute("edgeless.selection.move", { dx: result.dx, dy: result.dy }); return true; }
-    editor.batchUpdates(() => active.ids.forEach((id) => {
+    if (active.kind === "move" && reactEditor.commands.has("edgeless.selection.move")) { reactEditor.commands.execute("edgeless.selection.move", { dx: result.dx, dy: result.dy }); return true; }
+    reactEditor.history.batchUpdates(() => active.ids.forEach((id) => {
       const frame = previewFrame(id, active, result.dx, result.dy);
-      if (frame) editor.elements.updateElement(id, {
+      if (frame) reactEditor.elements.updateElement(id, {
         frame,
-        props: editor.elements.getElement(id)?.type === "block" ? { autoHeight: false } : undefined,
+        props: reactEditor.elements.getElement(id)?.type === "block" ? { autoHeight: false } : undefined,
       });
     }));
     return true;

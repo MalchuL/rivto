@@ -1,54 +1,32 @@
 import type {
   Block,
   BlockInput,
+  BlockNode,
   BlockPatch,
   BlockUpdate,
+  DocumentElement,
+  ElementFrame,
+  ElementInput,
+  ElementPatch,
+  ElementUpdate,
+  Snapshot,
+  SnapshotUpdate,
 } from "@chulane/document-model";
 
 /** Collaborative canvas geometry as seen by editor features. */
-export interface EditorElementFrame {
-  /** Horizontal canvas coordinate; may be negative. */
-  x: number;
-  /** Vertical canvas coordinate; may be negative. */
-  y: number;
-  /** Positive rendered width. */
-  width: number;
-  /** Positive rendered height. */
-  height: number;
-}
+export type EditorElementFrame = ElementFrame;
 
 /** Detached first-class canvas element exposed to editor integrations. */
-export interface EditorElement<Props extends Record<string, unknown> = Record<string, unknown>> {
-  /** Stable element identity used by selection and commands. */
-  id: string;
-  /** Extension-owned renderer discriminator. */
-  type: string;
-  /** Persisted geometry independent from any referenced blocks. */
-  frame: EditorElementFrame;
-  /** Finite layer order. */
-  zIndex: number;
-  /** Opaque extension-owned properties. */
-  props: Props;
-}
+export type EditorElement<Props extends Record<string, unknown> = Record<string, unknown>> = DocumentElement<Props>;
 
 /** Complete input accepted when creating a canvas element. */
-export interface EditorElementInput<Props extends Record<string, unknown> = Record<string, unknown>> {
-  id?: string;
-  type: string;
-  frame: EditorElementFrame;
-  zIndex: number;
-  props?: Props;
-}
+export type EditorElementInput<Props extends Record<string, unknown> = Record<string, unknown>> = ElementInput<Props>;
 
 /** Mutable canvas element fields. */
-export interface EditorElementPatch {
-  frame?: Partial<EditorElementFrame>;
-  zIndex?: number;
-  props?: Record<string, unknown>;
-}
+export type EditorElementPatch = ElementPatch;
 
 /** One identified canvas element patch used by atomic updates. */
-export interface EditorElementUpdate { id: string; patch: EditorElementPatch }
+export type EditorElementUpdate = ElementUpdate;
 
 /** Canonical detached block value rendered by editor integrations. */
 export type EditorBlock = Block;
@@ -59,18 +37,11 @@ export type EditorBlockPatch = BlockPatch;
 /** Canonical identified block patch. */
 export type EditorBlockUpdate = BlockUpdate;
 
+/** Detached block fields excluding the recursively materialized child tree. */
+export type EditorBlockNode = BlockNode;
+
 /** Lossless editor document value used for persistence. */
-export interface EditorSnapshot {
-  version: 6;
-  blocks: EditorBlock[];
-  elements: EditorElement[];
-  pluginData?: Record<string, unknown>;
-}
+export type EditorSnapshot = Snapshot;
 
 /** Persisted document sections that replace only supplied state. */
-export interface EditorSnapshotUpdate {
-  version: 6;
-  blocks?: EditorBlock[];
-  elements?: EditorElement[];
-  pluginData?: Record<string, unknown>;
-}
+export type EditorSnapshotUpdate = SnapshotUpdate;

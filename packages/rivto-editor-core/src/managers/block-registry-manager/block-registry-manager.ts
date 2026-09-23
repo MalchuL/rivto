@@ -1,4 +1,5 @@
 import type { BlockDefinition } from "./types";
+import type { BlockRegistryManagerApi } from "../types";
 import type { EditorBlockInput } from "../../editor/model";
 import { Listeners } from "../../utils";
 import type { ZodType } from "zod";
@@ -83,7 +84,7 @@ const validateProps = (
  * ownership, prepares editor-level creation data, and publishes definition
  * lifecycle changes to its own subscribers.
  */
-export class BlockRegistryManager {
+export class BlockRegistryManager implements BlockRegistryManagerApi {
   // Block name to definition
   private readonly definitions = new Map<string, BlockDefinition>();
 
@@ -205,25 +206,6 @@ export class BlockRegistryManager {
    */
   validate(type: string, props: Record<string, unknown>): Record<string, unknown> {
     return validateProps(this.get(type), props);
-  }
-
-  /**
-   * Enforces an optional parent/child constraint declared on the child type.
-   *
-   * Unknown types and definitions without `allowedParents` stay unconstrained.
-   *
-   * @param childType - Native type of the block being placed.
-   * @param parentType - Native type of the new parent, or `null` for the root.
-   * @returns No value.
-   * @throws {Error} When the child type forbids that parent.
-   */
-  assertAllowedParent(childType: string, parentType: string | null): void {
-    const allowed = this.get(childType)?.allowedParents;
-    if (!allowed) return;
-    if (allowed.includes(parentType)) return;
-    throw new Error(
-      `Block type ${childType} cannot be placed under ${parentType ?? "document root"}`,
-    );
   }
 
   /**

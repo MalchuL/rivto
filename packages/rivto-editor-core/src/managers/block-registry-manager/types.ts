@@ -4,8 +4,8 @@ import type { ZodType } from "zod";
  * Defines one native block type understood by the editor runtime.
  *
  * Definitions own data rules: the persisted native type, user-facing title,
- * default properties, optional property validation, parent constraints, and
- * opaque runtime metadata. Presentation lives in renderer definitions so the same
+ * default properties, optional property validation, and opaque runtime
+ * metadata. Presentation lives in renderer definitions so the same
  * block model can be rendered by DOM, canvas, server HTML, or another bridge
  * without importing UI framework types here.
  */
@@ -18,13 +18,6 @@ export interface BlockDefinition<Props extends Record<string, unknown> = Record<
   defaultProps?: Partial<Props> | (() => Partial<Props>);
   /** Runtime validator for the complete property object. */
   propSchema?: ZodType<Props>;
-  /**
-   * Optional parent-type constraint checked at insert, move, and load.
-   *
-   * Omitted means any parent, including the document root. `null` in the list
-   * allows a root placement. Unknown types have no constraint.
-   */
-  allowedParents?: readonly (string | null)[];
   /**
    * Optional runtime annotations owned and interpreted by higher layers.
    *

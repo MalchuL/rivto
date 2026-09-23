@@ -8,16 +8,21 @@
  */
 import {
   useCallback,
-  useEffect,
+  useId,
   useRef,
   useState,
   type ComponentType,
-  type FormEvent,
-  type MouseEvent,
 } from "react";
 import type { EditorBlock } from "@chulane/rivto";
 import { z } from "zod";
-import { useBlockEditing, useEditor, useReactEditor } from "../../hooks";
+import { CheckIcon, EllipsisIcon, MinusIcon, XIcon } from "lucide-react";
+import { useBlockEditing, useReactEditor } from "../../hooks";
+import { Button } from "../../components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../../components/ui/dialog";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
+import { Textarea } from "../../components/ui/textarea";
 import {
   restoreDOMSelection,
   saveDOMSelection,
@@ -31,6 +36,7 @@ import {
   TODO_META_CLASS,
   TODO_MODAL_CLASS,
   TODO_MODAL_CLOSE_CLASS,
+  TODO_MODAL_FIELD_CLASS,
   TODO_MODAL_FIELDS_CLASS,
   TODO_MODAL_HEADER_CLASS,
   TODO_MODAL_TIMESTAMPS_CLASS,
@@ -257,7 +263,7 @@ const commitPropertiesPatch = (
   blockId: string,
   patch?: TodoItemPropertiesPatch,
 ): boolean => {
-  const block = reactEditor.editor.blocks.getBlock(blockId);
+  const block = reactEditor.blocks.getBlockNode(blockId);
   if (!block || block.type !== TODO_ITEM_BLOCK_TYPE || !patch) return false;
   const changed = Object.fromEntries(
     Object.entries(patch).filter(([key, value]) => block.props[key] !== value),
@@ -266,24 +272,29 @@ const commitPropertiesPatch = (
   const updatedAt = nextTimestamp(String(block.props.updatedAt));
   const result = todoItemPropsSchema.loose().safeParse({ ...block.props, ...changed, updatedAt });
   if (!result.success) return false;
-  reactEditor.editor.batchUpdates(() => {
+  reactEditor.history.batchUpdates(() => {
     reactEditor.blocks.updateBlock(blockId, { props: { ...changed, updatedAt } });
   });
   return true;
 };
 
 /**
- * Renders the native auto-committing TODO properties dialog.
+ * Renders the default auto-committing TODO properties dialog.
+ *
+ * The dialog is a shadcn/Radix `Dialog` rendered in a portal, so it escapes
+ * the editable block tree. Every close path (close button, Escape, pointer
+ * outside) funnels through `onOpenChange(false)` and commits the local draft
+ * exactly once.
  *
  * @param props - Current typed block and close callback owned by the extension.
- * @returns Native dialog with local form state and read-only timestamps.
+ * @returns Modal dialog with local form state and read-only timestamps.
  */
 export function DefaultTodoItemPropertiesModal({
   block,
   onClose,
 }: TodoItemPropertiesModalProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const closedRef = useRef(false);
+  const fieldId = useId();
   const initial = block.props;
   const [draft, setDraft] = useState<TodoItemPropertiesPatch>({
     status: initial.status,
@@ -292,68 +303,53 @@ export function DefaultTodoItemPropertiesModal({
     project: initial.project,
   });
 
-  /** Commits the local draft once for every native close path. */
+  /** Commits the local draft once for every close path. */
   const finish = useCallback((): void => {
     if (closedRef.current) return;
     closedRef.current = true;
     onClose(draft);
   }, [draft, onClose]);
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    dialog?.showModal();
-    return () => {
-      if (dialog?.open) dialog.close();
-    };
-  }, []);
-
-  /** Handles Escape through the native dialog cancellation event. */
-  const cancel = (event: FormEvent<HTMLDialogElement>): void => {
-    event.preventDefault();
-    finish();
-  };
-
-  /** Treats clicks on the native backdrop, but not dialog children, as close. */
-  const backdrop = (event: MouseEvent<HTMLDialogElement>): void => {
-    if (event.target === event.currentTarget) finish();
-  };
-
   return (
-    <dialog
-      ref={dialogRef}
-      className={TODO_MODAL_CLASS}
-      aria-label="TODO item properties"
-      onCancel={cancel}
-      onClose={finish}
-      onClick={backdrop}
-    >
-      <div className={TODO_MODAL_HEADER_CLASS}>
-        <strong>TODO properties</strong>
-        <button className={TODO_MODAL_CLOSE_CLASS} type="button" aria-label="Close properties" onClick={finish}>×</button>
-      </div>
-      <div className={TODO_MODAL_FIELDS_CLASS}>
-        <label>Status
-          <select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as TodoItemStatus })}>
-            {TODO_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-          </select>
-        </label>
-        <label>Description
-          <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
-        </label>
-        <label>Priority
-          <select value={draft.priority} onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) as TodoItemProps["priority"] })}>
-            {[1, 2, 3, 4].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-          </select>
-        </label>
-        <label>Project
-          <input value={draft.project} onChange={(event) => setDraft({ ...draft, project: event.target.value })} />
-        </label>
-      </div>
-      <div className={TODO_MODAL_TIMESTAMPS_CLASS}>
-        <span>Created <time dateTime={initial.createdAt}>{initial.createdAt}</time></span>
-        <span>Updated <time dateTime={initial.updatedAt}>{initial.updatedAt}</time></span>
-      </div>
-    </dialog>
+    <Dialog open onOpenChange={(open) => { if (!open) finish(); }}>
+      <DialogContent className={TODO_MODAL_CLASS} showCloseButton={false}>
+        <div className={TODO_MODAL_HEADER_CLASS}>
+          {/* Radix names the dialog from its title via aria-labelledby, so the
+              title text is the public accessible name hosts and tests rely on. */}
+          <DialogTitle className="text-base">TODO item properties</DialogTitle>
+          <DialogDescription className="sr-only">Edit status, description, priority, and project.</DialogDescription>
+          <Button variant="ghost" size="icon-sm" className={TODO_MODAL_CLOSE_CLASS} type="button" aria-label="Close properties" onClick={finish}>
+            <XIcon />
+          </Button>
+        </div>
+        <div className={TODO_MODAL_FIELDS_CLASS}>
+          <Label className={TODO_MODAL_FIELD_CLASS} htmlFor={`${fieldId}-status`}>Status
+            <NativeSelect id={`${fieldId}-status`} className="w-full" value={draft.status}
+              onChange={(event) => setDraft({ ...draft, status: event.target.value as TodoItemStatus })}>
+              {TODO_STATUSES.map((status) => <NativeSelectOption key={status} value={status}>{status}</NativeSelectOption>)}
+            </NativeSelect>
+          </Label>
+          <Label className={TODO_MODAL_FIELD_CLASS} htmlFor={`${fieldId}-description`}>Description
+            <Textarea id={`${fieldId}-description`} className="min-h-[72px]" value={draft.description}
+              onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
+          </Label>
+          <Label className={TODO_MODAL_FIELD_CLASS} htmlFor={`${fieldId}-priority`}>Priority
+            <NativeSelect id={`${fieldId}-priority`} className="w-full" value={draft.priority}
+              onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) as TodoItemProps["priority"] })}>
+              {[1, 2, 3, 4].map((priority) => <NativeSelectOption key={priority} value={priority}>{priority}</NativeSelectOption>)}
+            </NativeSelect>
+          </Label>
+          <Label className={TODO_MODAL_FIELD_CLASS} htmlFor={`${fieldId}-project`}>Project
+            <Input id={`${fieldId}-project`} value={draft.project}
+              onChange={(event) => setDraft({ ...draft, project: event.target.value })} />
+          </Label>
+        </div>
+        <div className={TODO_MODAL_TIMESTAMPS_CLASS}>
+          <span>Created <time dateTime={initial.createdAt}>{initial.createdAt}</time></span>
+          <span>Updated <time dateTime={initial.updatedAt}>{initial.updatedAt}</time></span>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -367,7 +363,6 @@ export function TodoItem({
   blockId,
   propertiesModal: PropertiesModal = DefaultTodoItemPropertiesModal,
 }: TodoItemComponentProps) {
-  const editor = useEditor();
   const reactEditor = useReactEditor();
   const editing = useBlockEditing<TodoItemProps>(blockId);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
@@ -377,7 +372,7 @@ export function TodoItem({
   /** Updates content and its timestamp inside one editor batch. */
   const updateName = (event: Parameters<typeof editing.attributes.onInput>[0]): void => {
     const updatedAt = nextTimestamp(String(editing.getProp("updatedAt") ?? block.props.updatedAt));
-    editor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       editing.attributes.onInput(event);
       editing.setProp("updatedAt", updatedAt);
     });
@@ -386,7 +381,7 @@ export function TodoItem({
   /** Completes IME input and advances its timestamp atomically. */
   const finishComposition = (event: Parameters<typeof editing.attributes.onCompositionEnd>[0]): void => {
     const updatedAt = nextTimestamp(String(editing.getProp("updatedAt") ?? block.props.updatedAt));
-    editor.batchUpdates(() => {
+    reactEditor.history.batchUpdates(() => {
       editing.attributes.onCompositionEnd(event);
       editing.setProp("updatedAt", updatedAt);
     });
@@ -396,7 +391,7 @@ export function TodoItem({
   const cycleStatus = (): void => {
     const status = editing.getProp("status") ?? block.props.status;
     const updatedAt = nextTimestamp(String(editing.getProp("updatedAt") ?? block.props.updatedAt));
-    editor.batchUpdates(() => editing.setProps({
+    reactEditor.history.batchUpdates(() => editing.setProps({
       status: nextStatus(status),
       updatedAt,
     }));
@@ -418,7 +413,7 @@ export function TodoItem({
     doing: TODO_STATUS_DOING_CLASS,
     done: TODO_STATUS_DONE_CLASS,
   }[block.props.status];
-  const statusGlyph = { todo: "", doing: "–", done: "✓" }[block.props.status];
+  const statusIcon = { todo: null, doing: <MinusIcon aria-hidden="true" />, done: <CheckIcon aria-hidden="true" /> }[block.props.status];
 
   return (
     <div
@@ -426,15 +421,17 @@ export function TodoItem({
       data-todo-status={block.props.status}
       data-todo-priority={block.props.priority}
     >
-      <button
+      <Button
         {...editing.preventTextEditingAttributes}
+        variant="ghost"
+        size="icon-xs"
         className={`${TODO_STATUS_CLASS} ${statusClass}`}
         type="button"
         aria-label={`Status: ${block.props.status}. Change status`}
         onClick={cycleStatus}
       >
-        <span aria-hidden="true">{statusGlyph}</span>
-      </button>
+        {statusIcon}
+      </Button>
       <div className={TODO_BODY_CLASS}>
         <div
           {...editing.attributes}
@@ -444,7 +441,7 @@ export function TodoItem({
           onInput={updateName}
           onCompositionEnd={finishComposition}
         />
-        <input
+        <Input
           {...editing.preventTextEditingAttributes}
           className={TODO_DESCRIPTION_CLASS}
           aria-label="Description"
@@ -453,7 +450,7 @@ export function TodoItem({
           onChange={(event) => commitInlineProperty({ description: event.currentTarget.value })}
         />
         <div className={TODO_META_CLASS}>
-          <select
+          <NativeSelect
             {...editing.preventTextEditingAttributes}
             className={TODO_PRIORITY_CLASS}
             aria-label="Priority"
@@ -462,9 +459,9 @@ export function TodoItem({
               priority: Number(event.currentTarget.value) as TodoItemProps["priority"],
             })}
           >
-            {[1, 2, 3, 4].map((priority) => <option key={priority} value={priority}>P{priority}</option>)}
-          </select>
-          <input
+            {[1, 2, 3, 4].map((priority) => <NativeSelectOption key={priority} value={priority}>P{priority}</NativeSelectOption>)}
+          </NativeSelect>
+          <Input
             {...editing.preventTextEditingAttributes}
             className={TODO_PROJECT_CLASS}
             aria-label="Project"
@@ -474,13 +471,15 @@ export function TodoItem({
           />
         </div>
       </div>
-      <button
+      <Button
         {...editing.preventTextEditingAttributes}
+        variant="ghost"
+        size="icon-xs"
         className={TODO_PROPERTIES_BUTTON_CLASS}
         type="button"
         aria-label="Open TODO properties"
         onClick={() => setPropertiesOpen(true)}
-      >…</button>
+      ><EllipsisIcon /></Button>
       {propertiesOpen && <PropertiesModal block={block} onClose={closeProperties} />}
     </div>
   );
@@ -513,15 +512,15 @@ export function todoItemExtension(
         const current = candidate;
         if (!current) return;
         candidate = undefined;
-        const block = reactEditor.editor.blocks.getBlock(current.blockId);
+        const block = reactEditor.blocks.getBlockNode(current.blockId);
         const match = block ? matchPrompt(block.content, prompts) : undefined;
         if (!block || block.type === TODO_ITEM_BLOCK_TYPE || !match) {
           decoratePrompt(current.contentElement);
           return;
         }
         const owned = createTodoItemProps();
-        reactEditor.editor.batchUpdates(() => {
-          reactEditor.editor.blocks.setBlockType(current.blockId, TODO_ITEM_BLOCK_TYPE);
+        reactEditor.history.batchUpdates(() => {
+          reactEditor.blocks.setBlockType(current.blockId, TODO_ITEM_BLOCK_TYPE);
           reactEditor.blocks.updateBlock(current.blockId, {
             content: block.content.slice(match.prompt.length).replace(/^\s+/, ""),
             props: { ...owned, status: match.status },
@@ -530,7 +529,7 @@ export function todoItemExtension(
       };
 
       const disposers = [
-        reactEditor.blocks.register({
+        reactEditor.blockTypes.register({
           definition: {
             type: TODO_STORAGE_BLOCK_TYPE,
             title: "TODO storage",
@@ -546,11 +545,11 @@ export function todoItemExtension(
             group: "Turn into",
             keywords: ["tasks", "todos"],
             isAvailable: ({ blockId }) => (
-              reactEditor.editor.blocks.getBlock(blockId)?.children.length === 0
+              reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId)
             ),
           },
         }),
-        reactEditor.blocks.register({
+        reactEditor.blockTypes.register({
           definition: {
             type: TODO_ITEM_BLOCK_TYPE,
             title: "TODO item",
@@ -570,7 +569,7 @@ export function todoItemExtension(
         }, ({ blockId, contentElement }) => {
           if (!blockId || !contentElement) return false;
           queueMicrotask(() => {
-            const block = reactEditor.editor.blocks.getBlock(blockId);
+            const block = reactEditor.blocks.getBlockNode(blockId);
             if (!block || block.type === TODO_ITEM_BLOCK_TYPE) return;
             const match = matchPrompt(contentElement.textContent ?? "", prompts);
             if (!match) {

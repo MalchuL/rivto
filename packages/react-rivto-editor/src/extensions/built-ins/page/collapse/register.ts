@@ -1,7 +1,7 @@
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
-import { BlockCollapseSlot } from "../../../../blocks/block-slot-controls";
+import { BlockCollapseSlot } from "../../../../blocks/block-slot-controls/block-slot-controls";
 import type { ReactEditor } from "../../../../types";
 import { reconcileCollapsedSelection } from "../navigation";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../managers";
@@ -19,22 +19,21 @@ import { collapseTargets } from "./utils";
  * @returns Cleanup for document and selection reconciliation subscriptions.
  */
 export function registerCollapse(reactEditor: ReactEditor): () => void {
-  const { editor } = reactEditor;
-  reactEditor.blocks.registerListProps({
+  reactEditor.blockListProps.register({
     id: "collapse",
     defaults: { collapsed: false },
-    validate: (candidate) => typeof candidate.collapsed === "boolean",
+    isValid: (candidate) => typeof candidate.collapsed === "boolean",
   });
   reactEditor.surfaces.registerBlockSlot({
     position: "left-top",
     priority: 100,
     component: BlockCollapseSlot,
-    when: ({ block }) => block.children.length > 0,
+    when: ({ block }) => block.childIds.length > 0,
   });
   const reconcile = () => {
     const root = reactEditor.events.getRoot();
     const current = reactEditor.selection.get();
-    const next = reconcileCollapsedSelection(editor.blocks.getBlocks(), current);
+    const next = reconcileCollapsedSelection(reactEditor.blocks.getBlocks(), current);
     if (next !== current) {
       if (next) reactEditor.selection.set(next);
       else reactEditor.selection.clear();
@@ -44,7 +43,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
       root?.focus({ preventScroll: true });
     }
   };
-  const unsubscribeDocument = editor.document.subscribe(reconcile);
+  const unsubscribeDocument = reactEditor.subscribe(reconcile);
   const unsubscribeSelection = reactEditor.selection.subscribe(reconcile);
 
   const setCollapsed = (value: boolean | "toggle"): boolean => {
@@ -55,15 +54,17 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     const selection = nativeSelection ?? current;
     const ids = collapseTargets(selection);
     if (!ids.length) return false;
-    const blocks = [...new Set(ids)].map((id) => editor.blocks.getBlock(id));
-    if (blocks.some((block) => !block)) return false;
-    const first = blocks[0]!;
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.some((id) => !reactEditor.blocks.hasBlock(id))) return false;
+    const first = reactEditor.blocks.getBlockNode(uniqueIds[0]!);
+    if (!first) return false;
     const collapsed = value === "toggle" ? first.listProps.collapsed !== true : value;
-    const updates = blocks.flatMap((block) => (
-      block && (!collapsed || block.children.length > 0) && block.listProps.collapsed !== collapsed
-        ? [{ id: block.id, patch: { listProps: { collapsed } } }]
-        : []
-    ));
+    const updates = uniqueIds.flatMap((id) => {
+      const block = reactEditor.blocks.getBlockNode(id);
+      return block && (!collapsed || block.childIds.length > 0) && block.listProps.collapsed !== collapsed
+        ? [{ id, patch: { listProps: { collapsed } } }]
+        : [];
+    });
     if (updates.length) reactEditor.blocks.updateBlocks(updates);
     return true;
   };

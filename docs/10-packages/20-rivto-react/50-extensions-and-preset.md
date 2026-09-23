@@ -17,10 +17,10 @@ interface ReactEditorExtension {
 Manager registrations автоматически принадлежат active extension lifecycle. Не нужно вручную сохранять disposer, если registration создана внутри `setup()`.
 
 ```ts
-const analyticsExtension = (): ReactEditorExtension => ({
+const analyticsExtension = (editor: RivtoEditorApi): ReactEditorExtension => ({
   id: "app.analytics",
   setup(reactEditor) {
-    return reactEditor.editor.subscribe(() => report(reactEditor.editor.dump()));
+    return reactEditor.subscribe(() => report(editor.dump()));
   },
 });
 ```

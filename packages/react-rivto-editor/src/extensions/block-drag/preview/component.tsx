@@ -62,12 +62,12 @@ export function PageDragPreview({
   return (
     <>
       {entries.slice(0, MAX_PREVIEW_BLOCKS).map(({ block, depth }) => (
-        <div key={block.id} className={PAGE_DRAG_PREVIEW_BLOCK_CLASS} style={{ marginLeft: depth * 20 }}>
+        <div key={block.id} className={`${PAGE_DRAG_PREVIEW_BLOCK_CLASS} my-1`} style={{ marginLeft: depth * 20 }}>
           <div className={PAGE_DRAG_PREVIEW_CONTENT_CLASS}>{block.content || block.type}</div>
         </div>
       ))}
       {hiddenCount > 0 && (
-        <div className={PAGE_DRAG_PREVIEW_MORE_CLASS}>
+        <div className={`${PAGE_DRAG_PREVIEW_MORE_CLASS} mt-2 text-sm text-muted-foreground`}>
           … and {hiddenCount} more block{hiddenCount === 1 ? "" : "s"}
         </div>
       )}

@@ -1,4 +1,15 @@
-import { useEffect, useRef } from "react";
+/**
+ * Property editor for one or more selected visual objects of the same kind.
+ *
+ * Edits are previewed live through the controller and committed as a single
+ * undo entry when the pointer leaves the panel or the panel unmounts. Rows
+ * whose values differ across the selection render as "Mixed" until the user
+ * picks a value. Controls are shadcn primitives (`NativeSelect`, `Checkbox`)
+ * plus the shared edgeless size and color controls.
+ */
+import { useEffect, useRef, type ReactNode } from "react";
+import { Checkbox } from "../../../../components/ui/checkbox";
+import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
 import { isNodeLike } from "../../../../managers/events/dom-nodes";
 import type { EdgelessVisualController } from "../controller";
 import type { EdgelessFontOption, EdgelessVisual, TextHorizontalAlign, TextVerticalAlign } from "../types";
@@ -6,6 +17,37 @@ import { ColorControl } from "./color-control";
 import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
 import { SizeControl } from "./size-control";
 import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "./properties-panel";
+
+/* Segmented control for text alignment; buttons keep `aria-pressed` for the active value. */
+const ALIGN_TOGGLES_CLASS = "inline-flex gap-0.5 rounded-lg border border-border bg-secondary p-0.5 [&_button]:size-7 [&_button]:min-w-7";
+const PAINT_TOGGLE_CLASS = "ml-auto grid h-7 w-[18px] place-items-center";
+const SELECT_CLASS = "text-xs";
+
+/**
+ * Renders a compact property select with a disabled "Mixed" placeholder.
+ *
+ * @param props - Accessible label, current value (empty when mixed), change
+ * callback, and the option elements.
+ * @returns A small shadcn `NativeSelect`.
+ */
+function PropertySelect({
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  readonly label: string;
+  readonly value: unknown;
+  onChange(value: string): void;
+  readonly children: ReactNode;
+}) {
+  return (
+    <NativeSelect size="sm" className={SELECT_CLASS} aria-label={label} value={String(value ?? "")} onChange={(event) => onChange(event.currentTarget.value)}>
+      <NativeSelectOption value="" disabled>Mixed</NativeSelectOption>
+      {children}
+    </NativeSelect>
+  );
+}
 
 const horizontalAlignments: readonly { value: TextHorizontalAlign; label: string; icon: EdgelessToolIcon }[] = [
   { value: "left", label: "Align text left", icon: "align-left" },
@@ -19,7 +61,13 @@ const verticalAlignments: readonly { value: TextVerticalAlign; label: string; ic
   { value: "bottom", label: "Align text bottom", icon: "align-bottom" },
 ];
 
-/** Same-type multi-selection property editor with deferred undo commits. */
+/**
+ * Renders the same-type multi-selection property editor.
+ *
+ * @param props - Selected visuals (all of one kind), font options, and the
+ * visual controller that previews and commits edits.
+ * @returns The right-side visual properties panel.
+ */
 export function VisualProperties({
   visuals,
   fonts: fontOptions,
@@ -65,14 +113,13 @@ export function VisualProperties({
       />
     );
   const paintToggle = (label: string, key: "filled" | "stroked", enabled: boolean) => (
-    <label className="edgeless-paint-toggle" title={enabled ? `Disable ${label.toLowerCase()}` : `Enable ${label.toLowerCase()}`}>
-      <input
-        type="checkbox"
+    <span className={PAINT_TOGGLE_CLASS} title={enabled ? `Disable ${label.toLowerCase()}` : `Enable ${label.toLowerCase()}`}>
+      <Checkbox
         aria-label={`Enable ${label.toLowerCase()}`}
         checked={enabled}
-        onChange={(event) => preview({ [key]: event.currentTarget.checked })}
+        onCheckedChange={(checked) => preview({ [key]: checked === true })}
       />
-    </label>
+    </span>
   );
 
   const hasLabel =
@@ -88,35 +135,30 @@ export function VisualProperties({
         {color("Text color", "color")}
       </PropertyRow>
       <PropertyRow label="Font">
-        <select
-          aria-label="Font family"
-          value={String(common("fontFamily") ?? "")}
-          onChange={(event) => preview({ fontFamily: event.currentTarget.value })}
-        >
-          <option value="" disabled>Mixed</option>
-          {fontOptions.map((font) => <option key={font.fontFamily} value={font.fontFamily}>{font.label}</option>)}
-        </select>
+        <PropertySelect label="Font family" value={common("fontFamily")} onChange={(fontFamily) => preview({ fontFamily })}>
+          {fontOptions.map((font) => <NativeSelectOption key={font.fontFamily} value={font.fontFamily}>{font.label}</NativeSelectOption>)}
+        </PropertySelect>
         <SizeControl label="Font size" preview="text" value={common("fontSize")} min={10} max={96} onChange={(fontSize) => preview({ fontSize })} />
       </PropertyRow>
       <PropertyRow label="Align">
-        <span className="edgeless-align-toggles" role="group" aria-label="Horizontal text alignment">
+        <span className={ALIGN_TOGGLES_CLASS} role="group" aria-label="Horizontal text alignment">
           {horizontalAlignments.map(({ value, label, icon }) => (
             <EdgelessToolButton
               key={value}
               label={label}
               icon={icon}
-              aria-pressed={common("align") === value}
+              pressed={common("align") === value}
               onClick={() => preview({ align: value })}
             />
           ))}
         </span>
-        <span className="edgeless-align-toggles" role="group" aria-label="Vertical text alignment">
+        <span className={ALIGN_TOGGLES_CLASS} role="group" aria-label="Vertical text alignment">
           {verticalAlignments.map(({ value, label, icon }) => (
             <EdgelessToolButton
               key={value}
               label={label}
               icon={icon}
-              aria-pressed={common("verticalAlign") === value}
+              pressed={common("verticalAlign") === value}
               onClick={() => preview({ verticalAlign: value })}
             />
           ))}
@@ -124,18 +166,13 @@ export function VisualProperties({
       </PropertyRow>
       {visual.kind === "connector" && (
         <PropertyRow label="Rotation">
-          <select
-            aria-label="Connector text rotation"
-            value={String(common("textRotation") ?? "")}
-            onChange={(event) => preview({ textRotation: event.currentTarget.value })}
-          >
-            <option value="" disabled>Mixed</option>
-            <option value="horizontal">Horizontal</option>
-            <option value="90">90°</option>
-            <option value="180">180°</option>
-            <option value="270">270°</option>
-            <option value="along">Along path</option>
-          </select>
+          <PropertySelect label="Connector text rotation" value={common("textRotation")} onChange={(textRotation) => preview({ textRotation })}>
+            <NativeSelectOption value="horizontal">Horizontal</NativeSelectOption>
+            <NativeSelectOption value="90">90°</NativeSelectOption>
+            <NativeSelectOption value="180">180°</NativeSelectOption>
+            <NativeSelectOption value="270">270°</NativeSelectOption>
+            <NativeSelectOption value="along">Along path</NativeSelectOption>
+          </PropertySelect>
         </PropertyRow>
       )}
     </PropertyGroup>
@@ -203,33 +240,30 @@ export function VisualProperties({
               <SizeControl label="Stroke width" preview="dot" value={common("strokeWidth")} max={24} onChange={(strokeWidth) => preview({ strokeWidth })} />
             </PropertyRow>
             <PropertyRow label="Route">
-              <select aria-label="Connector route" value={String(common("route") ?? "")} onChange={(event) => preview({ route: event.currentTarget.value })}>
-                <option value="" disabled>Mixed</option>
-                <option value="straight">Straight</option>
-                <option value="orthogonal">Orthogonal</option>
-                <option value="curve">Curve</option>
-              </select>
+              <PropertySelect label="Connector route" value={common("route")} onChange={(route) => preview({ route })}>
+                <NativeSelectOption value="straight">Straight</NativeSelectOption>
+                <NativeSelectOption value="orthogonal">Orthogonal</NativeSelectOption>
+                <NativeSelectOption value="curve">Curve</NativeSelectOption>
+              </PropertySelect>
             </PropertyRow>
             <PropertyRow label="Style">
-              <select aria-label="Connector line style" value={String(common("lineStyle") ?? "")} onChange={(event) => preview({ lineStyle: event.currentTarget.value })}>
-                <option value="" disabled>Mixed</option>
-                <option value="solid">Solid</option>
-                <option value="dashed">Dashed</option>
-                <option value="dashed-animated">Dashed animated</option>
-              </select>
+              <PropertySelect label="Connector line style" value={common("lineStyle")} onChange={(lineStyle) => preview({ lineStyle })}>
+                <NativeSelectOption value="solid">Solid</NativeSelectOption>
+                <NativeSelectOption value="dashed">Dashed</NativeSelectOption>
+                <NativeSelectOption value="dashed-animated">Dashed animated</NativeSelectOption>
+              </PropertySelect>
             </PropertyRow>
             <PropertyRow label="Ends">
               {(["startStyle", "endStyle"] as const).map((key) => (
-                <select
+                <PropertySelect
                   key={key}
-                  aria-label={key === "startStyle" ? "Start endpoint" : "End endpoint"}
-                  value={String(common(key) ?? "")}
-                  onChange={(event) => preview({ [key]: event.currentTarget.value })}
+                  label={key === "startStyle" ? "Start endpoint" : "End endpoint"}
+                  value={common(key)}
+                  onChange={(style) => preview({ [key]: style })}
                 >
-                  <option value="" disabled>Mixed</option>
-                  <option value="none">None</option>
-                  <option value="arrow">Arrow</option>
-                </select>
+                  <NativeSelectOption value="none">None</NativeSelectOption>
+                  <NativeSelectOption value="arrow">Arrow</NativeSelectOption>
+                </PropertySelect>
               ))}
             </PropertyRow>
           </PropertyGroup>
@@ -245,7 +279,7 @@ export function VisualProperties({
       count={visuals.length}
       ariaLabel="Visual properties"
       panelRef={panelRef}
-      onClose={() => controller.reactEditor.editor.execute("edgeless.selection.clear")}
+      onClose={() => controller.reactEditor.commands.execute("edgeless.selection.clear")}
     >
       {body}
     </EdgelessPropertiesPanel>

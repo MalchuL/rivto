@@ -1,6 +1,6 @@
-import type { EditorBlock, EditorElement, EditorMode } from "@chulane/rivto";
+import type { EditorBlockNode, EditorElement, EditorMode } from "@chulane/rivto";
 import type { ComponentType, ReactNode } from "react";
-import type { BlockWrapperComponent } from "../../blocks/block-wrapper";
+import type { BlockWrapperComponent } from "../../blocks/block-wrapper/block-wrapper";
 
 /** Root React component rendering one complete presentation mode. */
 export type SurfaceComponent = ComponentType;
@@ -58,8 +58,8 @@ export type BlockSlotPosition =
 
 /** Render context supplied to a registered block-slot component or predicate. */
 export interface BlockSlotProps {
-  /** Latest detached block snapshot owned by the row. */
-  readonly block: EditorBlock;
+  /** Latest detached node snapshot owned by the row. */
+  readonly block: EditorBlockNode;
   /** Active presentation mode containing the row. */
   readonly mode: EditorMode;
   /** Whether the complete block participates in the current block selection. */

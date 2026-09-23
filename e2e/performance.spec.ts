@@ -14,9 +14,9 @@ async function seedLargeDocument(page: Page): Promise<void> {
   await page.goto("/");
   await page.evaluate(() => {
     const runtime = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor };
-    }).__rivtoDemo.editor.editor;
-    runtime.batchUpdates(() => {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    runtime.history.batchUpdates(() => {
       let afterId = runtime.blocks.getRootIds().at(-1);
       for (let index = 0; index < 500; index += 1) {
         afterId = runtime.blocks.insertBlock({

@@ -1,9 +1,15 @@
 /**
  * Per-block wrappers, drag registrations, indicators, and handle controls for page dragging.
  *
+ * The wrapper contributes Rivto's structural feedback around the stable block
+ * shell. dnd-kit hooks are mounted lazily and narrowly: a draggable only for
+ * the armed block and droppables only while a keyboard gesture is live, so a
+ * document with hundreds of blocks never carries broad manager subscriptions.
+ *
  * @module
  */
-import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { closestCenter } from "@dnd-kit/collision";
+import { useDraggable, useDroppable } from "@dnd-kit/react";
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks";
 import { useReactEditor } from "../../../hooks";
 import type { DropAxis } from "../../../views/types";
@@ -19,7 +25,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { PageDropIndicator } from "../placement/indicator";
-import type { DropPlacementStore, PageDragData } from "../types";
+import type { DropPlacementStore, PageDragData, PageDragHandle } from "../types";
 import { PageDragItemContext, PageDragStateContext } from "../state";
 import { blockContainment } from "../utils/containment";
 
@@ -50,11 +56,14 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
   const parentOutline = parentId ? blockContainment(reactEditor, parentId)?.childOutline : undefined;
   const axis = parentOutline === "fixed" ? parentView?.dropAxis : undefined;
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
-  const data: PageDragData = {
-    sortChildren: axis,
-    targetDropPlacement: targetView.dropPlacement,
-    parentDropPlacement: parentView?.dropPlacement,
-  };
+  const targetDropPlacement = targetView.dropPlacement;
+  const parentDropPlacement = parentView?.dropPlacement;
+  // dnd-kit re-assigns entity data whenever the object identity changes, so
+  // the layout context is memoized on its fields rather than rebuilt per render.
+  const data = useMemo<PageDragData>(
+    () => ({ sortChildren: axis, targetDropPlacement, parentDropPlacement }),
+    [axis, parentDropPlacement, targetDropPlacement],
+  );
   const dropNode = sortable || targetView.acceptsDropContainer ? blockElement : row;
 
   return (
@@ -172,31 +181,53 @@ function PageDragBlockMechanics({
     <PageDragItemContext.Provider value={itemState}>
       {children}
       {indicatorPortal}
-      {armed && <PageDragRegistration blockId={blockId} data={data} placements={dragState.placements} />}
+      {armed && <PageDragRegistration blockId={blockId} data={data} row={row} placements={dragState.placements} />}
       {keyboardDragging && <PageDragKeyboardDropTarget blockId={blockId} data={data} dropNode={dropNode} />}
     </PageDragItemContext.Provider>
   );
 }
 
-/** Mounts dnd-kit's broad-context hook for only the armed block handle. */
+/**
+ * Mounts dnd-kit's draggable for only the armed block handle.
+ *
+ * The row is the source element: the overlay is sized from it and keyboard
+ * movement starts at its center, matching the legacy handle-row geometry while
+ * keeping a tall parent's children out of the stand-in rectangle. The handle
+ * button is attached separately by the slot through {@link PageDragHandle}.
+ *
+ * @param props - Block ID, layout data, row element, and the shared store.
+ * @returns Nothing; the registration lives in the shared store.
+ */
 function PageDragRegistration({
   blockId,
   data,
+  row,
   placements,
 }: {
   readonly blockId: string;
   readonly data: PageDragData;
+  readonly row: HTMLElement | null;
   readonly placements: DropPlacementStore;
 }) {
-  const draggable = useDraggable({ id: blockId, data });
+  const { handleRef } = useDraggable<PageDragData>({ id: blockId, data, element: row ?? undefined });
+  const handle = useMemo<PageDragHandle>(() => ({ handleRef }), [handleRef]);
   useLayoutEffect(() => {
-    placements.setDraggable(blockId, draggable);
+    placements.setDraggable(blockId, handle);
     return () => placements.setDraggable(blockId, null);
-  }, [blockId, draggable, placements]);
+  }, [blockId, handle, placements]);
   return null;
 }
 
-/** Registers complete row geometry only for the less frequent keyboard gesture. */
+/**
+ * Registers complete row geometry only for the less frequent keyboard gesture.
+ *
+ * Keyboard movement has no cursor, so dnd-kit's nearest-center collision picks
+ * the row under the translated stand-in rectangle and the provider resolves
+ * before/after from the two rectangles.
+ *
+ * @param props - Block ID, layout data, and the element whose rectangle is measured.
+ * @returns Nothing; the droppable registers with the provider's manager.
+ */
 function PageDragKeyboardDropTarget({
   blockId,
   data,
@@ -206,10 +237,11 @@ function PageDragKeyboardDropTarget({
   readonly data: PageDragData;
   readonly dropNode: HTMLElement | null;
 }) {
-  const droppable = useDroppable({ id: blockId, data });
-  useLayoutEffect(() => {
-    droppable.setNodeRef(dropNode);
-    return () => droppable.setNodeRef(null);
-  }, [droppable.setNodeRef, dropNode]);
+  useDroppable<PageDragData>({
+    id: blockId,
+    data,
+    element: dropNode ?? undefined,
+    collisionDetector: closestCenter,
+  });
   return null;
 }

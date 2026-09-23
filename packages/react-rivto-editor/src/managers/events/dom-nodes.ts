@@ -37,13 +37,3 @@ export function isElementNode(value: unknown): value is Element {
 export function isHTMLElementNode(value: unknown): value is HTMLElement {
   return isElementNode(value) && typeof (value as HTMLElement).tagName === "string";
 }
-
-/**
- * Resolves the window that owns a node.
- *
- * @param node - Node whose document realm should be used.
- * @returns That document's `defaultView`, or null when unavailable.
- */
-export function viewOf(node: Node | null | undefined): Window | null {
-  return node?.ownerDocument?.defaultView ?? null;
-}

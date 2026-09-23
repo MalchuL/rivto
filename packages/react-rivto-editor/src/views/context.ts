@@ -22,12 +22,12 @@ export function createBlockViewContext(
   root: HTMLElement,
   selection?: Selection,
 ): BlockViewContext | undefined {
-  const block = reactEditor.editor.blocks.getBlock(blockId);
+  const block = reactEditor.blocks.getBlock(blockId);
   if (!block) return undefined;
   return {
     reactEditor,
     block,
-    parentId: reactEditor.editor.blocks.getParentId(block.id) ?? null,
+    parentId: reactEditor.blocks.getParentId(block.id) ?? null,
     selection,
     root,
   };

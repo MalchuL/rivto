@@ -1,16 +1,7 @@
+/**
+ * Publishes element storage and collection validation contracts.
+ * Field-level normalization remains internal to the document manager, while
+ * portable collection validation is shared with clipboard boundaries.
+ */
 export { DocumentElementManager } from "./element-manager";
-export type { ElementPipe, ElementPipeContext, ElementProcessor } from "./element-pipe";
-export {
-  ELEMENT_FRAME_PROCESSOR,
-  ELEMENT_FRAME_PROCESSOR_ID,
-  ELEMENT_PROPS_PROCESSOR,
-  ELEMENT_PROPS_PROCESSOR_ID,
-  ELEMENT_Z_INDEX_PROCESSOR,
-  ELEMENT_Z_INDEX_PROCESSOR_ID,
-} from "./element-pipe";
-export {
-  normalizeElementFrame,
-  normalizeElementProps,
-  normalizeElementZIndex,
-  validateElementCollection,
-} from "./utils";
+export { validateElementCollection } from "./utils";

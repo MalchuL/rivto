@@ -5,9 +5,12 @@
  * deleting them. Drag, clipboard, snapshots, and undo remain owned by core.
  * @module
  */
-import { useState, type KeyboardEvent, type MouseEvent } from "react";
+import { type KeyboardEvent, type MouseEvent } from "react";
+import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
+import { Button } from "../../../components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
 import { type EditorBlockInput } from "@chulane/rivto";
-import { useBlock, useBlockEditing, useReactEditor } from "../../../hooks";
+import { useBlockEditing, useBlockNode, useReactEditor } from "../../../hooks";
 import {
   type BlockSlotProps,
   type ReactEditorExtension,
@@ -32,121 +35,13 @@ export const COLUMNS_DEFAULT_COUNT = 2;
 export const COLUMNS_MIN_COUNT = 1;
 export const COLUMNS_MAX_COUNT = 6;
 
-const COLUMNS_CLASS = "rivto-columns";
-const COLUMN_CLASS = "rivto-columns-column";
-const SETTINGS_CLASS = "rivto-columns-settings";
-const PANEL_CLASS = "rivto-columns-settings-panel";
-const COUNT_CLASS = "rivto-columns-count";
-const EMPTY_COLUMN_MIN_HEIGHT = "120px";
-
-const COLUMNS_STYLES = `
-[data-block-type="${COLUMNS_BLOCK_TYPE}"] {
-  min-width: 0;
-  max-width: 100%;
-}
-[data-block-type="${COLUMNS_COLUMN_BLOCK_TYPE}"] {
-  min-width: 0;
-  max-width: 100%;
-  /* Internal lanes are layout shells rather than indented writing blocks. */
-  padding-left: 0;
-  padding-right: 0;
-}
-.${COLUMNS_CLASS} {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.${COLUMNS_CLASS}:not(:empty) {
-  min-height: var(--rivto-default-block-height);
-}
-.${COLUMNS_CLASS} span { color: #626f86; font-size: 12px; font-variant-numeric: tabular-nums; }
-[data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-children {
-  display: flex;
-  align-items: flex-start;
-  gap: 24px;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  margin: 0;
-}
-[data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-children > .page-block {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: 100%;
-  overflow: visible;
-}
-[data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-children > .page-block + .page-block::before {
-  content: "";
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  left: -12px;
-  width: 1px;
-  background: #dcdfe4;
-  pointer-events: none;
-}
-[data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-children .page-block-row::before {
-  /* Cover the handle gutter and block padding without entering another lane. */
-  inset: 0 -8px 0 -28px;
-  width: auto;
-}
-[data-block-type="${COLUMNS_COLUMN_BLOCK_TYPE}"] > .page-block-children {
-  margin: 0;
-  padding: 0 0 0 24px;
-  box-sizing: border-box;
-}
-[data-block-type="${COLUMNS_COLUMN_BLOCK_TYPE}"]:has(> .page-block-children) > .page-block-row {
-  display: none;
-}
-[data-block-type="${COLUMNS_BLOCK_TYPE}"] > .page-block-row .rivto-slot[data-slot-position="right"] {
-  left: auto;
-  right: 0;
-  transform: translateY(-50%);
-}
-.${COLUMN_CLASS} {
-  min-height: ${EMPTY_COLUMN_MIN_HEIGHT};
-}
-.${SETTINGS_CLASS} { position: relative; display: inline-flex; }
-.${SETTINGS_CLASS} > button {
-  width: 30px;
-  height: 30px;
-  border: 1px solid #dcdfe4;
-  border-radius: 6px;
-  background: white;
-  color: #44546f;
-  cursor: pointer;
-}
-.${SETTINGS_CLASS} > button:focus-visible { outline: 2px solid var(--rivto-accent, #6c5ce7); outline-offset: 2px; }
-.${PANEL_CLASS} {
-  position: absolute;
-  top: 36px;
-  right: 0;
-  z-index: 20;
-  width: 220px;
-  padding: 16px;
-  background: white;
-  border: 1px solid #dcdfe4;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px #091e4226;
-}
-.${COUNT_CLASS} {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
-}
-.${COUNT_CLASS} button {
-  width: 28px;
-  height: 28px;
-  border: 1px solid #dcdfe4;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-}
-.${COUNT_CLASS} output { font-variant-numeric: tabular-nums; min-width: 1.5ch; text-align: center; }
-`;
+const COLUMNS_CLASS = "rivto-columns flex items-center gap-2";
+const COLUMNS_STATS_CLASS = "text-xs tabular-nums text-muted-foreground";
+const COLUMN_CLASS = "rivto-columns-column min-h-[120px]";
+const SETTINGS_CLASS = "rivto-columns-settings relative inline-flex";
+const PANEL_CLASS = "rivto-columns-settings-panel w-56 p-4";
+const COUNT_CLASS = "rivto-columns-count mt-2 flex items-center justify-between gap-2";
+const COUNT_VALUE_CLASS = "min-w-[1.5ch] text-center tabular-nums";
 
 /**
  * Rejects counts that would create an empty or overflowing column board.
@@ -194,36 +89,36 @@ export function createColumnsBlockInput(
 
 /**
  * Changes how many column shells a board owns, relocating nested blocks first.
- * @param runtime - Active React editor runtime.
+ * @param reactEditor - Active React editor runtime.
  * @param blockId - Columns board identifier.
  * @param count - Desired column count in the supported range.
  * @returns Whether the board existed and the count could be applied.
  */
-export function setColumnsCount(runtime: ReactEditor, blockId: string, count: number): boolean {
-  const board = runtime.editor.blocks.getBlock(blockId);
+export function setColumnsCount(reactEditor: ReactEditor, blockId: string, count: number): boolean {
+  const board = reactEditor.blocks.getBlock(blockId);
   if (board?.type !== COLUMNS_BLOCK_TYPE || !Number.isFinite(count)) return false;
   const next = Math.max(COLUMNS_MIN_COUNT, Math.min(COLUMNS_MAX_COUNT, Math.round(count)));
   const columns = board.children.filter((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE);
   if (next === columns.length) return true;
-  runtime.editor.batchUpdates(() => {
-    runtime.blocks.updateBlock(board.id, { listProps: { collapsed: false } });
+  reactEditor.history.batchUpdates(() => {
+    reactEditor.blocks.updateBlock(board.id, { listProps: { collapsed: false } });
     if (next > columns.length) {
       let afterId = columns.at(-1)?.id ?? board.id;
       for (let index = columns.length; index < next; index += 1) {
-        const insertedId = runtime.blocks.insertBlock({
+        const insertedId = reactEditor.blocks.insertBlock({
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           content: "",
-        }, afterId === board.id ? undefined : afterId);
+        }, afterId === board.id ? undefined : afterId).id;
         if (afterId === board.id) {
-          runtime.editor.blocks.moveBlocks([insertedId], board.id, "inside");
+          reactEditor.blocks.moveBlocks([insertedId], board.id, "inside");
         }
         afterId = insertedId;
       }
       return;
     }
     const removed = columns.slice(next);
-    relocateColumnContents(runtime.editor, removed.map((column) => column.id));
-    runtime.editor.blocks.removeBlocks(removed.map((column) => column.id));
+    relocateColumnContents(reactEditor, removed.map((column) => column.id));
+    reactEditor.blocks.removeBlocks(removed.map((column) => column.id));
   });
   return true;
 }
@@ -237,11 +132,11 @@ export function Columns({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId, { textEdit: false });
   const block = editing.block;
   if (!block) return null;
-  const count = block.children.length;
+  const count = block.childIds.length;
   return <div {...editing.attributes} className={COLUMNS_CLASS}>
     {block.listProps.collapsed === true && <>
       <strong>Columns</strong>
-      <span>{count} {count === 1 ? "column" : "columns"}</span>
+      <span className={COLUMNS_STATS_CLASS}>{count} {count === 1 ? "column" : "columns"}</span>
     </>}
   </div>;
 }
@@ -252,9 +147,9 @@ export function Columns({ blockId }: { readonly blockId: string }) {
  * @returns Empty-lane control; drop and sort markers live on the column shell.
  */
 function ColumnsColumn({ blockId }: { readonly blockId: string }) {
-  const runtime = useReactEditor();
-  const { block } = useBlock(blockId);
-  const empty = (block?.children.length ?? 0) === 0;
+  const reactEditor = useReactEditor();
+  const { block } = useBlockNode(blockId);
+  const empty = block?.childIds.length === 0;
   /**
    * Creates the first writing block when the column has no nested content.
    * @param event - Click or keyboard activation of the empty column.
@@ -265,8 +160,8 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    const root = runtime.events.getRoot();
-    const context = root ? createBlockViewContext(runtime, blockId, root) : undefined;
+    const root = reactEditor.events.getRoot();
+    const context = root ? createBlockViewContext(reactEditor, blockId, root) : undefined;
     if (context) columnsColumnView.insertFirstChild(context);
   };
   return (
@@ -287,34 +182,31 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
  * @returns Settings button and count panel.
  */
 function ColumnsControls({ block }: BlockSlotProps) {
-  const runtime = useReactEditor();
-  const [open, setOpen] = useState(false);
-  const count = block.children.filter((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE).length;
+  const reactEditor = useReactEditor();
+  const count = block.childIds.filter((childId) => (
+    reactEditor.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE
+  )).length;
   return (
     <div className={SETTINGS_CLASS}>
-      <button type="button" aria-label="Columns settings" aria-expanded={open} onClick={() => setOpen(!open)}>⚙</button>
-      {open && (
-        <div className={PANEL_CLASS} role="group" aria-label="Column count">
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="icon-sm" type="button" aria-label="Columns settings">
+            <SettingsIcon />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className={PANEL_CLASS} role="group" aria-label="Column count">
           <strong>Columns</strong>
           <div className={COUNT_CLASS}>
-            <button type="button" aria-label="Remove column" disabled={count <= COLUMNS_MIN_COUNT}
-              onClick={() => setColumnsCount(runtime, block.id, count - 1)}>-</button>
-            <output aria-live="polite">{count}</output>
-            <button type="button" aria-label="Add column" disabled={count >= COLUMNS_MAX_COUNT}
-              onClick={() => setColumnsCount(runtime, block.id, count + 1)}>+</button>
+            <Button variant="outline" size="icon-sm" type="button" aria-label="Remove column" disabled={count <= COLUMNS_MIN_COUNT}
+              onClick={() => setColumnsCount(reactEditor, block.id, count - 1)}><MinusIcon /></Button>
+            <output className={COUNT_VALUE_CLASS} aria-live="polite">{count}</output>
+            <Button variant="outline" size="icon-sm" type="button" aria-label="Add column" disabled={count >= COLUMNS_MAX_COUNT}
+              onClick={() => setColumnsCount(reactEditor, block.id, count + 1)}><PlusIcon /></Button>
           </div>
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
     </div>
   );
-}
-
-/**
- * Supplies extension-local CSS without changing the shared package stylesheet.
- * @returns One scoped style element owned by the extension lifecycle.
- */
-function ColumnsStyles() {
-  return <style>{COLUMNS_STYLES}</style>;
 }
 
 /**
@@ -324,9 +216,8 @@ function ColumnsStyles() {
 export function columnsExtension(): ReactEditorExtension {
   return {
     id: "block.columns",
-    setup: (runtime) => {
-      runtime.extensions.mount(ColumnsStyles);
-      runtime.blocks.register({
+    setup: (reactEditor) => {
+      reactEditor.blockTypes.register({
         definition: {
           type: COLUMNS_BLOCK_TYPE,
           title: "Columns",
@@ -335,29 +226,28 @@ export function columnsExtension(): ReactEditorExtension {
         render: Columns,
         view: columnsView,
       });
-      runtime.blocks.register({
+      reactEditor.blockTypes.register({
         definition: {
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           title: "Column",
-          allowedParents: [COLUMNS_BLOCK_TYPE],
           metadata: { containment: { childOutline: "free", outlineFloor: true } },
         },
         render: ColumnsColumn,
         view: columnsColumnView,
       });
-      runtime.surfaces.registerBlockSlot({
+      reactEditor.surfaces.registerBlockSlot({
         position: "right",
         component: ColumnsControls,
         when: ({ block }) => block.type === COLUMNS_BLOCK_TYPE,
       });
-      runtime.slashCommands.register({
+      reactEditor.slashCommands.register({
         id: "block.columns.insert",
         title: "Columns",
         group: "Turn into",
         keywords: ["layout", "split", "grid"],
-        isAvailable: ({ blockId }) => runtime.editor.blocks.getBlock(blockId)?.children.length === 0,
+        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId),
         execute: ({ blockId }) => {
-          convertLeafToContainer(runtime, blockId, createColumnsBlockInput());
+          convertLeafToContainer(reactEditor, blockId, createColumnsBlockInput());
         },
       });
     },

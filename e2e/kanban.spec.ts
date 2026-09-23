@@ -87,7 +87,7 @@ test("moves cards between columns, back to the outline, and into an empty column
 test("moves Kanban cards in edgeless mode", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const { editor } = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "kanban")!;
     editor.load({ ...editor.dump(), blocks: [board], elements: [] });
     editor.elements.insertElement({
@@ -118,12 +118,12 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto("/");
     await page.evaluate((mode) => {
-      const { editor } = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto-react").ReactEditor } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === "kanban")!;
       editor.load({ ...editor.dump(), blocks: [board], elements: [] });
       const column = board.children[0]!;
       for (const content of ["Second card", "Third card"]) {
-        const id = editor.blocks.insertBlock({ type: "paragraph", content }, board.id);
+        const id = editor.blocks.insertBlock({ type: "paragraph", content }, board.id).id;
         editor.blocks.moveBlocks([id], column.id, "inside");
       }
       if (mode === "edgeless") editor.elements.insertElement({

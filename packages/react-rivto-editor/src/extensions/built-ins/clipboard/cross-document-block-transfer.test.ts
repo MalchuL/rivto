@@ -4,7 +4,7 @@ import { crossDocumentBlockTransfer } from "./cross-document-block-transfer";
 
 function createEditor(): RivtoEditorApi {
   const editor = createRivtoEditor();
-  editor.blocksRegistry.defineBlock({ type: "test.counter", defaultProps: { count: 0 } });
+  editor.blockRegistry.defineBlock({ type: "test.counter", defaultProps: { count: 0 } });
   return editor;
 }
 
@@ -19,17 +19,17 @@ describe("cross-document block transfer", () => {
       listProps: { collapsed: true, type: "checkbox", checked: true },
       pluginData: { test: { retained: true } },
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],
-    });
-    const second = source.blocks.insertBlock({ id: "second", type: "paragraph", content: "Second" });
-    const outside = source.blocks.insertBlock({ id: "outside", type: "paragraph", content: "Outside" });
-    const target = destination.blocks.insertBlock({ id: "target", type: "paragraph", content: "Target" });
+    }).id;
+    const second = source.blocks.insertBlock({ id: "second", type: "paragraph", content: "Second" }).id;
+    const outside = source.blocks.insertBlock({ id: "outside", type: "paragraph", content: "Outside" }).id;
+    const target = destination.blocks.insertBlock({ id: "target", type: "paragraph", content: "Target" }).id;
     source.history.clear();
     destination.history.clear();
 
     crossDocumentBlockTransfer(source, destination, [first, second], { targetId: target, position: "inside" });
 
     expect(source.blocks.getRootIds()).toEqual([outside]);
-    expect(destination.blocks.getChildIds(target)).toEqual([first, second]);
+    expect(destination.blocks.getBlockNode(target)?.childIds).toEqual([first, second]);
     expect(destination.blocks.getBlock(first)).toMatchObject({
       id: first,
       listProps: { collapsed: true, type: "checkbox", checked: true },
@@ -37,10 +37,10 @@ describe("cross-document block transfer", () => {
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],
     });
 
-    destination.undo();
+    destination.history.undo();
     expect(destination.blocks.getRootIds()).toEqual([target]);
     expect(source.blocks.getRootIds()).toEqual([outside]);
-    source.undo();
+    source.history.undo();
     expect(source.blocks.getRootIds()).toEqual([first, second, outside]);
 
     source.destroy();
@@ -91,7 +91,7 @@ describe("cross-document block transfer", () => {
     expect(() => crossDocumentBlockTransfer(source, destination, ["custom"], {
       targetId: null,
       position: "after",
-    })).toThrow("Unknown block type test.counter");
+    })).toThrow("Block type test.counter is unavailable in block mode");
     expect(source.dump()).toEqual(sourceBefore);
     expect(destination.blocks.getBlocks()).toEqual([]);
     source.destroy();

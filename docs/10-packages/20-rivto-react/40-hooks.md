@@ -4,12 +4,6 @@
 
 ## Runtime hooks
 
-### `useEditor()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** stable core `RivtoEditorApi`.
-- **Исключения:** `Editor hooks must be used inside EditorView`.
-
 ### `useReactEditor()`
 
 - **Аргументы:** отсутствуют.
@@ -40,12 +34,6 @@ Mode локален и не входит в snapshot.
 
 ## Document hooks
 
-### `useDocument()`
-
-- **Аргументы:** отсутствуют.
-- **Возвращает:** stable `DocumentModel`.
-- **Исключения:** provider error.
-
 ### `useRootBlockIds()`
 
 - **Аргументы:** отсутствуют.
@@ -60,15 +48,16 @@ Mode локален и не входит в snapshot.
 - **Возвращает:** `{ block: EditorBlock | undefined; operations: BlockOperations }`.
 - **Исключения:** provider error; operations передают validation/store errors.
 
-Detached `block` обновляется по revision. Operations привязаны к ID: `update`, `setContent`, `setType`, `setProp`, `setPluginData`, `remove`, `mergeInto`, `moveAfter`, `moveBefore`, `moveInside`, `indent`, `outdent`.
+Detached `block` обновляется по подписке на его subtree. Operations привязаны к ID: `update`, `setContent`, `setType`, `setProp`, `setPluginData`, `remove`, `mergeInto`, `moveAfter`, `moveBefore`, `moveInside`, `indent`, `outdent`.
 
-### `useBlockChildren(blockId)`
+`block.children` содержит полные рекурсивные дочерние блоки. Используйте этот hook только когда нужны данные потомков.
 
-- **Аргументы:** parent `blockId`.
-- **Возвращает:** `{ children; operations: { add, remove, move } }`.
-- **Исключения:** missing parent, non-direct child и core errors.
+### `useBlockNode(blockId)`
 
-`add(block, afterId?)` возвращает ID; `undefined` означает append, `null` — first. Остальные operations принимают только direct children.
+- **Аргументы:** `blockId: string`.
+- **Возвращает:** `{ block: EditorBlockNode | undefined; operations: BlockOperations }`.
+
+`block.childIds` содержит прямые дочерние ID; данные потомков не материализуются. Узел обновляется при изменении своих полей или списка прямых детей.
 
 ### `useBlockSelection(blockId)`
 
