@@ -47,6 +47,8 @@ import {
   type ReviewReport,
 } from "./extensions/reports/review-report";
 
+const DEMO_BLOCK_ID_TOGGLE_CLASS = "demo-block-id-toggle";
+
 /**
  * Persists one Review envelope through the demo-only Vite server adapter.
  *
@@ -572,10 +574,14 @@ function DemoToolbar({
   editor,
   showBlockIds,
   onShowBlockIdsChange,
+  virtualizePage,
+  onVirtualizePageChange,
 }: {
   readonly editor: RivtoEditorApi;
   readonly showBlockIds: boolean;
   readonly onShowBlockIdsChange: (visible: boolean) => void;
+  readonly virtualizePage?: boolean;
+  readonly onVirtualizePageChange?: (enabled: boolean) => void;
 }) {
   const { mode, setMode } = useEditorMode();
   const [reportError, setReportError] = useState<string | null>(null);
@@ -605,7 +611,7 @@ function DemoToolbar({
   return (
     <header className="demo-header">
       <div className="demo-toolbar-controls">
-        <label className="demo-block-id-toggle">
+        <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
           <input
             type="checkbox"
             checked={showBlockIds}
@@ -613,6 +619,10 @@ function DemoToolbar({
           />
           Block IDs
         </label>
+        {onVirtualizePageChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+          <input type="checkbox" checked={virtualizePage} onChange={(event) => onVirtualizePageChange(event.currentTarget.checked)} />
+          Virtualize page
+        </label>}
         <div className="demo-mode-switch" role="group" aria-label="Editor mode">
           {/* `data-editor-mode` / `data-editor-action` are used by e2e. */}
           <button type="button" data-editor-mode="block" aria-pressed={mode === "block"} onClick={() => switchMode("block")}>Page</button>
@@ -645,6 +655,7 @@ function JournalDemoApp() {
   const [todayEditor] = useState(createDemoEditor);
   const [yesterdayEditor] = useState(createEmptyDemoEditor);
   const [showBlockIds, setShowBlockIds] = useState(true);
+  const [virtualizePage, setVirtualizePage] = useState(true);
   const [dates] = useState(() => {
     const today = new Date();
     const yesterday = new Date(today);
@@ -669,11 +680,13 @@ function JournalDemoApp() {
       <div className="journal-stack">
         {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
         <section className="journal-document" data-journal-document="today">
-          <EditorView reactEditor={todayEditor.reactEditor}>
+          <EditorView reactEditor={todayEditor.reactEditor} virtualizePage={virtualizePage}>
             <DemoToolbar
               editor={todayEditor.editor}
               showBlockIds={showBlockIds}
               onShowBlockIdsChange={setShowBlockIds}
+              virtualizePage={virtualizePage}
+              onVirtualizePageChange={setVirtualizePage}
             />
             <RevisionsPanel />
             <KeyboardPanel />
