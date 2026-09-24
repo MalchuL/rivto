@@ -15,7 +15,6 @@ import {
   type PointerDropCandidate,
   type PointerDropReason,
 } from "./hit";
-import { isStructuralLayout } from "../placement/intent";
 import type { DropPlacementInput, DropPlacementSource } from "../placement/types";
 import type { PointerCoordinates } from "../types";
 
@@ -171,12 +170,8 @@ function nearbyRow(
  * contains the gap between siblings, so the smallest containing block was
  * the container itself.
  *
- * The fix hit-tests `.page-block-row` instead of the full BlockView.
- * A pointer on a row targets that block so "inside" stays on the same line.
- * A pointer in a gap falls through to {@link pickPointerDropTarget}, which
- * prefers the nearest row (before/after, including first/last nested
- * children) and only keeps a container when the pointer is over an empty
- * lane body with no nearby descendant row.
+ * Shared pointer hit-testing gives a root's outer edge priority over nested
+ * rows, then resolves row and empty-body hits from the same measured geometry.
  *
  * @param source - Dragged block identity and layout data.
  * @param pointer - Live viewport cursor position driving the hit test.

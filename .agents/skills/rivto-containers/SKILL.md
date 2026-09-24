@@ -15,7 +15,7 @@ tree renderer, or container-specific drag system.
 Patterns can evolve. Trace the affected behavior and inspect relevant shared
 owners; do not rely only on this guide:
 
-- `packages/react-rivto-editor/src/blocks/block-tree.tsx` — recursive rendering,
+- `packages/react-rivto-editor/src/blocks/block-tree/block-tree.tsx` — recursive rendering,
   collapse visibility, slots, wrappers, and stable DOM shells.
 - `packages/react-rivto-editor/src/hooks/blocks/use-block-editing.ts` — text and
   structural selection anchors.
@@ -27,7 +27,7 @@ owners; do not rely only on this guide:
   registration and containment metadata.
 - `packages/rivto-editor-core/src/managers/block-registry-manager/types.ts` —
   defaults, property schemas, and `allowedParents`.
-- `packages/react-rivto-editor/styles.css` — shared block-tree geometry.
+- `packages/react-rivto-editor/src/blocks/block-tree/block-tree.css` — shared block-tree geometry.
 
 Then inspect the closest example end to end:
 
@@ -272,6 +272,16 @@ Check these geometry rules:
 
 Verify page and edgeless DOM because they share `BlockTree` but use different
 wrappers and available width.
+
+For block dragging, keep a narrow outer-edge zone on each root container for
+its sibling gap. A nested row may reach the container border, but dragging on
+that border must place the source before or after the root, not inside its last
+child. Route row hits and gap hits through the same pointer target picker;
+separate DOM row fast paths can bypass the edge rule. Test adjacent root
+containers with the pointer just inside the first container's bottom edge,
+then assert both the indicator and the persisted root order in page and
+edgeless modes. Also exercise the demo's TODO storage and Bento pair with the
+target scrolled into the viewport before dragging.
 
 ## Test the invariant, then the browser
 

@@ -103,6 +103,20 @@ test("the gap below the last nested child uses the last child, not the parent bo
     .toEqual({ id: "after", reason: "nearby-row" });
 });
 
+test("the outer bottom edge of a root container targets its sibling gap", () => {
+  const board = candidate("board", rect(0, 28), {
+    block: rect(0, 160),
+    acceptsDropContainer: true,
+  });
+  const last = candidate("last", rect(128, 32), { ancestorIds: ["board"] });
+  const next = candidate("next", rect(168, 80), {
+    block: rect(168, 80),
+    acceptsDropContainer: true,
+  });
+  expect(pickPointerDropTarget([board, last, next], { x: 100, y: 156 }))
+    .toEqual({ id: "board", reason: "root-edge" });
+});
+
 test("space outside the first and last roots targets their boundary, not a container field", () => {
   const board = candidate("board", rect(0, 28), {
     block: rect(0, 160),
