@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { Fragment, useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { defaultRangeExtractor, useWindowVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import { useEditorRoot, useReactEditor, useRootBlockIds } from "../../hooks";
@@ -188,6 +188,14 @@ export function PageSurface() {
     ref(element);
     setSurface(element);
   }, [ref]);
+  let pageRoots: ReactNode;
+  if (pageVirtualization.threshold === true || (
+    typeof pageVirtualization.threshold === "number" && rootIds.length >= pageVirtualization.threshold
+  )) {
+    pageRoots = <VirtualPageRoots blockIds={rootIds} surface={surface} overscan={pageVirtualization.overscan} />;
+  } else {
+    pageRoots = <BlockTree blockIds={rootIds} />;
+  }
 
   /*
    * `ref` registers this element as the EditorView DOM/event root.
@@ -207,11 +215,7 @@ export function PageSurface() {
       aria-label="Document editor"
       tabIndex={-1}
     >
-      {(pageVirtualization.threshold === true || (
-        typeof pageVirtualization.threshold === "number" && rootIds.length >= pageVirtualization.threshold
-      ))
-        ? <VirtualPageRoots blockIds={rootIds} surface={surface} overscan={pageVirtualization.overscan} />
-        : <BlockTree blockIds={rootIds} />}
+      {pageRoots}
       {/* PAGE_END_SLOT_ATTRIBUTE in constants.ts marks the TrailingBlock portal target. 
       * Uses to add "Add block" buttons at the end of the page.
       */}

@@ -454,6 +454,26 @@ describe("document reactivity", () => {
     void doc.destroy();
   });
 
+  test("notifies changed parents without waking the moved child's node listener", () => {
+    const doc = new YjsDoc("child-placement-notification");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({ id: "left", type: "paragraph", children: [{ id: "child", type: "paragraph" }] });
+    model.blocks.insertBlock({ id: "right", type: "paragraph" });
+    const calls = { left: 0, right: 0, child: 0 };
+    const disposers = [
+      model.blocks.subscribeBlockNode("left", () => { calls.left += 1; }),
+      model.blocks.subscribeBlockNode("right", () => { calls.right += 1; }),
+      model.blocks.subscribeBlockNode("child", () => { calls.child += 1; }),
+    ];
+
+    model.blocks.moveBlock("child", "right", "inside");
+
+    expect(calls).toEqual({ left: 1, right: 1, child: 0 });
+    expect(model.blocks.getParentId("child")).toBe("right");
+    disposers.forEach((dispose) => dispose());
+    void doc.destroy();
+  });
+
   test("updates parent links without reading unrelated block records", () => {
     const doc = new YjsDoc("local-parent-refresh");
     const model = new DocumentModelImpl(doc);

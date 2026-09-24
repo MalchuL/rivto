@@ -30,7 +30,11 @@ export interface EditorViewProps {
  * @returns A nonnegative integer count.
  */
 function rootCount(value: number, fallback: number): number {
-  return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : fallback;
+  let count = fallback;
+  if (Number.isFinite(value)) {
+    count = Math.max(0, Math.trunc(value));
+  }
+  return count;
 }
 
 /**

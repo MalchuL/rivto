@@ -558,6 +558,10 @@ function DemoToolbar({
 }) {
   const { mode, setMode } = useEditorMode();
   const [reportError, setReportError] = useState<string | null>(null);
+  let thresholdInputValue: number | string = "";
+  if (typeof virtualizePageThreshold === "number") {
+    thresholdInputValue = virtualizePageThreshold;
+  }
   /** No-ops when already in `next` so repeated clicks do not thrash mode. */
   const switchMode = (next: "block" | "edgeless") => {
     if (next === mode) return;
@@ -581,6 +585,21 @@ function DemoToolbar({
     }
   };
 
+  /**
+   * Uses an empty threshold input to mean virtualization is always enabled.
+   *
+   * @param event - Current numeric input.
+   * @returns Nothing.
+   */
+  const changeVirtualizationThreshold = (event: ChangeEvent<HTMLInputElement>): void => {
+    const value = event.currentTarget.valueAsNumber;
+    if (Number.isFinite(value)) {
+      onVirtualizePageThresholdChange?.(Math.max(0, Math.trunc(value)));
+    } else {
+      onVirtualizePageThresholdChange?.(true);
+    }
+  };
+
   return (
     <header className="demo-header">
       <div className="demo-toolbar-controls">
@@ -601,9 +620,8 @@ function DemoToolbar({
           Virtualize after roots
           <input type="number" min={0} step={1} placeholder="Always"
             disabled={virtualizePageThreshold === false}
-            value={typeof virtualizePageThreshold === "number" ? virtualizePageThreshold : ""}
-            onChange={(event) => onVirtualizePageThresholdChange(Number.isFinite(event.currentTarget.valueAsNumber)
-              ? Math.max(0, Math.trunc(event.currentTarget.valueAsNumber)) : true)} />
+            value={thresholdInputValue}
+            onChange={changeVirtualizationThreshold} />
         </label>}
         {onVirtualizePageOverscanChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
           Extra roots per side

@@ -115,7 +115,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             const nodeFieldChangedIds = new Set<string>();
             // Parents whose direct child-ID snapshots must be rebuilt.
             const childListChangedIds = new Set<string>();
-            const placementChangedIds = new Set<string>();
             let structureChanged = false;
             let recordReplaced = false;
             events.forEach(({ path, keys }) => {
@@ -148,16 +147,12 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 structureChanged ||= childrenChanged;
             });
             if (structureChanged || recordReplaced) {
-                childListChangedIds.forEach((parentId) => {
-                    const previous = new Set(this.cache.getIndexedChildren(parentId));
-                    const parent = this.storage.get(parentId);
-                    const next = new Set(isCRDTMap(parent) ? strings(this.requiredArray(parent, "children")) : []);
-                    previous.forEach((id) => { if (!next.has(id)) placementChangedIds.add(id); });
-                    next.forEach((id) => { if (!previous.has(id)) placementChangedIds.add(id); });
-                });
                 this.cache.refreshParents(recordReplaced ? undefined : childListChangedIds, transaction);
             }
-            this.invalidateBlocks(changedBlockIds, nodeFieldChangedIds, childListChangedIds, placementChangedIds);
+            // Placement changes update the parent index and changed child lists.
+            // A moved block's own node snapshot is unchanged, so its node
+            // listener must not wake just because it moved under another parent.
+            this.invalidateBlocks(changedBlockIds, nodeFieldChangedIds, childListChangedIds);
             if (structureChanged || recordReplaced) this.emitStructure(transaction);
         });
         // The roots array is not a field on any block, so these events have an
@@ -638,6 +633,28 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         position: "before" | "after" | "inside";
     }[]): void {
         const parents = new Map<string, string | null>();
+        // History batches may already hold a CRDT transaction, so the parent
+        // cache is stale and individual placement searches scan the whole tree.
+        // Read the live hierarchy once for a large grouped move.
+        const liveParents = this.crdt.isTransacting && moves.length > 8
+            ? new Map<string, string | null>() : undefined;
+        if (liveParents) {
+            /**
+             * Indexes current placement before any writes in this move.
+             * @param array - Current sibling array to visit.
+             * @param parentId - Owner of the array, or null for roots.
+             * @returns No value.
+             */
+            const visit = (array: CRDTArray<string>, parentId: string | null): void => {
+                strings(array).forEach((id) => {
+                    if (liveParents.has(id)) return;
+                    liveParents.set(id, parentId);
+                    const block = this.storage.get(id);
+                    if (isCRDTMap(block)) visit(this.requiredArray(block, "children"), id);
+                });
+            };
+            visit(this.roots, null);
+        }
         /**
          * Resolves a parent after preceding simulated moves.
          *
@@ -646,13 +663,13 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
          */
         const parentOf = (id: string): string | null => parents.has(id)
             ? parents.get(id)!
-            : this.getParentId(id) ?? null;
+            : liveParents ? liveParents.get(id) ?? null : this.getParentId(id) ?? null;
         // Self-anchors are already in the requested place; keeping them would
         // still trip the descendant-cycle walk below.
         const pending = moves.filter(({ id, targetId }) => id !== targetId);
         for (const { id, targetId, position } of pending) {
-            if (!this.findContainer(id)) throw new Error(`Block ${id} not found`);
-            if (targetId !== null && !this.findContainer(targetId)) {
+            if (!(liveParents ? liveParents.has(id) : this.isPlaced(id))) throw new Error(`Block ${id} not found`);
+            if (targetId !== null && !(liveParents ? liveParents.has(targetId) : this.isPlaced(targetId))) {
                 throw new Error(`Target block ${targetId} not found`);
             }
             // Reject any placement whose anchor sits in the moving subtree,
@@ -670,6 +687,39 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             parents.set(id, parentId);
         }
         this.crdt.transact(() => {
+            // Outline commands pass a contiguous sibling range in source order
+            // (or reverse order for repeated "after" inserts). Move that range
+            // with one CRDT deletion and insertion instead of rewriting every ID.
+            const first = pending[0];
+            const samePlacement = first && pending.length > 1
+                && pending.every(({ targetId, position }) => targetId === first.targetId && position === first.position)
+                && (first.targetId === null || !pending.some(({ id }) => id === first.targetId));
+            if (samePlacement) {
+                const source = this.findContainer(first.id)!;
+                const sourceIds = strings(source.array);
+                const reversed = first.targetId === null || first.position === "after";
+                const start = source.index - (reversed ? pending.length - 1 : 0);
+                const range = sourceIds.slice(start, start + pending.length);
+                const ordered = reversed ? [...pending].reverse() : pending;
+                if (start >= 0 && range.length === pending.length
+                    && range.every((id, index) => id === ordered[index]!.id)) {
+                    const targetLocation = first.targetId !== null && first.position !== "inside"
+                        ? this.findContainer(first.targetId)! : undefined;
+                    const target = first.targetId === null ? source.array
+                        : first.position === "inside" ? this.requiredArray(this.requiredBlock(first.targetId), "children")
+                            : targetLocation!.array;
+                    const sameArray = first.targetId === null
+                        || (first.position === "inside" ? source.parentId === first.targetId
+                            : source.parentId === targetLocation!.parentId);
+                    let index = first.targetId === null ? 0
+                        : first.position === "inside" ? target.length
+                            : strings(target).indexOf(first.targetId) + (first.position === "after" ? 1 : 0);
+                    source.array.delete(start, range.length);
+                    if (sameArray && index > start) index -= range.length;
+                    target.insert(index, ...range);
+                    return;
+                }
+            }
             for (const { id, targetId, position } of pending) {
                 const source = this.findContainer(id)!;
                 let target: CRDTArray<string>;
@@ -953,12 +1003,11 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         ids: ReadonlySet<string>,
         nodeIds: ReadonlySet<string>,
         childListIds: ReadonlySet<string>,
-        placementIds: ReadonlySet<string>,
     ): void {
         const affected = this.cache.getAncestorIds(ids);
         this.cache.invalidate(affected, nodeIds, childListIds);
         this.emitFocused(affected, this.blockListeners);
-        this.emitFocused(new Set([...nodeIds, ...childListIds, ...placementIds]), this.blockNodeListeners);
+        this.emitFocused(new Set([...nodeIds, ...childListIds]), this.blockNodeListeners);
     }
 
     /**
