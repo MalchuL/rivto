@@ -45,6 +45,7 @@ interface SlashSession {
   readonly lastMatchedLength: number;
   readonly left: number;
   readonly top: number;
+  readonly above: boolean;
   readonly activeIndex: number;
 }
 
@@ -56,21 +57,29 @@ function findSlash(source: string, caret: number): { slashOffset: number; query:
   return { slashOffset, query: prefix.slice(slashOffset + 1) };
 }
 
-/** Measures the live caret, falling back to the editable block's lower edge. */
-function popupPosition(content: HTMLElement): Pick<SlashSession, "left" | "top"> {
+/**
+ * Measures the live caret and chooses the menu edge that stays beside it.
+ *
+ * An upward menu stores its bottom anchor rather than its top, so filtering
+ * moves the top down while the final choice remains next to the caret.
+ *
+ * @param content - Editable region containing the active slash query.
+ * @returns Viewport coordinates and the side used to anchor the menu.
+ */
+function popupPosition(content: HTMLElement): Pick<SlashSession, "left" | "top" | "above"> {
   const selection = content.ownerDocument.getSelection();
   const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : undefined;
   const fallback = content.getBoundingClientRect();
   const viewport = content.ownerDocument.defaultView;
   const desiredTop = (rect?.bottom || fallback.bottom) + 6;
-  const top = viewport && desiredTop + 320 > viewport.innerHeight
-    ? Math.max(8, (rect?.top || fallback.top) - 326)
-    : desiredTop;
+  const above = Boolean(viewport && desiredTop + 320 > viewport.innerHeight);
+  const top = above ? (rect?.top || fallback.top) - 6 : desiredTop;
   return {
     left: viewport
       ? Math.max(8, Math.min(rect?.left || fallback.left, viewport.innerWidth - 292))
       : rect?.left || fallback.left,
     top,
+    above,
   };
 }
 
@@ -327,7 +336,12 @@ export function SlashMenu() {
       className={SLASH_MENU_CLASS}
       data-slash-menu="true"
       aria-label="Slash commands"
-      style={{ left: session.left, top: session.top }}
+      style={{
+        left: session.left,
+        top: session.top,
+        transform: session.above ? "translateY(-100%)" : undefined,
+        maxHeight: session.above ? Math.min(320, Math.max(0, session.top - 8)) : undefined,
+      }}
       onPointerDown={(event) => event.preventDefault()}
     >
       <CommandList className="max-h-none overflow-visible">
