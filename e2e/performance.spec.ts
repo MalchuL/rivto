@@ -232,6 +232,7 @@ test("keeps the preview in step with repeated moves across 2,000 flat blocks", a
   await seedOutlineDocument(page, 0);
   const handle = page.locator('[data-block-id="perf-root-0"]').getByRole("button", { name: /^Move block:/ });
   await handle.scrollIntoViewIfNeeded();
+  await handle.evaluate((element) => element.scrollIntoView({ block: "center" }));
   const from = await handle.boundingBox();
   if (!from) throw new Error("Expected drag handle geometry");
   const x = from.x + from.width / 2;
@@ -259,10 +260,30 @@ test("keeps the preview in step with repeated moves across 2,000 flat blocks", a
     await page.waitForFunction(() => (window as unknown as { __previewMoveMs: number }).__previewMoveMs > 0);
     samples.push(await page.evaluate(() => (window as unknown as { __previewMoveMs: number }).__previewMoveMs));
   }
+  await page.evaluate(() => {
+    const state = window as unknown as { __flatFrames: number[]; __measureFlat: boolean };
+    state.__flatFrames = [];
+    state.__measureFlat = true;
+    const sample = (time: number) => {
+      state.__flatFrames.push(time);
+      if (state.__measureFlat) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  for (let step = 0; step < 30; step += 1) {
+    await page.mouse.move(x + 8, y + 10 + step * 6);
+    await page.waitForTimeout(8);
+  }
+  const gaps = await page.evaluate(() => {
+    const state = window as unknown as { __flatFrames: number[]; __measureFlat: boolean };
+    state.__measureFlat = false;
+    return state.__flatFrames.slice(1).map((time, index) => time - state.__flatFrames[index]!).sort((a, b) => a - b);
+  });
   await page.mouse.up();
   samples.sort((left, right) => left - right);
-  console.log(`flat preview frames: ${samples.map((sample) => sample.toFixed(1)).join(", ")} ms`);
+  console.log(`flat preview: median follow ${samples[Math.floor(samples.length / 2)]!.toFixed(1)} ms, p90 frame gap ${gaps[Math.floor(gaps.length * 0.9)]!.toFixed(1)} ms`);
   expect(samples[Math.floor(samples.length / 2)]).toBeLessThan(40);
+  expect(gaps[Math.floor(gaps.length * 0.9)]).toBeLessThan(40);
 });
 
 test("keeps auto-scroll frames responsive while dragging 2,000 flat blocks", async ({ browserName, page }) => {
@@ -277,24 +298,10 @@ test("keeps auto-scroll frames responsive while dragging 2,000 flat blocks", asy
   await page.mouse.move(x, y);
   await page.mouse.down();
   await page.mouse.move(x + 8, y);
-  await expect(page.locator(`.${PAGE_DRAG_OVERLAY_CLASS}`)).toBeVisible();
-  await page.mouse.move(x + 8, page.viewportSize()!.height - 12, { steps: 5 });
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Profiler.enable");
-  await cdp.send("Profiler.setSamplingInterval", { interval: 1_000 });
-  await cdp.send("Profiler.start");
-  await page.evaluate(() => {
-    const original = Document.prototype.elementsFromPoint;
-    (window as unknown as { __hitTests: { count: number; ms: number } }).__hitTests = { count: 0, ms: 0 };
-    Document.prototype.elementsFromPoint = function (x, y) {
-      const start = performance.now();
-      const result = original.call(this, x, y);
-      const metric = (window as unknown as { __hitTests: { count: number; ms: number } }).__hitTests;
-      metric.count += 1;
-      metric.ms += performance.now() - start;
-      return result;
-    };
-  });
+  const preview = page.locator(`.${PAGE_DRAG_OVERLAY_CLASS}`);
+  await expect(preview).toBeVisible();
+  await page.mouse.move(x + 8, page.viewportSize()!.height - 50, { steps: 5 });
+  const previewTop = (await preview.boundingBox())!.y;
   const measurements = await page.evaluate(async () => {
     const frames: number[] = [];
     const startScroll = window.scrollY;
@@ -312,24 +319,16 @@ test("keeps auto-scroll frames responsive while dragging 2,000 flat blocks", asy
       gaps: frames.slice(1).map((time, index) => time - frames[index]!).sort((a, b) => a - b),
     };
   });
-  const { profile } = await cdp.send("Profiler.stop");
-  console.log("CPU PROFILE", profile.nodes
-    .map((node) => ({ name: node.callFrame.functionName, url: node.callFrame.url, hits: node.hitCount ?? 0 }))
-    .sort((a, b) => b.hits - a.hits).slice(0, 25));
-  const nodes = new Map(profile.nodes.map((node) => [node.id, node]));
-  const parents = new Map(profile.nodes.flatMap((node) => (node.children ?? []).map((child) => [child, node.id] as const)));
-  console.log("HOT STACKS", profile.nodes.filter((node) => ["Tae", "elementFromPoint"].includes(node.callFrame.functionName)).map((node) => {
-    const stack = [];
-    let current: typeof node | undefined = node;
-    while (current && stack.length < 8) {
-      stack.push(`${current.callFrame.functionName || "anonymous"}:${current.hitCount ?? 0}`);
-      current = nodes.get(parents.get(current.id) ?? -1);
-    }
-    return stack.join(" <- ");
-  }));
-  console.log("HIT TESTS", await page.evaluate(() => (window as unknown as { __hitTests: { count: number; ms: number } }).__hitTests));
+  expect((await preview.boundingBox())!.y).toBeCloseTo(previewTop, 0);
+  await page.mouse.move(x + 8, page.viewportSize()!.height / 2, { steps: 5 });
+  await page.waitForTimeout(100);
+  const settledScroll = await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => window.scrollY)).toBe(settledScroll);
+  await page.mouse.move(x + 8, 50, { steps: 5 });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(settledScroll - 100);
   await page.mouse.up();
-  console.log(`flat auto-scroll: ${measurements.scroll}px; frame gaps ${measurements.gaps.map((gap) => gap.toFixed(1)).join(", ")} ms`);
+  console.log(`flat auto-scroll: ${measurements.scroll}px, p75 frame gap ${measurements.gaps[Math.floor(measurements.gaps.length * 0.75)]!.toFixed(1)} ms`);
   expect(measurements.scroll).toBeGreaterThan(100);
   expect(measurements.gaps[Math.floor(measurements.gaps.length * 0.75)]).toBeLessThan(40);
 });

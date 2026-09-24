@@ -182,6 +182,8 @@ export function PageDragProvider({
   const dragBlocks = useRef<readonly DropBlock[] | null>(null);
   const draggedSubtreeIds = useRef(new Set<string>());
   const pointerTracker = useRef<PointerTracker | null>(null);
+  /** @returns The live viewport pointer, or null for keyboard gestures. */
+  const getDragPointer = useMemo(() => () => pointerTracker.current?.get() ?? null, []);
   const previewRef = useRef<HTMLDivElement | null>(null);
   const previewPosition = useRef<PointerCoordinates | null>(null);
   const keyboardSourceRect = useRef<DOMRectangle | null>(null);
@@ -535,7 +537,7 @@ export function PageDragProvider({
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
       >
-        <PageDragAutoScrollPolicy />
+        <PageDragAutoScrollPolicy getPointer={getDragPointer} />
         {children}
         {overlay}
       </DragDropProvider>
