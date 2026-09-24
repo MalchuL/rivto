@@ -63,6 +63,8 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
 }) {
   const reactEditor = useReactEditor();
   const [pageTop, setPageTop] = useState(0);
+  // Focused or explicitly requested roots stay mounted even when scrolling
+  // moves them outside the ordinary viewport range.
   const [pinnedIds, setPinnedIds] = useState<readonly string[]>([]);
   useLayoutEffect(() => {
     if (!surface) return;
@@ -74,6 +76,8 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
     return () => observer.disconnect();
   }, [surface]);
   const getItemKey = useCallback((index: number) => blockIds[index]!, [blockIds]);
+  // The virtualizer chooses visible indices; pins add blocks needed by DOM
+  // focus and keyboard navigation without mounting the whole document.
   const rangeExtractor = useCallback((range: Parameters<typeof defaultRangeExtractor>[0]) => (
     [...new Set([...defaultRangeExtractor(range), ...pinnedIds.map((id) => blockIds.indexOf(id))])]
       .filter((index) => index >= 0 && index < blockIds.length)
@@ -90,12 +94,22 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
   });
   useEffect(() => {
     if (!surface) return;
-    const rootId = (blockId: string) => {
+    /**
+     * Finds the top-level root containing a possibly nested block.
+     * @param blockId - Requested block anywhere in the outline.
+     * @returns Its top-level root ID.
+     */
+    const rootId = (blockId: string): string => {
       let id = blockId;
       for (let parent = reactEditor.blocks.getParentId(id); parent; parent = reactEditor.blocks.getParentId(id)) id = parent;
       return id;
     };
-    const ensure = (ids: readonly string[]) => {
+    /**
+     * Mounts requested roots synchronously before a caller queries their DOM.
+     * @param ids - Requested blocks, including nested blocks.
+     * @returns No value.
+     */
+    const ensure = (ids: readonly string[]): void => {
       const roots = ids.map(rootId).filter((id) => blockIds.includes(id));
       if (!roots.length) return;
       flushSync(() => setPinnedIds(roots));

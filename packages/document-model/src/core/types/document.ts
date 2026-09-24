@@ -173,7 +173,13 @@ export interface DocumentBlockManagerApi {
     targetId: string | null;
     position: "before" | "after" | "inside";
   }[]): void;
-  /** @param id - Block that adopts all later siblings as children. @returns No value. */
+  /**
+   * Appends all later siblings of this block to its children, in their current
+   * order. Used before outdent so later outline items remain below the lifted
+   * block at its new depth.
+   * @param id - Block receiving the sibling tail.
+   * @returns No value.
+   */
   adoptFollowingSiblings(id: string): void;
   /** @param blocks - Complete portable block forest to validate. @returns No value. */
   validateBlocks(blocks: readonly Block[]): void;

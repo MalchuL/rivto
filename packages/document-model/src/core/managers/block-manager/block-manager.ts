@@ -661,9 +661,11 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
          * @param id - Placed block identifier.
          * @returns Its simulated parent, or the live parent when not yet moved.
          */
-        const parentOf = (id: string): string | null => parents.has(id)
-            ? parents.get(id)!
-            : liveParents ? liveParents.get(id) ?? null : this.getParentId(id) ?? null;
+        const parentOf = (id: string): string | null => {
+            if (parents.has(id)) return parents.get(id)!;
+            if (liveParents) return liveParents.get(id) ?? null;
+            return this.getParentId(id) ?? null;
+        };
         // Self-anchors are already in the requested place; keeping them would
         // still trip the descendant-cycle walk below.
         const pending = moves.filter(({ id, targetId }) => id !== targetId);
@@ -691,10 +693,10 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             // (or reverse order for repeated "after" inserts). Move that range
             // with one CRDT deletion and insertion instead of rewriting every ID.
             const first = pending[0];
-            const samePlacement = first && pending.length > 1
+            const samePlacement = Boolean(first && pending.length > 1
                 && pending.every(({ targetId, position }) => targetId === first.targetId && position === first.position)
-                && (first.targetId === null || !pending.some(({ id }) => id === first.targetId));
-            if (samePlacement) {
+                && (first.targetId === null || !pending.some(({ id }) => id === first.targetId)));
+            if (first && samePlacement) {
                 const source = this.findContainer(first.id)!;
                 const sourceIds = strings(source.array);
                 const reversed = first.targetId === null || first.position === "after";
@@ -703,17 +705,25 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
                 const ordered = reversed ? [...pending].reverse() : pending;
                 if (start >= 0 && range.length === pending.length
                     && range.every((id, index) => id === ordered[index]!.id)) {
-                    const targetLocation = first.targetId !== null && first.position !== "inside"
-                        ? this.findContainer(first.targetId)! : undefined;
-                    const target = first.targetId === null ? source.array
-                        : first.position === "inside" ? this.requiredArray(this.requiredBlock(first.targetId), "children")
-                            : targetLocation!.array;
-                    const sameArray = first.targetId === null
-                        || (first.position === "inside" ? source.parentId === first.targetId
-                            : source.parentId === targetLocation!.parentId);
-                    let index = first.targetId === null ? 0
-                        : first.position === "inside" ? target.length
-                            : strings(target).indexOf(first.targetId) + (first.position === "after" ? 1 : 0);
+                    let target: CRDTArray<string>;
+                    let index: number;
+                    let sameArray: boolean;
+                    if (first.targetId === null) {
+                        target = source.array;
+                        index = 0;
+                        sameArray = true;
+                    } else if (first.position === "inside") {
+                        target = this.requiredArray(this.requiredBlock(first.targetId), "children");
+                        index = target.length;
+                        sameArray = source.parentId === first.targetId;
+                    } else {
+                        const targetLocation = this.findContainer(first.targetId)!;
+                        target = targetLocation.array;
+                        index = targetLocation.index + (first.position === "after" ? 1 : 0);
+                        sameArray = source.parentId === targetLocation.parentId;
+                    }
+                    // The insertion slot was measured before deleting the range.
+                    // Deleting earlier siblings shifts that slot left by its length.
                     source.array.delete(start, range.length);
                     if (sameArray && index > start) index -= range.length;
                     target.insert(index, ...range);
@@ -742,10 +752,11 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     }
 
     /**
-     * Moves the complete sibling tail under its preceding block as one range.
+     * Moves every later sibling under the named block, preserving their order.
      *
-     * Outdent uses this before lifting the block. Preserving the tail as one
-     * ordered range avoids a separate lookup and CRDT rewrite for each sibling.
+     * For [A, B, C] under parent P, adopting after B gives P: [A, B] and
+     * B.children: [...existingChildren, C]. Outdent then lifts B after P,
+     * leaving C visually below B. The complete tail moves in one CRDT edit.
      *
      * @param id - Block receiving all siblings that currently follow it.
      * @returns No value.
