@@ -126,6 +126,41 @@ function pointerDropInput(
 }
 
 /**
+ * Finds the nearest row above or below an ordinary outline gap with native hit testing.
+ *
+ * @param root - Surface containing the dragged blocks.
+ * @param pointer - Current viewport cursor.
+ * @param direction - Whether to search above or below the cursor.
+ * @param excludedIds - Dragged subtree IDs that cannot receive the drop.
+ * @returns The first nearby row, or null when the gap needs the full layout search.
+ */
+function nearbyRow(
+  root: HTMLElement,
+  pointer: PointerCoordinates,
+  direction: -1 | 1,
+  excludedIds: ReadonlySet<string>,
+): { element: HTMLElement; rect: DOMRect; parentId: string | undefined } | null {
+  let result: { element: HTMLElement; rect: DOMRect; parentId: string | undefined } | null = null;
+  for (const distance of [12, 24, 48]) {
+    const hit = root.ownerDocument.elementsFromPoint(pointer.x, pointer.y + direction * distance)
+      .map((element) => element.closest<HTMLElement>(PAGE_BLOCK_SELECTOR))
+      .find((element) => element && root.contains(element) && !excludedIds.has(element.dataset.blockId ?? ""));
+    const row = hit?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
+    const rect = row?.getBoundingClientRect();
+    const probeY = pointer.y + direction * distance;
+    if (hit && rect && probeY >= rect.top && probeY <= rect.bottom) {
+      result = {
+        element: hit,
+        rect,
+        parentId: hit.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR)?.dataset.blockId,
+      };
+      break;
+    }
+  }
+  return result;
+}
+
+/**
  * Resolves the block beneath the pointer through native hit testing.
  *
  * Gaps used to snap to the nearest accepting ancestor by
@@ -170,11 +205,12 @@ export function withPointerDropTarget(
       block = block.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR) ?? null;
     }
   });
-  const rowHit = [...hovered].flatMap((element) => {
+  const hoveredRows = [...hovered].flatMap((element) => {
     if (element.dataset.blockId && excludedIds.has(element.dataset.blockId)) return [];
     const row = element.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
     return row ? [{ element, row, rect: row.getBoundingClientRect() }] : [];
-  }).filter(({ rect }) => (
+  });
+  const rowHit = hoveredRows.filter(({ rect }) => (
     pointer.x >= rect.left && pointer.x <= rect.right
     && pointer.y >= rect.top && pointer.y <= rect.bottom
   )).sort((left, right) => (
@@ -188,6 +224,40 @@ export function withPointerDropTarget(
       childOutline: id ? blockContainment(reactEditor, id)?.childOutline : undefined,
     }) ? "chrome" : "row";
     return pointerDropInput(source, rowHit.element, false, reactEditor, reason);
+  }
+
+  // A handle drag stays in the gutter outside the row rectangle. Its wide
+  // hover slab still identifies the block, so use that row's vertical span
+  // before probing six nearby points through the large document's hit tree.
+  const gutterHit = hoveredRows.filter(({ rect }) => (
+    pointer.y >= rect.top && pointer.y <= rect.bottom
+  )).sort((left, right) => (
+    left.rect.width * left.rect.height - right.rect.width * right.rect.height
+  ))[0];
+  if (gutterHit) {
+    const id = gutterHit.element.dataset.blockId;
+    const view = id ? reactEditor.views.resolve(id) : undefined;
+    const reason: PointerDropReason = view && isStructuralLayout({
+      dropAxis: view.dropAxis,
+      childOutline: id ? blockContainment(reactEditor, id)?.childOutline : undefined,
+    }) ? "chrome" : "nearby-row";
+    return pointerDropInput(source, gutterHit.element, false, reactEditor, reason);
+  }
+
+  const before = nearbyRow(root, pointer, -1, excludedIds);
+  const after = nearbyRow(root, pointer, 1, excludedIds);
+  if (before && after && before.parentId === after.parentId) {
+    const parentOutline = before.parentId
+      ? blockContainment(reactEditor, before.parentId)?.childOutline
+      : undefined;
+    const beforeOutline = blockContainment(reactEditor, before.element.dataset.blockId!)?.childOutline;
+    const afterOutline = blockContainment(reactEditor, after.element.dataset.blockId!)?.childOutline;
+    if (parentOutline !== "fixed" && beforeOutline !== "fixed" && afterOutline !== "fixed") {
+      // Ordinary sibling gaps need only their adjacent rows. The complete
+      // layout scan remains necessary for empty fields and fixed containers.
+      const nearest = pointer.y - before.rect.bottom <= after.rect.top - pointer.y ? before : after;
+      return pointerDropInput(source, nearest.element, false, reactEditor, "nearby-row");
+    }
   }
 
   // No row under the cursor: pick the nearest sibling row, not the nearest

@@ -502,7 +502,7 @@ export class BlockManager implements BlockManagerApi {
   ): void {
     // The document move is already atomic; this wrapper creates undo capture
     // breakpoints between consecutive structural moves.
-    this.editor.history.batchUpdates(() => this.moveGroupedBlocks(ids, targetId, position));
+    this.moveGroupedBlocks(ids, targetId, position);
   }
 
   /**
@@ -523,7 +523,7 @@ export class BlockManager implements BlockManagerApi {
    * @returns No value.
    */
   indentBlocks(ids: string[]): void {
-    this.editor.history.batchUpdates(() => this.applyIndent(ids));
+    this.applyIndent(ids);
   }
 
   /**
@@ -545,7 +545,7 @@ export class BlockManager implements BlockManagerApi {
    * @returns No value.
    */
   outdentBlocks(ids: string[]): void {
-    this.editor.history.batchUpdates(() => this.applyOutdent(ids));
+    this.applyOutdent(ids);
   }
 
   /**
@@ -662,7 +662,9 @@ export class BlockManager implements BlockManagerApi {
     // Inserting repeatedly after the same anchor reverses order unless the
     // grouped roots are processed backwards. Prepending has the same rule.
     const ordered = targetId === null || position === "after" ? [...roots].reverse() : roots;
-    this.document.blocks.moveBlocks(ordered.map((id) => ({ id, targetId, position })));
+    this.editor.history.batchUpdates(() => {
+      this.document.blocks.moveBlocks(ordered.map((id) => ({ id, targetId, position })));
+    });
   }
 
   /**
@@ -677,17 +679,19 @@ export class BlockManager implements BlockManagerApi {
     const index = siblings.indexOf(roots[0]!);
     if (index <= 0) return;
     const targetId = siblings[index - 1]!;
-    this.document.blocks.moveBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
+    this.editor.history.batchUpdates(() => {
+      this.document.blocks.moveBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
+    });
   }
 
   /**
-   * Outdents a consecutive range and adopts trailing siblings into its last root.
+   * Outdents a consecutive range, keeping later outline items below it.
    *
    * Lifting a nested range after its parent would otherwise leave later siblings
    * at the old depth, which visually "breaks out" from under the outdented
-   * outline. Those following siblings are therefore reparented as children of
-   * the last moved root. `inside` appends, so they follow any children that root
-   * already had.
+   * outline. For P: [A, B, C], outdenting B makes [P, B] at the outer level,
+   * with C appended to B's existing children. This preserves document order
+   * and leaves C indented beneath B.
    *
    * @param ids - Identifiers to outdent, including any listed descendants.
    * @returns No value; a root-level or nonconsecutive range is unchanged.
@@ -703,14 +707,15 @@ export class BlockManager implements BlockManagerApi {
     const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
     if (!moving.length) return;
     const lastId = moving.at(-1)!;
-    // Siblings below the last moved root stay nested under it after the lift.
-    const siblings = this.siblingIds(lastId);
-    const following = siblings.slice(siblings.indexOf(lastId) + 1);
-    this.document.blocks.moveBlocks([
-      // Repeated "after parent" inserts reverse order unless roots go last-first.
-      ...[...moving].reverse().map((id) => ({ id, targetId: parentId, position: "after" as const })),
-      ...following.map((id) => ({ id, targetId: lastId, position: "inside" as const })),
-    ]);
+    // Adopt before lifting: afterwards lastId no longer shares P's child list,
+    // so the old sibling tail cannot be found from its new location.
+    this.editor.history.batchUpdates(() => {
+      this.document.blocks.adoptFollowingSiblings(lastId);
+      this.document.blocks.moveBlocks([
+        // Repeated "after parent" inserts reverse order unless roots go last-first.
+        ...[...moving].reverse().map((id) => ({ id, targetId: parentId, position: "after" as const })),
+      ]);
+    });
   }
 
   /**
@@ -788,6 +793,9 @@ export class BlockManager implements BlockManagerApi {
    * @returns Roots excluding descendants of other listed blocks.
    */
   private topLevelRoots(ids: string[]): string[] {
+    // A single subtree is already an ordered root. Avoid walking every block
+    // merely to rediscover its place in the document outline.
+    if (ids.length === 1) return this.getBlockNode(ids[0]!) ? ids : [];
     const listed = new Set(ids);
     return this.getRootIds().flatMap((id) => this.collectTreeIds(id)).filter((id) => {
       if (!listed.has(id)) return false;
@@ -807,6 +815,7 @@ export class BlockManager implements BlockManagerApi {
    */
   private isConsecutiveRange(roots: string[]): boolean {
     if (!roots.length) return false;
+    if (roots.length === 1) return true;
     const visible = this.getRootIds().flatMap((id) => this.collectTreeIds(id));
     const covered = new Set(roots.flatMap((id) => this.collectTreeIds(id)));
     const first = visible.indexOf(roots[0]!);

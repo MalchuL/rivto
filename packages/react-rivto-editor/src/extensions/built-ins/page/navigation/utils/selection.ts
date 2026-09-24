@@ -22,6 +22,7 @@ import type { ReactEditor } from "../../../../../types";
 import { navigationOutlineBlocks } from "./scope";
 import { pageEntries } from "./outline";
 import type { VerticalDirection } from "./types";
+import { pageWindowFor } from "../../../../../surfaces/page/page-window";
 
 export type { VerticalDirection } from "./types";
 
@@ -101,6 +102,7 @@ export function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirect
   const index = roots.indexOf(root);
   const adjacent = roots[index + (direction === "up" ? -1 : 1)];
   if (!adjacent) return false;
+  pageWindowFor(adjacent)?.ensureEdge(direction === "up" ? -1 : 1);
   const blocks = Array.from(adjacent.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
   if (direction === "up") blocks.reverse();
   let focused = false;
@@ -124,6 +126,7 @@ export function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirect
  * @returns No value.
  */
 export function focusBlockSelection(root: HTMLElement, blockId: string): void {
+  pageWindowFor(root)?.ensure([blockId]);
   root.ownerDocument.getSelection()?.removeAllRanges();
   root.focus({ preventScroll: true });
   root.querySelector<HTMLElement>(`[${BLOCK_ID_ATTRIBUTE}="${CSS.escape(blockId)}"]`)

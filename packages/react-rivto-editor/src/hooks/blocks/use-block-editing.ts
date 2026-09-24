@@ -1,3 +1,11 @@
+/**
+ * Connects block contenteditable elements to React and the core block manager.
+ *
+ * The hook keeps browser owned text in sync with document updates while
+ * preserving live selections and supports blocks without editable text.
+ *
+ * @module
+ */
 import {
   useCallback,
   useEffect,
@@ -160,6 +168,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   const { reactEditor } = useEditorContext();
   const blockResult = useBlockNode(blockId);
   const elementRef = useRef<HTMLDivElement>(null);
+  const syncedElementRef = useRef<HTMLDivElement | null>(null);
   const composingRef = useRef(false);
   const pointerCleanupRef = useRef<(() => void) | undefined>(undefined);
   const textEdit = options.textEdit !== false;
@@ -177,10 +186,14 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
     const element = elementRef.current;
     if (!element || composingRef.current) return;
 
+    // A newly mounted editable has no live selection to preserve. Avoid a
+    // document selection read for every block mounted by a large tree move.
+    const wasMounted = syncedElementRef.current === element;
+    syncedElementRef.current = element;
     const content = blockResult.block?.content ?? "";
     if (element.textContent === content) return;
 
-    const selection = saveDOMSelection(element);
+    const selection = wasMounted ? saveDOMSelection(element) : null;
     element.textContent = content;
     restoreDOMSelection(element, selection);
   }, [blockResult.block?.content, textEdit]);

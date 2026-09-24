@@ -30,9 +30,10 @@ export function canPageDragAutoScroll(element: Element): boolean {
  * @param activatorEvent - Native event that started the gesture.
  * @param onScroll - Called after any scroll while the gesture is live, because
  * content sliding under a stationary cursor changes the hit-tested target.
+ * @param onMove - Called with each live cursor position for preview movement.
  * @returns A tracker for pointer gestures, or null for keyboard activation.
  */
-export function trackGesturePointer(activatorEvent: Event, onScroll?: () => void): PointerTracker | null {
+export function trackGesturePointer(activatorEvent: Event, onScroll?: () => void, onMove?: (point: PointerCoordinates) => void): PointerTracker | null {
   const activator = activatorEvent as Event & { clientX?: unknown; clientY?: unknown };
   const target = activatorEvent.target;
   const ownerDocument = target instanceof Node ? target.ownerDocument : null;
@@ -42,6 +43,7 @@ export function trackGesturePointer(activatorEvent: Event, onScroll?: () => void
   let current: PointerCoordinates = { x: activator.clientX, y: activator.clientY };
   const update = (event: PointerEvent) => {
     current = { x: event.clientX, y: event.clientY };
+    onMove?.(current);
   };
   const scrolled = () => onScroll?.();
   ownerDocument.addEventListener("pointermove", update, { capture: true, passive: true });

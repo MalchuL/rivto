@@ -10,21 +10,20 @@
  * `resolveDropPlacement`, and Rivto's view policy plus the guarded
  * `moveBlocks` transaction remain the final authority over every drop.
  *
- * Feedback stays on dnd-kit's default mode on purpose: with a `DragOverlay`
- * mounted the feedback plugin never clones or promotes the real block DOM, and
- * the `none` mode would stop tracking the translated shape the keyboard path
- * depends on.
+ * Pointer gestures use a fixed preview moved directly from the pointer.
+ * Keyboard gestures publish a translated source rectangle for dnd-kit's
+ * collision detector without loading its DOM feedback plugin.
  *
  * @module
  */
 import {
   DragDropProvider,
-  DragOverlay,
   type DragDropManager,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/react";
-import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
+import { Accessibility, AutoScroller, KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
+import { DOMRectangle } from "@dnd-kit/dom/utilities";
 import { createStructuralSelection } from "@chulane/rivto";
 import { useEditorRoot, useReactEditor } from "../../hooks";
 import {
@@ -77,6 +76,17 @@ import { collectSubtreeIds } from "./utils/subtree";
 import { PageDragAutoScrollPolicy } from "./surface/auto-scroll";
 
 const PAGE_DRAG_OVERLAY_CLASS = "page-drag-overlay";
+const DRAG_PLUGINS = [Accessibility, AutoScroller];
+
+/**
+ * Stops native text selection while a block handle owns a drag gesture.
+ *
+ * @param event - Browser selection start event.
+ * @returns No value.
+ */
+function preventDragSelection(event: Event): void {
+  event.preventDefault();
+}
 
 /**
  * Viewport pixels one arrow press moves the keyboard stand-in rectangle.
@@ -172,6 +182,12 @@ export function PageDragProvider({
   const dragBlocks = useRef<readonly DropBlock[] | null>(null);
   const draggedSubtreeIds = useRef(new Set<string>());
   const pointerTracker = useRef<PointerTracker | null>(null);
+  /** @returns The live viewport pointer, or null for keyboard gestures. */
+  const getDragPointer = useMemo(() => () => pointerTracker.current?.get() ?? null, []);
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const previewPosition = useRef<PointerCoordinates | null>(null);
+  const keyboardSourceRect = useRef<DOMRectangle | null>(null);
+  const stopSelectionGuard = useRef<(() => void) | null>(null);
   const [activeIds, setActiveIds] = useState<string[]>([]);
   const placements = useMemo(createDropPlacementStore, []);
   // A plain sensor array replaces dnd-kit's defaults, so the keyboard sensor
@@ -223,7 +239,20 @@ export function PageDragProvider({
   useLayoutEffect(() => () => {
     pointerTracker.current?.dispose();
     pointerTracker.current = null;
+    stopSelectionGuard.current?.();
+    stopSelectionGuard.current = null;
   }, []);
+
+  /**
+   * Moves the detached preview without rerendering the block tree.
+   *
+   * @param point - Preview origin in viewport pixels.
+   * @returns No value.
+   */
+  const positionPreview = (point: PointerCoordinates): void => {
+    previewPosition.current = point;
+    if (previewRef.current) previewRef.current.style.transform = `translate3d(${point.x}px, ${point.y}px, 0)`;
+  };
 
   const clearCrossDocumentTarget = () => {
     crossDocumentTarget.current?.controller.setPlacement(null);
@@ -244,6 +273,10 @@ export function PageDragProvider({
    */
   const resetGesture = () => {
     stopPointerTracking();
+    stopSelectionGuard.current?.();
+    stopSelectionGuard.current = null;
+    previewPosition.current = null;
+    keyboardSourceRect.current = null;
     activeMove.current = undefined;
     dragBlocks.current = null;
     draggedSubtreeIds.current.clear();
@@ -342,8 +375,26 @@ export function PageDragProvider({
     pointerTracker.current = activatorEvent
       ? trackGesturePointer(activatorEvent, () => {
         if (manager.dragOperation.status.dragging) updatePlacement(manager.dragOperation);
-      })
+      }, (point) => positionPreview({ x: point.x + 12, y: point.y + 12 }))
       : null;
+    const pointer = pointerTracker.current?.get();
+    const sourceRect = source.element?.getBoundingClientRect();
+    if (pointer) positionPreview({ x: pointer.x + 12, y: pointer.y + 12 });
+    else if (sourceRect) positionPreview({ x: sourceRect.left, y: sourceRect.top });
+    const ownerDocument = root?.ownerDocument;
+    if (ownerDocument) {
+      const clearSelection = () => {
+        const selection = ownerDocument.getSelection();
+        if (selection?.rangeCount) selection.removeAllRanges();
+      };
+      clearSelection();
+      ownerDocument.addEventListener("selectstart", preventDragSelection, true);
+      ownerDocument.addEventListener("selectionchange", clearSelection, true);
+      stopSelectionGuard.current = () => {
+        ownerDocument.removeEventListener("selectstart", preventDragSelection, true);
+        ownerDocument.removeEventListener("selectionchange", clearSelection, true);
+      };
+    }
     const blocks = reactEditor.blocks.getBlocks();
     const move = selectedMoveRoots(
       blocks,
@@ -360,7 +411,12 @@ export function PageDragProvider({
     draggedSubtreeIds.current = subtreeIds;
     activeMove.current = move;
     const KeyboardEventType = root?.ownerDocument.defaultView?.KeyboardEvent;
-    placements.setKeyboardDragging(Boolean(KeyboardEventType && activatorEvent instanceof KeyboardEventType));
+    const keyboardDragging = Boolean(KeyboardEventType && activatorEvent instanceof KeyboardEventType);
+    if (keyboardDragging && source.element) {
+      keyboardSourceRect.current = new DOMRectangle(source.element);
+      manager.dragOperation.shape = keyboardSourceRect.current;
+    }
+    placements.setKeyboardDragging(keyboardDragging);
     placements.setDragged(move.ids);
     setActiveIds(move.ids);
   };
@@ -381,7 +437,16 @@ export function PageDragProvider({
       updatePlacement(manager.dragOperation);
     } else {
       void manager.renderer.rendering.then(() => {
-        if (manager.dragOperation.status.dragging) updatePlacement(manager.dragOperation);
+        if (manager.dragOperation.status.dragging) {
+          const sourceRect = keyboardSourceRect.current;
+          const { x, y } = manager.dragOperation.position.delta;
+          if (sourceRect) manager.dragOperation.shape = sourceRect.translate(x, y);
+          const rect = manager.dragOperation.shape?.current.boundingRectangle;
+          if (rect) positionPreview({ x: rect.left, y: rect.top });
+          void manager.renderer.rendering.then(() => {
+            if (manager.dragOperation.status.dragging) updatePlacement(manager.dragOperation);
+          });
+        }
       });
     }
   };
@@ -442,31 +507,39 @@ export function PageDragProvider({
 
   // Native modal dialogs occupy the top layer; previews must join that layer.
   const modalRoot = root?.querySelector("dialog:modal");
-  const overlay = (
-    <DragOverlay dropAnimation={null}>
-      {activeBlocks.length > 0 && (
-        <div
-          className={`${PAGE_DRAG_OVERLAY_CLASS} pointer-events-none box-border max-h-[220px] w-[min(520px,70vw)] max-w-[520px] overflow-hidden rounded-md border border-accent-foreground/30 bg-background px-3.5 py-2.5 text-foreground opacity-70 shadow-lg`}
-          aria-hidden="true"
-        >
-          <PageDragPreview blocks={activeBlocks} collapseActive={reactEditor.blockListProps.has("collapse")} />
-        </div>
-      )}
-    </DragOverlay>
-  );
+  const overlayHost = modalRoot ?? root?.ownerDocument.body;
+  const overlay = activeBlocks.length > 0 && overlayHost ? createPortal(
+    <div
+      ref={previewRef}
+      className={`${PAGE_DRAG_OVERLAY_CLASS} pointer-events-none box-border max-h-[220px] w-[min(520px,70vw)] max-w-[520px] overflow-hidden rounded-md border border-accent-foreground/30 bg-background px-3.5 py-2.5 text-foreground opacity-70 shadow-lg`}
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        zIndex: 2147483647,
+        transform: `translate3d(${previewPosition.current?.x ?? 0}px, ${previewPosition.current?.y ?? 0}px, 0)`,
+        willChange: "transform",
+      }}
+      aria-hidden="true"
+    >
+      <PageDragPreview blocks={activeBlocks} collapseActive={reactEditor.blockListProps.has("collapse")} />
+    </div>,
+    overlayHost,
+  ) : null;
   const dragContext = useMemo(() => ({ placements }), [placements]);
 
   return (
     <PageDragStateContext.Provider value={dragContext}>
       <DragDropProvider
         sensors={sensors}
+        plugins={DRAG_PLUGINS}
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
       >
-        <PageDragAutoScrollPolicy />
+        <PageDragAutoScrollPolicy getPointer={getDragPointer} />
         {children}
-        {modalRoot ? createPortal(overlay, modalRoot) : overlay}
+        {overlay}
       </DragDropProvider>
     </PageDragStateContext.Provider>
   );
