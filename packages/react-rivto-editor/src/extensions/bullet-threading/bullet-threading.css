@@ -1,0 +1,17 @@
+.rivto-bullet-threading {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.rivto-bullet-threading path {
+  fill: none;
+  stroke: var(--rivto-bullet-threading-color, var(--rivto-accent));
+  stroke-width: var(--rivto-bullet-threading-width, 2px);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

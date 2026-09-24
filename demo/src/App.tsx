@@ -10,15 +10,20 @@ import {
   createBentoBlockInput,
   createTableBlockInput,
   createColumnsBlockInput,
+  BENTO_BLOCK_TYPE,
+  COLUMNS_BLOCK_TYPE,
   DEFAULT_WRITING_BLOCK_TYPE,
   type MarkdownLinkClick,
   edgelessPreset,
   edgelessVisualsExtension,
   EditorView,
   KEYBOARD_BINDING_IDS,
+  KANBAN_BLOCK_TYPE,
   pageDragExtension,
+  bulletThreadingExtension,
   SEPARATOR_BLOCK_TYPE,
   standardPreset,
+  TABLE_BLOCK_TYPE,
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
   todoItemExtension,
@@ -241,6 +246,16 @@ function createDemoEditor() {
         [KEYBOARD_BINDING_IDS.blockOutdent]: [],
       }
     : undefined;
+  const threadParams = new URLSearchParams(window.location.search);
+  const requestedThreadAnchor = threadParams.get("threadAnchor");
+  const threadAnchor = requestedThreadAnchor === "drag" || requestedThreadAnchor === "left-top"
+    ? requestedThreadAnchor
+    : "collapse";
+  const requestedThreadResolution = threadParams.get("threadResolution");
+  const threadResolution = requestedThreadResolution === "all" || requestedThreadResolution === "none"
+    ? requestedThreadResolution
+    : "focused";
+  const requestedRootLineOffset = threadParams.get("threadRootLineOffset");
   const reactEditor = createReactEditor({
     editor,
     keymap: alternateKeymap,
@@ -248,6 +263,20 @@ function createDemoEditor() {
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       todoItemExtension({ prompts: { todo: ["task"] } }),
       pageDragExtension(),
+      bulletThreadingExtension({
+        anchor: threadAnchor,
+        rootLineOffset: requestedRootLineOffset === null ? undefined : Number(requestedRootLineOffset),
+        resolution: threadResolution,
+        excludeBlockTypes: [
+          BENTO_BLOCK_TYPE,
+          COLUMNS_BLOCK_TYPE,
+          KANBAN_BLOCK_TYPE,
+          TABLE_BLOCK_TYPE,
+          TODO_STORAGE_BLOCK_TYPE,
+          ...threadParams.getAll("threadExclude"),
+        ],
+        continueBlockTypes: threadParams.has("threadContinue") ? threadParams.getAll("threadContinue") : undefined,
+      }),
       ...edgelessPreset(),
       edgelessVisuals,
       blockIdExtension(),
