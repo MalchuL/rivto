@@ -543,14 +543,18 @@ function DemoToolbar({
   editor,
   showBlockIds,
   onShowBlockIdsChange,
-  virtualizePage,
-  onVirtualizePageChange,
+  virtualizePageThreshold,
+  onVirtualizePageThresholdChange,
+  virtualizePageOverscan,
+  onVirtualizePageOverscanChange,
 }: {
   readonly editor: RivtoEditorApi;
   readonly showBlockIds: boolean;
   readonly onShowBlockIdsChange: (visible: boolean) => void;
-  readonly virtualizePage?: boolean;
-  readonly onVirtualizePageChange?: (enabled: boolean) => void;
+  readonly virtualizePageThreshold?: boolean | number;
+  readonly onVirtualizePageThresholdChange?: (threshold: boolean | number) => void;
+  readonly virtualizePageOverscan?: number;
+  readonly onVirtualizePageOverscanChange?: (count: number) => void;
 }) {
   const { mode, setMode } = useEditorMode();
   const [reportError, setReportError] = useState<string | null>(null);
@@ -588,9 +592,23 @@ function DemoToolbar({
           />
           Block IDs
         </label>
-        {onVirtualizePageChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
-          <input type="checkbox" checked={virtualizePage} onChange={(event) => onVirtualizePageChange(event.currentTarget.checked)} />
+        {onVirtualizePageThresholdChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+          <input type="checkbox" checked={virtualizePageThreshold !== false}
+            onChange={(event) => onVirtualizePageThresholdChange(event.currentTarget.checked)} />
           Virtualize page
+        </label>}
+        {onVirtualizePageThresholdChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+          Virtualize after roots
+          <input type="number" min={0} step={1} placeholder="Always"
+            disabled={virtualizePageThreshold === false}
+            value={typeof virtualizePageThreshold === "number" ? virtualizePageThreshold : ""}
+            onChange={(event) => onVirtualizePageThresholdChange(Number.isFinite(event.currentTarget.valueAsNumber)
+              ? Math.max(0, Math.trunc(event.currentTarget.valueAsNumber)) : true)} />
+        </label>}
+        {onVirtualizePageOverscanChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+          Extra roots per side
+          <input type="number" min={0} step={1} value={virtualizePageOverscan}
+            onChange={(event) => onVirtualizePageOverscanChange(Math.max(0, Math.trunc(event.currentTarget.valueAsNumber || 0)))} />
         </label>}
         <div className="demo-mode-switch" role="group" aria-label="Editor mode">
           {/* `data-editor-mode` / `data-editor-action` are used by e2e. */}
@@ -624,7 +642,8 @@ function JournalDemoApp() {
   const [todayEditor] = useState(createDemoEditor);
   const [yesterdayEditor] = useState(createEmptyDemoEditor);
   const [showBlockIds, setShowBlockIds] = useState(true);
-  const [virtualizePage, setVirtualizePage] = useState(true);
+  const [virtualizePageThreshold, setVirtualizePageThreshold] = useState<boolean | number>(false);
+  const [virtualizePageOverscan, setVirtualizePageOverscan] = useState(8);
   const [dates] = useState(() => {
     const today = new Date();
     const yesterday = new Date(today);
@@ -649,13 +668,16 @@ function JournalDemoApp() {
       <div className="journal-stack">
         {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
         <section className="journal-document" data-journal-document="today">
-          <EditorView reactEditor={todayEditor.reactEditor} virtualizePage={virtualizePage}>
+          <EditorView reactEditor={todayEditor.reactEditor}
+            virtualizePageThreshold={virtualizePageThreshold} virtualizePageOverscan={virtualizePageOverscan}>
             <DemoToolbar
               editor={todayEditor.editor}
               showBlockIds={showBlockIds}
               onShowBlockIdsChange={setShowBlockIds}
-              virtualizePage={virtualizePage}
-              onVirtualizePageChange={setVirtualizePage}
+              virtualizePageThreshold={virtualizePageThreshold}
+              onVirtualizePageThresholdChange={setVirtualizePageThreshold}
+              virtualizePageOverscan={virtualizePageOverscan}
+              onVirtualizePageOverscanChange={setVirtualizePageOverscan}
             />
             <RevisionsPanel />
             <KeyboardPanel />

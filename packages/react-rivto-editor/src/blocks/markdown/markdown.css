@@ -24,6 +24,10 @@
 .markdown-content {
   position: relative;
   min-height: var(--rivto-default-block-height);
+  /* Keep the editor and preview in one stacking context so links and code
+     controls remain clickable above the transparent editing layer. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--rivto-default-block-height);
 }
 
 .markdown-preview {

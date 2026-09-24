@@ -19,6 +19,18 @@ Page behavior из `standardPreset()` включает:
 
 Hierarchy остаётся core state. Surface только рекурсивно показывает её и не хранит отдельное React tree.
 
+По умолчанию виртуализация выключена. `virtualizePageThreshold={true}` включает её для любого числа root blocks, `false` выключает, а число включает её при достижении заданного порога. `virtualizePageOverscan` задаёт одинаковый буфер сверху и снизу viewport; по умолчанию это 8 roots с каждой стороны.
+
+```tsx
+<EditorView
+  reactEditor={reactEditor}
+  virtualizePageThreshold={1_000}
+  virtualizePageOverscan={8}
+/>
+```
+
+Буфер считается в root blocks; вложенные дети mounted root остаются в DOM.
+
 ## Markdown writing block
 
 Default paragraph сохраняет Markdown как обычную строку `block.content`. Parsing — presentation only: headings/lists внутри Markdown не создают Rivto blocks и не меняют hierarchy.

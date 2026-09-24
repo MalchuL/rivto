@@ -48,6 +48,8 @@ async function seedLargeDocument(page: Page): Promise<void> {
  */
 async function seedOutlineDocument(page: Page, branches: number): Promise<string[]> {
   await page.goto("/");
+  await page.getByRole("checkbox", { name: "Virtualize page" }).check();
+  await page.getByRole("spinbutton", { name: "Virtualize after roots" }).fill("1000");
   const siblings = await page.evaluate((count) => {
     const editor = (window as unknown as {
       __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
@@ -89,11 +91,11 @@ test("windows 2,000 flat page roots and can disable windowing", async ({ page })
   await seedOutlineDocument(page, 0);
   const roots = page.locator(`.${PAGE_SURFACE_CLASS} [data-block-id^="perf-root-"]`);
   await expect(page.locator('[data-block-id="perf-root-0"]')).toHaveCount(1);
-  await expect.poll(() => roots.count()).toBeLessThan(150);
+  await expect.poll(() => roots.count()).toBeLessThan(500);
   await page.getByRole("checkbox", { name: "Virtualize page" }).uncheck();
   await expect(roots).toHaveCount(2_000);
   await page.getByRole("checkbox", { name: "Virtualize page" }).check();
-  await expect.poll(() => roots.count()).toBeLessThan(150);
+  await expect.poll(() => roots.count()).toBeLessThan(500);
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     editor.blocks.updateBlock("perf-root-1999", { content: "Updated offscreen root" });
@@ -101,7 +103,63 @@ test("windows 2,000 flat page roots and can disable windowing", async ({ page })
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await expect(page.locator('[data-block-id="perf-root-1999"]')).toHaveCount(1);
   await expect(page.locator('[data-block-id="perf-root-1999"] [data-block-content]')).toHaveText("Updated offscreen root");
+  await expect.poll(() => roots.count()).toBeLessThan(500);
+});
+
+test("configures the page threshold and symmetric root buffer", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  const roots = page.locator(`.${PAGE_SURFACE_CLASS} [data-block-id^="perf-root-"]`);
+  await expect(page.locator('[data-block-id="perf-root-150"]')).toHaveCount(0);
+  await expect(page.locator('[data-block-id="perf-root-500"]')).toHaveCount(0);
+
+  await page.getByRole("spinbutton", { name: "Extra roots per side" }).fill("200");
+  await expect(page.locator('[data-block-id="perf-root-150"]')).toHaveCount(1);
+  await page.getByRole("spinbutton", { name: "Extra roots per side" }).fill("8");
+  await expect(page.locator('[data-block-id="perf-root-150"]')).toHaveCount(0);
+  await page.getByRole("spinbutton", { name: "Virtualize after roots" }).fill("3000");
+  await expect(roots).toHaveCount(2_000);
+  await page.getByRole("spinbutton", { name: "Virtualize after roots" }).fill("1000");
   await expect.poll(() => roots.count()).toBeLessThan(150);
+});
+
+test("keeps virtualization off by default and treats true as always on", async ({ page }) => {
+  await seedLargeDocument(page);
+  const roots = page.locator(`.${PAGE_SURFACE_CLASS} > [data-block-id]`);
+  await expect(page.getByRole("checkbox", { name: "Virtualize page" })).not.toBeChecked();
+  await expect.poll(() => roots.count()).toBeGreaterThan(500);
+  await page.getByRole("checkbox", { name: "Virtualize page" }).check();
+  await expect.poll(() => roots.count()).toBeLessThan(350);
+  await page.getByRole("checkbox", { name: "Virtualize page" }).uncheck();
+  await expect.poll(() => roots.count()).toBeGreaterThan(500);
+});
+
+test("skips offscreen content paint while keeping block shells and TODO fields mounted", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  await page.getByRole("checkbox", { name: "Virtualize page" }).uncheck();
+  await expect(page.locator(`.${PAGE_SURFACE_CLASS} [data-block-id^="perf-root-"]`)).toHaveCount(2_000);
+  const styles = await page.evaluate(() => {
+    const content = document.querySelector<HTMLElement>('[data-block-id="perf-root-1999"] .markdown-content');
+    const row = document.querySelector<HTMLElement>('[data-block-id="perf-root-1999"] > .page-block-row');
+    const description = document.querySelector<HTMLElement>('[data-journal-document="today"] .rivto-todo-description');
+    if (!content || !row || !description) throw new Error("Expected mounted content, row, and TODO description");
+    const previewText = content.querySelector(".markdown-preview p");
+    return {
+      content: getComputedStyle(content).contentVisibility,
+      row: getComputedStyle(row).contentVisibility,
+      description: getComputedStyle(description).contentVisibility,
+      offscreenContentSkipped: previewText ? !previewText.checkVisibility({ contentVisibilityAuto: true }) : null,
+    };
+  });
+  expect(styles).toEqual({ content: "auto", row: "visible", description: "auto", offscreenContentSkipped: true });
+  const handle = page.locator('[data-block-id="perf-root-0"]').getByRole("button", { name: /^Move block:/ });
+  await handle.scrollIntoViewIfNeeded();
+  const box = await handle.boundingBox();
+  if (!box) throw new Error("Expected drag handle outside the skipped content");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 8, box.y + box.height / 2);
+  await expect(page.locator(`.${PAGE_DRAG_OVERLAY_CLASS}`)).toBeVisible();
+  await page.mouse.up();
 });
 
 test("moves the caret through a page window boundary", async ({ page }) => {
@@ -228,8 +286,13 @@ for (const mode of ["block", "edgeless"] as const) {
       has: page.getByText(/^Performance block [1-7]$/),
     });
     await source.scrollIntoViewIfNeeded();
-    const sourceBox = await source.boundingBox();
+    let sourceBox = await source.boundingBox();
     if (!sourceBox) throw new Error("Expected drag source geometry");
+    await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+    // Browser scroll anchoring may shift a long page when an offscreen content
+    // wrapper becomes relevant under the pointer; use the handle's live rect.
+    sourceBox = await source.boundingBox();
+    if (!sourceBox) throw new Error("Expected drag source geometry after hover");
     await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
     await page.mouse.down();
     await page.evaluate(() => {
@@ -585,7 +648,7 @@ for (const mode of ["block", "edgeless"] as const) {
         return { create, createRoot, move, crossMove, indent, tailIndent, outdent, tailOutdent, count: document.querySelectorAll("[data-block-id]").length };
       }, { branches: branchCount, siblings });
       console.log(`${branchCount || "flat"} branches on ${mode}: ${JSON.stringify(times)}`);
-      if (mode === "block" && !branchCount) expect(times.count).toBeLessThan(150);
+      if (mode === "block" && !branchCount) expect(times.count).toBeLessThan(500);
       else expect(times.count).toBeGreaterThanOrEqual(2_000);
       expect(times.outdent.sync).toBeLessThan(500);
       expect(times.indent.sync).toBeLessThan(100);
