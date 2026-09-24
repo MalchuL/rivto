@@ -558,7 +558,7 @@ function DemoToolbar({
 }) {
   const { mode, setMode } = useEditorMode();
   const [reportError, setReportError] = useState<string | null>(null);
-  let thresholdInputValue: number | string = "";
+  let thresholdInputValue: number | "" = "";
   if (typeof virtualizePageThreshold === "number") {
     thresholdInputValue = virtualizePageThreshold;
   }

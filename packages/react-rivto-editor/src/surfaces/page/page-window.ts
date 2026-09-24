@@ -10,11 +10,11 @@
 
 /** Page-local operations needed by commands that focus a currently unmounted root. */
 export interface PageWindow {
-  /** Mounts requested blocks and scrolls to the first one. */
+  /** Mounts requested blocks and scrolls to the last one. */
   ensure(blockIds: readonly string[]): void;
-  /** Mounts the next root at a rendered window edge. */
+  /** Mounts the neighboring root when keyboard navigation reaches a window edge. */
   ensureAdjacent(blockId: string, direction: -1 | 1): void;
-  /** Mounts the document-order edge used by cross-editor keyboard movement. */
+  /** Mounts the last root for -1 or the first root for 1 during cross-editor navigation. */
   ensureEdge(direction: -1 | 1): void;
 }
 

@@ -685,13 +685,13 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
-   * Outdents a consecutive range and adopts trailing siblings into its last root.
+   * Outdents a consecutive range, keeping later outline items below it.
    *
    * Lifting a nested range after its parent would otherwise leave later siblings
    * at the old depth, which visually "breaks out" from under the outdented
-   * outline. Those following siblings are therefore reparented as children of
-   * the last moved root. `inside` appends, so they follow any children that root
-   * already had.
+   * outline. For P: [A, B, C], outdenting B makes [P, B] at the outer level,
+   * with C appended to B's existing children. This preserves document order
+   * and leaves C indented beneath B.
    *
    * @param ids - Identifiers to outdent, including any listed descendants.
    * @returns No value; a root-level or nonconsecutive range is unchanged.
@@ -707,8 +707,8 @@ export class BlockManager implements BlockManagerApi {
     const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
     if (!moving.length) return;
     const lastId = moving.at(-1)!;
-    // Keep the trailing sibling range intact while lifting its new parent.
-    // A single array move avoids one CRDT rewrite per adopted block.
+    // Adopt before lifting: afterwards lastId no longer shares P's child list,
+    // so the old sibling tail cannot be found from its new location.
     this.editor.history.batchUpdates(() => {
       this.document.blocks.adoptFollowingSiblings(lastId);
       this.document.blocks.moveBlocks([
