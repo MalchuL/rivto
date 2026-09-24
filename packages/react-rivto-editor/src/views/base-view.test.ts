@@ -3,10 +3,14 @@
  *
  * @module
  */
+import { createCaretSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../test-utils";
 import { createReactEditor } from "../react-editor";
-import { defaultWritingBlockExtension } from "../extensions/built-ins/built-ins";
+import { defaultWritingBlockExtension, listShortcutsExtension } from "../extensions/built-ins/built-ins";
+import { tableExtension, createTableBlockInput } from "../extensions/containers/table/table";
 import { BaseBlockView } from "./base-view";
+import { createBlockViewContext } from "./context";
+import { firstKeyboardTarget } from "../managers/events/selection";
 import type { BlockViewDropContext } from "./types";
 
 class RejectingBlockView extends BaseBlockView {
@@ -58,4 +62,105 @@ test("asks the resolved view whether a drop is accepted", () => {
 
   reactEditor.destroy();
   editor.destroy();
+});
+
+test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbered_list"])(
+  "empty %s clears its marker before outdenting one level per Enter",
+  (type) => {
+    const originalFrame = globalThis.requestAnimationFrame;
+    globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
+    const editor = createTestCoreEditor();
+    const reactEditor = createReactEditor({
+      editor,
+      extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
+    });
+    try {
+      const root = editor.blocks.insertBlock({ type: "paragraph", content: "Root" }).id;
+      const parent = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }, root).id;
+      editor.blocks.indentBlock(parent);
+      const child = editor.blocks.insertBlock({
+        type: "paragraph",
+        listProps: { type, checked: true, custom: "keep" },
+      }, parent).id;
+      editor.blocks.indentBlock(child);
+      const view = new BaseBlockView();
+      /** @returns Nothing after dispatching one Enter from a fresh block snapshot. */
+      const pressEnter = () => {
+        const selection = createCaretSelection(child, 0);
+        const context = createBlockViewContext(reactEditor, child, {} as HTMLElement, selection)!;
+        const target = firstKeyboardTarget(selection)!;
+        editor.history.batchUpdates(() => view.onSplit(context, target));
+      };
+
+      pressEnter();
+      expect(editor.blocks.getParentId(child)).toBe(parent);
+      expect(editor.blocks.getBlockNode(child)?.listProps).toEqual({ custom: "keep" });
+      pressEnter();
+      expect(editor.blocks.getParentId(child)).toBe(root);
+      pressEnter();
+      expect(editor.blocks.getParentId(child)).toBeNull();
+      expect(editor.blocks.getBlockNode(child)?.id).toBe(child);
+
+      editor.history.undo();
+      expect(editor.blocks.getParentId(child)).toBe(root);
+      editor.history.undo();
+      expect(editor.blocks.getParentId(child)).toBe(parent);
+      editor.history.undo();
+      expect(editor.blocks.getBlockNode(child)?.listProps.type).toBe(type);
+    } finally {
+      reactEditor.destroy();
+      editor.destroy();
+      globalThis.requestAnimationFrame = originalFrame;
+    }
+  },
+);
+
+test.each(["block", "edgeless"] as const)("empty root list marker clears in %s mode", (mode) => {
+  const originalFrame = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
+  const editor = createTestCoreEditor();
+  const reactEditor = createReactEditor({
+    editor,
+    extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
+  });
+  try {
+    editor.mode.set(mode);
+    const id = editor.blocks.insertBlock({
+      type: "paragraph",
+      listProps: { type: "checkbox", checked: true, custom: "keep" },
+    }).id;
+    const selection = createCaretSelection(id, 0);
+    const context = createBlockViewContext(reactEditor, id, {} as HTMLElement, selection)!;
+    expect(new BaseBlockView().onSplit(context, firstKeyboardTarget(selection)!)).toBe("handled");
+    expect(editor.blocks.getParentId(id)).toBeNull();
+    expect(editor.blocks.getBlockNode(id)?.listProps).toEqual({ custom: "keep" });
+  } finally {
+    reactEditor.destroy();
+    editor.destroy();
+    globalThis.requestAnimationFrame = originalFrame;
+  }
+});
+
+test("empty block Enter respects an outline floor", () => {
+  const originalFrame = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
+  const editor = createTestCoreEditor();
+  const reactEditor = createReactEditor({
+    editor,
+    extensions: [defaultWritingBlockExtension(), tableExtension()],
+  });
+  try {
+    const table = editor.blocks.insertBlock(createTableBlockInput()).id;
+    const cell = editor.blocks.getBlock(table)!.children[0]!.children[0]!.id;
+    const child = editor.blocks.insertBlock({ type: "paragraph" }).id;
+    editor.blocks.moveBlocks([child], cell, "inside");
+    const selection = createCaretSelection(child, 0);
+    const context = createBlockViewContext(reactEditor, child, {} as HTMLElement, selection)!;
+    expect(new BaseBlockView().onSplit(context, firstKeyboardTarget(selection)!)).toBe("handled");
+    expect(editor.blocks.getParentId(child)).toBe(cell);
+  } finally {
+    reactEditor.destroy();
+    editor.destroy();
+    globalThis.requestAnimationFrame = originalFrame;
+  }
 });
