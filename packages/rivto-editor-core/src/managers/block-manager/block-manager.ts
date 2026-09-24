@@ -502,7 +502,7 @@ export class BlockManager implements BlockManagerApi {
   ): void {
     // The document move is already atomic; this wrapper creates undo capture
     // breakpoints between consecutive structural moves.
-    this.editor.history.batchUpdates(() => this.moveGroupedBlocks(ids, targetId, position));
+    this.moveGroupedBlocks(ids, targetId, position);
   }
 
   /**
@@ -523,7 +523,7 @@ export class BlockManager implements BlockManagerApi {
    * @returns No value.
    */
   indentBlocks(ids: string[]): void {
-    this.editor.history.batchUpdates(() => this.applyIndent(ids));
+    this.applyIndent(ids);
   }
 
   /**
@@ -545,7 +545,7 @@ export class BlockManager implements BlockManagerApi {
    * @returns No value.
    */
   outdentBlocks(ids: string[]): void {
-    this.editor.history.batchUpdates(() => this.applyOutdent(ids));
+    this.applyOutdent(ids);
   }
 
   /**
@@ -662,7 +662,9 @@ export class BlockManager implements BlockManagerApi {
     // Inserting repeatedly after the same anchor reverses order unless the
     // grouped roots are processed backwards. Prepending has the same rule.
     const ordered = targetId === null || position === "after" ? [...roots].reverse() : roots;
-    this.document.blocks.moveBlocks(ordered.map((id) => ({ id, targetId, position })));
+    this.editor.history.batchUpdates(() => {
+      this.document.blocks.moveBlocks(ordered.map((id) => ({ id, targetId, position })));
+    });
   }
 
   /**
@@ -677,7 +679,9 @@ export class BlockManager implements BlockManagerApi {
     const index = siblings.indexOf(roots[0]!);
     if (index <= 0) return;
     const targetId = siblings[index - 1]!;
-    this.document.blocks.moveBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
+    this.editor.history.batchUpdates(() => {
+      this.document.blocks.moveBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
+    });
   }
 
   /**
@@ -705,11 +709,13 @@ export class BlockManager implements BlockManagerApi {
     const lastId = moving.at(-1)!;
     // Keep the trailing sibling range intact while lifting its new parent.
     // A single array move avoids one CRDT rewrite per adopted block.
-    this.document.blocks.adoptFollowingSiblings(lastId);
-    this.document.blocks.moveBlocks([
-      // Repeated "after parent" inserts reverse order unless roots go last-first.
-      ...[...moving].reverse().map((id) => ({ id, targetId: parentId, position: "after" as const })),
-    ]);
+    this.editor.history.batchUpdates(() => {
+      this.document.blocks.adoptFollowingSiblings(lastId);
+      this.document.blocks.moveBlocks([
+        // Repeated "after parent" inserts reverse order unless roots go last-first.
+        ...[...moving].reverse().map((id) => ({ id, targetId: parentId, position: "after" as const })),
+      ]);
+    });
   }
 
   /**

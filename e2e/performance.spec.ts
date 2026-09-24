@@ -339,6 +339,54 @@ for (const mode of ["block", "edgeless"] as const) {
 }
 
 for (const mode of ["block", "edgeless"] as const) {
+  test(`moves, indents, and outdents 100 selected siblings promptly on ${mode}`, async ({ browserName, page }) => {
+    test.skip(browserName !== "chromium", "The timing sample is calibrated for Chromium");
+    test.setTimeout(180_000);
+    await seedOutlineDocument(page, 1);
+    if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
+    const times = await page.evaluate(async () => {
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      }).__rivtoDemo.editor;
+      const ids = Array.from({ length: 100 }, (_, index) => `perf-b0-c${index + 100}`);
+      /**
+       * Measures a structural command and the next two browser frames.
+       * @param action - Synchronous editor command to measure.
+       * @returns Command duration and elapsed rendering time in milliseconds.
+       */
+      const measure = async (action: () => void): Promise<{ sync: number; rendered: number }> => {
+        const start = performance.now();
+        action();
+        const sync = performance.now() - start;
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+        return { sync, rendered: performance.now() - start };
+      };
+      const move = await measure(() => editor.blocks.moveBlocks(ids, "perf-b0-c500", "after"));
+      const afterMove = editor.blocks.getBlockNode("perf-b0")?.childIds.slice(400, 501);
+      const indent = await measure(() => editor.blocks.indentBlocks(ids));
+      const afterIndent = editor.blocks.getBlockNode("perf-b0-c500")?.childIds;
+      const outdent = await measure(() => editor.blocks.outdentBlocks(ids));
+      const afterOutdent = editor.blocks.getBlockNode("perf-b0")?.childIds.slice(400, 501);
+      const tailOutdent = await measure(() => editor.blocks.outdentBlocks(ids));
+      return { move, indent, outdent, tailOutdent, afterMove, afterIndent, afterOutdent,
+        parent: editor.blocks.getParentId(ids[0]!), tailParent: editor.blocks.getParentId("perf-b0-c501") };
+    });
+    expect(times.parent).toBeNull();
+    expect(times.tailParent).toBe("perf-b0-c199");
+    const movedIds = Array.from({ length: 100 }, (_, index) => `perf-b0-c${index + 100}`);
+    expect(times.afterMove).toEqual(["perf-b0-c500", ...movedIds]);
+    expect(times.afterIndent).toEqual(movedIds);
+    expect(times.afterOutdent).toEqual(["perf-b0-c500", ...movedIds]);
+    expect(times.move.sync).toBeLessThan(150);
+    expect(times.indent.sync).toBeLessThan(150);
+    expect(times.outdent.sync).toBeLessThan(150);
+    expect(times.outdent.rendered).toBeLessThan(400);
+    expect(times.tailOutdent.sync).toBeLessThan(150);
+    expect(times.tailOutdent.rendered).toBeLessThan(500);
+  });
+}
+
+for (const mode of ["block", "edgeless"] as const) {
   test(`starts and tracks a 2,000-block drag promptly on ${mode}`, async ({ browserName, page }) => {
     test.skip(browserName !== "chromium", "The timing budget is calibrated for Chromium");
     await seedOutlineDocument(page, 1);
