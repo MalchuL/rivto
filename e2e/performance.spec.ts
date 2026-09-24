@@ -72,9 +72,115 @@ async function seedOutlineDocument(page: Page, branches: number): Promise<string
     });
     return Array.from({ length: 6 }, (_, index) => count ? `perf-b0-c${index}` : `perf-root-${index}`);
   }, branches);
-  await expect(page.locator(`[data-block-id="${siblings[5]}"]`)).toHaveCount(1);
+  if (!branches) {
+    await page.evaluate(async () => {
+      window.scrollTo(0, 0);
+      for (let attempt = 0; attempt < 20 && !document.querySelector('[data-block-id="perf-root-0"]'); attempt += 1) {
+        window.scrollBy(0, 200);
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      }
+    });
+  }
+  await expect(page.locator(`[data-block-id="${siblings[0]}"]`)).toHaveCount(1);
   return siblings;
 }
+
+test("windows 2,000 flat page roots and can disable windowing", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  const roots = page.locator(`.${PAGE_SURFACE_CLASS} [data-block-id^="perf-root-"]`);
+  await expect(page.locator('[data-block-id="perf-root-0"]')).toHaveCount(1);
+  await expect.poll(() => roots.count()).toBeLessThan(150);
+  await page.getByRole("checkbox", { name: "Virtualize page" }).uncheck();
+  await expect(roots).toHaveCount(2_000);
+  await page.getByRole("checkbox", { name: "Virtualize page" }).check();
+  await expect.poll(() => roots.count()).toBeLessThan(150);
+  await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    editor.blocks.updateBlock("perf-root-1999", { content: "Updated offscreen root" });
+  });
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect(page.locator('[data-block-id="perf-root-1999"]')).toHaveCount(1);
+  await expect(page.locator('[data-block-id="perf-root-1999"] [data-block-content]')).toHaveText("Updated offscreen root");
+  await expect.poll(() => roots.count()).toBeLessThan(150);
+});
+
+test("moves the caret through a page window boundary", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  await page.locator('[data-block-id="perf-root-0"] [data-block-content]').click();
+  for (let index = 0; index < 35; index += 1) await page.keyboard.press("ArrowDown");
+  const focused = await page.evaluate(() => (window as unknown as {
+    __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+  }).__rivtoDemo.editor.selection.get()?.focusBlockId);
+  expect(Number(focused?.replace("perf-root-", ""))).toBeGreaterThan(20);
+  await expect(page.locator(`[data-block-id="${focused}"]`)).toHaveCount(1);
+});
+
+test("extends a text selection through a page window boundary", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  await page.locator('[data-block-id="perf-root-0"] [data-block-content]').click();
+  for (let index = 0; index < 35; index += 1) await page.keyboard.press("Shift+ArrowDown");
+  const selection = await page.evaluate(() => {
+    const current = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.selection.get();
+    return { anchor: current?.anchorBlockId, focus: current?.focusBlockId, native: Boolean(window.getSelection()?.rangeCount) };
+  });
+  expect(selection.anchor).toBe("perf-root-0");
+  expect(Number(selection.focus?.replace("perf-root-", ""))).toBeGreaterThan(20);
+  expect(selection.native).toBe(true);
+  await expect(page.locator('[data-block-id="perf-root-0"]')).toHaveCount(1);
+});
+
+test("keeps numbered-list values after earlier roots unmount", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    editor.history.batchUpdates(() => {
+      for (let index = 0; index < 120; index += 1) {
+        editor.blocks.updateBlock(`perf-root-${index}`, { listProps: { type: "numbered_list" } });
+      }
+    });
+    window.scrollTo(0, editor.blocks.getRootIds().indexOf("perf-root-95") * 52);
+  });
+  const marker = page.locator('[data-block-id="perf-root-95"] .page-list-marker');
+  await expect(marker).toHaveCount(1);
+  const firstVisible = page.locator('.page-surface [data-index]').first();
+  const counter = await firstVisible.evaluate((element) => ({
+    id: element.getAttribute("data-block-id"),
+    set: (element as HTMLElement).style.counterSet,
+  }));
+  expect(counter.set).toBe(`rivto-list-number ${Number(counter.id?.replace("perf-root-", ""))}`);
+});
+
+test("drops on a root first mounted after scrolling during drag", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  const handle = page.locator('[data-block-id="perf-root-0"]').getByRole("button", { name: /^Move block:/ });
+  await handle.scrollIntoViewIfNeeded();
+  const source = await handle.boundingBox();
+  if (!source) throw new Error("Expected source handle");
+  await expect(page.locator('[data-block-id="perf-root-100"]')).toHaveCount(0);
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(source.x + source.width / 2 + 8, source.y + source.height / 2);
+  await expect(page.locator(`.${PAGE_DRAG_OVERLAY_CLASS}`)).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 6_500));
+  await page.waitForTimeout(200);
+  const target = page.locator('[data-block-id="perf-root-100"] > .page-block-row');
+  await expect(target).toHaveCount(1);
+  await target.scrollIntoViewIfNeeded();
+  await expect(page.locator('[data-block-id="perf-root-0"]')).toHaveCount(1);
+  const box = await target.boundingBox();
+  if (!box) throw new Error("Expected newly mounted target row");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.up();
+  const placement = await page.evaluate(() => {
+    const blocks = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor.blocks;
+    return { parent: blocks.getParentId("perf-root-0"), order: blocks.getRootIds() };
+  });
+  expect(placement.parent === "perf-root-100" || Math.abs(
+    placement.order.indexOf("perf-root-0") - placement.order.indexOf("perf-root-100"),
+  ) <= 1).toBe(true);
+});
 
 test("toggles a checkbox responsively with 500 additional Markdown blocks", async ({
   browserName,
@@ -320,6 +426,7 @@ test("keeps auto-scroll frames responsive while dragging 2,000 flat blocks", asy
     };
   });
   expect((await preview.boundingBox())!.y).toBeCloseTo(previewTop, 0);
+  await expect(page.locator('[data-block-id="perf-root-0"]')).toHaveCount(1);
   await page.mouse.move(x + 8, page.viewportSize()!.height / 2, { steps: 5 });
   await page.waitForTimeout(100);
   const settledScroll = await page.evaluate(() => window.scrollY);
@@ -478,7 +585,8 @@ for (const mode of ["block", "edgeless"] as const) {
         return { create, createRoot, move, crossMove, indent, tailIndent, outdent, tailOutdent, count: document.querySelectorAll("[data-block-id]").length };
       }, { branches: branchCount, siblings });
       console.log(`${branchCount || "flat"} branches on ${mode}: ${JSON.stringify(times)}`);
-      expect(times.count).toBeGreaterThanOrEqual(2_000);
+      if (mode === "block" && !branchCount) expect(times.count).toBeLessThan(150);
+      else expect(times.count).toBeGreaterThanOrEqual(2_000);
       expect(times.outdent.sync).toBeLessThan(500);
       expect(times.indent.sync).toBeLessThan(100);
       expect(times.createRoot.sync).toBeLessThan(100);

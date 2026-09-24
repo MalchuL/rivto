@@ -4,6 +4,7 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../constants";
+import { pageWindowFor } from "../../surfaces/page/page-window";
 
 /** DOM elements and persisted identity resolved from a delegated event target. */
 export interface EventBlock {
@@ -65,8 +66,13 @@ function findOwnedContent(block: HTMLElement): HTMLElement | null {
  * @returns Previous editable block identity and elements, or null.
  */
 export function findPreviousEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
-  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
-  const index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
+  let blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+  let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
+  if (index === 0 && pageWindowFor(root)) {
+    pageWindowFor(root)?.ensureAdjacent(blockId, -1);
+    blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+    index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
+  }
   if (index <= 0) return null;
 
   const block = blocks[index - 1];
@@ -77,8 +83,13 @@ export function findPreviousEditableBlock(root: HTMLElement, blockId: string): E
 
 /** Finds the immediately next rendered block when that block is editable. */
 export function findNextEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
-  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
-  const index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
+  let blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+  let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
+  if (index === blocks.length - 1 && pageWindowFor(root)) {
+    pageWindowFor(root)?.ensureAdjacent(blockId, 1);
+    blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+    index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
+  }
   if (index < 0 || index >= blocks.length - 1) return null;
 
   const block = blocks[index + 1];
@@ -111,6 +122,7 @@ export function findParentBlock(block: HTMLElement): HTMLElement | null {
  * @returns True when the block and editable content were found.
  */
 export function focusBlock(root: HTMLElement, blockId: string, offset: number): boolean {
+  if (!findRenderedBlock(root, blockId)) pageWindowFor(root)?.ensure([blockId]);
   const block = findRenderedBlock(root, blockId);
   const content = block ? findOwnedContent(block) : null;
   if (!content) return false;
@@ -234,8 +246,13 @@ export function verticalCaretPosition(
   const nextLine = lines[lineIndex + (direction === "up" ? -1 : 1)];
   if (nextLine) return { blockId: position.blockId, offset: closestOnLine(nextLine, current.left).offset };
 
-  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
-  const currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId);
+  let blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+  let currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId);
+  if ((direction === "up" && currentIndex === 0 || direction === "down" && currentIndex === blocks.length - 1) && pageWindowFor(root)) {
+    pageWindowFor(root)?.ensureAdjacent(position.blockId, direction === "up" ? -1 : 1);
+    blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+    currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId);
+  }
   for (
     let index = currentIndex + (direction === "up" ? -1 : 1);
     index >= 0 && index < blocks.length;

@@ -7,6 +7,7 @@ import {
 } from "react";
 import { EditorContext } from "./editor-context";
 import { EditorRootContext } from "./editor-root-context";
+import { PageVirtualizationContext } from "./page-virtualization-context";
 import type { ReactEditor } from "./types";
 
 /** Properties accepted by the React editor boundary. */
@@ -15,6 +16,8 @@ export interface EditorViewProps {
   readonly reactEditor: ReactEditor;
   /** Optional application chrome; extensions are registered at runtime creation. */
   readonly children?: ReactNode;
+  /** Mount only nearby page roots on long pages; defaults to true. */
+  readonly virtualizePage?: boolean;
 }
 
 /**
@@ -32,7 +35,7 @@ export interface EditorViewProps {
  * @param props - Editor runtime and React subtree to bind together.
  * @returns A context provider; EditorView adds no DOM element.
  */
-export function EditorView({ reactEditor, children }: EditorViewProps) {
+export function EditorView({ reactEditor, children, virtualizePage = true }: EditorViewProps) {
   const [root, setRoot] = useState<HTMLElement | null>(null);
 
   const subscribeSurfaces = useCallback(
@@ -96,9 +99,11 @@ export function EditorView({ reactEditor, children }: EditorViewProps) {
 
   return (
     <EditorContext.Provider value={context}>
-      <EditorRootContext.Provider value={rootContext}>
-        {content}
-      </EditorRootContext.Provider>
+      <PageVirtualizationContext.Provider value={virtualizePage}>
+        <EditorRootContext.Provider value={rootContext}>
+          {content}
+        </EditorRootContext.Provider>
+      </PageVirtualizationContext.Provider>
     </EditorContext.Provider>
   );
 }
