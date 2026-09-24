@@ -24,7 +24,7 @@ const COLUMN_TITLE_CLASS = "rivto-kanban-column-title min-w-0 flex-1 rounded tex
 const COLUMN_COUNT_CLASS = "rivto-kanban-column-count text-xs tabular-nums text-(--rivto-kanban-muted-foreground)";
 /** Structural sizing and flex order live in kanban.css; the dashed tile look is utility-based. */
 const ADD_COLUMN_CLASS = "rivto-kanban-add-column h-auto grid place-items-center rounded-xl border-2 border-dashed border-(--rivto-kanban-card-hover-border)/60 bg-white/45 p-3 text-(--rivto-kanban-muted-foreground) hover:bg-white hover:text-(--rivto-kanban-accent) [&_svg]:size-10";
-const ADD_CARD_CLASS = "rivto-kanban-add-card size-7 flex-none text-(--rivto-kanban-card-foreground)/80 hover:bg-[#dcdfe4] [&_svg]:size-5";
+const ADD_CARD_CLASS = "rivto-kanban-add-card flex";
 const BOARD_SUMMARY_CLASS = "rivto-kanban-summary flex items-center gap-2";
 const BOARD_SUMMARY_STATS_CLASS = "text-xs tabular-nums text-(--rivto-kanban-muted-foreground)";
 
@@ -94,7 +94,9 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
   // Collapse unmounts that container, so the button must not fall back into
   // the title row or it would remain visible on a folded board.
   useLayoutEffect(() => {
-    setColumns(title.current?.ownerDocument.getElementById(`block-children-${blockId}`) ?? null);
+    // Synced editors can render the same block ID twice in one document.
+    const board = title.current?.closest<HTMLElement>('[data-block-type="kanban"]');
+    setColumns(board?.querySelector<HTMLElement>(":scope > .page-block-children") ?? null);
   });
   /**
    * Appends one real column and focuses its editable title in one undo step.
@@ -129,7 +131,7 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
 
 /**
  * Renders an editable column title and advertises its full subtree as a drop area.
- * The add-card control is omitted while the column is collapsed.
+ * The add-card control follows the card list, including when that list is empty.
  * @param props - Identity of the persisted column.
  * @returns Editable title with a marker consumed by the shared drag wrapper.
  */
@@ -137,6 +139,18 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId);
   const cardCount = editing.block?.childIds.length ?? 0;
   const reactEditor = useReactEditor();
+  const header = useRef<HTMLDivElement>(null);
+  const addCardButton = useRef<HTMLButtonElement>(null);
+  const [addCardHost, setAddCardHost] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const column = header.current?.closest<HTMLElement>('[data-block-type="kanban-column"]');
+    const host = column?.querySelector<HTMLElement>(":scope > .page-block-children") ?? column ?? null;
+    setAddCardHost(host);
+    // The shared tree may append a new card after this portal; keep the control last.
+    if (host && addCardButton.current?.parentElement === host && host.lastElementChild !== addCardButton.current) {
+      host.append(addCardButton.current);
+    }
+  });
   /**
    * Appends an editable card in one undo step and places the caret inside it.
    * @returns Nothing; the shared block tree mounts the new card.
@@ -154,16 +168,15 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
     });
   };
   return (
-    <div className={COLUMN_HEADER_CLASS}>
+    <div ref={header} className={COLUMN_HEADER_CLASS}>
       <div className={COLUMN_TITLE_CLASS} {...editing.attributes} aria-label="Kanban column title" />
       <span className={COLUMN_COUNT_CLASS} aria-label={`${cardCount} cards`}>
         {cardCount}
       </span>
-      {editing.block?.listProps.collapsed !== true && (
-        // Collapse hides cards; keep the header compact without a dangling add control.
-        <Button variant="ghost" size="icon-sm" className={ADD_CARD_CLASS} type="button" aria-label={`Add card to ${editing.block?.content ?? "column"}`} onClick={addCard}>
+      {addCardHost && editing.block?.listProps.collapsed !== true && createPortal(
+        <Button ref={addCardButton} variant="ghost" className={ADD_CARD_CLASS} type="button" aria-label={`Add card to ${editing.block?.content ?? "column"}`} onClick={addCard}>
           <PlusIcon />
-        </Button>
+        </Button>, addCardHost,
       )}
     </div>
   );

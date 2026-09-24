@@ -148,6 +148,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await expect.poll(() => column.evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
     await column.getByRole("button", { name: "Add card to To do" }).click();
     await expect(cards).toHaveCount(4);
+    await expect(column.locator(":scope > .page-block-children > .rivto-kanban-add-card:last-child")).toHaveCount(1);
     await expect(column.getByLabel("4 cards", { exact: true })).toHaveText("4");
     await page.getByRole("button", { name: "Expand Kanban", exact: true }).click();
     const modal = page.getByRole("dialog", { name: "Expanded Kanban" });
@@ -179,7 +180,7 @@ for (const mode of ["block", "edgeless"] as const) {
   });
 }
 
-test("hides Kanban add buttons while the board or a column is collapsed", async ({ page }) => {
+test("places Kanban add-card controls after cards and hides them while collapsed", async ({ page }) => {
   await page.goto("/");
   const board = page.locator('[data-block-type="kanban"]').first();
   await board.scrollIntoViewIfNeeded();
@@ -195,10 +196,45 @@ test("hides Kanban add buttons while the board or a column is collapsed", async 
   const column = board.locator('[data-block-type="kanban-column"]').first();
   const addCard = column.getByRole("button", { name: "Add card to To do" });
   await expect(addCard).toBeVisible();
+  await expect(column.locator(":scope > .page-block-children > .rivto-kanban-add-card:last-child")).toHaveCount(1);
+  await expect.poll(() => column.evaluate((element) => {
+    const card = element.querySelector(":scope > .page-block-children > .page-block:last-of-type");
+    const button = element.querySelector(":scope > .page-block-children > .rivto-kanban-add-card");
+    return card && button ? button.getBoundingClientRect().top - card.getBoundingClientRect().bottom : -1;
+  })).toBe(10);
   const columnToggle = column.locator(":scope > .page-block-row [data-collapse-toggle]");
   await columnToggle.click();
   await expect(columnToggle).toHaveAttribute("aria-expanded", "false");
   await expect(addCard).toHaveCount(0);
   await columnToggle.click();
   await expect(addCard).toBeVisible();
+  for (const count of [2, 3]) {
+    await addCard.click();
+    await expect(column.locator(":scope > .page-block-children > .page-block")).toHaveCount(count);
+    await expect(column.locator(":scope > .page-block-children > .rivto-kanban-add-card:last-child")).toHaveCount(1);
+  }
+
+  const emptyColumn = board.locator('[data-block-type="kanban-column"]').nth(1);
+  const emptyAddCard = emptyColumn.getByRole("button", { name: "Add card to In progress" });
+  await expect(emptyColumn.locator(":scope > .rivto-kanban-add-card:last-child")).toHaveCount(1);
+  await emptyAddCard.click();
+  await expect(emptyColumn.locator(":scope > .page-block-children > .page-block")).toHaveCount(1);
+  await expect(emptyColumn.locator(":scope > .page-block-children > .rivto-kanban-add-card:last-child")).toHaveCount(1);
+});
+
+test("keeps one add-column control in each synced Kanban board", async ({ page }) => {
+  await page.goto(`/?sync=1&room=kanban-controls-${Date.now()}`);
+  const left = page.locator('[data-editor-sync="left"]');
+  const right = page.locator('[data-editor-sync="right"]');
+  const content = left.locator('.page-surface > [data-block-type="paragraph"] [data-block-content]').first();
+  await content.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("/kanban");
+  await page.locator('[data-slash-command="block.kanban.insert"]').click();
+
+  for (const pane of [left, right]) {
+    const board = pane.locator('[data-block-type="kanban"]');
+    await expect(board).toHaveCount(1);
+    await expect(board.locator(':scope > .page-block-children > .rivto-kanban-add-column')).toHaveCount(1);
+  }
 });
