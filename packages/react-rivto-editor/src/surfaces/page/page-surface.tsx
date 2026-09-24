@@ -13,13 +13,11 @@ import { defaultRangeExtractor, useWindowVirtualizer, type Virtualizer } from "@
 import { useEditorRoot, useReactEditor, useRootBlockIds } from "../../hooks";
 import { BlockTree } from "../../blocks";
 import { BlockElementRefProvider } from "../../blocks/block-wrapper/block-wrapper";
-import { usePageVirtualization } from "../../page-virtualization-context";
+import { ESTIMATED_ROOT_HEIGHT, usePageVirtualization } from "../../page-virtualization-context";
 import { registerPageWindow } from "./page-window";
 
 const PAGE_SURFACE_CLASS = "page-surface";
 const PAGE_VIRTUAL_SPACER_CLASS = "page-virtual-spacer";
-const PAGE_VIRTUAL_THRESHOLD = 1_000;
-const ESTIMATED_ROOT_HEIGHT = 40;
 
 /**
  * Measures a root's existing BlockView without adding a layout wrapper.
@@ -58,9 +56,10 @@ function MeasuredRoot({
  * @param props - Ordered roots and their owning page surface.
  * @returns Flow layout with space for roots outside the mounted range.
  */
-function VirtualPageRoots({ blockIds, surface }: {
+function VirtualPageRoots({ blockIds, surface, overscan }: {
   readonly blockIds: readonly string[];
   readonly surface: HTMLElement | null;
+  readonly overscan: number;
 }) {
   const reactEditor = useReactEditor();
   const [pageTop, setPageTop] = useState(0);
@@ -85,7 +84,7 @@ function VirtualPageRoots({ blockIds, surface }: {
     estimateSize: () => ESTIMATED_ROOT_HEIGHT,
     getItemKey,
     scrollMargin: pageTop,
-    overscan: 8,
+    overscan,
     rangeExtractor,
     measureElement: (element) => element.getBoundingClientRect().height + 8,
   });
@@ -183,7 +182,7 @@ function VirtualPageRoots({ blockIds, surface }: {
 export function PageSurface() {
   const rootIds = useRootBlockIds();
   const { ref } = useEditorRoot();
-  const virtualizePage = usePageVirtualization();
+  const pageVirtualization = usePageVirtualization();
   const [surface, setSurface] = useState<HTMLElement | null>(null);
   const surfaceRef = useCallback((element: HTMLElement | null) => {
     ref(element);
@@ -208,8 +207,10 @@ export function PageSurface() {
       aria-label="Document editor"
       tabIndex={-1}
     >
-      {virtualizePage && rootIds.length >= PAGE_VIRTUAL_THRESHOLD
-        ? <VirtualPageRoots blockIds={rootIds} surface={surface} />
+      {(pageVirtualization.threshold === true || (
+        typeof pageVirtualization.threshold === "number" && rootIds.length >= pageVirtualization.threshold
+      ))
+        ? <VirtualPageRoots blockIds={rootIds} surface={surface} overscan={pageVirtualization.overscan} />
         : <BlockTree blockIds={rootIds} />}
       {/* PAGE_END_SLOT_ATTRIBUTE in constants.ts marks the TrailingBlock portal target. 
       * Uses to add "Add block" buttons at the end of the page.

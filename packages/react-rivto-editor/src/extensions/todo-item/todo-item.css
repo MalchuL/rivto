@@ -32,6 +32,18 @@
   font-weight: 700;
 }
 
+/* TODO text lives outside the shared page-block-content renderer. Keep its
+   card and controls in layout while skipping offscreen text work. */
+.rivto-todo-name,
+.rivto-todo-description {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 20px;
+}
+
+.rivto-todo-description {
+  contain-intrinsic-size: auto 16px;
+}
+
 .rivto-todo-storage {
   margin: 8px 0;
 }

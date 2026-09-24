@@ -7,7 +7,7 @@ import {
 } from "react";
 import { EditorContext } from "./editor-context";
 import { EditorRootContext } from "./editor-root-context";
-import { PageVirtualizationContext } from "./page-virtualization-context";
+import { DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN, PageVirtualizationContext } from "./page-virtualization-context";
 import type { ReactEditor } from "./types";
 
 /** Properties accepted by the React editor boundary. */
@@ -16,8 +16,21 @@ export interface EditorViewProps {
   readonly reactEditor: ReactEditor;
   /** Optional application chrome; extensions are registered at runtime creation. */
   readonly children?: ReactNode;
-  /** Mount only nearby page roots on long pages; defaults to true. */
-  readonly virtualizePage?: boolean;
+  /** False disables page virtualization, true always enables it, and a number sets the minimum root count; defaults to false. */
+  readonly virtualizePageThreshold?: boolean | number;
+  /** Extra mounted roots on each side of the viewport; defaults to 8. */
+  readonly virtualizePageOverscan?: number;
+}
+
+/**
+ * Keeps host-supplied root counts safe for the virtualizer's index arithmetic.
+ *
+ * @param value - Requested count.
+ * @param fallback - Default count for non-finite values.
+ * @returns A nonnegative integer count.
+ */
+function rootCount(value: number, fallback: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : fallback;
 }
 
 /**
@@ -35,7 +48,12 @@ export interface EditorViewProps {
  * @param props - Editor runtime and React subtree to bind together.
  * @returns A context provider; EditorView adds no DOM element.
  */
-export function EditorView({ reactEditor, children, virtualizePage = true }: EditorViewProps) {
+export function EditorView({
+  reactEditor,
+  children,
+  virtualizePageThreshold = false,
+  virtualizePageOverscan = DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN,
+}: EditorViewProps) {
   const [root, setRoot] = useState<HTMLElement | null>(null);
 
   const subscribeSurfaces = useCallback(
@@ -67,6 +85,17 @@ export function EditorView({ reactEditor, children, virtualizePage = true }: Edi
   );
 
   const context = useMemo(() => ({ reactEditor }), [reactEditor]);
+  const virtualization = useMemo(() => {
+    let threshold = virtualizePageThreshold;
+    if (typeof threshold === "number") {
+      if (Number.isFinite(threshold)) threshold = rootCount(threshold, 0);
+      else threshold = false;
+    }
+    return {
+      threshold,
+      overscan: rootCount(virtualizePageOverscan, DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN),
+    };
+  }, [virtualizePageThreshold, virtualizePageOverscan]);
   // The callback ref identity never changes, preventing React from unregistering
   // and registering the same surface root on ordinary editor renders.
   const rootRef = useCallback((element: HTMLElement | null) => {
@@ -99,7 +128,7 @@ export function EditorView({ reactEditor, children, virtualizePage = true }: Edi
 
   return (
     <EditorContext.Provider value={context}>
-      <PageVirtualizationContext.Provider value={virtualizePage}>
+      <PageVirtualizationContext.Provider value={virtualization}>
         <EditorRootContext.Provider value={rootContext}>
           {content}
         </EditorRootContext.Provider>
