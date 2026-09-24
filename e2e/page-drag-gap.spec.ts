@@ -185,6 +185,118 @@ const ROOT_CONTAINER_INPUTS = [
 ] as const;
 
 for (const mode of ["block", "edgeless"] as const) {
+  test(`drops a container at the Kanban–Columns outer edge in ${mode}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    const ids = await page.evaluate((nextMode) => {
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      }).__rivtoDemo.editor;
+      const holder = editor.blocks.insertBlock({
+        type: "paragraph", content: "Holder",
+        children: [{ type: "bento", children: [{ type: "paragraph", content: "Move me" }] }],
+      }).id;
+      const source = editor.blocks.getBlock(holder)!.children[0]!.id;
+      const first = editor.blocks.insertBlock({
+        type: "kanban", content: "Board", children: [{ type: "kanban-column", content: "Lane" }],
+      }).id;
+      const second = editor.blocks.insertBlock({ type: "columns", children: [{ type: "columns-column" }] }).id;
+      editor.load({ ...editor.dump(), blocks: [holder, first, second].map((id) => editor.blocks.getBlock(id)!), elements: [] });
+      if (nextMode === "edgeless") {
+        editor.elements.insertElement({
+          type: "block", zIndex: 0,
+          frame: { x: 20, y: 20, width: 900, height: 650 },
+          props: { startBlockId: holder, endBlockId: second },
+        });
+      }
+      return { holder, source, first, second };
+    }, mode);
+    if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
+    const source = page.locator(`[data-block-id="${ids.source}"]`).first();
+    await source.scrollIntoViewIfNeeded();
+    await source.locator(`:scope > .${ROW_CLASS}`).hover();
+    await source.locator(`:scope > .${ROW_CLASS} .${HANDLE_CLASS}`).hover();
+    const first = page.locator(`[data-block-id="${ids.first}"]`).first();
+    const firstBox = (await first.boundingBox())!;
+
+    await holdDragAt(page, source, firstBox.x + firstBox.width / 2,
+      firstBox.y + firstBox.height - 4);
+    const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
+    await expect(line).toBeVisible();
+    const lineBox = (await line.boundingBox())!;
+    expect(Math.abs(lineBox.y + lineBox.height / 2 - firstBox.y - firstBox.height)).toBeLessThan(9);
+    await page.mouse.up();
+    await expect.poll(() => page.evaluate(() => {
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      }).__rivtoDemo.editor;
+      return editor.blocks.getRootIds();
+    })).toEqual([ids.holder, ids.first, ids.source, ids.second]);
+  });
+}
+
+test("moves a card out of the demo Kanban into the Kanban–Columns gap", async ({ page }) => {
+  await page.goto("/");
+  const document = page.locator('[data-journal-document="today"]');
+  const board = document.locator('[data-block-type="kanban"]').first();
+  const columns = document.locator('[data-block-type="columns"]').first();
+  const card = board.locator('[data-block-type="paragraph"]')
+    .filter({ hasText: "Drag me between columns or back into the editor" }).first();
+  const cardId = await card.getAttribute("data-block-id");
+  await card.scrollIntoViewIfNeeded();
+  const boardBox = (await board.boundingBox())!;
+  const columnsBox = (await columns.boundingBox())!;
+  await holdDragAt(page, card, boardBox.x + boardBox.width / 2,
+    (boardBox.y + boardBox.height + columnsBox.y) / 2);
+  await expect(page.locator(`.${LINE_CLASS}[data-kind="between"]`)).toBeVisible();
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getParentId(id!);
+  }, cardId)).toBeNull();
+});
+
+test("moves a block between the demo TODO storage and Bento", async ({ page }) => {
+  await page.goto("/");
+  const document = page.locator('[data-journal-document="today"]');
+  const storage = document.locator('[data-block-type="todo-storage"]').first();
+  const bento = document.locator('[data-block-type="bento"]').first();
+  const source = storage.locator('[data-block-type="todo-item"]').last();
+  const ids = await page.evaluate(() => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    const roots = editor.blocks.getRootIds();
+    const storageId = roots.find((id) => editor.blocks.getBlock(id)?.type === "todo-storage")!;
+    const bentoId = roots.find((id) => editor.blocks.getBlock(id)?.type === "bento")!;
+    editor.blocks.moveBlock(bentoId, storageId, "after");
+    return { storageId, bentoId };
+  });
+  const sourceId = await source.getAttribute("data-block-id");
+  await source.scrollIntoViewIfNeeded();
+  const storageBox = (await storage.boundingBox())!;
+  await holdDragAt(page, source, storageBox.x + storageBox.width / 2, storageBox.y + storageBox.height - 4);
+  const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
+  await expect(line).toBeVisible();
+  const lineBox = (await line.boundingBox())!;
+  expect(Math.abs(lineBox.y + lineBox.height / 2 - storageBox.y - storageBox.height)).toBeLessThan(9);
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getRootIds().indexOf(id!);
+  }, sourceId)).toBe((await page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getRootIds().indexOf(id);
+  }, ids.storageId)) + 1);
+  await expect(bento).toBeVisible();
+});
+
+for (const mode of ["block", "edgeless"] as const) {
   for (const container of ROOT_CONTAINER_INPUTS) {
     test(`centers the ${container.type} root gap like an ordinary block in ${mode}`, async ({ page }) => {
       const ids = await page.evaluate(({ input, nextMode }) => {
@@ -198,7 +310,7 @@ for (const mode of ["block", "edgeless"] as const) {
           editor.blocks.insertBlock({ id: "gap-counter", type: "demo.counter", props: { count: 2 } }),
           editor.blocks.insertBlock({ id: "gap-container", ...input }),
           editor.blocks.insertBlock({ id: "gap-after", type: "paragraph", content: "After container" }),
-        ];
+        ].map((block) => block.id);
         editor.load({ ...editor.dump(), blocks: roots.map((id) => editor.blocks.getBlock(id)!), elements: [] });
         if (nextMode === "edgeless") {
           editor.elements.insertElement({
@@ -354,7 +466,7 @@ for (const mode of ["block", "edgeless"] as const) {
           }],
         },
       ];
-      const roots = inputs.map((input) => editor.blocks.insertBlock(input)).id;
+      const roots = inputs.map((input) => editor.blocks.insertBlock(input).id);
       editor.load({
         ...editor.dump(),
         blocks: roots.map((id) => editor.blocks.getBlock(id)!),

@@ -35,6 +35,7 @@ export type {
  * body stays a container target instead of snapping to the lane header.
  */
 export const NEARBY_ROW_DROP_PX = 24;
+const ROOT_EDGE_DROP_PX = 8;
 
 /**
  * Reports whether a viewport point lies inside a rectangle, edges included.
@@ -108,16 +109,27 @@ export function pickPointerDropTarget(
 ): PointerDropHit | null {
   const { x, y } = pointer;
   let result: PointerDropHit | null = null;
+  const roots = candidates.filter((candidate) => candidate.ancestorIds.length === 0);
+  // Reserve a narrow strip at a layout root's outer edge for its sibling gap.
+  // A child row can fill the body to that edge, but the edge still belongs to
+  // the root's outline rather than the child field.
+  const rootEdge = roots.find((candidate) => (
+    (candidate.acceptsDropContainer || isStructuralLayout(candidate))
+    && pointInRect(x, y, candidate.block)
+    && (y - candidate.block.top <= ROOT_EDGE_DROP_PX
+      || candidate.block.bottom - y <= ROOT_EDGE_DROP_PX)
+  ));
 
   const rowHits = candidates.filter((candidate) => pointInRect(x, y, candidate.row));
   const rowHit = smallest(rowHits, (candidate) => rectArea(candidate.row));
-  if (rowHit) {
+  if (rootEdge) {
+    result = { id: rootEdge.id, reason: "root-edge" };
+  } else if (rowHit) {
     result = {
       id: rowHit.id,
       reason: isStructuralLayout(rowHit) ? "chrome" : "row",
     };
   } else {
-    const roots = candidates.filter((candidate) => candidate.ancestorIds.length === 0);
     const firstRoot = [...roots].sort((left, right) => left.block.top - right.block.top)[0];
     const lastRoot = [...roots].sort((left, right) => right.block.bottom - left.block.bottom)[0];
     const nearest = [...candidates]
