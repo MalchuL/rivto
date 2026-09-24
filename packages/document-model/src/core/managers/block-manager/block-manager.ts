@@ -692,6 +692,28 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     }
 
     /**
+     * Moves the complete sibling tail under its preceding block as one range.
+     *
+     * Outdent uses this before lifting the block. Preserving the tail as one
+     * ordered range avoids a separate lookup and CRDT rewrite for each sibling.
+     *
+     * @param id - Block receiving all siblings that currently follow it.
+     * @returns No value.
+     * @throws When the block is not placed.
+     */
+    adoptFollowingSiblings(id: string): void {
+        this.crdt.transact(() => {
+            const source = this.findContainer(id);
+            if (!source) throw new Error(`Block ${id} not found`);
+            const following = strings(source.array).slice(source.index + 1);
+            if (!following.length) return;
+            const children = this.requiredArray(this.requiredBlock(id), "children");
+            source.array.delete(source.index + 1, following.length);
+            children.insert(children.length, ...following);
+        });
+    }
+
+    /**
      * Replaces the complete block tree inside the caller's snapshot transaction.
      *
      * Every supplied block is validated before existing collaborative state is

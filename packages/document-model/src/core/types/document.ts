@@ -173,6 +173,8 @@ export interface DocumentBlockManagerApi {
     targetId: string | null;
     position: "before" | "after" | "inside";
   }[]): void;
+  /** @param id - Block that adopts all later siblings as children. @returns No value. */
+  adoptFollowingSiblings(id: string): void;
   /** @param blocks - Complete portable block forest to validate. @returns No value. */
   validateBlocks(blocks: readonly Block[]): void;
   /** @param blocks - Complete portable block forest replacing stored blocks. @returns No value. */

@@ -1,3 +1,11 @@
+/**
+ * Browser coverage for Markdown preview, source editing, and custom block commands.
+ *
+ * These tests exercise the React editor through the demo, including selection
+ * preservation when document updates reach mounted editable blocks.
+ *
+ * @module
+ */
 import { expect, test } from "@playwright/test";
 import {
   blockIdSelector,
@@ -8,9 +16,49 @@ import {
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
 const MARKDOWN_CODE_EDITOR_CLASS = "markdown-code-editor";
+const MARKDOWN_PREVIEW_CLASS = "markdown-preview";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
+});
+
+test("renders plain writing text and keeps Markdown list syntax", async ({ page }) => {
+  const ids = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    return {
+      plain: editor.blocks.insertBlock({ type: "paragraph", content: "Child 0-1" }).id,
+      list: editor.blocks.insertBlock({ type: "paragraph", content: "- item" }).id,
+    };
+  });
+  await expect(page.locator(blockIdSelector(ids.plain)).locator(`.${MARKDOWN_PREVIEW_CLASS} > p`)).toHaveText("Child 0-1");
+  await expect(page.locator(blockIdSelector(ids.list)).locator(`.${MARKDOWN_PREVIEW_CLASS} ul li`)).toHaveText("item");
+});
+
+test("preserves an existing caret during an external text update", async ({ page }) => {
+  const block = page.locator(blockTypeSelector("paragraph")).first();
+  const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!id) throw new Error("Expected block ID");
+  const editor = block.locator("[data-block-content]");
+  await editor.evaluate((element) => {
+    (element as HTMLElement).focus();
+    const text = element.firstChild;
+    const selection = element.ownerDocument.getSelection();
+    if (!text || !selection) throw new Error("Expected editable text selection");
+    selection.setBaseAndExtent(text, 4, text, 4);
+  });
+  await page.evaluate((blockId) => {
+    const runtime = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    runtime.blocks.updateBlock(blockId, { content: "Changed content" });
+  }, id);
+  await expect(editor).toHaveText("Changed content");
+  expect(await editor.evaluate((element) => {
+    const selection = element.ownerDocument.getSelection();
+    const range = element.ownerDocument.createRange();
+    if (!selection?.anchorNode || !element.contains(selection.anchorNode)) return -1;
+    range.selectNodeContents(element);
+    range.setEnd(selection.anchorNode, selection.anchorOffset);
+    return range.toString().length;
+  })).toBe(4);
 });
 
 test("shows full GFM at rest and raw source while editing", async ({ page }) => {

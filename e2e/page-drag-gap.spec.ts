@@ -198,7 +198,7 @@ for (const mode of ["block", "edgeless"] as const) {
           editor.blocks.insertBlock({ id: "gap-counter", type: "demo.counter", props: { count: 2 } }),
           editor.blocks.insertBlock({ id: "gap-container", ...input }),
           editor.blocks.insertBlock({ id: "gap-after", type: "paragraph", content: "After container" }),
-        ];
+        ].map((block) => block.id);
         editor.load({ ...editor.dump(), blocks: roots.map((id) => editor.blocks.getBlock(id)!), elements: [] });
         if (nextMode === "edgeless") {
           editor.elements.insertElement({
@@ -354,7 +354,7 @@ for (const mode of ["block", "edgeless"] as const) {
           }],
         },
       ];
-      const roots = inputs.map((input) => editor.blocks.insertBlock(input)).id;
+      const roots = inputs.map((input) => editor.blocks.insertBlock(input).id);
       editor.load({
         ...editor.dump(),
         blocks: roots.map((id) => editor.blocks.getBlock(id)!),

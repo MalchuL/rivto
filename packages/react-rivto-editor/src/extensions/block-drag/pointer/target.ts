@@ -126,6 +126,41 @@ function pointerDropInput(
 }
 
 /**
+ * Finds the nearest row above or below an ordinary outline gap with native hit testing.
+ *
+ * @param root - Surface containing the dragged blocks.
+ * @param pointer - Current viewport cursor.
+ * @param direction - Whether to search above or below the cursor.
+ * @param excludedIds - Dragged subtree IDs that cannot receive the drop.
+ * @returns The first nearby row, or null when the gap needs the full layout search.
+ */
+function nearbyRow(
+  root: HTMLElement,
+  pointer: PointerCoordinates,
+  direction: -1 | 1,
+  excludedIds: ReadonlySet<string>,
+): { element: HTMLElement; rect: DOMRect; parentId: string | undefined } | null {
+  let result: { element: HTMLElement; rect: DOMRect; parentId: string | undefined } | null = null;
+  for (const distance of [12, 24, 48]) {
+    const hit = root.ownerDocument.elementFromPoint(pointer.x, pointer.y + direction * distance)
+      ?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
+    const row = hit?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
+    const rect = row?.getBoundingClientRect();
+    const probeY = pointer.y + direction * distance;
+    if (hit && root.contains(hit) && !excludedIds.has(hit.dataset.blockId ?? "")
+      && rect && probeY >= rect.top && probeY <= rect.bottom) {
+      result = {
+        element: hit,
+        rect,
+        parentId: hit.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR)?.dataset.blockId,
+      };
+      break;
+    }
+  }
+  return result;
+}
+
+/**
  * Resolves the block beneath the pointer through native hit testing.
  *
  * Gaps used to snap to the nearest accepting ancestor by
@@ -163,13 +198,12 @@ export function withPointerDropTarget(
   // so a gap between siblings still sits inside the parent rect. Only a row
   // under the cursor is an "inside" hit; otherwise the gap picker runs.
   const hovered = new Set<HTMLElement>();
-  root.ownerDocument.elementsFromPoint(pointer.x, pointer.y).forEach((element) => {
-    let block = element.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
-    while (block && root.contains(block)) {
-      hovered.add(block);
-      block = block.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR) ?? null;
-    }
-  });
+  let block = root.ownerDocument.elementFromPoint(pointer.x, pointer.y)
+    ?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
+  while (block && root.contains(block)) {
+    hovered.add(block);
+    block = block.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR) ?? null;
+  }
   const rowHit = [...hovered].flatMap((element) => {
     if (element.dataset.blockId && excludedIds.has(element.dataset.blockId)) return [];
     const row = element.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
@@ -188,6 +222,22 @@ export function withPointerDropTarget(
       childOutline: id ? blockContainment(reactEditor, id)?.childOutline : undefined,
     }) ? "chrome" : "row";
     return pointerDropInput(source, rowHit.element, false, reactEditor, reason);
+  }
+
+  const before = nearbyRow(root, pointer, -1, excludedIds);
+  const after = nearbyRow(root, pointer, 1, excludedIds);
+  if (before && after && before.parentId === after.parentId) {
+    const parentOutline = before.parentId
+      ? blockContainment(reactEditor, before.parentId)?.childOutline
+      : undefined;
+    const beforeOutline = blockContainment(reactEditor, before.element.dataset.blockId!)?.childOutline;
+    const afterOutline = blockContainment(reactEditor, after.element.dataset.blockId!)?.childOutline;
+    if (parentOutline !== "fixed" && beforeOutline !== "fixed" && afterOutline !== "fixed") {
+      // Ordinary sibling gaps need only their adjacent rows. The complete
+      // layout scan remains necessary for empty fields and fixed containers.
+      const nearest = pointer.y - before.rect.bottom <= after.rect.top - pointer.y ? before : after;
+      return pointerDropInput(source, nearest.element, false, reactEditor, "nearby-row");
+    }
   }
 
   // No row under the cursor: pick the nearest sibling row, not the nearest

@@ -25,8 +25,12 @@ export function findCrossDocumentPageController(
   pointer: PointerCoordinates,
 ): CrossDocumentPageRootController | null {
   const document = sourceRoot?.ownerDocument;
-  const pageRoot = document?.elementsFromPoint(pointer.x, pointer.y)
-    .map((element) => element.closest<HTMLElement>(CROSS_DOCUMENT_PAGE_ROOT_SELECTOR))
-    .find((element): element is HTMLElement => Boolean(element && element !== sourceRoot));
-  return pageRoot ? crossDocumentPageRootControllers.get(pageRoot) ?? null : null;
+  const sourceRect = sourceRoot?.getBoundingClientRect();
+  if (sourceRect && pointer.x >= sourceRect.left && pointer.x <= sourceRect.right
+    && pointer.y >= sourceRect.top && pointer.y <= sourceRect.bottom) return null;
+  const pageRoot = document?.elementFromPoint(pointer.x, pointer.y)
+    ?.closest<HTMLElement>(CROSS_DOCUMENT_PAGE_ROOT_SELECTOR);
+  return pageRoot && pageRoot !== sourceRoot
+    ? crossDocumentPageRootControllers.get(pageRoot) ?? null
+    : null;
 }
