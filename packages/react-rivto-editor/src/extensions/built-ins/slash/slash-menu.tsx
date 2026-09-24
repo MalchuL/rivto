@@ -36,7 +36,21 @@ import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from ".
  * scroll while the highlighted item stays visible; cmdk's own list keeps no
  * height limit of its own.
  */
-const SLASH_MENU_CLASS = "slash-menu fixed z-[1000] h-auto w-[min(280px,calc(100vw-24px))] max-h-80 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg";
+const SLASH_MENU_CLASS = "slash-menu fixed z-[1000] h-auto overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg";
+
+/** Host-adjustable dimensions used by the floating slash menu. */
+export interface SlashMenuPositionOptions {
+  /** Preferred menu width in pixels. */
+  readonly width?: number;
+  /** Maximum menu height in pixels. */
+  readonly maxHeight?: number;
+  /** Distance from the caret in pixels. */
+  readonly gap?: number;
+  /** Minimum distance from viewport edges in pixels. */
+  readonly viewportPadding?: number;
+}
+
+const DEFAULT_POSITION = { width: 280, maxHeight: 320, gap: 6, viewportPadding: 8 };
 
 interface SlashSession {
   readonly blockId: string;
@@ -64,19 +78,26 @@ function findSlash(source: string, caret: number): { slashOffset: number; query:
  * moves the top down while the final choice remains next to the caret.
  *
  * @param content - Editable region containing the active slash query.
+ * @param options - Resolved menu dimensions and viewport spacing.
  * @returns Viewport coordinates and the side used to anchor the menu.
  */
-function popupPosition(content: HTMLElement): Pick<SlashSession, "left" | "top" | "above"> {
+export function popupPosition(
+  content: HTMLElement,
+  options: Required<SlashMenuPositionOptions> = DEFAULT_POSITION,
+): Pick<SlashSession, "left" | "top" | "above"> {
   const selection = content.ownerDocument.getSelection();
   const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : undefined;
   const fallback = content.getBoundingClientRect();
   const viewport = content.ownerDocument.defaultView;
-  const desiredTop = (rect?.bottom || fallback.bottom) + 6;
-  const above = Boolean(viewport && desiredTop + 320 > viewport.innerHeight);
-  const top = above ? (rect?.top || fallback.top) - 6 : desiredTop;
+  const desiredTop = (rect?.bottom || fallback.bottom) + options.gap;
+  const above = Boolean(viewport && desiredTop + options.maxHeight > viewport.innerHeight - options.viewportPadding);
+  const top = above ? (rect?.top || fallback.top) - options.gap : desiredTop;
   return {
     left: viewport
-      ? Math.max(8, Math.min(rect?.left || fallback.left, viewport.innerWidth - 292))
+      ? Math.max(options.viewportPadding, Math.min(
+        rect?.left || fallback.left,
+        viewport.innerWidth - options.width - options.viewportPadding,
+      ))
       : rect?.left || fallback.left,
     top,
     above,
@@ -118,7 +139,11 @@ function groupCommands(commands: readonly SlashCommand[]): Array<{ group: string
  * manager action inside one document transaction, making both changes one undo
  * step while the preceding typing stays a separate capture.
  */
-export function SlashMenu() {
+export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositionOptions }) {
+  const width = Math.max(1, options.width ?? DEFAULT_POSITION.width);
+  const maxHeight = Math.max(1, options.maxHeight ?? DEFAULT_POSITION.maxHeight);
+  const gap = Math.max(0, options.gap ?? DEFAULT_POSITION.gap);
+  const viewportPadding = Math.max(0, options.viewportPadding ?? DEFAULT_POSITION.viewportPadding);
   const reactEditor = useReactEditor();
   const roots = reactEditor.blocks.getBlocks();
   const slashCommands = reactEditor.slashCommands;
@@ -178,7 +203,7 @@ export function SlashMenu() {
         ignoredTrigger.current = key;
         setSession(null);
       } else {
-        const position = popupPosition(content);
+        const position = popupPosition(content, { width, maxHeight, gap, viewportPadding });
         setSession({
           blockId,
           slashOffset: trigger.slashOffset,
@@ -191,7 +216,7 @@ export function SlashMenu() {
         });
       }
     }
-  }, [slashCommands]);
+  }, [slashCommands, width, maxHeight, gap, viewportPadding]);
 
   useDOMEvent({
     id: "slash.input",
@@ -340,7 +365,10 @@ export function SlashMenu() {
         left: session.left,
         top: session.top,
         transform: session.above ? "translateY(-100%)" : undefined,
-        maxHeight: session.above ? Math.min(320, Math.max(0, session.top - 8)) : undefined,
+        width: `min(${width}px, calc(100vw - ${viewportPadding * 2}px))`,
+        maxHeight: Math.min(maxHeight, Math.max(0, session.above
+          ? session.top - viewportPadding
+          : (root.ownerDocument.defaultView?.innerHeight ?? maxHeight) - session.top - viewportPadding)),
       }}
       onPointerDown={(event) => event.preventDefault()}
     >
