@@ -142,13 +142,13 @@ function nearbyRow(
 ): { element: HTMLElement; rect: DOMRect; parentId: string | undefined } | null {
   let result: { element: HTMLElement; rect: DOMRect; parentId: string | undefined } | null = null;
   for (const distance of [12, 24, 48]) {
-    const hit = root.ownerDocument.elementFromPoint(pointer.x, pointer.y + direction * distance)
-      ?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
+    const hit = root.ownerDocument.elementsFromPoint(pointer.x, pointer.y + direction * distance)
+      .map((element) => element.closest<HTMLElement>(PAGE_BLOCK_SELECTOR))
+      .find((element) => element && root.contains(element) && !excludedIds.has(element.dataset.blockId ?? ""));
     const row = hit?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
     const rect = row?.getBoundingClientRect();
     const probeY = pointer.y + direction * distance;
-    if (hit && root.contains(hit) && !excludedIds.has(hit.dataset.blockId ?? "")
-      && rect && probeY >= rect.top && probeY <= rect.bottom) {
+    if (hit && rect && probeY >= rect.top && probeY <= rect.bottom) {
       result = {
         element: hit,
         rect,
@@ -198,17 +198,19 @@ export function withPointerDropTarget(
   // so a gap between siblings still sits inside the parent rect. Only a row
   // under the cursor is an "inside" hit; otherwise the gap picker runs.
   const hovered = new Set<HTMLElement>();
-  let block = root.ownerDocument.elementFromPoint(pointer.x, pointer.y)
-    ?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
-  while (block && root.contains(block)) {
-    hovered.add(block);
-    block = block.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR) ?? null;
-  }
-  const rowHit = [...hovered].flatMap((element) => {
+  root.ownerDocument.elementsFromPoint(pointer.x, pointer.y).forEach((element) => {
+    let block = element.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
+    while (block && root.contains(block)) {
+      hovered.add(block);
+      block = block.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR) ?? null;
+    }
+  });
+  const hoveredRows = [...hovered].flatMap((element) => {
     if (element.dataset.blockId && excludedIds.has(element.dataset.blockId)) return [];
     const row = element.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
     return row ? [{ element, row, rect: row.getBoundingClientRect() }] : [];
-  }).filter(({ rect }) => (
+  });
+  const rowHit = hoveredRows.filter(({ rect }) => (
     pointer.x >= rect.left && pointer.x <= rect.right
     && pointer.y >= rect.top && pointer.y <= rect.bottom
   )).sort((left, right) => (
@@ -222,6 +224,24 @@ export function withPointerDropTarget(
       childOutline: id ? blockContainment(reactEditor, id)?.childOutline : undefined,
     }) ? "chrome" : "row";
     return pointerDropInput(source, rowHit.element, false, reactEditor, reason);
+  }
+
+  // A handle drag stays in the gutter outside the row rectangle. Its wide
+  // hover slab still identifies the block, so use that row's vertical span
+  // before probing six nearby points through the large document's hit tree.
+  const gutterHit = hoveredRows.filter(({ rect }) => (
+    pointer.y >= rect.top && pointer.y <= rect.bottom
+  )).sort((left, right) => (
+    left.rect.width * left.rect.height - right.rect.width * right.rect.height
+  ))[0];
+  if (gutterHit) {
+    const id = gutterHit.element.dataset.blockId;
+    const view = id ? reactEditor.views.resolve(id) : undefined;
+    const reason: PointerDropReason = view && isStructuralLayout({
+      dropAxis: view.dropAxis,
+      childOutline: id ? blockContainment(reactEditor, id)?.childOutline : undefined,
+    }) ? "chrome" : "nearby-row";
+    return pointerDropInput(source, gutterHit.element, false, reactEditor, reason);
   }
 
   const before = nearbyRow(root, pointer, -1, excludedIds);
