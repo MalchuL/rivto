@@ -11,6 +11,7 @@
  * @module
  */
 import { Scroller } from "@dnd-kit/dom";
+import { isKeyboardEvent } from "@dnd-kit/dom/utilities";
 import { useDragDropManager } from "@dnd-kit/react";
 import { useLayoutEffect } from "react";
 import { canPageDragAutoScroll } from "../pointer/tracker";
@@ -26,16 +27,28 @@ export function PageDragAutoScrollPolicy() {
   const manager = useDragDropManager();
   useLayoutEffect(() => {
     const scroller = manager?.registry.plugins.get(Scroller);
-    if (!scroller) return;
+    if (!manager || !scroller) return;
     const unfiltered = scroller.getScrollableElements;
+    const unthrottledScroll = scroller.scroll;
+    let lastScroll = -Infinity;
+    let canScroll = false;
     // A fresh Set per call keeps the scroller's cached, deep-compared value
     // untouched so its own change detection keeps working.
     scroller.getScrollableElements = () => {
       const elements = unfiltered();
       return elements ? new Set([...elements].filter(canPageDragAutoScroll)) : elements;
     };
+    scroller.scroll = (options, scrollOptions) => {
+      const keyboard = isKeyboardEvent(manager.dragOperation.activatorEvent);
+      const now = performance.now();
+      if (!keyboard && !options?.by && now - lastScroll < 32) return canScroll;
+      lastScroll = now;
+      canScroll = unthrottledScroll(options, scrollOptions);
+      return canScroll;
+    };
     return () => {
       scroller.getScrollableElements = unfiltered;
+      scroller.scroll = unthrottledScroll;
     };
   }, [manager]);
   return null;

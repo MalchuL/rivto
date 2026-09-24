@@ -30,8 +30,15 @@ const MARKDOWN_CONTENT_CLASS = "markdown-content";
 const PAGE_BLOCK_CONTENT_CLASS = "page-block-content";
 const MARKDOWN_EDITOR_CLASS = "markdown-editor";
 const MARKDOWN_PREVIEW_CLASS = "markdown-preview";
+// Single-line text in this alphabet cannot form Markdown syntax or GFM links.
+const PLAIN_TEXT_SOURCE = /^[\p{L}\p{N}][\p{L}\p{N} -]*$/u;
 
-/** Memoized expensive Markdown parser boundary keyed by source and renderer options. */
+/**
+ * Renders ordinary text directly and parses Markdown when syntax is possible.
+ *
+ * @param props - Source and renderer options for the idle preview.
+ * @returns A paragraph for plain text or the formatted Markdown tree.
+ */
 const MarkdownPreview = memo(function MarkdownPreview({
   components,
   source,
@@ -41,6 +48,7 @@ const MarkdownPreview = memo(function MarkdownPreview({
   readonly source: string;
   readonly transformUrl: UrlTransform;
 }) {
+  if (PLAIN_TEXT_SOURCE.test(source)) return <p>{source}</p>;
   return (
     <ReactMarkdown
       components={components}

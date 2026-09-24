@@ -204,6 +204,22 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     editor.destroy();
   });
 
+  it("indents one block without reading unrelated siblings", () => {
+    const editor = createTestEditor({ mode });
+    editor.blocks.insertBlock({
+      id: "parent",
+      type: "paragraph",
+      children: Array.from({ length: 128 }, (_, index) => ({ id: `child-${index}`, type: "paragraph" })),
+    });
+    const getBlockNode = jest.spyOn(editor.blocks, "getBlockNode");
+
+    editor.blocks.indentBlock("child-1");
+
+    expect(editor.blocks.getParentId("child-1")).toBe("child-0");
+    expect(getBlockNode.mock.calls.length).toBeLessThan(20);
+    editor.destroy();
+  });
+
   it("imports forests and reports stable source-to-destination identities", () => {
     const editor = createTestEditor({ mode });
     const root = editor.blocks.insertBlock({

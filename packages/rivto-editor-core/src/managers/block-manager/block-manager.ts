@@ -703,13 +703,12 @@ export class BlockManager implements BlockManagerApi {
     const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
     if (!moving.length) return;
     const lastId = moving.at(-1)!;
-    // Siblings below the last moved root stay nested under it after the lift.
-    const siblings = this.siblingIds(lastId);
-    const following = siblings.slice(siblings.indexOf(lastId) + 1);
+    // Keep the trailing sibling range intact while lifting its new parent.
+    // A single array move avoids one CRDT rewrite per adopted block.
+    this.document.blocks.adoptFollowingSiblings(lastId);
     this.document.blocks.moveBlocks([
       // Repeated "after parent" inserts reverse order unless roots go last-first.
       ...[...moving].reverse().map((id) => ({ id, targetId: parentId, position: "after" as const })),
-      ...following.map((id) => ({ id, targetId: lastId, position: "inside" as const })),
     ]);
   }
 
@@ -788,6 +787,9 @@ export class BlockManager implements BlockManagerApi {
    * @returns Roots excluding descendants of other listed blocks.
    */
   private topLevelRoots(ids: string[]): string[] {
+    // A single subtree is already an ordered root. Avoid walking every block
+    // merely to rediscover its place in the document outline.
+    if (ids.length === 1) return this.getBlockNode(ids[0]!) ? ids : [];
     const listed = new Set(ids);
     return this.getRootIds().flatMap((id) => this.collectTreeIds(id)).filter((id) => {
       if (!listed.has(id)) return false;
@@ -807,6 +809,7 @@ export class BlockManager implements BlockManagerApi {
    */
   private isConsecutiveRange(roots: string[]): boolean {
     if (!roots.length) return false;
+    if (roots.length === 1) return true;
     const visible = this.getRootIds().flatMap((id) => this.collectTreeIds(id));
     const covered = new Set(roots.flatMap((id) => this.collectTreeIds(id)));
     const first = visible.indexOf(roots[0]!);
