@@ -35,7 +35,7 @@ export type {
  * body stays a container target instead of snapping to the lane header.
  */
 export const NEARBY_ROW_DROP_PX = 24;
-const ROOT_EDGE_DROP_PX = 8;
+const OUTER_EDGE_DROP_PX = 8;
 
 /**
  * Reports whether a viewport point lies inside a rectangle, edges included.
@@ -77,14 +77,14 @@ function distanceToRect(x: number, y: number, rect: HitRect): number {
 }
 
 /**
- * Returns the item with the smallest area, or `undefined` when the list is empty.
+ * Returns the item with the lowest value from the supplied measure.
  *
  * @param items - Candidates to compare.
- * @param areaOf - Area reader used for the sort.
- * @returns The smallest item, keeping the first of any ties.
+ * @param measure - Numeric value used to compare candidates.
+ * @returns The lowest-valued item, keeping the first of any ties, or `undefined`.
  */
-function smallest<T>(items: readonly T[], areaOf: (item: T) => number): T | undefined {
-  return [...items].sort((left, right) => areaOf(left) - areaOf(right))[0];
+function findMinimumBy<T>(items: readonly T[], measure: (item: T) => number): T | undefined {
+  return [...items].sort((left, right) => measure(left) - measure(right))[0];
 }
 
 /**
@@ -110,20 +110,18 @@ export function pickPointerDropTarget(
   const { x, y } = pointer;
   let result: PointerDropHit | null = null;
   const roots = candidates.filter((candidate) => candidate.ancestorIds.length === 0);
-  // Reserve a narrow strip at a layout root's outer edge for its sibling gap.
-  // A child row can fill the body to that edge, but the edge still belongs to
-  // the root's outline rather than the child field.
-  const rootEdge = roots.find((candidate) => (
-    (candidate.acceptsDropContainer || isStructuralLayout(candidate))
-    && pointInRect(x, y, candidate.block)
-    && (y - candidate.block.top <= ROOT_EDGE_DROP_PX
-      || candidate.block.bottom - y <= ROOT_EDGE_DROP_PX)
-  ));
+  // An ancestor's outer edge wins over descendant rows occupying the same
+  // pixels. Prefer the shallowest matching block when their edges coincide.
+  const outerEdge = findMinimumBy(candidates.filter((candidate) => (
+    pointInRect(x, y, candidate.block)
+    && (y - candidate.block.top <= OUTER_EDGE_DROP_PX
+      || candidate.block.bottom - y <= OUTER_EDGE_DROP_PX)
+  )), (candidate) => candidate.ancestorIds.length);
 
   const rowHits = candidates.filter((candidate) => pointInRect(x, y, candidate.row));
-  const rowHit = smallest(rowHits, (candidate) => rectArea(candidate.row));
-  if (rootEdge) {
-    result = { id: rootEdge.id, reason: "root-edge" };
+  const rowHit = findMinimumBy(rowHits, (candidate) => rectArea(candidate.row));
+  if (outerEdge) {
+    result = { id: outerEdge.id, reason: "outer-edge" };
   } else if (rowHit) {
     result = {
       id: rowHit.id,
@@ -138,7 +136,7 @@ export function pickPointerDropTarget(
     const containers = candidates.filter((candidate) => (
       candidate.acceptsDropContainer && pointInRect(x, y, candidate.block)
     ));
-    const container = smallest(containers, (candidate) => rectArea(candidate.block));
+    const container = findMinimumBy(containers, (candidate) => rectArea(candidate.block));
 
     // Prefer a nearby descendant row so a gap between cards or nested outline
     // blocks does not become "inside" the parent lane. An empty lane body has
@@ -148,9 +146,9 @@ export function pickPointerDropTarget(
     // Page padding and end controls sit outside every BlockView. Resolve that
     // space against the root boundary, not the visually nearest nested lane.
     if (firstRoot && y < firstRoot.block.top) {
-      result = { id: firstRoot.id, reason: "root-edge" };
+      result = { id: firstRoot.id, reason: "outer-edge" };
     } else if (lastRoot && y > lastRoot.block.bottom) {
-      result = { id: lastRoot.id, reason: "root-edge" };
+      result = { id: lastRoot.id, reason: "outer-edge" };
     } else if (container) {
       const descendant = [...candidates]
         .filter((candidate) => candidate.ancestorIds.includes(container.id))

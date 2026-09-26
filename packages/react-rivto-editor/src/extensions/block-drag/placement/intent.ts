@@ -21,7 +21,7 @@ export function isStructuralLayout(candidate: {
 /**
  * Chooses the placement rule for a resolved pointer hit.
  *
- * Chrome (a filled board's title) and the page's outer root edges are
+ * Chrome (a filled board's title) and a block's outer edges are
  * before/after that block in the outline, never inside as a new column. A
  * field (empty lane, column, cell, empty board) takes the writing block
  * inside. Fixed structural layouts retain axis-specific sibling sorting, while
@@ -39,7 +39,7 @@ export function hitDropIntent(input: {
   readonly targetAcceptsDrop?: boolean;
 }): HitDropIntent {
   let result: HitDropIntent = "geometry";
-  if (input.reason === "chrome" || input.reason === "root-edge") {
+  if (input.reason === "chrome" || input.reason === "outer-edge") {
     result = "sibling-edge";
   } else if (input.parentAxis && input.parentAxis === input.activeAxis) {
     if (input.parentAxis === "horizontal") result = "axis-horizontal";

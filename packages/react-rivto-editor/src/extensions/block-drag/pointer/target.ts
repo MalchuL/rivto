@@ -170,7 +170,7 @@ function nearbyRow(
  * contains the gap between siblings, so the smallest containing block was
  * the container itself.
  *
- * Shared pointer hit-testing gives a root's outer edge priority over nested
+ * Shared pointer hit-testing gives a block's outer edge priority over nested
  * rows, then resolves row and empty-body hits from the same measured geometry.
  *
  * @param source - Dragged block identity and layout data.

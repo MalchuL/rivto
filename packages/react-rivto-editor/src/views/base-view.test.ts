@@ -141,6 +141,56 @@ test.each(["block", "edgeless"] as const)("empty root list marker clears in %s m
   }
 });
 
+test("empty checkbox clearing follows the host writing predicate for another block type", () => {
+  const originalFrame = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
+  const editor = createTestCoreEditor();
+  const reactEditor = createReactEditor({
+    editor,
+    extensions: [defaultWritingBlockExtension({
+      type: "note",
+      isEmptyBlock: (block) => block.type === "note" && block.content === "",
+    }), listShortcutsExtension()],
+  });
+  try {
+    const id = editor.blocks.insertBlock({
+      type: "note", listProps: { type: "checkbox", checked: true },
+    }).id;
+    const selection = createCaretSelection(id, 0);
+    const context = createBlockViewContext(reactEditor, id, {} as HTMLElement, selection)!;
+    expect(new BaseBlockView().onSplit(context, firstKeyboardTarget(selection)!)).toBe("handled");
+    expect(editor.blocks.getBlockNode(id)?.listProps.type).toBeUndefined();
+  } finally {
+    reactEditor.destroy();
+    editor.destroy();
+    globalThis.requestAnimationFrame = originalFrame;
+  }
+});
+
+test("contentless custom blocks do not lose checkbox state on Enter", () => {
+  const originalFrame = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
+  const editor = createTestCoreEditor();
+  editor.blockRegistry.defineBlock({ type: "custom-control" });
+  const reactEditor = createReactEditor({
+    editor,
+    extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
+  });
+  try {
+    const id = editor.blocks.insertBlock({
+      type: "custom-control", listProps: { type: "checkbox", checked: true },
+    }).id;
+    const selection = createCaretSelection(id, 0);
+    const context = createBlockViewContext(reactEditor, id, {} as HTMLElement, selection)!;
+    new BaseBlockView().onSplit(context, firstKeyboardTarget(selection)!);
+    expect(editor.blocks.getBlockNode(id)?.listProps.type).toBe("checkbox");
+  } finally {
+    reactEditor.destroy();
+    editor.destroy();
+    globalThis.requestAnimationFrame = originalFrame;
+  }
+});
+
 test("empty block Enter respects an outline floor", () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
