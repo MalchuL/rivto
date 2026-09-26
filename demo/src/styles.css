@@ -164,6 +164,28 @@ body { margin: 0; }
   background: var(--rivto-accent);
 }
 
+/* The left slot sits against its row. Each nested row starts 32px further right:
+   24px from .page-block-children plus 8px from .page-block padding. Shift the
+   label back by that amount so every number shares the page gutter. */
+.page-surface .rivto-slot[data-slot-position="left"]:has(> .demo-block-number) {
+  top: 0;
+  left: 0;
+  height: var(--rivto-default-block-height);
+  transform: translate(-100%, 0);
+}
+
+.rivto-slot > .demo-block-number {
+  padding-right: 6px;
+  transform: translateX(calc(-1 * var(--demo-block-depth, 0) * 32px));
+  color: #999;
+  font: 11px/var(--rivto-default-block-height) ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  pointer-events: none;
+  user-select: none;
+}
+
+
 .rivto-slot > .demo-block-id {
   padding-left: 12px;
   color: #999;

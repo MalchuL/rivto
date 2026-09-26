@@ -15,6 +15,7 @@ import { BlockTree } from "../../blocks";
 import { BlockElementRefProvider } from "../../blocks/block-wrapper/block-wrapper";
 import { ESTIMATED_ROOT_HEIGHT, usePageVirtualization } from "../../page-virtualization-context";
 import { registerPageVirtualizationController } from "./page-virtualization-controller";
+import { registerPageWindow } from "./page-window";
 
 const PAGE_SURFACE_CLASS = "page-surface";
 const PAGE_VIRTUAL_SPACER_CLASS = "page-virtual-spacer";
@@ -92,8 +93,16 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
     rangeExtractor,
     measureElement: (element) => element.getBoundingClientRect().height + 8,
   });
+  // Root measurements update virtual offsets, but moving the browser's
+  // viewport for those estimates fights structural-command anchoring and can
+  // jump by hundreds of rows when many roots are reparented at once.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
   useEffect(() => {
     if (!surface) return;
+    const view = surface.ownerDocument.defaultView;
+    let pendingScrollFrame: number | undefined;
+    let scrollAdjustmentSuspensions = 0;
+    let previousOverflowAnchor = "";
     /**
      * Finds the top-level root containing a possibly nested block.
      * @param blockId - Requested block anywhere in the outline.
@@ -107,13 +116,34 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
     /**
      * Mounts requested roots synchronously before a caller queries their DOM.
      * @param ids - Requested blocks, including nested blocks.
+     * @param options - Whether to scroll to the last requested block.
      * @returns No value.
      */
-    const mountBlocks = (ids: readonly string[]): void => {
-      const roots = ids.map(rootId).filter((id) => blockIds.includes(id));
+    const ensure = (ids: readonly string[], options?: { readonly scroll?: boolean }): void => {
+      const roots = [...new Set(ids.map(rootId).filter((id) => blockIds.includes(id)))];
       if (!roots.length) return;
       flushSync(() => setPinnedIds(roots));
-      virtualizer.scrollToIndex(blockIds.indexOf(roots.at(-1)!), { align: "auto" });
+      if (pendingScrollFrame !== undefined) view?.cancelAnimationFrame(pendingScrollFrame);
+      pendingScrollFrame = undefined;
+      if (options?.scroll === false) return;
+      const requestedId = ids.at(-1);
+      const requestedElement = requestedId
+        ? surface.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(requestedId)}"]`)
+        : null;
+      const requestedRect = requestedElement?.getBoundingClientRect();
+      // Structural commands can change which virtual root owns a still-visible
+      // block. Mount the new root, but preserve the position of a block partially
+      // above the viewport instead of aligning it as if navigation moved offscreen.
+      if (requestedRect && requestedRect.bottom > 0 && requestedRect.top < (view?.innerHeight ?? 0)) return;
+      const targetIndex = blockIds.indexOf(roots.at(-1)!);
+      virtualizer.scrollToIndex(targetIndex, { align: "auto" });
+      // A newly pinned root is first positioned from its estimate. Retry after
+      // measurement so caret navigation reaches the target without requiring
+      // a manual scroll event to make the virtualizer reconcile its offset.
+      pendingScrollFrame = view?.requestAnimationFrame(() => {
+        pendingScrollFrame = undefined;
+        virtualizer.scrollToIndex(targetIndex, { align: "auto" });
+      });
     };
     const onFocus = (event: FocusEvent) => {
       const id = (event.target as Element)?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
@@ -128,23 +158,74 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
     };
     surface.addEventListener("focusin", onFocus);
     surface.addEventListener("pointerdown", onPointerDown);
-    const unregister = registerPageVirtualizationController(surface, {
-      mountBlocks,
-      mountAdjacentBlocks: (id, direction) => {
-        const current = rootId(id);
-        const index = blockIds.indexOf(current);
-        const next = blockIds[index + direction];
-        if (next) mountBlocks([current, next]);
+    /**
+     * Mounts the neighboring root for keyboard navigation.
+     * @param id - Current block, including a nested block.
+     * @param direction - Previous or next root.
+     * @returns No value.
+     */
+    const ensureAdjacent = (id: string, direction: -1 | 1): void => {
+      const current = rootId(id);
+      const index = blockIds.indexOf(current);
+      const next = blockIds[index + direction];
+      if (next) ensure([current, next]);
+    };
+    /**
+     * Mounts the page edge entered from another editor.
+     * @param direction - Last root for upward entry or first root for downward entry.
+     * @returns No value.
+     */
+    const ensureEdge = (direction: -1 | 1): void => {
+      const id = direction < 0 ? blockIds.at(-1) : blockIds[0];
+      if (id) ensure([id]);
+    };
+    const unregisterController = registerPageVirtualizationController(surface, {
+      mountBlocks: ensure,
+      mountAdjacentBlocks: ensureAdjacent,
+      mountFirstOrLastBlock: ensureEdge,
+    });
+    const unregisterWindow = registerPageWindow(surface, {
+      ensure,
+      ensureAdjacent,
+      ensureEdge,
+      getSelectionBlocks: () => {
+        const collapseActive = reactEditor.blockListProps.has("collapse");
+        /**
+         * Flattens the visible outline without depending on mounted BlockViews.
+         * @param blocks - Current sibling forest in canonical order.
+         * @returns Visible IDs and text lengths in depth-first page order.
+         */
+        const visit = (blocks: ReturnType<typeof reactEditor.blocks.getBlocks>): Array<{ id: string; length: number }> => (
+          blocks.flatMap((block) => [
+            { id: block.id, length: block.content.length },
+            ...(collapseActive && block.listProps.collapsed === true ? [] : visit(block.children)),
+          ])
+        );
+        return visit(reactEditor.blocks.getBlocks());
       },
-      mountFirstOrLastBlock: (direction) => {
-        const id = direction < 0 ? blockIds.at(-1) : blockIds[0];
-        if (id) mountBlocks([id]);
+      suspendScrollAdjustments: () => {
+        if (scrollAdjustmentSuspensions === 0) {
+          previousOverflowAnchor = surface.style.overflowAnchor;
+          surface.style.overflowAnchor = "none";
+        }
+        scrollAdjustmentSuspensions += 1;
+        let active = true;
+        return () => {
+          if (!active) return;
+          active = false;
+          scrollAdjustmentSuspensions -= 1;
+          if (scrollAdjustmentSuspensions === 0) {
+            surface.style.overflowAnchor = previousOverflowAnchor;
+          }
+        };
       },
     });
     return () => {
+      if (pendingScrollFrame !== undefined) view?.cancelAnimationFrame(pendingScrollFrame);
       surface.removeEventListener("focusin", onFocus);
       surface.removeEventListener("pointerdown", onPointerDown);
-      unregister();
+      unregisterController();
+      unregisterWindow();
     };
   }, [blockIds, reactEditor, surface, virtualizer]);
   const items = virtualizer.getVirtualItems();

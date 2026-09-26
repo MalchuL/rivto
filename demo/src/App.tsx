@@ -41,6 +41,7 @@ import {
   blockIdExtension,
   BlockIdsVisibleProvider,
 } from "./extensions/block-id";
+import { blockNumberExtension } from "./extensions/block-number";
 import {
   createReviewElementInput,
   reviewReportExtensions,
@@ -48,6 +49,10 @@ import {
 } from "./extensions/reports/review-report";
 
 const DEMO_BLOCK_ID_TOGGLE_CLASS = "demo-block-id-toggle";
+const DEMO_BLOCK_IDS_TOOLTIP = "Shows a shortened block id at the end of each row. Hover that label to see the full id.";
+const DEMO_VIRTUALIZE_PAGE_TOOLTIP = "When on, only page roots near the viewport stay mounted. When off, every root stays mounted.";
+const DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP = "Starts windowing once the page has at least this many root blocks. Only roots in the viewport, plus the extra roots on each side, stay mounted; other roots become spacers. Nested blocks inside a mounted root stay in the document. Leave empty to virtualize at any root count.";
+const DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP = "How many extra root blocks stay mounted above and below the viewport while the page is virtualized.";
 
 /**
  * Persists one Review envelope through the demo-only Vite server adapter.
@@ -284,6 +289,7 @@ function createDemoEditor() {
       ...edgelessPreset(),
       edgelessVisuals,
       blockIdExtension(),
+      blockNumberExtension(),
       ...customBlockExtensions,
       ...demoReviewReports(editor),
     ],
@@ -528,6 +534,7 @@ function createEmptyDemoEditor() {
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
+      blockNumberExtension(),
       ...customBlockExtensions,
       ...demoReviewReports(editor),
     ],
@@ -634,29 +641,32 @@ function DemoToolbar({
   return (
     <header className="demo-header">
       <div className="demo-toolbar-controls">
-        <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+        <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_BLOCK_IDS_TOOLTIP}>
           <input
             type="checkbox"
             checked={showBlockIds}
+            title={DEMO_BLOCK_IDS_TOOLTIP}
             onChange={(event) => onShowBlockIdsChange(event.currentTarget.checked)}
           />
           Block IDs
         </label>
-        {onVirtualizePageThresholdChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
-          <input type="checkbox" checked={virtualizePageThreshold !== false}
+        {onVirtualizePageThresholdChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}>
+          <input type="checkbox" checked={virtualizePageThreshold !== false} title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}
             onChange={(event) => onVirtualizePageThresholdChange(event.currentTarget.checked)} />
           Virtualize page
         </label>}
-        {onVirtualizePageThresholdChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
-          Virtualize after roots
+        {onVirtualizePageThresholdChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP}>
+          Virtualize after roots count
           <input type="number" min={0} step={1} placeholder="Always"
             disabled={virtualizePageThreshold === false}
             value={thresholdInputValue}
+            title={DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP}
             onChange={changeVirtualizationThreshold} />
         </label>}
-        {onVirtualizePageOverscanChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+        {onVirtualizePageOverscanChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP}>
           Extra roots per side
           <input type="number" min={0} step={1} value={virtualizePageOverscan}
+            title={DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP}
             onChange={(event) => onVirtualizePageOverscanChange(Math.max(0, Math.trunc(event.currentTarget.valueAsNumber || 0)))} />
         </label>}
         <div className="demo-mode-switch" role="group" aria-label="Editor mode">
@@ -765,6 +775,7 @@ function createMultiEditor(
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
+      blockNumberExtension(),
       ...customBlockExtensions,
       ...demoReviewReports(editor),
     ],
@@ -898,6 +909,7 @@ function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: n
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
+      blockNumberExtension(),
       ...customBlockExtensions,
       ...demoReviewReports(editor),
     ],

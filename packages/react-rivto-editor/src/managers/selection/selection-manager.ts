@@ -5,7 +5,7 @@
  * endpoints and restores them after rendering.
  */
 import type { RivtoEditorApi, Selection } from "@chulane/rivto";
-import type { SelectionCapability } from "../../capabilities";
+import type { RestoreDOMSelectionOptions, SelectionCapability } from "../../capabilities";
 import type { ReactEditorImpl } from "../../react-editor";
 import { readEditorDOMSelection, restoreEditorDOMSelection } from "./editor-dom-selection";
 
@@ -77,10 +77,14 @@ export class ReactSelectionManager implements SelectionCapability {
   /**
    * Restores a non-structural range after DOM reconciliation.
    * @param selection - Selection to restore, defaulting to current state.
+   * @param options - Virtual endpoint mounting and navigation policy.
    * @returns Whether both text endpoints could be restored.
    */
-  restoreDOM(selection: Selection | undefined = this.get()): boolean {
+  restoreDOM(
+    selection: Selection | undefined = this.get(),
+    options?: RestoreDOMSelectionOptions,
+  ): boolean {
     const root = this.reactEditor.events.getRoot();
-    return root && selection ? restoreEditorDOMSelection(root, selection) : false;
+    return root && selection ? restoreEditorDOMSelection(root, selection, options) : false;
   }
 }

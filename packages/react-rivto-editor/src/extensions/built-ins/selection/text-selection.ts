@@ -19,6 +19,7 @@ import {
 import type { ReactEditor } from "../../../types";
 import { isElementNode } from "../../../managers/events/dom-nodes";
 import { findEdgelessRuntime } from "./edgeless-runtime";
+import { pageWindowFor } from "../../../surfaces/page/page-window";
 import {
   createVisibleStructuralSelection,
   createDOMSelection,
@@ -100,6 +101,18 @@ interface PointerSelection {
   wholeBlocks: boolean;
 }
 
+/** Latest viewport pointer state used while selection auto-scrolls without new pointer events. */
+interface PointerSelectionCoordinates {
+  /** Horizontal viewport coordinate. */
+  readonly x: number;
+  /** Vertical viewport coordinate. */
+  readonly y: number;
+  /** Whether Alt still requests partial cross-block text selection. */
+  readonly altKey: boolean;
+  /** Whether Shift still requests partial cross-block text selection. */
+  readonly shiftKey: boolean;
+}
+
 /**
  * Publishes exact text endpoints and structural block gestures to core.
  *
@@ -131,6 +144,17 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
   let releaseTimer: number | undefined;
   let suppressClickBlockId: string | undefined;
   let ownsCrossBlockSelection = false;
+  let autoScrollFrame: number | undefined;
+  let latestPointer: PointerSelectionCoordinates | undefined;
+
+  /**
+   * Reads visible page order from the model when roots are virtualized.
+   * @param root - Active editor surface.
+   * @returns Block IDs in the order selection commands must cover.
+   */
+  const selectionBlockIds = (root: HTMLElement): string[] => (
+    pageWindowFor(root)?.getSelectionBlocks().map((block) => block.id) ?? orderedBlockIds(root)
+  );
 
   /** Publishes the synthetic endpoint chosen for a cross-host gesture. */
   const publish = (
@@ -145,7 +169,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       active.head = head;
       active.wholeBlocks = forceWholeBlocks;
       active.selection = active.wholeBlocks
-        ? createVisibleStructuralSelection(orderedBlockIds(root), active.anchorPosition.blockId, headPosition.blockId)
+        ? createVisibleStructuralSelection(selectionBlockIds(root), active.anchorPosition.blockId, headPosition.blockId)
         : createDOMSelection(root, active.anchorPosition, headPosition);
       if (!active.selection) return;
 
@@ -161,6 +185,107 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       }
   };
 
+  /**
+   * Resolves and publishes the moving endpoint at current pointer coordinates.
+   * @param active - Gesture retaining the fixed endpoint.
+   * @param current - Latest viewport coordinates and selection modifiers.
+   * @returns Whether the pointer currently identifies a selectable endpoint.
+   */
+  const updatePointerSelection = (
+    active: PointerSelection,
+    current: PointerSelectionCoordinates,
+  ): boolean => {
+    const root = reactEditor.events.getRoot();
+    if (!root) return false;
+    const pointedBlockId = readBlockIdAtPoint(root, current.x, current.y);
+    const head = active.anchor ? readDOMSelectionPoint(root, current.x, current.y) : undefined;
+    const headPosition = head && readDOMPointPosition(root, head);
+    // Caret hit-testing falls back to a nearby editable host over contentless
+    // blocks. Shift+Alt keeps that DOM point only for native painting and
+    // uses the actual BlockView hit as the portable selection endpoint.
+    //
+    // Nested parents wrap descendant rows, so a bottom-to-top drag can sit
+    // in the margin between children while `elementFromPoint` still reports
+    // the parent. `readBlockIdAtPoint` maps that wrapping hit to the nearest
+    // nested row. Promoting the parent here would select the whole subtree
+    // even though the pointer never entered the parent's own row.
+    const partialContentlessBlockId = current.shiftKey && current.altKey
+      && pointedBlockId !== headPosition?.blockId ? pointedBlockId : undefined;
+    const effectiveHeadPosition = partialContentlessBlockId
+      ? { blockId: partialContentlessBlockId, offset: 0 }
+      : headPosition;
+    const crossBlock = (effectiveHeadPosition?.blockId ?? pointedBlockId) !== active.anchorPosition.blockId;
+    const wholeBlocks = wantsWholeBlocks(current, Boolean(crossBlock));
+    let handled = false;
+    if (wholeBlocks && pointedBlockId && pointedBlockId !== headPosition?.blockId && (
+      pointedBlockId !== active.anchorPosition.blockId || !active.anchor
+    )) {
+      ownsCrossBlockSelection = true;
+      if (!active.anchor) suppressClickBlockId = active.anchorPosition.blockId;
+      publish(active, undefined, { blockId: pointedBlockId, offset: 0 }, true);
+      handled = true;
+    } else if (head && effectiveHeadPosition) {
+      const sameBlock = effectiveHeadPosition.blockId === active.anchorPosition.blockId;
+      if (!(sameBlock && !ownsCrossBlockSelection)) {
+        ownsCrossBlockSelection = true;
+        publish(active, head, effectiveHeadPosition, wholeBlocks);
+        handled = true;
+      }
+    } else if (pointedBlockId && (
+      pointedBlockId !== active.anchorPosition.blockId || !active.anchor
+    )) {
+      // Contentless structural blocks have no caret geometry, so their stable
+      // BlockView marker advances a whole-block range instead.
+      ownsCrossBlockSelection = true;
+      if (!active.anchor) suppressClickBlockId = active.anchorPosition.blockId;
+      publish(active, undefined, { blockId: pointedBlockId, offset: 0 }, true);
+      handled = true;
+    }
+    return handled;
+  };
+
+  /** Stops the frame loop that advances a selection beside a viewport edge. */
+  const stopAutoScroll = (): void => {
+    const view = reactEditor.events.getRoot()?.ownerDocument.defaultView;
+    if (autoScrollFrame !== undefined) view?.cancelAnimationFrame(autoScrollFrame);
+    autoScrollFrame = undefined;
+  };
+
+  /**
+   * Scrolls the page and resolves the selection endpoint under the held pointer.
+   *
+   * Browsers do not reliably emit another pointermove while native drag
+   * scrolling advances the document. Run the same frame loop with and without
+   * virtualization so the portable editor selection cannot stop at its first
+   * edge hit while the viewport continues moving.
+   *
+   * @param root - Active page surface containing the pointer selection.
+   */
+  const scheduleAutoScroll = (root: HTMLElement): void => {
+    if (autoScrollFrame !== undefined) return;
+    const view = root.ownerDocument.defaultView;
+    const scrollElement = root.ownerDocument.scrollingElement;
+    if (!view || !scrollElement) return;
+    autoScrollFrame = view.requestAnimationFrame(() => {
+      autoScrollFrame = undefined;
+      const active = pointer;
+      const current = latestPointer;
+      if (!active || !current) return;
+      const threshold = Math.min(96, view.innerHeight * 0.2);
+      const distance = current.y < threshold
+        ? current.y - threshold
+        : current.y > view.innerHeight - threshold
+          ? current.y - (view.innerHeight - threshold)
+          : 0;
+      if (!distance) return;
+      const delta = Math.sign(distance) * Math.max(2, Math.ceil(Math.abs(distance) / threshold * 20));
+      const before = scrollElement.scrollTop;
+      scrollElement.scrollTop += delta;
+      updatePointerSelection(active, current);
+      if (scrollElement.scrollTop !== before) scheduleAutoScroll(root);
+    });
+  };
+
   reactEditor.events.register({
     id: "text-selection.pointer-start",
     type: "pointerdown",
@@ -169,10 +294,14 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       const view = root.ownerDocument.defaultView;
       let handled = false;
       if (event.ctrlKey || event.metaKey) {
+        stopAutoScroll();
+        latestPointer = undefined;
         if (releaseTimer !== undefined) view?.clearTimeout(releaseTimer);
         pointer = null;
         ownsCrossBlockSelection = false;
       } else if (event.button === 0) {
+        stopAutoScroll();
+        latestPointer = undefined;
         // Keep the original event target, not only its owning anchor. Nested
         // controls and structural selection receive the same pointerdown;
         // checking only the ancestor would start both gestures at once.
@@ -223,14 +352,14 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
             if (originId && wholeBlocks) {
               ownsCrossBlockSelection = true;
               pointer = null;
-              const next = createVisibleStructuralSelection(orderedBlockIds(root), originId, clickedPosition.blockId);
+              const next = createVisibleStructuralSelection(selectionBlockIds(root), originId, clickedPosition.blockId);
               if (next) reactEditor.selection.set(next);
               root.ownerDocument.getSelection()?.removeAllRanges();
               root.focus({ preventScroll: true });
               releaseTimer = view?.setTimeout(() => { ownsCrossBlockSelection = false; });
               handled = true;
             } else if (clicked) {
-              const ids = orderedBlockIds(root);
+              const ids = selectionBlockIds(root);
               const originFromBlock = item?.anchorBlockId;
               const originIndex = originFromBlock ? ids.indexOf(originFromBlock) : -1;
               const clickIndex = originFromBlock ? ids.indexOf(clickedPosition.blockId) : -1;
@@ -300,55 +429,15 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
   }, ({ raw: event, root }) => {
       const active = pointer;
       if (!active || Math.hypot(event.clientX - active.startX, event.clientY - active.startY) < 3) return false;
-
-      const pointedBlockId = readBlockIdAtPoint(root, event.clientX, event.clientY);
-      const head = active.anchor ? readDOMSelectionPoint(root, event.clientX, event.clientY) : undefined;
-      const headPosition = head && readDOMPointPosition(root, head);
-      // Caret hit-testing falls back to a nearby editable host over contentless
-      // blocks. Shift+Alt keeps that DOM point only for native painting and
-      // uses the actual BlockView hit as the portable selection endpoint.
-      //
-      // Nested parents wrap descendant rows, so a bottom-to-top drag can sit
-      // in the margin between children while `elementFromPoint` still reports
-      // the parent. `readBlockIdAtPoint` maps that wrapping hit to the nearest
-      // nested row. Promoting the parent here would select the whole subtree
-      // even though the pointer never entered the parent's own row.
-      const partialContentlessBlockId = event.shiftKey && event.altKey
-        && pointedBlockId !== headPosition?.blockId ? pointedBlockId : undefined;
-      const effectiveHeadPosition = partialContentlessBlockId
-        ? { blockId: partialContentlessBlockId, offset: 0 }
-        : headPosition;
-      const crossBlock = (effectiveHeadPosition?.blockId ?? pointedBlockId) !== active.anchorPosition.blockId;
-      const wholeBlocks = wantsWholeBlocks(event, Boolean(crossBlock));
-      let handled = false;
-      if (wholeBlocks && pointedBlockId && pointedBlockId !== headPosition?.blockId && (
-        pointedBlockId !== active.anchorPosition.blockId || !active.anchor
-      )) {
-        ownsCrossBlockSelection = true;
-        if (!active.anchor) suppressClickBlockId = active.anchorPosition.blockId;
-        publish(active, undefined, { blockId: pointedBlockId, offset: 0 }, true);
-        handled = true;
-      } else if (head && effectiveHeadPosition) {
-        const sameBlock = effectiveHeadPosition.blockId === active.anchorPosition.blockId;
-        if (!(sameBlock && !ownsCrossBlockSelection)) {
-          ownsCrossBlockSelection = true;
-          publish(active, head, effectiveHeadPosition, wholeBlocks);
-          handled = true;
-        }
-      } else if (pointedBlockId && (
-        pointedBlockId !== active.anchorPosition.blockId || !active.anchor
-      )) {
-        // Contentless structural blocks have no caret geometry, so their stable
-        // BlockView marker advances a whole-block range instead.
-        ownsCrossBlockSelection = true;
-        if (!active.anchor) suppressClickBlockId = active.anchorPosition.blockId;
-        publish(active, undefined, { blockId: pointedBlockId, offset: 0 }, true);
-        handled = true;
-      }
+      latestPointer = { x: event.clientX, y: event.clientY, altKey: event.altKey, shiftKey: event.shiftKey };
+      const handled = updatePointerSelection(active, latestPointer);
+      scheduleAutoScroll(root);
       return handled;
   });
 
   const stop = (): false => {
+      stopAutoScroll();
+      latestPointer = undefined;
       const root = reactEditor.events.getRoot();
       const completed = pointer;
       pointer = null;
@@ -414,7 +503,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       const anchor = event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);
       if (!anchor || anchor.isContentEditable || !root.contains(anchor)) return false;
 
-      const selection = createVisibleStructuralSelection(orderedBlockIds(root), blockId, blockId);
+      const selection = createVisibleStructuralSelection(selectionBlockIds(root), blockId, blockId);
       if (selection) reactEditor.selection.set(selection);
       if (reactEditor.mode.get() === "edgeless") findEdgelessRuntime(reactEditor)?.deactivate();
       root.ownerDocument.getSelection()?.removeAllRanges();
@@ -440,6 +529,8 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
   });
 
   return () => {
+    stopAutoScroll();
+    latestPointer = undefined;
     const root = reactEditor.events.getRoot();
     if (releaseTimer !== undefined) {
       root?.ownerDocument.defaultView?.clearTimeout(releaseTimer);
