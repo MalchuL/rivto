@@ -528,6 +528,53 @@ test("an empty kanban column still accepts an inside drop on its body", async ({
   }, { sourceId: alphaId })).toBe(emptyId);
 });
 
+test("does not add an ordinary block directly to an empty kanban", async ({ page }) => {
+  const boardId = await page.evaluate(() => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.insertBlock({ type: "kanban", content: "Empty board" }).id;
+  });
+  const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
+  const alphaId = await alpha.getAttribute("data-block-id");
+  const board = page.locator(`[data-block-id="${boardId}"]`).first();
+  const box = (await board.boundingBox())!;
+  await holdDragAt(page, alpha, box.x + box.width / 2, box.y + box.height * 0.7);
+  await expect(board).not.toHaveAttribute("data-drop-inside", "true");
+  await page.mouse.up();
+  expect(await page.evaluate(({ sourceId, targetId }) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return { parentId: editor.blocks.getParentId(sourceId!), childIds: editor.blocks.getBlock(targetId)?.children.map(({ id }) => id) };
+  }, { sourceId: alphaId, targetId: boardId })).toEqual({ parentId: null, childIds: [] });
+});
+
+test("moves an ordinary block between sibling kanban columns", async ({ page }) => {
+  const ids = await page.evaluate(() => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    const alpha = editor.blocks.getRootIds().find((id) => editor.blocks.getBlock(id)?.content === "Alpha")!;
+    const board = editor.blocks.getRootIds().find((id) => editor.blocks.getBlock(id)?.type === "kanban")!;
+    const [first, second] = editor.blocks.getBlock(board)!.children.map(({ id }) => id);
+    editor.blocks.moveBlock(alpha, first, "inside");
+    return { alpha, first, second };
+  });
+  const source = page.locator(`[data-block-id="${ids.alpha}"]`).first();
+  const destination = page.locator(`[data-block-id="${ids.second}"]`).first();
+  const box = (await destination.boundingBox())!;
+  await holdDragAt(page, source, box.x + box.width / 2, box.y + box.height * 0.7);
+  await expect(destination).toHaveAttribute("data-drop-inside", "true");
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getParentId(id);
+  }, ids.alpha)).toBe(ids.second);
+});
+
 test("dragging onto a kanban title does not insert a column or paint a board-sized line", async ({ page }) => {
   const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
   const board = page.locator('[data-block-type="kanban"]');
