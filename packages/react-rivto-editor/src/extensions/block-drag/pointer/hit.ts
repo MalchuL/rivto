@@ -35,7 +35,6 @@ export type {
  * body stays a container target instead of snapping to the lane header.
  */
 export const NEARBY_ROW_DROP_PX = 24;
-const OUTER_EDGE_DROP_PX = 8;
 
 /**
  * Reports whether a viewport point lies inside a rectangle, edges included.
@@ -100,12 +99,14 @@ function findMinimumBy<T>(items: readonly T[], measure: (item: T) => number): T 
  * @param candidates - Measured blocks in the active surface.
  * @param pointer - Viewport cursor.
  * @param nearbyRowPx - Distance at which a descendant row wins over a free lane.
+ * @param outerEdgeDropZone - Viewport pixels reserved at each block's outer edge; defaults to 8.
  * @returns The chosen block and why it won, or `null` when the surface is empty.
  */
 export function pickPointerDropTarget(
   candidates: readonly PointerDropCandidate[],
   pointer: { readonly x: number; readonly y: number },
   nearbyRowPx: number = NEARBY_ROW_DROP_PX,
+  outerEdgeDropZone = 8,
 ): PointerDropHit | null {
   const { x, y } = pointer;
   let result: PointerDropHit | null = null;
@@ -114,8 +115,8 @@ export function pickPointerDropTarget(
   // pixels. Prefer the shallowest matching block when their edges coincide.
   const outerEdge = findMinimumBy(candidates.filter((candidate) => (
     pointInRect(x, y, candidate.block)
-    && (y - candidate.block.top <= OUTER_EDGE_DROP_PX
-      || candidate.block.bottom - y <= OUTER_EDGE_DROP_PX)
+    && (y - candidate.block.top <= outerEdgeDropZone
+      || candidate.block.bottom - y <= outerEdgeDropZone)
   )), (candidate) => candidate.ancestorIds.length);
 
   const rowHits = candidates.filter((candidate) => pointInRect(x, y, candidate.row));

@@ -101,5 +101,7 @@ export interface PageDragExtensionOptions {
   readonly activationDistance?: number;
   readonly childDropIndent?: number;
   readonly gapDropZone?: number;
+  /** Width in viewport pixels of the sibling-drop zone at a block's outer edge. Defaults to 8. */
+  readonly outerEdgeDropZone?: number;
   readonly allowChildPlacement?: boolean;
 }
