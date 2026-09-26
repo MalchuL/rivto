@@ -7,12 +7,21 @@
  *
  * @module
  */
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const ROW_CLASS = "page-block-row";
 const HANDLE_CLASS = "page-drag-handle";
 const LINE_CLASS = "page-drop-indicator";
 const CHILD_DROP_INDENT = 24;
+const REPORT_PARENT_ID = "a7666f59-e2f6-4b4e-8103-dc7225fdc94c";
+const REPORT_LEVEL_2_ID = "a0609823-81b4-41bb-85cd-a6dbb4a11fbb";
+const REPORT_LEVEL_3_ID = "bbbb25e5-6e92-49c9-89d4-c7fba0a7cf60";
+const REPORT_LEVEL_4_ID = "f081611e-de2f-43de-a1fb-7c8e53ff89db";
+const REPORT_LEVEL_3_NEXT_ID = "c9cb55d9-9d24-4db2-a66b-8946ba7a6c44";
+const REPORT_NEXT_ID = "9f1718c1-f0db-4bfb-b127-29874f2711e1";
+const REPORT_ANOTHER_ID = "fe679c9a-de62-4d8c-a77b-356774bc7c2d";
 
 /**
  * Arms a block handle and holds the pointer at a viewport point.
@@ -32,6 +41,25 @@ async function holdDragAt(page: Page, source: Locator, x: number, y: number): Pr
   await page.mouse.down();
   await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
   await page.mouse.move(x, y, { steps: 15 });
+}
+
+/**
+ * Loads the captured single-child Review report into the active demo editor.
+ *
+ * @param page - Browser page owning the editor.
+ * @returns Completion after the native v6 snapshot is loaded.
+ */
+async function loadSingleChildReport(page: Page): Promise<void> {
+  const snapshot = JSON.parse(await readFile(
+    resolve(process.cwd(), "e2e/fixtures/single-nested-block-drag.snapshot.json"),
+    "utf8",
+  )) as import("@chulane/rivto").EditorSnapshot;
+  await page.evaluate((value) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    editor.load(value);
+  }, snapshot);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -360,6 +388,99 @@ test("hovering a row body still puts the drop inside that block", async ({ page 
   await expect(indicator).toHaveCSS("outline-width", "4px");
   await expect(page.locator('[data-block-type="kanban"]')).not.toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
+});
+
+test("shows the only-child outdent line on its parent's bottom edge", async ({ page }) => {
+  await page.setViewportSize({ width: 635, height: 360 });
+  const cases = [
+    {
+      parentId: REPORT_PARENT_ID,
+      sourceId: REPORT_LEVEL_2_ID,
+      nextId: REPORT_NEXT_ID,
+      expectedParentId: null,
+      expectedSiblings: [REPORT_PARENT_ID, REPORT_LEVEL_2_ID, REPORT_NEXT_ID, REPORT_ANOTHER_ID],
+    },
+    {
+      parentId: REPORT_LEVEL_3_ID,
+      sourceId: REPORT_LEVEL_4_ID,
+      nextId: REPORT_LEVEL_3_NEXT_ID,
+      expectedParentId: REPORT_LEVEL_2_ID,
+      expectedSiblings: [REPORT_LEVEL_3_ID, REPORT_LEVEL_4_ID, REPORT_LEVEL_3_NEXT_ID],
+    },
+  ] as const;
+
+  for (const scenario of cases) {
+    await loadSingleChildReport(page);
+    const parent = page.locator(`[data-block-id="${scenario.parentId}"]`).first();
+    const source = page.locator(`[data-block-id="${scenario.sourceId}"]`).first();
+    await parent.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    const parentRow = parent.locator(`:scope > .${ROW_CLASS}`);
+    const parentRowBox = (await parentRow.boundingBox())!;
+
+    await holdDragAt(
+      page,
+      source,
+      parentRowBox.x + CHILD_DROP_INDENT / 2,
+      parentRowBox.y + parentRowBox.height - 2,
+    );
+    const line = parent.locator(`:scope > .${LINE_CLASS}[data-kind="between"]`);
+    await expect(line).toBeVisible();
+    const lineBox = (await line.boundingBox())!;
+    expect(lineBox.y + lineBox.height / 2).toBeCloseTo(parentRowBox.y + parentRowBox.height, 0);
+    await page.mouse.up();
+    await expect.poll(() => page.evaluate(({ sourceId, expectedParentId }) => {
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      }).__rivtoDemo.editor;
+      const siblings = expectedParentId
+        ? editor.blocks.getBlock(expectedParentId)?.children.map(({ id }) => id)
+        : editor.blocks.getRootIds();
+      return { parentId: editor.blocks.getParentId(sourceId), siblings };
+    }, scenario)).toEqual({
+      parentId: scenario.expectedParentId,
+      siblings: [...scenario.expectedSiblings],
+    });
+  }
+});
+
+test("keeps the report's parent body and next-block top edge drop zones", async ({ page }) => {
+  await page.setViewportSize({ width: 635, height: 360 });
+  await loadSingleChildReport(page);
+  const parent = page.locator(`[data-block-id="${REPORT_PARENT_ID}"]`).first();
+  const source = page.locator(`[data-block-id="${REPORT_LEVEL_2_ID}"]`).first();
+  const parentRow = parent.locator(`:scope > .${ROW_CLASS}`);
+  await parent.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const parentRowBox = (await parentRow.boundingBox())!;
+
+  await holdDragAt(
+    page,
+    source,
+    parentRowBox.x + parentRowBox.width / 2,
+    parentRowBox.y + parentRowBox.height / 2,
+  );
+  await expect(parentRow).toHaveAttribute("data-drop-inside", "true");
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getParentId(id);
+  }, REPORT_LEVEL_2_ID)).toBe(REPORT_PARENT_ID);
+
+  await loadSingleChildReport(page);
+  const next = page.locator(`[data-block-id="${REPORT_NEXT_ID}"]`).first();
+  const nextRow = next.locator(`:scope > .${ROW_CLASS}`);
+  await next.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const nextRowBox = (await nextRow.boundingBox())!;
+  await holdDragAt(page, source, nextRowBox.x + CHILD_DROP_INDENT / 2, nextRowBox.y + 2);
+  await expect(next.locator(`:scope > .${LINE_CLASS}[data-kind="between"]`)).toBeVisible();
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getParentId(id);
+  }, REPORT_LEVEL_2_ID)).toBeNull();
 });
 
 test("hovering a block in a free container nests inside that block", async ({ page }) => {
