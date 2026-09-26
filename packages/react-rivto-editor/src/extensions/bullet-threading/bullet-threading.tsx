@@ -23,8 +23,6 @@ export interface BulletThreadingOptions {
   readonly anchor: BulletThreadingAnchor;
   /** Horizontal distance from a root anchor to its vertical line, in CSS pixels. Defaults to 12. */
   readonly rootLineOffset?: number;
-  /** "focused" draws only the active block's ancestry; "all" draws every rendered branch and costs more on large pages; "none" mounts no overlay or listeners. Defaults to "focused". */
-  readonly resolution?: "focused" | "all" | "none";
   /** Block types where the thread stops before descendants; the root-level line still reaches them. Takes precedence over continueBlockTypes. */
   readonly excludeBlockTypes?: readonly string[];
   /** When provided, only these block types can carry a thread to descendants. */
@@ -40,10 +38,10 @@ const DEFAULT_ROOT_LINE_OFFSET = 12;
  * nested-scroll, and viewport events schedule a new frame rather than measuring
  * synchronously inside the event handler.
  *
- * @param props - Anchor resolver, rendering mode, offset, and traversal rules.
+ * @param props - Anchor resolver, offset, and traversal rules.
  * @returns Body-hosted SVG overlay for page mode, or null for other surfaces.
  */
-function ThreadOverlay({ anchor, rootLineOffset = DEFAULT_ROOT_LINE_OFFSET, resolution = "focused", excludeBlockTypes, continueBlockTypes }: BulletThreadingOptions) {
+function ThreadOverlay({ anchor, rootLineOffset = DEFAULT_ROOT_LINE_OFFSET, excludeBlockTypes, continueBlockTypes }: BulletThreadingOptions) {
   const { element: root } = useEditorRoot();
   const overlayRef = useRef<SVGSVGElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
@@ -86,7 +84,7 @@ function ThreadOverlay({ anchor, rootLineOffset = DEFAULT_ROOT_LINE_OFFSET, reso
         cache.set(block, value);
         return value;
       };
-      const path = buildThreadPath({ root: root!, resolution, rootLineOffset, excluded, continued, point });
+      const path = buildThreadPath({ root: root!, rootLineOffset, excluded, continued, point });
       for (const element of observed) if (!nextObserved.has(element)) observer.unobserve(element);
       for (const element of nextObserved) if (!observed.has(element)) observer.observe(element);
       observed.clear();
@@ -105,10 +103,8 @@ function ThreadOverlay({ anchor, rootLineOffset = DEFAULT_ROOT_LINE_OFFSET, reso
 
     const mutations = new MutationObserver(schedule);
     mutations.observe(root, { childList: true, subtree: true });
-    if (resolution === "focused") {
-      root.addEventListener("focusin", schedule);
-      root.addEventListener("focusout", schedule);
-    }
+    root.addEventListener("focusin", schedule);
+    root.addEventListener("focusout", schedule);
     view.addEventListener("scroll", onScroll, true);
     view.addEventListener("resize", schedule);
     schedule();
@@ -116,14 +112,12 @@ function ThreadOverlay({ anchor, rootLineOffset = DEFAULT_ROOT_LINE_OFFSET, reso
       view.cancelAnimationFrame(frame);
       mutations.disconnect();
       observer.disconnect();
-      if (resolution === "focused") {
-        root.removeEventListener("focusin", schedule);
-        root.removeEventListener("focusout", schedule);
-      }
+      root.removeEventListener("focusin", schedule);
+      root.removeEventListener("focusout", schedule);
       view.removeEventListener("scroll", onScroll, true);
       view.removeEventListener("resize", schedule);
     };
-  }, [root, anchor, rootLineOffset, resolution, excludeBlockTypes, continueBlockTypes]);
+  }, [root, anchor, rootLineOffset, excludeBlockTypes, continueBlockTypes]);
 
   if (!root?.matches(".page-surface")) return null;
   return createPortal(
@@ -135,26 +129,22 @@ function ThreadOverlay({ anchor, rootLineOffset = DEFAULT_ROOT_LINE_OFFSET, reso
 }
 
 /**
- * Installs optional page threading with anchor, resolution, and block-type rules.
+ * Installs optional page threading with anchor and block-type rules.
  *
  * @param options - Anchor resolver and optional rendering constraints.
  * @returns React editor extension mounting the page overlay after the surface.
- * @throws When the anchor, resolution, or root-line offset is invalid.
+ * @throws When the anchor or root-line offset is invalid.
  */
 export function bulletThreadingExtension(options: BulletThreadingOptions): ReactEditorExtension {
-  const { anchor, resolution = "focused" } = options;
+  const { anchor } = options;
   if (typeof anchor !== "function") {
     throw new Error("Bullet threading anchor must be a function");
-  }
-  if (!["focused", "all", "none"].includes(resolution)) {
-    throw new Error(`Invalid bullet threading resolution: ${resolution}`);
   }
   if (options.rootLineOffset !== undefined && (!Number.isFinite(options.rootLineOffset) || options.rootLineOffset < 0)) {
     throw new Error(`Invalid bullet threading root line offset: ${options.rootLineOffset}`);
   }
   return {
     id: "block.bullet-threading",
-    setup: (reactEditor) => resolution === "none" ? undefined :
-      reactEditor.extensions.mount(() => <ThreadOverlay {...options} />, "afterSurface"),
+    setup: (reactEditor) => reactEditor.extensions.mount(() => <ThreadOverlay {...options} />, "afterSurface"),
   };
 }
