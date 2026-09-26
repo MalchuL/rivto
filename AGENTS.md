@@ -54,6 +54,8 @@ Use `*.test.ts(x)` for Jest and `*.spec.ts` for Playwright. Run focused tests fi
 
 Use ES modules and nearby formatting. Use `PascalCase` for types/components, `camelCase` for functions/values, and kebab-case directories. Prefer existing managers and narrow types.
 
+Do not invent new terms. Use only names already established in this repository or in widely known domain vocabulary. Do not coin acronyms, shorthand, or new labels for concepts that already have a known name.
+
 Every source file starts with a detailed module-level JSDoc describing its purpose, responsibilities, important invariants, and relationship to adjacent layers. Every function and method has JSDoc that explains its purpose, each parameter with `@param`, and its result with `@returns` (omit `@returns` only for constructors). Describe behavior and semantics rather than restating names or types.
 
 Add focused inline comments around tricky algorithms, changes between logical modes or branches, important edge cases, and other non-obvious decisions. Explain why the code takes that path and what invariant it preserves; do not narrate straightforward statements.

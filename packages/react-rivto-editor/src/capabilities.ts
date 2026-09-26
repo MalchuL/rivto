@@ -317,7 +317,13 @@ export interface SelectionCapability {
   /** @param id - Element identifier. @returns Whether the element is selected. */
   isElementSelected(id: string): boolean;
   readDOM(): Selection | undefined;
-  restoreDOM(selection?: Selection): boolean;
+  restoreDOM(selection?: Selection, options?: RestoreDOMSelectionOptions): boolean;
+}
+
+/** Options for rebuilding a portable selection in the live browser DOM. */
+export interface RestoreDOMSelectionOptions {
+  /** False mounts virtual endpoints without navigating the viewport to them. */
+  readonly scroll?: boolean;
 }
 
 export interface SlashCommandsCapability {

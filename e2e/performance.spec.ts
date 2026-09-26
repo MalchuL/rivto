@@ -49,7 +49,7 @@ async function seedLargeDocument(page: Page): Promise<void> {
 async function seedOutlineDocument(page: Page, branches: number): Promise<string[]> {
   await page.goto("/");
   await page.getByRole("checkbox", { name: "Virtualize page" }).check();
-  await page.getByRole("spinbutton", { name: "Virtualize after roots" }).fill("1000");
+  await page.getByRole("spinbutton", { name: "Virtualize after roots count" }).fill("1000");
   const siblings = await page.evaluate((count) => {
     const editor = (window as unknown as {
       __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
@@ -116,9 +116,9 @@ test("configures the page threshold and symmetric root buffer", async ({ page })
   await expect(page.locator('[data-block-id="perf-root-150"]')).toHaveCount(1);
   await page.getByRole("spinbutton", { name: "Extra roots per side" }).fill("8");
   await expect(page.locator('[data-block-id="perf-root-150"]')).toHaveCount(0);
-  await page.getByRole("spinbutton", { name: "Virtualize after roots" }).fill("3000");
+  await page.getByRole("spinbutton", { name: "Virtualize after roots count" }).fill("3000");
   await expect(roots).toHaveCount(2_000);
-  await page.getByRole("spinbutton", { name: "Virtualize after roots" }).fill("1000");
+  await page.getByRole("spinbutton", { name: "Virtualize after roots count" }).fill("1000");
   await expect.poll(() => roots.count()).toBeLessThan(150);
 });
 
@@ -136,6 +136,12 @@ test("keeps virtualization off by default and treats true as always on", async (
 test("skips offscreen content paint while keeping block shells and TODO fields mounted", async ({ page }) => {
   await seedOutlineDocument(page, 0);
   await page.getByRole("checkbox", { name: "Virtualize page" }).uncheck();
+  // Suppress Chromium's native drag scrolling so this verifies the editor's
+  // pointer loop, which also covers structural and cross-block selections.
+  await page.evaluate(() => {
+    document.addEventListener("selectstart", (event) => event.preventDefault(), { capture: true });
+    window.addEventListener("pointermove", (event) => event.preventDefault(), { capture: true });
+  });
   await expect(page.locator(`.${PAGE_SURFACE_CLASS} [data-block-id^="perf-root-"]`)).toHaveCount(2_000);
   const styles = await page.evaluate(() => {
     const content = document.querySelector<HTMLElement>('[data-block-id="perf-root-1999"] .markdown-content');
@@ -185,6 +191,220 @@ test("extends a text selection through a page window boundary", async ({ page })
   expect(Number(selection.focus?.replace("perf-root-", ""))).toBeGreaterThan(20);
   expect(selection.native).toBe(true);
   await expect(page.locator('[data-block-id="perf-root-0"]')).toHaveCount(1);
+});
+
+test("keeps a structural selection complete across virtual gaps for keyboard commands", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  const first = page.locator('[data-block-id="perf-root-1"] [data-block-content]');
+  const last = page.locator('[data-block-id="perf-root-100"] [data-block-content]');
+  await first.click();
+  await page.evaluate(() => window.scrollTo(0, 6_500));
+  await expect(last).toHaveCount(1);
+  await last.scrollIntoViewIfNeeded();
+  await last.click({ modifiers: ["Shift"] });
+
+  const selectedIds = await page.evaluate(() => (
+    (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor.selection.get()?.blocks.map((block) => block.id)
+  ));
+  expect(selectedIds).toEqual(Array.from({ length: 100 }, (_, index) => `perf-root-${index + 1}`));
+
+  const beforeIndent = await last.evaluate((element) => ({
+    top: element.getBoundingClientRect().top,
+  }));
+  await page.keyboard.press("Tab");
+  await page.mouse.wheel(0, 12);
+  await page.waitForTimeout(250);
+  const afterIndent = await last.evaluate((element) => ({
+    top: element.getBoundingClientRect().top,
+  }));
+  expect(afterIndent.top).toBeCloseTo(beforeIndent.top - 12, 0);
+  const indentedParents = await page.evaluate(() => {
+    const blocks = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor.blocks;
+    return Array.from({ length: 100 }, (_, index) => blocks.getParentId(`perf-root-${index + 1}`));
+  });
+  expect(indentedParents).toEqual(Array.from({ length: 100 }, () => "perf-root-0"));
+
+  await page.keyboard.press("Shift+Tab");
+  const outdentedParents = await page.evaluate(() => {
+    const blocks = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor.blocks;
+    return Array.from({ length: 100 }, (_, index) => blocks.getParentId(`perf-root-${index + 1}`));
+  });
+  expect(outdentedParents).toEqual(Array.from({ length: 100 }, () => null));
+
+  await page.keyboard.press("Delete");
+  const remaining = await page.evaluate(() => (
+    (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor.blocks.getRootIds()
+  ));
+  for (let index = 1; index <= 100; index += 1) {
+    expect(remaining).not.toContain(`perf-root-${index}`);
+  }
+});
+
+test("keeps scroll position when an offscreen virtualized root is indented and outdented", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  await page.evaluate(() => window.scrollTo(0, 6_500));
+  const parent = page.locator('[data-block-id="perf-root-100"]');
+  const child = page.locator('[data-block-id="perf-root-101"]');
+  const childContent = page.locator('[data-block-id="perf-root-101"] [data-block-content]');
+  await expect(parent).toHaveCount(1);
+  await childContent.click();
+  await child.evaluate((element) => element.scrollIntoView({ block: "start" }));
+  await page.evaluate(() => window.scrollBy(0, 60));
+
+  const beforeIndent = await child.evaluate((element) => element.getBoundingClientRect().top);
+  await page.keyboard.press("Tab");
+  await page.mouse.wheel(0, 12);
+  await page.waitForTimeout(250);
+  expect(await child.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(beforeIndent - 12, 0);
+
+  const beforeOutdent = await child.evaluate((element) => element.getBoundingClientRect().top);
+  await page.keyboard.press("Shift+Tab");
+  await page.mouse.wheel(0, 12);
+  await page.waitForTimeout(250);
+  expect(await child.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(beforeOutdent - 12, 0);
+});
+
+test("keeps the visible middle of a large selection fixed during repeated indent and outdent", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  const first = page.locator('[data-block-id="perf-root-1"] [data-block-content]');
+  const last = page.locator('[data-block-id="perf-root-200"] [data-block-content]');
+  await first.click();
+  await page.evaluate(() => window.scrollTo(0, 11_000));
+  await page.mouse.wheel(0, 1);
+  await expect(last).toHaveCount(1);
+  await last.click({ modifiers: ["Shift"] });
+
+  const visible = page.locator('[data-block-id="perf-root-50"]');
+  for (let scrollTop = 2_000; scrollTop <= 5_000 && await visible.count() === 0; scrollTop += 100) {
+    await page.evaluate((top) => window.scrollTo(0, top), scrollTop);
+    await page.mouse.wheel(0, 1);
+  }
+  await expect(visible).toHaveCount(1);
+  await visible.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  await page.keyboard.press("Tab");
+  await page.waitForTimeout(400);
+  const before = await visible.evaluate((element) => ({
+    scrollY: window.scrollY,
+    top: element.getBoundingClientRect().top,
+  }));
+
+  for (let index = 0; index < 4; index += 1) {
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+  }
+  await page.waitForTimeout(400);
+
+  const after = await visible.evaluate((element) => ({
+    scrollY: window.scrollY,
+    top: element.getBoundingClientRect().top,
+  }));
+  expect(await page.evaluate(() => (
+    window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }
+  ).__rivtoDemo.editor.blocks.getParentId("perf-root-50"))).toBe("perf-root-0");
+  expect(Math.abs(after.top - before.top)).toBeLessThanOrEqual(8);
+});
+
+test("auto-scrolls a virtualized page while extending a pointer selection", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  const first = page.locator('[data-block-id="perf-root-0"] [data-block-content]');
+  await first.scrollIntoViewIfNeeded();
+  await first.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const point = await first.evaluate((element) => {
+    const node = element.firstChild;
+    if (!node) throw new Error("Expected first virtualized block text");
+    const range = document.createRange();
+    range.setStart(node, 1);
+    range.setEnd(node, 2);
+    const rect = range.getBoundingClientRect();
+    return { x: rect.left + 1, y: rect.top + rect.height / 2 };
+  });
+  const initialHead = await page.locator('[data-block-id="perf-root-1"] [data-block-content]').evaluate((element) => {
+    const node = element.firstChild;
+    if (!node) throw new Error("Expected initial selection head text");
+    const range = document.createRange();
+    range.setStart(node, 1);
+    range.setEnd(node, 2);
+    const rect = range.getBoundingClientRect();
+    return { x: rect.left + 1, y: rect.top + rect.height / 2 };
+  });
+  const startScroll = await page.evaluate(() => window.scrollY);
+
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  await page.mouse.move(initialHead.x, initialHead.y, { steps: 5 });
+  await expect.poll(() => page.evaluate(() => (
+    (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor.selection.get()?.blocks.length ?? 0
+  ))).toBeGreaterThan(1);
+  await page.mouse.move(point.x, page.viewportSize()!.height - 2, { steps: 5 });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(startScroll + 100);
+  await expect.poll(() => page.evaluate(() => (
+    (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor.selection.get()?.blocks.length ?? 0
+  ))).toBeGreaterThan(5);
+  await page.mouse.up();
+
+  const selected = await page.evaluate(() => {
+    const selection = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor.selection.get();
+    return {
+      count: selection?.blocks.length ?? 0,
+      focus: selection?.focusBlockId,
+    };
+  });
+  expect(selected.count).toBeGreaterThan(5);
+  expect(Number(selected.focus?.replace("perf-root-", ""))).toBeGreaterThan(5);
+});
+
+test("auto-scrolls a non-virtualized page while extending a pointer selection", async ({ page }) => {
+  await seedOutlineDocument(page, 0);
+  await page.getByRole("checkbox", { name: "Virtualize page" }).uncheck();
+  const first = page.locator('[data-block-id="perf-root-0"] [data-block-content]');
+  await first.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const point = await first.evaluate((element) => {
+    const node = element.firstChild;
+    if (!node) throw new Error("Expected first non-virtualized block text");
+    const range = document.createRange();
+    range.setStart(node, 1);
+    range.setEnd(node, 2);
+    const rect = range.getBoundingClientRect();
+    return { x: rect.left + 1, y: rect.top + rect.height / 2 };
+  });
+  const initialHead = await page.locator('[data-block-id="perf-root-1"] [data-block-content]').evaluate((element) => {
+    const node = element.firstChild;
+    if (!node) throw new Error("Expected neighboring non-virtualized block text");
+    const range = document.createRange();
+    range.setStart(node, 1);
+    range.setEnd(node, 2);
+    const rect = range.getBoundingClientRect();
+    return { x: rect.left + 1, y: rect.top + rect.height / 2 };
+  });
+  const startScroll = await page.evaluate(() => window.scrollY);
+
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  await page.mouse.move(initialHead.x, initialHead.y, { steps: 5 });
+  await page.mouse.move(point.x, page.viewportSize()!.height - 2, { steps: 5 });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(startScroll + 100);
+  await expect.poll(() => page.evaluate(() => (
+    (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor.selection.get()?.blocks.length ?? 0
+  ))).toBeGreaterThan(5);
+  await page.mouse.up();
 });
 
 test("keeps numbered-list values after earlier roots unmount", async ({ page }) => {

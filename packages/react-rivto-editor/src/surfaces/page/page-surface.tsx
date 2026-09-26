@@ -92,8 +92,16 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
     rangeExtractor,
     measureElement: (element) => element.getBoundingClientRect().height + 8,
   });
+  // Root measurements update virtual offsets, but moving the browser's
+  // viewport for those estimates fights structural-command anchoring and can
+  // jump by hundreds of rows when many roots are reparented at once.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
   useEffect(() => {
     if (!surface) return;
+    const view = surface.ownerDocument.defaultView;
+    let pendingScrollFrame: number | undefined;
+    let scrollAdjustmentSuspensions = 0;
+    let previousOverflowAnchor = "";
     /**
      * Finds the top-level root containing a possibly nested block.
      * @param blockId - Requested block anywhere in the outline.
@@ -109,11 +117,31 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
      * @param ids - Requested blocks, including nested blocks.
      * @returns No value.
      */
-    const ensure = (ids: readonly string[]): void => {
-      const roots = ids.map(rootId).filter((id) => blockIds.includes(id));
+    const ensure = (ids: readonly string[], options?: { readonly scroll?: boolean }): void => {
+      const roots = [...new Set(ids.map(rootId).filter((id) => blockIds.includes(id)))];
       if (!roots.length) return;
       flushSync(() => setPinnedIds(roots));
-      virtualizer.scrollToIndex(blockIds.indexOf(roots.at(-1)!), { align: "auto" });
+      if (pendingScrollFrame !== undefined) view?.cancelAnimationFrame(pendingScrollFrame);
+      pendingScrollFrame = undefined;
+      if (options?.scroll === false) return;
+      const requestedId = ids.at(-1);
+      const requestedElement = requestedId
+        ? surface.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(requestedId)}"]`)
+        : null;
+      const requestedRect = requestedElement?.getBoundingClientRect();
+      // Structural commands can change which virtual root owns a still-visible
+      // block. Mount the new root, but preserve the position of a block partially
+      // above the viewport instead of aligning it as if navigation moved offscreen.
+      if (requestedRect && requestedRect.bottom > 0 && requestedRect.top < (view?.innerHeight ?? 0)) return;
+      const targetIndex = blockIds.indexOf(roots.at(-1)!);
+      virtualizer.scrollToIndex(targetIndex, { align: "auto" });
+      // A newly pinned root is first positioned from its estimate. Retry after
+      // measurement so caret navigation reaches the target without requiring
+      // a manual scroll event to make the virtualizer reconcile its offset.
+      pendingScrollFrame = view?.requestAnimationFrame(() => {
+        pendingScrollFrame = undefined;
+        virtualizer.scrollToIndex(targetIndex, { align: "auto" });
+      });
     };
     const onFocus = (event: FocusEvent) => {
       const id = (event.target as Element)?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
@@ -140,8 +168,40 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
         const id = direction < 0 ? blockIds.at(-1) : blockIds[0];
         if (id) ensure([id]);
       },
+      getSelectionBlocks: () => {
+        const collapseActive = reactEditor.blockListProps.has("collapse");
+        /**
+         * Flattens the visible outline without depending on mounted BlockViews.
+         * @param blocks - Current sibling forest in canonical order.
+         * @returns Visible IDs and text lengths in depth-first page order.
+         */
+        const visit = (blocks: ReturnType<typeof reactEditor.blocks.getBlocks>): Array<{ id: string; length: number }> => (
+          blocks.flatMap((block) => [
+            { id: block.id, length: block.content.length },
+            ...(collapseActive && block.listProps.collapsed === true ? [] : visit(block.children)),
+          ])
+        );
+        return visit(reactEditor.blocks.getBlocks());
+      },
+      suspendScrollAdjustments: () => {
+        if (scrollAdjustmentSuspensions === 0) {
+          previousOverflowAnchor = surface.style.overflowAnchor;
+          surface.style.overflowAnchor = "none";
+        }
+        scrollAdjustmentSuspensions += 1;
+        let active = true;
+        return () => {
+          if (!active) return;
+          active = false;
+          scrollAdjustmentSuspensions -= 1;
+          if (scrollAdjustmentSuspensions === 0) {
+            surface.style.overflowAnchor = previousOverflowAnchor;
+          }
+        };
+      },
     });
     return () => {
+      if (pendingScrollFrame !== undefined) view?.cancelAnimationFrame(pendingScrollFrame);
       surface.removeEventListener("focusin", onFocus);
       surface.removeEventListener("pointerdown", onPointerDown);
       unregister();

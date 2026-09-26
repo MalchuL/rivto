@@ -66,6 +66,7 @@ import {
 import { isElementNode } from "../events/dom-nodes";
 import { resolveSelectionEndpoints } from "./selection-endpoints";
 import { pageWindowFor } from "../../surfaces/page/page-window";
+import type { RestoreDOMSelectionOptions } from "../../capabilities";
 
 /**
  * One live browser caret/selection endpoint inside a block's editable content.
@@ -315,8 +316,10 @@ export function createDOMSelection(
       .find((candidate) => candidate.closest(BLOCK_ID_SELECTOR) === block);
     return [{ id, content }];
   });
+  const selectionBlocks = pageWindowFor(root)?.getSelectionBlocks()
+    ?? rendered.map(({ id, content }) => ({ id, length: content?.textContent?.length ?? 0 }));
   const selection = createTextSelection(
-    rendered.map(({ id, content }) => ({ id, length: content?.textContent?.length ?? 0 })),
+    selectionBlocks,
     anchor,
     head,
   );
@@ -568,11 +571,19 @@ export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosi
  *
  * @param root - Active EditorView root containing the rendered block content.
  * @param selection - Editor selection captured before the structural command.
+ * @param options - Virtual endpoint mounting and navigation policy.
  * @returns True when a text selection was resolved and restored.
  */
-export function restoreEditorDOMSelection(root: HTMLElement, selection: Selection): boolean {
+export function restoreEditorDOMSelection(
+  root: HTMLElement,
+  selection: Selection,
+  options?: RestoreDOMSelectionOptions,
+): boolean {
   if (!isStructuralSelection(selection)) {
-    pageWindowFor(root)?.ensure([selection.anchorBlockId, selection.focusBlockId].filter((id): id is string => Boolean(id)));
+    pageWindowFor(root)?.ensure(
+      [selection.anchorBlockId, selection.focusBlockId].filter((id): id is string => Boolean(id)),
+      options,
+    );
   }
   const contents = orderedContents(root);
   const lengthOf = (id: string): number => {
