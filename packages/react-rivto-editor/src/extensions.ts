@@ -10,6 +10,7 @@
  */
 export * from "./extensions/built-ins/built-ins";
 export * from "./extensions/block-drag";
+export * from "./extensions/bullet-threading/bullet-threading";
 export * from "./extensions/edgeless";
 export * from "./extensions/built-ins/separator/separator-block";
 export * from "./extensions/todo-item/todo-item";
