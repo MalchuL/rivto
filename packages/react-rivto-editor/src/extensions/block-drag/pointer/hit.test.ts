@@ -135,6 +135,16 @@ test("a nested parent's bottom edge wins over its last child's row", () => {
     .toEqual({ id: "parent", reason: "outer-edge" });
 });
 
+test("the outer-edge zone can be widened beyond its eight-pixel default", () => {
+  const parent = candidate("parent", rect(0, 28), { block: rect(0, 160) });
+  const child = candidate("child", rect(128, 32), { ancestorIds: ["parent"] });
+  const pointer = { x: 100, y: 151 };
+  expect(pickPointerDropTarget([parent, child], pointer))
+    .toEqual({ id: "child", reason: "row" });
+  expect(pickPointerDropTarget([parent, child], pointer, 24, 12))
+    .toEqual({ id: "parent", reason: "outer-edge" });
+});
+
 test("space outside the first and last roots targets their boundary, not a container field", () => {
   const board = candidate("board", rect(0, 28), {
     block: rect(0, 160),

@@ -29,7 +29,7 @@ export interface PointerDropCandidate {
  *
  * ```text
  * above both blocks: outer-edge -> before Block 1
- * +----------------------------------------+ <- outer-edge, Block 1 top
+ * +----------------------------------------+ <- outer-edge, Block 1 top (8px by default)
  * | Block 1 row                            | <- row; chrome if its child outline is fixed
  * +----------------------------------------+
  *      +-----------------------------------+
@@ -37,7 +37,7 @@ export interface PointerDropCandidate {
  *      +-----------------------------------+
  *                                          <- outer-edge, Block 1 subtree bottom
  *              gap between blocks             <- nearby-row, closest row wins
- * +----------------------------------------+ <- outer-edge, Block 2 top
+ * +----------------------------------------+ <- outer-edge, Block 2 top (8px by default)
  * | Block 2 row                            | <- row
  * | Empty accepting body                   | <- container if Block 2 accepts body drops
  * +----------------------------------------+ <- outer-edge, Block 2 bottom
@@ -61,7 +61,7 @@ export type PointerDropReason =
   | "container"
   /** Direct hit on a fixed outline's title row; its direct children are layout slots. */
   | "chrome"
-  /** Hit within 8px of a block's top/bottom, or in page space beyond end roots. */
+  /** Hit within the configured top/bottom strip (8px by default), or beyond end roots. */
   | "outer-edge";
 
 /** Chosen drop block and the rule that selected it. */

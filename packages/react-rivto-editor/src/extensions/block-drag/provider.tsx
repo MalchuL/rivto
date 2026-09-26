@@ -139,6 +139,7 @@ function withParentBottomEdgeIndicator(
  * @param root - Surface root used for native hit testing.
  * @param reactEditor - Editor whose views describe drop capabilities.
  * @param excludedIds - Blocks inside the dragged subtrees.
+ * @param outerEdgeDropZone - Width of each outer-edge sibling-drop zone in viewport pixels.
  * @returns Placement input, or null when no candidate target exists.
  */
 function gesturePlacementInput(
@@ -147,6 +148,7 @@ function gesturePlacementInput(
   root: HTMLElement | null,
   reactEditor: ReturnType<typeof useReactEditor>,
   excludedIds: ReadonlySet<string>,
+  outerEdgeDropZone?: number,
 ): DropPlacementInput | null {
   const { source, target } = operation;
   if (!source) return null;
@@ -158,7 +160,7 @@ function gesturePlacementInput(
   };
   let input: DropPlacementInput | null = null;
   if (pointer) {
-    input = withPointerDropTarget(placementSource, pointer, root, reactEditor, excludedIds);
+    input = withPointerDropTarget(placementSource, pointer, root, reactEditor, excludedIds, outerEdgeDropZone);
   } else if (sourceRect && target?.shape) {
     input = {
       source: placementSource,
@@ -194,6 +196,7 @@ export function PageDragProvider({
   activationDistance = 4,
   childDropIndent = 24,
   gapDropZone = 8,
+  outerEdgeDropZone,
   allowChildPlacement = true,
 }: PageDragExtensionOptions) {
   const reactEditor = useReactEditor();
@@ -328,7 +331,9 @@ export function PageDragProvider({
       : 1;
     const blocks = dragBlocks.current ?? reactEditor.blocks.getBlocks();
     const pointer = pointerTracker.current?.get() ?? null;
-    const input = gesturePlacementInput(operation, pointer, root, reactEditor, draggedSubtreeIds.current);
+    const input = gesturePlacementInput(
+      operation, pointer, root, reactEditor, draggedSubtreeIds.current, outerEdgeDropZone,
+    );
     let placement = input
       ? resolveDropPlacement(
         input,

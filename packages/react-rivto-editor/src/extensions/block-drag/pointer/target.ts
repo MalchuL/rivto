@@ -143,6 +143,7 @@ function pointerDropInput(
  * @param root - Active editor surface containing eligible block rows.
  * @param reactEditor - Runtime used to resolve views and canonical containment.
  * @param excludedIds - Dragged subtree IDs that cannot become targets.
+ * @param outerEdgeDropZone - Width of each outer-edge sibling-drop zone in viewport pixels.
  * @returns Input carrying the one live DOM target, or null over blank space.
  */
 export function withPointerDropTarget(
@@ -151,6 +152,7 @@ export function withPointerDropTarget(
   root: HTMLElement | null,
   reactEditor: ReactEditor,
   excludedIds: ReadonlySet<string>,
+  outerEdgeDropZone?: number,
 ): DropPlacementInput | null {
   if (!root) return null;
 
@@ -161,6 +163,7 @@ export function withPointerDropTarget(
     candidates.filter(({ id }) => !excludedIds.has(id)),
     pointer,
     NEARBY_ROW_DROP_PX,
+    outerEdgeDropZone,
   );
   const blockElement = hit ? elements.get(hit.id) : undefined;
   return blockElement
