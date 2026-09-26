@@ -15,7 +15,6 @@ import {
   type PointerDropCandidate,
   type PointerDropReason,
 } from "./hit";
-import { isStructuralLayout } from "../placement/intent";
 import type { DropPlacementInput, DropPlacementSource } from "../placement/types";
 import type { PointerCoordinates } from "../types";
 
@@ -136,18 +135,15 @@ function pointerDropInput(
  * contains the gap between siblings, so the smallest containing block was
  * the container itself.
  *
- * The fix hit-tests `.page-block-row` instead of the full BlockView.
- * A pointer on a row targets that block so "inside" stays on the same line.
- * A pointer in a gap falls through to {@link pickPointerDropTarget}, which
- * prefers the nearest row (before/after, including first/last nested
- * children) and only keeps a container when the pointer is over an empty
- * lane body with no nearby descendant row.
+ * Shared pointer hit-testing gives a block's outer edge priority over nested
+ * rows, then resolves row and empty-body hits from the same measured geometry.
  *
  * @param source - Dragged block identity and layout data.
  * @param pointer - Live viewport cursor position driving the hit test.
  * @param root - Active editor surface containing eligible block rows.
  * @param reactEditor - Runtime used to resolve views and canonical containment.
  * @param excludedIds - Dragged subtree IDs that cannot become targets.
+ * @param outerEdgeDropZone - Width of each outer-edge sibling-drop zone in viewport pixels.
  * @returns Input carrying the one live DOM target, or null over blank space.
  */
 export function withPointerDropTarget(
@@ -156,48 +152,18 @@ export function withPointerDropTarget(
   root: HTMLElement | null,
   reactEditor: ReactEditor,
   excludedIds: ReadonlySet<string>,
+  outerEdgeDropZone?: number,
 ): DropPlacementInput | null {
   if (!root) return null;
 
-  // Ignore the full BlockView: a parent includes `.page-block-children`,
-  // so a gap between siblings still sits inside the parent rect. Only a row
-  // under the cursor is an "inside" hit; otherwise the gap picker runs.
-  const hovered = new Set<HTMLElement>();
-  root.ownerDocument.elementsFromPoint(pointer.x, pointer.y).forEach((element) => {
-    let block = element.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
-    while (block && root.contains(block)) {
-      hovered.add(block);
-      block = block.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR) ?? null;
-    }
-  });
-  const rowHit = [...hovered].flatMap((element) => {
-    if (element.dataset.blockId && excludedIds.has(element.dataset.blockId)) return [];
-    const row = element.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
-    return row ? [{ element, row, rect: row.getBoundingClientRect() }] : [];
-  }).filter(({ rect }) => (
-    pointer.x >= rect.left && pointer.x <= rect.right
-    && pointer.y >= rect.top && pointer.y <= rect.bottom
-  )).sort((left, right) => (
-    left.rect.width * left.rect.height - right.rect.width * right.rect.height
-  ))[0];
-  if (rowHit) {
-    const id = rowHit.element.dataset.blockId;
-    const view = id ? reactEditor.views.resolve(id) : undefined;
-    const reason: PointerDropReason = view && isStructuralLayout({
-      dropAxis: view.dropAxis,
-      childOutline: id ? blockContainment(reactEditor, id)?.childOutline : undefined,
-    }) ? "chrome" : "row";
-    return pointerDropInput(source, rowHit.element, false, reactEditor, reason);
-  }
-
-  // No row under the cursor: pick the nearest sibling row, not the nearest
-  // accepting ancestor. Filled fixed layouts snap to a descendant field.
-  // `reason === "container"` is reserved for accepting body space.
+  // The same picker must handle row hits and gaps so a descendant row cannot
+  // steal the narrow sibling zone at its parent's outer edge.
   const { elements, candidates } = collectPointerDropCandidates(root, reactEditor);
   const hit = pickPointerDropTarget(
     candidates.filter(({ id }) => !excludedIds.has(id)),
     pointer,
     NEARBY_ROW_DROP_PX,
+    outerEdgeDropZone,
   );
   const blockElement = hit ? elements.get(hit.id) : undefined;
   return blockElement

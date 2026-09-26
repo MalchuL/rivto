@@ -7,12 +7,21 @@
  *
  * @module
  */
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const ROW_CLASS = "page-block-row";
 const HANDLE_CLASS = "page-drag-handle";
 const LINE_CLASS = "page-drop-indicator";
 const CHILD_DROP_INDENT = 24;
+const REPORT_PARENT_ID = "a7666f59-e2f6-4b4e-8103-dc7225fdc94c";
+const REPORT_LEVEL_2_ID = "a0609823-81b4-41bb-85cd-a6dbb4a11fbb";
+const REPORT_LEVEL_3_ID = "bbbb25e5-6e92-49c9-89d4-c7fba0a7cf60";
+const REPORT_LEVEL_4_ID = "f081611e-de2f-43de-a1fb-7c8e53ff89db";
+const REPORT_LEVEL_3_NEXT_ID = "c9cb55d9-9d24-4db2-a66b-8946ba7a6c44";
+const REPORT_NEXT_ID = "9f1718c1-f0db-4bfb-b127-29874f2711e1";
+const REPORT_ANOTHER_ID = "fe679c9a-de62-4d8c-a77b-356774bc7c2d";
 
 /**
  * Arms a block handle and holds the pointer at a viewport point.
@@ -32,6 +41,25 @@ async function holdDragAt(page: Page, source: Locator, x: number, y: number): Pr
   await page.mouse.down();
   await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
   await page.mouse.move(x, y, { steps: 15 });
+}
+
+/**
+ * Loads the captured single-child Review report into the active demo editor.
+ *
+ * @param page - Browser page owning the editor.
+ * @returns Completion after the native v6 snapshot is loaded.
+ */
+async function loadSingleChildReport(page: Page): Promise<void> {
+  const snapshot = JSON.parse(await readFile(
+    resolve(process.cwd(), "e2e/fixtures/single-nested-block-drag.snapshot.json"),
+    "utf8",
+  )) as import("@chulane/rivto").EditorSnapshot;
+  await page.evaluate((value) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    editor.load(value);
+  }, snapshot);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -185,6 +213,118 @@ const ROOT_CONTAINER_INPUTS = [
 ] as const;
 
 for (const mode of ["block", "edgeless"] as const) {
+  test(`drops a container at the Kanban–Columns outer edge in ${mode}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    const ids = await page.evaluate((nextMode) => {
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      }).__rivtoDemo.editor;
+      const holder = editor.blocks.insertBlock({
+        type: "paragraph", content: "Holder",
+        children: [{ type: "bento", children: [{ type: "paragraph", content: "Move me" }] }],
+      }).id;
+      const source = editor.blocks.getBlock(holder)!.children[0]!.id;
+      const first = editor.blocks.insertBlock({
+        type: "kanban", content: "Board", children: [{ type: "kanban-column", content: "Lane" }],
+      }).id;
+      const second = editor.blocks.insertBlock({ type: "columns", children: [{ type: "columns-column" }] }).id;
+      editor.load({ ...editor.dump(), blocks: [holder, first, second].map((id) => editor.blocks.getBlock(id)!), elements: [] });
+      if (nextMode === "edgeless") {
+        editor.elements.insertElement({
+          type: "block", zIndex: 0,
+          frame: { x: 20, y: 20, width: 900, height: 650 },
+          props: { startBlockId: holder, endBlockId: second },
+        });
+      }
+      return { holder, source, first, second };
+    }, mode);
+    if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
+    const source = page.locator(`[data-block-id="${ids.source}"]`).first();
+    await source.scrollIntoViewIfNeeded();
+    await source.locator(`:scope > .${ROW_CLASS}`).hover();
+    await source.locator(`:scope > .${ROW_CLASS} .${HANDLE_CLASS}`).hover();
+    const first = page.locator(`[data-block-id="${ids.first}"]`).first();
+    const firstBox = (await first.boundingBox())!;
+
+    await holdDragAt(page, source, firstBox.x + firstBox.width / 2,
+      firstBox.y + firstBox.height - 4);
+    const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
+    await expect(line).toBeVisible();
+    const lineBox = (await line.boundingBox())!;
+    expect(Math.abs(lineBox.y + lineBox.height / 2 - firstBox.y - firstBox.height)).toBeLessThan(9);
+    await page.mouse.up();
+    await expect.poll(() => page.evaluate(() => {
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      }).__rivtoDemo.editor;
+      return editor.blocks.getRootIds();
+    })).toEqual([ids.holder, ids.first, ids.source, ids.second]);
+  });
+}
+
+test("moves a card out of the demo Kanban into the Kanban–Columns gap", async ({ page }) => {
+  await page.goto("/");
+  const document = page.locator('[data-journal-document="today"]');
+  const board = document.locator('[data-block-type="kanban"]').first();
+  const columns = document.locator('[data-block-type="columns"]').first();
+  const card = board.locator('[data-block-type="paragraph"]')
+    .filter({ hasText: "Drag me between columns or back into the editor" }).first();
+  const cardId = await card.getAttribute("data-block-id");
+  await card.scrollIntoViewIfNeeded();
+  const boardBox = (await board.boundingBox())!;
+  const columnsBox = (await columns.boundingBox())!;
+  await holdDragAt(page, card, boardBox.x + boardBox.width / 2,
+    (boardBox.y + boardBox.height + columnsBox.y) / 2);
+  await expect(page.locator(`.${LINE_CLASS}[data-kind="between"]`)).toBeVisible();
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getParentId(id!);
+  }, cardId)).toBeNull();
+});
+
+test("moves a block between the demo TODO storage and Bento", async ({ page }) => {
+  await page.goto("/");
+  const document = page.locator('[data-journal-document="today"]');
+  const storage = document.locator('[data-block-type="todo-storage"]').first();
+  const bento = document.locator('[data-block-type="bento"]').first();
+  const source = storage.locator('[data-block-type="todo-item"]').last();
+  const ids = await page.evaluate(() => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    const roots = editor.blocks.getRootIds();
+    const storageId = roots.find((id) => editor.blocks.getBlock(id)?.type === "todo-storage")!;
+    const bentoId = roots.find((id) => editor.blocks.getBlock(id)?.type === "bento")!;
+    editor.blocks.moveBlock(bentoId, storageId, "after");
+    return { storageId, bentoId };
+  });
+  const sourceId = await source.getAttribute("data-block-id");
+  await source.scrollIntoViewIfNeeded();
+  const storageBox = (await storage.boundingBox())!;
+  await holdDragAt(page, source, storageBox.x + storageBox.width / 2, storageBox.y + storageBox.height - 4);
+  const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
+  await expect(line).toBeVisible();
+  const lineBox = (await line.boundingBox())!;
+  expect(Math.abs(lineBox.y + lineBox.height / 2 - storageBox.y - storageBox.height)).toBeLessThan(9);
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getRootIds().indexOf(id!);
+  }, sourceId)).toBe((await page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getRootIds().indexOf(id);
+  }, ids.storageId)) + 1);
+  await expect(bento).toBeVisible();
+});
+
+for (const mode of ["block", "edgeless"] as const) {
   for (const container of ROOT_CONTAINER_INPUTS) {
     test(`centers the ${container.type} root gap like an ordinary block in ${mode}`, async ({ page }) => {
       const ids = await page.evaluate(({ input, nextMode }) => {
@@ -198,7 +338,7 @@ for (const mode of ["block", "edgeless"] as const) {
           editor.blocks.insertBlock({ id: "gap-counter", type: "demo.counter", props: { count: 2 } }),
           editor.blocks.insertBlock({ id: "gap-container", ...input }),
           editor.blocks.insertBlock({ id: "gap-after", type: "paragraph", content: "After container" }),
-        ];
+        ].map((block) => block.id);
         editor.load({ ...editor.dump(), blocks: roots.map((id) => editor.blocks.getBlock(id)!), elements: [] });
         if (nextMode === "edgeless") {
           editor.elements.insertElement({
@@ -250,6 +390,99 @@ test("hovering a row body still puts the drop inside that block", async ({ page 
   await page.mouse.up();
 });
 
+test("shows the only-child outdent line on its parent's bottom edge", async ({ page }) => {
+  await page.setViewportSize({ width: 635, height: 360 });
+  const cases = [
+    {
+      parentId: REPORT_PARENT_ID,
+      sourceId: REPORT_LEVEL_2_ID,
+      nextId: REPORT_NEXT_ID,
+      expectedParentId: null,
+      expectedSiblings: [REPORT_PARENT_ID, REPORT_LEVEL_2_ID, REPORT_NEXT_ID, REPORT_ANOTHER_ID],
+    },
+    {
+      parentId: REPORT_LEVEL_3_ID,
+      sourceId: REPORT_LEVEL_4_ID,
+      nextId: REPORT_LEVEL_3_NEXT_ID,
+      expectedParentId: REPORT_LEVEL_2_ID,
+      expectedSiblings: [REPORT_LEVEL_3_ID, REPORT_LEVEL_4_ID, REPORT_LEVEL_3_NEXT_ID],
+    },
+  ] as const;
+
+  for (const scenario of cases) {
+    await loadSingleChildReport(page);
+    const parent = page.locator(`[data-block-id="${scenario.parentId}"]`).first();
+    const source = page.locator(`[data-block-id="${scenario.sourceId}"]`).first();
+    await parent.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    const parentRow = parent.locator(`:scope > .${ROW_CLASS}`);
+    const parentRowBox = (await parentRow.boundingBox())!;
+
+    await holdDragAt(
+      page,
+      source,
+      parentRowBox.x + CHILD_DROP_INDENT / 2,
+      parentRowBox.y + parentRowBox.height - 2,
+    );
+    const line = parent.locator(`:scope > .${LINE_CLASS}[data-kind="between"]`);
+    await expect(line).toBeVisible();
+    const lineBox = (await line.boundingBox())!;
+    expect(lineBox.y + lineBox.height / 2).toBeCloseTo(parentRowBox.y + parentRowBox.height, 0);
+    await page.mouse.up();
+    await expect.poll(() => page.evaluate(({ sourceId, expectedParentId }) => {
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      }).__rivtoDemo.editor;
+      const siblings = expectedParentId
+        ? editor.blocks.getBlock(expectedParentId)?.children.map(({ id }) => id)
+        : editor.blocks.getRootIds();
+      return { parentId: editor.blocks.getParentId(sourceId), siblings };
+    }, scenario)).toEqual({
+      parentId: scenario.expectedParentId,
+      siblings: [...scenario.expectedSiblings],
+    });
+  }
+});
+
+test("keeps the report's parent body and next-block top edge drop zones", async ({ page }) => {
+  await page.setViewportSize({ width: 635, height: 360 });
+  await loadSingleChildReport(page);
+  const parent = page.locator(`[data-block-id="${REPORT_PARENT_ID}"]`).first();
+  const source = page.locator(`[data-block-id="${REPORT_LEVEL_2_ID}"]`).first();
+  const parentRow = parent.locator(`:scope > .${ROW_CLASS}`);
+  await parent.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const parentRowBox = (await parentRow.boundingBox())!;
+
+  await holdDragAt(
+    page,
+    source,
+    parentRowBox.x + parentRowBox.width / 2,
+    parentRowBox.y + parentRowBox.height / 2,
+  );
+  await expect(parentRow).toHaveAttribute("data-drop-inside", "true");
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getParentId(id);
+  }, REPORT_LEVEL_2_ID)).toBe(REPORT_PARENT_ID);
+
+  await loadSingleChildReport(page);
+  const next = page.locator(`[data-block-id="${REPORT_NEXT_ID}"]`).first();
+  const nextRow = next.locator(`:scope > .${ROW_CLASS}`);
+  await next.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const nextRowBox = (await nextRow.boundingBox())!;
+  await holdDragAt(page, source, nextRowBox.x + CHILD_DROP_INDENT / 2, nextRowBox.y + 2);
+  await expect(next.locator(`:scope > .${LINE_CLASS}[data-kind="between"]`)).toBeVisible();
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getParentId(id);
+  }, REPORT_LEVEL_2_ID)).toBeNull();
+});
+
 test("hovering a block in a free container nests inside that block", async ({ page }) => {
   const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
   const beta = page.locator("[data-block-id]").filter({ has: page.getByText("Beta", { exact: true }) }).first();
@@ -293,6 +526,53 @@ test("an empty kanban column still accepts an inside drop on its body", async ({
     }).__rivtoDemo.editor;
     return sourceId ? editor.blocks.getParentId(sourceId) : undefined;
   }, { sourceId: alphaId })).toBe(emptyId);
+});
+
+test("does not add an ordinary block directly to an empty kanban", async ({ page }) => {
+  const boardId = await page.evaluate(() => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.insertBlock({ type: "kanban", content: "Empty board" }).id;
+  });
+  const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
+  const alphaId = await alpha.getAttribute("data-block-id");
+  const board = page.locator(`[data-block-id="${boardId}"]`).first();
+  const box = (await board.boundingBox())!;
+  await holdDragAt(page, alpha, box.x + box.width / 2, box.y + box.height * 0.7);
+  await expect(board).not.toHaveAttribute("data-drop-inside", "true");
+  await page.mouse.up();
+  expect(await page.evaluate(({ sourceId, targetId }) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return { parentId: editor.blocks.getParentId(sourceId!), childIds: editor.blocks.getBlock(targetId)?.children.map(({ id }) => id) };
+  }, { sourceId: alphaId, targetId: boardId })).toEqual({ parentId: null, childIds: [] });
+});
+
+test("moves an ordinary block between sibling kanban columns", async ({ page }) => {
+  const ids = await page.evaluate(() => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    const alpha = editor.blocks.getRootIds().find((id) => editor.blocks.getBlock(id)?.content === "Alpha")!;
+    const board = editor.blocks.getRootIds().find((id) => editor.blocks.getBlock(id)?.type === "kanban")!;
+    const [first, second] = editor.blocks.getBlock(board)!.children.map(({ id }) => id);
+    editor.blocks.moveBlock(alpha, first, "inside");
+    return { alpha, first, second };
+  });
+  const source = page.locator(`[data-block-id="${ids.alpha}"]`).first();
+  const destination = page.locator(`[data-block-id="${ids.second}"]`).first();
+  const box = (await destination.boundingBox())!;
+  await holdDragAt(page, source, box.x + box.width / 2, box.y + box.height * 0.7);
+  await expect(destination).toHaveAttribute("data-drop-inside", "true");
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate((id) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.getParentId(id);
+  }, ids.alpha)).toBe(ids.second);
 });
 
 test("dragging onto a kanban title does not insert a column or paint a board-sized line", async ({ page }) => {
@@ -354,7 +634,7 @@ for (const mode of ["block", "edgeless"] as const) {
           }],
         },
       ];
-      const roots = inputs.map((input) => editor.blocks.insertBlock(input)).id;
+      const roots = inputs.map((input) => editor.blocks.insertBlock(input).id);
       editor.load({
         ...editor.dump(),
         blocks: roots.map((id) => editor.blocks.getBlock(id)!),

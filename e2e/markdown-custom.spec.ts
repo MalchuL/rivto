@@ -188,6 +188,33 @@ test("filters typo queries, converts in place, and undoes query removal with con
   await expect(converted.locator("[data-block-content]")).toHaveText(`${initial}/sloder`);
 });
 
+test("keeps a filtered slash menu beside the caret when it opens upward", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 600 });
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    return editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
+  });
+  const content = page.locator(`[data-block-id="${id}"] [data-block-content]`);
+  await content.evaluate((element) => element.scrollIntoView({ block: "end" }));
+  await content.click();
+  await page.keyboard.type("/");
+  const menu = page.locator("[data-slash-menu]");
+  await expect(menu).toBeVisible();
+  const full = (await menu.boundingBox())!;
+  await page.keyboard.type("slider");
+  await expect(menu.locator("[data-slash-command]")).toHaveCount(1);
+  const filtered = (await menu.boundingBox())!;
+  const caretTop = await content.evaluate((element) => {
+    const selection = element.ownerDocument.getSelection()!;
+    return selection.getRangeAt(0).getBoundingClientRect().top;
+  });
+  expect(full.height).toBeGreaterThan(filtered.height);
+  expect(filtered.y).toBeGreaterThan(full.y);
+  expect(Math.abs(filtered.y + filtered.height - caretTop)).toBeLessThan(12);
+});
+
 test("executes the highlighted command after grouped slash navigation", async ({ page }) => {
   const editor = page.locator("[data-block-content]").last();
   const block = editor.locator(BLOCK_ANCESTOR_XPATH);

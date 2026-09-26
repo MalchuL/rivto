@@ -1,0 +1,84 @@
+{
+  "version": 6,
+  "blocks": [
+    {
+      "id": "a7666f59-e2f6-4b4e-8103-dc7225fdc94c",
+      "type": "paragraph",
+      "listProps": { "type": "list", "checked": false, "collapsed": false },
+      "props": {},
+      "pluginData": {},
+      "content": "Parent block",
+      "children": [
+        {
+          "id": "a0609823-81b4-41bb-85cd-a6dbb4a11fbb",
+          "type": "paragraph",
+          "listProps": { "type": "list", "checked": false, "collapsed": false },
+          "props": {},
+          "pluginData": {},
+          "content": "Level 2",
+          "children": [
+            {
+              "id": "bbbb25e5-6e92-49c9-89d4-c7fba0a7cf60",
+              "type": "paragraph",
+              "listProps": { "type": "list", "checked": false, "collapsed": false },
+              "props": {},
+              "pluginData": {},
+              "content": "Level 3",
+              "children": [
+                {
+                  "id": "f081611e-de2f-43de-a1fb-7c8e53ff89db",
+                  "type": "paragraph",
+                  "listProps": { "type": "list", "checked": false, "collapsed": false },
+                  "props": {},
+                  "pluginData": {},
+                  "content": "Level 4",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "c9cb55d9-9d24-4db2-a66b-8946ba7a6c44",
+              "type": "paragraph",
+              "listProps": { "type": "list", "checked": false, "collapsed": false },
+              "props": {},
+              "pluginData": {},
+              "content": "Level 3 Next block",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "9f1718c1-f0db-4bfb-b127-29874f2711e1",
+      "type": "paragraph",
+      "listProps": { "type": "list", "checked": false, "collapsed": false },
+      "props": {},
+      "pluginData": {},
+      "content": "Next block",
+      "children": []
+    },
+    {
+      "id": "fe679c9a-de62-4d8c-a77b-356774bc7c2d",
+      "type": "paragraph",
+      "listProps": { "type": "list", "checked": false, "collapsed": false },
+      "props": {},
+      "pluginData": {},
+      "content": "Another block",
+      "children": []
+    }
+  ],
+  "elements": [
+    {
+      "id": "a7666f59-e2f6-4b4e-8103-dc7225fdc94c",
+      "type": "block",
+      "frame": { "x": 60, "y": 60, "width": 500, "height": 360 },
+      "zIndex": 0,
+      "props": {
+        "startBlockId": "a7666f59-e2f6-4b4e-8103-dc7225fdc94c",
+        "endBlockId": "fe679c9a-de62-4d8c-a77b-356774bc7c2d"
+      }
+    }
+  ],
+  "pluginData": {}
+}

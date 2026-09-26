@@ -103,6 +103,48 @@ test("the gap below the last nested child uses the last child, not the parent bo
     .toEqual({ id: "after", reason: "nearby-row" });
 });
 
+test("the outer bottom edge of a root container targets its sibling gap", () => {
+  const board = candidate("board", rect(0, 28), {
+    block: rect(0, 160),
+    acceptsDropContainer: true,
+  });
+  const last = candidate("last", rect(128, 32), { ancestorIds: ["board"] });
+  const next = candidate("next", rect(168, 80), {
+    block: rect(168, 80),
+    acceptsDropContainer: true,
+  });
+  expect(pickPointerDropTarget([board, last, next], { x: 100, y: 156 }))
+    .toEqual({ id: "board", reason: "outer-edge" });
+});
+
+test("the outer edge of an ordinary root with children targets its sibling gap", () => {
+  const parent = candidate("parent", rect(0, 28), { block: rect(0, 160) });
+  const last = candidate("last", rect(128, 32), { ancestorIds: ["parent"] });
+  const next = candidate("next", rect(168, 24));
+  expect(pickPointerDropTarget([parent, last, next], { x: 100, y: 156 }))
+    .toEqual({ id: "parent", reason: "outer-edge" });
+});
+
+test("a nested parent's bottom edge wins over its last child's row", () => {
+  const root = candidate("root", rect(0, 28), { block: rect(0, 240) });
+  const parent = candidate("parent", rect(40, 28), {
+    block: rect(40, 160), ancestorIds: ["root"],
+  });
+  const child = candidate("child", rect(168, 32), { ancestorIds: ["parent", "root"] });
+  expect(pickPointerDropTarget([root, parent, child], { x: 100, y: 196 }))
+    .toEqual({ id: "parent", reason: "outer-edge" });
+});
+
+test("the outer-edge zone can be widened beyond its eight-pixel default", () => {
+  const parent = candidate("parent", rect(0, 28), { block: rect(0, 160) });
+  const child = candidate("child", rect(128, 32), { ancestorIds: ["parent"] });
+  const pointer = { x: 100, y: 151 };
+  expect(pickPointerDropTarget([parent, child], pointer))
+    .toEqual({ id: "child", reason: "row" });
+  expect(pickPointerDropTarget([parent, child], pointer, 24, 12))
+    .toEqual({ id: "parent", reason: "outer-edge" });
+});
+
 test("space outside the first and last roots targets their boundary, not a container field", () => {
   const board = candidate("board", rect(0, 28), {
     block: rect(0, 160),
@@ -114,10 +156,10 @@ test("space outside the first and last roots targets their boundary, not a conta
     ancestorIds: ["board"],
   });
   expect(pickPointerDropTarget([board, column], { x: 20, y: -12 }))
-    .toEqual({ id: "board", reason: "root-edge" });
+    .toEqual({ id: "board", reason: "outer-edge" });
   expect(pickPointerDropTarget([board, column], { x: 20, y: 172 }))
-    .toEqual({ id: "board", reason: "root-edge" });
-  expect(hitDropIntent({ reason: "root-edge", targetAcceptsDrop: true })).toBe("sibling-edge");
+    .toEqual({ id: "board", reason: "outer-edge" });
+  expect(hitDropIntent({ reason: "outer-edge", targetAcceptsDrop: true })).toBe("sibling-edge");
 });
 
 test("returns null when the surface has no measured blocks", () => {

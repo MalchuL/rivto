@@ -26,7 +26,9 @@ import { registerEmptyBlockReset } from "./page/empty-block-reset";
 import { registerBlockSelection } from "./selection/block-selection";
 import { registerCollapse } from "./page/collapse";
 import { registerBlockCreation } from "./page/block-creation";
-import { SlashMenu } from "./slash/slash-menu";
+import { createElement } from "react";
+import { SlashMenu, type SlashMenuPositionOptions } from "./slash/slash-menu";
+export type { SlashMenuPositionOptions } from "./slash/slash-menu";
 import { registerSelectionDeletion } from "./selection/selection-deletion";
 import { registerTrailingBlock } from "./page/trailing-block";
 import { registerIndent, type IndentExtensionOptions } from "./page/indent";
@@ -195,12 +197,13 @@ export const collapseExtension = (): ReactEditorExtension => ({
  * Block-type conversion entries are registered separately by `registerBlock`.
  * This extension owns only actions valid for arbitrary registered types.
  *
+ * @param options - Optional menu width, height, caret gap, and viewport padding.
  * @returns A mode-independent slash popup and its core command registrations.
  */
-export const slashCommandExtension = (): ReactEditorExtension => ({
+export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): ReactEditorExtension => ({
   id: "slash.commands",
   setup: (reactEditor) => {
-    reactEditor.extensions.mount(SlashMenu);
+    reactEditor.extensions.mount(() => createElement(SlashMenu, { options }));
     const listCommands: readonly { type: BlockListType; title: string }[] = [
       { type: "list", title: "List" },
       { type: "checkbox", title: "Checkbox" },
@@ -329,6 +332,8 @@ export interface StandardPresetOptions {
   readonly trailingBlockCount?: number;
   /** Host overrides for the default writing block extension. */
   readonly writing?: DefaultWritingBlockOptions;
+  /** Floating slash-menu dimensions and caret spacing. */
+  readonly slashMenu?: SlashMenuPositionOptions;
 }
 
 /**
@@ -337,7 +342,7 @@ export interface StandardPresetOptions {
  * Installs `defaultWritingBlockExtension` first so writing factories exist
  * before separator, clipboard, Enter, and related paths run.
  *
- * @param options - Trailing-block count and optional writing overrides.
+ * @param options - Trailing-block count, writing overrides, and slash-menu placement.
  * @returns The standard page extension preset without optional drag or canvas features.
  */
 export const standardPreset = (
@@ -351,7 +356,7 @@ export const standardPreset = (
     pageSurfaceExtension(),
     historyExtension(),
     textSelectionExtension(),
-    slashCommandExtension(),
+    slashCommandExtension(options.slashMenu),
     listShortcutsExtension(),
     clipboardExtension({ onPrepareError: createErrorBlockInput }),
     blockSelectionExtension(),

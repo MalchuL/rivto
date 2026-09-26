@@ -37,6 +37,26 @@ function surfaceBlock(host: HTMLElement, id: string | null): HTMLElement | null 
   return surface?.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`) ?? null;
 }
 
+/**
+ * Finds the visual edge for an outdent indicator owned by the parent row.
+ * A parent block's full rectangle includes its nested children, so using that
+ * rectangle would paint the line near the next block instead of directly
+ * beneath the parent row the pointer approached.
+ *
+ * @param placement - Between placement whose indicator owner is being drawn.
+ * @param row - Parent's title row, excluding its nested child list.
+ * @returns Viewport Y coordinate of the parent row edge when applicable.
+ */
+function parentBottomIndicatorEdge(
+  placement: DropPlacement & { readonly kind: "between" },
+  row: HTMLElement | null,
+): number | undefined {
+  const usesParentBottomEdge = placement.gapEdge === "after"
+    && placement.indicatorId === placement.previousId
+    && Boolean(placement.nextId);
+  return usesParentBottomEdge ? row?.getBoundingClientRect().bottom : undefined;
+}
+
 /** Calculates one midpoint line relative to its indicator-owning block. */
 function betweenIndicatorStyle(
   placement: DropPlacement & { readonly kind: "between" },
@@ -79,17 +99,18 @@ function betweenIndicatorStyle(
       : nextRect?.left ?? previousRect?.right ?? hostRect.left;
     style = { left: x - hostRect.left, top: 0, bottom: 0 };
   } else {
+    const targetRowEdge = parentBottomIndicatorEdge(placement, row);
     const adjacent = Boolean(previousRect && nextRect
       && nextRect.top - previousRect.bottom <= placement.childDropIndent);
     const preferPrevious = placement.gapPointer
       ? Math.abs(placement.gapPointer.y - (previousRect?.bottom ?? Number.NEGATIVE_INFINITY))
         <= Math.abs(placement.gapPointer.y - (nextRect?.top ?? Number.POSITIVE_INFINITY))
       : placement.gapEdge === "after";
-    const y = previousRect && nextRect
+    const y = targetRowEdge ?? (previousRect && nextRect
       ? adjacent
         ? (previousRect.bottom + nextRect.top) / 2
         : preferPrevious ? previousRect.bottom : nextRect.top
-      : nextRect?.top ?? previousRect?.bottom ?? row?.getBoundingClientRect().bottom ?? hostRect.bottom;
+      : nextRect?.top ?? previousRect?.bottom ?? row?.getBoundingClientRect().bottom ?? hostRect.bottom);
     const emptyChildList = !placement.previousId && !placement.nextId;
     style = {
       top: y - hostRect.top,
