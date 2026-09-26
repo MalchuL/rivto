@@ -91,6 +91,42 @@ type PageDragOperation = DragStartEvent["operation"];
 export type { PageDragExtensionOptions } from "./types";
 
 /**
+ * Keeps the outdent indicator on a parent's bottom edge when every direct
+ * child is being moved. The canonical destination remains before the next
+ * sibling, but letting that sibling own the indicator makes the gesture look
+ * like a drop on the next block instead of an outdent from the parent.
+ *
+ * @param placement - Canonical placement resolved for the current pointer.
+ * @param input - Target row approached by the gesture.
+ * @param targetChildren - Current direct children of that target row.
+ * @param draggedIds - IDs contained by the dragged subtrees.
+ * @returns The same placement with parent-owned feedback when required.
+ */
+function withParentBottomEdgeIndicator(
+  placement: DropPlacement,
+  input: DropPlacementInput,
+  targetChildren: readonly DropBlock[],
+  draggedIds: ReadonlySet<string>,
+): DropPlacement {
+  const useParentBottomEdge =
+    // This affordance is a line between siblings, never an inside highlight.
+    placement.kind === "between"
+    // The pointer approached the bottom of the target, not the top of the next block.
+    && placement.gapEdge === "after"
+    // The resolved gap starts immediately after the parent row being approached.
+    && placement.previousId === input.target.id
+    // A following sibling exists, so this is the parent/next-block gap from the report.
+    && Boolean(placement.nextId)
+    // The target must actually be a parent; an empty ordinary block keeps default feedback.
+    && targetChildren.length > 0
+    // Every direct child leaves, exposing this parent-level gap for the dragged selection.
+    && targetChildren.every(({ id }) => draggedIds.has(id));
+  return useParentBottomEdge
+    ? { ...placement, indicatorId: input.target.id }
+    : placement;
+}
+
+/**
  * Adapts the current dnd-kit operation into Rivto's placement input.
  *
  * A live pointer wins: the target is hit-tested natively from the cursor and
@@ -293,7 +329,7 @@ export function PageDragProvider({
     const blocks = dragBlocks.current ?? reactEditor.blocks.getBlocks();
     const pointer = pointerTracker.current?.get() ?? null;
     const input = gesturePlacementInput(operation, pointer, root, reactEditor, draggedSubtreeIds.current);
-    const placement = input
+    let placement = input
       ? resolveDropPlacement(
         input,
         blocks,
@@ -303,7 +339,14 @@ export function PageDragProvider({
         pointer,
       )
       : null;
-    if (!placement) return null;
+    if (!placement || !input) return null;
+    const targetChildren = reactEditor.blocks.getBlock(input.target.id)?.children ?? [];
+    placement = withParentBottomEdgeIndicator(
+      placement,
+      input,
+      targetChildren,
+      draggedSubtreeIds.current,
+    );
     const target = dropMoveTarget(placement);
     if (target.targetId && draggedSubtreeIds.current.has(target.targetId)) return null;
     const sourceIds = activeMove.current?.ids
