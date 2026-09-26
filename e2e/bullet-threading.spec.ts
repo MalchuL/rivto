@@ -21,23 +21,6 @@ test("draws one continuous top-level line to the focused root", async ({ page })
   expect(Number(d.split(" H ").at(-1))).toBeCloseTo(endpointX, 1);
 });
 
-test("rootLineOffset moves the root line in focused and all resolutions", async ({ page }) => {
-  await page.goto("/?threadRootLineOffset=20");
-  const focused = page.locator(".page-surface > .page-block:has(> .page-block-children)").first();
-  await focused.locator(":scope > .page-block-row [data-block-content]").click();
-  const path = page.locator("[data-bullet-threading] path");
-  await expect.poll(() => path.getAttribute("d")).toMatch(/^M .* Q .* H .*$/);
-  const x = await focused.locator(":scope > .page-block-row .page-collapse-toggle").evaluate((control) => {
-    const rect = control.getBoundingClientRect();
-    return rect.x + rect.width / 2;
-  });
-  expect(x - Number(/^M ([\d.]+)/.exec((await path.getAttribute("d"))!)![1])).toBeCloseTo(20, 1);
-
-  await page.goto("/?threadResolution=all&threadRootLineOffset=20");
-  await expect.poll(() => path.getAttribute("d")).toMatch(/^M .* Q .* H .*$/);
-  expect(x - Number(/^M ([\d.]+)/.exec((await path.getAttribute("d"))!)![1])).toBeCloseTo(20, 1);
-});
-
 test("threads only the focused page ancestry and follows its controls", async ({ page }) => {
   await page.goto("/");
   const parent = page.locator(".page-surface > .page-block:has(> .page-block-children)").first();
@@ -115,42 +98,11 @@ test("repositions the path for a nested scroll container", async ({ page }) => {
   expect(endpointY).toBeCloseTo(anchorY, 1);
 });
 
-for (const anchor of ["drag", "left-top"] as const) {
-  test(`aligns the path to the ${anchor} anchor`, async ({ page }) => {
-    await page.goto(`/?threadAnchor=${anchor}`);
-    const parent = page.locator(".page-surface > .page-block:has(> .page-block-children)").first();
-    const child = parent.locator(":scope > .page-block-children > .page-block").first();
-    await child.locator(":scope > .page-block-row [data-block-content]").click();
-    const path = page.locator("[data-bullet-threading] path");
-    await expect.poll(() => path.getAttribute("d")).toMatch(/ H [\d.]+$/);
-    const endpoint = Number((await path.getAttribute("d"))!.split(" H ").at(-1));
-    const target = anchor === "drag"
-      ? ":scope > .page-block-row .page-drag-handle"
-      : ':scope > .page-block-row > .rivto-slot[data-slot-position="left-top"]';
-    const targetX = await child.locator(target).evaluate((control) => {
-      const rect = control.getBoundingClientRect();
-      const overlay = document.querySelector("[data-bullet-threading]")!.getBoundingClientRect();
-      return rect.x + rect.width / 2 - overlay.x;
-    });
-    expect(endpoint).toBeCloseTo(targetX, 1);
-  });
-}
-
-test("all renders without focus and none mounts no overlay", async ({ page }) => {
-  await page.goto("/?threadResolution=all");
-  const path = page.locator("[data-bullet-threading] path");
-  await expect.poll(async () => (await path.getAttribute("d"))?.match(/ Q /g)?.length ?? 0)
-    .toBeGreaterThan(await page.locator(".page-surface > .page-block").count());
-  await page.goto("/?threadResolution=none");
-  await expect(page.locator("[data-bullet-threading]")).toHaveCount(0);
-});
-
 test("wrapped and direct container roots keep the root line but stop before descendants", async ({ page }) => {
-  for (const [type, query] of [
-    ["table", ""], ["kanban", ""], ["columns", ""], ["bento", ""], ["todo-storage", ""],
-    ["columns", "?threadContinue=paragraph&threadContinue=columns&threadContinue=columns-column"],
+  for (const type of [
+    "table", "kanban", "columns", "bento", "todo-storage",
   ]) {
-    await page.goto(`/${query}`);
+    await page.goto("/");
     const container = page.locator(`.page-surface .page-block[data-block-type="${type}"]`).first();
     await container.locator('[data-block-content]').first().click();
     const path = page.locator("[data-bullet-threading] path");

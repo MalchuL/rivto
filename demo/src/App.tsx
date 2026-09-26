@@ -111,6 +111,22 @@ function demoRepeatCount(): number {
 }
 
 /**
+ * Resolves the demo thread endpoint from the controls rendered in one block row.
+ *
+ * @param block - Rendered block shell being measured.
+ * @returns Visible collapse toggle, its drag-handle fallback, or null.
+ */
+function demoThreadAnchor(block: Element): Element | null {
+  const row = block.querySelector(":scope > .page-block-row");
+  const collapse = row?.querySelector(".page-collapse-toggle");
+  if (collapse) {
+    const rect = collapse.getBoundingClientRect();
+    if (rect.width && rect.height) return collapse;
+  }
+  return row?.querySelector(".page-drag-handle") ?? null;
+}
+
+/**
  * Seeds canvas visuals that exercise edgeless features in the journal demo.
  *
  * Needed so a fresh demo load already has shapes, text, sticky, drawing,
@@ -246,16 +262,6 @@ function createDemoEditor() {
         [KEYBOARD_BINDING_IDS.blockOutdent]: [],
       }
     : undefined;
-  const threadParams = new URLSearchParams(window.location.search);
-  const requestedThreadAnchor = threadParams.get("threadAnchor");
-  const threadAnchor = requestedThreadAnchor === "drag" || requestedThreadAnchor === "left-top"
-    ? requestedThreadAnchor
-    : "collapse";
-  const requestedThreadResolution = threadParams.get("threadResolution");
-  const threadResolution = requestedThreadResolution === "all" || requestedThreadResolution === "none"
-    ? requestedThreadResolution
-    : "focused";
-  const requestedRootLineOffset = threadParams.get("threadRootLineOffset");
   const reactEditor = createReactEditor({
     editor,
     keymap: alternateKeymap,
@@ -264,18 +270,14 @@ function createDemoEditor() {
       todoItemExtension({ prompts: { todo: ["task"] } }),
       pageDragExtension(),
       bulletThreadingExtension({
-        anchor: threadAnchor,
-        rootLineOffset: requestedRootLineOffset === null ? undefined : Number(requestedRootLineOffset),
-        resolution: threadResolution,
+        anchor: demoThreadAnchor,
         excludeBlockTypes: [
           BENTO_BLOCK_TYPE,
           COLUMNS_BLOCK_TYPE,
           KANBAN_BLOCK_TYPE,
           TABLE_BLOCK_TYPE,
           TODO_STORAGE_BLOCK_TYPE,
-          ...threadParams.getAll("threadExclude"),
         ],
-        continueBlockTypes: threadParams.has("threadContinue") ? threadParams.getAll("threadContinue") : undefined,
       }),
       ...edgelessPreset(),
       edgelessVisuals,
