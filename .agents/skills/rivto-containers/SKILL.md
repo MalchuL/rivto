@@ -283,6 +283,14 @@ then assert both the indicator and the persisted root order in page and
 edgeless modes. Also exercise the demo's TODO storage and Bento pair with the
 target scrolled into the viewport before dragging.
 
+The gap immediately above a root container also belongs to its root sibling
+boundary. An accepting board can otherwise highlight "inside" while the
+pointer is outside it; a container with an inset title row can instead target
+the block above and nest the source there. Cover Kanban, TODO storage, Bento,
+Columns, and Table with an ordinary root immediately above each one. Check
+the indicator and persisted root order in page and edgeless modes. Keep the
+preceding block's own row available for ordinary row placement.
+
 ## Test the invariant, then the browser
 
 Add focused checks for the behavior changed. Model or operation checks may cover:

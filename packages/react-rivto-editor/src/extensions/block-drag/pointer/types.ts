@@ -36,7 +36,7 @@ export interface PointerDropCandidate {
  *      | Nested block row                  | <- row
  *      +-----------------------------------+
  *                                          <- outer-edge if Block 1 is a root container
- *              gap between blocks             <- nearby-row, closest row wins
+ *              gap between blocks             <- outer-edge near a root container, otherwise nearby-row
  * +----------------------------------------+ <- outer-edge if Block 2 is a root container
  * | Block 2 row                            | <- row
  * | Empty accepting body                   | <- container if Block 2 accepts body drops
@@ -60,7 +60,7 @@ export type PointerDropReason =
   | "container"
   /** Direct hit on a fixed outline's title row; its direct children are layout slots. */
   | "chrome"
-  /** Hit within a root container's configured top/bottom strip (8px by default), or beyond end roots. */
+  /** Hit on a root container's edge or gap immediately above it, or beyond end roots. */
   | "outer-edge";
 
 /** Chosen drop block and the rule that selected it. */

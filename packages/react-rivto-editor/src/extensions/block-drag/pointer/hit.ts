@@ -93,13 +93,13 @@ function findMinimumBy<T>(items: readonly T[], measure: (item: T) => number): T 
  * line as the row. A fixed outline's title is chrome (outline before/after).
  * A pointer in a gap targets the nearest row. Filled fixed layouts prefer a
  * descendant field, while empty accepting layouts remain full-body targets.
- * Grid space remains an accepting body outside nearby item gaps. Space outside
- * the first or last root targets that root's outer edge.
+ * Grid space remains an accepting body outside nearby item gaps. The narrow
+ * gap above a root container and space beyond the end roots target root edges.
  *
  * @param candidates - Measured blocks in the active surface.
  * @param pointer - Viewport cursor.
  * @param nearbyRowPx - Distance at which a descendant row wins over a free lane.
- * @param outerEdgeDropZone - Viewport pixels reserved at each root container's outer edge; defaults to 8.
+ * @param outerEdgeDropZone - Viewport pixels reserved at each root container's edge and in its gap above; defaults to 8.
  * @returns The chosen block and why it won, or `null` when the surface is empty.
  */
 export function pickPointerDropTarget(
@@ -111,13 +111,18 @@ export function pickPointerDropTarget(
   const { x, y } = pointer;
   let result: PointerDropHit | null = null;
   const roots = candidates.filter((candidate) => candidate.ancestorIds.length === 0);
-  // Only root containers reserve their outer edge. Nested block edges belong
-  // to the child row there, which must remain available for child placement.
+  const insideRoot = roots.some((candidate) => pointInRect(x, y, candidate.block));
+  // Root containers own the narrow gap immediately above them as well as
+  // their edge. Never take pixels belonging to the preceding root's row.
+  // Nested block edges stay available for child placement.
   const outerEdge = roots.find((candidate) => (
     (candidate.acceptsDropContainer || isStructuralLayout(candidate))
-    && pointInRect(x, y, candidate.block)
-    && (y - candidate.block.top <= outerEdgeDropZone
-      || candidate.block.bottom - y <= outerEdgeDropZone)
+    && x >= candidate.block.left && x <= candidate.block.right
+    && ((y >= candidate.block.top - outerEdgeDropZone
+      && y <= candidate.block.top + outerEdgeDropZone
+      && (y >= candidate.block.top || !insideRoot))
+      || (pointInRect(x, y, candidate.block)
+        && candidate.block.bottom - y <= outerEdgeDropZone))
   ));
 
   const rowHits = candidates.filter((candidate) => pointInRect(x, y, candidate.row));

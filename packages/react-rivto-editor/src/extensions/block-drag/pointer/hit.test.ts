@@ -117,6 +117,17 @@ test("the outer bottom edge of a root container targets its sibling gap", () => 
     .toEqual({ id: "board", reason: "outer-edge" });
 });
 
+test("the gap above a root container stays a sibling target even when its row is inset", () => {
+  const upper = candidate("upper", rect(0, 24));
+  const storage = candidate("storage", rect(36, 24), {
+    block: rect(28, 160), acceptsDropContainer: true,
+  });
+  expect(pickPointerDropTarget([upper, storage], { x: 100, y: 27 }))
+    .toEqual({ id: "storage", reason: "outer-edge" });
+  expect(pickPointerDropTarget([upper, storage], { x: 100, y: 22 }))
+    .toEqual({ id: "upper", reason: "row" });
+});
+
 test("an ordinary root does not steal its last child's row at the outer edge", () => {
   const parent = candidate("parent", rect(0, 28), { block: rect(0, 160) });
   const last = candidate("last", rect(128, 32), { ancestorIds: ["parent"] });
