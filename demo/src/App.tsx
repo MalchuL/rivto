@@ -10,15 +10,20 @@ import {
   createBentoBlockInput,
   createTableBlockInput,
   createColumnsBlockInput,
+  BENTO_BLOCK_TYPE,
+  COLUMNS_BLOCK_TYPE,
   DEFAULT_WRITING_BLOCK_TYPE,
   type MarkdownLinkClick,
   edgelessPreset,
   edgelessVisualsExtension,
   EditorView,
   KEYBOARD_BINDING_IDS,
+  KANBAN_BLOCK_TYPE,
   pageDragExtension,
+  bulletThreadingExtension,
   SEPARATOR_BLOCK_TYPE,
   standardPreset,
+  TABLE_BLOCK_TYPE,
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
   todoItemExtension,
@@ -103,6 +108,22 @@ function demoRepeatCount(): number {
   if (raw == null || raw === "") return 0;
   const count = Number.parseInt(raw, 10);
   return Number.isInteger(count) && count > 0 ? count : 0;
+}
+
+/**
+ * Resolves the demo thread endpoint from the controls rendered in one block row.
+ *
+ * @param block - Rendered block shell being measured.
+ * @returns Visible collapse toggle, its drag-handle fallback, or null.
+ */
+function demoThreadAnchor(block: Element): Element | null {
+  const row = block.querySelector(":scope > .page-block-row");
+  const collapse = row?.querySelector(".page-collapse-toggle");
+  if (collapse) {
+    const rect = collapse.getBoundingClientRect();
+    if (rect.width && rect.height) return collapse;
+  }
+  return row?.querySelector(".page-drag-handle") ?? null;
 }
 
 /**
@@ -248,6 +269,16 @@ function createDemoEditor() {
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       todoItemExtension({ prompts: { todo: ["task"] } }),
       pageDragExtension(),
+      bulletThreadingExtension({
+        anchor: demoThreadAnchor,
+        excludeBlockTypes: [
+          BENTO_BLOCK_TYPE,
+          COLUMNS_BLOCK_TYPE,
+          KANBAN_BLOCK_TYPE,
+          TABLE_BLOCK_TYPE,
+          TODO_STORAGE_BLOCK_TYPE,
+        ],
+      }),
       ...edgelessPreset(),
       edgelessVisuals,
       blockIdExtension(),
