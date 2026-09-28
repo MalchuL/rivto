@@ -19,7 +19,7 @@ import {
 } from "../../../../managers";
 import type { ReactEditor } from "../../../../types";
 import { createBlockViewContext, dispatchViewAction } from "../../../../views";
-import { pageWindowFor } from "../../../../surfaces/page/page-window";
+import { getPageVirtualizationControllerForElement } from "../../../../surfaces/page/page-virtualization-controller";
 
 /** Active viewport settlement for one page surface. */
 interface ViewportSettlement {
@@ -178,7 +178,7 @@ export function applyIndentShortcut(
   // Reparenting a virtualized root block partially above the viewport changes
   // both the root count and its DOM parent. Preserve the viewport through that
   // render instead of letting browser scroll anchoring reveal the hidden row edge.
-  const pageWindow = pageWindowFor(root);
+  const virtualizationController = getPageVirtualizationControllerForElement(root);
   const mountedTargetIds = mountedSelectedBlockIds(root, targetIds);
   const previousSettlement = viewportSettlements.get(root);
   const inheritedAnchor = previousSettlement?.anchorId
@@ -188,8 +188,8 @@ export function applyIndentShortcut(
     ? { id: previousSettlement.anchorId, top: previousSettlement.expectedTop }
     : undefined;
   previousSettlement?.cancel();
-  const releaseScrollAdjustments = pageWindow?.suspendScrollAdjustments();
-  const scrollElement = pageWindow ? root.ownerDocument.scrollingElement : null;
+  const releaseScrollAdjustments = virtualizationController?.suspendScrollAdjustments();
+  const scrollElement = virtualizationController ? root.ownerDocument.scrollingElement : null;
   const anchor = inheritedAnchor ?? selectedViewportAnchor(root, targetIds);
   const anchorId = anchor?.id;
   const anchorTop = anchor?.top;
@@ -231,7 +231,7 @@ export function applyIndentShortcut(
   // Mounting every selected root here makes a large outdent briefly defeat
   // virtualization, then the following indent replaces hundreds of measured
   // roots with one subtree and produces a large scroll offset correction.
-  pageWindow?.ensure(
+  virtualizationController?.mountBlocks(
     mountedTargetIds.length ? mountedTargetIds : anchorId ? [anchorId] : targetIds.slice(-1),
     { scroll: false },
   );
@@ -246,10 +246,12 @@ export function applyIndentShortcut(
   // subtree. Track deliberate scrolling between frames and preserve that
   // movement while compensating only for changes in the anchor's layout.
   requestAnimationFrame(() => {
+    // A newer command owns selection restoration once this settlement is cancelled.
+    if (!settlementActive) return;
     // The controller captured before dispatch still indexes the old root list.
     // Resolve it again after React commits so an outdented viewport window is
     // pinned as new roots instead of being looked up in the former parent root.
-    pageWindowFor(root)?.ensure(
+    getPageVirtualizationControllerForElement(root)?.mountBlocks(
       mountedTargetIds.length ? mountedTargetIds : anchorId ? [anchorId] : targetIds.slice(-1),
       { scroll: false },
     );

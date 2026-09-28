@@ -84,6 +84,9 @@ async function seedOutlineDocument(page: Page, branches: number): Promise<string
     });
   }
   await expect(page.locator(`[data-block-id="${siblings[0]}"]`)).toHaveCount(1);
+  // A root can be mounted as overscan while its following siblings remain
+  // outside the window. Bring the fixture into view before callers select it.
+  await page.locator(`[data-block-id="${siblings[0]}"]`).scrollIntoViewIfNeeded();
   return siblings;
 }
 

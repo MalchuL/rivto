@@ -101,10 +101,9 @@ function invalidateBlockOrder(reactEditor: ReactEditor): void {
  */
 function useBlockOrdinal(block: BlockSlotProps["block"]): BlockOrdinal | undefined {
   const reactEditor = useReactEditor();
-  const subscribe = useCallback((listener: () => void) => reactEditor.blocks.subscribeStructure(() => {
-    invalidateBlockOrder(reactEditor);
-    listener();
-  }), [reactEditor]);
+  // Read after document publication: undo can notify structure observers
+  // before every affected root/child snapshot has been invalidated.
+  const subscribe = useCallback((listener: () => void) => reactEditor.subscribe(listener), [reactEditor]);
   const getSnapshot = useCallback(() => blockOrderSnapshot(reactEditor), [reactEditor]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot).get(block.id);
 }
@@ -125,12 +124,24 @@ function BlockNumberSlot({ block }: BlockSlotProps) {
 export function blockNumberExtension(): ReactEditorExtension {
   return {
     id: "demo.block-number",
+    /**
+     * Invalidates shared numbering before mounted rows read the new outline.
+     * @param reactEditor - Runtime owning the structure subscription and labels.
+     * @returns Cleanup for the subscription and cached outline.
+     */
     setup(reactEditor) {
+      // Invalidate once during structure observation. Rows read on document
+      // publication, sharing one rebuild after all storage observers finish.
+      const unsubscribe = reactEditor.blocks.subscribeStructure(() => invalidateBlockOrder(reactEditor));
       reactEditor.surfaces.registerBlockSlot({
         position: "left",
         mode: "block",
         component: BlockNumberSlot,
       });
+      return () => {
+        unsubscribe();
+        invalidateBlockOrder(reactEditor);
+      };
     },
   };
 }

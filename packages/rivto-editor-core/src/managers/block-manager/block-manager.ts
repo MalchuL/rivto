@@ -500,8 +500,8 @@ export class BlockManager implements BlockManagerApi {
     targetId: string | null,
     position: "before" | "after" | "inside" = "after",
   ): void {
-    // The document move is already atomic; this wrapper creates undo capture
-    // breakpoints between consecutive structural moves.
+    // Resolve the range before opening the history transaction so reads can
+    // reuse the document's placement index. The grouped move owns undo capture.
     this.moveGroupedBlocks(ids, targetId, position);
   }
 

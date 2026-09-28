@@ -15,7 +15,6 @@ import { BlockTree } from "../../blocks";
 import { BlockElementRefProvider } from "../../blocks/block-wrapper/block-wrapper";
 import { ESTIMATED_ROOT_HEIGHT, usePageVirtualization } from "../../page-virtualization-context";
 import { registerPageVirtualizationController } from "./page-virtualization-controller";
-import { registerPageWindow } from "./page-window";
 
 const PAGE_SURFACE_CLASS = "page-surface";
 const PAGE_VIRTUAL_SPACER_CLASS = "page-virtual-spacer";
@@ -119,7 +118,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
      * @param options - Whether to scroll to the last requested block.
      * @returns No value.
      */
-    const ensure = (ids: readonly string[], options?: { readonly scroll?: boolean }): void => {
+    const mountBlocks = (ids: readonly string[], options?: { readonly scroll?: boolean }): void => {
       const roots = [...new Set(ids.map(rootId).filter((id) => blockIds.includes(id)))];
       if (!roots.length) return;
       flushSync(() => setPinnedIds(roots));
@@ -164,30 +163,25 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
      * @param direction - Previous or next root.
      * @returns No value.
      */
-    const ensureAdjacent = (id: string, direction: -1 | 1): void => {
+    const mountAdjacentBlocks = (id: string, direction: -1 | 1): void => {
       const current = rootId(id);
       const index = blockIds.indexOf(current);
       const next = blockIds[index + direction];
-      if (next) ensure([current, next]);
+      if (next) mountBlocks([current, next]);
     };
     /**
      * Mounts the page edge entered from another editor.
      * @param direction - Last root for upward entry or first root for downward entry.
      * @returns No value.
      */
-    const ensureEdge = (direction: -1 | 1): void => {
+    const mountFirstOrLastBlock = (direction: -1 | 1): void => {
       const id = direction < 0 ? blockIds.at(-1) : blockIds[0];
-      if (id) ensure([id]);
+      if (id) mountBlocks([id]);
     };
     const unregisterController = registerPageVirtualizationController(surface, {
-      mountBlocks: ensure,
-      mountAdjacentBlocks: ensureAdjacent,
-      mountFirstOrLastBlock: ensureEdge,
-    });
-    const unregisterWindow = registerPageWindow(surface, {
-      ensure,
-      ensureAdjacent,
-      ensureEdge,
+      mountBlocks,
+      mountAdjacentBlocks,
+      mountFirstOrLastBlock,
       getSelectionBlocks: () => {
         const collapseActive = reactEditor.blockListProps.has("collapse");
         /**
@@ -225,7 +219,6 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
       surface.removeEventListener("focusin", onFocus);
       surface.removeEventListener("pointerdown", onPointerDown);
       unregisterController();
-      unregisterWindow();
     };
   }, [blockIds, reactEditor, surface, virtualizer]);
   const items = virtualizer.getVirtualItems();

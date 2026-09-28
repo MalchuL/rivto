@@ -19,7 +19,7 @@ import {
 import type { ReactEditor } from "../../../types";
 import { isElementNode } from "../../../managers/events/dom-nodes";
 import { findEdgelessRuntime } from "./edgeless-runtime";
-import { pageWindowFor } from "../../../surfaces/page/page-window";
+import { getPageVirtualizationControllerForElement } from "../../../surfaces/page/page-virtualization-controller";
 import {
   createVisibleStructuralSelection,
   createDOMSelection,
@@ -153,7 +153,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
    * @returns Block IDs in the order selection commands must cover.
    */
   const selectionBlockIds = (root: HTMLElement): string[] => (
-    pageWindowFor(root)?.getSelectionBlocks().map((block) => block.id) ?? orderedBlockIds(root)
+    getPageVirtualizationControllerForElement(root)?.getSelectionBlocks().map((block) => block.id) ?? orderedBlockIds(root)
   );
 
   /** Publishes the synthetic endpoint chosen for a cross-host gesture. */

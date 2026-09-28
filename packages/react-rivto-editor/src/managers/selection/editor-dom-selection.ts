@@ -66,7 +66,6 @@ import {
 import { isElementNode } from "../events/dom-nodes";
 import { resolveSelectionEndpoints } from "./selection-endpoints";
 import { getPageVirtualizationControllerForElement } from "../../surfaces/page/page-virtualization-controller";
-import { pageWindowFor } from "../../surfaces/page/page-window";
 import type { RestoreDOMSelectionOptions } from "../../capabilities";
 
 /**
@@ -317,7 +316,7 @@ export function createDOMSelection(
       .find((candidate) => candidate.closest(BLOCK_ID_SELECTOR) === block);
     return [{ id, content }];
   });
-  const selectionBlocks = pageWindowFor(root)?.getSelectionBlocks()
+  const selectionBlocks = getPageVirtualizationControllerForElement(root)?.getSelectionBlocks()
     ?? rendered.map(({ id, content }) => ({ id, length: content?.textContent?.length ?? 0 }));
   const selection = createTextSelection(
     selectionBlocks,
@@ -581,7 +580,7 @@ export function restoreEditorDOMSelection(
   options?: RestoreDOMSelectionOptions,
 ): boolean {
   if (!isStructuralSelection(selection)) {
-    pageWindowFor(root)?.ensure(
+    getPageVirtualizationControllerForElement(root)?.mountBlocks(
       [selection.anchorBlockId, selection.focusBlockId].filter((id): id is string => Boolean(id)),
       options,
     );

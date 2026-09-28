@@ -536,6 +536,28 @@ test("Left and Right preserve native caret movement inside text", async ({ page 
   })).toBe(4);
 });
 
+test("only restores the newest selection when indent commands share a frame", async ({ page }) => {
+  const restored = await page.evaluate(async () => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    const root = document.querySelector<HTMLElement>("[data-journal-document='today'] [data-rivto-page-editor-root]")!;
+    const ids = editor.blocks.getRootIds().slice(1, 3);
+    root.focus();
+    for (const id of ids) {
+      editor.selection.set({ type: "selection", blocks: [{ id, start: 0, end: -1 }], anchorBlockId: id, focusBlockId: id });
+      root.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+    }
+    const selections: Array<string | undefined> = [];
+    const unsubscribe = editor.selection.subscribe(() => selections.push(editor.selection.get()?.focusBlockId));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    unsubscribe();
+    return { stale: selections.includes(ids[0]), focus: editor.selection.get()?.focusBlockId, expected: ids[1] };
+  });
+  expect(restored.stale).toBe(false);
+  expect(restored.focus).toBe(restored.expected);
+});
+
 test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => {
   const parent = page.locator(".page-block:has(> .page-block-children)").first();
   const siblings = parent.locator(`:scope > .page-block-children > ${BLOCK_ID_SELECTOR}`);
