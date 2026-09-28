@@ -21,6 +21,8 @@ import {
   standardPreset,
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
+  createOpenUiBlockInput,
+  openuiExtension,
   todoItemExtension,
   useEditorMode,
 } from "@chulane/rivto-react";
@@ -32,6 +34,7 @@ import {
   customBlockExtensions,
   SLIDER_BLOCK_TYPE,
 } from "./blocks/custom-blocks";
+import { OPENUI_DEMO_EXAMPLES } from "./blocks/openui-examples";
 import {
   blockIdExtension,
   BlockIdsVisibleProvider,
@@ -247,6 +250,7 @@ function createDemoEditor() {
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       todoItemExtension({ prompts: { todo: ["task"] } }),
+      openuiExtension(),
       pageDragExtension(),
       ...edgelessPreset(),
       edgelessVisuals,
@@ -466,6 +470,13 @@ function createDemoEditor() {
       project: "Rivto",
     },
   }, doingId);
+  let openUiAfterId = editor.blocks.insertBlock({
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content: "OpenUI blocks draw a program. Use **Edit** to change the source, then **Draw** to render it again.",
+  }).id;
+  for (const source of OPENUI_DEMO_EXAMPLES) {
+    openUiAfterId = editor.blocks.insertBlock(createOpenUiBlockInput(source), openUiAfterId).id;
+  }
   seedEdgelessShowcase(edgelessVisuals);
   editor.elements.insertElement(createReviewElementInput({
     id: "demo-review-element",
@@ -491,6 +502,7 @@ function createEmptyDemoEditor() {
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      openuiExtension(),
       pageDragExtension(),
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
@@ -677,6 +689,7 @@ function createMultiEditor(
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      openuiExtension(),
       pageDragExtension(),
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
@@ -810,6 +823,7 @@ function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: n
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      openuiExtension(),
       pageDragExtension(),
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
