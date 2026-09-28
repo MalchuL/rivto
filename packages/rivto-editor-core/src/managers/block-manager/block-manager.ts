@@ -707,10 +707,10 @@ export class BlockManager implements BlockManagerApi {
     const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
     if (!moving.length) return;
     const lastId = moving.at(-1)!;
-    // Adopt before lifting: afterwards lastId no longer shares P's child list,
+    // Move the tail before lifting: afterwards lastId no longer shares P's child list,
     // so the old sibling tail cannot be found from its new location.
     this.editor.history.batchUpdates(() => {
-      this.document.blocks.adoptFollowingSiblings(lastId);
+      this.document.blocks.moveFollowingSiblingsInside(lastId);
       this.document.blocks.moveBlocks([
         // Repeated "after parent" inserts reverse order unless roots go last-first.
         ...[...moving].reverse().map((id) => ({ id, targetId: parentId, position: "after" as const })),

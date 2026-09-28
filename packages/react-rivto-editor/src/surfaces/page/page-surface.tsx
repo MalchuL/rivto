@@ -14,7 +14,7 @@ import { useEditorRoot, useReactEditor, useRootBlockIds } from "../../hooks";
 import { BlockTree } from "../../blocks";
 import { BlockElementRefProvider } from "../../blocks/block-wrapper/block-wrapper";
 import { ESTIMATED_ROOT_HEIGHT, usePageVirtualization } from "../../page-virtualization-context";
-import { registerPageWindow } from "./page-window";
+import { registerPageVirtualizationController } from "./page-virtualization-controller";
 
 const PAGE_SURFACE_CLASS = "page-surface";
 const PAGE_VIRTUAL_SPACER_CLASS = "page-virtual-spacer";
@@ -109,7 +109,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
      * @param ids - Requested blocks, including nested blocks.
      * @returns No value.
      */
-    const ensure = (ids: readonly string[]): void => {
+    const mountBlocks = (ids: readonly string[]): void => {
       const roots = ids.map(rootId).filter((id) => blockIds.includes(id));
       if (!roots.length) return;
       flushSync(() => setPinnedIds(roots));
@@ -128,17 +128,17 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
     };
     surface.addEventListener("focusin", onFocus);
     surface.addEventListener("pointerdown", onPointerDown);
-    const unregister = registerPageWindow(surface, {
-      ensure,
-      ensureAdjacent: (id, direction) => {
+    const unregister = registerPageVirtualizationController(surface, {
+      mountBlocks,
+      mountAdjacentBlocks: (id, direction) => {
         const current = rootId(id);
         const index = blockIds.indexOf(current);
         const next = blockIds[index + direction];
-        if (next) ensure([current, next]);
+        if (next) mountBlocks([current, next]);
       },
-      ensureEdge: (direction) => {
+      mountFirstOrLastBlock: (direction) => {
         const id = direction < 0 ? blockIds.at(-1) : blockIds[0];
-        if (id) ensure([id]);
+        if (id) mountBlocks([id]);
       },
     });
     return () => {

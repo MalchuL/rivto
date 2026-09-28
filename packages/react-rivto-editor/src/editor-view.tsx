@@ -23,13 +23,13 @@ export interface EditorViewProps {
 }
 
 /**
- * Keeps host-supplied root counts safe for the virtualizer's index arithmetic.
+ * Keeps host-supplied threshold and overscan counts safe for virtualizer index arithmetic.
  *
  * @param value - Requested count.
  * @param fallback - Default count for non-finite values.
  * @returns A nonnegative integer count.
  */
-function rootCount(value: number, fallback: number): number {
+function normalizeVirtualizationCount(value: number, fallback: number): number {
   let count = fallback;
   if (Number.isFinite(value)) {
     count = Math.max(0, Math.trunc(value));
@@ -92,12 +92,12 @@ export function EditorView({
   const virtualization = useMemo(() => {
     let threshold = virtualizePageThreshold;
     if (typeof threshold === "number") {
-      if (Number.isFinite(threshold)) threshold = rootCount(threshold, 0);
+      if (Number.isFinite(threshold)) threshold = normalizeVirtualizationCount(threshold, 0);
       else threshold = false;
     }
     return {
       threshold,
-      overscan: rootCount(virtualizePageOverscan, DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN),
+      overscan: normalizeVirtualizationCount(virtualizePageOverscan, DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN),
     };
   }, [virtualizePageThreshold, virtualizePageOverscan]);
   // The callback ref identity never changes, preventing React from unregistering

@@ -65,7 +65,7 @@ import {
 } from "../../constants";
 import { isElementNode } from "../events/dom-nodes";
 import { resolveSelectionEndpoints } from "./selection-endpoints";
-import { pageWindowFor } from "../../surfaces/page/page-window";
+import { getPageVirtualizationControllerForElement } from "../../surfaces/page/page-virtualization-controller";
 
 /**
  * One live browser caret/selection endpoint inside a block's editable content.
@@ -548,7 +548,7 @@ function pointAtOffset(content: HTMLElement, requestedOffset: number): { node: N
  * @returns Live {@link DOMSelectionPoint}, or `undefined` if that block is not rendered.
  */
 export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosition): DOMSelectionPoint | undefined {
-  pageWindowFor(root)?.ensure([position.blockId]);
+  getPageVirtualizationControllerForElement(root)?.mountBlocks([position.blockId]);
   const content = orderedContents(root).find((candidate) => blockIdForContent(candidate) === position.blockId);
   return content ? { ...pointAtOffset(content, position.offset), content } : undefined;
 }
@@ -572,7 +572,7 @@ export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosi
  */
 export function restoreEditorDOMSelection(root: HTMLElement, selection: Selection): boolean {
   if (!isStructuralSelection(selection)) {
-    pageWindowFor(root)?.ensure([selection.anchorBlockId, selection.focusBlockId].filter((id): id is string => Boolean(id)));
+    getPageVirtualizationControllerForElement(root)?.mountBlocks([selection.anchorBlockId, selection.focusBlockId].filter((id): id is string => Boolean(id)));
   }
   const contents = orderedContents(root);
   const lengthOf = (id: string): number => {

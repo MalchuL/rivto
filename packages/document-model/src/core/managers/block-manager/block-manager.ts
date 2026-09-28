@@ -64,6 +64,8 @@ interface LocatedBlock {
  * schema and placement policy is applied before this storage boundary.
  */
 export class DocumentBlockManager implements DocumentBlockManagerApi {
+    /** Largest move batch that uses individual parent lookups during an open CRDT transaction. */
+    private static readonly PARENT_INDEX_MOVE_THRESHOLD = 8;
     /** Creates block identities without exposing generator configuration. */
     private readonly generateId = (): string => crypto.randomUUID();
     /** Detached snapshots invalidated before subscribers are notified. */
@@ -636,7 +638,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         // History batches may already hold a CRDT transaction, so the parent
         // cache is stale and individual placement searches scan the whole tree.
         // Read the live hierarchy once for a large grouped move.
-        const liveParents = this.crdt.isTransacting && moves.length > 8
+        const liveParents = this.crdt.isTransacting && moves.length > DocumentBlockManager.PARENT_INDEX_MOVE_THRESHOLD
             ? new Map<string, string | null>() : undefined;
         if (liveParents) {
             /**
@@ -662,9 +664,11 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
          * @returns Its simulated parent, or the live parent when not yet moved.
          */
         const parentOf = (id: string): string | null => {
-            if (parents.has(id)) return parents.get(id)!;
-            if (liveParents) return liveParents.get(id) ?? null;
-            return this.getParentId(id) ?? null;
+            let parentId: string | null;
+            if (parents.has(id)) parentId = parents.get(id)!;
+            else if (liveParents) parentId = liveParents.get(id) ?? null;
+            else parentId = this.getParentId(id) ?? null;
+            return parentId;
         };
         // Self-anchors are already in the requested place; keeping them would
         // still trip the descendant-cycle walk below.
@@ -696,57 +700,76 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
             const samePlacement = Boolean(first && pending.length > 1
                 && pending.every(({ targetId, position }) => targetId === first.targetId && position === first.position)
                 && (first.targetId === null || !pending.some(({ id }) => id === first.targetId)));
+            let source: LocatedBlock | undefined;
+            let start = -1;
+            let range: string[] = [];
+            // A shared placement can use one array splice only if its sources
+            // occupy one contiguous sibling range in the expected order.
             if (first && samePlacement) {
-                const source = this.findContainer(first.id)!;
-                const sourceIds = strings(source.array);
+                source = this.findContainer(first.id)!;
                 const reversed = first.targetId === null || first.position === "after";
-                const start = source.index - (reversed ? pending.length - 1 : 0);
-                const range = sourceIds.slice(start, start + pending.length);
+                start = source.index - (reversed ? pending.length - 1 : 0);
+                range = strings(source.array).slice(start, start + pending.length);
                 const ordered = reversed ? [...pending].reverse() : pending;
-                if (start >= 0 && range.length === pending.length
-                    && range.every((id, index) => id === ordered[index]!.id)) {
-                    let target: CRDTArray<string>;
-                    let index: number;
-                    let sameArray: boolean;
-                    if (first.targetId === null) {
-                        target = source.array;
-                        index = 0;
-                        sameArray = true;
-                    } else if (first.position === "inside") {
-                        target = this.requiredArray(this.requiredBlock(first.targetId), "children");
-                        index = target.length;
-                        sameArray = source.parentId === first.targetId;
-                    } else {
-                        const targetLocation = this.findContainer(first.targetId)!;
-                        target = targetLocation.array;
-                        index = targetLocation.index + (first.position === "after" ? 1 : 0);
-                        sameArray = source.parentId === targetLocation.parentId;
-                    }
-                    // The insertion slot was measured before deleting the range.
-                    // Deleting earlier siblings shifts that slot left by its length.
-                    source.array.delete(start, range.length);
-                    if (sameArray && index > start) index -= range.length;
-                    target.insert(index, ...range);
-                    return;
+                // A noncontiguous or reordered selection needs individual moves.
+                if (start < 0 || range.length !== pending.length
+                    || !range.every((id, index) => id === ordered[index]!.id)) {
+                    source = undefined;
                 }
             }
-            for (const { id, targetId, position } of pending) {
-                const source = this.findContainer(id)!;
+            // Move the verified range together so its sibling order is preserved.
+            if (source && first) {
                 let target: CRDTArray<string>;
-                if (targetId === null) target = source.array;
-                else if (position === "inside") target = this.requiredArray(this.requiredBlock(targetId), "children");
-                else target = this.findContainer(targetId)!.array;
-                // Detach first so same-array sibling indexes are computed on
-                // the remaining IDs, then insert at the resolved slot.
-                source.array.delete(source.index, 1);
                 let index: number;
-                if (targetId === null) index = 0;
-                else if (position === "inside") index = target.length;
-                else {
-                    index = strings(target).indexOf(targetId);
-                    if (position === "after") index += 1;
+                let sameArray: boolean;
+                // A null anchor prepends within the range's current parent.
+                if (first.targetId === null) {
+                    target = source.array;
+                    index = 0;
+                    sameArray = true;
+                // Inside appends to the anchor's children.
+                } else if (first.position === "inside") {
+                    target = this.requiredArray(this.requiredBlock(first.targetId), "children");
+                    index = target.length;
+                    sameArray = source.parentId === first.targetId;
+                // Before and after use the anchor's sibling array and index.
+                } else {
+                    const targetLocation = this.findContainer(first.targetId)!;
+                    target = targetLocation.array;
+                    index = targetLocation.index + (first.position === "after" ? 1 : 0);
+                    sameArray = source.parentId === targetLocation.parentId;
                 }
-                target.insert(index, id);
+                // The insertion slot was measured before deleting the range.
+                // Deleting earlier siblings shifts that slot left by its length.
+                source.array.delete(start, range.length);
+                if (sameArray && index > start) index -= range.length;
+                target.insert(index, ...range);
+            // Other selections must be placed one block at a time.
+            } else {
+                for (const { id, targetId, position } of pending) {
+                    const source = this.findContainer(id)!;
+                    let target: CRDTArray<string>;
+                    // A null anchor stays in the source's sibling array.
+                    if (targetId === null) target = source.array;
+                    // Inside changes the parent to the anchor block.
+                    else if (position === "inside") target = this.requiredArray(this.requiredBlock(targetId), "children");
+                    // Before and after keep the anchor's parent.
+                    else target = this.findContainer(targetId)!.array;
+                    // Detach first so same-array sibling indexes are computed on
+                    // the remaining IDs, then insert at the resolved slot.
+                    source.array.delete(source.index, 1);
+                    let index: number;
+                    // A null anchor inserts at the start of the same sibling list.
+                    if (targetId === null) index = 0;
+                    // Inside inserts after the anchor's existing children.
+                    else if (position === "inside") index = target.length;
+                    // Sibling moves resolve the anchor after detaching the source.
+                    else {
+                        index = strings(target).indexOf(targetId);
+                        if (position === "after") index += 1;
+                    }
+                    target.insert(index, id);
+                }
             }
         });
     }
@@ -762,7 +785,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * @returns No value.
      * @throws When the block is not placed.
      */
-    adoptFollowingSiblings(id: string): void {
+    moveFollowingSiblingsInside(id: string): void {
         this.crdt.transact(() => {
             const source = this.findContainer(id);
             if (!source) throw new Error(`Block ${id} not found`);

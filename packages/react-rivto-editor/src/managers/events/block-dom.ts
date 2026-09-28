@@ -4,7 +4,7 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../constants";
-import { pageWindowFor } from "../../surfaces/page/page-window";
+import { getPageVirtualizationControllerForElement } from "../../surfaces/page/page-virtualization-controller";
 
 /** DOM elements and persisted identity resolved from a delegated event target. */
 export interface EventBlock {
@@ -68,8 +68,8 @@ function findOwnedContent(block: HTMLElement): HTMLElement | null {
 export function findPreviousEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
   let blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
   let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
-  if (index === 0 && pageWindowFor(root)) {
-    pageWindowFor(root)?.ensureAdjacent(blockId, -1);
+  if (index === 0 && getPageVirtualizationControllerForElement(root)) {
+    getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(blockId, -1);
     blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
     index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   }
@@ -85,8 +85,8 @@ export function findPreviousEditableBlock(root: HTMLElement, blockId: string): E
 export function findNextEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
   let blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
   let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
-  if (index === blocks.length - 1 && pageWindowFor(root)) {
-    pageWindowFor(root)?.ensureAdjacent(blockId, 1);
+  if (index === blocks.length - 1 && getPageVirtualizationControllerForElement(root)) {
+    getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(blockId, 1);
     blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
     index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   }
@@ -122,7 +122,7 @@ export function findParentBlock(block: HTMLElement): HTMLElement | null {
  * @returns True when the block and editable content were found.
  */
 export function focusBlock(root: HTMLElement, blockId: string, offset: number): boolean {
-  if (!findRenderedBlock(root, blockId)) pageWindowFor(root)?.ensure([blockId]);
+  if (!findRenderedBlock(root, blockId)) getPageVirtualizationControllerForElement(root)?.mountBlocks([blockId]);
   const block = findRenderedBlock(root, blockId);
   const content = block ? findOwnedContent(block) : null;
   if (!content) return false;
@@ -248,8 +248,8 @@ export function verticalCaretPosition(
 
   let blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
   let currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId);
-  if ((direction === "up" && currentIndex === 0 || direction === "down" && currentIndex === blocks.length - 1) && pageWindowFor(root)) {
-    pageWindowFor(root)?.ensureAdjacent(position.blockId, direction === "up" ? -1 : 1);
+  if ((direction === "up" && currentIndex === 0 || direction === "down" && currentIndex === blocks.length - 1) && getPageVirtualizationControllerForElement(root)) {
+    getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(position.blockId, direction === "up" ? -1 : 1);
     blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
     currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId);
   }

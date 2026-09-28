@@ -180,7 +180,7 @@ export interface DocumentBlockManagerApi {
    * @param id - Block receiving the sibling tail.
    * @returns No value.
    */
-  adoptFollowingSiblings(id: string): void;
+  moveFollowingSiblingsInside(id: string): void;
   /** @param blocks - Complete portable block forest to validate. @returns No value. */
   validateBlocks(blocks: readonly Block[]): void;
   /** @param blocks - Complete portable block forest replacing stored blocks. @returns No value. */
