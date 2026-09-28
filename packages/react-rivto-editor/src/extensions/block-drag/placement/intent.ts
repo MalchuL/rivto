@@ -21,7 +21,7 @@ export function isStructuralLayout(candidate: {
 /**
  * Chooses the placement rule for a resolved pointer hit.
  *
- * Chrome (a filled board's title) and a block's outer edges are
+ * Chrome (a filled board's title) and root container outer edges are
  * before/after that block in the outline, never inside as a new column. A
  * field (empty lane, column, cell, empty board) takes the writing block
  * inside. Fixed structural layouts retain axis-specific sibling sorting, while

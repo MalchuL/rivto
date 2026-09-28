@@ -29,31 +29,30 @@ export interface PointerDropCandidate {
  *
  * ```text
  * above both blocks: outer-edge -> before Block 1
- * +----------------------------------------+ <- outer-edge, Block 1 top (8px by default)
+ * +----------------------------------------+ <- outer-edge if Block 1 is a root container
  * | Block 1 row                            | <- row; chrome if its child outline is fixed
  * +----------------------------------------+
  *      +-----------------------------------+
  *      | Nested block row                  | <- row
  *      +-----------------------------------+
- *                                          <- outer-edge, Block 1 subtree bottom
+ *                                          <- outer-edge if Block 1 is a root container
  *              gap between blocks             <- nearby-row, closest row wins
- * +----------------------------------------+ <- outer-edge, Block 2 top (8px by default)
+ * +----------------------------------------+ <- outer-edge if Block 2 is a root container
  * | Block 2 row                            | <- row
  * | Empty accepting body                   | <- container if Block 2 accepts body drops
- * +----------------------------------------+ <- outer-edge, Block 2 bottom
+ * +----------------------------------------+ <- outer-edge if Block 2 is a root container
  * below both blocks: outer-edge -> after Block 2
  * ```
  *
  * The boxes show visible rows; the parent BlockView rectangle still spans
- * Block 1 and its indented descendant. The outer-edge strip uses that full
- * rectangle, including children. If the last child's row overlaps Block 1's
- * bottom edge, the pointer hits that row, so nearby-row is never considered.
- * Outer-edge runs first and selects Block 1 for a sibling drop after it.
+ * Block 1 and its indented descendant. Root containers reserve an outer-edge
+ * strip across that full rectangle, including children. Ordinary blocks and
+ * nested containers leave overlapping child rows available for targeting.
  * Outside the first or last root, the same reason selects that root rather
  * than a nested row that happens to be nearest to the page padding.
  */
 export type PointerDropReason =
-  /** Direct hit on a non-fixed block's row, outside its outer-edge strip. */
+  /** Direct hit on a non-fixed block's row. */
   | "row"
   /** No row contains the pointer; a gap resolves to a nearby block row. */
   | "nearby-row"
@@ -61,7 +60,7 @@ export type PointerDropReason =
   | "container"
   /** Direct hit on a fixed outline's title row; its direct children are layout slots. */
   | "chrome"
-  /** Hit within the configured top/bottom strip (8px by default), or beyond end roots. */
+  /** Hit within a root container's configured top/bottom strip (8px by default), or beyond end roots. */
   | "outer-edge";
 
 /** Chosen drop block and the rule that selected it. */

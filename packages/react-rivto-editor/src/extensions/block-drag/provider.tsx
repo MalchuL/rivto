@@ -149,7 +149,7 @@ function withParentBottomEdgeIndicator(
  * @param root - Surface root used for native hit testing.
  * @param reactEditor - Editor whose views describe drop capabilities.
  * @param excludedIds - Blocks inside the dragged subtrees.
- * @param outerEdgeDropZone - Width of each outer-edge sibling-drop zone in viewport pixels.
+ * @param outerEdgeDropZone - Width of each root container's outer-edge sibling-drop zone in viewport pixels.
  * @returns Placement input, or null when no candidate target exists.
  */
 function gesturePlacementInput(

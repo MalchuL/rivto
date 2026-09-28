@@ -170,15 +170,15 @@ function nearbyRow(
  * contains the gap between siblings, so the smallest containing block was
  * the container itself.
  *
- * Shared pointer hit-testing gives a block's outer edge priority over nested
- * rows, then resolves row and empty-body hits from the same measured geometry.
+ * Shared pointer hit-testing gives a root container's outer edge priority
+ * over nested rows, then resolves row and empty-body hits from the same geometry.
  *
  * @param source - Dragged block identity and layout data.
  * @param pointer - Live viewport cursor position driving the hit test.
  * @param root - Active editor surface containing eligible block rows.
  * @param reactEditor - Runtime used to resolve views and canonical containment.
  * @param excludedIds - Dragged subtree IDs that cannot become targets.
- * @param outerEdgeDropZone - Width of each outer-edge sibling-drop zone in viewport pixels.
+ * @param outerEdgeDropZone - Width of each root container's outer-edge sibling-drop zone in viewport pixels.
  * @returns Input carrying the one live DOM target, or null over blank space.
  */
 export function withPointerDropTarget(

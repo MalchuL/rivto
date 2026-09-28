@@ -117,26 +117,28 @@ test("the outer bottom edge of a root container targets its sibling gap", () => 
     .toEqual({ id: "board", reason: "outer-edge" });
 });
 
-test("the outer edge of an ordinary root with children targets its sibling gap", () => {
+test("an ordinary root does not steal its last child's row at the outer edge", () => {
   const parent = candidate("parent", rect(0, 28), { block: rect(0, 160) });
   const last = candidate("last", rect(128, 32), { ancestorIds: ["parent"] });
   const next = candidate("next", rect(168, 24));
   expect(pickPointerDropTarget([parent, last, next], { x: 100, y: 156 }))
-    .toEqual({ id: "parent", reason: "outer-edge" });
+    .toEqual({ id: "last", reason: "row" });
 });
 
-test("a nested parent's bottom edge wins over its last child's row", () => {
+test("a nested parent's bottom edge leaves its last child available for nesting", () => {
   const root = candidate("root", rect(0, 28), { block: rect(0, 240) });
   const parent = candidate("parent", rect(40, 28), {
     block: rect(40, 160), ancestorIds: ["root"],
   });
   const child = candidate("child", rect(168, 32), { ancestorIds: ["parent", "root"] });
   expect(pickPointerDropTarget([root, parent, child], { x: 100, y: 196 }))
-    .toEqual({ id: "parent", reason: "outer-edge" });
+    .toEqual({ id: "child", reason: "row" });
 });
 
 test("the outer-edge zone can be widened beyond its eight-pixel default", () => {
-  const parent = candidate("parent", rect(0, 28), { block: rect(0, 160) });
+  const parent = candidate("parent", rect(0, 28), {
+    block: rect(0, 160), acceptsDropContainer: true,
+  });
   const child = candidate("child", rect(128, 32), { ancestorIds: ["parent"] });
   const pointer = { x: 100, y: 151 };
   expect(pickPointerDropTarget([parent, child], pointer))

@@ -99,7 +99,7 @@ function findMinimumBy<T>(items: readonly T[], measure: (item: T) => number): T 
  * @param candidates - Measured blocks in the active surface.
  * @param pointer - Viewport cursor.
  * @param nearbyRowPx - Distance at which a descendant row wins over a free lane.
- * @param outerEdgeDropZone - Viewport pixels reserved at each block's outer edge; defaults to 8.
+ * @param outerEdgeDropZone - Viewport pixels reserved at each root container's outer edge; defaults to 8.
  * @returns The chosen block and why it won, or `null` when the surface is empty.
  */
 export function pickPointerDropTarget(
@@ -111,13 +111,14 @@ export function pickPointerDropTarget(
   const { x, y } = pointer;
   let result: PointerDropHit | null = null;
   const roots = candidates.filter((candidate) => candidate.ancestorIds.length === 0);
-  // An ancestor's outer edge wins over descendant rows occupying the same
-  // pixels. Prefer the shallowest matching block when their edges coincide.
-  const outerEdge = findMinimumBy(candidates.filter((candidate) => (
-    pointInRect(x, y, candidate.block)
+  // Only root containers reserve their outer edge. Nested block edges belong
+  // to the child row there, which must remain available for child placement.
+  const outerEdge = roots.find((candidate) => (
+    (candidate.acceptsDropContainer || isStructuralLayout(candidate))
+    && pointInRect(x, y, candidate.block)
     && (y - candidate.block.top <= outerEdgeDropZone
       || candidate.block.bottom - y <= outerEdgeDropZone)
-  )), (candidate) => candidate.ancestorIds.length);
+  ));
 
   const rowHits = candidates.filter((candidate) => pointInRect(x, y, candidate.row));
   const rowHit = findMinimumBy(rowHits, (candidate) => rectArea(candidate.row));
