@@ -13,6 +13,8 @@ import type {
 import { isStructuralSelection } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
+  BLOCK_ID_ATTRIBUTE,
+  BLOCK_ID_SELECTOR,
   BLOCK_SELECTION_ANCHOR_SELECTOR,
   PREVENT_TEXT_EDITING_SELECTOR,
 } from "../../../constants";
@@ -74,6 +76,25 @@ function wantsWholeBlocks(
 ): boolean {
   if (!crossBlock) return false;
   return !(event.shiftKey && event.altKey);
+}
+
+/**
+ * Reports whether a block owns editable text, as opposed to a nested child.
+ *
+ * Structural drawings such as OpenUI contain visible text and may wrap child
+ * editors, but they have no `[data-block-content]` of their own. Caret
+ * hit-testing therefore snaps to a nearby editable host and can hide the fact
+ * that the pointer is already over the structural block.
+ *
+ * @param root - Surface that scopes the lookup.
+ * @param blockId - Block under the pointer.
+ * @returns Whether that block, not one of its descendants, is contenteditable.
+ */
+function blockOwnsEditableContent(root: HTMLElement, blockId: string): boolean {
+  const block = root.querySelector<HTMLElement>(`[${BLOCK_ID_ATTRIBUTE}="${CSS.escape(blockId)}"]`);
+  if (!block) return false;
+  return [...block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)]
+    .some((content) => content.closest(BLOCK_ID_SELECTOR) === block);
 }
 
 /** Live state retained only for the duration of one pointer selection gesture. */
@@ -318,7 +339,16 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       const effectiveHeadPosition = partialContentlessBlockId
         ? { blockId: partialContentlessBlockId, offset: 0 }
         : headPosition;
-      const crossBlock = (effectiveHeadPosition?.blockId ?? pointedBlockId) !== active.anchorPosition.blockId;
+      // Caret fallback stays on the anchor when a structural block is the next
+      // row. The BlockView hit is the crossing in that case; editable hosts
+      // still follow the caret so a drag inside one paragraph stays textual.
+      const pointerOnForeignStructuralBlock = Boolean(
+        pointedBlockId
+        && pointedBlockId !== active.anchorPosition.blockId
+        && !blockOwnsEditableContent(root, pointedBlockId),
+      );
+      const crossBlock = pointerOnForeignStructuralBlock
+        || (effectiveHeadPosition?.blockId ?? pointedBlockId) !== active.anchorPosition.blockId;
       const wholeBlocks = wantsWholeBlocks(event, Boolean(crossBlock));
       let handled = false;
       if (wholeBlocks && pointedBlockId && pointedBlockId !== headPosition?.blockId && (

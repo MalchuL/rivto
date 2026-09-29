@@ -9,6 +9,7 @@ packages:
   - app/server
 
 allowBuilds:
+  '@openuidev/lang-core': false
   '@parcel/watcher': false
   electron: true
   esbuild: true

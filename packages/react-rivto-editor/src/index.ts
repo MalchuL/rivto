@@ -60,6 +60,16 @@ export type {
   TodoStorageProps,
 } from "./extensions/todo-item/todo-item";
 export {
+  OPENUI_BLOCK_TYPE,
+  OpenUiBlock,
+  createOpenUiBlockInput,
+  openuiExtension,
+} from "./extensions/openui/openui-block";
+export type {
+  OpenUiBlockProps,
+  OpenUiExtensionOptions,
+} from "./extensions/openui/openui-block";
+export {
   createReactEditor,
 } from "./react-editor";
 export type {

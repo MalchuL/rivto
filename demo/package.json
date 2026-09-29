@@ -15,9 +15,11 @@
     "@chulane/document-model": "workspace:*",
     "@chulane/rivto": "workspace:*",
     "@chulane/rivto-react": "workspace:*",
+    "@openuidev/react-ui": "0.16.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "zod": "^4.1.13"
+    "zod": "^4.1.13",
+    "zustand": "4.5.7"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

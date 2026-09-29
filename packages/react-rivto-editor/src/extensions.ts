@@ -60,6 +60,16 @@ export {
   TABLE_DEFAULT_COLUMN_WIDTH,
   type TableCellProps,
 } from "./extensions/containers/table/table";
+export {
+  OPENUI_BLOCK_TYPE,
+  OpenUiBlock,
+  createOpenUiBlockInput,
+  openuiExtension,
+} from "./extensions/openui/openui-block";
+export type {
+  OpenUiBlockProps,
+  OpenUiExtensionOptions,
+} from "./extensions/openui/openui-block";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal/block-modal";
 export { BaseBlockView, ContainerBlockView } from "./views";
 export type {
