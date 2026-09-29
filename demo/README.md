@@ -22,6 +22,22 @@ Edit either pane — the other should converge. Optional `room=` selects the
 channel name so another tab can join the same room, for example
 `/?sync=1&room=my-room`.
 
+## AI agent (mock)
+
+The demo toolbar has an **AI** button. It opens a panel whose mock model streams
+random words into blocks: add a paragraph, rewrite the block under the caret,
+or duplicate it. Each block row also has an **AI** button on the right (shown
+on hover) that rewrites that block.
+
+While typing in a block, light ghost text suggests a completion of the current
+word plus a few words and punctuation. **Tab** inserts the full suggestion, even
+if the last words are still streaming. **Escape** dismisses it. Tab still
+indents when no suggestion is showing.
+
+Open `/?sync=1`, run the agent in one pane, and the other pane follows because
+the writes are normal block updates. Details and the client interface are in
+`src/extensions/ai/README.md`.
+
 `pnpm demo` starts only Vite. Development aliases resolve
 `@chulane/rivto` and `@chulane/rivto-react` directly to workspace sources, so
 core and React edits are hot-reloaded without building or watching package

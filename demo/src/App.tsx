@@ -37,6 +37,7 @@ import {
   customBlockExtensions,
   SLIDER_BLOCK_TYPE,
 } from "./blocks/custom-blocks";
+import { aiAgentExtension, AiToolbarButton } from "./extensions/ai/ai-agent";
 import {
   blockIdExtension,
   BlockIdsVisibleProvider,
@@ -282,6 +283,7 @@ function createDemoEditor() {
       ...edgelessPreset(),
       edgelessVisuals,
       blockIdExtension(),
+      aiAgentExtension(),
       ...customBlockExtensions,
       ...demoReviewReports(editor),
     ],
@@ -526,6 +528,7 @@ function createEmptyDemoEditor() {
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
+      aiAgentExtension(),
       ...customBlockExtensions,
       ...demoReviewReports(editor),
     ],
@@ -618,6 +621,7 @@ function DemoToolbar({
           <button type="button" data-editor-mode="block" aria-pressed={mode === "block"} onClick={() => switchMode("block")}>Page</button>
           <button type="button" data-editor-mode="edgeless" aria-pressed={mode === "edgeless"} onClick={() => switchMode("edgeless")}>Edgeless</button>
         </div>
+        <AiToolbarButton />
         <button type="button" data-editor-action="delete" onClick={() => editor.selection.delete()}>Delete</button>
         <button type="button" data-editor-action="undo" onClick={() => editor.history.undo()}>Undo</button>
         <label>
@@ -712,6 +716,7 @@ function createMultiEditor(
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
+      aiAgentExtension(),
       ...customBlockExtensions,
       ...demoReviewReports(editor),
     ],
@@ -845,6 +850,7 @@ function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: n
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
+      aiAgentExtension(),
       ...customBlockExtensions,
       ...demoReviewReports(editor),
     ],
