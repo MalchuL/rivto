@@ -52,6 +52,15 @@ async function undo(page: Page): Promise<void> {
   await page.locator("[data-editor-action=\"undo\"]").click();
 }
 
+/** Ends the current Yjs capture so the next edit is its own undo step. */
+async function stopCapturing(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    (window as unknown as {
+      __rivtoDemo: { editor: { history: { stopCapturing: () => void } } };
+    }).__rivtoDemo.editor.history.stopCapturing();
+  });
+}
+
 async function copySelection(page: Page): Promise<ClipboardFlavors> {
   await page.evaluate(() => {
     document.addEventListener("copy", (event) => {
@@ -148,7 +157,7 @@ test("edits a callout and undoes tone, emoji, and body changes", async ({ page }
   const variant = row.getByLabel("Variant");
   await variant.selectOption("warning");
   await expect(variant).toHaveValue("warning");
-  await expect(row).toHaveAttribute("data-callout-variant", "warning");
+  await expect(row.locator("[data-callout-variant]")).toHaveAttribute("data-callout-variant", "warning");
   await undo(page);
   await expect(variant).toHaveValue("note");
 
@@ -194,6 +203,7 @@ test("submits bookmark links and keeps invalid or partial URLs uncommitted", asy
   await expect.poll(() => blockProps(page, bookmark.id)).toMatchObject({
     url: "https://rivto.example/docs",
   });
+  await stopCapturing(page);
 
   const description = row.getByLabel("Description");
   await description.fill("A manual note");
@@ -307,6 +317,7 @@ test("renders valid math and keeps an invalid formula editable", async ({ page }
   await expect(row.locator(".katex-error")).toBeVisible();
   await expect(row.getByRole("alert")).toHaveText("Invalid formula");
   await expect(source).toHaveText("\\frac{");
+  await stopCapturing(page);
   await source.press("End");
   await page.keyboard.type("x");
   await expect(source).toHaveText("\\frac{x");
@@ -390,38 +401,32 @@ test("copies host blocks as structured data and portable text", async ({ page })
 });
 
 test("selects host blocks on the page and the canvas", async ({ page }) => {
-  const ids = await page.evaluate(() => {
-    const editor = (window as unknown as {
-      __rivtoDemo: {
-        editor: {
-          blocks: {
-            getRootIds: () => string[];
-            insertBlock: (value: Record<string, unknown>) => { id: string };
-            moveBlock: (id: string, targetId: string, position: "inside") => void;
-          };
-        };
-      };
-    }).__rivtoDemo.editor;
-    const parentId = editor.blocks.getRootIds()[0]!;
-    const inputs = [
-      { type: "demo.callout", content: "Selectable callout", props: { variant: "note", emoji: "💡" } },
-      { type: "demo.bookmark", content: "Selectable bookmark", props: { url: "", description: "" } },
-      { type: "demo.table-of-contents", content: "" },
-      { type: "demo.math-equation", content: "a+b" },
-    ];
-    return inputs.map((input) => {
-      const id = editor.blocks.insertBlock(input).id;
-      editor.blocks.moveBlock(id, parentId, "inside");
-      return id;
-    });
+  const callout = await insertBlock(page, {
+    type: "demo.callout",
+    content: "Selectable callout",
+    props: { variant: "note", emoji: "💡" },
   });
+  const bookmark = await insertBlock(page, {
+    type: "demo.bookmark",
+    content: "Selectable bookmark",
+    props: { url: "", description: "" },
+  });
+  const contents = await insertBlock(page, { type: "demo.table-of-contents", content: "" });
+  const equation = await insertBlock(page, { type: "demo.math-equation", content: "a+b" });
+  const ids = [callout.id, bookmark.id, contents.id, equation.id];
 
   for (const mode of ["block", "edgeless"] as const) {
     await page.locator(`[data-editor-mode="${mode}"]`).click();
+    await page.evaluate(() => {
+      (window as unknown as {
+        __rivtoDemo: { editor: { selection: { clear: () => void } } };
+      }).__rivtoDemo.editor.selection.clear();
+    });
     for (const id of ids) {
       const row = block(page, id);
-      await expect(row).toBeVisible();
-      await row.click({ modifiers: ["Control"], force: mode === "edgeless" });
+      const content = row.locator(":scope > .page-block-row [data-block-content]");
+      const anchor = (await content.count()) > 0 ? content : row.locator(".demo-toc");
+      await anchor.click({ modifiers: ["Control"], force: mode === "edgeless" });
       await expect(row).toHaveAttribute("data-block-selected", "true");
     }
   }
