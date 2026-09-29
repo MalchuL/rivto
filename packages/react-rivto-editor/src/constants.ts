@@ -23,6 +23,18 @@ export const PAGE_EDITOR_ROOT_ATTRIBUTE = "data-rivto-page-editor-root";
 /** CSS selector matching page editor surface roots in document order. */
 export const PAGE_EDITOR_ROOT_SELECTOR = `[${PAGE_EDITOR_ROOT_ATTRIBUTE}]`;
 
+/**
+ * Marks a live copy of another block rendered by an embed.
+ *
+ * Document walks skip these copies so selection, drag, and focus keep the
+ * canonical block. The copy still uses the same block id, so editing it
+ * updates that record.
+ */
+export const EMBED_MIRROR_ATTRIBUTE = "data-rivto-embed-mirror";
+
+/** CSS selector matching a live embed mirror boundary. */
+export const EMBED_MIRROR_SELECTOR = `[${EMBED_MIRROR_ATTRIBUTE}]`;
+
 /** Stable DOM attribute placed on the trailing-block mount point. */
 export const PAGE_END_SLOT_ATTRIBUTE = "data-page-end-slot";
 

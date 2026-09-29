@@ -1,0 +1,41 @@
+/*
+ * Embed frame geometry and the hover-only reference control.
+ *
+ * Descendant selectors have to cancel the mirrored block's outer margin and
+ * the page-wide row hover slab; utilities on the frame cannot reach those
+ * generated elements. The pen stays hidden until the pointer or keyboard is
+ * on the embed block.
+ */
+.rivto-embed-frame {
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+
+[data-rivto-embed-mirror] {
+  margin: 0;
+  padding: 0;
+}
+
+[data-rivto-embed-mirror] > .page-block {
+  margin: 0;
+}
+
+[data-rivto-embed-mirror] .page-block-row::before {
+  inset: 0;
+}
+
+[data-rivto-embed-mirror] .page-drag-handle {
+  display: none;
+}
+
+[data-block-type="embed"] > .page-block-row .rivto-embed-edit {
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-block-type="embed"]:hover > .page-block-row .rivto-embed-edit,
+[data-block-type="embed"]:focus-within > .page-block-row .rivto-embed-edit {
+  opacity: 1;
+  pointer-events: auto;
+}

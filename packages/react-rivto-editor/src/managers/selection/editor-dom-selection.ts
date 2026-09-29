@@ -63,6 +63,7 @@ import {
   BLOCK_ID_SELECTOR,
   BLOCK_ROW_CLASS,
 } from "../../constants";
+import { canonicalBlockElements, isEmbedMirrorElement } from "../events/block-dom";
 import { isElementNode } from "../events/dom-nodes";
 import { resolveSelectionEndpoints } from "./selection-endpoints";
 
@@ -125,6 +126,23 @@ function orderedContents(root: HTMLElement): HTMLElement[] {
 }
 
 /**
+ * Picks the content host that should receive a portable caret for one block.
+ *
+ * The focused copy wins, including an embed mirror the user is editing.
+ * Otherwise the canonical host wins so an unfocused mirror does not steal
+ * focus from the original block.
+ */
+function contentForBlock(root: HTMLElement, blockId: string): HTMLElement | undefined {
+  const matches = orderedContents(root).filter((content) => blockIdForContent(content) === blockId);
+  const active = root.ownerDocument?.activeElement;
+  if (active instanceof Element) {
+    const focused = matches.find((content) => content === active || content.contains(active));
+    if (focused) return focused;
+  }
+  return matches.find((content) => !isEmbedMirrorElement(content)) ?? matches[0];
+}
+
+/**
  * Creates one inclusive whole-block range in visible order.
  *
  * @param blockIds - Candidate block IDs already in visible document order.
@@ -153,7 +171,7 @@ export function createVisibleStructuralSelection(
  * @param root - EditorView root Element that scopes the query.
  */
 export function orderedBlockIds(root: HTMLElement): string[] {
-  return [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
+  return canonicalBlockElements(root).flatMap((block) => {
     const blockId = block.getAttribute(BLOCK_ID_ATTRIBUTE);
     return blockId ? [blockId] : [];
   });
@@ -283,6 +301,7 @@ function ownedBlockRow(block: HTMLElement): HTMLElement | null {
  */
 function nearestNestedBlock(parent: HTMLElement, x: number, y: number): HTMLElement | undefined {
   return [...parent.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)]
+    .filter((candidate) => !isEmbedMirrorElement(candidate))
     .map((candidate) => {
       const row = ownedBlockRow(candidate);
       return row ? { candidate, distance: distanceToRect(row.getBoundingClientRect(), x, y) } : undefined;
@@ -307,7 +326,7 @@ export function createDOMSelection(
 ): Selection | undefined {
   // Start from every BlockView, not only editable hosts. Otherwise a
   // contentless renderer such as Counter disappears from a Shift+Alt range.
-  const rendered = [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
+  const rendered = canonicalBlockElements(root).flatMap((block) => {
     const id = block.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!id) return [];
     const content = [...block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)]
@@ -547,7 +566,7 @@ function pointAtOffset(content: HTMLElement, requestedOffset: number): { node: N
  * @returns Live {@link DOMSelectionPoint}, or `undefined` if that block is not rendered.
  */
 export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosition): DOMSelectionPoint | undefined {
-  const content = orderedContents(root).find((candidate) => blockIdForContent(candidate) === position.blockId);
+  const content = contentForBlock(root, position.blockId);
   return content ? { ...pointAtOffset(content, position.offset), content } : undefined;
 }
 
@@ -569,17 +588,13 @@ export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosi
  * @returns True when a text selection was resolved and restored.
  */
 export function restoreEditorDOMSelection(root: HTMLElement, selection: Selection): boolean {
-  const contents = orderedContents(root);
-  const lengthOf = (id: string): number => {
-    const content = contents.find((candidate) => blockIdForContent(candidate) === id);
-    return content?.textContent?.length ?? 0;
-  };
+  const lengthOf = (id: string): number => contentForBlock(root, id)?.textContent?.length ?? 0;
   if (isStructuralSelection(selection)) return false;
   const ends = resolveSelectionEndpoints(selection, lengthOf);
   if (!ends) return false;
 
-  const anchorContent = contents.find((content) => blockIdForContent(content) === ends.anchor.blockId);
-  const headContent = contents.find((content) => blockIdForContent(content) === ends.head.blockId);
+  const anchorContent = contentForBlock(root, ends.anchor.blockId);
+  const headContent = contentForBlock(root, ends.head.blockId);
   if (!anchorContent || !headContent) return false;
 
   const anchor = pointAtOffset(anchorContent, ends.anchor.offset);

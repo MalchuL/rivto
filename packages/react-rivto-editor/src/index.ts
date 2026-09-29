@@ -40,6 +40,14 @@ export {
   separatorBlockExtension,
 } from "./extensions/built-ins/separator/separator-block";
 export {
+  EMBED_BLOCK_TYPE,
+  EmbedBlock,
+  embedBlockContent,
+  embedBlockExtension,
+  embedReferenceLabel,
+  readEmbedTargetId,
+} from "./extensions/built-ins/embed/embed-block";
+export {
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
   DefaultTodoItemPropertiesModal,

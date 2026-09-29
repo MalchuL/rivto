@@ -7,6 +7,7 @@
  *
  * @module
  */
+import { isEmbedMirrorElement } from "../../../managers";
 import type { ReactEditor } from "../../../types";
 import { blockContainment } from "../utils/containment";
 import {
@@ -60,7 +61,7 @@ function collectPointerDropCandidates(
   root.querySelectorAll<HTMLElement>(PAGE_BLOCK_SELECTOR).forEach((element) => {
     const id = element.dataset.blockId;
     const row = element.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
-    if (!id || !row) return;
+    if (!id || !row || isEmbedMirrorElement(element)) return;
     elements.set(id, element);
     const view = reactEditor.views.resolve(id);
     candidates.push({
@@ -166,7 +167,7 @@ export function withPointerDropTarget(
   root.ownerDocument.elementsFromPoint(pointer.x, pointer.y).forEach((element) => {
     let block = element.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
     while (block && root.contains(block)) {
-      hovered.add(block);
+      if (!isEmbedMirrorElement(block)) hovered.add(block);
       block = block.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR) ?? null;
     }
   });

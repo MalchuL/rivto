@@ -17,7 +17,12 @@ import {
   BLOCK_ID_SELECTOR,
   PAGE_EDITOR_ROOT_SELECTOR,
 } from "../../../../../constants";
-import { focusBlock, resolveSelectionEndpoints } from "../../../../../managers";
+import {
+  canonicalBlockElements,
+  findRenderedBlock,
+  focusBlock,
+  resolveSelectionEndpoints,
+} from "../../../../../managers";
 import type { ReactEditor } from "../../../../../types";
 import { navigationOutlineBlocks } from "./scope";
 import { pageEntries } from "./outline";
@@ -101,7 +106,7 @@ export function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirect
   const index = roots.indexOf(root);
   const adjacent = roots[index + (direction === "up" ? -1 : 1)];
   if (!adjacent) return false;
-  const blocks = Array.from(adjacent.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+  const blocks = canonicalBlockElements(adjacent);
   if (direction === "up") blocks.reverse();
   let focused = false;
   for (const block of blocks) {
@@ -126,6 +131,5 @@ export function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirect
 export function focusBlockSelection(root: HTMLElement, blockId: string): void {
   root.ownerDocument.getSelection()?.removeAllRanges();
   root.focus({ preventScroll: true });
-  root.querySelector<HTMLElement>(`[${BLOCK_ID_ATTRIBUTE}="${CSS.escape(blockId)}"]`)
-    ?.scrollIntoView({ block: "nearest" });
+  findRenderedBlock(root, blockId)?.scrollIntoView({ block: "nearest" });
 }

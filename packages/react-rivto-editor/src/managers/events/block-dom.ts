@@ -3,6 +3,7 @@ import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
+  EMBED_MIRROR_SELECTOR,
 } from "../../constants";
 
 /** DOM elements and persisted identity resolved from a delegated event target. */
@@ -37,12 +38,63 @@ export function findBlockFromEvent(event: Event): EventBlock | null {
   return content && block && blockId ? { block, content, blockId } : null;
 }
 
-/** Finds a rendered BlockView by ID without interpolating that ID into CSS. */
+/** True when this element is inside a live embed mirror rather than the canonical tree. */
+export function isEmbedMirrorElement(element: Element): boolean {
+  return Boolean(element.closest(EMBED_MIRROR_SELECTOR));
+}
+
+/**
+ * Lists BlockViews in document order, skipping live embed mirrors.
+ *
+ * Mirrors repeat canonical ids so an embed can edit the same record. Structural
+ * walks have to keep one copy or the same block is visited twice.
+ *
+ * @param root - Surface or subtree that owns the rendered blocks.
+ * @returns Canonical BlockView elements in depth-first order.
+ */
+export function canonicalBlockElements(root: ParentNode): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].filter(
+    (block) => !isEmbedMirrorElement(block),
+  );
+}
+
+/**
+ * Finds a rendered BlockView by ID without interpolating that ID into CSS.
+ *
+ * A focused embed mirror wins so typing there stays in that copy. Otherwise
+ * the canonical block wins over any unfocused mirror.
+ *
+ * @param root - Surface root that contains the block.
+ * @param blockId - Persisted block ID.
+ * @returns The preferred rendered BlockView, or null when it is not mounted.
+ */
 export function findRenderedBlock(root: HTMLElement, blockId: string): HTMLElement | null {
+  const matches: HTMLElement[] = [];
   for (const block of root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)) {
-    if (block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId) return block;
+    if (block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId) matches.push(block);
   }
-  return null;
+  if (matches.length === 0) return null;
+  const active = root.ownerDocument?.activeElement;
+  if (active instanceof Element) {
+    const focused = matches.find((block) => block.contains(active));
+    if (focused) return focused;
+  }
+  return matches.find((block) => !isEmbedMirrorElement(block)) ?? matches[0] ?? null;
+}
+
+/**
+ * Lists blocks that belong to the same visible copy as `blockId`.
+ *
+ * Arrow navigation inside an embed stays in that mirror. Navigation elsewhere
+ * stays on the canonical tree and does not step through the mirror again.
+ */
+function sameInstanceBlocks(root: HTMLElement, blockId: string): HTMLElement[] {
+  const current = findRenderedBlock(root, blockId);
+  const mirror = current?.closest<HTMLElement>(EMBED_MIRROR_SELECTOR);
+  if (!current || !mirror || !root.contains(mirror)) return canonicalBlockElements(root);
+  return [...mirror.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].filter((block) => (
+    block.closest(EMBED_MIRROR_SELECTOR) === mirror
+  ));
 }
 
 /** Finds editable content owned directly by one BlockView, excluding descendants. */
@@ -65,8 +117,9 @@ function findOwnedContent(block: HTMLElement): HTMLElement | null {
  * @returns Previous editable block identity and elements, or null.
  */
 export function findPreviousEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
-  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
-  const index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
+  const current = findRenderedBlock(root, blockId);
+  const blocks = sameInstanceBlocks(root, blockId);
+  const index = current ? blocks.indexOf(current) : -1;
   if (index <= 0) return null;
 
   const block = blocks[index - 1];
@@ -77,8 +130,9 @@ export function findPreviousEditableBlock(root: HTMLElement, blockId: string): E
 
 /** Finds the immediately next rendered block when that block is editable. */
 export function findNextEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
-  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
-  const index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
+  const current = findRenderedBlock(root, blockId);
+  const blocks = sameInstanceBlocks(root, blockId);
+  const index = current ? blocks.indexOf(current) : -1;
   if (index < 0 || index >= blocks.length - 1) return null;
 
   const block = blocks[index + 1];
@@ -225,7 +279,7 @@ export function verticalCaretPosition(
 ): EditorPosition | undefined {
   const currentBlock = findRenderedBlock(root, position.blockId);
   const currentContent = currentBlock ? findOwnedContent(currentBlock) : null;
-  if (!currentContent) return;
+  if (!currentBlock || !currentContent) return;
   const current = caretCandidate(currentContent, position.offset);
   const lines = caretLines(currentContent);
   const lineIndex = lines.reduce((best, line, index) => (
@@ -234,8 +288,8 @@ export function verticalCaretPosition(
   const nextLine = lines[lineIndex + (direction === "up" ? -1 : 1)];
   if (nextLine) return { blockId: position.blockId, offset: closestOnLine(nextLine, current.left).offset };
 
-  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
-  const currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId);
+  const blocks = sameInstanceBlocks(root, position.blockId);
+  const currentIndex = blocks.indexOf(currentBlock);
   for (
     let index = currentIndex + (direction === "up" ? -1 : 1);
     index >= 0 && index < blocks.length;

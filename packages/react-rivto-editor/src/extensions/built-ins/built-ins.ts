@@ -32,6 +32,7 @@ import { registerTrailingBlock } from "./page/trailing-block";
 import { registerIndent, type IndentExtensionOptions } from "./page/indent";
 import { registerListShortcuts } from "./page/list";
 import { separatorBlockExtension } from "./separator/separator-block";
+import { embedBlockExtension } from "./embed/embed-block";
 import { registerDefaultWritingBlock } from "./page/default-writing-block/register";
 import type { DefaultWritingBlockOptions } from "./page/default-writing-block/types";
 import {
@@ -348,6 +349,7 @@ export const standardPreset = (
     defaultWritingBlockExtension(options.writing),
     errorBlockExtension(),
     separatorBlockExtension(),
+    embedBlockExtension(),
     pageSurfaceExtension(),
     historyExtension(),
     textSelectionExtension(),

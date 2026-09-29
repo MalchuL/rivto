@@ -1,5 +1,6 @@
 /** Canonical page-drop placement decoration and indicator rendering. */
 import type { CSSProperties } from "react";
+import { canonicalBlockElements } from "../../../managers";
 import type { DropAxis } from "../../../views/types";
 import type { CanonicalDropPlacement } from "./types";
 import type { DropPlacement } from "../types";
@@ -34,7 +35,8 @@ export function withDropIndicator(
 function surfaceBlock(host: HTMLElement, id: string | null): HTMLElement | null {
   if (!id) return null;
   const surface = host.closest<HTMLElement>(`${PAGE_SURFACE_SELECTOR}, ${EDGELESS_CARD_CONTENT_SELECTOR}`);
-  return surface?.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`) ?? null;
+  if (!surface) return null;
+  return canonicalBlockElements(surface).find((block) => block.dataset.blockId === id) ?? null;
 }
 
 /** Calculates one midpoint line relative to its indicator-owning block. */
