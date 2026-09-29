@@ -45,3 +45,9 @@ Use ES modules and nearby formatting. Use `PascalCase` for types/components, `ca
 Document public APIs and non-obvious invariants. Use comments to explain tricky algorithms and edge cases; avoid restating straightforward code. Define repeated or cross-file HTML class names once in the narrowest owning scope.
 
 Keep commits focused and imperative. Pull requests state the problem, solution, validation, and API/UI impact.
+
+## Cursor Cloud
+
+- Run `pnpm install` from the repository root. `app/pnpm-workspace.yaml` is a nested workspace and cannot resolve `@chulane/rivto`.
+- `pnpm demo` serves the editor at http://127.0.0.1:5173. `pnpm app` serves the Next.js shell at http://127.0.0.1:3000. The shell uses in-memory mocks, so the Encore server is not required.
+- CI and Cloud Agent images use Node.js 22. The root README's Node.js 24 line is for local development.
