@@ -1,0 +1,7 @@
+/*
+ * Demo Tailwind entry. Imports the editor stylesheet, then scans host blocks
+ * so their utility classes are emitted with the same theme.
+ */
+@import "@chulane/rivto-react/styles.css";
+@source "./blocks";
+@import "./styles.css";
