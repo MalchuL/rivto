@@ -39,14 +39,7 @@ export default defineConfig({
     ],
     // Source imports originate in two workspace packages. Force both to share
     // the demo's React runtime rather than following package-local symlinks.
-    dedupe: [
-      "react",
-      "react-dom",
-      "zustand",
-      "@openuidev/react-ui",
-      "@openuidev/react-lang",
-      "@openuidev/react-headless",
-    ],
+    dedupe: ["react", "react-dom", "zustand", "@openuidev/react-ui"],
   },
   server: {
     // Polling keeps `pnpm demo` usable on machines whose shared inotify watcher
