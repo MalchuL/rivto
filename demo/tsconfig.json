@@ -12,6 +12,7 @@
       "@chulane/rivto-react": ["../packages/react-rivto-editor/src/index.ts"]
     },
     "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
