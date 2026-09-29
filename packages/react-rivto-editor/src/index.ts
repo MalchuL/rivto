@@ -20,6 +20,18 @@ export {
 } from "./extensions/built-ins/built-ins";
 export type { StandardPresetOptions } from "./extensions/built-ins/built-ins";
 export { pageDragExtension } from "./extensions/block-drag";
+export {
+  PLAIN_EDITOR_EXTENSION_ID,
+  isPlainBlockVisible,
+  plainEditorExtension,
+  plainIndentBlocks,
+  projectPlainOutline,
+} from "./extensions/plain";
+export type {
+  PlainBlockSource,
+  PlainEditorOptions,
+  PlainOutlineNode,
+} from "./extensions/plain";
 export type { PageDragOptions } from "./extensions/block-drag";
 export { bulletThreadingExtension } from "./extensions/bullet-threading/bullet-threading";
 export type { BulletThreadingAnchor, BulletThreadingOptions } from "./extensions/bullet-threading/bullet-threading";

@@ -10,6 +10,18 @@
  */
 export * from "./extensions/built-ins/built-ins";
 export * from "./extensions/block-drag";
+export {
+  PLAIN_EDITOR_EXTENSION_ID,
+  plainEditorExtension,
+  isPlainBlockVisible,
+  plainIndentBlocks,
+  projectPlainOutline,
+} from "./extensions/plain";
+export type {
+  PlainBlockSource,
+  PlainEditorOptions,
+  PlainOutlineNode,
+} from "./extensions/plain";
 export * from "./extensions/bullet-threading/bullet-threading";
 export * from "./extensions/edgeless";
 export * from "./extensions/built-ins/separator/separator-block";

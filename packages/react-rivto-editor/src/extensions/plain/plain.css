@@ -1,0 +1,94 @@
+/*
+ * Plain-text projection geometry.
+ *
+ * `.page-block` draws vertical margins and a selection outline that read as
+ * block borders. Those rules stay in force for page and edgeless mode. This
+ * sheet is scoped to `.plain-surface` so the same renderers sit in a continuous
+ * text column. Nested bullets are a separate non-editable span: putting the
+ * marker in the contenteditable would shift caret offsets away from the
+ * stored text. Optional separators are a host toggle, not the default, so the
+ * column stays borderless until the user turns them on.
+ */
+.plain-surface {
+  width: min(720px, calc(100% - 32px));
+  min-height: 70vh;
+  margin: 24px auto 64px;
+  padding: 24px 48px 64px;
+  box-sizing: border-box;
+  background: var(--rivto-background);
+  overflow-x: clip;
+  counter-reset: rivto-list-number;
+}
+
+.plain-surface .page-block-children {
+  counter-reset: rivto-list-number;
+}
+
+.plain-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.plain-separators-toggle,
+.plain-empty {
+  border: 1px solid var(--rivto-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.plain-separators-toggle {
+  padding: 2px 8px;
+}
+
+.plain-separators-toggle[aria-pressed="true"] {
+  border-color: var(--rivto-accent);
+  background: var(--rivto-accent);
+  color: white;
+}
+
+.plain-empty {
+  width: 100%;
+  padding: 8px;
+  text-align: left;
+  color: var(--rivto-muted-foreground);
+}
+
+.plain-surface .page-block {
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  outline: none;
+  box-shadow: none;
+}
+
+.plain-surface .page-block[data-block-selected] {
+  border: none;
+  outline: none;
+  background: var(--rivto-block-selection-background);
+}
+
+.plain-surface .page-block-children {
+  margin-left: 1.25em;
+}
+
+.plain-bullet {
+  flex: none;
+  width: 1.25em;
+  color: var(--rivto-muted-foreground);
+  line-height: 1.5;
+  user-select: none;
+  pointer-events: none;
+}
+
+.plain-surface[data-separators="true"] .plain-document > .page-block + .page-block,
+.plain-surface[data-separators="true"] .page-block-children > .page-block + .page-block {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px solid var(--rivto-border);
+}
