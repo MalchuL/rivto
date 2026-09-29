@@ -10,8 +10,6 @@ const rivtoCoreSrc = path.join(repoRoot, "packages/rivto-editor-core/src/index.t
 const rivtoReactSrc = path.join(repoRoot, "packages/react-rivto-editor/src/index.ts");
 // Tailwind source entry; app/web's @tailwindcss/postcss compiles it alongside globals.css.
 const rivtoReactCss = path.join(repoRoot, "packages/react-rivto-editor/src/styles/index.css");
-const webReact = path.join(appDir, "node_modules/react");
-const webReactDom = path.join(appDir, "node_modules/react-dom");
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@chulane/app", "@chulane/crdt-doc", "@chulane/document-model", "@chulane/rivto", "@chulane/rivto-react"],
@@ -25,13 +23,14 @@ const nextConfig: NextConfig = {
       ...config.resolve.alias,
       // Match demo/vite.config.ts: resolve editor packages to workspace
       // sources so app work does not require a parallel package build.
+      // Do not alias react or react-dom here. Next already vendors those
+      // packages, and a global alias makes its dev segment explorer call
+      // hooks on a different React instance.
       "@chulane/rivto-react/styles.css": rivtoReactCss,
       "@chulane/rivto-react": rivtoReactSrc,
       "@chulane/rivto": rivtoCoreSrc,
       "@chulane/document-model": rivtoDocumentModelSrc,
       "@chulane/crdt-doc": rivtoCrdtDocSrc,
-      react: webReact,
-      "react-dom": webReactDom,
     };
     config.resolve.fallback = {
       ...config.resolve.fallback,
