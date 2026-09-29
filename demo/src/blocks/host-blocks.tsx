@@ -29,6 +29,11 @@ import {
   type FormEvent,
   type MouseEvent,
 } from "react";
+import { Button } from "../../../packages/react-rivto-editor/src/components/ui/button";
+import { Input } from "../../../packages/react-rivto-editor/src/components/ui/input";
+import { Label } from "../../../packages/react-rivto-editor/src/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "../../../packages/react-rivto-editor/src/components/ui/native-select";
+import { Textarea } from "../../../packages/react-rivto-editor/src/components/ui/textarea";
 import {
   BOOKMARK_BLOCK_TYPE,
   CALLOUT_BLOCK_TYPE,
@@ -79,27 +84,30 @@ export {
   isTocConversionAvailable,
 } from "./toc-entries";
 
-const CALLOUT_CLASS = "demo-callout";
-const CALLOUT_CONTROLS_CLASS = "demo-callout-controls";
-const CALLOUT_FIELD_CLASS = "demo-callout-field";
-const CALLOUT_EMOJI_CLASS = "demo-callout-emoji";
-const BOOKMARK_CLASS = "demo-bookmark";
-const BOOKMARK_FIELD_CLASS = "demo-bookmark-field";
-const BOOKMARK_DESCRIPTION_CLASS = "demo-bookmark-description";
-const BOOKMARK_FORM_CLASS = "demo-bookmark-form";
-const BOOKMARK_URL_CLASS = "demo-bookmark-url";
-const BOOKMARK_LINK_CLASS = "demo-bookmark-link";
-const BOOKMARK_ERROR_CLASS = "demo-bookmark-error";
-const BOOKMARK_ACTIONS_CLASS = "demo-bookmark-actions";
-const TOC_CLASS = "demo-toc";
-const TOC_LIST_CLASS = "demo-toc-list";
+const BLOCK_FRAME_CLASS = "box-border w-full min-w-0 max-w-full";
+const CALLOUT_CLASS = `demo-callout ${BLOCK_FRAME_CLASS} flex flex-col gap-2 rounded-lg border p-2`;
+const CALLOUT_VARIANT_CLASS: Record<CalloutVariant, string> = {
+  note: "border-border bg-muted/60",
+  tip: "border-border bg-secondary",
+  warning: "border-destructive/40 bg-destructive/10",
+};
+const CALLOUT_CONTROLS_CLASS = "demo-callout-controls flex min-w-0 flex-wrap items-center gap-2";
+const CALLOUT_FIELD_CLASS = "demo-callout-field text-muted-foreground";
+const CALLOUT_EMOJI_CLASS = "demo-callout-emoji h-8 w-16 px-2 text-center";
+const BOOKMARK_CLASS = `demo-bookmark ${BLOCK_FRAME_CLASS} flex flex-col gap-2 rounded-lg border border-border bg-card p-2`;
+const BOOKMARK_FIELD_CLASS = "demo-bookmark-field grid min-w-0 flex-1 basis-40 gap-1.5 text-muted-foreground";
+const BOOKMARK_FORM_CLASS = "demo-bookmark-form flex min-w-0 flex-wrap items-end gap-2";
+const BOOKMARK_LINK_CLASS = "demo-bookmark-link h-auto max-w-full justify-start px-0 wrap-anywhere";
+const BOOKMARK_ACTIONS_CLASS = "demo-bookmark-actions flex min-w-0 flex-wrap items-center gap-2";
+const MESSAGE_CLASS = "m-0 text-sm text-destructive";
+const QUIET_CLASS = "m-0 text-sm text-muted-foreground";
+const TOC_CLASS = `demo-toc ${BLOCK_FRAME_CLASS} min-h-(--rivto-default-block-height)`;
+const TOC_LIST_CLASS = "demo-toc-list m-0 list-none p-0";
 const TOC_ENTRY_CLASS = "demo-toc-entry";
-const TOC_EMPTY_CLASS = "demo-toc-empty";
-const MATH_CLASS = "demo-math";
-const MATH_SOURCE_CLASS = "demo-math-source";
-const MATH_PREVIEW_CLASS = "demo-math-preview";
-const MATH_ERROR_CLASS = "demo-math-error";
-const MATH_EMPTY_CLASS = "demo-math-empty";
+const TOC_BUTTON_CLASS = "h-auto w-full justify-start px-1 py-0.5 font-normal";
+const MATH_CLASS = `demo-math ${BLOCK_FRAME_CLASS} grid gap-1.5`;
+const MATH_SOURCE_CLASS = "demo-math-source box-border w-full min-w-0 rounded-md border border-input px-2 py-1";
+const MATH_PREVIEW_CLASS = "demo-math-preview min-w-0 max-w-full overflow-x-auto";
 const PAGE_BLOCK_CONTENT_CLASS = "page-block-content";
 
 /** KaTeX options fixed by the host contract. `trust` stays off so commands cannot inject HTML. */
@@ -157,7 +165,7 @@ function indentLines(value: string, depth: number): string {
  * @param event - Click on a native control inside a block.
  * @returns True when the control should not perform its own action.
  */
-function isClaimedSelectionClick(event: MouseEvent<HTMLElement>): boolean {
+function isClaimedSelectionClick(event: Pick<MouseEvent, "defaultPrevented" | "ctrlKey" | "metaKey">): boolean {
   return event.defaultPrevented || event.ctrlKey || event.metaKey;
 }
 
@@ -296,17 +304,21 @@ function registerHostBlock(
  */
 function CalloutBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing<CalloutProps>(blockId);
+  const variantId = useId();
+  const emojiId = useId();
   const committedEmoji = editing.getProp("emoji") ?? DEFAULT_CALLOUT_EMOJI;
   const [emojiDraft, setEmojiDraft] = useState<string | null>(null);
   if (!editing.block) return null;
   const variant = editing.getProp("variant") ?? DEFAULT_CALLOUT_VARIANT;
   const emoji = emojiDraft ?? committedEmoji;
   return (
-    <div className={`${CALLOUT_CLASS} ${CALLOUT_CLASS}-${variant}`} data-callout-variant={variant}>
+    <div className={`${CALLOUT_CLASS} ${CALLOUT_VARIANT_CLASS[variant]}`} data-callout-variant={variant}>
       <div className={CALLOUT_CONTROLS_CLASS}>
-        <label className={CALLOUT_FIELD_CLASS}>
-          Variant
-          <select
+        <div className="flex min-w-0 items-center gap-2">
+          <Label className={CALLOUT_FIELD_CLASS} htmlFor={variantId}>Variant</Label>
+          <NativeSelect
+            id={variantId}
+            size="sm"
             value={variant}
             onMouseDown={(event) => {
               if (isClaimedSelectionClick(event)) event.preventDefault();
@@ -317,18 +329,22 @@ function CalloutBlock({ blockId }: { readonly blockId: string }) {
             }}
           >
             {CALLOUT_VARIANTS.map((option) => (
-              <option key={option} value={option}>{CALLOUT_VARIANT_LABELS[option]}</option>
+              <NativeSelectOption key={option} value={option}>{CALLOUT_VARIANT_LABELS[option]}</NativeSelectOption>
             ))}
-          </select>
-        </label>
-        <label className={CALLOUT_FIELD_CLASS}>
-          Emoji
-          <input
+          </NativeSelect>
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <Label className={CALLOUT_FIELD_CLASS} htmlFor={emojiId}>Emoji</Label>
+          <Input
+            id={emojiId}
             className={CALLOUT_EMOJI_CLASS}
             type="text"
             value={emoji}
             maxLength={32}
             spellCheck={false}
+            onMouseDown={(event) => {
+              if (isClaimedSelectionClick(event)) event.preventDefault();
+            }}
             onChange={(event) => setEmojiDraft(event.target.value)}
             onBlur={() => {
               const next = (emojiDraft ?? committedEmoji).trim();
@@ -337,7 +353,7 @@ function CalloutBlock({ blockId }: { readonly blockId: string }) {
               editing.setProp("emoji", next);
             }}
           />
-        </label>
+        </div>
       </div>
       <MarkdownContent blockId={blockId} />
     </div>
@@ -362,6 +378,8 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [editingUrl, setEditingUrl] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null);
+  const descriptionId = useId();
+  const urlId = useId();
   const urlErrorId = useId();
   if (trackedUrl !== committedUrl) {
     setTrackedUrl(committedUrl);
@@ -388,10 +406,10 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
   return (
     <div className={BOOKMARK_CLASS}>
       <MarkdownContent blockId={blockId} />
-      <label className={BOOKMARK_FIELD_CLASS}>
-        Description
-        <textarea
-          className={BOOKMARK_DESCRIPTION_CLASS}
+      <div className={BOOKMARK_FIELD_CLASS}>
+        <Label htmlFor={descriptionId}>Description</Label>
+        <Textarea
+          id={descriptionId}
           rows={2}
           value={description}
           onFocus={() => setDescriptionDraft(editing.getProp("description") ?? "")}
@@ -402,13 +420,13 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
             if (next !== (editing.getProp("description") ?? "")) editing.setProp("description", next);
           }}
         />
-      </label>
+      </div>
       {showUrlForm ? (
         <form className={BOOKMARK_FORM_CLASS} noValidate onSubmit={submitUrl}>
-          <label className={BOOKMARK_FIELD_CLASS}>
-            URL
-            <input
-              className={BOOKMARK_URL_CLASS}
+          <div className={BOOKMARK_FIELD_CLASS}>
+            <Label htmlFor={urlId}>URL</Label>
+            <Input
+              id={urlId}
               type="text"
               inputMode="url"
               value={urlDraft}
@@ -419,19 +437,22 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
                 if (urlError) setUrlError(null);
               }}
             />
-          </label>
+          </div>
           <div className={BOOKMARK_ACTIONS_CLASS}>
-            <button
+            <Button
               type="submit"
+              size="sm"
               onClick={(event) => {
                 if (isClaimedSelectionClick(event)) event.preventDefault();
               }}
             >
               Save link
-            </button>
+            </Button>
             {committedUrl ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={(event) => {
                   if (isClaimedSelectionClick(event)) return;
                   setEditingUrl(false);
@@ -440,26 +461,29 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
                 }}
               >
                 Cancel
-              </button>
+              </Button>
             ) : null}
           </div>
-          {urlError ? <p id={urlErrorId} className={BOOKMARK_ERROR_CLASS} role="alert">{urlError}</p> : null}
+          {urlError ? <p id={urlErrorId} className={`${MESSAGE_CLASS} basis-full`} role="alert">{urlError}</p> : null}
         </form>
       ) : (
         <div className={BOOKMARK_ACTIONS_CLASS}>
-          <a
-            className={BOOKMARK_LINK_CLASS}
-            href={committedUrl}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(event) => {
-              if (isClaimedSelectionClick(event)) event.preventDefault();
-            }}
-          >
-            {committedUrl}
-          </a>
-          <button
+          <Button variant="link" size="sm" asChild className={BOOKMARK_LINK_CLASS}>
+            <a
+              href={committedUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => {
+                if (isClaimedSelectionClick(event)) event.preventDefault();
+              }}
+            >
+              {committedUrl}
+            </a>
+          </Button>
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={(event) => {
               if (isClaimedSelectionClick(event)) return;
               setUrlDraft(editing.getProp("url") ?? "");
@@ -468,7 +492,7 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
             }}
           >
             Change URL
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -496,14 +520,17 @@ function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
   return (
     <div {...editing.attributes} className={TOC_CLASS}>
       <nav aria-label="Table of contents">
-        {entries.length === 0 ? <p className={TOC_EMPTY_CLASS}>No headings</p> : (
+        {entries.length === 0 ? <p className={QUIET_CLASS}>No headings</p> : (
           <ol className={TOC_LIST_CLASS}>
             {entries.map((entry, index) => {
               const label = entry.text.trim() || "Empty heading";
               return (
                 <li className={TOC_ENTRY_CLASS} key={`${entry.blockId}:${index}`}>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={TOC_BUTTON_CLASS}
                     data-toc-entry=""
                     data-toc-target={entry.blockId}
                     style={{ paddingInlineStart: `${(entry.depth - 1) * 12}px` }}
@@ -513,7 +540,7 @@ function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
                     }}
                   >
                     {label}
-                  </button>
+                  </Button>
                 </li>
               );
             })}
@@ -549,10 +576,10 @@ function MathEquationBlock({ blockId }: { readonly blockId: string }) {
         spellCheck={false}
       />
       <div className={MATH_PREVIEW_CLASS} data-math-preview="" aria-label="Equation preview">
-        {empty ? <p className={MATH_EMPTY_CLASS}>Equation preview</p> : (
+        {empty ? <p className={QUIET_CLASS}>Equation preview</p> : (
           <>
             {rendered.html ? <div dangerouslySetInnerHTML={{ __html: rendered.html }} /> : null}
-            {rendered.invalid ? <p className={MATH_ERROR_CLASS} role="alert">Invalid formula</p> : null}
+            {rendered.invalid ? <p className={MESSAGE_CLASS} role="alert">Invalid formula</p> : null}
           </>
         )}
       </div>
