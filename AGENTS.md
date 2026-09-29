@@ -42,6 +42,29 @@ Use `*.test.ts(x)` for Jest and `*.spec.ts` for Playwright. Run checks proportio
 
 Use ES modules and nearby formatting. Use `PascalCase` for types/components, `camelCase` for functions/values, and kebab-case directories. Prefer existing managers and narrow types.
 
-Document public APIs and non-obvious invariants. Use comments to explain tricky algorithms and edge cases; avoid restating straightforward code. Define repeated or cross-file HTML class names once in the narrowest owning scope.
+Use concrete names that describe the implemented behavior and reuse existing domain terminology. Name functions for what they actually do, including meaningful scope or side effects; name values for what they contain. Avoid vague names such as `processData`, `handleLogic`, or `AbstractManager` when the code has a specific responsibility. Do not imply validation, persistence, synchronization, or completeness unless the implementation provides it. Check the implementation and callers before choosing or changing a name.
+
+Avoid nested or chained ternary operators. Use `if`/`else` or early returns for multiple conditions; a single simple ternary is fine.
+
+Document public APIs and non-obvious internal contracts with TypeScript JSDoc (`/** ... */`) directly above the declaration. Describe the actual behavior, relevant constraints and side effects, each parameter's meaning, and the return value (including missing-value behavior). Add `@throws` for meaningful failure conditions. Explain defaults, units, identity, mutation, or transaction behavior when relevant; do not repeat TypeScript types or invent guarantees. Keep docs current when behavior changes. Straightforward private helpers do not need boilerplate JSDoc.
+
+For example, `useBlock` in `packages/react-rivto-editor/src/hooks/blocks/use-block.ts` subscribes to a recursive snapshot and returns ID-bound commands. Its documentation can describe that contract as follows:
+
+```ts
+/**
+ * Subscribes to a block's complete subtree and returns commands bound to its ID.
+ *
+ * The snapshot is detached; use the returned operations to change the document.
+ * Commands read current document state when invoked.
+ *
+ * @param blockId - Stable persisted ID of the block to observe.
+ * @returns Current recursive snapshot and ID-bound operations. The `block`
+ * field is undefined when the ID is unknown or the block has been deleted.
+ * @throws If called outside an EditorView subtree.
+ */
+export function useBlock(blockId: string): UseBlockResult;
+```
+
+Use comments to explain tricky algorithms and edge cases; avoid restating straightforward code. Define repeated or cross-file HTML class names once in the narrowest owning scope.
 
 Keep commits focused and imperative. Pull requests state the problem, solution, validation, and API/UI impact.
