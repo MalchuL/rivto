@@ -8,6 +8,7 @@ module.exports = {
     "^@chulane/rivto$": "<rootDir>/../rivto-editor-core/src/index.ts",
     "^react-markdown$": "<rootDir>/src/test-mocks/react-markdown.ts",
     "^rehype-highlight$": "<rootDir>/src/test-mocks/empty-plugin.ts",
+    "^rehype-raw$": "<rootDir>/src/test-mocks/empty-plugin.ts",
     "^remark-gfm$": "<rootDir>/src/test-mocks/empty-plugin.ts",
   },
   transform: {

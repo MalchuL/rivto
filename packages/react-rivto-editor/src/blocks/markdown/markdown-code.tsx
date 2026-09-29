@@ -139,13 +139,17 @@ export function resolveCodeFenceInfo(value: string | undefined): CodeFenceInfo |
 /**
  * Adds display metadata and normalized language classes before highlighting.
  *
- * @returns A unified transformer that mutates fenced `pre > code` elements.
+ * Must run before raw HTML is parsed. The marker distinguishes Markdown code
+ * from a later `<pre>` in authored HTML, which should stay a native element.
+ *
+ * @returns A unified transformer that mutates Markdown `pre > code` elements.
  */
 export function rehypeCodeFenceMetadata() {
   return (tree: SyntaxNode): void => {
     const visit = (node: SyntaxNode, parent?: SyntaxNode): void => {
       if (node.tagName === "code" && parent?.tagName === "pre") {
         const properties = node.properties ??= {};
+        properties.dataMarkdownCode = "true";
         const classes = Array.isArray(properties.className)
           ? properties.className.map(String)
           : [];

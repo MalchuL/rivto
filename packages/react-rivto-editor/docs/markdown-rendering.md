@@ -58,8 +58,46 @@ and markup extensions are inferred. Unknown extensions remain renderable and
 may use automatic language detection.
 
 Highlighting is provided by `rehype-highlight`. It transforms ReactMarkdown's
-syntax tree into escaped React elements; user-authored raw HTML remains disabled.
-Theme colors are exposed through the `--rivto-code-*` CSS variables.
+syntax tree into escaped React elements. Theme colors are exposed through the
+`--rivto-code-*` CSS variables.
+
+## Raw HTML, CSS, and scripts
+
+Idle previews render authored HTML as real elements. The same renderer is used
+for every default writing block, including nested children and table cells, so
+an HTML table inside any of those blocks is a table rather than escaped text.
+
+`<style>` and `<script>` run from the preview. Styles apply to the document
+for as long as that preview is mounted. Scripts run in the page, in source
+order, after the surrounding markup exists. Focusing the block removes the
+preview, which also removes those style and script elements.
+
+Fenced and indented Markdown code stays source text: a `<script>` inside a
+fence is displayed, not executed. `javascript:`, `vbscript:`, and `data:`
+script URLs are ignored. `<title>`, `<base>`, and `<meta>` are not applied to
+the host document.
+
+## JSX and Tailwind
+
+Fences labeled exactly `jsx`, `tsx`, or `live` render with [react-live](https://github.com/FormidableLabs/react-live) 5 while the block is idle. react-live 5.0.0 was released in September 2026 and transpiles with Sucrase. Sucrase has more stars, and its latest release is November 2025; it only transpiles, so the preview uses react-live.
+
+An inline fence is one JSX expression. A component that needs hooks calls `render`:
+
+````markdown
+```jsx
+<div className="rounded bg-emerald-100 px-3 py-2 font-semibold">Hello</div>
+```
+
+```tsx
+function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(count + 1)}>Count {count}</button>;
+}
+render(<Counter />);
+```
+````
+
+`React` and the common hooks are in scope. Other modules cannot be imported. Tailwind utilities are compiled in the browser from theme and utility styles, without Preflight. File-path fences such as `src/Button.jsx` stay highlighted source.
 
 ## Constraining editor height
 

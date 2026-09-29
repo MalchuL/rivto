@@ -45,7 +45,9 @@ standardPreset({
 
 `MarkdownContent` держит raw contenteditable mounted для стабильных offsets. В idle state formatted preview определяет block height, а raw editor становится прозрачным interaction layer. При focus preview скрывается и raw source участвует в layout.
 
-Поддерживаются GFM и syntax highlighting через уже установленные `react-markdown`, `remark-gfm` и `rehype-highlight`. Raw user HTML не исполняется.
+Поддерживаются GFM и syntax highlighting через `react-markdown`, `remark-gfm` и `rehype-highlight`. В idle preview authored HTML рендерится нативно: таблицы, вложенные элементы, `<style>` и `<script>` работают и в корневых writing blocks, и во вложенных, включая ячейки таблиц. Обычный код в fence остаётся текстом. `<title>`, `<base>` и `<meta>` не переписывают документ-хост.
+
+Fence с меткой `jsx`, `tsx` или `live` рендерится через react-live 5 (Sucrase внутри) и получает Tailwind utilities без Preflight. Выражение JSX рендерится напрямую; компонент с хуками вызывает `render(<Component />)`. `React` и стандартные hooks уже в scope.
 
 Code fence info может быть language или filepath:
 

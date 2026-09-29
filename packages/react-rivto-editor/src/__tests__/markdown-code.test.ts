@@ -1,4 +1,5 @@
 import {
+  rehypeCodeFenceMetadata,
   replaceMarkdownCode,
   resolveCodeFenceInfo,
 } from "../blocks/markdown/markdown-code";
@@ -25,6 +26,32 @@ describe("resolveCodeFenceInfo", () => {
       label: "config/example.unknown",
       language: undefined,
       filename: true,
+    });
+  });
+});
+
+describe("rehypeCodeFenceMetadata", () => {
+  it("marks Markdown code before raw HTML is parsed", () => {
+    const tree = {
+      type: "root",
+      children: [{
+        type: "element",
+        tagName: "pre",
+        children: [{
+          type: "element",
+          tagName: "code",
+          properties: { className: ["language-src/example.js"] },
+          children: [],
+        }],
+      }],
+    };
+
+    rehypeCodeFenceMetadata()(tree);
+
+    expect(tree.children[0]?.children[0]?.properties).toMatchObject({
+      dataMarkdownCode: "true",
+      dataCodeLabel: "src/example.js",
+      dataCodeLanguage: "javascript",
     });
   });
 });
