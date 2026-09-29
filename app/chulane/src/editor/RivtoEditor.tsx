@@ -60,8 +60,11 @@ export function RivtoEditor({
     setRuntime(created);
     return () => {
       unsubscribe();
+      const document = created.editor.getDocument();
       created.reactEditor.destroy();
-      created.editor.destroy();
+      void created.editor.destroy().finally(() => {
+        void document?.destroy();
+      });
       setRuntime(null);
     };
     // `content` is the hydration payload for this document, not a live prop.
@@ -74,7 +77,7 @@ export function RivtoEditor({
 
   return (
     <div className={cn(EDITOR_ROOT_CLASS, className)}>
-      <EditorView editor={runtime.reactEditor}>
+      <EditorView reactEditor={runtime.reactEditor}>
         {children}
         {showModeSwitch ? (
           <header className={TOOLBAR_CLASS}>

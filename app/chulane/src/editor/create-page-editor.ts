@@ -7,6 +7,8 @@
  * mock page store is still a JSON string.
  */
 
+import { YjsDoc } from "@chulane/crdt-doc";
+import { DocumentModelImpl } from "@chulane/document-model";
 import {
   createRivtoEditor,
   type EditorMode,
@@ -57,6 +59,7 @@ export function createPageEditor(options: {
   mode?: EditorMode;
 }): PageEditorRuntime {
   const editor = createRivtoEditor({ mode: options.mode ?? "block" });
+  editor.setDocument(new DocumentModelImpl(new YjsDoc(crypto.randomUUID())));
   const parsed = parseEditorSnapshot(options.snapshot);
   if (parsed && (parsed.blocks.length > 0 || parsed.elements.length > 0)) {
     editor.load(parsed);
