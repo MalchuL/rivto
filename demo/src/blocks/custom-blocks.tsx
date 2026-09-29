@@ -29,6 +29,12 @@ import {
   counterBlockDefinition,
   sliderBlockDefinition,
 } from "./custom-block-definitions";
+import {
+  bookmarkBlockExtension,
+  calloutBlockExtension,
+  mathEquationBlockExtension,
+  tableOfContentsBlockExtension,
+} from "./host-blocks";
 
 interface SliderProps {
   value: number;
@@ -186,6 +192,10 @@ export const customBlockExtensions: readonly ReactEditorExtension[] = [
       render: CounterBlock,
       slashCommand: { title: "Counter", group: "Turn into", keywords: ["count", "button"] },
     }),
+    calloutBlockExtension(),
+    bookmarkBlockExtension(),
+    tableOfContentsBlockExtension(),
+    mathEquationBlockExtension(),
     {
       id: "clipboard.demo-counter",
       setup: (reactEditor) => {
