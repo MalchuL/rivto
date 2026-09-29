@@ -12,11 +12,15 @@
   /* Keep selection darker than the subtle hover tint. */
   --rivto-block-selection-background: #e5dfff;
   --rivto-block-selection-outline: #cfc4ff;
+
+  /* Shell inset shared with features that must line up with block text. */
+  --rivto-block-padding-block: 2px;
+  --rivto-block-padding-inline: 8px;
 }
 
 .page-block {
   margin: 4px 0;
-  padding: 2px 8px;
+  padding: var(--rivto-block-padding-block) var(--rivto-block-padding-inline);
 }
 
 .page-block:has(> .page-drop-indicator) {

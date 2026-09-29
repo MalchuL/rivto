@@ -63,7 +63,8 @@ Token groups:
 | Group | Purpose |
 | --- | --- |
 | `--rivto-accent`, `--rivto-background`, `--rivto-foreground`, `--rivto-card*`, `--rivto-popover*`, `--rivto-primary*`, `--rivto-secondary*`, `--rivto-muted*`, `--rivto-subtle*`, `--rivto-destructive`, `--rivto-border`, `--rivto-input`, `--rivto-ring`, `--rivto-radius` | Semantic palette. `@theme inline` maps these onto Tailwind's `bg-background`, `text-muted-foreground`, `ring-ring`, `rounded-lg`, ... so shadcn primitives and package utilities share one theme, including chrome rendered in portals. |
-| `--rivto-default-block-height`, `--rivto-block-surface-padding` | Block geometry shared by page and edgeless trees. |
+| `--rivto-default-block-height`, `--rivto-block-surface-padding`, `--rivto-block-padding-block`, `--rivto-block-padding-inline` | Block geometry shared by page and edgeless trees. |
+| `--rivto-embed-background` | Light gray fill behind a live embed frame. |
 | `--rivto-drop-*` | Drag and drop indicator feedback. |
 | `--rivto-code-*`, `--rivto-link-color` | Markdown code blocks and links. |
 | `--rivto-kanban-*`, `--rivto-bento-background` | Layout containers. |

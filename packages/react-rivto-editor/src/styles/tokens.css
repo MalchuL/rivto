@@ -32,6 +32,7 @@
   --rivto-subtle-foreground: #4c3fc9;
   --rivto-destructive: #d64545;
   --rivto-border: #dedbe7;
+  --rivto-embed-background: #f3f4f6;
   --rivto-input: #d8d4e2;
   --rivto-ring: var(--rivto-accent);
   --rivto-radius: 0.5rem;
