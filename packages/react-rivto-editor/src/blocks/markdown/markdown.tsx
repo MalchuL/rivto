@@ -6,10 +6,13 @@
  * @module
  */
 import {
+  Children,
+  isValidElement,
   useCallback,
   memo,
   useMemo,
   useState,
+  type ReactNode,
 } from "react";
 import type { MarkdownLinkClick } from "../../types";
 import {
@@ -18,7 +21,17 @@ import {
 } from "../../hooks";
 import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
+import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
+import {
+  MarkdownHtmlScript,
+  MarkdownHtmlStyle,
+  nodeText,
+} from "./markdown-html";
+import {
+  isLiveCodeLabel,
+  MarkdownLivePreview,
+} from "./markdown-live";
 import {
   MarkdownCodeBlock,
   rehypeCodeFenceMetadata,
@@ -46,11 +59,14 @@ const MarkdownPreview = memo(function MarkdownPreview({
       components={components}
       urlTransform={transformUrl}
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeCodeFenceMetadata, [rehypeHighlight, {
-        detect: true,
-        plainText: ["text", "txt", "plaintext"],
-      }]]}
-      skipHtml
+      rehypePlugins={[
+        rehypeCodeFenceMetadata,
+        rehypeRaw,
+        [rehypeHighlight, {
+          detect: true,
+          plainText: ["text", "txt", "plaintext"],
+        }],
+      ]}
     >
       {source}
     </ReactMarkdown>
@@ -68,8 +84,11 @@ const MarkdownPreview = memo(function MarkdownPreview({
  * determine the block height.
  *
  * Markdown is presentation only: it never creates or changes Rivto blocks.
- * Raw HTML is deliberately ignored, and ReactMarkdown sanitizes link
- * destinations without rendering through `dangerouslySetInnerHTML`.
+ * Authored HTML renders as real elements, including tables, styles, and
+ * scripts. Fences labeled `jsx`, `tsx`, or `live` render through react-live
+ * with Tailwind utilities. Other fenced code stays source text. Link
+ * destinations are still sanitized, and `title`, `base`, and `meta` cannot
+ * rewrite the host document.
  *
  * @param props - Stable block ID and optional application link interceptor.
  * @returns A stable raw editor and, while idle, its formatted preview.
@@ -103,13 +122,42 @@ export function MarkdownContent({
         onClick={(event) => onLinkClick?.({ blockId, href, event })}
       />
     ),
-    pre: (props) => (
-      <MarkdownCodeBlock
-        {...props}
-        onCodeChange={updateCode}
-        preventTextEditingAttributes={editing.preventTextEditingAttributes}
-      />
-    ),
+    // Document metadata would be hoisted onto the host page. Block HTML stays
+    // inside the preview, so these tags contribute nothing.
+    base: () => null,
+    meta: () => null,
+    title: () => null,
+    script: ({ node: _node, ...props }) => <MarkdownHtmlScript {...props} />,
+    style: ({ node: _node, ...props }) => <MarkdownHtmlStyle {...props} />,
+    pre: ({ node, children, ...props }) => {
+      const first = Children.toArray(children)[0];
+      const codeProps = isValidElement<{
+        readonly "data-markdown-code"?: string;
+        readonly "data-code-label"?: string;
+        readonly children?: ReactNode;
+      }>(first) ? first.props : undefined;
+      const markdownCode = codeProps?.["data-markdown-code"] === "true";
+      const label = codeProps?.["data-code-label"];
+      if (markdownCode && isLiveCodeLabel(label)) {
+        return (
+          <MarkdownLivePreview
+            code={nodeText(codeProps?.children).replace(/\n$/, "")}
+            label={label ?? "jsx"}
+          />
+        );
+      }
+      if (!markdownCode) return <pre {...props}>{children}</pre>;
+      return (
+        <MarkdownCodeBlock
+          {...props}
+          node={node}
+          onCodeChange={updateCode}
+          preventTextEditingAttributes={editing.preventTextEditingAttributes}
+        >
+          {children}
+        </MarkdownCodeBlock>
+      );
+    },
   }), [blockId, editing.preventTextEditingAttributes, onLinkClick, updateCode]);
 
   return (

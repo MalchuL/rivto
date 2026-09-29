@@ -13,6 +13,138 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
+test("renders HTML, CSS, and scripts in default blocks and nested content", async ({ page }) => {
+  const rootHtml = [
+    '<p class="rivto-html-sample" style="font-weight: 700">Native HTML</p>',
+    '<table class="rivto-html-table"><tr><td>Cell</td><td>Two</td></tr></table>',
+    "<style>.rivto-html-sample { color: rgb(10, 90, 40); } .rivto-html-table > tbody > tr > td { background-color: rgb(200, 230, 210); }</style>",
+    '<script>document.querySelector(".rivto-html-sample")?.setAttribute("data-ran", "root")</script>',
+  ].join("\n\n");
+  const nestedHtml = [
+    '<p class="rivto-html-nested">Nested HTML</p>',
+    "<style>.rivto-html-nested { color: rgb(20, 40, 160); }</style>",
+    '<script>document.querySelector(".rivto-html-nested")?.setAttribute("data-ran", "nested")</script>',
+  ].join("\n\n");
+  const cellHtml = [
+    '<p class="rivto-html-cell">Inner cell</p>',
+    "<style>.rivto-html-cell { color: rgb(120, 30, 30); }</style>",
+    '<script>document.querySelector(".rivto-html-cell")?.setAttribute("data-ran", "cell")</script>',
+  ].join("\n\n");
+  const fencedHtml = [
+    "```html",
+    '<script>document.documentElement.dataset.rivtoFencedScript = "ran"</script>',
+    "```",
+  ].join("\n");
+
+  const ids = await page.evaluate(({ root, nested, cell, fenced }) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    const blocks: { id: string; type: string; content: string; children?: typeof blocks }[] = [];
+    const visit = (items: typeof blocks) => {
+      for (const block of items) {
+        blocks.push(block);
+        if (block.children) visit(block.children);
+      }
+    };
+    visit(editor.blocks.getBlocks() as typeof blocks);
+    const rootBlock = blocks.find((block) => block.content === "**Rivto editor**");
+    const nestedBlock = blocks.find((block) => block.content.startsWith("Level 2: this child"));
+    const cellBlock = blocks.find((block) => block.type === "table-cell");
+    const fencedBlock = blocks.find((block) => block.content.startsWith("Level 4:"));
+    if (!rootBlock || !nestedBlock || !cellBlock || !fencedBlock) {
+      throw new Error("Expected root, nested, cell, and fenced blocks");
+    }
+    editor.blocks.updateBlock(rootBlock.id, { content: root });
+    editor.blocks.updateBlock(nestedBlock.id, { content: nested });
+    editor.blocks.updateBlock(cellBlock.id, { content: cell });
+    editor.blocks.updateBlock(fencedBlock.id, { content: fenced });
+    return {
+      rootId: rootBlock.id,
+      nestedId: nestedBlock.id,
+      cellId: cellBlock.id,
+      fencedId: fencedBlock.id,
+    };
+  }, { root: rootHtml, nested: nestedHtml, cell: cellHtml, fenced: fencedHtml });
+
+  const root = page.locator(blockIdSelector(ids.rootId));
+  const nested = page.locator(blockIdSelector(ids.nestedId));
+  const cell = page.locator(blockIdSelector(ids.cellId));
+  const fenced = page.locator(blockIdSelector(ids.fencedId));
+
+  await expect(root.locator(".markdown-preview .rivto-html-sample")).toHaveText("Native HTML");
+  await expect(root.locator(".markdown-preview .rivto-html-table td").nth(1)).toHaveText("Two");
+  await expect(root.locator(".markdown-preview .rivto-html-sample")).toHaveCSS("color", "rgb(10, 90, 40)");
+  await expect(root.locator(".markdown-preview .rivto-html-sample")).toHaveCSS("font-weight", "700");
+  await expect(root.locator(".markdown-preview .rivto-html-table td").first()).toHaveCSS("background-color", "rgb(200, 230, 210)");
+  await expect(root.locator(".markdown-preview .rivto-html-sample")).toHaveAttribute("data-ran", "root");
+  await expect(root.locator(".markdown-editor")).toContainText("<table");
+
+  await expect(nested.locator(".markdown-preview .rivto-html-nested")).toHaveText("Nested HTML");
+  await expect(nested.locator(".markdown-preview .rivto-html-nested")).toHaveCSS("color", "rgb(20, 40, 160)");
+  await expect(nested.locator(".markdown-preview .rivto-html-nested")).toHaveAttribute("data-ran", "nested");
+
+  await expect(cell.locator(".markdown-preview .rivto-html-cell")).toHaveText("Inner cell");
+  await expect(cell.locator(".markdown-preview .rivto-html-cell")).toHaveCSS("color", "rgb(120, 30, 30)");
+  await expect(cell.locator(".markdown-preview .rivto-html-cell")).toHaveAttribute("data-ran", "cell");
+
+  await expect(fenced.locator(".markdown-preview .markdown-code-preview")).toContainText("<script>");
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.rivtoFencedScript ?? ""))
+    .toBe("");
+});
+
+test("renders JSX fences with Tailwind without resetting the page", async ({ page }) => {
+  const today = page.locator('[data-journal-document="today"]');
+  const headingSize = await today.locator(".journal-date").evaluate((element) => getComputedStyle(element).fontSize);
+  const jsx = [
+    "```jsx",
+    '<div className="bg-[#123456] px-3 py-2 font-bold text-white">Live JSX</div>',
+    "```",
+  ].join("\n");
+  const counter = [
+    "```tsx",
+    "function Counter() {",
+    "  const [count, setCount] = useState(0);",
+    "  return <button onClick={() => setCount(count + 1)}>Count {count}</button>;",
+    "}",
+    "render(<Counter />);",
+    "```",
+  ].join("\n");
+
+  const ids = await page.evaluate(({ jsxSource, counterSource }) => {
+    const editor = (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor;
+    const blocks: { id: string; content: string; children?: typeof blocks }[] = [];
+    const visit = (items: typeof blocks) => {
+      for (const block of items) {
+        blocks.push(block);
+        if (block.children) visit(block.children);
+      }
+    };
+    visit(editor.blocks.getBlocks() as typeof blocks);
+    const rootBlock = blocks.find((block) => block.content === "**Rivto editor**");
+    const nestedBlock = blocks.find((block) => block.content.startsWith("Level 2: this child"));
+    if (!rootBlock || !nestedBlock) throw new Error("Expected root and nested blocks");
+    editor.blocks.updateBlock(rootBlock.id, { content: jsxSource });
+    editor.blocks.updateBlock(nestedBlock.id, { content: counterSource });
+    return { rootId: rootBlock.id, nestedId: nestedBlock.id };
+  }, { jsxSource: jsx, counterSource: counter });
+
+  const root = page.locator(blockIdSelector(ids.rootId));
+  const nested = page.locator(blockIdSelector(ids.nestedId));
+  const live = root.locator(".markdown-live");
+  await expect(live).toContainText("Live JSX");
+  await expect(live.locator("div").last()).toHaveCSS("background-color", "rgb(18, 52, 86)");
+  await expect(live.locator("div").last()).toHaveCSS("font-weight", "700");
+  await expect(today.locator(".journal-date")).toHaveCSS("font-size", headingSize);
+
+  const button = nested.locator(".markdown-live button");
+  await expect(button).toHaveText("Count 0");
+  await button.click();
+  await expect(button).toHaveText("Count 1");
+});
+
 test("shows full GFM at rest and raw source while editing", async ({ page }) => {
   const block = page.locator(blockTypeSelector("paragraph")).first();
   const editor = block.locator(":scope > .page-block-row .markdown-editor");

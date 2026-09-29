@@ -48,9 +48,66 @@
 }
 
 .markdown-preview a {
+  color: var(--rivto-link-color);
+}
+
+.markdown-preview table {
+  width: 100%;
+  max-width: 100%;
+  margin: 0.75em 0;
+  border-collapse: collapse;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid var(--rivto-border);
+  padding: 0.25em 0.6em;
+  vertical-align: top;
+}
+
+.markdown-preview th {
+  background: var(--rivto-muted);
+  font-weight: 600;
+}
+
+.markdown-preview img,
+.markdown-preview video,
+.markdown-preview canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* The idle editor covers the preview. Interactive HTML must sit above it. */
+.markdown-live {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.markdown-live-error {
+  margin: 0.5em 0 0;
+  color: var(--rivto-destructive);
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+}
+
+.markdown-preview :is(
+  .markdown-live,
+  a,
+  button,
+  input,
+  textarea,
+  select,
+  label,
+  summary,
+  video,
+  audio,
+  iframe,
+  canvas,
+  [tabindex]
+) {
   position: relative;
   z-index: 2;
-  color: var(--rivto-link-color);
   pointer-events: auto;
 }
 
