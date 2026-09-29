@@ -85,29 +85,41 @@ export {
 } from "./toc-entries";
 
 const BLOCK_FRAME_CLASS = "box-border w-full min-w-0 max-w-full";
-const CALLOUT_CLASS = `demo-callout ${BLOCK_FRAME_CLASS} flex flex-col gap-2 rounded-lg border p-2`;
-const CALLOUT_VARIANT_CLASS: Record<CalloutVariant, string> = {
-  note: "border-border bg-muted/60",
-  tip: "border-border bg-secondary",
-  warning: "border-destructive/40 bg-destructive/10",
+const SCREEN_READER_CLASS = "sr-only";
+/** Left accent drawn inline so it wins over the shared `border` shorthand. */
+const ACCENT_RULE_WIDTH = 3;
+
+const CALLOUT_ACCENT: Record<CalloutVariant, string> = {
+  note: "var(--rivto-primary)",
+  tip: "var(--rivto-subtle-foreground)",
+  warning: "var(--rivto-destructive)",
 };
-const CALLOUT_CONTROLS_CLASS = "demo-callout-controls flex min-w-0 flex-wrap items-center gap-2";
-const CALLOUT_FIELD_CLASS = "demo-callout-field text-muted-foreground";
-const CALLOUT_EMOJI_CLASS = "demo-callout-emoji h-8 w-16 px-2 text-center";
-const BOOKMARK_CLASS = `demo-bookmark ${BLOCK_FRAME_CLASS} flex flex-col gap-2 rounded-lg border border-border bg-card p-2`;
-const BOOKMARK_FIELD_CLASS = "demo-bookmark-field grid min-w-0 flex-1 basis-40 gap-1.5 text-muted-foreground";
-const BOOKMARK_FORM_CLASS = "demo-bookmark-form flex min-w-0 flex-wrap items-end gap-2";
-const BOOKMARK_LINK_CLASS = "demo-bookmark-link h-auto max-w-full justify-start px-0 wrap-anywhere";
-const BOOKMARK_ACTIONS_CLASS = "demo-bookmark-actions flex min-w-0 flex-wrap items-center gap-2";
+const CALLOUT_CLASS = `demo-callout ${BLOCK_FRAME_CLASS} flex items-start gap-2 rounded-lg border border-solid py-2 pr-2 pl-3`;
+const CALLOUT_VARIANT_CLASS: Record<CalloutVariant, string> = {
+  note: "border-primary/20 bg-muted/70",
+  tip: "border-primary/15 bg-accent/60",
+  warning: "border-destructive/25 bg-destructive/10",
+};
+const CALLOUT_EMOJI_CLASS = "demo-callout-emoji mt-0.5 size-8 shrink-0 rounded-md border-border/80 bg-background/80 px-0 text-center text-base shadow-none";
+const CALLOUT_BODY_CLASS = "demo-callout-body min-w-0 flex-1 text-foreground";
+const CALLOUT_VARIANT_CONTROL_CLASS = "demo-callout-variant h-7 w-24 rounded-full border-transparent bg-background/70 px-2.5 pr-7 text-left text-xs font-medium text-muted-foreground shadow-none";
+const BOOKMARK_CLASS = `demo-bookmark ${BLOCK_FRAME_CLASS} flex flex-col gap-1 rounded-lg border border-solid border-border bg-card px-3 py-2.5 shadow-xs`;
+const BOOKMARK_TITLE_CLASS = "demo-bookmark-title min-w-0 text-base font-semibold leading-snug text-foreground";
+const BOOKMARK_DESCRIPTION_CLASS = "demo-bookmark-description min-h-(--rivto-default-block-height) resize-none border-transparent bg-transparent px-0 py-0 text-sm leading-relaxed text-muted-foreground shadow-none placeholder:text-muted-foreground/80";
+const BOOKMARK_RULE_CLASS = "demo-bookmark-rule mt-1 flex min-w-0 flex-wrap items-center gap-2 border-t border-solid border-border pt-2";
+const BOOKMARK_FORM_CLASS = "demo-bookmark-form flex min-w-0 flex-1 flex-wrap items-center gap-2";
+const BOOKMARK_URL_CLASS = "demo-bookmark-url h-8 min-w-0 flex-1 basis-40";
+const BOOKMARK_LINK_CLASS = "demo-bookmark-link h-auto max-w-full justify-start px-0 text-sm font-normal wrap-anywhere";
+const BOOKMARK_ACTIONS_CLASS = "demo-bookmark-actions flex min-w-0 flex-1 flex-wrap items-center gap-2";
 const MESSAGE_CLASS = "m-0 text-sm text-destructive";
 const QUIET_CLASS = "m-0 text-sm text-muted-foreground";
-const TOC_CLASS = `demo-toc ${BLOCK_FRAME_CLASS} min-h-(--rivto-default-block-height)`;
+const TOC_CLASS = `demo-toc ${BLOCK_FRAME_CLASS} min-h-(--rivto-default-block-height) rounded-r-md bg-muted/40 py-1 pr-1 pl-3`;
 const TOC_LIST_CLASS = "demo-toc-list m-0 list-none p-0";
 const TOC_ENTRY_CLASS = "demo-toc-entry";
-const TOC_BUTTON_CLASS = "h-auto w-full justify-start px-1 py-0.5 font-normal";
-const MATH_CLASS = `demo-math ${BLOCK_FRAME_CLASS} grid gap-1.5`;
-const MATH_SOURCE_CLASS = "demo-math-source box-border w-full min-w-0 rounded-md border border-input px-2 py-1";
-const MATH_PREVIEW_CLASS = "demo-math-preview min-w-0 max-w-full overflow-x-auto";
+const TOC_BUTTON_CLASS = "h-auto w-full justify-start rounded-md px-1.5 py-1 text-left text-sm font-normal text-foreground";
+const MATH_CLASS = `demo-math ${BLOCK_FRAME_CLASS} overflow-hidden rounded-lg border border-solid border-border bg-card`;
+const MATH_PREVIEW_CLASS = "demo-math-preview min-w-0 max-w-full overflow-x-auto bg-muted/50 px-4 py-5 text-center text-foreground";
+const MATH_SOURCE_CLASS = "demo-math-source box-border w-full min-w-0 border-t border-solid border-border bg-background px-3 py-1.5 font-mono text-sm text-muted-foreground";
 const PAGE_BLOCK_CONTENT_CLASS = "page-block-content";
 
 /** KaTeX options fixed by the host contract. `trust` stays off so commands cannot inject HTML. */
@@ -312,50 +324,53 @@ function CalloutBlock({ blockId }: { readonly blockId: string }) {
   const variant = editing.getProp("variant") ?? DEFAULT_CALLOUT_VARIANT;
   const emoji = emojiDraft ?? committedEmoji;
   return (
-    <div className={`${CALLOUT_CLASS} ${CALLOUT_VARIANT_CLASS[variant]}`} data-callout-variant={variant}>
-      <div className={CALLOUT_CONTROLS_CLASS}>
-        <div className="flex min-w-0 items-center gap-2">
-          <Label className={CALLOUT_FIELD_CLASS} htmlFor={variantId}>Variant</Label>
-          <NativeSelect
-            id={variantId}
-            size="sm"
-            value={variant}
-            onMouseDown={(event) => {
-              if (isClaimedSelectionClick(event)) event.preventDefault();
-            }}
-            onChange={(event) => {
-              const next = event.target.value;
-              if (isCalloutVariant(next)) editing.setProp("variant", next);
-            }}
-          >
-            {CALLOUT_VARIANTS.map((option) => (
-              <NativeSelectOption key={option} value={option}>{CALLOUT_VARIANT_LABELS[option]}</NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </div>
-        <div className="flex min-w-0 items-center gap-2">
-          <Label className={CALLOUT_FIELD_CLASS} htmlFor={emojiId}>Emoji</Label>
-          <Input
-            id={emojiId}
-            className={CALLOUT_EMOJI_CLASS}
-            type="text"
-            value={emoji}
-            maxLength={32}
-            spellCheck={false}
-            onMouseDown={(event) => {
-              if (isClaimedSelectionClick(event)) event.preventDefault();
-            }}
-            onChange={(event) => setEmojiDraft(event.target.value)}
-            onBlur={() => {
-              const next = (emojiDraft ?? committedEmoji).trim();
-              setEmojiDraft(null);
-              if (!next || next === (editing.getProp("emoji") ?? DEFAULT_CALLOUT_EMOJI)) return;
-              editing.setProp("emoji", next);
-            }}
-          />
-        </div>
+    <div
+      className={`${CALLOUT_CLASS} ${CALLOUT_VARIANT_CLASS[variant]}`}
+      data-callout-variant={variant}
+      style={{ borderLeftWidth: ACCENT_RULE_WIDTH, borderLeftColor: CALLOUT_ACCENT[variant] }}
+    >
+      <Label className={SCREEN_READER_CLASS} htmlFor={emojiId}>Emoji</Label>
+      <Input
+        id={emojiId}
+        className={CALLOUT_EMOJI_CLASS}
+        type="text"
+        value={emoji}
+        maxLength={32}
+        spellCheck={false}
+        onMouseDown={(event) => {
+          if (isClaimedSelectionClick(event)) event.preventDefault();
+        }}
+        onChange={(event) => setEmojiDraft(event.target.value)}
+        onBlur={() => {
+          const next = (emojiDraft ?? committedEmoji).trim();
+          setEmojiDraft(null);
+          if (!next || next === (editing.getProp("emoji") ?? DEFAULT_CALLOUT_EMOJI)) return;
+          editing.setProp("emoji", next);
+        }}
+      />
+      <div className={CALLOUT_BODY_CLASS}>
+        <MarkdownContent blockId={blockId} />
       </div>
-      <MarkdownContent blockId={blockId} />
+      <div className="mt-0.5 shrink-0">
+        <Label className={SCREEN_READER_CLASS} htmlFor={variantId}>Variant</Label>
+        <NativeSelect
+          id={variantId}
+          size="sm"
+          className={CALLOUT_VARIANT_CONTROL_CLASS}
+          value={variant}
+          onMouseDown={(event) => {
+            if (isClaimedSelectionClick(event)) event.preventDefault();
+          }}
+          onChange={(event) => {
+            const next = event.target.value;
+            if (isCalloutVariant(next)) editing.setProp("variant", next);
+          }}
+        >
+          {CALLOUT_VARIANTS.map((option) => (
+            <NativeSelectOption key={option} value={option}>{CALLOUT_VARIANT_LABELS[option]}</NativeSelectOption>
+          ))}
+        </NativeSelect>
+      </div>
     </div>
   );
 }
@@ -405,31 +420,35 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
 
   return (
     <div className={BOOKMARK_CLASS}>
-      <MarkdownContent blockId={blockId} />
-      <div className={BOOKMARK_FIELD_CLASS}>
-        <Label htmlFor={descriptionId}>Description</Label>
-        <Textarea
-          id={descriptionId}
-          rows={2}
-          value={description}
-          onFocus={() => setDescriptionDraft(editing.getProp("description") ?? "")}
-          onChange={(event) => setDescriptionDraft(event.target.value)}
-          onBlur={() => {
-            const next = descriptionDraft ?? (editing.getProp("description") ?? "");
-            setDescriptionDraft(null);
-            if (next !== (editing.getProp("description") ?? "")) editing.setProp("description", next);
-          }}
-        />
+      <div className={BOOKMARK_TITLE_CLASS}>
+        <MarkdownContent blockId={blockId} />
       </div>
-      {showUrlForm ? (
-        <form className={BOOKMARK_FORM_CLASS} noValidate onSubmit={submitUrl}>
-          <div className={BOOKMARK_FIELD_CLASS}>
-            <Label htmlFor={urlId}>URL</Label>
+      <Label className={SCREEN_READER_CLASS} htmlFor={descriptionId}>Description</Label>
+      <Textarea
+        id={descriptionId}
+        className={BOOKMARK_DESCRIPTION_CLASS}
+        rows={1}
+        value={description}
+        placeholder="Add a description"
+        onFocus={() => setDescriptionDraft(editing.getProp("description") ?? "")}
+        onChange={(event) => setDescriptionDraft(event.target.value)}
+        onBlur={() => {
+          const next = descriptionDraft ?? (editing.getProp("description") ?? "");
+          setDescriptionDraft(null);
+          if (next !== (editing.getProp("description") ?? "")) editing.setProp("description", next);
+        }}
+      />
+      <div className={BOOKMARK_RULE_CLASS}>
+        {showUrlForm ? (
+          <form className={BOOKMARK_FORM_CLASS} noValidate onSubmit={submitUrl}>
+            <Label className={SCREEN_READER_CLASS} htmlFor={urlId}>URL</Label>
             <Input
               id={urlId}
+              className={BOOKMARK_URL_CLASS}
               type="text"
               inputMode="url"
               value={urlDraft}
+              placeholder="https://example.com"
               aria-invalid={urlError ? true : undefined}
               aria-describedby={urlError ? urlErrorId : undefined}
               onChange={(event) => {
@@ -437,8 +456,6 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
                 if (urlError) setUrlError(null);
               }}
             />
-          </div>
-          <div className={BOOKMARK_ACTIONS_CLASS}>
             <Button
               type="submit"
               size="sm"
@@ -451,7 +468,7 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
             {committedUrl ? (
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={(event) => {
                   if (isClaimedSelectionClick(event)) return;
@@ -463,38 +480,38 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
                 Cancel
               </Button>
             ) : null}
-          </div>
-          {urlError ? <p id={urlErrorId} className={`${MESSAGE_CLASS} basis-full`} role="alert">{urlError}</p> : null}
-        </form>
-      ) : (
-        <div className={BOOKMARK_ACTIONS_CLASS}>
-          <Button variant="link" size="sm" asChild className={BOOKMARK_LINK_CLASS}>
-            <a
-              href={committedUrl}
-              target="_blank"
-              rel="noreferrer"
+            {urlError ? <p id={urlErrorId} className={`${MESSAGE_CLASS} basis-full`} role="alert">{urlError}</p> : null}
+          </form>
+        ) : (
+          <div className={BOOKMARK_ACTIONS_CLASS}>
+            <Button variant="link" size="sm" asChild className={BOOKMARK_LINK_CLASS}>
+              <a
+                href={committedUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => {
+                  if (isClaimedSelectionClick(event)) event.preventDefault();
+                }}
+              >
+                {committedUrl}
+              </a>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
               onClick={(event) => {
-                if (isClaimedSelectionClick(event)) event.preventDefault();
+                if (isClaimedSelectionClick(event)) return;
+                setUrlDraft(editing.getProp("url") ?? "");
+                setUrlError(null);
+                setEditingUrl(true);
               }}
             >
-              {committedUrl}
-            </a>
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={(event) => {
-              if (isClaimedSelectionClick(event)) return;
-              setUrlDraft(editing.getProp("url") ?? "");
-              setUrlError(null);
-              setEditingUrl(true);
-            }}
-          >
-            Change URL
-          </Button>
-        </div>
-      )}
+              Change URL
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -518,7 +535,11 @@ function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
   );
   if (!editing.block) return null;
   return (
-    <div {...editing.attributes} className={TOC_CLASS}>
+    <div
+      {...editing.attributes}
+      className={TOC_CLASS}
+      style={{ borderLeftWidth: ACCENT_RULE_WIDTH, borderLeftStyle: "solid", borderLeftColor: "var(--rivto-primary)" }}
+    >
       <nav aria-label="Table of contents">
         {entries.length === 0 ? <p className={QUIET_CLASS}>No headings</p> : (
           <ol className={TOC_LIST_CLASS}>
@@ -567,6 +588,14 @@ function MathEquationBlock({ blockId }: { readonly blockId: string }) {
   const empty = source.trim() === "";
   return (
     <div className={MATH_CLASS}>
+      <div className={MATH_PREVIEW_CLASS} data-math-preview="" aria-label="Equation preview">
+        {empty ? <p className={QUIET_CLASS}>Equation preview</p> : (
+          <>
+            {rendered.html ? <div dangerouslySetInnerHTML={{ __html: rendered.html }} /> : null}
+            {rendered.invalid ? <p className={`${MESSAGE_CLASS} mt-2`} role="alert">Invalid formula</p> : null}
+          </>
+        )}
+      </div>
       <div
         {...editing.attributes}
         className={`${PAGE_BLOCK_CONTENT_CLASS} ${MATH_SOURCE_CLASS}`}
@@ -575,14 +604,6 @@ function MathEquationBlock({ blockId }: { readonly blockId: string }) {
         aria-multiline="true"
         spellCheck={false}
       />
-      <div className={MATH_PREVIEW_CLASS} data-math-preview="" aria-label="Equation preview">
-        {empty ? <p className={QUIET_CLASS}>Equation preview</p> : (
-          <>
-            {rendered.html ? <div dangerouslySetInnerHTML={{ __html: rendered.html }} /> : null}
-            {rendered.invalid ? <p className={MESSAGE_CLASS} role="alert">Invalid formula</p> : null}
-          </>
-        )}
-      </div>
     </div>
   );
 }
