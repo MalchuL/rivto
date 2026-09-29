@@ -214,8 +214,9 @@ function previewTableColumnWidth(reactEditor: ReactEditor, tableId: string, colu
   const root = reactEditor.events.getRoot();
   if (!root) return;
   tableColumnCells(reactEditor, tableId, column).forEach((cellId) => {
-    root.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(cellId)}"]`)
-      ?.style.setProperty(COLUMN_WIDTH_PROPERTY, `${columnWidth(width)}px`);
+    root.querySelectorAll<HTMLElement>(`[data-block-id="${CSS.escape(cellId)}"]`).forEach((cell) => {
+      cell.style.setProperty(COLUMN_WIDTH_PROPERTY, `${columnWidth(width)}px`);
+    });
   });
 }
 

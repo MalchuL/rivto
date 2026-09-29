@@ -7,7 +7,15 @@
  *
  * @module
  */
-import { memo, useCallback, useSyncExternalStore, type ComponentType } from "react";
+import {
+  createContext,
+  memo,
+  useCallback,
+  useContext,
+  useSyncExternalStore,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { BLOCK_ROW_CLASS } from "../../constants";
 import { useBlockNode, useBlockSelected, useReactEditor } from "../../hooks";
 import {
@@ -21,6 +29,24 @@ import { UnknownBlock } from "../unknown-block/unknown-block";
 import { BlockSlots } from "../owner-slots/owner-slots";
 
 const BLOCK_CONTENT_FLOW_CLASS = "rivto-block-content-flow";
+
+/**
+ * True while rendering an embed's live copy of another block.
+ *
+ * The copy must not reuse `block-children-*` element ids. Those ids belong to
+ * the canonical tree so collapse controls and `getElementById` stay unique.
+ */
+const BlockTreeMirrorContext = createContext(false);
+
+/**
+ * Renders a nested block tree as an embed mirror.
+ *
+ * @param props - Mirror contents, normally one `BlockTree`.
+ * @returns A context boundary with no DOM element.
+ */
+export function BlockTreeMirrorScope({ children }: { readonly children: ReactNode }) {
+  return <BlockTreeMirrorContext.Provider value={true}>{children}</BlockTreeMirrorContext.Provider>;
+}
 
 /** Root block IDs rendered by the shared recursive block tree. */
 export interface BlockTreeProps {
@@ -73,10 +99,11 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
     () => reactEditor.renderers.revision,
   );
 
+  const mirrored = useContext(BlockTreeMirrorContext);
   if (!block) return null;
   const childIds = block.childIds;
   const Content = reactEditor.renderers.get(block.type) ?? UnknownBlock;
-  const childrenId = `block-children-${block.id}`;
+  const childrenId = mirrored ? undefined : `block-children-${block.id}`;
   const collapseActive = reactEditor.blockListProps.has("collapse");
 
   return (

@@ -33,6 +33,7 @@
 @import "../blocks/block-slot-controls/block-slot-controls.css" layer(components);
 @import "../blocks/block-modal/block-modal.css" layer(components);
 @import "../blocks/markdown/markdown.css" layer(components);
+@import "../extensions/built-ins/embed/embed-block.css" layer(components);
 
 /* Optional page interaction extensions. */
 @import "../extensions/block-drag/block-drag.css" layer(components);

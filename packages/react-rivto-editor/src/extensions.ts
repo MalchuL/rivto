@@ -13,6 +13,7 @@ export * from "./extensions/block-drag";
 export * from "./extensions/bullet-threading/bullet-threading";
 export * from "./extensions/edgeless";
 export * from "./extensions/built-ins/separator/separator-block";
+export * from "./extensions/built-ins/embed/embed-block";
 export * from "./extensions/todo-item/todo-item";
 export {
   DEFAULT_WRITING_BLOCK_TYPE,

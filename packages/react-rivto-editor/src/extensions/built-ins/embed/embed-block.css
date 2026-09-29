@@ -1,0 +1,67 @@
+/*
+ * Embed frame geometry and the hover-only reference control.
+ *
+ * The frame is drawn inside the embed shell, which is already padded, and the
+ * mirrored block pads itself again. That second inset shifts the copy off the
+ * original. The negative margin and matching width put the rounded frame on
+ * the shell's border box; the mirror keeps its own padding, so its text lands
+ * on the same inset as the source. An inset shadow draws the border without
+ * adding a pixel of layout offset.
+ *
+ * Descendant selectors cancel the mirrored block's outer margin and the
+ * page-wide row hover slab; utilities on the frame cannot reach those
+ * generated elements. The pen stays hidden until the pointer or keyboard is
+ * on the embed block.
+ */
+.rivto-embed-frame {
+  width: calc(100% + (2 * var(--rivto-block-padding-inline)));
+  margin: calc(-1 * var(--rivto-block-padding-block)) calc(-1 * var(--rivto-block-padding-inline));
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border-radius: var(--rivto-radius);
+  background: var(--rivto-embed-background);
+  box-shadow: inset 0 0 0 1px var(--rivto-border);
+}
+
+.rivto-embed-error,
+.rivto-embed-reference {
+  padding: var(--rivto-block-padding-block) var(--rivto-block-padding-inline);
+}
+
+[data-rivto-embed-mirror] {
+  margin: 0;
+  padding: 0;
+}
+
+[data-rivto-embed-mirror] > .page-block {
+  margin: 0;
+}
+
+/* The mirrored row repeats the target's end slot. Keeping it in flow would
+   narrow the copy a second time, beside the embed shell's own end slot. */
+[data-rivto-embed-mirror] .rivto-slot[data-slot-owner="block"][data-slot-position="end"] {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+}
+
+[data-rivto-embed-mirror] .page-block-row::before {
+  inset: 0;
+}
+
+[data-rivto-embed-mirror] .page-drag-handle {
+  display: none;
+}
+
+[data-block-type="embed"] > .page-block-row .rivto-embed-edit {
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-block-type="embed"]:hover > .page-block-row .rivto-embed-edit,
+[data-block-type="embed"]:focus-within > .page-block-row .rivto-embed-edit {
+  opacity: 1;
+  pointer-events: auto;
+}

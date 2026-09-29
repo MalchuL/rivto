@@ -159,6 +159,10 @@ body { margin: 0; }
   background: var(--rivto-accent);
 }
 
+[data-rivto-embed-mirror] .demo-block-id {
+  display: none;
+}
+
 .rivto-slot > .demo-block-id {
   padding-left: 12px;
   color: #999;

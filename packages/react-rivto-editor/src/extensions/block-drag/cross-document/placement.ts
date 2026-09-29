@@ -1,4 +1,5 @@
 /** Canonical destination resolution for cross-document page drops. */
+import { canonicalBlockElements } from "../../../managers";
 import type { CrossDocumentBlockTransferPlacement } from "../../built-ins/clipboard/cross-document-block-transfer";
 import type { ReactEditor } from "../../../types";
 import {
@@ -21,7 +22,7 @@ export function resolveCrossDocumentPageRootPlacement(
   gapDropZone: number,
   allowChildPlacement: boolean,
 ): (CrossDocumentBlockTransferPlacement & { readonly indicator: DropPlacement | null }) | null {
-  const rows = [...root.querySelectorAll<HTMLElement>("[data-block-id]")].flatMap((block) => {
+  const rows = canonicalBlockElements(root).flatMap((block) => {
     const row = block.querySelector<HTMLElement>(PAGE_BLOCK_ROW_SELECTOR);
     const id = block.dataset.blockId;
     return row && id ? [{ id, rect: row.getBoundingClientRect() }] : [];
@@ -32,7 +33,7 @@ export function resolveCrossDocumentPageRootPlacement(
   } else {
     const row = closestPageRow(rows, y);
     if (row) {
-      const targetElement = root.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(row.id)}"]`);
+      const targetElement = canonicalBlockElements(root).find((block) => block.dataset.blockId === row.id);
       const parentId = targetElement?.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR)?.dataset.blockId;
       const parentOptions = resolveBlockDropPlacementOptions(
         childDropIndent,

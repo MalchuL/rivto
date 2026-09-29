@@ -21,6 +21,8 @@ import {
   KANBAN_BLOCK_TYPE,
   pageDragExtension,
   bulletThreadingExtension,
+  EMBED_BLOCK_TYPE,
+  embedBlockContent,
   SEPARATOR_BLOCK_TYPE,
   standardPreset,
   TABLE_BLOCK_TYPE,
@@ -300,11 +302,19 @@ function createDemoEditor() {
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "This paragraph renders *Markdown*, ~~old text~~, and `inline code` when it is not edited.",
   }, introId).id;
+  const embeddedParagraphId = editor.blocks.insertBlock({
+    type: EMBED_BLOCK_TYPE,
+    content: embedBlockContent(paragraphId),
+  }, paragraphId).id;
+  const missingEmbedId = editor.blocks.insertBlock({
+    type: EMBED_BLOCK_TYPE,
+    content: embedBlockContent("missing-block"),
+  }, embeddedParagraphId).id;
 
   const selectionStartId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Start a selection in the middle of this sentence and drag downward. See [Rivto](https://example.com).",
-  }, paragraphId).id;
+  }, missingEmbedId).id;
   const middleParagraphId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "This complete **Markdown paragraph** should be included between partial selections.",
