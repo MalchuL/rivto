@@ -6,11 +6,13 @@ import {
 } from "../src/blocks/custom-block-definitions.ts";
 import {
   bookmarkBlockDefinition,
-  calloutBlockDefinition,
   isHttpUrl,
-  mathEquationBlockDefinition,
+  mathBlockDefinition,
+  noteBlockDefinition,
   tableOfContentsBlockDefinition,
-} from "../src/blocks/host-block-definitions.ts";
+  tipBlockDefinition,
+  warningBlockDefinition,
+} from "../src/extensions/host-blocks/definitions.ts";
 
 test("custom block definitions expose defaults and reject invalid properties", () => {
   assert.deepEqual(sliderBlockDefinition.defaultProps, { value: 50 });
@@ -22,25 +24,22 @@ test("custom block definitions expose defaults and reject invalid properties", (
   assert.throws(() => counterBlockDefinition.propSchema.parse({ count: 1.5 }));
 });
 
-test("host block definitions expose defaults and reject invalid callout and URL data", () => {
-  assert.deepEqual(calloutBlockDefinition.defaultProps, { variant: "note", emoji: "💡" });
+test("host block definitions expose defaults and reject invalid admonition and URL data", () => {
+  assert.deepEqual(noteBlockDefinition.defaultProps, { emoji: "💡" });
+  assert.deepEqual(tipBlockDefinition.defaultProps, { emoji: "✅" });
+  assert.deepEqual(warningBlockDefinition.defaultProps, { emoji: "⚠️" });
+  assert.notEqual(noteBlockDefinition.type, tipBlockDefinition.type);
+  assert.notEqual(tipBlockDefinition.type, warningBlockDefinition.type);
+  assert.equal(noteBlockDefinition.type, "demo.note");
+  assert.equal(tipBlockDefinition.type, "demo.tip");
+  assert.equal(warningBlockDefinition.type, "demo.warning");
   assert.deepEqual(bookmarkBlockDefinition.defaultProps, { url: "", description: "" });
   assert.deepEqual(tableOfContentsBlockDefinition.defaultProps, {});
-  assert.deepEqual(mathEquationBlockDefinition.defaultProps, {});
-  assert.deepEqual(
-    calloutBlockDefinition.propSchema.parse(calloutBlockDefinition.defaultProps),
-    { variant: "note", emoji: "💡" },
-  );
-  assert.deepEqual(calloutBlockDefinition.propSchema.parse({ variant: "tip", emoji: "✅" }), {
-    variant: "tip",
-    emoji: "✅",
-  });
-  assert.deepEqual(calloutBlockDefinition.propSchema.parse({ variant: "warning", emoji: "⚠️" }), {
-    variant: "warning",
-    emoji: "⚠️",
-  });
-  assert.throws(() => calloutBlockDefinition.propSchema.parse({ variant: "danger", emoji: "💡" }));
-  assert.throws(() => calloutBlockDefinition.propSchema.parse({ variant: "note", emoji: "" }));
+  assert.deepEqual(mathBlockDefinition.defaultProps, {});
+  assert.deepEqual(noteBlockDefinition.propSchema.parse({ emoji: "🔥" }), { emoji: "🔥" });
+  assert.throws(() => noteBlockDefinition.propSchema.parse({ emoji: "" }));
+  assert.throws(() => tipBlockDefinition.propSchema.parse({ emoji: "💡", variant: "tip" }));
+  assert.throws(() => warningBlockDefinition.propSchema.parse({ variant: "warning", emoji: "⚠️" }));
 
   assert.equal(isHttpUrl("https://example.com/docs"), true);
   assert.equal(isHttpUrl("http://localhost:3000"), true);

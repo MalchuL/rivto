@@ -1,5 +1,5 @@
 /**
- * Derives table-of-contents entries from writing and callout Markdown.
+ * Derives table-of-contents entries from writing and admonition Markdown.
  *
  * Entries are computed from the live document. Nothing in this module writes
  * a heading cache back onto the table-of-contents block.
@@ -17,17 +17,21 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 export const TOC_WRITING_BLOCK_TYPE = "paragraph";
 
 /**
- * Callout block type whose Markdown body also contributes headings.
+ * Admonition block types whose Markdown bodies also contribute headings.
  *
- * Kept as a literal for the same reason as {@link TOC_WRITING_BLOCK_TYPE}.
- * It matches `CALLOUT_BLOCK_TYPE`.
+ * Kept as literals so this module does not import the definition file.
+ * They match the note, tip, and warning block types.
  */
-export const TOC_CALLOUT_BLOCK_TYPE = "demo.callout";
+export const TOC_NOTE_BLOCK_TYPE = "demo.note";
+export const TOC_TIP_BLOCK_TYPE = "demo.tip";
+export const TOC_WARNING_BLOCK_TYPE = "demo.warning";
 
 /** Block types whose Markdown bodies contribute headings. */
 export const TOC_HEADING_BLOCK_TYPES: readonly string[] = [
   TOC_WRITING_BLOCK_TYPE,
-  TOC_CALLOUT_BLOCK_TYPE,
+  TOC_NOTE_BLOCK_TYPE,
+  TOC_TIP_BLOCK_TYPE,
+  TOC_WARNING_BLOCK_TYPE,
 ];
 
 const HEADING_BLOCK_TYPES = new Set(TOC_HEADING_BLOCK_TYPES);
@@ -107,7 +111,7 @@ function inlineText(node: MarkdownNode): string {
  * become code nodes and never appear as headings. Repeated heading text is
  * preserved because each heading node becomes its own entry.
  *
- * @param markdown - Raw Markdown stored on one writing or callout block.
+ * @param markdown - Raw Markdown stored on one writing or admonition block.
  * @returns Headings in the order they appear in that body.
  */
 export function extractMarkdownHeadings(markdown: string): readonly { depth: number; text: string }[] {

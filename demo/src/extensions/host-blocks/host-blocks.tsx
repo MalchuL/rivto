@@ -1,13 +1,13 @@
 /**
- * Demo extensions for callout, bookmark, table of contents, and math equation.
+ * Demo extensions for note, tip, warning, bookmark, table of contents, and math.
  *
  * Each factory registers one block through the public `blockExtension` API and
  * a portable clipboard formatter. The shared block shell still owns selection,
- * drag, and child layout.
+ * drag, and child layout. Note, tip, and warning are separate block types, each
+ * with its own slash command.
  *
  * @module
  */
-import katex, { type KatexOptions } from "katex";
 import {
   BLOCK_ID_ATTRIBUTE,
   MarkdownContent,
@@ -29,59 +29,36 @@ import {
   type FormEvent,
   type MouseEvent,
 } from "react";
-import { Button } from "../../../packages/react-rivto-editor/src/components/ui/button";
-import { Input } from "../../../packages/react-rivto-editor/src/components/ui/input";
-import { Label } from "../../../packages/react-rivto-editor/src/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "../../../packages/react-rivto-editor/src/components/ui/native-select";
-import { Textarea } from "../../../packages/react-rivto-editor/src/components/ui/textarea";
+import { Badge } from "../../../../packages/react-rivto-editor/src/components/ui/badge";
+import { Button } from "../../../../packages/react-rivto-editor/src/components/ui/button";
+import { Input } from "../../../../packages/react-rivto-editor/src/components/ui/input";
+import { Label } from "../../../../packages/react-rivto-editor/src/components/ui/label";
+import { Textarea } from "../../../../packages/react-rivto-editor/src/components/ui/textarea";
 import {
+  ADMONITION_BLOCK_TYPE,
+  ADMONITION_DEFAULT_EMOJI,
+  ADMONITION_LABELS,
   BOOKMARK_BLOCK_TYPE,
-  CALLOUT_BLOCK_TYPE,
-  CALLOUT_VARIANT_LABELS,
-  CALLOUT_VARIANTS,
-  DEFAULT_CALLOUT_EMOJI,
-  DEFAULT_CALLOUT_VARIANT,
-  MATH_EQUATION_BLOCK_TYPE,
+  MATH_BLOCK_TYPE,
   TABLE_OF_CONTENTS_BLOCK_TYPE,
+  admonitionTone,
   bookmarkBlockDefinition,
-  calloutBlockDefinition,
-  isCalloutVariant,
   isHttpUrl,
-  mathEquationBlockDefinition,
+  mathBlockDefinition,
+  noteBlockDefinition,
   tableOfContentsBlockDefinition,
+  tipBlockDefinition,
+  warningBlockDefinition,
+  type AdmonitionProps,
+  type AdmonitionTone,
   type BookmarkProps,
-  type CalloutProps,
-  type CalloutVariant,
-} from "./host-block-definitions";
+} from "./definitions";
+import { evaluateMathSource } from "./math-value";
 import {
   collectTocEntries,
   isTocConversionAvailable,
   type TocDocumentView,
   type TocEntry,
-} from "./toc-entries";
-import "katex/dist/katex.min.css";
-import "./host-blocks.css";
-
-export {
-  BOOKMARK_BLOCK_TYPE,
-  CALLOUT_BLOCK_TYPE,
-  CALLOUT_VARIANTS,
-  DEFAULT_CALLOUT_EMOJI,
-  DEFAULT_CALLOUT_VARIANT,
-  MATH_EQUATION_BLOCK_TYPE,
-  TABLE_OF_CONTENTS_BLOCK_TYPE,
-  bookmarkBlockDefinition,
-  calloutBlockDefinition,
-  isHttpUrl,
-  mathEquationBlockDefinition,
-  tableOfContentsBlockDefinition,
-} from "./host-block-definitions";
-export {
-  TOC_HEADING_BLOCK_TYPES,
-  TOC_WRITING_BLOCK_TYPE,
-  collectTocEntries,
-  extractMarkdownHeadings,
-  isTocConversionAvailable,
 } from "./toc-entries";
 
 const BLOCK_FRAME_CLASS = "box-border w-full min-w-0 max-w-full";
@@ -89,20 +66,30 @@ const SCREEN_READER_CLASS = "sr-only";
 /** Left accent drawn inline so it wins over the shared `border` shorthand. */
 const ACCENT_RULE_WIDTH = 3;
 
-const CALLOUT_ACCENT: Record<CalloutVariant, string> = {
+const ADMONITION_ACCENT: Record<AdmonitionTone, string> = {
   note: "var(--rivto-primary)",
   tip: "var(--rivto-subtle-foreground)",
   warning: "var(--rivto-destructive)",
 };
-const CALLOUT_CLASS = `demo-callout ${BLOCK_FRAME_CLASS} flex items-start gap-2 rounded-lg border border-solid py-2 pr-2 pl-3`;
-const CALLOUT_VARIANT_CLASS: Record<CalloutVariant, string> = {
+const ADMONITION_CLASS = `demo-callout ${BLOCK_FRAME_CLASS} flex items-start gap-2 rounded-lg border border-solid py-2 pr-2 pl-3`;
+const ADMONITION_SURFACE_CLASS: Record<AdmonitionTone, string> = {
   note: "border-primary/20 bg-muted/70",
   tip: "border-primary/15 bg-accent/60",
   warning: "border-destructive/25 bg-destructive/10",
 };
-const CALLOUT_EMOJI_CLASS = "demo-callout-emoji mt-0.5 size-8 shrink-0 rounded-md border-border/80 bg-background/80 px-0 text-center text-base shadow-none";
-const CALLOUT_BODY_CLASS = "demo-callout-body min-w-0 flex-1 text-foreground";
-const CALLOUT_VARIANT_CONTROL_CLASS = "demo-callout-variant h-7 w-24 rounded-full border-transparent bg-background/70 px-2.5 pr-7 text-left text-xs font-medium text-muted-foreground shadow-none";
+const ADMONITION_EMOJI_CLASS = "demo-callout-emoji mt-0.5 size-8 shrink-0 rounded-md border-border/80 bg-background/80 px-0 text-center text-base shadow-none";
+const ADMONITION_BODY_CLASS = "demo-callout-body min-w-0 flex-1 text-foreground";
+const ADMONITION_BADGE_CLASS = "demo-callout-tone mt-0.5 shrink-0";
+const ADMONITION_DEFINITION = {
+  note: noteBlockDefinition,
+  tip: tipBlockDefinition,
+  warning: warningBlockDefinition,
+} as const;
+const ADMONITION_KEYWORDS: Record<AdmonitionTone, readonly string[]> = {
+  note: ["note", "info"],
+  tip: ["tip", "hint"],
+  warning: ["warning", "caution", "alert"],
+};
 const BOOKMARK_CLASS = `demo-bookmark ${BLOCK_FRAME_CLASS} flex flex-col gap-1 rounded-lg border border-solid border-border bg-card px-3 py-2.5 shadow-xs`;
 const BOOKMARK_TITLE_CLASS = "demo-bookmark-title min-w-0 text-base font-semibold leading-snug text-foreground";
 const BOOKMARK_DESCRIPTION_CLASS = "demo-bookmark-description min-h-(--rivto-default-block-height) resize-none border-transparent bg-transparent px-0 py-0 text-sm leading-relaxed text-muted-foreground shadow-none placeholder:text-muted-foreground/80";
@@ -117,35 +104,10 @@ const TOC_CLASS = `demo-toc ${BLOCK_FRAME_CLASS} min-h-(--rivto-default-block-he
 const TOC_LIST_CLASS = "demo-toc-list m-0 list-none p-0";
 const TOC_ENTRY_CLASS = "demo-toc-entry";
 const TOC_BUTTON_CLASS = "h-auto w-full justify-start rounded-md px-1.5 py-1 text-left text-sm font-normal text-foreground";
-const MATH_CLASS = `demo-math ${BLOCK_FRAME_CLASS} overflow-hidden rounded-lg border border-solid border-border bg-card`;
-const MATH_PREVIEW_CLASS = "demo-math-preview min-w-0 max-w-full overflow-x-auto bg-muted/50 px-4 py-5 text-center text-foreground";
-const MATH_SOURCE_CLASS = "demo-math-source box-border w-full min-w-0 border-t border-solid border-border bg-background px-3 py-1.5 font-mono text-sm text-muted-foreground";
+const MATH_CLASS = `demo-math ${BLOCK_FRAME_CLASS} flex items-stretch overflow-hidden rounded-lg border border-solid border-border bg-card`;
+const MATH_SOURCE_CLASS = "demo-math-source min-h-[4.5em] min-w-0 flex-1 border-r border-solid border-border bg-background px-3 py-2 font-mono text-sm";
+const MATH_VALUE_CLASS = "demo-math-value flex w-40 max-w-[40%] shrink-0 items-center justify-end bg-muted/50 px-3 py-2 text-right font-mono text-sm break-words";
 const PAGE_BLOCK_CONTENT_CLASS = "page-block-content";
-
-/** KaTeX options fixed by the host contract. `trust` stays off so commands cannot inject HTML. */
-const MATH_RENDER_OPTIONS = {
-  displayMode: true,
-  throwOnError: false,
-  trust: false,
-} as const satisfies KatexOptions;
-
-/**
- * Renders one display equation with KaTeX.
- *
- * Invalid formulas return the library's error markup instead of throwing, so
- * the source field can stay mounted. The returned HTML is used as-is.
- *
- * @param source - LaTeX stored on the block.
- * @returns Library HTML and whether that HTML reports a parse error.
- */
-function renderEquation(source: string): { html: string; invalid: boolean } {
-  try {
-    const html = katex.renderToString(source, MATH_RENDER_OPTIONS);
-    return { html, invalid: html.includes("katex-error") };
-  } catch {
-    return { html: "", invalid: true };
-  }
-}
 
 /** Escapes text that will be placed in a portable HTML clipboard flavor. */
 function escapeHtml(value: string): string {
@@ -259,9 +221,9 @@ function navigateToTocEntry(reactEditor: ReactEditor, blockId: string): void {
   });
 }
 
-/** Quotes callout content as a GitHub-style alert, including its emoji. */
-function calloutMarkdown(variant: CalloutVariant, emoji: string, content: string): string {
-  const label = variant.toUpperCase();
+/** Quotes admonition content as a GitHub-style alert, including its emoji. */
+function admonitionMarkdown(tone: AdmonitionTone, emoji: string, content: string): string {
+  const label = tone.toUpperCase();
   const lines = content.length > 0 ? content.split("\n") : [""];
   const quoted = lines.map((line, index) => (
     index === 0 ? `> ${emoji} ${line}`.trimEnd() : `> ${line}`
@@ -286,9 +248,12 @@ function tocMarkdown(entries: readonly TocEntry[]): string {
   }).join("\n");
 }
 
-/** Wraps a display equation in `$$` fences. */
-function mathFence(content: string): string {
-  return `$$\n${content}\n$$`;
+/** Renders a math source plus its evaluated value when evaluation succeeds. */
+function mathMarkdown(content: string): string {
+  const evaluated = evaluateMathSource(content);
+  if (!evaluated.value) return content;
+  if (!content) return `= ${evaluated.value}`;
+  return `${content}\n\n= ${evaluated.value}`;
 }
 
 /**
@@ -311,28 +276,29 @@ function registerHostBlock(
 /**
  * Editable Markdown inside a note, tip, or warning box.
  *
- * @param blockId - Stable callout block ID.
- * @returns The tone controls and Markdown body, or null after deletion.
+ * The tone comes from the block type. Slash commands create each type on its own.
+ *
+ * @param blockId - Stable admonition block ID.
+ * @returns The emoji, Markdown body, and tone badge, or null after deletion.
  */
-function CalloutBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<CalloutProps>(blockId);
-  const variantId = useId();
+function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
+  const editing = useBlockEditing<AdmonitionProps>(blockId);
   const emojiId = useId();
-  const committedEmoji = editing.getProp("emoji") ?? DEFAULT_CALLOUT_EMOJI;
+  const tone = admonitionTone(editing.block?.type ?? "") ?? "note";
+  const committedEmoji = editing.getProp("emoji") ?? ADMONITION_DEFAULT_EMOJI[tone];
   const [emojiDraft, setEmojiDraft] = useState<string | null>(null);
   if (!editing.block) return null;
-  const variant = editing.getProp("variant") ?? DEFAULT_CALLOUT_VARIANT;
   const emoji = emojiDraft ?? committedEmoji;
   return (
     <div
-      className={`${CALLOUT_CLASS} ${CALLOUT_VARIANT_CLASS[variant]}`}
-      data-callout-variant={variant}
-      style={{ borderLeftWidth: ACCENT_RULE_WIDTH, borderLeftColor: CALLOUT_ACCENT[variant] }}
+      className={`${ADMONITION_CLASS} ${ADMONITION_SURFACE_CLASS[tone]}`}
+      data-callout-tone={tone}
+      style={{ borderLeftWidth: ACCENT_RULE_WIDTH, borderLeftColor: ADMONITION_ACCENT[tone] }}
     >
       <Label className={SCREEN_READER_CLASS} htmlFor={emojiId}>Emoji</Label>
       <Input
         id={emojiId}
-        className={CALLOUT_EMOJI_CLASS}
+        className={ADMONITION_EMOJI_CLASS}
         type="text"
         value={emoji}
         maxLength={32}
@@ -344,33 +310,14 @@ function CalloutBlock({ blockId }: { readonly blockId: string }) {
         onBlur={() => {
           const next = (emojiDraft ?? committedEmoji).trim();
           setEmojiDraft(null);
-          if (!next || next === (editing.getProp("emoji") ?? DEFAULT_CALLOUT_EMOJI)) return;
+          if (!next || next === (editing.getProp("emoji") ?? ADMONITION_DEFAULT_EMOJI[tone])) return;
           editing.setProp("emoji", next);
         }}
       />
-      <div className={CALLOUT_BODY_CLASS}>
+      <div className={ADMONITION_BODY_CLASS}>
         <MarkdownContent blockId={blockId} />
       </div>
-      <div className="mt-0.5 shrink-0">
-        <Label className={SCREEN_READER_CLASS} htmlFor={variantId}>Variant</Label>
-        <NativeSelect
-          id={variantId}
-          size="sm"
-          className={CALLOUT_VARIANT_CONTROL_CLASS}
-          value={variant}
-          onMouseDown={(event) => {
-            if (isClaimedSelectionClick(event)) event.preventDefault();
-          }}
-          onChange={(event) => {
-            const next = event.target.value;
-            if (isCalloutVariant(next)) editing.setProp("variant", next);
-          }}
-        >
-          {CALLOUT_VARIANTS.map((option) => (
-            <NativeSelectOption key={option} value={option}>{CALLOUT_VARIANT_LABELS[option]}</NativeSelectOption>
-          ))}
-        </NativeSelect>
-      </div>
+      <Badge variant="outline" className={ADMONITION_BADGE_CLASS}>{ADMONITION_LABELS[tone]}</Badge>
     </div>
   );
 }
@@ -573,68 +520,67 @@ function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
 }
 
 /**
- * Editable LaTeX source with a display-mode KaTeX preview.
+ * Multiline mathjs source with the evaluated value on the right.
  *
- * Parse errors stay in the source and are shown from KaTeX's own markup.
+ * Lines share one scope, so a later line can use a name assigned above.
+ * Invalid lines stay in the editor and show the library message in the value column.
  *
- * @param blockId - Stable math equation block ID.
- * @returns The source editor and preview, or null after deletion.
+ * @param blockId - Stable math block ID.
+ * @returns The source editor and result, or null after deletion.
  */
-function MathEquationBlock({ blockId }: { readonly blockId: string }) {
+function MathBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId);
   const source = editing.block?.content ?? "";
-  const rendered = useMemo(() => renderEquation(source), [source]);
+  const evaluated = useMemo(() => evaluateMathSource(source), [source]);
   if (!editing.block) return null;
-  const empty = source.trim() === "";
   return (
     <div className={MATH_CLASS}>
-      <div className={MATH_PREVIEW_CLASS} data-math-preview="" aria-label="Equation preview">
-        {empty ? <p className={QUIET_CLASS}>Equation preview</p> : (
-          <>
-            {rendered.html ? <div dangerouslySetInnerHTML={{ __html: rendered.html }} /> : null}
-            {rendered.invalid ? <p className={`${MESSAGE_CLASS} mt-2`} role="alert">Invalid formula</p> : null}
-          </>
-        )}
-      </div>
       <div
         {...editing.attributes}
         className={`${PAGE_BLOCK_CONTENT_CLASS} ${MATH_SOURCE_CLASS}`}
         role="textbox"
-        aria-label="Equation source"
+        aria-label="Math source"
         aria-multiline="true"
         spellCheck={false}
       />
+      <div className={MATH_VALUE_CLASS} data-math-value="" aria-label="Math result">
+        {evaluated.error ? (
+          <p className={MESSAGE_CLASS} role="alert">{evaluated.error}</p>
+        ) : (
+          <p className="m-0 font-medium text-foreground">{evaluated.value}</p>
+        )}
+      </div>
     </div>
   );
 }
 
 /**
- * Registers the callout block and its quoted Markdown clipboard form.
+ * Registers one admonition type and its quoted Markdown clipboard form.
  *
- * @returns An extension that installs the block wherever it is set up.
+ * @param tone - Note, tip, or warning. Each tone is its own block type.
+ * @returns An extension that installs that type wherever it is set up.
  */
-export function calloutBlockExtension(): ReactEditorExtension {
+function admonitionBlockExtension(tone: AdmonitionTone): ReactEditorExtension {
+  const type = ADMONITION_BLOCK_TYPE[tone];
   return {
-    id: "demo.callout",
+    id: type,
     setup: (reactEditor) => {
       registerHostBlock(reactEditor, {
-        definition: calloutBlockDefinition,
-        render: CalloutBlock,
+        definition: ADMONITION_DEFINITION[tone],
+        render: AdmonitionBlock,
         slashCommand: {
-          title: "Callout",
+          title: ADMONITION_LABELS[tone],
           group: "Turn into",
-          keywords: ["note", "tip", "warning", "admonition"],
+          keywords: [...ADMONITION_KEYWORDS[tone]],
         },
       }, {
-        id: "demo.callout",
-        matches: ({ block }) => block.type === CALLOUT_BLOCK_TYPE,
+        id: type,
+        matches: ({ block }) => block.type === type,
         format: ({ block, depth, children }): PortableBlockFormats => {
-          const rawVariant = String(block.props.variant ?? "");
-          const variant = isCalloutVariant(rawVariant) ? rawVariant : DEFAULT_CALLOUT_VARIANT;
           const emoji = typeof block.props.emoji === "string" && block.props.emoji
             ? block.props.emoji
-            : DEFAULT_CALLOUT_EMOJI;
-          const markdown = indentLines(calloutMarkdown(variant, emoji, block.content), depth);
+            : ADMONITION_DEFAULT_EMOJI[tone];
+          const markdown = indentLines(admonitionMarkdown(tone, emoji, block.content), depth);
           const plain = indentLines(`${emoji} ${block.content}`.trimEnd(), depth);
           const body = escapeHtml(block.content).replace(/\r\n?|\n/g, "<br>");
           return {
@@ -646,6 +592,21 @@ export function calloutBlockExtension(): ReactEditorExtension {
       });
     },
   };
+}
+
+/** @returns The note block extension. Invoke it with `/note`. */
+export function noteBlockExtension(): ReactEditorExtension {
+  return admonitionBlockExtension("note");
+}
+
+/** @returns The tip block extension. Invoke it with `/tip`. */
+export function tipBlockExtension(): ReactEditorExtension {
+  return admonitionBlockExtension("tip");
+}
+
+/** @returns The warning block extension. Invoke it with `/warning`. */
+export function warningBlockExtension(): ReactEditorExtension {
+  return admonitionBlockExtension("warning");
 }
 
 /**
@@ -737,36 +698,54 @@ export function tableOfContentsBlockExtension(): ReactEditorExtension {
 }
 
 /**
- * Registers the math equation block and its fenced display-math clipboard form.
+ * Registers the math block and a clipboard form that includes the evaluated value.
  *
  * @returns An extension that installs the block wherever it is set up.
  */
-export function mathEquationBlockExtension(): ReactEditorExtension {
+export function mathBlockExtension(): ReactEditorExtension {
   return {
-    id: "demo.math-equation",
+    id: "demo.math",
     setup: (reactEditor) => {
       registerHostBlock(reactEditor, {
-        definition: mathEquationBlockDefinition,
-        render: MathEquationBlock,
+        definition: mathBlockDefinition,
+        render: MathBlock,
         slashCommand: {
-          title: "Math equation",
+          title: "Math",
           group: "Turn into",
-          keywords: ["math", "latex", "katex", "formula", "equation"],
+          keywords: ["math", "calculate", "evaluate", "expression"],
         },
       }, {
-        id: "demo.math-equation",
-        matches: ({ block }) => block.type === MATH_EQUATION_BLOCK_TYPE,
+        id: "demo.math",
+        matches: ({ block }) => block.type === MATH_BLOCK_TYPE,
         format: ({ block, depth, children }): PortableBlockFormats => {
-          const fence = indentLines(mathFence(block.content), depth);
-          const rendered = renderEquation(block.content);
-          const html = rendered.html || `<pre>${escapeHtml(block.content)}</pre>`;
+          const evaluated = evaluateMathSource(block.content);
+          const markdown = indentLines(mathMarkdown(block.content), depth);
+          const plain = indentLines(
+            evaluated.value ? `${block.content}\n= ${evaluated.value}` : block.content,
+            depth,
+          );
+          const valueHtml = evaluated.value
+            ? `<p>= ${escapeHtml(evaluated.value)}</p>`
+            : evaluated.error
+              ? `<p>${escapeHtml(evaluated.error)}</p>`
+              : "";
           return {
-            plain: joinPortableText(fence, children.plain),
-            markdown: joinPortableText(fence, children.markdown),
-            html: `${html}${children.html}`,
+            plain: joinPortableText(plain, children.plain),
+            markdown: joinPortableText(markdown, children.markdown),
+            html: `<pre>${escapeHtml(block.content)}</pre>${valueHtml}${children.html}`,
           };
         },
       });
     },
   };
 }
+
+/** Host blocks installed together on every demo editor. */
+export const hostBlockExtensions: readonly ReactEditorExtension[] = [
+  noteBlockExtension(),
+  tipBlockExtension(),
+  warningBlockExtension(),
+  bookmarkBlockExtension(),
+  tableOfContentsBlockExtension(),
+  mathBlockExtension(),
+];
