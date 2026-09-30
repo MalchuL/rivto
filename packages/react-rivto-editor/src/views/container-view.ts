@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { focusBlockLater } from "./ops/focus-ops";
+import { scheduleBlockFocus } from "./ops/focus-ops";
 import { insertFirstChild } from "./ops/outline-ops";
 import { BaseBlockView } from "./base-view";
 import type { BlockViewContext, BlockViewOutcome, DropAxis } from "./types";
@@ -44,7 +44,7 @@ export class ContainerBlockView extends BaseBlockView {
    */
   insertFirstChild(context: BlockViewContext): BlockViewOutcome {
     const child = insertFirstChild(context.reactEditor, context.block.id);
-    focusBlockLater(context.root, child.id, 0);
+    scheduleBlockFocus(context.reactEditor, context.root, child.id, 0);
     return "handled";
   }
 }

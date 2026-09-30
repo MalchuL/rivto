@@ -61,7 +61,8 @@ export function registerListShortcuts(reactEditor: ReactEditor): void {
       reactEditor.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
       reactEditor.selection.set(createCaretSelection(blockId, 0));
     });
-    requestAnimationFrame(() => focusBlock(root, blockId, 0));
+    // Only place the caret and its editing focus; list conversion is already committed.
+    reactEditor.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, 0));
   };
 
   reactEditor.events.register({

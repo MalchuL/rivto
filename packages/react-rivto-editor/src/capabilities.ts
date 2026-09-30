@@ -318,6 +318,18 @@ export interface SelectionCapability {
   isElementSelected(id: string): boolean;
   readDOM(): Selection | undefined;
   restoreDOM(selection?: Selection, options?: RestoreDOMSelectionOptions): boolean;
+  /**
+   * Runs the callback next frame only if the model selection has not changed since scheduling.
+   * Reserve callbacks for caret, DOM selection, and associated editing focus;
+   * each call replaces previous pending work even if selection is unchanged.
+   * Keep document mutations and independent UI operations outside this scheduler.
+   * @param callback - Work to perform next frame while the scheduled selection remains current.
+   * @param onCancel - Optional cleanup when newer state or teardown supersedes the work.
+   * @returns Idempotent cancellation for the pending callback.
+   */
+  scheduleIfSelectionUnchanged(callback: () => void, onCancel?: () => void): () => void;
+  /** Whether the current selection has a pending, still-valid callback in the next frame. */
+  readonly hasPendingSelectionCallback: boolean;
 }
 
 /** Options for rebuilding a portable selection in the live browser DOM. */

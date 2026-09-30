@@ -42,7 +42,8 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
     } else if (blocks) {
       reactEditor.selection.set(blockSelection(outline, activeId, activeId, isCollapsed));
     }
-    requestAnimationFrame(() => {
+    // Only restore selection and its focus after the move; block mutations remain synchronous.
+    reactEditor.selection.scheduleIfSelectionUnchanged(() => {
       if (textLike) reactEditor.selection.restoreDOM(selection);
       else focusBlockSelection(root, activeId);
     });

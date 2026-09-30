@@ -22,4 +22,4 @@ export { createBlockViewContext } from "./context";
 export { dispatchViewAction } from "./dispatch";
 export { indentBlocks, insertFirstChild, outdentBlocks, outdentUntilBoundary } from "./ops/outline-ops";
 export { convertEmptyToList, mergeBlocks, resetToWritingType, splitBlockAt } from "./ops/text-ops";
-export { focusBlockLater, focusCaret } from "./ops/focus-ops";
+export { scheduleBlockFocus, focusCaret } from "./ops/focus-ops";

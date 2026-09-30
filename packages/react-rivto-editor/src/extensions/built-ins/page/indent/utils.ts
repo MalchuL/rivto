@@ -245,7 +245,10 @@ export function applyIndentShortcut(
   // Virtual measurements can settle across several frames for a large moved
   // subtree. Track deliberate scrolling between frames and preserve that
   // movement while compensating only for changes in the anchor's layout.
-  requestAnimationFrame(() => {
+  // This callback owns caret/selection restoration, not the indent mutation. Mounting
+  // endpoints and preserving the viewport support that restoration; unrelated work
+  // must not use this slot because a newer selection callback replaces it.
+  selectionManager.scheduleIfSelectionUnchanged(() => {
     // A newer command owns selection restoration once this settlement is cancelled.
     if (!settlementActive) return;
     // The controller captured before dispatch still indexes the old root list.
@@ -286,6 +289,9 @@ export function applyIndentShortcut(
       }
     };
     stabilize();
+  }, () => {
+    settlement.cancel();
+    if (viewportSettlements.get(root) === settlement) viewportSettlements.delete(root);
   });
   return claimed;
 }

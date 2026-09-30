@@ -62,7 +62,8 @@ export function registerHistory(
   const run = (root: HTMLElement, action: HistoryAction): void => {
     if (!root) return;
     reactEditor.history[action]();
-    requestAnimationFrame(() => {
+    // Only restore selection and its focus here; undo/redo has already changed the document.
+    reactEditor.selection.scheduleIfSelectionUnchanged(() => {
       if (reactEditor.selection.restoreDOM()) return;
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });

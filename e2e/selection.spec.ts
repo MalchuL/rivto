@@ -536,27 +536,58 @@ test("Left and Right preserve native caret movement inside text", async ({ page 
   })).toBe(4);
 });
 
-test("only restores the newest selection when indent commands share a frame", async ({ page }) => {
-  const restored = await page.evaluate(async () => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
-    }).__rivtoDemo.editor;
-    const root = document.querySelector<HTMLElement>("[data-journal-document='today'] [data-rivto-page-editor-root]")!;
-    const ids = editor.blocks.getRootIds().slice(1, 3);
-    root.focus();
-    for (const id of ids) {
-      editor.selection.set({ type: "selection", blocks: [{ id, start: 0, end: -1 }], anchorBlockId: id, focusBlockId: id });
-      root.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
-    }
-    const selections: Array<string | undefined> = [];
-    const unsubscribe = editor.selection.subscribe(() => selections.push(editor.selection.get()?.focusBlockId));
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    unsubscribe();
-    return { stale: selections.includes(ids[0]), focus: editor.selection.get()?.focusBlockId, expected: ids[1] };
+for (const change of ["indent", "select", "clear", "select-and-return"] as const) {
+  test(`preserves a newer ${change} before deferred indent restoration`, async ({ page }) => {
+    const restored = await page.evaluate(async (change) => {
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      }).__rivtoDemo.editor;
+      const root = document.querySelector<HTMLElement>("[data-journal-document='today'] [data-rivto-page-editor-root]")!;
+      const ids = editor.blocks.getRootIds().slice(1, 3);
+      root.focus();
+      for (const [index, id] of ids.entries()) {
+        editor.selection.set({ type: "selection", blocks: [{ id, start: 0, end: -1 }], anchorBlockId: id, focusBlockId: id });
+        if (index === 0 || change === "indent") root.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+      }
+      if (change === "clear") editor.selection.clear();
+      if (change === "select-and-return") editor.selection.set({ type: "selection", blocks: [{ id: ids[0]!, start: 0, end: -1 }], anchorBlockId: ids[0]!, focusBlockId: ids[0]! });
+      const expected = editor.selection.get()?.focusBlockId;
+      const selections: Array<string | undefined> = [];
+      const unsubscribe = editor.selection.subscribe(() => selections.push(editor.selection.get()?.focusBlockId));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      unsubscribe();
+      return { stale: selections.some((id) => id !== expected), focus: editor.selection.get()?.focusBlockId, expected };
+    }, change);
+    expect(restored.stale).toBe(false);
+    expect(restored.focus).toBe(restored.expected);
   });
-  expect(restored.stale).toBe(false);
-  expect(restored.focus).toBe(restored.expected);
-});
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`restores a caret after a transient empty native selection on ${mode}`, async ({ page }) => {
+    if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
+    const result = await page.evaluate(async () => {
+      const { editor, reactEditor } = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi; reactEditor: import("@chulane/rivto-react").ReactEditor };
+      }).__rivtoDemo;
+      const id = editor.blocks.getRootIds()[1]!;
+      editor.selection.set({ type: "selection", blocks: [{ id, start: 1, end: 1 }], anchorBlockId: id, focusBlockId: id });
+      reactEditor.selection.restoreDOM();
+      const content = document.querySelector<HTMLElement>(`[data-block-id="${id}"] [contenteditable]`)!;
+      content.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+      document.getSelection()?.removeAllRanges();
+      document.dispatchEvent(new Event("selectionchange"));
+      const retained = editor.selection.get()?.focusBlockId === id;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      return { retained, focus: editor.selection.get()?.focusBlockId, id,
+        offset: document.getSelection()?.focusOffset, parent: editor.blocks.getParentId(id) };
+    });
+    expect(result.retained).toBe(true);
+    expect(result.focus).toBe(result.id);
+    expect(result.offset).toBe(1);
+    expect(result.parent).not.toBeNull();
+  });
+}
 
 test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => {
   const parent = page.locator(".page-block:has(> .page-block-children)").first();

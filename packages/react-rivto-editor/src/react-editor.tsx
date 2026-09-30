@@ -59,7 +59,6 @@ interface RuntimeExtensionsCapability extends ExtensionsCapability {
   initialize(extensions: readonly ReactEditorExtension[]): void;
   own(release: RegistrationDisposer): RegistrationDisposer;
   assertActive(): void;
-  destroy(): void;
 }
 
 /** Internal implementation; applications receive the capability-only interface. */
@@ -108,7 +107,8 @@ export class ReactEditorImpl implements ReactEditor {
   readonly slashCommands: SlashCommandsCapability;
   private destroyed = false;
   private reconciliationQueued = false;
-  private readonly reconciliationDisposers: Array<() => void> = [];
+  /** Runtime-owned cleanup, kept private behind the public capability contracts. */
+  private readonly disposers: Array<() => void> = [];
 
   /** Current revision of the framework-neutral editor. */
   get revision(): number {
@@ -132,10 +132,14 @@ export class ReactEditorImpl implements ReactEditor {
     this.mode = editor.mode;
     this.commands = editor.commands;
     this.history = editor.history;
-    this.extensions = new ExtensionManager(this);
+    const extensions = new ExtensionManager(this);
+    this.extensions = extensions;
+    this.disposers.push(() => extensions.destroy());
     const events = new EventManager(this);
     this.events = events;
-    this.selection = new ReactSelectionManager(this, editor);
+    const selection = new ReactSelectionManager(this, editor);
+    this.selection = selection;
+    this.disposers.push(() => selection.destroy());
     const keyboard = new KeyboardManager(this, options.keymap);
     this.keyboard = keyboard;
     const slashCommands = new ReactSlashCommandManager(this);
@@ -163,7 +167,7 @@ export class ReactEditorImpl implements ReactEditor {
     this.surfaces = new SurfaceManager(this);
     try {
       this.extensions.initialize(options.extensions ?? []);
-      this.reconciliationDisposers.push(
+      this.disposers.push(
         this.blocks.subscribeRootIds(() => this.queueBlockElementReconciliation()),
         this.elements.subscribe(() => this.queueBlockElementReconciliation()),
       );
@@ -232,14 +236,25 @@ export class ReactEditorImpl implements ReactEditor {
   /**
    * Releases React managers without destroying the core editor.
    *
-   * ExtensionManager first runs extension cleanup and owned registrations. Event
-   * listeners are then detached.
+   * Selection restoration is cancelled while its extension dependencies remain
+   * available. ExtensionManager then runs extension cleanup and owned registrations.
+   * Event listeners are detached through the existing manager registrations. All
+   * runtime disposers run even if cleanup fails, with errors reported afterward.
    */
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.reconciliationDisposers.splice(0).forEach((dispose) => dispose());
-    this.extensions.destroy();
+    const errors: unknown[] = [];
+    for (const dispose of this.disposers.splice(0).reverse()) {
+      try {
+        dispose();
+      } catch (error) {
+        // One failed cleanup must not prevent the remaining managers from releasing resources.
+        errors.push(error);
+      }
+    }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) throw new AggregateError(errors, "React editor teardown failed");
   }
 }
 

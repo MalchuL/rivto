@@ -523,7 +523,11 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
       } else if (!(reactEditor.mode.get() === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active)) {
         // Losing the browser range keeps a structural selection and clears carets.
         const current = reactEditor.selection.get();
-        if (current && !isStructuralSelection(current)) reactEditor.selection.clear();
+        // Reparenting may detach native endpoints before the scheduled restore.
+        // Keep that model selection; explicit core clears still invalidate it.
+        if (current && !isStructuralSelection(current) && !reactEditor.selection.hasPendingSelectionCallback) {
+          reactEditor.selection.clear();
+        }
       }
       return false;
   });
