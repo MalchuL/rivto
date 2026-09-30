@@ -109,6 +109,14 @@ async function scrollRowToCursor(page: Page, row: Locator, cursorY: number): Pro
   expect(scrollBy).toBeGreaterThan(200);
   await page.mouse.wheel(0, scrollBy);
   await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(200);
+  // A large wheel event need not consume its entire delta. Align the actual row,
+  // rather than assuming the browser moved it by the requested pixel count.
+  await expect.poll(async () => {
+    const box = (await row.boundingBox())!;
+    const remaining = Math.round(box.y + box.height / 2 - cursorY);
+    if (Math.abs(remaining) > 1) await page.mouse.wheel(0, remaining);
+    return Math.abs(remaining);
+  }).toBeLessThanOrEqual(1);
 }
 
 test.describe("page drag with a scrolling window", () => {

@@ -6,7 +6,11 @@ import { resolveDropPlacement, type DropLayoutBlock, type DropLayoutOptions } fr
 import type { DropBlock } from "../placement/types";
 import type { DropPlacement, PointerCoordinates } from "../types";
 
-/** Collects only rendered blocks belonging to this surface. */
+/**
+ * Collects only rendered blocks belonging to this surface. Keeps the complete
+ * identity list, but reads bounding rectangles only when the resolver accesses
+ * them. Each access reads the live DOM; no geometry survives between calculations.
+ */
 export function collectDropLayout(root: HTMLElement, runtime: ReactEditor): DropLayoutBlock[] {
   return [...root.querySelectorAll<HTMLElement>("[data-block-id]")].flatMap((element) => {
     const id = element.dataset.blockId;
@@ -16,7 +20,8 @@ export function collectDropLayout(root: HTMLElement, runtime: ReactEditor): Drop
     const view = runtime.views.resolve(id);
     return [{
       id, parentId: parent && root.contains(parent) ? parent.dataset.blockId ?? null : null,
-      row: row.getBoundingClientRect(), rect: element.getBoundingClientRect(),
+      get row() { return row.getBoundingClientRect(); },
+      get rect() { return element.getBoundingClientRect(); },
       axis: view.dropAxis, fixed: blockContainment(runtime, id)?.childOutline === "fixed",
       acceptsBody: Boolean(view.acceptsDropContainer), options: view.dropPlacement,
       hasRenderedChildren: Boolean(element.querySelector("[data-block-id]")),

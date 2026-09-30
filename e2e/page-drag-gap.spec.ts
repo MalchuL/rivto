@@ -28,11 +28,12 @@ const REPORT_ANOTHER_ID = "fe679c9a-de62-4d8c-a77b-356774bc7c2d";
  *
  * @param page - Browser page owning the editor.
  * @param source - Block whose handle starts the gesture.
- * @param x - Destination viewport X.
- * @param y - Destination viewport Y.
+ * @param x - Destination viewport X, or a callback measuring the destination
+ * after activation and painting previously skipped content have settled.
+ * @param y - Destination viewport Y when X is supplied as a number.
  * @returns Completion after the cursor reaches the destination.
  */
-async function holdDragAt(page: Page, source: Locator, x: number, y: number): Promise<void> {
+async function holdDragAt(page: Page, source: Locator, x: number | (() => Promise<{ x: number; y: number }>), y?: number): Promise<void> {
   const handle = source.locator(`:scope > .${ROW_CLASS} .${HANDLE_CLASS}`);
   await source.locator(`:scope > .${ROW_CLASS}`).hover();
   await handle.hover();
@@ -40,7 +41,11 @@ async function holdDragAt(page: Page, source: Locator, x: number, y: number): Pr
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
-  await page.mouse.move(x, y, { steps: 15 });
+  if (typeof x === "function") {
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  }
+  const point = typeof x === "function" ? await x() : { x, y: y! };
+  await page.mouse.move(point.x, point.y, { steps: 15 });
 }
 
 /**
@@ -159,7 +164,8 @@ test("drops a block after the last root container", async ({ page }) => {
   const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
   await expect(line).toBeVisible();
   const lineBox = (await line.boundingBox())!;
-  expect(lineBox.y + lineBox.height / 2).toBeCloseTo(boardBox.y + boardBox.height, 0);
+  const currentBoardBox = (await board.boundingBox())!;
+  expect(lineBox.y + lineBox.height / 2).toBeCloseTo(currentBoardBox.y + currentBoardBox.height, 0);
   await page.mouse.up();
 
   await expect.poll(() => page.evaluate(() => {
@@ -168,6 +174,19 @@ test("drops a block after the last root container", async ({ page }) => {
     }).__rivtoDemo.editor;
     return editor.blocks.getBlocks().map((block) => block.id);
   })).toEqual([betaId, boardId, alphaId]);
+});
+
+test("uses the final pointer event for feedback and the committed destination", async ({ page }) => {
+  const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
+  const beta = page.locator("[data-block-id]").filter({ has: page.getByText("Beta", { exact: true }) }).first();
+  const row = beta.locator(`:scope > .${ROW_CLASS}`);
+  const box = (await row.boundingBox())!;
+  await holdDragAt(page, alpha, box.x + box.width / 2, box.y + 2);
+  // One final event must replace the earlier sibling-gap destination with the row body.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(row).toHaveAttribute("data-drop-inside", "true");
+  await page.mouse.up();
+  await expect(beta.locator('[data-block-id]').filter({ has: page.getByText("Alpha", { exact: true }) })).toHaveCount(1);
 });
 
 test("drops a block before the first root container", async ({ page }) => {
@@ -271,10 +290,11 @@ test("moves a card out of the demo Kanban into the Kanban–Columns gap", async 
     .filter({ hasText: "Drag me between columns or back into the editor" }).first();
   const cardId = await card.getAttribute("data-block-id");
   await card.scrollIntoViewIfNeeded();
-  const boardBox = (await board.boundingBox())!;
-  const columnsBox = (await columns.boundingBox())!;
-  await holdDragAt(page, card, boardBox.x + boardBox.width / 2,
-    (boardBox.y + boardBox.height + columnsBox.y) / 2);
+  await holdDragAt(page, card, async () => {
+    const boardBox = (await board.boundingBox())!;
+    const columnsBox = (await columns.boundingBox())!;
+    return { x: boardBox.x + boardBox.width / 2, y: (boardBox.y + boardBox.height + columnsBox.y) / 2 };
+  });
   await expect(page.locator(`.${LINE_CLASS}[data-kind="between"]`)).toBeVisible();
   await page.mouse.up();
   await expect.poll(() => page.evaluate((id) => {
@@ -303,11 +323,14 @@ test("moves a block between the demo TODO storage and Bento", async ({ page }) =
   });
   const sourceId = await source.getAttribute("data-block-id");
   await source.scrollIntoViewIfNeeded();
-  const storageBox = (await storage.boundingBox())!;
-  await holdDragAt(page, source, storageBox.x + storageBox.width / 2, storageBox.y + storageBox.height - 4);
+  await holdDragAt(page, source, async () => {
+    const box = (await storage.boundingBox())!;
+    return { x: box.x + box.width / 2, y: box.y + box.height - 4 };
+  });
   const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
   await expect(line).toBeVisible();
   const lineBox = (await line.boundingBox())!;
+  const storageBox = (await storage.boundingBox())!;
   expect(Math.abs(lineBox.y + lineBox.height / 2 - storageBox.y - storageBox.height)).toBeLessThan(9);
   await page.mouse.up();
   await expect.poll(() => page.evaluate((id) => {
@@ -673,14 +696,12 @@ for (const mode of ["block", "edgeless"] as const) {
     for (const dragCase of cases) {
       const source = page.locator(`[data-block-id="${dragCase.source}"]`).first();
       const nestedRow = page.locator(`[data-block-id="${dragCase.nested}"] > .${ROW_CLASS}`).first();
-      await nestedRow.scrollIntoViewIfNeeded();
-      const box = (await nestedRow.boundingBox())!;
-      await holdDragAt(
-        page,
-        source,
-        box.x - CHILD_DROP_INDENT / 2,
-        box.y + box.height - 2,
-      );
+      // Keep this boundary away from auto-scroll; edge scrolling has separate coverage.
+      await nestedRow.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await holdDragAt(page, source, async () => {
+        const box = (await nestedRow.boundingBox())!;
+        return { x: box.x - CHILD_DROP_INDENT / 2, y: box.y + box.height - 2 };
+      });
       await expect(page.locator(`.${LINE_CLASS}[data-kind="between"]`)).toBeVisible();
       await page.mouse.up();
       await expect.poll(() => page.evaluate((sourceId) => {

@@ -141,9 +141,10 @@ test("skips offscreen content paint while keeping block shells and TODO fields m
   await page.getByRole("checkbox", { name: "Virtualize page" }).uncheck();
   // Suppress Chromium's native drag scrolling so this verifies the editor's
   // pointer loop, which also covers structural and cross-block selections.
+  // Cancel text selection rather than pointer movement: dnd-kit rejects an
+  // activation when its pointer event has already been cancelled.
   await page.evaluate(() => {
     document.addEventListener("selectstart", (event) => event.preventDefault(), { capture: true });
-    window.addEventListener("pointermove", (event) => event.preventDefault(), { capture: true });
   });
   await expect(page.locator(`.${PAGE_SURFACE_CLASS} [data-block-id^="perf-root-"]`)).toHaveCount(2_000);
   const styles = await page.evaluate(() => {
@@ -780,6 +781,10 @@ for (const mode of ["block", "edgeless"] as const) {
       test.skip(browserName !== "chromium", "The timing budget is calibrated for Chromium");
       test.setTimeout(180_000);
       const siblings = await seedOutlineDocument(page, branchCount);
+      const originalParent = await page.evaluate((id) => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+        return editor.blocks.getParentId(id);
+      }, siblings[0]!);
       if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
       const source = page.locator(`[data-block-id="${siblings[0]}"]`).getByRole("button", { name: /^Move block:/ });
       await source.scrollIntoViewIfNeeded();
@@ -800,14 +805,23 @@ for (const mode of ["block", "edgeless"] as const) {
       await expect(page.locator(`.${PAGE_DRAG_OVERLAY_CLASS}`)).toBeVisible();
       await page.waitForFunction(() => (window as unknown as { __activationDuration: number }).__activationDuration > 0);
       const activation = await page.evaluate(() => (window as unknown as { __activationDuration: number }).__activationDuration);
-      await page.evaluate(() => {
+      const mountedCount = await page.locator("[data-block-id]").count();
+      await page.evaluate((rowClass) => {
         const original = Element.prototype.querySelectorAll;
+        const originalRect = Element.prototype.getBoundingClientRect;
         (window as unknown as { __dragFullScans: number }).__dragFullScans = 0;
+        (window as unknown as { __dragRectReads: number }).__dragRectReads = 0;
         Element.prototype.querySelectorAll = function (...args) {
           if (args[0] === "[data-block-id]") (window as unknown as { __dragFullScans: number }).__dragFullScans += 1;
           return original.apply(this, args);
         };
-      });
+        Element.prototype.getBoundingClientRect = function () {
+          if (this.hasAttribute("data-block-id") || this.classList.contains(rowClass)) {
+            (window as unknown as { __dragRectReads: number }).__dragRectReads += 1;
+          }
+          return originalRect.call(this);
+        };
+      }, PAGE_BLOCK_ROW_CLASS);
 
       const samples: number[] = [];
       for (const id of siblings.slice(1)) {
@@ -838,8 +852,14 @@ for (const mode of ["block", "edgeless"] as const) {
       const commit = await page.evaluate(() => (window as unknown as { __commitDuration: number }).__commitDuration);
       samples.sort((left, right) => left - right);
       const fullScans = await page.evaluate(() => (window as unknown as { __dragFullScans: number }).__dragFullScans);
-      console.log(`${branchCount || "flat"} branches drag: activation=${activation.toFixed(1)}, feedback=${samples.join(",")}, commit=${commit.toFixed(1)} ms; full scans=${fullScans}`);
-      expect(fullScans).toBe(0);
+      const rectReads = await page.evaluate(() => (window as unknown as { __dragRectReads: number }).__dragRectReads);
+      console.log(`${branchCount || "flat"} branches drag: activation=${activation.toFixed(1)}, feedback=${samples.join(",")}, commit=${commit.toFixed(1)} ms; full scans=${fullScans}; rectangle reads=${rectReads}`);
+      await expect.poll(() => page.evaluate((id) => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+        return editor.blocks.getParentId(id);
+      }, siblings[0]!)).not.toBe(originalParent);
+      // Keep every identity, but do not read the whole nested surface's geometry on every sample.
+      if (branchCount > 0) expect(rectReads).toBeLessThan(mountedCount * samples.length);
       expect(samples[Math.floor(samples.length / 2)]).toBeLessThan(160);
     });
   }
