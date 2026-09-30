@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CALLOUT_BLOCK_TYPE } from "../src/blocks/host-block-definitions.ts";
 import {
-  TOC_CALLOUT_BLOCK_TYPE,
+  NOTE_BLOCK_TYPE,
+  TIP_BLOCK_TYPE,
+  WARNING_BLOCK_TYPE,
+} from "../src/extensions/host-blocks/definitions.ts";
+import {
+  TOC_NOTE_BLOCK_TYPE,
+  TOC_TIP_BLOCK_TYPE,
+  TOC_WARNING_BLOCK_TYPE,
   TOC_WRITING_BLOCK_TYPE,
   collectTocEntries,
   extractMarkdownHeadings,
   isTocConversionAvailable,
-} from "../src/blocks/toc-entries.ts";
+} from "../src/extensions/host-blocks/toc-entries.ts";
 
 /**
  * Builds a parent map the table-of-contents walker can read and move.
@@ -81,11 +87,13 @@ function sectionTree() {
     { id: "before", type: TOC_WRITING_BLOCK_TYPE, parentId: "section", content: beforeContent },
     { id: "nested", type: TOC_WRITING_BLOCK_TYPE, parentId: "before", content: "### Nested" },
     { id: "toc", type: "demo.table-of-contents", parentId: "section", content: "" },
+    { id: "note", type: NOTE_BLOCK_TYPE, parentId: "section", content: "# Note heading" },
+    { id: "tip", type: TIP_BLOCK_TYPE, parentId: "section", content: "## Tip heading" },
     {
-      id: "callout",
-      type: CALLOUT_BLOCK_TYPE,
+      id: "warning",
+      type: WARNING_BLOCK_TYPE,
       parentId: "section",
-      content: "# Callout heading\n\n```\n# Hidden callout\n```",
+      content: "# Warning heading\n\n```\n# Hidden warning\n```",
     },
     { id: "slider", type: "demo.slider", parentId: "section", content: "# Not a heading source" },
     { id: "cousin", type: TOC_WRITING_BLOCK_TYPE, parentId: null, content: "# Cousin" },
@@ -101,7 +109,9 @@ const sectionEntries = [
   { blockId: "before", depth: 1, text: "Same" },
   { blockId: "before", depth: 1, text: "Same" },
   { blockId: "nested", depth: 3, text: "Nested" },
-  { blockId: "callout", depth: 1, text: "Callout heading" },
+  { blockId: "note", depth: 1, text: "Note heading" },
+  { blockId: "tip", depth: 2, text: "Tip heading" },
+  { blockId: "warning", depth: 1, text: "Warning heading" },
 ];
 
 test("markdown heading extraction keeps ATX, Setext, and repeats outside code fences", () => {
@@ -142,7 +152,9 @@ test("moving a table of contents changes the headings it lists", () => {
     "Same",
     "Same",
     "Nested",
-    "Callout heading",
+    "Note heading",
+    "Tip heading",
+    "Warning heading",
   ]);
   tree.move("toc", "cousin");
   assert.deepEqual(collectTocEntries(tree.view(), "toc"), [
@@ -157,7 +169,9 @@ test("moving a table of contents changes the headings it lists", () => {
 });
 
 test("table of contents conversion is limited to empty content", () => {
-  assert.equal(TOC_CALLOUT_BLOCK_TYPE, CALLOUT_BLOCK_TYPE);
+  assert.equal(TOC_NOTE_BLOCK_TYPE, NOTE_BLOCK_TYPE);
+  assert.equal(TOC_TIP_BLOCK_TYPE, TIP_BLOCK_TYPE);
+  assert.equal(TOC_WARNING_BLOCK_TYPE, WARNING_BLOCK_TYPE);
   assert.equal(TOC_WRITING_BLOCK_TYPE, "paragraph");
   assert.equal(isTocConversionAvailable(""), true);
   assert.equal(isTocConversionAvailable("/"), true);

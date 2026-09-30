@@ -15,13 +15,13 @@
     "@chulane/document-model": "workspace:*",
     "@chulane/rivto": "workspace:*",
     "@chulane/rivto-react": "workspace:*",
+    "@chulane/rivto-utils": "workspace:*",
     "lucide-react": "^1.28.0",
-    "katex": "^0.16.47",
+    "mathjs": "^15.2.0",
     "mdast-util-from-markdown": "2.0.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "zod": "^4.1.13",
-    "@chulane/rivto-utils": "workspace:*"
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@chulane/rivto-edgeless": "workspace:*",

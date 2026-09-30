@@ -128,38 +128,47 @@ test("slash conversion adds the host blocks and preserves unrelated content", as
   const savedContent = savedRow.locator(":scope > .page-block-row [data-block-content]");
   await savedContent.click();
   await page.keyboard.press("End");
-  await page.keyboard.type("/callout");
-  await page.locator("[data-slash-command=\"type.demo.callout\"]").click();
-  await expect(savedRow).toHaveAttribute("data-block-type", "demo.callout");
+  await page.keyboard.type("/note");
+  await page.locator("[data-slash-command=\"type.demo.note\"]").click();
+  await expect(savedRow).toHaveAttribute("data-block-type", "demo.note");
   await expect(savedRow).toHaveAttribute("data-block-id", saved.id);
+  await expect(savedRow.locator("[data-callout-tone]")).toHaveAttribute("data-callout-tone", "note");
   await expect(savedContent).toHaveText("Saved title");
   await expect(block(page, saved.childIds[0]!).locator("[data-block-content]")).toHaveText("Kept child");
 
+  const tip = await insertBlock(page, { type: "paragraph", content: "" });
+  const warning = await insertBlock(page, { type: "paragraph", content: "" });
   const bookmark = await insertBlock(page, { type: "paragraph", content: "" });
   const equation = await insertBlock(page, { type: "paragraph", content: "" });
+  await block(page, tip.id).locator("[data-block-content]").click();
+  await page.keyboard.type("/tip");
+  await page.locator("[data-slash-command=\"type.demo.tip\"]").click();
+  await expect(block(page, tip.id)).toHaveAttribute("data-block-type", "demo.tip");
+  await expect(block(page, tip.id).locator("[data-callout-tone]")).toHaveAttribute("data-callout-tone", "tip");
+  await block(page, warning.id).locator("[data-block-content]").click();
+  await page.keyboard.type("/warning");
+  await page.locator("[data-slash-command=\"type.demo.warning\"]").click();
+  await expect(block(page, warning.id)).toHaveAttribute("data-block-type", "demo.warning");
+  await expect(block(page, warning.id).locator("[data-callout-tone]")).toHaveAttribute("data-callout-tone", "warning");
   await block(page, bookmark.id).locator("[data-block-content]").click();
   await page.keyboard.type("/bookmark");
   await page.locator("[data-slash-command=\"type.demo.bookmark\"]").click();
   await expect(block(page, bookmark.id)).toHaveAttribute("data-block-type", "demo.bookmark");
   await block(page, equation.id).locator("[data-block-content]").click();
   await page.keyboard.type("/math");
-  await page.locator("[data-slash-command=\"type.demo.math-equation\"]").click();
-  await expect(block(page, equation.id)).toHaveAttribute("data-block-type", "demo.math-equation");
+  await page.locator("[data-slash-command=\"type.demo.math\"]").click();
+  await expect(block(page, equation.id)).toHaveAttribute("data-block-type", "demo.math");
 });
 
-test("edits a callout and undoes tone, emoji, and body changes", async ({ page }) => {
+test("edits a note and undoes emoji and body changes", async ({ page }) => {
   const callout = await insertBlock(page, {
-    type: "demo.callout",
+    type: "demo.note",
     content: "Body text",
-    props: { variant: "note", emoji: "💡" },
+    props: { emoji: "💡" },
   });
   const row = block(page, callout.id);
-  const variant = row.getByLabel("Variant");
-  await variant.selectOption("warning");
-  await expect(variant).toHaveValue("warning");
-  await expect(row.locator("[data-callout-variant]")).toHaveAttribute("data-callout-variant", "warning");
-  await undo(page);
-  await expect(variant).toHaveValue("note");
+  await expect(row.locator("[data-callout-tone]")).toHaveAttribute("data-callout-tone", "note");
+  await expect(row.getByLabel("Variant")).toHaveCount(0);
 
   const emoji = row.getByLabel("Emoji");
   await emoji.fill("🔥");
@@ -226,7 +235,7 @@ test("updates a table of contents and navigates to its heading", async ({ page }
     children: [
       { type: "demo.table-of-contents", content: "" },
       { type: "paragraph", content: "## Alpha\n\n```\n# Hidden\n```" },
-      { type: "demo.callout", content: "# From callout", props: { variant: "note", emoji: "💡" } },
+      { type: "demo.warning", content: "# From callout", props: { emoji: "⚠️" } },
     ],
   }, null);
   const outside = await insertBlock(page, { type: "paragraph", content: "# Outside" });
@@ -300,38 +309,44 @@ test("updates a table of contents and navigates to its heading", async ({ page }
   expect(outside.id).not.toBe(tocId);
 });
 
-test("renders valid math and keeps an invalid formula editable", async ({ page }) => {
-  const equation = await insertBlock(page, { type: "demo.math-equation", content: "E=mc^2" });
+test("evaluates multiline math and keeps an invalid expression editable", async ({ page }) => {
+  const equation = await insertBlock(page, { type: "demo.math", content: "1 + 1" });
   const row = block(page, equation.id);
-  await expect(row.locator(".katex")).toBeVisible();
-  await expect(row.locator(".katex-display")).toBeVisible();
-  await expect(row.locator(".katex-error")).toHaveCount(0);
+  const result = row.locator("[data-math-value]");
+  await expect(result).toHaveText("2");
   await expect(row.getByRole("alert")).toHaveCount(0);
 
-  const source = row.getByRole("textbox", { name: "Equation source" });
+  const source = row.getByRole("textbox", { name: "Math source" });
   await source.click();
   await source.evaluate((element) => {
-    element.textContent = "\\frac{";
+    element.textContent = "a = 2\na + 3";
     element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
   });
-  await expect(row.locator(".katex-error")).toBeVisible();
-  await expect(row.getByRole("alert")).toHaveText("Invalid formula");
-  await expect(source).toHaveText("\\frac{");
+  await expect(result).toHaveText("5");
+  await expect.poll(() => source.textContent()).toBe("a = 2\na + 3");
+  await stopCapturing(page);
+  await source.evaluate((element) => {
+    element.textContent = "1 +";
+    element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+  });
+  await expect(row.getByRole("alert")).toBeVisible();
+  await expect.poll(() => source.textContent()).toBe("1 +");
   await stopCapturing(page);
   await source.press("End");
-  await page.keyboard.type("x");
-  await expect(source).toHaveText("\\frac{x");
+  await page.keyboard.type("1");
+  await expect.poll(() => source.textContent()).toBe("1 +1");
   await undo(page);
   await undo(page);
-  await expect(source).toHaveText("E=mc^2");
-  await expect(row.locator(".katex-error")).toHaveCount(0);
+  await expect.poll(() => source.textContent()).toBe("a = 2\na + 3");
+  await expect(result).toHaveText("5");
+  await expect(row.getByRole("alert")).toHaveCount(0);
 });
 
 test("copies host blocks as structured data and portable text", async ({ page }) => {
   const callout = await insertBlock(page, {
-    type: "demo.callout",
+    type: "demo.tip",
     content: "Remember this",
-    props: { variant: "tip", emoji: "✅" },
+    props: { emoji: "✅" },
   });
   const bookmark = await insertBlock(page, {
     type: "demo.bookmark",
@@ -343,12 +358,12 @@ test("copies host blocks as structured data and portable text", async ({ page })
     content: "# Copied heading",
     children: [{ type: "demo.table-of-contents", content: "" }],
   });
-  const equation = await insertBlock(page, { type: "demo.math-equation", content: "E=mc^2" });
+  const equation = await insertBlock(page, { type: "demo.math", content: "1 + 1" });
   const cases = [
     {
       id: callout.id,
-      type: "demo.callout",
-      props: { variant: "tip", emoji: "✅" },
+      type: "demo.tip",
+      props: { emoji: "✅" },
       content: "Remember this",
       markdown: "> [!TIP]",
     },
@@ -368,10 +383,10 @@ test("copies host blocks as structured data and portable text", async ({ page })
     },
     {
       id: equation.id,
-      type: "demo.math-equation",
+      type: "demo.math",
       props: {},
-      content: "E=mc^2",
-      markdown: "$$\nE=mc^2\n$$",
+      content: "1 + 1",
+      markdown: "= 2",
     },
   ];
 
@@ -402,9 +417,9 @@ test("copies host blocks as structured data and portable text", async ({ page })
 
 test("selects host blocks on the page and the canvas", async ({ page }) => {
   const callout = await insertBlock(page, {
-    type: "demo.callout",
+    type: "demo.note",
     content: "Selectable callout",
-    props: { variant: "note", emoji: "💡" },
+    props: { emoji: "💡" },
   });
   const bookmark = await insertBlock(page, {
     type: "demo.bookmark",
@@ -412,7 +427,7 @@ test("selects host blocks on the page and the canvas", async ({ page }) => {
     props: { url: "", description: "" },
   });
   const contents = await insertBlock(page, { type: "demo.table-of-contents", content: "" });
-  const equation = await insertBlock(page, { type: "demo.math-equation", content: "a+b" });
+  const equation = await insertBlock(page, { type: "demo.math", content: "a + b" });
   const ids = [callout.id, bookmark.id, contents.id, equation.id];
 
   for (const mode of ["block", "edgeless"] as const) {

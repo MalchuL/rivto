@@ -34,8 +34,7 @@ import {
   counterBlockDefinition,
   sliderBlockDefinition,
 } from "./custom-block-definitions";
-
-import { bookmarkBlockExtension, calloutBlockExtension, mathEquationBlockExtension, tableOfContentsBlockExtension } from "./host-blocks";
+import { hostBlockExtensions } from "../extensions/host-blocks";
 
 interface SliderProps {
   value: number;
@@ -209,10 +208,6 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
 
 /** Creation-time extensions for the demo's optional and custom block types. */
 export const customBlockExtensions: readonly ReactEditorExtension[] = [
-  calloutBlockExtension(),
-  bookmarkBlockExtension(),
-  tableOfContentsBlockExtension(),
-  mathEquationBlockExtension(),
   kanbanExtension(),
   bentoExtension(),
   tableExtension(),
@@ -255,4 +250,5 @@ export const customBlockExtensions: readonly ReactEditorExtension[] = [
       },
     },
   }),
+  ...hostBlockExtensions,
 ];

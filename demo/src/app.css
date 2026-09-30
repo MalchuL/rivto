@@ -4,4 +4,5 @@
  */
 @import "@chulane/rivto-react/styles.css";
 @source "./blocks";
+@source "./extensions";
 @import "./styles.css";
