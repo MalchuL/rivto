@@ -20,6 +20,7 @@ import {
   type ReactEditor,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
+import { Link2Icon, PencilIcon } from "lucide-react";
 import {
   useCallback,
   useId,
@@ -91,13 +92,13 @@ const ADMONITION_KEYWORDS: Record<AdmonitionTone, readonly string[]> = {
   warning: ["warning", "caution", "alert"],
 };
 const BOOKMARK_CLASS = `demo-bookmark ${BLOCK_FRAME_CLASS} flex flex-col gap-1 rounded-lg border border-solid border-border bg-card px-3 py-2.5 shadow-xs`;
-const BOOKMARK_TITLE_CLASS = "demo-bookmark-title min-w-0 text-base font-semibold leading-snug text-foreground";
-const BOOKMARK_DESCRIPTION_CLASS = "demo-bookmark-description min-h-(--rivto-default-block-height) resize-none border-transparent bg-transparent px-0 py-0 text-sm leading-relaxed text-muted-foreground shadow-none placeholder:text-muted-foreground/80";
-const BOOKMARK_RULE_CLASS = "demo-bookmark-rule mt-1 flex min-w-0 flex-wrap items-center gap-2 border-t border-solid border-border pt-2";
-const BOOKMARK_FORM_CLASS = "demo-bookmark-form flex min-w-0 flex-1 flex-wrap items-center gap-2";
+const BOOKMARK_TITLE_CLASS = "demo-bookmark-title min-w-0 text-sm font-semibold leading-snug text-foreground";
+const BOOKMARK_DESCRIPTION_CLASS = "demo-bookmark-description field-sizing-content min-h-5 resize-none border-transparent bg-transparent px-0 py-0 text-xs leading-5 text-muted-foreground shadow-none placeholder:text-muted-foreground/70 md:text-xs";
+const BOOKMARK_META_CLASS = "demo-bookmark-meta mt-1 flex min-w-0 items-center gap-2";
+const BOOKMARK_FORM_CLASS = "demo-bookmark-form mt-1 flex min-w-0 flex-wrap items-center gap-2";
 const BOOKMARK_URL_CLASS = "demo-bookmark-url h-8 min-w-0 flex-1 basis-40";
-const BOOKMARK_LINK_CLASS = "demo-bookmark-link h-auto max-w-full justify-start px-0 text-sm font-normal wrap-anywhere";
-const BOOKMARK_ACTIONS_CLASS = "demo-bookmark-actions flex min-w-0 flex-1 flex-wrap items-center gap-2";
+const BOOKMARK_LINK_CLASS = "demo-bookmark-link inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground hover:text-primary";
+const BOOKMARK_HOST_CLASS = "truncate";
 const MESSAGE_CLASS = "m-0 text-sm text-destructive";
 const QUIET_CLASS = "m-0 text-sm text-muted-foreground";
 const TOC_CLASS = `demo-toc ${BLOCK_FRAME_CLASS} min-h-(--rivto-default-block-height) rounded-r-md bg-muted/40 py-1 pr-1 pl-3`;
@@ -231,6 +232,22 @@ function admonitionMarkdown(tone: AdmonitionTone, emoji: string, content: string
   return [`> [!${label}]`, ...quoted].join("\n");
 }
 
+/**
+ * Returns the site name shown on a bookmark card.
+ *
+ * Link previews show the hostname, not the full path. A leading `www.` is dropped.
+ *
+ * @param url - Committed HTTP(S) URL.
+ * @returns Hostname, or the original string when it cannot be parsed.
+ */
+function bookmarkHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 /** Renders a bookmark as a Markdown link plus its manual description. */
 function bookmarkMarkdown(title: string, url: string, description: string): string {
   const label = title || url;
@@ -325,8 +342,10 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
 /**
  * Bookmark with an editable title, a manual description, and an HTTP(S) link.
  *
- * An empty URL shows a setup form. The URL is validated when the form is
- * submitted, so a half-typed value stays in the field and is not written.
+ * A saved link shows the page title, the description, and the site name,
+ * which is the usual link-preview stack. An empty URL shows a paste field.
+ * The URL is validated when the form is submitted, so a half-typed value
+ * stays in the field and is not written.
  *
  * @param blockId - Stable bookmark block ID.
  * @returns Title, description, and either the link or the URL form.
@@ -385,80 +404,82 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
           if (next !== (editing.getProp("description") ?? "")) editing.setProp("description", next);
         }}
       />
-      <div className={BOOKMARK_RULE_CLASS}>
-        {showUrlForm ? (
-          <form className={BOOKMARK_FORM_CLASS} noValidate onSubmit={submitUrl}>
-            <Label className={SCREEN_READER_CLASS} htmlFor={urlId}>URL</Label>
-            <Input
-              id={urlId}
-              className={BOOKMARK_URL_CLASS}
-              type="text"
-              inputMode="url"
-              value={urlDraft}
-              placeholder="https://example.com"
-              aria-invalid={urlError ? true : undefined}
-              aria-describedby={urlError ? urlErrorId : undefined}
-              onChange={(event) => {
-                setUrlDraft(event.target.value);
-                if (urlError) setUrlError(null);
-              }}
-            />
-            <Button
-              type="submit"
-              size="sm"
-              onClick={(event) => {
-                if (isClaimedSelectionClick(event)) event.preventDefault();
-              }}
-            >
-              Save link
-            </Button>
-            {committedUrl ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={(event) => {
-                  if (isClaimedSelectionClick(event)) return;
-                  setEditingUrl(false);
-                  setUrlDraft(editing.getProp("url") ?? "");
-                  setUrlError(null);
-                }}
-              >
-                Cancel
-              </Button>
-            ) : null}
-            {urlError ? <p id={urlErrorId} className={`${MESSAGE_CLASS} basis-full`} role="alert">{urlError}</p> : null}
-          </form>
-        ) : (
-          <div className={BOOKMARK_ACTIONS_CLASS}>
-            <Button variant="link" size="sm" asChild className={BOOKMARK_LINK_CLASS}>
-              <a
-                href={committedUrl}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(event) => {
-                  if (isClaimedSelectionClick(event)) event.preventDefault();
-                }}
-              >
-                {committedUrl}
-              </a>
-            </Button>
+      {showUrlForm ? (
+        <form className={BOOKMARK_FORM_CLASS} noValidate onSubmit={submitUrl}>
+          <Label className={SCREEN_READER_CLASS} htmlFor={urlId}>URL</Label>
+          <Input
+            id={urlId}
+            className={BOOKMARK_URL_CLASS}
+            type="text"
+            inputMode="url"
+            value={urlDraft}
+            placeholder="Paste a link"
+            aria-invalid={urlError ? true : undefined}
+            aria-describedby={urlError ? urlErrorId : undefined}
+            onChange={(event) => {
+              setUrlDraft(event.target.value);
+              if (urlError) setUrlError(null);
+            }}
+          />
+          <Button
+            type="submit"
+            size="sm"
+            onClick={(event) => {
+              if (isClaimedSelectionClick(event)) event.preventDefault();
+            }}
+          >
+            Save link
+          </Button>
+          {committedUrl ? (
             <Button
               type="button"
               variant="ghost"
-              size="xs"
+              size="sm"
               onClick={(event) => {
                 if (isClaimedSelectionClick(event)) return;
+                setEditingUrl(false);
                 setUrlDraft(editing.getProp("url") ?? "");
                 setUrlError(null);
-                setEditingUrl(true);
               }}
             >
-              Change URL
+              Cancel
             </Button>
-          </div>
-        )}
-      </div>
+          ) : null}
+          {urlError ? <p id={urlErrorId} className={`${MESSAGE_CLASS} basis-full`} role="alert">{urlError}</p> : null}
+        </form>
+      ) : (
+        <div className={BOOKMARK_META_CLASS}>
+          <a
+            className={BOOKMARK_LINK_CLASS}
+            href={committedUrl}
+            title={committedUrl}
+            aria-label={committedUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(event) => {
+              if (isClaimedSelectionClick(event)) event.preventDefault();
+            }}
+          >
+            <Link2Icon className="size-3 shrink-0 pointer-events-none" aria-hidden="true" />
+            <span className={BOOKMARK_HOST_CLASS}>{bookmarkHost(committedUrl)}</span>
+          </a>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="ml-auto text-muted-foreground"
+            aria-label="Change URL"
+            onClick={(event) => {
+              if (isClaimedSelectionClick(event)) return;
+              setUrlDraft(editing.getProp("url") ?? "");
+              setUrlError(null);
+              setEditingUrl(true);
+            }}
+          >
+            <PencilIcon className="pointer-events-none" aria-hidden="true" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
