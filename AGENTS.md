@@ -30,6 +30,14 @@ Breaking changes are allowed, including changes that affect schemas or previousl
 
 ## Commands and Tests
 
+For every feature implementation or bug fix, read
+[rivto-performance-testing](.agents/skills/rivto-performance-testing/SKILL.md)
+when choosing tests and execute its verification workflow after the final code
+change, before reporting completion. This is mandatory even when the user does
+not explicitly request tests or performance checks. Follow the file directly if
+the skill is not listed in the session's skill catalog. Report any blocked or
+failing checks; do not describe unverified work as fully validated.
+
 - `pnpm demo` — run the demo.
 - `pnpm build`, `pnpm check-types`, `pnpm lint` — build and statically validate the workspace.
 - `pnpm test` — run core Jest tests.
@@ -42,6 +50,10 @@ Use `*.test.ts(x)` for Jest and `*.spec.ts` for Playwright. Run checks proportio
 
 Use ES modules and nearby formatting. Use `PascalCase` for types/components, `camelCase` for functions/values, and kebab-case directories. Prefer existing managers and narrow types.
 
+Do not invent new terms. Use only names already established in this repository or in widely known domain vocabulary. Do not coin acronyms, shorthand, or new labels for concepts that already have a known name.
+
 Document public APIs and non-obvious invariants. Use comments to explain tricky algorithms and edge cases; avoid restating straightforward code. Define repeated or cross-file HTML class names once in the narrowest owning scope.
+
+Do not shorten existing comments or docstrings, including JSDoc, unless the user explicitly requests it. Preserve their length and level of detail during edits, refactoring, renaming, and code consolidation. Carry documentation over to the surviving implementation, retaining explanations of behavior, invariants, edge cases, parameters, and return values. Update inaccurate descriptions to match the code without condensing the documentation.
 
 Keep commits focused and imperative. Pull requests state the problem, solution, validation, and API/UI impact.

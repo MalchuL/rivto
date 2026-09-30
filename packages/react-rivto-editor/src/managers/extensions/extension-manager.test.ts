@@ -5,6 +5,30 @@ import { createReactEditor } from "../../react-editor";
 const Mounted: ComponentType = () => null;
 
 describe("ExtensionManager", () => {
+  test("releases extensions when earlier runtime cleanup throws", () => {
+    const editor = createEditor();
+    let released = false;
+    const reactEditor = createReactEditor({ editor, extensions: [{
+      id: "cleanup",
+      setup: () => () => { released = true; },
+    }] });
+    const root = { ownerDocument: { defaultView: {
+      requestAnimationFrame: () => 1,
+      cancelAnimationFrame: () => {},
+    } } } as unknown as HTMLElement;
+    reactEditor.events.getRoot = () => root;
+    // A no-op stands in for selection restoration; this test exercises cancellation cleanup.
+    reactEditor.selection.scheduleIfSelectionUnchanged(() => {}, () => {
+      throw new Error("restoration cleanup failed");
+    });
+    expect(() => reactEditor.destroy()).toThrow("restoration cleanup failed");
+    expect(released).toBe(true);
+    expect(reactEditor.selection.hasPendingSelectionCallback).toBe(false);
+    expect(() => reactEditor.extensions.mount(Mounted)).toThrow(/destroyed/);
+    expect(() => reactEditor.destroy()).not.toThrow();
+    editor.destroy();
+  });
+
   test("rolls back a throwing extension and continues teardown after a cleanup error", () => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
