@@ -12,8 +12,10 @@ import type { EditorBlockInput } from "@chulane/rivto";
 import { createCaretSelection } from "@chulane/rivto";
 import { useBlockEditing, useReactEditor } from "../../../hooks";
 import { focusBlock, type ReactEditorExtension } from "../../../managers";
-import { kanbanColumnView, kanbanView } from "./kanban-view";
+import { KANBAN_BLOCK_TYPE, KANBAN_COLUMN_BLOCK_TYPE, kanbanColumnView, kanbanView } from "./kanban-view";
 import { convertLeafToContainer } from "../../../views/ops/outline-ops";
+
+export { KANBAN_BLOCK_TYPE, KANBAN_COLUMN_BLOCK_TYPE } from "./kanban-view";
 
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { PlusIcon } from "lucide-react";
@@ -27,9 +29,6 @@ const ADD_COLUMN_CLASS = "rivto-kanban-add-column h-auto grid place-items-center
 const ADD_CARD_CLASS = "rivto-kanban-add-card flex";
 const BOARD_SUMMARY_CLASS = "rivto-kanban-summary flex items-center gap-2";
 const BOARD_SUMMARY_STATS_CLASS = "text-xs tabular-nums text-(--rivto-kanban-muted-foreground)";
-
-export const KANBAN_BLOCK_TYPE = "kanban";
-export const KANBAN_COLUMN_BLOCK_TYPE = "kanban-column";
 
 /**
  * Creates a board with three empty columns, ready to receive existing blocks.

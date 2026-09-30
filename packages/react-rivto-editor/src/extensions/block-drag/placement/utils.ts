@@ -222,3 +222,13 @@ export function dropMoveTarget(placement: CanonicalDropPlacement): DropMoveTarge
     ? { targetId: placement.parentId, position: "inside" }
     : { targetId: null, position: "after" };
 }
+
+/** Revalidates a displayed destination without choosing a different gap. */
+export function isCurrentDropDestination(blocks: readonly DropBlock[], placement: CanonicalDropPlacement): boolean {
+  const parent = placement.parentId ? findBlockLocation(blocks, placement.parentId)?.block : undefined;
+  if (placement.parentId && !parent) return false;
+  if (placement.kind === "inside") return true;
+  const siblings = parent?.children ?? blocks;
+  const index = placement.previousId ? siblings.findIndex(({ id }) => id === placement.previousId) + 1 : 0;
+  return (!placement.previousId || index > 0) && (siblings[index]?.id ?? null) === placement.nextId;
+}

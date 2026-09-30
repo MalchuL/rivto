@@ -208,6 +208,7 @@ export type {
   BlockDropPlacementOptions,
   BlockViewContext,
   BlockViewDropContext,
+  BlockDropDestination,
   BlockViewOutcome,
   DropAxis,
 } from "./views";

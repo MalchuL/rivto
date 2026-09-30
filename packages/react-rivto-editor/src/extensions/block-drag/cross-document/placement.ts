@@ -1,16 +1,10 @@
-/** Canonical destination resolution for cross-document page drops. */
+/** Foreign documents use the same regions and acceptance as local dragging. */
+import type { EditorBlock } from "@chulane/rivto";
 import type { CrossDocumentBlockTransferPlacement } from "../../built-ins/clipboard/cross-document-block-transfer";
 import type { ReactEditor } from "../../../types";
-import {
-  dropMoveTarget,
-  resolveBlockDropPlacementOptions,
-} from "../placement/utils";
-import { blockContainment } from "../utils/containment";
-import { closestPageRow, resolveGeometryPlacement } from "../placement/geometry";
+import { dropMoveTarget } from "../placement/utils";
+import { resolveSurfaceDrop } from "../pointer/target";
 import type { DropPlacement } from "../types";
-
-const PAGE_BLOCK_SELECTOR = "[data-block-id]";
-const PAGE_BLOCK_ROW_SELECTOR = ":scope > .page-block-row";
 
 export function resolveCrossDocumentPageRootPlacement(
   reactEditor: ReactEditor,
@@ -20,50 +14,16 @@ export function resolveCrossDocumentPageRootPlacement(
   childDropIndent: number,
   gapDropZone: number,
   allowChildPlacement: boolean,
+  sources: readonly EditorBlock[],
+  outerEdgeDropZone?: number,
 ): (CrossDocumentBlockTransferPlacement & { readonly indicator: DropPlacement | null }) | null {
-  const rows = [...root.querySelectorAll<HTMLElement>("[data-block-id]")].flatMap((block) => {
-    const row = block.querySelector<HTMLElement>(PAGE_BLOCK_ROW_SELECTOR);
-    const id = block.dataset.blockId;
-    return row && id ? [{ id, rect: row.getBoundingClientRect() }] : [];
-  });
-  let result: (CrossDocumentBlockTransferPlacement & { readonly indicator: DropPlacement | null }) | null = null;
-  if (rows.length === 0) {
-    result = { targetId: null, position: "after", indicator: null };
-  } else {
-    const row = closestPageRow(rows, y);
-    if (row) {
-      const targetElement = root.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(row.id)}"]`);
-      const parentId = targetElement?.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR)?.dataset.blockId;
-      const parentOptions = resolveBlockDropPlacementOptions(
-        childDropIndent,
-        gapDropZone,
-        parentId ? reactEditor.views.resolve(parentId).dropPlacement : undefined,
-        allowChildPlacement,
-      );
-      const targetOptions = resolveBlockDropPlacementOptions(
-        childDropIndent,
-        gapDropZone,
-        reactEditor.views.resolve(row.id).dropPlacement,
-        allowChildPlacement,
-      );
-      const indicator = resolveGeometryPlacement(
-        reactEditor.blocks.getBlocks(),
-        row,
-        x,
-        y,
-        {
-          ...parentOptions,
-          allowChildPlacement: parentOptions.allowChildPlacement
-            && targetOptions.allowChildPlacement
-            && (!parentId || blockContainment(reactEditor, parentId)?.childOutline !== "fixed"),
-        },
-      );
-      const renderedIndicator = indicator?.kind === "between"
-        ? { ...indicator, gapPointer: { x, y } }
-        : indicator;
-      const target = renderedIndicator ? dropMoveTarget(renderedIndicator) : null;
-      result = target && renderedIndicator ? { ...target, indicator: renderedIndicator } : null;
-    }
+  const blocks = reactEditor.blocks.getBlocks();
+  if (!blocks.length) {
+    const destination = { kind: "between", parentId: null, previousId: null, nextId: null, depth: 0 } as const;
+    return reactEditor.views.acceptsDrop(destination, sources) ? { targetId: null, position: "after", indicator: null } : null;
   }
-  return result;
+  const indicator = resolveSurfaceDrop(root, reactEditor, sources, blocks, { x, y }, {
+    childDropIndent, gapDropZone, allowChildPlacement, outerEdgeDropZone,
+  });
+  return indicator ? { ...dropMoveTarget(indicator), indicator } : null;
 }

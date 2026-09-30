@@ -1,155 +1,96 @@
-/**
- * Verifies placement resolution through the library-independent input shape.
- *
- * The provider adapts pointer and keyboard gestures into `DropPlacementInput`,
- * so these tests pin the geometry rules that depend only on Rivto data: pointer
- * row halves, keyboard stand-in rects, chrome edges, accepting fields, and the
- * fixed-layout axes.
- *
- * @module
- */
-import { resolveDropPlacement } from "./resolver";
-import { dropMoveTarget } from "./utils";
-import type { DropBlock, DropPlacementInput, ViewportRect } from "./types";
+import { resolveDropPlacement, type DropLayoutBlock, type DropLayoutOptions, type DropRect } from "./resolver";
+import type { CanonicalDropPlacement, DropBlock } from "./types";
 
-const blocks: DropBlock[] = [
-  { id: "first", children: [] },
-  {
-    id: "board",
-    children: [
-      { id: "lane-a", children: [{ id: "card", children: [] }] },
-      { id: "lane-b", children: [] },
-    ],
-  },
-  { id: "last", children: [] },
-];
-
-/**
- * Builds a viewport rectangle from its edges.
- *
- * @param top - Top edge in viewport pixels.
- * @param left - Left edge in viewport pixels.
- * @param width - Rectangle width.
- * @param height - Rectangle height.
- * @returns Rectangle with derived right and bottom edges.
- */
-function rect(top: number, left: number, width: number, height: number): ViewportRect {
-  return { top, left, width, height, right: left + width, bottom: top + height };
+const defaults: DropLayoutOptions = { childDropIndent: 24, gapDropZone: 8, allowChildPlacement: true };
+function rect(top: number, height: number, left = 0, width = 400): DropRect {
+  return { top, bottom: top + height, left, right: left + width, width, height };
+}
+function item(id: string, top: number, height: number, options: Partial<DropLayoutBlock> = {}): DropLayoutBlock {
+  return { id, parentId: null, row: rect(top, 24), rect: rect(top, height), fixed: false, acceptsBody: false, ...options };
+}
+function tree(items: readonly DropLayoutBlock[], parentId: string | null = null): DropBlock[] {
+  return items.filter((entry) => entry.parentId === parentId).map(({ id }) => ({ id, children: tree(items, id) }));
+}
+function resolve(items: DropLayoutBlock[], x: number, y: number, accepts = (_: CanonicalDropPlacement) => true, options = defaults) {
+  return resolveDropPlacement(items, tree(items), { x, y }, options, accepts);
 }
 
-/**
- * Builds a placement input for a pointer gesture over one target row.
- *
- * @param targetId - Hovered block.
- * @param targetRect - Measured target rectangle.
- * @param data - Optional target layout data.
- * @returns Input with a cursor-driven source lacking a stand-in rect.
- */
-function pointerInput(
-  targetId: string,
-  targetRect: ViewportRect,
-  data: DropPlacementInput["target"]["data"] = { sortChildren: undefined },
-): DropPlacementInput {
-  return {
-    source: { id: "last", data: { sortChildren: undefined }, rect: null },
-    target: { id: targetId, rect: targetRect, data },
-  };
-}
-
-test("pointer row halves resolve inside, before, and after placements", () => {
-  const row = rect(100, 40, 400, 30);
-  const input = pointerInput("first", row);
-
-  const inside = resolveDropPlacement(input, blocks, 24, 8, true, { x: 60, y: 115 });
-  expect(inside?.kind).toBe("inside");
-  expect(dropMoveTarget(inside!)).toEqual({ targetId: "first", position: "inside" });
-
-  const before = resolveDropPlacement(input, blocks, 24, 8, true, { x: 60, y: 102 });
-  expect(dropMoveTarget(before!)).toEqual({ targetId: "first", position: "before" });
-  expect(before?.kind === "between" && before.gapPointer).toEqual({ x: 60, y: 102 });
-
-  const after = resolveDropPlacement(input, blocks, 24, 8, true, { x: 60, y: 128 });
-  expect(dropMoveTarget(after!)).toEqual({ targetId: "board", position: "before" });
+test.each([false, true])("one-pixel sweeps keep the same container neighbors (nested=%s)", (nested) => {
+  const parentId = nested ? "parent" : null;
+  const items = [
+    ...(nested ? [item("parent", -40, 650, { acceptsBody: true })] : []),
+    item("a", 0, 180, { acceptsBody: true, parentId }),
+    item("a-child", 130, 50, { parentId: "a", row: rect(130, 50) }),
+    item("b", 196, 240, { fixed: true, parentId }),
+    item("b-child", 220, 180, { parentId: "b", acceptsBody: true }),
+    item("c", 452, 100, { acceptsBody: true, parentId }),
+  ];
+  for (let y = 173; y <= 203; y++) {
+    expect(resolve(items, 100, y)).toMatchObject({ kind: "between", parentId, previousId: "a", nextId: "b", depth: nested ? 1 : 0 });
+  }
 });
 
-test("pointer nesting is refused when the global policy forbids children", () => {
-  const input = pointerInput("first", rect(100, 40, 400, 30));
-  const placement = resolveDropPlacement(input, blocks, 24, 8, false, { x: 60, y: 115 });
-  expect(placement?.kind).toBe("between");
+test("both sides of an ordinary gap select the same neighbors", () => {
+  const items = [item("a", 0, 24), item("b", 40, 24), item("c", 80, 24)];
+  for (let y = 18; y <= 46; y++) {
+    expect(resolve(items, 12, y)).toMatchObject({ kind: "between", parentId: null, previousId: "a", nextId: "b" });
+  }
+  expect(resolve(items, 100, 52)).toMatchObject({ kind: "inside", parentId: "b" });
 });
 
-test("keyboard stand-in rect chooses row halves without nesting", () => {
-  const targetRect = rect(200, 40, 400, 30);
-  const source = { id: "first", data: { sortChildren: undefined }, rect: rect(190, 40, 400, 30) };
-  const upper = resolveDropPlacement({ source, target: { id: "last", rect: targetRect, data: undefined } }, blocks, 24, 8, true, null);
-  expect(dropMoveTarget(upper!)).toEqual({ targetId: "last", position: "before" });
-  expect(upper?.kind === "between" && upper.gapPointer).toBeUndefined();
-
-  const lowerSource = { ...source, rect: rect(210, 40, 400, 30) };
-  const lower = resolveDropPlacement({ source: lowerSource, target: { id: "last", rect: targetRect, data: undefined } }, blocks, 24, 8, true, null);
-  expect(dropMoveTarget(lower!)).toEqual({ targetId: "last", position: "after" });
+test("background does not redirect to a distant lane or create a shell", () => {
+  const items = [item("board", 0, 400, { fixed: true, acceptsBody: true, axis: "horizontal" }),
+    item("lane", 80, 250, { parentId: "board", acceptsBody: true, rect: rect(80, 250, 20, 160), row: rect(80, 24, 20, 160) })];
+  const accepts = (destination: CanonicalDropPlacement) => destination.parentId !== "board";
+  expect(resolve(items, 200, 55, accepts)).toBeNull();
+  expect(resolve(items, 300, 200, accepts)).toBeNull();
+  expect(resolve(items, 100, 200, accepts)).toMatchObject({ kind: "inside", parentId: "lane" });
+  expect(resolve([items[0]!], 100, 200, accepts)).toBeNull();
 });
 
-test("fixed-layout chrome resolves to sibling edges instead of inside", () => {
-  const input = pointerInput("board", rect(100, 40, 400, 30), {
-    sortChildren: undefined,
-    hitReason: "chrome",
-    targetAcceptsDrop: true,
-  });
-  const upper = resolveDropPlacement(input, blocks, 24, 8, true, { x: 60, y: 105 });
-  expect(dropMoveTarget(upper!)).toEqual({ targetId: "board", position: "before" });
-
-  // The lower half resolves to "after board", whose canonical gap is "before last".
-  const lower = resolveDropPlacement(input, blocks, 24, 8, true, { x: 60, y: 125 });
-  expect(dropMoveTarget(lower!)).toEqual({ targetId: "last", position: "before" });
+test("horizontal gaps reorder shells, independent of source layout axis", () => {
+  const items = [item("board", 0, 300, { fixed: true, axis: "horizontal" }),
+    item("a", 40, 220, { parentId: "board", acceptsBody: true, rect: rect(40, 220, 0, 180) }),
+    item("b", 40, 220, { parentId: "board", acceptsBody: true, rect: rect(40, 220, 200, 180) })];
+  for (let x = 174; x <= 206; x++) expect(resolve(items, x, 140)).toMatchObject({ parentId: "board", previousId: "a", nextId: "b", line: { axis: "vertical", x: 190 } });
 });
 
-test("accepting fields receive the drop inside and respect target overrides", () => {
-  const data = { sortChildren: undefined, hitReason: "container" as const, targetAcceptsDrop: true };
-  const inside = resolveDropPlacement(pointerInput("lane-b", rect(100, 40, 200, 300), data), blocks, 24, 8, true, { x: 60, y: 200 });
-  expect(dropMoveTarget(inside!)).toEqual({ targetId: "lane-b", position: "inside" });
-
-  const refused = resolveDropPlacement(
-    pointerInput("lane-b", rect(100, 40, 200, 300), { ...data, targetDropPlacement: { allowChildPlacement: false } }),
-    blocks,
-    24,
-    8,
-    true,
-    { x: 60, y: 200 },
-  );
-  expect(refused).toBeNull();
+test("grid gaps follow document order across wrapped rows", () => {
+  const items = [item("grid", 0, 300, { fixed: true, acceptsBody: true, axis: "grid" }),
+    item("a", 40, 80, { parentId: "grid", row: rect(40, 80, 0, 180), rect: rect(40, 80, 0, 180) }),
+    item("b", 40, 80, { parentId: "grid", row: rect(40, 80, 200, 180), rect: rect(40, 80, 200, 180) }),
+    item("c", 140, 80, { parentId: "grid", row: rect(140, 80, 0, 180), rect: rect(140, 80, 0, 180) })];
+  expect(resolve(items, 190, 80)).toMatchObject({ previousId: "a", nextId: "b", line: { axis: "vertical" } });
+  expect(resolve(items, 100, 130)).toMatchObject({ previousId: "b", nextId: "c", line: { axis: "horizontal" } });
+  expect(resolve(items, 80, 80)).toMatchObject({ kind: "inside", parentId: "a" });
 });
 
-test("horizontal lanes split on the target's vertical center line", () => {
-  const laneRect = rect(100, 40, 200, 300);
-  const data = { sortChildren: "horizontal" as const, parentChildOutline: "fixed" as const };
-  const before = resolveDropPlacement(pointerInput("lane-b", laneRect, data), blocks, 24, 8, true, { x: 60, y: 200 });
-  expect(dropMoveTarget(before!)).toEqual({ targetId: "lane-b", position: "before" });
-  expect(before?.layoutAxis).toBe("horizontal");
-
-  const after = resolveDropPlacement(pointerInput("lane-b", laneRect, data), blocks, 24, 8, true, { x: 220, y: 200 });
-  expect(dropMoveTarget(after!)).toEqual({ targetId: "lane-b", position: "after" });
+test("outline depths stay on the same subtree boundary", () => {
+  const items = [item("a", 0, 104), item("b", 40, 64, { parentId: "a", row: rect(40, 24, 24) }),
+    item("c", 80, 24, { parentId: "b", row: rect(80, 24, 48), rect: rect(80, 24, 48) }), item("d", 120, 24)];
+  expect(resolve(items, 12, 110)).toMatchObject({ parentId: null, previousId: "a", nextId: "d" });
+  expect(resolve(items, 36, 110)).toMatchObject({ parentId: "a", previousId: "b", nextId: null });
+  expect(resolve(items, 72, 110)).toMatchObject({ parentId: "c", previousId: null, nextId: null });
 });
 
-test("grid tiles nest at the center and sort along their rims", () => {
-  const tile = rect(100, 100, 200, 200);
-  const data = { sortChildren: "grid" as const, parentChildOutline: "fixed" as const };
-  const nested = resolveDropPlacement(pointerInput("lane-a", tile, data), blocks, 24, 8, true, { x: 200, y: 200 });
-  expect(dropMoveTarget(nested!)).toEqual({ targetId: "lane-a", position: "inside" });
-
-  const rim = resolveDropPlacement(pointerInput("lane-a", tile, data), blocks, 24, 8, true, { x: 200, y: 296 });
-  expect(dropMoveTarget(rim!)).toEqual({ targetId: "lane-b", position: "before" });
-  expect(rim?.layoutAxis).toBe("grid");
+test("excluded and collapsed children are not target regions", () => {
+  const items = [item("a", 0, 100, { hasRenderedChildren: true }), item("b", 116, 24)];
+  const blocks = [{ id: "a", children: [{ id: "hidden", children: [] }] }, { id: "b", children: [] }];
+  expect(resolveDropPlacement(items, blocks, { x: 12, y: 22 }, defaults, () => true)).toMatchObject({ previousId: "a", nextId: "b", line: { y: 24 } });
+  expect(resolveDropPlacement(items, [{ id: "b", children: [] }], { x: 12, y: 4 }, defaults, () => true)).toMatchObject({ previousId: null, nextId: "b" });
 });
 
-test("vertical fixed layouts sort whole items by the target's horizontal center line", () => {
-  const item = rect(100, 40, 400, 120);
-  const data = { sortChildren: "vertical" as const, parentChildOutline: "fixed" as const };
-  const before = resolveDropPlacement(pointerInput("lane-a", item, data), blocks, 24, 8, true, { x: 60, y: 120 });
-  expect(dropMoveTarget(before!)).toEqual({ targetId: "lane-a", position: "before" });
+test("keyboard uses item halves and rejected destinations have no indicator", () => {
+  const items = [item("a", 0, 24), item("b", 40, 24)];
+  expect(resolve(items, 100, 54, () => true, { ...defaults, keyboard: true })).toMatchObject({ previousId: "b", nextId: null });
+  expect(resolve(items, 100, 54, () => false)).toBeNull();
+});
 
-  // Below the center line the gap after lane-a is canonicalized as "before lane-b".
-  const after = resolveDropPlacement(pointerInput("lane-a", item, data), blocks, 24, 8, true, { x: 60, y: 170 });
-  expect(dropMoveTarget(after!)).toEqual({ targetId: "lane-b", position: "before" });
-  expect(after?.layoutAxis).toBe("vertical");
+test("disabled child placement keeps row-center drops at sibling depth", () => {
+  const items = [item("a", 0, 24), item("b", 40, 24)];
+  expect(resolve(items, 100, 54, () => true, { ...defaults, allowChildPlacement: false }))
+    .toMatchObject({ kind: "between", parentId: null, previousId: "b", nextId: null });
+  items[1] = { ...items[1]!, options: { allowChildPlacement: false } };
+  expect(resolve(items, 100, 54)).toMatchObject({ kind: "between", parentId: null, previousId: "b" });
+  expect(resolve(items, 100, 62)).toMatchObject({ kind: "between", parentId: null, previousId: "b" });
 });

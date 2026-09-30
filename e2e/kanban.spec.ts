@@ -29,10 +29,12 @@ async function move(
   await source.locator(`:scope > .${ROW_CLASS}`).hover();
   await handle.hover();
   const from = (await handle.boundingBox())!;
-  const to = (await target.boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
+  // A horizontally clipped lane is not a drop field until it is visible.
+  await target.scrollIntoViewIfNeeded();
+  const to = (await target.boundingBox())!;
   await page.mouse.move(
     to.x + (axis === "horizontal" ? to.width * fraction : crossOffset ?? to.width / 2),
     to.y + to.height * (axis === "vertical" ? fraction : 0.5),

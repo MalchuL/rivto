@@ -5,6 +5,7 @@
  */
 import {
   dropMoveTarget,
+  isCurrentDropDestination,
   excludeDropSubtrees,
   resolveBlockDropPlacementOptions,
   resolveAfterDropPlacement,
@@ -13,7 +14,6 @@ import {
   resolveSiblingAfterDropPlacement,
   type DropBlock,
 } from "./utils";
-import { resolveGeometryPlacement } from "./geometry";
 
 const blocks: DropBlock[] = [
   {
@@ -101,25 +101,6 @@ test("offers every structurally available depth after a final nested leaf", () =
   });
 });
 
-test("fractional left bands after a final nested row outdent with floor semantics", () => {
-  const document: DropBlock[] = [{
-    id: "A",
-    children: [{ id: "B", children: [{ id: "C", children: [] }] }],
-  }];
-  const row = { id: "C", rect: { top: 0, bottom: 30, left: 48, height: 30 } };
-  const options = { allowChildPlacement: true, childDropIndent: 24, gapDropZone: 8 };
-
-  expect(resolveGeometryPlacement(document, row, 36, 28, options)).toMatchObject({
-    kind: "between", parentId: "A", previousId: "B", nextId: null, depth: 1,
-  });
-  expect(resolveGeometryPlacement(document, row, 12, 28, options)).toMatchObject({
-    kind: "between", parentId: null, previousId: "A", nextId: null, depth: 0,
-  });
-  expect(resolveGeometryPlacement(document, row, 72, 28, options)).toMatchObject({
-    kind: "between", parentId: "C", previousId: null, nextId: null, depth: 3,
-  });
-});
-
 test("keeps a gap at sibling depth when later siblings prevent outdenting", () => {
   const document: DropBlock[] = [{
     id: "A",
@@ -147,4 +128,13 @@ test("maps parent gaps to the start of existing or empty child lists", () => {
     kind: "between", parentId: "A", previousId: null, nextId: null, depth: 1,
   });
   expect(resolveAfterDropPlacement(populated, "missing", 0)).toBeUndefined();
+});
+
+test("commit refuses a changed gap instead of retargeting its neighbors", () => {
+  const blocks = [{ id: "a", children: [] }, { id: "b", children: [] }];
+  const placement = { kind: "between", parentId: null, previousId: "a", nextId: "b", depth: 0 } as const;
+  expect(isCurrentDropDestination(blocks, placement)).toBe(true);
+  expect(isCurrentDropDestination([blocks[0]!, { id: "new", children: [] }, blocks[1]!], placement)).toBe(false);
+  expect(isCurrentDropDestination([blocks[1]!], placement)).toBe(false);
+  expect(isCurrentDropDestination(blocks, { kind: "inside", parentId: "missing" })).toBe(false);
 });

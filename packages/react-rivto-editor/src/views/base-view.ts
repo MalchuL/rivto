@@ -37,6 +37,8 @@ import type {
 export class BaseBlockView implements BlockViewBehavior {
   /** Sibling-sort axis this type owns, if any. */
   readonly dropAxis?: DropAxis;
+  readonly dropChildTypes?: readonly string[];
+  readonly dropParentTypes?: readonly string[];
   /** Whether the complete BlockView is a drop target, including empty lanes. */
   readonly acceptsDropContainer: boolean = false;
 

@@ -11,10 +11,14 @@
 import { ContainerBlockView } from "../../../views/container-view";
 import type { DropAxis } from "../../../views/types";
 
+export const KANBAN_BLOCK_TYPE = "kanban";
+export const KANBAN_COLUMN_BLOCK_TYPE = "kanban-column";
+
 /**
  * Behavior registered for the `kanban` board type.
  */
 export class KanbanView extends ContainerBlockView {
+  override readonly dropChildTypes = [KANBAN_COLUMN_BLOCK_TYPE];
   override readonly dropAxis: DropAxis = "horizontal";
 }
 
@@ -22,6 +26,7 @@ export class KanbanView extends ContainerBlockView {
  * Behavior registered for the `kanban-column` type.
  */
 export class KanbanColumnView extends ContainerBlockView {
+  override readonly dropParentTypes = [KANBAN_BLOCK_TYPE];
   override readonly dropAxis: DropAxis = "vertical";
 }
 

@@ -11,10 +11,7 @@ import type { EditorBlock as Block } from "@chulane/rivto";
 import type { ReactNode } from "react";
 import type { CrossDocumentBlockTransferPlacement } from "../built-ins/clipboard/cross-document-block-transfer";
 import type { ReactEditor } from "../../types";
-import type { DropAxis } from "../../views/types";
 import type { CanonicalDropPlacement } from "./placement/types";
-
-export type { PageDragData, PageDropTargetData } from "./placement/types";
 
 /** Viewport pointer coordinates for a drag gesture. */
 export interface PointerCoordinates {
@@ -33,15 +30,9 @@ export interface CrossDocumentPageRootController {
   reactEditor: ReactEditor;
   root: HTMLElement;
   setPlacement: (placement: DropPlacement | null, empty?: boolean) => void;
-  resolvePlacement: (x: number, y: number) => CrossDocumentBlockTransferPlacement & {
+  resolvePlacement: (x: number, y: number, sources: readonly Block[]) => CrossDocumentBlockTransferPlacement & {
     readonly indicator: DropPlacement | null;
   } | null;
-}
-
-/** One measured row used by geometry-based placement. */
-export interface RowGeometry {
-  readonly id: string;
-  readonly rect: Pick<DOMRect, "top" | "bottom" | "left" | "height">;
 }
 
 /** One visible row in the height-limited subtree preview. */
@@ -53,10 +44,8 @@ export interface PreviewEntry {
 /** Canonical placement enriched with indicator rendering data. */
 export type DropPlacement = CanonicalDropPlacement & {
   readonly indicatorId: string;
-  readonly layoutAxis?: DropAxis;
-  readonly childDropIndent: number;
-  readonly gapEdge?: "before" | "after";
-  readonly gapPointer?: PointerCoordinates;
+  /** Viewport line selected by the same region that owns the destination. */
+  readonly line?: { readonly axis: "horizontal" | "vertical"; readonly x: number; readonly y: number; readonly length: number };
 };
 
 /**
@@ -101,7 +90,7 @@ export interface PageDragExtensionOptions {
   readonly activationDistance?: number;
   readonly childDropIndent?: number;
   readonly gapDropZone?: number;
-  /** Width in viewport pixels of the sibling-drop zone at a root container's outer edge. Defaults to 8. */
+  /** Width in viewport pixels of each container's outer sibling-drop zone. Defaults to 8. */
   readonly outerEdgeDropZone?: number;
   readonly allowChildPlacement?: boolean;
 }

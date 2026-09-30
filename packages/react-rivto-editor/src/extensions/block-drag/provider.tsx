@@ -3,12 +3,9 @@
  * sibling-root selection. Surface rendering enters through wrapper slots, so
  * this module owns gesture mechanics without owning recursive traversal.
  *
- * The provider is the only adapter between `@dnd-kit/react` events and Rivto's
- * library-independent placement input. Pointer gestures are hit-tested by
- * Rivto against live viewport rectangles; keyboard gestures use dnd-kit's
- * nearest-center target and translated source rectangle. Both feed
- * `resolveDropPlacement`, and Rivto's view policy plus the guarded
- * `moveBlocks` transaction remain the final authority over every drop.
+ * Pointer and keyboard gestures share one measured layout resolver. Each
+ * result identifies the actual destination parent and sibling gap; the same
+ * result drives feedback and the eventual guarded move transaction.
  *
  * Pointer gestures use a fixed preview moved directly from the pointer.
  * Keyboard gestures publish a translated source rectangle for dnd-kit's
@@ -36,7 +33,7 @@ import { createPortal } from "react-dom";
 import {
   dropMoveTarget,
   excludeDropSubtrees,
-  type DropBlock,
+  isCurrentDropDestination,
 } from "./placement/utils";
 import { selectedMoveRoots, type SelectedMoveRoots } from "../built-ins/page/navigation";
 import {
@@ -44,17 +41,9 @@ import {
   type CrossDocumentBlockTransferPlacement,
 } from "../built-ins/clipboard/cross-document-block-transfer";
 import { PageDragPreview } from "./preview/component";
-import {
-  resolveDropPlacement,
-} from "./placement/resolver";
-import type {
-  DropPlacementInput,
-  DropPlacementSource,
-  PageDragData,
-  PageDropTargetData,
-} from "./placement/types";
 import { resolveCrossDocumentPageRootPlacement } from "./cross-document/placement";
-import { withPointerDropTarget } from "./pointer/target";
+import { resolveSurfaceDrop } from "./pointer/target";
+import type { CanonicalDropPlacement } from "./placement/types";
 import {
   type DropPlacement,
   type CrossDocumentPageRootController,
@@ -72,7 +61,6 @@ import {
   findCrossDocumentPageController,
 } from "./cross-document/target";
 import { trackGesturePointer } from "./pointer/tracker";
-import { collectSubtreeIds } from "./utils/subtree";
 import { PageDragAutoScrollPolicy } from "./surface/auto-scroll";
 
 const PAGE_DRAG_OVERLAY_CLASS = "page-drag-overlay";
@@ -101,90 +89,6 @@ type PageDragOperation = DragStartEvent["operation"];
 export type { PageDragExtensionOptions } from "./types";
 
 /**
- * Keeps the outdent indicator on a parent's bottom edge when every direct
- * child is being moved. The canonical destination remains before the next
- * sibling, but letting that sibling own the indicator makes the gesture look
- * like a drop on the next block instead of an outdent from the parent.
- *
- * @param placement - Canonical placement resolved for the current pointer.
- * @param input - Target row approached by the gesture.
- * @param targetChildren - Current direct children of that target row.
- * @param draggedIds - IDs contained by the dragged subtrees.
- * @returns The same placement with parent-owned feedback when required.
- */
-function withParentBottomEdgeIndicator(
-  placement: DropPlacement,
-  input: DropPlacementInput,
-  targetChildren: readonly DropBlock[],
-  draggedIds: ReadonlySet<string>,
-): DropPlacement {
-  const useParentBottomEdge =
-    // This affordance is a line between siblings, never an inside highlight.
-    placement.kind === "between"
-    // The pointer approached the bottom of the target, not the top of the next block.
-    && placement.gapEdge === "after"
-    // The resolved gap starts immediately after the parent row being approached.
-    && placement.previousId === input.target.id
-    // A following sibling exists, so this is the parent/next-block gap from the report.
-    && Boolean(placement.nextId)
-    // The target must actually be a parent; an empty ordinary block keeps default feedback.
-    && targetChildren.length > 0
-    // Every direct child leaves, exposing this parent-level gap for the dragged selection.
-    && targetChildren.every(({ id }) => draggedIds.has(id));
-  return useParentBottomEdge
-    ? { ...placement, indicatorId: input.target.id }
-    : placement;
-}
-
-/**
- * Adapts the current dnd-kit operation into Rivto's placement input.
- *
- * A live pointer wins: the target is hit-tested natively from the cursor and
- * the source carries no stand-in rectangle. Without a pointer the translated
- * source shape stands in for the cursor and dnd-kit's collision target is the
- * candidate row.
- *
- * @param operation - Source, target, and shape of the running gesture.
- * @param pointer - Live cursor, or null for keyboard movement.
- * @param root - Surface root used for native hit testing.
- * @param reactEditor - Editor whose views describe drop capabilities.
- * @param excludedIds - Blocks inside the dragged subtrees.
- * @param outerEdgeDropZone - Width of each root container's outer-edge sibling-drop zone in viewport pixels.
- * @returns Placement input, or null when no candidate target exists.
- */
-function gesturePlacementInput(
-  operation: PageDragOperation,
-  pointer: PointerCoordinates | null,
-  root: HTMLElement | null,
-  reactEditor: ReturnType<typeof useReactEditor>,
-  excludedIds: ReadonlySet<string>,
-  outerEdgeDropZone?: number,
-): DropPlacementInput | null {
-  const { source, target } = operation;
-  if (!source) return null;
-  const sourceRect = pointer ? null : operation.shape?.current.boundingRectangle ?? null;
-  const placementSource: DropPlacementSource = {
-    id: String(source.id),
-    data: source.data as PageDragData | undefined,
-    rect: sourceRect,
-  };
-  let input: DropPlacementInput | null = null;
-  if (pointer) {
-    input = withPointerDropTarget(placementSource, pointer, root, reactEditor, excludedIds, outerEdgeDropZone);
-  } else if (sourceRect && target?.shape) {
-    input = {
-      source: placementSource,
-      target: {
-        id: String(target.id),
-        rect: target.shape.boundingRectangle,
-        data: target.data as PageDropTargetData | undefined,
-      },
-    };
-  }
-  return input;
-}
-
-/**
  * Provides structural block drag-and-drop for an outline surface.
  *
  * A selected sibling group moves together when the dragged block belongs to
@@ -211,15 +115,13 @@ export function PageDragProvider({
 }: PageDragExtensionOptions) {
   const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
+  const displayedPlacement = useRef<DropPlacement | null>(null);
   const activeMove = useRef<SelectedMoveRoots | undefined>(undefined);
   const crossDocumentTarget = useRef<{
     controller: CrossDocumentPageRootController;
     placement: CrossDocumentBlockTransferPlacement;
+    destination: CanonicalDropPlacement;
   } | null>(null);
-  // ponytail: freeze hierarchy for one short gesture; add incremental remote
-  // reconciliation only if concurrent drag-time structure edits become common.
-  const dragBlocks = useRef<readonly DropBlock[] | null>(null);
-  const draggedSubtreeIds = useRef(new Set<string>());
   const pointerTracker = useRef<PointerTracker | null>(null);
   /** @returns The live viewport pointer, or null for keyboard gestures. */
   const getDragPointer = useMemo(() => () => pointerTracker.current?.get() ?? null, []);
@@ -253,7 +155,7 @@ export function PageDragProvider({
         if (empty) root.setAttribute("data-drop-empty", "true");
         else root.removeAttribute("data-drop-empty");
       },
-      resolvePlacement: (x, y) => resolveCrossDocumentPageRootPlacement(
+      resolvePlacement: (x, y, sources) => resolveCrossDocumentPageRootPlacement(
         reactEditor,
         root,
         x,
@@ -261,6 +163,8 @@ export function PageDragProvider({
         childDropIndent,
         gapDropZone,
         allowChildPlacement,
+        sources,
+        outerEdgeDropZone,
       ),
     };
     crossDocumentPageRootControllers.set(root, controller);
@@ -272,7 +176,7 @@ export function PageDragProvider({
       root.removeAttribute(CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE);
       root.removeAttribute("data-drop-empty");
     };
-  }, [allowChildPlacement, childDropIndent, reactEditor, gapDropZone, placements, reactEditor, root]);
+  }, [allowChildPlacement, childDropIndent, reactEditor, gapDropZone, outerEdgeDropZone, placements, root]);
 
   // A gesture abandoned by unmounting still owns a document listener.
   useLayoutEffect(() => () => {
@@ -317,12 +221,11 @@ export function PageDragProvider({
     previewPosition.current = null;
     keyboardSourceRect.current = null;
     activeMove.current = undefined;
-    dragBlocks.current = null;
-    draggedSubtreeIds.current.clear();
     placements.setKeyboardDragging(false);
     placements.setDragged([]);
     setActiveIds([]);
     placements.set(null);
+    displayedPlacement.current = null;
     clearCrossDocumentTarget();
   };
 
@@ -335,16 +238,16 @@ export function PageDragProvider({
       clearCrossDocumentTarget();
     } else {
       if (crossDocumentTarget.current?.controller !== controller) clearCrossDocumentTarget();
-      const candidate = controller.resolvePlacement(pointer.x, pointer.y);
-      const sourceIds = activeMove.current?.ids ?? [];
-      const placement = candidate && (!candidate.targetId
-        || controller.reactEditor.views.acceptsDrop(candidate.targetId, sourceIds))
-        ? candidate
-        : null;
+      const sources = (activeMove.current?.ids ?? []).flatMap((id) => {
+        const block = reactEditor.blocks.getBlock(id);
+        return block ? [block] : [];
+      });
+      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources);
       controller.setPlacement(placement?.indicator ?? null, placement?.targetId === null);
       crossDocumentTarget.current = placement ? {
         controller,
         placement: { targetId: placement.targetId, position: placement.position },
+        destination: placement.indicator ?? { kind: "between", parentId: null, previousId: null, nextId: null, depth: 0 },
       } : null;
       handled = true;
     }
@@ -362,34 +265,19 @@ export function PageDragProvider({
     const zoom = reactEditor.mode.get() === "edgeless"
       ? Number(root?.dataset.edgelessZoom) || 1
       : 1;
-    const blocks = dragBlocks.current ?? reactEditor.blocks.getBlocks();
-    const pointer = pointerTracker.current?.get() ?? null;
-    const input = gesturePlacementInput(
-      operation, pointer, root, reactEditor, draggedSubtreeIds.current, outerEdgeDropZone,
-    );
-    let placement = input
-      ? resolveDropPlacement(
-        input,
-        blocks,
-        childDropIndent * zoom,
-        gapDropZone,
-        allowChildPlacement,
-        pointer,
-      )
-      : null;
-    if (!placement || !input) return null;
-    const targetChildren = reactEditor.blocks.getBlock(input.target.id)?.children ?? [];
-    placement = withParentBottomEdgeIndicator(
-      placement,
-      input,
-      targetChildren,
-      draggedSubtreeIds.current,
-    );
-    const target = dropMoveTarget(placement);
-    if (target.targetId && draggedSubtreeIds.current.has(target.targetId)) return null;
-    const sourceIds = activeMove.current?.ids
-      ?? (operation.source ? [String(operation.source.id)] : []);
-    return !target.targetId || reactEditor.views.acceptsDrop(target.targetId, sourceIds) ? placement : null;
+    const blocks = excludeDropSubtrees(reactEditor.blocks.getBlocks(), new Set(activeMove.current?.ids ?? []));
+    const livePointer = pointerTracker.current?.get() ?? null;
+    const rect = operation.shape?.current.boundingRectangle;
+    const pointer = livePointer ?? (rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null);
+    if (!pointer) return null;
+    const sources = (activeMove.current?.ids ?? []).flatMap((id) => {
+      const block = reactEditor.blocks.getBlock(id);
+      return block ? [block] : [];
+    });
+    return resolveSurfaceDrop(root, reactEditor, sources, blocks, pointer, {
+      childDropIndent: childDropIndent * zoom, gapDropZone, allowChildPlacement,
+      outerEdgeDropZone, keyboard: !livePointer,
+    });
   };
 
   /**
@@ -399,8 +287,8 @@ export function PageDragProvider({
    * @param operation - Live or snapshotted dnd-kit operation state.
    */
   const updatePlacement = (operation: PageDragOperation): void => {
-    if (updateCrossDocumentTarget()) placements.set(null);
-    else placements.set(validPlacement(operation));
+    displayedPlacement.current = updateCrossDocumentTarget() ? null : validPlacement(operation);
+    placements.set(displayedPlacement.current);
   };
 
   /**
@@ -450,13 +338,6 @@ export function PageDragProvider({
       String(source.id),
       (block) => reactEditor.blockListProps.has("collapse") && block.listProps.collapsed === true,
     );
-    const subtreeIds = new Set<string>();
-    move.ids.forEach((id) => {
-      const block = reactEditor.blocks.getBlock(id);
-      if (block) collectSubtreeIds(block, subtreeIds);
-    });
-    dragBlocks.current = excludeDropSubtrees(blocks, new Set(move.ids));
-    draggedSubtreeIds.current = subtreeIds;
     activeMove.current = move;
     const KeyboardEventType = root?.ownerDocument.defaultView?.KeyboardEvent;
     const keyboardDragging = Boolean(KeyboardEventType && activatorEvent instanceof KeyboardEventType);
@@ -484,17 +365,22 @@ export function PageDragProvider({
     if (pointerTracker.current) {
       updatePlacement(manager.dragOperation);
     } else {
-      void manager.renderer.rendering.then(() => {
-        if (manager.dragOperation.status.dragging) {
-          const sourceRect = keyboardSourceRect.current;
-          const { x, y } = manager.dragOperation.position.delta;
-          if (sourceRect) manager.dragOperation.shape = sourceRect.translate(x, y);
-          const rect = manager.dragOperation.shape?.current.boundingRectangle;
-          if (rect) positionPreview({ x: rect.left, y: rect.top });
-          void manager.renderer.rendering.then(() => {
-            if (manager.dragOperation.status.dragging) updatePlacement(manager.dragOperation);
-          });
-        }
+      // dnd-kit queues its position update after dispatching dragmove. Attach
+      // the rendering continuation in a microtask so it cannot read the old
+      // position when the renderer's promise is already resolved.
+      queueMicrotask(() => {
+        void manager.renderer.rendering.then(() => {
+          if (manager.dragOperation.status.dragging) {
+            const sourceRect = keyboardSourceRect.current;
+            const { x, y } = manager.dragOperation.position.delta;
+            if (sourceRect) manager.dragOperation.shape = sourceRect.translate(x, y);
+            const rect = manager.dragOperation.shape?.current.boundingRectangle;
+            if (rect) positionPreview({ x: rect.left, y: rect.top });
+            void manager.renderer.rendering.then(() => {
+              if (manager.dragOperation.status.dragging) updatePlacement(manager.dragOperation);
+            });
+          }
+        });
       });
     }
   };
@@ -510,11 +396,21 @@ export function PageDragProvider({
   const handleDragEnd = (event: DragEndEvent) => {
     const move = activeMove.current;
     const crossDocument = crossDocumentTarget.current;
-    const placement = event.canceled || crossDocument ? null : validPlacement(event.operation);
+    const placement = event.canceled || crossDocument ? null : displayedPlacement.current;
+    const sources = (move?.ids ?? []).flatMap((id) => {
+      const block = reactEditor.blocks.getBlock(id);
+      return block ? [block] : [];
+    });
+    const valid = placement && sources.length === move?.ids.length
+      && reactEditor.views.acceptsDrop(placement, sources)
+      && isCurrentDropDestination(excludeDropSubtrees(reactEditor.blocks.getBlocks(), new Set(move.ids)), placement);
+    const validCrossDocument = crossDocument && sources.length === move?.ids.length
+      && crossDocument.controller.reactEditor.views.acceptsDrop(crossDocument.destination, sources)
+      && isCurrentDropDestination(crossDocument.controller.reactEditor.blocks.getBlocks(), crossDocument.destination);
     resetGesture();
     if (event.canceled || !move) {
       // Nothing to commit; teardown above already removed every indicator.
-    } else if (crossDocument) {
+    } else if (crossDocument && validCrossDocument) {
       let transferred = false;
       try {
         crossDocumentBlockTransfer(
@@ -536,7 +432,7 @@ export function PageDragProvider({
         );
         requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));
       }
-    } else if (placement) {
+    } else if (placement && valid) {
       const { targetId, position } = dropMoveTarget(placement);
       // Persisted parent constraints can reject a structural destination.
       // Refuse the drop instead of leaving an uncaught gesture error.

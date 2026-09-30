@@ -140,7 +140,11 @@ Set `dropAxis` to match direct-child layout:
 - `undefined` when sibling sorting is not meaningful.
 
 Set `acceptsDropContainer = false` when the shell itself must not accept body
-drops. Override semantic methods only for a demonstrated difference. Examples:
+drops. Declare `dropChildTypes` on fixed-shell owners and `dropParentTypes` on
+structural children; the axis does not imply type acceptance. The shared resolver
+validates explicit sibling gaps or body destinations against source snapshots.
+Override `acceptsDrop({ destination, sources, reactEditor })` only for additional
+semantic restrictions. It runs on the destination parent's view, not a neighbor's. Override semantic methods only for a demonstrated difference. Examples:
 
 - Table cells override `onSplit` because Enter always inserts a nested writing
   block rather than splitting cell text.
@@ -273,23 +277,20 @@ Check these geometry rules:
 Verify page and edgeless DOM because they share `BlockTree` but use different
 wrappers and available width.
 
-For block dragging, keep a narrow outer-edge zone on each root container for
-its sibling gap. A nested row may reach the container border, but dragging on
-that border must place the source before or after the root, not inside its last
-child. Route row hits and gap hits through the same pointer target picker;
-separate DOM row fast paths can bypass the edge rule. Test adjacent root
-containers with the pointer just inside the first container's bottom edge,
-then assert both the indicator and the persisted root order in page and
-edgeless modes. Also exercise the demo's TODO storage and Bento pair with the
-target scrolled into the viewport before dragging.
+For block dragging, each container reserves a narrow boundary for its sibling
+gap at every nesting level. The shared resolver walks child layouts and returns
+the exact parent and neighbors with the indicator line. Do not reintroduce a
+nearest-row search, hit reasons, source-axis matching, or container-type switches.
+Kanban/Columns background outside lanes rejects ordinary content; entering a
+visible lane accepts it. Scroll horizontally clipped lanes into view before
+asserting a body drop.
 
-The gap immediately above a root container also belongs to its root sibling
-boundary. An accepting board can otherwise highlight "inside" while the
-pointer is outside it; a container with an inset title row can instead target
-the block above and nest the source there. Cover Kanban, TODO storage, Bento,
-Columns, and Table with an ordinary root immediately above each one. Check
-the indicator and persisted root order in page and edgeless modes. Keep the
-preceding block's own row available for ordinary row placement.
+Test adjacent root and nested containers with one-pixel pointer sweeps through
+their shared gap. Assert both indicator position and persisted sibling order in
+page and edgeless modes, including a scrolled TODO-storage/Bento pair. Cover
+ordinary blocks above Kanban, TODO storage, Bento, Columns, and Table without
+stealing the preceding block's own row. Keep row-center nesting and horizontal
+outline depth selection available within free child layouts.
 
 ## Test the invariant, then the browser
 

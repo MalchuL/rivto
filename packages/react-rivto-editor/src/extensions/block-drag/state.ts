@@ -26,11 +26,10 @@ function sameDropPlacement(left: DropPlacement | null, right: DropPlacement | nu
       && left.previousId === right.previousId
       && left.nextId === right.nextId
       && left.depth === right.depth))
-    && left.layoutAxis === right.layoutAxis
-    && left.childDropIndent === right.childDropIndent
-    && left.gapEdge === right.gapEdge
-    && left.gapPointer?.x === right.gapPointer?.x
-    && left.gapPointer?.y === right.gapPointer?.y);
+    && left.line?.axis === right.line?.axis
+    && left.line?.x === right.line?.x
+    && left.line?.y === right.line?.y
+    && left.line?.length === right.line?.length);
 }
 
 /**

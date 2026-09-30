@@ -58,7 +58,7 @@ test("asks the resolved view whether a drop is accepted", () => {
   });
   const targetId = editor.blocks.insertBlock({ type: "paragraph" }).id;
 
-  expect(reactEditor.views.acceptsDrop(targetId, ["source"])).toBe(false);
+  expect(reactEditor.views.acceptsDrop({ kind: "inside", parentId: targetId }, [editor.blocks.getBlock(targetId)!])).toBe(false);
 
   reactEditor.destroy();
   editor.destroy();
@@ -212,5 +212,30 @@ test("empty block Enter respects an outline floor", () => {
     reactEditor.destroy();
     editor.destroy();
     globalThis.requestAnimationFrame = originalFrame;
+  }
+});
+
+test("drop validation checks the destination parent and every source snapshot", async () => {
+  const { kanbanExtension } = await import("../extensions/containers/kanban/kanban");
+  const { columnsExtension } = await import("../extensions/containers/columns/columns");
+  const editor = createTestCoreEditor();
+  const runtime = createReactEditor({ editor, extensions: [defaultWritingBlockExtension(), kanbanExtension(), columnsExtension(), tableExtension()] });
+  try {
+    for (const [parentType, shellType] of [["kanban", "kanban-column"], ["columns", "columns-column"], ["table", "table-row"], ["table-row", "table-cell"]]) {
+      const parent = editor.blocks.insertBlock({ type: parentType!, children: [{ type: shellType! }] });
+      const shell = editor.blocks.getBlock(parent.id)!.children[0]!;
+      const content = editor.blocks.insertBlock({ type: "paragraph" });
+      const destination = { kind: "between", parentId: parent.id, previousId: shell.id, nextId: null, depth: 1 } as const;
+      expect(runtime.views.acceptsDrop(destination, [content])).toBe(false);
+      expect(runtime.views.acceptsDrop(destination, [{ ...shell, id: "foreign-shell" }])).toBe(true);
+      expect(runtime.views.acceptsDrop(destination, [shell, content])).toBe(false);
+      expect(runtime.views.acceptsDrop({ ...destination, parentId: null }, [shell])).toBe(false);
+      if (shellType === "kanban-column" || shellType === "columns-column" || shellType === "table-cell") {
+        expect(runtime.views.acceptsDrop({ kind: "inside", parentId: shell.id }, [{ ...content, id: "foreign-content" }])).toBe(true);
+      }
+    }
+  } finally {
+    runtime.destroy();
+    editor.destroy();
   }
 });

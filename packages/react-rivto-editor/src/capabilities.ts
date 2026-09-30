@@ -1,6 +1,7 @@
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
+import type { BlockDropDestination } from "./views/types";
 import type {
   BlockDefinition,
   BlockListPropsManagerApi,
@@ -233,8 +234,8 @@ export interface ViewsCapability {
   has(type: string): boolean;
   /** Resolves the view for a placed block, falling back to the generic view. */
   resolve(blockId: string): BlockViewBehavior;
-  /** Asks the target view whether it accepts the dragged roots. */
-  acceptsDrop(targetId: string, sourceIds: readonly string[]): boolean;
+  /** Validates source snapshots against the exact destination parent. */
+  acceptsDrop(destination: BlockDropDestination, sources: readonly EditorBlock[]): boolean;
   /** Shared generic view used when a type registers no specialization. */
   readonly fallback: BlockViewBehavior;
 }
