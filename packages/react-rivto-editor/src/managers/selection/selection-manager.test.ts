@@ -3,7 +3,7 @@ import { createTestCoreEditor as createEditor } from "../../test-utils";
 import { createReactEditor, type ReactEditorImpl } from "../../react-editor";
 
 describe("ReactSelectionManager", () => {
-  test.each(["page", "edgeless"] as const)("keeps only the newest callback when cancellation schedules work in %s", (mode) => {
+  test.each(["block", "edgeless"] as const)("keeps only the newest callback when cancellation schedules work in %s", (mode) => {
     const editor = createEditor();
     const reactEditor = createReactEditor({ editor });
     reactEditor.mode.set(mode);
