@@ -248,6 +248,32 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     doc.destroy();
   });
 
+  it.each([3, 200])("moves %i contiguous siblings with one deletion and insertion", (count) => {
+    const doc = new YjsDoc("range-move");
+    const model = new DocumentModelImpl(doc);
+    const ids = Array.from({ length: count }, (_, index) => `block-${index}`);
+    model.blocks.insertBlock({ id: "target", type: "paragraph" });
+    ids.forEach((id) => model.blocks.insertBlock({ id, type: "paragraph" }));
+    model.blocks.insertBlock({ id: "tail", type: "paragraph" });
+    const roots = doc.doc.getArray<string>("rivto.editor.roots");
+    const deletion = jest.spyOn(roots, "delete");
+    const insertion = jest.spyOn(roots, "insert");
+
+    // An open transaction exercises live parent indexing for the large batch.
+    doc.transact(() => model.blocks.moveBlocks([...ids].reverse().map((id) => ({
+      id, targetId: "tail", position: "after" as const,
+    }))));
+
+    expect(model.blocks.getRootIds()).toEqual(["target", "tail", ...ids]);
+    expect(deletion).toHaveBeenCalledTimes(1);
+    expect(deletion).toHaveBeenCalledWith(1, count);
+    expect(insertion).toHaveBeenCalledTimes(1);
+    expect(insertion).toHaveBeenCalledWith(2, ids);
+    deletion.mockRestore();
+    insertion.mockRestore();
+    doc.destroy();
+  });
+
   it("provides direct block getters", () => {
     const doc = new YjsDoc("direct-getters");
     const model = new DocumentModelImpl(doc);

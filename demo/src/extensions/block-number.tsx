@@ -104,8 +104,8 @@ function useBlockOrdinal(block: BlockSlotProps["block"]): BlockOrdinal | undefin
   // Read after document publication: undo can notify structure observers
   // before every affected root/child snapshot has been invalidated.
   const subscribe = useCallback((listener: () => void) => reactEditor.subscribe(listener), [reactEditor]);
-  const getSnapshot = useCallback(() => blockOrderSnapshot(reactEditor), [reactEditor]);
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot).get(block.id);
+  const getBlockOrderSnapshot = useCallback(() => blockOrderSnapshot(reactEditor), [reactEditor]);
+  return useSyncExternalStore(subscribe, getBlockOrderSnapshot, getBlockOrderSnapshot).get(block.id);
 }
 
 /** Draws the block's document-order number in the page's left gutter. */
