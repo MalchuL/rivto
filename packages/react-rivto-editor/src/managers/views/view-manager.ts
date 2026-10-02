@@ -105,7 +105,18 @@ export class ViewManager implements ViewsCapability {
     return (type && this.views.get(type)?.view) || this.fallback;
   }
 
-  /** Validates all moved roots against their actual destination parent. */
+  /**
+   * Validates all moved roots against their actual destination parent.
+   *
+   * Checks the parent's allowed child types and each source view's allowed
+   * parent types before consulting the destination view's acceptance hook.
+   * Root-level destinations use the generic fallback view.
+   *
+   * @param destination - Canonical gap or container receiving the moved roots.
+   * @param sources - Source blocks whose types and content must be accepted.
+   * @returns `true` when sources are non-empty, the destination parent exists
+   * when specified, and all type restrictions and the acceptance hook pass.
+   */
   acceptsDrop(destination: BlockDropDestination, sources: readonly EditorBlock[]): boolean {
     const parent = destination.parentId
       ? this.reactEditor.blocks.getBlock(destination.parentId)

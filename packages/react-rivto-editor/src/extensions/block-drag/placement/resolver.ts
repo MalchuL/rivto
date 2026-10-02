@@ -34,6 +34,19 @@ function contains(rect: DropRect, point: PointerCoordinates): boolean {
 /**
  * Walks owning child lists, never a global nearest-row list. A boundary carries
  * both neighbors from the moment it is selected, including through validation.
+ *
+ * Matches the pointer to a child layout's gaps, item edges, or accepted block
+ * bodies. Outline gaps may change depth with horizontal pointer movement;
+ * fixed layouts and container bodies bound that movement. Accepted gaps carry
+ * line geometry, while inside placements identify the highlighted block body.
+ *
+ * @param measured - Rendered block geometry and per-view child-layout policies.
+ * @param blocks - Destination tree participating in resolution, with moved subtrees excluded.
+ * @param pointer - Pointer or keyboard-generated position in viewport pixels.
+ * @param defaults - Placement defaults, outer-edge width, and optional keyboard policy.
+ * @param accepts - Predicate validating a candidate destination for the current sources.
+ * @returns Accepted canonical destination with indicator data, or `null` when
+ * no eligible region resolves to an accepted destination with a visible anchor.
  */
 export function resolveDropPlacement(
   measured: readonly DropLayoutBlock[],
@@ -142,6 +155,8 @@ export function resolveDropPlacement(
 
   const resolveList = (parent?: DropLayoutBlock): DropPlacement | null => {
     const list = children.get(parent?.id ?? null) ?? [];
+    // An empty list has no sibling anchor; only an explicit container body
+    // can offer an inside placement.
     if (!list.length) return parent ? (parent.acceptsBody ? inside(parent) : null) : null;
     const axis = parent?.axis ?? "vertical";
     const horizontal = axis === "horizontal";
@@ -153,6 +168,8 @@ export function resolveDropPlacement(
       // Only direct-child gaps belong to this layout. Background never falls
       // through into a lane or a cell that the pointer did not enter.
       if (axis === "grid") {
+        // Consecutive grid items share either a side gap within a row or a
+        // gap between rows; their overlap determines which coordinate to use.
         for (let index = 1; index < list.length; index++) {
           const a = bounds(list[index - 1]!);
           const b = bounds(list[index]!);
@@ -164,6 +181,8 @@ export function resolveDropPlacement(
           if (inGap) return gap(parent, index);
         }
         const rim = options(parent).gapDropZone;
+        // Near an exposed item edge, preserve the same sibling destination.
+        // Side edges request a vertical indicator when the gap has one anchor.
         for (let index = 0; index < list.length; index++) {
           const rect = bounds(list[index]!);
           if (pointer.x >= rect.left && pointer.x <= rect.right) {
@@ -177,6 +196,8 @@ export function resolveDropPlacement(
         }
         return parent?.acceptsBody ? inside(parent) : null;
       }
+      // Ordered layouts choose an insertion index along their own axis.
+      // Horizontal lists also require alignment across the items' height.
       const index = list.findIndex((entry) => coordinate < start(entry));
       const insertion = index < 0 ? list.length : index;
       const previous = list[insertion - 1];
@@ -193,6 +214,8 @@ export function resolveDropPlacement(
     const index = list.indexOf(item);
     const rect = bounds(item);
     const size = horizontal ? rect.width : rect.height;
+    // Reserve narrow outer edges for sorting containers as siblings, leaving
+    // their interior available for child layouts. Small items cap the zone.
     const edge = Math.min(item.acceptsBody || item.fixed ? defaults.outerEdgeDropZone ?? 8 : options(parent).gapDropZone, size / 3);
     const before = coordinate <= start(item) + edge;
     const after = coordinate >= end(item) - edge;
@@ -201,6 +224,8 @@ export function resolveDropPlacement(
       if (boundary) return boundary;
     }
     if (axis === "grid") {
+      // Grid side edges sort within the owning list before the item's body
+      // or nested child layout is considered.
       const xEdge = Math.min(options(parent).gapDropZone, rect.width / 4);
       if (pointer.x <= rect.left + xEdge || pointer.x >= rect.right - xEdge) {
         return gap(parent, index + (pointer.x >= rect.right - xEdge ? 1 : 0), false, "vertical");
@@ -214,17 +239,23 @@ export function resolveDropPlacement(
       if (boundary) return boundary;
     }
     if (contains(item.row, pointer)) {
+      // Fixed rows sort by halves. Ordinary row edges expose outline gaps;
+      // a lower edge with visible children targets the start of that child list.
       if (item.fixed) return gap(parent, index + (pointer.y >= item.row.top + item.row.height / 2 ? 1 : 0));
       const rowEdge = Math.min(options(parent).gapDropZone, item.row.height / 3);
       if (pointer.y < item.row.top + rowEdge) return gap(parent, index, true);
       if (pointer.y > item.row.bottom - rowEdge) {
         return children.get(item.id)?.length ? gap(item, 0) : gap(parent, index + 1, true);
       }
+      // Either the owning list or the item can disable nesting, in which
+      // case the row center continues to sort by halves.
       if (!options(parent).allowChildPlacement || !options(item).allowChildPlacement) {
         return gap(parent, index + (pointer.y >= item.row.top + item.row.height / 2 ? 1 : 0));
       }
       return inside(item);
     }
+    // Beyond the row, enter the item's own child layout. An empty grid item
+    // can instead expose its body directly as an inside destination.
     if (axis === "grid" && !children.get(item.id)?.length) return inside(item);
     return resolveList(item);
   };

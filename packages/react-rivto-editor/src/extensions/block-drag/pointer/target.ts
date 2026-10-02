@@ -10,6 +10,11 @@ import type { DropPlacement, PointerCoordinates } from "../types";
  * Collects only rendered blocks belonging to this surface. Keeps the complete
  * identity list, but reads bounding rectangles only when the resolver accesses
  * them. Each access reads the live DOM; no geometry survives between calculations.
+ *
+ * @param root - Surface element containing the rendered destination blocks.
+ * @param runtime - Destination React runtime providing block-view behavior and containment.
+ * @returns Rendered block identities and layout policies with live viewport
+ * rectangle getters; blocks without a direct page row or client rectangles are omitted.
  */
 export function collectDropLayout(root: HTMLElement, runtime: ReactEditor): DropLayoutBlock[] {
   return [...root.querySelectorAll<HTMLElement>("[data-block-id]")].flatMap((element) => {
@@ -29,7 +34,23 @@ export function collectDropLayout(root: HTMLElement, runtime: ReactEditor): Drop
   });
 }
 
-/** Shared local, foreign-document, and keyboard geometry adapter. */
+/**
+ * Resolves a surface drop using the shared local, foreign-document, and keyboard
+ * geometry adapter.
+ *
+ * Collects rendered layout and validates candidate destinations through the
+ * destination runtime's views. The supplied tree determines which blocks can
+ * participate, allowing local callers to exclude the subtrees being moved.
+ *
+ * @param root - Destination surface element, or `null` when unavailable.
+ * @param runtime - Destination React runtime providing layout and acceptance behavior.
+ * @param sources - Source blocks checked against each candidate destination.
+ * @param blocks - Destination tree participating in placement resolution.
+ * @param pointer - Pointer or keyboard-generated position in viewport pixels.
+ * @param options - Placement defaults and optional keyboard policy.
+ * @returns Accepted placement with indicator data, or `null` when the surface
+ * is unavailable or no eligible region resolves to an accepted destination.
+ */
 export function resolveSurfaceDrop(
   root: HTMLElement | null,
   runtime: ReactEditor,

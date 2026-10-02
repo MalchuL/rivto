@@ -223,7 +223,19 @@ export function dropMoveTarget(placement: CanonicalDropPlacement): DropMoveTarge
     : { targetId: null, position: "after" };
 }
 
-/** Revalidates a displayed destination without choosing a different gap. */
+/**
+ * Revalidates a displayed destination without choosing a different gap.
+ *
+ * Inside placements remain current while their parent exists. Between
+ * placements require the recorded neighbors to remain adjacent in the same
+ * child list, including its start and end boundaries. This checks structural
+ * identity only; view acceptance and outline depth are not revalidated here.
+ *
+ * @param blocks - Current destination tree, excluding any locally moved subtrees.
+ * @param placement - Previously resolved destination to check against the tree.
+ * @returns `true` when the parent exists, if specified, and the recorded gap
+ * still matches its sibling list, or when an inside placement's parent exists.
+ */
 export function isCurrentDropDestination(blocks: readonly DropBlock[], placement: CanonicalDropPlacement): boolean {
   const parent = placement.parentId ? findBlockLocation(blocks, placement.parentId)?.block : undefined;
   if (placement.parentId && !parent) return false;

@@ -6,6 +6,25 @@ import { dropMoveTarget } from "../placement/utils";
 import { resolveSurfaceDrop } from "../pointer/target";
 import type { DropPlacement } from "../types";
 
+/**
+ * Resolves a foreign-document drop into a destination page's move target.
+ *
+ * Uses the same rendered regions and view acceptance as local dragging. An
+ * empty document accepts a root-level append without a block indicator;
+ * populated documents translate the resolved canonical placement into a target.
+ *
+ * @param reactEditor - Destination React runtime providing its tree and block views.
+ * @param root - Rendered destination page surface.
+ * @param x - Pointer's horizontal viewport coordinate in pixels.
+ * @param y - Pointer's vertical viewport coordinate in pixels.
+ * @param childDropIndent - Default pixels per requested outline depth change.
+ * @param gapDropZone - Default item-edge zone for sibling placement in pixels.
+ * @param allowChildPlacement - Default policy permitting child placement.
+ * @param sources - Foreign source blocks validated by the destination views.
+ * @param outerEdgeDropZone - Optional container-edge sibling zone in pixels; defaults to 8.
+ * @returns Accepted transfer target and visual placement, with a `null` indicator
+ * for an empty document, or `null` when no destination is accepted.
+ */
 export function resolveCrossDocumentPageRootPlacement(
   reactEditor: ReactEditor,
   root: HTMLElement,
