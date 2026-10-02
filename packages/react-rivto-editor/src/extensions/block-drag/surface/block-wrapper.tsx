@@ -25,7 +25,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { PageDropIndicator } from "../placement/indicator";
-import type { DropPlacementStore, PageDragData, PageDragHandle } from "../types";
+import type { DropPlacementStore, PageDragHandle } from "../types";
 import { PageDragItemContext, PageDragStateContext } from "../state";
 import { blockContainment } from "../utils/containment";
 
@@ -56,14 +56,6 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
   const parentOutline = parentId ? blockContainment(reactEditor, parentId)?.childOutline : undefined;
   const axis = parentOutline === "fixed" ? parentView?.dropAxis : undefined;
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
-  const targetDropPlacement = targetView.dropPlacement;
-  const parentDropPlacement = parentView?.dropPlacement;
-  // dnd-kit re-assigns entity data whenever the object identity changes, so
-  // the layout context is memoized on its fields rather than rebuilt per render.
-  const data = useMemo<PageDragData>(
-    () => ({ sortChildren: axis, targetDropPlacement, parentDropPlacement }),
-    [axis, parentDropPlacement, targetDropPlacement],
-  );
   const dropNode = sortable || targetView.acceptsDropContainer ? blockElement : row;
 
   return (
@@ -75,7 +67,6 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
         dropNode={dropNode}
         sortable={sortable}
         axis={axis}
-        data={data}
       >
         {children}
       </PageDragBlockMechanics>
@@ -96,7 +87,6 @@ function PageDragBlockMechanics({
   dropNode,
   sortable,
   axis,
-  data,
   children,
 }: {
   readonly blockId: string;
@@ -105,7 +95,6 @@ function PageDragBlockMechanics({
   readonly dropNode: HTMLElement | null;
   readonly sortable: boolean;
   readonly axis: DropAxis | undefined;
-  readonly data: PageDragData;
   readonly children?: ReactNode;
 }) {
   const dragState = useContext(PageDragStateContext);
@@ -173,7 +162,7 @@ function PageDragBlockMechanics({
 
   const indicatorHost = indicator?.kind === "inside" ? dropNode : blockElement;
   const indicatorPortal = indicatorHost && indicator ? createPortal(
-    <PageDropIndicator placement={indicator} host={indicatorHost} row={row} />,
+    <PageDropIndicator placement={indicator} host={indicatorHost} />,
     indicatorHost,
   ) : null;
 
@@ -181,8 +170,8 @@ function PageDragBlockMechanics({
     <PageDragItemContext.Provider value={itemState}>
       {children}
       {indicatorPortal}
-      {armed && <PageDragRegistration blockId={blockId} data={data} row={row} placements={dragState.placements} />}
-      {keyboardDragging && <PageDragKeyboardDropTarget blockId={blockId} data={data} dropNode={dropNode} />}
+      {armed && <PageDragRegistration blockId={blockId} row={row} placements={dragState.placements} />}
+      {keyboardDragging && <PageDragKeyboardDropTarget blockId={blockId} dropNode={dropNode} />}
     </PageDragItemContext.Provider>
   );
 }
@@ -200,16 +189,14 @@ function PageDragBlockMechanics({
  */
 function PageDragRegistration({
   blockId,
-  data,
   row,
   placements,
 }: {
   readonly blockId: string;
-  readonly data: PageDragData;
   readonly row: HTMLElement | null;
   readonly placements: DropPlacementStore;
 }) {
-  const { handleRef } = useDraggable<PageDragData>({ id: blockId, data, element: row ?? undefined });
+  const { handleRef } = useDraggable({ id: blockId, element: row ?? undefined });
   const handle = useMemo<PageDragHandle>(() => ({ handleRef }), [handleRef]);
   useLayoutEffect(() => {
     placements.setDraggable(blockId, handle);
@@ -221,25 +208,22 @@ function PageDragRegistration({
 /**
  * Registers complete row geometry only for the less frequent keyboard gesture.
  *
- * Keyboard movement has no cursor, so dnd-kit's nearest-center collision picks
- * the row under the translated stand-in rectangle and the provider resolves
- * before/after from the two rectangles.
+ * Supplies collision geometry for dnd-kit's keyboard gesture mechanics.
+ * The provider resolves the translated source center against the shared layout;
+ * the library's nearest-center target does not determine the destination.
  *
  * @param props - Block ID, layout data, and the element whose rectangle is measured.
  * @returns Nothing; the droppable registers with the provider's manager.
  */
 function PageDragKeyboardDropTarget({
   blockId,
-  data,
   dropNode,
 }: {
   readonly blockId: string;
-  readonly data: PageDragData;
   readonly dropNode: HTMLElement | null;
 }) {
-  useDroppable<PageDragData>({
+  useDroppable({
     id: blockId,
-    data,
     element: dropNode ?? undefined,
     collisionDetector: closestCenter,
   });

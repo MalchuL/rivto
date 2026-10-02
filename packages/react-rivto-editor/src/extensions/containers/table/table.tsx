@@ -25,12 +25,11 @@ import { MarkdownContent } from "../../../blocks/markdown/markdown";
 import { useBlockEditing, useReactEditor } from "../../../hooks";
 import { type ReactEditorExtension } from "../../../managers";
 import type { ReactEditor } from "../../../types";
-import { tableCellView, tableRowView, tableView } from "./table-view";
+import { TABLE_BLOCK_TYPE, TABLE_ROW_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE, tableCellView, tableRowView, tableView } from "./table-view";
 import { convertLeafToContainer } from "../../../views/ops/outline-ops";
 
-export const TABLE_BLOCK_TYPE = "table";
-export const TABLE_ROW_BLOCK_TYPE = "table-row";
-export const TABLE_CELL_BLOCK_TYPE = "table-cell";
+export { TABLE_BLOCK_TYPE, TABLE_ROW_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE } from "./table-view";
+
 export const TABLE_DEFAULT_COLUMN_WIDTH = 180;
 
 const TABLE_CLASS = "rivto-table";
@@ -52,7 +51,6 @@ export interface TableCellProps {
   /** Preferred column width in CSS pixels. */
   readonly tableColumnWidth?: number;
 }
-
 
 /**
  * Rejects dimensions that would create a malformed or unexpectedly huge grid.
