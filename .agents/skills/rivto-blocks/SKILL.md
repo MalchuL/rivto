@@ -105,6 +105,27 @@ Use the native control size or the minimum internal padding its design requires;
 changing the shell's margin or padding would make custom blocks behave
 differently from built-ins.
 
+## Keep paint containment inside renderer content
+
+When using `content-visibility: auto` to reduce offscreen rendering work, put
+it on the renderer's content root, never on `.page-block`, `.page-block-row`,
+`.rivto-block-content-flow`, child slots, or drag controls. The shared shell must
+remain available for selection and drag hit testing. Apply the rule separately
+to text fields outside that root, such as the TODO name and description.
+
+Keep interacting layers in one contained root: Markdown's transparent editor,
+preview, links, and code controls belong under `.markdown-content`. Containing
+the editor and preview separately changes their stacking order and blocks link
+clicks. Pair `content-visibility: auto` with `contain-intrinsic-size: auto <height>`
+using a fallback near the normal field height; check long content for scroll
+jumps. Keep page virtualization independently switchable: this CSS can skip
+paint for mounted content, but it cannot make unmounted blocks available to
+native find-in-page.
+
+For a containment change, verify in a browser that distant content is actually
+skipped, block rows and drag handles still respond, and links, code controls,
+and editable fields still work when scrolled into view.
+
 ## Choose one editing owner
 
 ### Editable text

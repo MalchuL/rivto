@@ -544,6 +544,23 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
+  it("keeps a long same-parent move adjacent to its target and undoable", () => {
+    const editor = createRivtoEditor();
+    const ids = Array.from({ length: 16 }, (_, index) => editor.blocks.insertBlock({
+      type: "paragraph", content: `Block ${index}`,
+    }).id);
+    const moving = ids.slice(2, 12);
+
+    editor.blocks.moveBlocks(moving, ids[13]!, "after");
+
+    expect(editor.blocks.getRootIds()).toEqual([
+      ...ids.slice(0, 2), ids[12], ids[13], ...moving, ...ids.slice(14),
+    ]);
+    editor.history.undo();
+    expect(editor.blocks.getRootIds()).toEqual(ids);
+    editor.destroy();
+  });
+
   it("rejects grouped moves whose roots have different parents", () => {
     const editor = createRivtoEditor();
     const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;

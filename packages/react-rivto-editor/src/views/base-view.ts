@@ -17,8 +17,9 @@ import {
 import type { KeyboardSelectionTarget } from "../managers";
 import { navigationDomRoot } from "../extensions/built-ins/page/navigation/utils/scope";
 import { removeEmptyBlockAfterStructuralPredecessor } from "../extensions/built-ins/page/block-merge/utils";
-import { focusBlockLater, focusCaret } from "./ops/focus-ops";
-import { indentBlocks, outdentBlocks, outdentUntilBoundary } from "./ops/outline-ops";
+import { isNumberedListType } from "../extensions/built-ins/page/list";
+import { scheduleBlockFocus, focusCaret } from "./ops/focus-ops";
+import { indentBlocks, outdentBlocks } from "./ops/outline-ops";
 import { convertEmptyToList, mergeBlocks, resetToWritingType, splitBlockAt } from "./ops/text-ops";
 import type {
   BlockViewBehavior,
@@ -36,21 +37,32 @@ import type {
 export class BaseBlockView implements BlockViewBehavior {
   /** Sibling-sort axis this type owns, if any. */
   readonly dropAxis?: DropAxis;
+  readonly dropChildTypes?: readonly string[];
+  readonly dropParentTypes?: readonly string[];
   /** Whether the complete BlockView is a drop target, including empty lanes. */
   readonly acceptsDropContainer: boolean = false;
 
   /**
-   * Splits at the caret, continues a list, or lifts an empty nested block.
+   * Splits at the caret, clears an empty list marker, or lifts one outline level.
    *
    * @param context - Block that owns the Enter event.
    * @param target - Caret or structural keyboard target.
-   * @returns `"handled"` when a block was created or outdented.
+   * @returns `"handled"` when a block was created, cleared, or outdented.
    */
   onSplit(context: BlockViewContext, target: KeyboardSelectionTarget): BlockViewOutcome {
     const { reactEditor, block, root } = context;
     const { isEmptyBlock } = reactEditor;
+    if (isEmptyBlock(block) &&
+      (block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type))) {
+      // The first Enter removes only the visible list state; the block keeps
+      // its outline position and unrelated properties for the next press.
+      reactEditor.blocks.deleteListProps(block.id, ["type", "checked"]);
+      focusCaret(reactEditor, root, block.id, 0);
+      return "handled";
+    }
     if (isEmptyBlock(block) && reactEditor.blocks.getParentId(block.id)) {
-      outdentUntilBoundary(reactEditor, block.id);
+      // Lift one permitted level per Enter, stopping at container outline floors.
+      outdentBlocks(reactEditor, [block.id]);
       focusCaret(reactEditor, root, block.id, 0);
       return "handled";
     }
@@ -58,7 +70,7 @@ export class BaseBlockView implements BlockViewBehavior {
     const collapseActive = reactEditor.blockListProps.has("collapse");
     if (listActive && isEmptyBlock(block) && block.listProps.type !== "list") {
       convertEmptyToList(reactEditor, block.id);
-      focusBlockLater(root, block.id, 0);
+      scheduleBlockFocus(reactEditor, root, block.id, 0);
       return "handled";
     }
     const splitAt = target.collapsed
@@ -76,7 +88,7 @@ export class BaseBlockView implements BlockViewBehavior {
       );
       if (element) reactEditor.elements.updateElement(element.id, { props: { endBlockId: nextBlock.id } });
     }
-    focusBlockLater(root, nextBlock.id, 0);
+    scheduleBlockFocus(reactEditor, root, nextBlock.id, 0);
     return "handled";
   }
 
@@ -115,7 +127,7 @@ export class BaseBlockView implements BlockViewBehavior {
     const rendered = findRenderedBlock(context.root, target.blockId);
     if (!rendered || !findParentBlock(rendered)) return "default";
     outdentBlocks(context.reactEditor, [target.blockId]);
-    focusBlockLater(context.root, target.blockId, 0);
+    scheduleBlockFocus(context.reactEditor, context.root, target.blockId, 0);
     return "handled";
   }
 
@@ -135,7 +147,7 @@ export class BaseBlockView implements BlockViewBehavior {
     const previous = findPreviousEditableBlock(scope, target.blockId);
     if (!previous) return "default";
     const joinOffset = mergeBlocks(reactEditor, previous.blockId, target.blockId);
-    focusBlockLater(root, previous.blockId, joinOffset);
+    scheduleBlockFocus(reactEditor, root, previous.blockId, joinOffset);
     return "handled";
   }
 
@@ -154,7 +166,7 @@ export class BaseBlockView implements BlockViewBehavior {
     const next = findNextEditableBlock(scope, target.blockId);
     if (!next) return "default";
     const joinOffset = mergeBlocks(reactEditor, block.id, next.blockId);
-    focusBlockLater(root, block.id, joinOffset);
+    scheduleBlockFocus(reactEditor, root, block.id, joinOffset);
     return "handled";
   }
 
@@ -171,7 +183,7 @@ export class BaseBlockView implements BlockViewBehavior {
     const scope = navigationDomRoot(root, block.id);
     if (findPreviousEditableBlock(scope, target.blockId)) return "default";
     resetToWritingType(reactEditor, block.id);
-    focusBlockLater(root, block.id, 0);
+    scheduleBlockFocus(reactEditor, root, block.id, 0);
     return "handled";
   }
 

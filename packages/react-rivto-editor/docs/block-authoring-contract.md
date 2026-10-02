@@ -233,8 +233,25 @@ return <div {...editing.attributes} className={BOARD_BODY_CLASS} />;
 Container behavior is declared separately with `ContainerBlockView`:
 
 - `dropAxis` describes direct-child layout;
-- `acceptsDropContainer` describes body drops;
+- `acceptsDropContainer` enables drops on the full body, including empty fields;
+- `dropChildTypes` restricts direct children accepted by dragging (omit for unrestricted content);
+- `dropParentTypes` restricts where a dragged structural shell may be placed;
+- `acceptsDrop({ destination, sources, reactEditor })` validates an exact destination
+  against source snapshots, including sources from another document;
 - containment metadata describes fixed or free outline behavior;
+
+The shared resolver walks the measured hierarchy. Each sibling gap carries its
+parent and both neighbors; body regions carry their accepting parent. Layout axes
+never imply type acceptance. Kanban and Columns background outside lanes rejects
+ordinary content, while lane interiors accept it. Container boundaries select
+sibling gaps at every nesting level. Feedback and commit share the same resolved
+destination; a destination invalidated before release cancels the move.
+
+For example, a Kanban view declares `dropAxis = "horizontal"` and
+`dropChildTypes = [KANBAN_COLUMN_BLOCK_TYPE]`; its column view declares
+`dropParentTypes = [KANBAN_BLOCK_TYPE]`. These are drag policies, not persisted
+schema constraints. Custom views receive the destination parent even when the
+pointer approached a neighboring child's edge.
 
 Do not map `block.children`, create a parallel child store, or register a second
 drag system in the renderer.

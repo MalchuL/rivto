@@ -15,7 +15,7 @@ tree renderer, or container-specific drag system.
 Patterns can evolve. Trace the affected behavior and inspect relevant shared
 owners; do not rely only on this guide:
 
-- `packages/react-rivto-editor/src/blocks/block-tree.tsx` — recursive rendering,
+- `packages/react-rivto-editor/src/blocks/block-tree/block-tree.tsx` — recursive rendering,
   collapse visibility, slots, wrappers, and stable DOM shells.
 - `packages/react-rivto-editor/src/hooks/blocks/use-block-editing.ts` — text and
   structural selection anchors.
@@ -142,7 +142,11 @@ Set `dropAxis` to match direct-child layout:
 - `undefined` when sibling sorting is not meaningful.
 
 Set `acceptsDropContainer = false` when the shell itself must not accept body
-drops. Override semantic methods only for a demonstrated difference. Examples:
+drops. Declare `dropChildTypes` on fixed-shell owners and `dropParentTypes` on
+structural children; the axis does not imply type acceptance. The shared resolver
+validates explicit sibling gaps or body destinations against source snapshots.
+Override `acceptsDrop({ destination, sources, reactEditor })` only for additional
+semantic restrictions. It runs on the destination parent's view, not a neighbor's. Override semantic methods only for a demonstrated difference. Examples:
 
 - Table cells override `onSplit` because Enter always inserts a nested writing
   block rather than splitting cell text.
@@ -289,6 +293,21 @@ Check these geometry rules:
 
 Verify page and edgeless DOM because they share `BlockTree` but use different
 wrappers and available width.
+
+For block dragging, each container reserves a narrow boundary for its sibling
+gap at every nesting level. The shared resolver walks child layouts and returns
+the exact parent and neighbors with the indicator line. Do not reintroduce a
+nearest-row search, hit reasons, source-axis matching, or container-type switches.
+Kanban/Columns background outside lanes rejects ordinary content; entering a
+visible lane accepts it. Scroll horizontally clipped lanes into view before
+asserting a body drop.
+
+Test adjacent root and nested containers with one-pixel pointer sweeps through
+their shared gap. Assert both indicator position and persisted sibling order in
+page and edgeless modes, including a scrolled TODO-storage/Bento pair. Cover
+ordinary blocks above Kanban, TODO storage, Bento, Columns, and Table without
+stealing the preceding block's own row. Keep row-center nesting and horizontal
+outline depth selection available within free child layouts.
 
 ## Test the invariant, then the browser
 

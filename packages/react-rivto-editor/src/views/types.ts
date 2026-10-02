@@ -48,14 +48,26 @@ export interface BlockViewContext {
   readonly root: HTMLElement;
 }
 
-/** Arguments for a drop-acceptance check against one destination view. */
+/** A stable destination in one parent's ordered child list. */
+export type BlockDropDestination = {
+  readonly kind: "between";
+  readonly parentId: string | null;
+  readonly previousId: string | null;
+  readonly nextId: string | null;
+  readonly depth: number;
+} | {
+  readonly kind: "inside";
+  readonly parentId: string;
+};
+
+/** Arguments for a drop-acceptance check against the destination parent. */
 export interface BlockViewDropContext {
   /** Runtime used to read live block types and parents. */
   readonly reactEditor: ReactEditor;
-  /** Block that would receive or sit beside the drop. */
-  readonly targetId: string;
-  /** Subtree roots being moved. */
-  readonly sourceIds: readonly string[];
+  /** Exact destination, shared by feedback and commit. */
+  readonly destination: BlockDropDestination;
+  /** Source snapshots, including when they belong to another document. */
+  readonly sources: readonly EditorBlock[];
 }
 
 /**
@@ -68,6 +80,10 @@ export interface BlockViewDropContext {
 export interface BlockViewBehavior {
   /** How this type sorts its own children during drag, if it owns a layout. */
   readonly dropAxis?: DropAxis;
+  /** Permitted direct child types during dragging; omitted means unrestricted. */
+  readonly dropChildTypes?: readonly string[];
+  /** Permitted destination parent types for a dragged structural shell. */
+  readonly dropParentTypes?: readonly string[];
   /** Optional overrides for shared page-drag placement defaults. */
   readonly dropPlacement?: BlockDropPlacementOptions;
   /** Whether this type's complete BlockView is a drop target, including empty lanes. */

@@ -97,6 +97,31 @@ test("creates interactive checkboxes from a shortcut and inherits them with Ente
   await expect(inherited.locator(":scope > .page-block-row .page-list-marker")).toHaveCount(0);
 });
 
+test("empty nested checkbox clears its marker before Enter outdents it", async ({ page }) => {
+  const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
+  const first = roots.first();
+  const content = first.locator(":scope > .page-block-row [data-block-content]");
+  await content.click();
+  await replaceContent(page, "[ ] ");
+  await page.keyboard.type("Task");
+  await content.click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  const child = roots.nth(1);
+  const childId = await child.getAttribute("data-block-id");
+  if (!childId) throw new Error("Expected an empty checkbox block");
+  await expect(child.locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
+  await page.keyboard.press("Tab");
+  const nested = first.locator(`:scope > .page-block-children > ${blockIdSelector(childId)}`);
+  await expect(nested).toHaveCount(1);
+
+  await page.keyboard.press("Enter");
+  await expect(nested).toHaveCount(1);
+  await expect(nested.locator(":scope > .page-block-row .page-list-checkbox")).toHaveCount(0);
+  await page.keyboard.press("Enter");
+  await expect(roots.nth(1)).toHaveAttribute("data-block-id", childId);
+});
+
 test("numbers adjacent blocks and resumes through a list gap from slash commands", async ({ page }) => {
   const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
   const first = roots.first();

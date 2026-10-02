@@ -46,6 +46,7 @@ export function relocateColumnContents(editor: ReactEditor | RivtoEditorApi, col
  * Behavior registered for the `columns` board type.
  */
 export class ColumnsView extends ContainerBlockView {
+  override readonly dropChildTypes = [COLUMNS_COLUMN_BLOCK_TYPE];
   override readonly dropAxis: DropAxis = "horizontal";
   override readonly acceptsDropContainer: boolean = false;
 }
@@ -54,6 +55,7 @@ export class ColumnsView extends ContainerBlockView {
  * Behavior registered for the `columns-column` lane type.
  */
 export class ColumnsColumnView extends ContainerBlockView {
+  override readonly dropParentTypes = [COLUMNS_BLOCK_TYPE];
   override readonly dropAxis: DropAxis | undefined = undefined;
 
   /**

@@ -2,7 +2,8 @@
  * Caret-placement primitives used by block views after a mutation.
  *
  * Views schedule focus on the next frame so React can remount the BlockView
- * that owns the new caret host.
+ * that owns the new caret host. The shared selection scheduler skips stale
+ * focus work when another operation publishes a newer selection first.
  *
  * @module
  */
@@ -26,17 +27,22 @@ export function focusCaret(
   offset: number,
 ): void {
   reactEditor.selection.set(createCaretSelection(blockId, offset));
-  requestAnimationFrame(() => focusBlock(root, blockId, offset));
+  // Only place the caret and its editing focus; model mutations happen before scheduling.
+  reactEditor.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, offset));
 }
 
 /**
- * Focuses an already-published caret after the next paint.
+ * Schedules focus for an already-published caret in the next animation frame.
+ * A newer model selection cancels the pending focus through the shared selection
+ * scheduler, so delayed work cannot replace a more recent selection.
  *
+ * @param reactEditor - Runtime whose current selection guards deferred focus.
  * @param root - Surface or card that contains the target BlockView.
  * @param blockId - Block that should own the caret.
  * @param offset - UTF-16 caret offset inside that block.
  * @returns Nothing; focus is scheduled asynchronously.
  */
-export function focusBlockLater(root: HTMLElement, blockId: string, offset: number): void {
-  requestAnimationFrame(() => focusBlock(root, blockId, offset));
+export function scheduleBlockFocus(reactEditor: ReactEditor, root: HTMLElement, blockId: string, offset: number): void {
+  // Only place the caret and its editing focus; model mutations happen before scheduling.
+  reactEditor.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, offset));
 }

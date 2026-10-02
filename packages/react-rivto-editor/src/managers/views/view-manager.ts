@@ -9,7 +9,8 @@
  */
 import type { ReactEditorImpl } from "../../react-editor";
 import { BaseBlockView } from "../../views/base-view";
-import type { BlockViewBehavior } from "../../views/types";
+import type { EditorBlock } from "@chulane/rivto";
+import type { BlockDropDestination, BlockViewBehavior } from "../../views/types";
 import type { ViewsCapability } from "../../capabilities";
 
 /** Shared fallback used for unregistered and unknown block types. */
@@ -105,18 +106,28 @@ export class ViewManager implements ViewsCapability {
   }
 
   /**
-   * Asks a resolved target view whether it accepts dragged roots.
+   * Validates all moved roots against their actual destination parent.
    *
-   * @param targetId - Block that would receive or sit beside the drop.
-   * @param sourceIds - Subtree roots being moved.
-   * @returns Whether the shared drag resolver may use this destination.
+   * Checks the parent's allowed child types and each source view's allowed
+   * parent types before consulting the destination view's acceptance hook.
+   * Root-level destinations use the generic fallback view.
+   *
+   * @param destination - Canonical gap or container receiving the moved roots.
+   * @param sources - Source blocks whose types and content must be accepted.
+   * @returns `true` when sources are non-empty, the destination parent exists
+   * when specified, and all type restrictions and the acceptance hook pass.
    */
-  acceptsDrop(targetId: string, sourceIds: readonly string[]): boolean {
-    return this.resolve(targetId).acceptsDrop({
-      reactEditor: this.reactEditor,
-      targetId,
-      sourceIds,
-    });
+  acceptsDrop(destination: BlockDropDestination, sources: readonly EditorBlock[]): boolean {
+    const parent = destination.parentId
+      ? this.reactEditor.blocks.getBlock(destination.parentId)
+      : undefined;
+    if (destination.parentId && !parent) return false;
+    const view = parent ? this.resolve(parent.id) : this.fallback;
+    return sources.length > 0 && sources.every((source) => {
+      const sourceView = this.get(source.type) ?? this.fallback;
+      return (!view.dropChildTypes || view.dropChildTypes.includes(source.type))
+        && (!sourceView.dropParentTypes || Boolean(parent && sourceView.dropParentTypes.includes(parent.type)));
+    }) && view.acceptsDrop({ reactEditor: this.reactEditor, destination, sources });
   }
 
   /** Shared generic view used when a type registers no specialization. */

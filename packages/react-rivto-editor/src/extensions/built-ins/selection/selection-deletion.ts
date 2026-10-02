@@ -68,7 +68,8 @@ export function registerSelectionDeletion(reactEditor: ReactEditor): void {
     // Cursor Browser intercepting Ctrl/Cmd+Z before the page receives it; see
     // the known-host limitation documented in the history extension.
     if (!focusSelectionCaret(root, reactEditor.selection)) root.focus({ preventScroll: true });
-    requestAnimationFrame(() => focusSelectionCaret(root, reactEditor.selection));
+    // Only restore the caret and its editing focus; document deletion has already completed.
+    reactEditor.selection.scheduleIfSelectionUnchanged(() => focusSelectionCaret(root, reactEditor.selection));
     return true;
   });
 }

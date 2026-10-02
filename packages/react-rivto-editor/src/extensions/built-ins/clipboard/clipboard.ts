@@ -228,7 +228,8 @@ export function registerClipboard(
       root?.ownerDocument.getSelection()?.removeAllRanges();
       root?.focus({ preventScroll: true });
     }
-    requestAnimationFrame(() => reactEditor.selection.restoreDOM());
+    // Only restore DOM selection after paste; content insertion must stay outside this callback.
+    reactEditor.selection.scheduleIfSelectionUnchanged(() => reactEditor.selection.restoreDOM());
   };
 
   /**
@@ -251,7 +252,8 @@ export function registerClipboard(
     reactEditor.selection.delete();
     // Capture before a delayed native selectionchange can report old DOM offsets.
     const selection = reactEditor.selection.get();
-    requestAnimationFrame(() => reactEditor.selection.restoreDOM(selection));
+    // Only restore the post-cut caret/selection; cutting content has already completed.
+    reactEditor.selection.scheduleIfSelectionUnchanged(() => reactEditor.selection.restoreDOM(selection));
   };
 
   reactEditor.events.register({

@@ -1,6 +1,7 @@
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
+import type { BlockDropDestination } from "./views/types";
 import type {
   BlockDefinition,
   BlockListPropsManagerApi,
@@ -233,8 +234,8 @@ export interface ViewsCapability {
   has(type: string): boolean;
   /** Resolves the view for a placed block, falling back to the generic view. */
   resolve(blockId: string): BlockViewBehavior;
-  /** Asks the target view whether it accepts the dragged roots. */
-  acceptsDrop(targetId: string, sourceIds: readonly string[]): boolean;
+  /** Validates source snapshots against the exact destination parent. */
+  acceptsDrop(destination: BlockDropDestination, sources: readonly EditorBlock[]): boolean;
   /** Shared generic view used when a type registers no specialization. */
   readonly fallback: BlockViewBehavior;
 }
@@ -317,7 +318,25 @@ export interface SelectionCapability {
   /** @param id - Element identifier. @returns Whether the element is selected. */
   isElementSelected(id: string): boolean;
   readDOM(): Selection | undefined;
-  restoreDOM(selection?: Selection): boolean;
+  restoreDOM(selection?: Selection, options?: RestoreDOMSelectionOptions): boolean;
+  /**
+   * Runs the callback next frame only if the model selection has not changed since scheduling.
+   * Reserve callbacks for caret, DOM selection, and associated editing focus;
+   * each call replaces previous pending work even if selection is unchanged.
+   * Keep document mutations and independent UI operations outside this scheduler.
+   * @param callback - Work to perform next frame while the scheduled selection remains current.
+   * @param onCancel - Optional cleanup when newer state or teardown supersedes the work.
+   * @returns Idempotent cancellation for the pending callback.
+   */
+  scheduleIfSelectionUnchanged(callback: () => void, onCancel?: () => void): () => void;
+  /** Whether the current selection has a pending, still-valid callback in the next frame. */
+  readonly hasPendingSelectionCallback: boolean;
+}
+
+/** Options for rebuilding a portable selection in the live browser DOM. */
+export interface RestoreDOMSelectionOptions {
+  /** False mounts virtual endpoints without navigating the viewport to them. */
+  readonly scroll?: boolean;
 }
 
 export interface SlashCommandsCapability {

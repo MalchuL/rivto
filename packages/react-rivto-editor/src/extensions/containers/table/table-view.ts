@@ -11,10 +11,15 @@ import { ContainerBlockView } from "../../../views/container-view";
 import type { BlockViewContext, BlockViewOutcome, DropAxis } from "../../../views/types";
 import type { KeyboardSelectionTarget } from "../../../managers";
 
+export const TABLE_BLOCK_TYPE = "table";
+export const TABLE_ROW_BLOCK_TYPE = "table-row";
+export const TABLE_CELL_BLOCK_TYPE = "table-cell";
+
 /**
  * Behavior registered for the `table` board type.
  */
 export class TableView extends ContainerBlockView {
+  override readonly dropChildTypes = [TABLE_ROW_BLOCK_TYPE];
   override readonly dropAxis: DropAxis = "vertical";
 }
 
@@ -22,6 +27,8 @@ export class TableView extends ContainerBlockView {
  * Behavior registered for the `table-row` type.
  */
 export class TableRowView extends ContainerBlockView {
+  override readonly dropChildTypes = [TABLE_CELL_BLOCK_TYPE];
+  override readonly dropParentTypes = [TABLE_BLOCK_TYPE];
   override readonly dropAxis: DropAxis = "horizontal";
 }
 
@@ -29,6 +36,7 @@ export class TableRowView extends ContainerBlockView {
  * Behavior registered for the `table-cell` type.
  */
 export class TableCellView extends ContainerBlockView {
+  override readonly dropParentTypes = [TABLE_ROW_BLOCK_TYPE];
   override readonly dropAxis: DropAxis | undefined = undefined;
 
   /**

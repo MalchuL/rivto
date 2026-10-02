@@ -1,206 +1,66 @@
-/**
- * Native DOM target collection for page pointer drag gestures.
- *
- * Pointer dragging never relies on library collision detection: Rivto
- * hit-tests block rows itself and adapts the winning block into a
- * library-independent {@link DropPlacementInput} for the placement resolver.
- *
- * @module
- */
+/** Measures one active surface and resolves its explicit drop regions. */
+import type { EditorBlock } from "@chulane/rivto";
 import type { ReactEditor } from "../../../types";
 import { blockContainment } from "../utils/containment";
-import {
-  NEARBY_ROW_DROP_PX,
-  pickPointerDropTarget,
-  type PointerDropCandidate,
-  type PointerDropReason,
-} from "./hit";
-import { isStructuralLayout } from "../placement/intent";
-import type { DropPlacementInput, DropPlacementSource } from "../placement/types";
-import type { PointerCoordinates } from "../types";
-
-const PAGE_BLOCK_ROW_CLASS = "page-block-row";
-const PAGE_BLOCK_SELECTOR = "[data-block-id]";
+import { resolveDropPlacement, type DropLayoutBlock, type DropLayoutOptions } from "../placement/resolver";
+import type { DropBlock } from "../placement/types";
+import type { DropPlacement, PointerCoordinates } from "../types";
 
 /**
- * Collects ancestor block IDs from a block element outward to the surface root.
+ * Collects only rendered blocks belonging to this surface. Keeps the complete
+ * identity list, but reads bounding rectangles only when the resolver accesses
+ * them. Each access reads the live DOM; no geometry survives between calculations.
  *
- * @param element - Block whose parents are walked.
- * @param root - Active editor surface that bounds the walk.
- * @returns Parent IDs from the closest ancestor outward.
+ * @param root - Surface element containing the rendered destination blocks.
+ * @param runtime - Destination React runtime providing block-view behavior and containment.
+ * @returns Rendered block identities and layout policies with live viewport
+ * rectangle getters; blocks without a direct page row or client rectangles are omitted.
  */
-function ancestorBlockIds(element: HTMLElement, root: HTMLElement): string[] {
-  const ids: string[] = [];
-  let parent = element.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
-  while (parent && root.contains(parent)) {
-    const id = parent.dataset.blockId;
-    if (id) ids.push(id);
-    parent = parent.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
-  }
-  return ids;
-}
-
-/**
- * Measures every block row on the surface for gap and empty-lane targeting.
- *
- * Each candidate keeps both the title-row rect (nearest-block / inside-on-the-
- * same-line) and the full BlockView rect (empty accepting layout fields).
- * Ancestor IDs let a gap between children win over "inside parent container".
- *
- * @param root - Active editor surface containing eligible block rows.
- * @param reactEditor - Runtime used to resolve views and canonical containment.
- * @returns Candidates consumed by {@link pickPointerDropTarget}.
- */
-function collectPointerDropCandidates(
-  root: HTMLElement,
-  reactEditor: ReactEditor,
-): { readonly elements: Map<string, HTMLElement>; readonly candidates: PointerDropCandidate[] } {
-  const elements = new Map<string, HTMLElement>();
-  const candidates: PointerDropCandidate[] = [];
-  root.querySelectorAll<HTMLElement>(PAGE_BLOCK_SELECTOR).forEach((element) => {
+export function collectDropLayout(root: HTMLElement, runtime: ReactEditor): DropLayoutBlock[] {
+  return [...root.querySelectorAll<HTMLElement>("[data-block-id]")].flatMap((element) => {
     const id = element.dataset.blockId;
-    const row = element.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
-    if (!id || !row) return;
-    elements.set(id, element);
-    const view = reactEditor.views.resolve(id);
-    candidates.push({
-      id,
-      row: row.getBoundingClientRect(),
-      block: element.getBoundingClientRect(),
-      acceptsDropContainer: Boolean(view.acceptsDropContainer),
-      ancestorIds: ancestorBlockIds(element, root),
-      dropAxis: view.dropAxis,
-      childOutline: blockContainment(reactEditor, id)?.childOutline,
-    });
+    const row = element.querySelector<HTMLElement>(":scope > .page-block-row");
+    if (!id || !row || !element.getClientRects().length) return [];
+    const parent = element.parentElement?.closest<HTMLElement>("[data-block-id]");
+    const view = runtime.views.resolve(id);
+    return [{
+      id, parentId: parent && root.contains(parent) ? parent.dataset.blockId ?? null : null,
+      get row() { return row.getBoundingClientRect(); },
+      get rect() { return element.getBoundingClientRect(); },
+      axis: view.dropAxis, fixed: blockContainment(runtime, id)?.childOutline === "fixed",
+      acceptsBody: Boolean(view.acceptsDropContainer), options: view.dropPlacement,
+      hasRenderedChildren: Boolean(element.querySelector("[data-block-id]")),
+    }];
   });
-  return { elements, candidates };
 }
 
 /**
- * Builds the placement input for one resolved drop block.
+ * Resolves a surface drop using the shared local, foreign-document, and keyboard
+ * geometry adapter.
  *
- * The target rectangle is what `resolveDropPlacement` treats as the row body
- * versus its before/after edges. A BlockView includes its whole subtree, so
- * free-outline targets use only their title row. Explicit body hits and fixed
- * layouts keep the full BlockView for containment or spatial half-splits.
+ * Collects rendered layout and validates candidate destinations through the
+ * destination runtime's views. The supplied tree determines which blocks can
+ * participate, allowing local callers to exclude the subtrees being moved.
  *
- * @param source - Dragged block identity, layout data, and cursor stand-in.
- * @param blockElement - BlockView that owns the resolved target.
- * @param useFullBlock - Whether the complete block, not just its row, is the target rect.
- * @param reactEditor - Runtime used to resolve views and canonical containment.
- * @param hitReason - Why this block was chosen; chrome titles skip inside-append.
- * @returns Input carrying the one live DOM target, or null when the row is missing.
+ * @param root - Destination surface element, or `null` when unavailable.
+ * @param runtime - Destination React runtime providing layout and acceptance behavior.
+ * @param sources - Source blocks checked against each candidate destination.
+ * @param blocks - Destination tree participating in placement resolution.
+ * @param pointer - Pointer or keyboard-generated position in viewport pixels.
+ * @param options - Placement defaults and optional keyboard policy.
+ * @returns Accepted placement with indicator data, or `null` when the surface
+ * is unavailable or no eligible region resolves to an accepted destination.
  */
-function pointerDropInput(
-  source: DropPlacementSource,
-  blockElement: HTMLElement,
-  useFullBlock: boolean,
-  reactEditor: ReactEditor,
-  hitReason: PointerDropReason,
-): DropPlacementInput | null {
-  const id = blockElement.dataset.blockId;
-  const row = blockElement.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
-  if (!id || !row) return null;
-  const parentId = blockElement.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR)?.dataset.blockId;
-  const targetView = reactEditor.views.resolve(id);
-  const parentView = parentId ? reactEditor.views.resolve(parentId) : undefined;
-  const parentOutline = parentId ? blockContainment(reactEditor, parentId)?.childOutline : undefined;
-  const axis = parentOutline === "fixed" ? parentView?.dropAxis : undefined;
-  const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
-  const dropNode = useFullBlock || sortable ? blockElement : row;
-  return {
-    source,
-    target: {
-      id,
-      rect: dropNode.getBoundingClientRect(),
-      data: {
-        sortChildren: axis,
-        hitReason,
-        targetAcceptsDrop: Boolean(targetView.acceptsDropContainer),
-        parentChildOutline: parentOutline,
-        targetDropPlacement: targetView.dropPlacement,
-        parentDropPlacement: parentView?.dropPlacement,
-      },
-    },
-  };
-}
-
-/**
- * Resolves the block beneath the pointer through native hit testing.
- *
- * Gaps used to snap to the nearest accepting ancestor by
- * distance to that container's center. The pointer was not over the board;
- * the board was merely the closest `acceptsDropContainer` on the page, and
- * its tall BlockView then resolved as "inside". The same miss happened when
- * `elementsFromPoint` hit a parent's children wrapper: the parent rect
- * contains the gap between siblings, so the smallest containing block was
- * the container itself.
- *
- * The fix hit-tests `.page-block-row` instead of the full BlockView.
- * A pointer on a row targets that block so "inside" stays on the same line.
- * A pointer in a gap falls through to {@link pickPointerDropTarget}, which
- * prefers the nearest row (before/after, including first/last nested
- * children) and only keeps a container when the pointer is over an empty
- * lane body with no nearby descendant row.
- *
- * @param source - Dragged block identity and layout data.
- * @param pointer - Live viewport cursor position driving the hit test.
- * @param root - Active editor surface containing eligible block rows.
- * @param reactEditor - Runtime used to resolve views and canonical containment.
- * @param excludedIds - Dragged subtree IDs that cannot become targets.
- * @returns Input carrying the one live DOM target, or null over blank space.
- */
-export function withPointerDropTarget(
-  source: DropPlacementSource,
-  pointer: PointerCoordinates,
+export function resolveSurfaceDrop(
   root: HTMLElement | null,
-  reactEditor: ReactEditor,
-  excludedIds: ReadonlySet<string>,
-): DropPlacementInput | null {
+  runtime: ReactEditor,
+  sources: readonly EditorBlock[],
+  blocks: readonly DropBlock[],
+  pointer: PointerCoordinates,
+  options: DropLayoutOptions,
+): DropPlacement | null {
   if (!root) return null;
-
-  // Ignore the full BlockView: a parent includes `.page-block-children`,
-  // so a gap between siblings still sits inside the parent rect. Only a row
-  // under the cursor is an "inside" hit; otherwise the gap picker runs.
-  const hovered = new Set<HTMLElement>();
-  root.ownerDocument.elementsFromPoint(pointer.x, pointer.y).forEach((element) => {
-    let block = element.closest<HTMLElement>(PAGE_BLOCK_SELECTOR);
-    while (block && root.contains(block)) {
-      hovered.add(block);
-      block = block.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR) ?? null;
-    }
-  });
-  const rowHit = [...hovered].flatMap((element) => {
-    if (element.dataset.blockId && excludedIds.has(element.dataset.blockId)) return [];
-    const row = element.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`);
-    return row ? [{ element, row, rect: row.getBoundingClientRect() }] : [];
-  }).filter(({ rect }) => (
-    pointer.x >= rect.left && pointer.x <= rect.right
-    && pointer.y >= rect.top && pointer.y <= rect.bottom
-  )).sort((left, right) => (
-    left.rect.width * left.rect.height - right.rect.width * right.rect.height
-  ))[0];
-  if (rowHit) {
-    const id = rowHit.element.dataset.blockId;
-    const view = id ? reactEditor.views.resolve(id) : undefined;
-    const reason: PointerDropReason = view && isStructuralLayout({
-      dropAxis: view.dropAxis,
-      childOutline: id ? blockContainment(reactEditor, id)?.childOutline : undefined,
-    }) ? "chrome" : "row";
-    return pointerDropInput(source, rowHit.element, false, reactEditor, reason);
-  }
-
-  // No row under the cursor: pick the nearest sibling row, not the nearest
-  // accepting ancestor. Filled fixed layouts snap to a descendant field.
-  // `reason === "container"` is reserved for accepting body space.
-  const { elements, candidates } = collectPointerDropCandidates(root, reactEditor);
-  const hit = pickPointerDropTarget(
-    candidates.filter(({ id }) => !excludedIds.has(id)),
-    pointer,
-    NEARBY_ROW_DROP_PX,
-  );
-  const blockElement = hit ? elements.get(hit.id) : undefined;
-  return blockElement
-    ? pointerDropInput(source, blockElement, hit?.reason === "container", reactEditor, hit!.reason)
-    : null;
+  const measured = collectDropLayout(root, runtime);
+  return resolveDropPlacement(measured, blocks, pointer, options,
+    (destination) => runtime.views.acceptsDrop(destination, sources));
 }

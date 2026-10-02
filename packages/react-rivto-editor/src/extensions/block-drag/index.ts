@@ -19,15 +19,4 @@ export {
   type DropMoveTarget,
   type ResolvedDropPlacementOptions,
 } from "./placement";
-export {
-  pickPointerDropTarget,
-  type PointerDropCandidate,
-  type PointerDropHit,
-  type PointerDropReason,
-} from "./pointer";
-export {
-  hitDropIntent,
-  isStructuralLayout,
-  resolveChromePlacement,
-  resolveGridPlacement,
-} from "./placement";
+export { resolveDropPlacement, type DropLayoutBlock, type DropLayoutOptions, type DropRect } from "./placement/resolver";

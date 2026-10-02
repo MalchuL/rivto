@@ -109,6 +109,14 @@ async function scrollRowToCursor(page: Page, row: Locator, cursorY: number): Pro
   expect(scrollBy).toBeGreaterThan(200);
   await page.mouse.wheel(0, scrollBy);
   await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(200);
+  // A large wheel event need not consume its entire delta. Align the actual row,
+  // rather than assuming the browser moved it by the requested pixel count.
+  await expect.poll(async () => {
+    const box = (await row.boundingBox())!;
+    const remaining = Math.round(box.y + box.height / 2 - cursorY);
+    if (Math.abs(remaining) > 1) await page.mouse.wheel(0, remaining);
+    return Math.abs(remaining);
+  }).toBeLessThanOrEqual(1);
 }
 
 test.describe("page drag with a scrolling window", () => {
@@ -177,7 +185,17 @@ test.describe("page drag with a scrolling window", () => {
     const settled = await page.evaluate(() => window.scrollY);
     const expected = await blockUnderCursor(page, cursor);
     expect(expected).not.toBeNull();
-    await expect.poll(() => dropFeedbackOwner(page)).toBe(expected);
+    const indicator = page.locator(".page-drop-indicator");
+    await expect(indicator).toBeVisible();
+    if (await indicator.getAttribute("data-kind") === "inside") {
+      await expect.poll(() => dropFeedbackOwner(page)).toBe(expected);
+    } else {
+      // A canonical gap can be owned by the preceding subtree at the selected
+      // indentation. Its line must stay beside the cursor after auto-scroll;
+      // DOM ownership alone does not identify the destination anymore.
+      const line = (await indicator.boundingBox())!;
+      expect(Math.abs(line.y + line.height / 2 - cursor.y)).toBeLessThanOrEqual(CHILD_DROP_INDENT);
+    }
     expect(await page.evaluate(() => window.scrollY)).toBe(settled);
     await page.mouse.up();
   });

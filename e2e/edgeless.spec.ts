@@ -734,7 +734,6 @@ test("copies visual label text as text instead of duplicating the element", asyn
 
 test("edits visual properties immediately and enters text editing on double-click", async ({ page }) => {
   await switchMode(page, "edgeless");
-  const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
   const rectangle = await createVisual(page, "Rectangle");
   const properties = page.getByRole("region", { name: "Visual properties" });
   await expect(properties).toBeVisible();
@@ -794,7 +793,6 @@ test("edits visual properties immediately and enters text editing on double-clic
 
 test("previews a group with its drag handle before committing the move", async ({ page }) => {
   await switchMode(page, "edgeless");
-  const create = page.getByRole("toolbar", { name: "Visual objects" });
   const rectangle = await createVisual(page, "Rectangle");
   const firstBox = await rectangle.boundingBox();
   if (!firstBox) throw new Error("Expected rectangle geometry");
@@ -1450,7 +1448,6 @@ test("undoes a grouped nested-block drag after switching from edgeless", async (
 test("reuses Tab and Shift+Tab inside a canvas card", async ({ page }) => {
   await switchMode(page, "edgeless");
   const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
-  const rootBlock = cardRoot(card);
   const directChildren = cardChildren(card);
   const firstId = await directChildren.first().getAttribute(BLOCK_ID_ATTRIBUTE);
   const second = directChildren.nth(1);
@@ -1497,6 +1494,30 @@ test("reuses page Enter and structural drag inside a canvas card", async ({ page
   await page.mouse.up();
   const movedTarget = card.locator(`.page-block${blockIdSelector(targetId!)}`);
   await expect(movedTarget.locator(`:scope > .page-block-children > ${blockIdSelector(sourceId!)}`)).toHaveCount(1);
+});
+
+test("empty nested checkbox clears before outdenting inside a canvas card", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
+  const directChildren = cardChildren(card);
+  const firstId = await directChildren.first().getAttribute(BLOCK_ID_ATTRIBUTE);
+  const second = directChildren.nth(1);
+  const secondId = await second.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!firstId || !secondId) throw new Error("Expected sibling blocks inside a canvas card");
+  const content = second.locator(":scope > .page-block-row [data-block-content]");
+  await content.focus();
+  await page.keyboard.press("Control+a");
+  await page.keyboard.type("[ ] ");
+  await expect(second.locator(":scope > .page-block-row .page-list-checkbox")).toHaveCount(1);
+  await page.keyboard.press("Tab");
+  const nested = card.locator(`${blockIdSelector(firstId)} > .page-block-children > ${blockIdSelector(secondId)}`);
+  await expect(nested).toHaveCount(1);
+
+  await page.keyboard.press("Enter");
+  await expect(nested).toHaveCount(1);
+  await expect(nested.locator(":scope > .page-block-row .page-list-checkbox")).toHaveCount(0);
+  await page.keyboard.press("Enter");
+  await expect(cardChild(card, secondId)).toHaveCount(1);
 });
 
 test("keeps an indented block drag handle visible while moving onto it", async ({ page }) => {
