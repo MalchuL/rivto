@@ -80,7 +80,8 @@ function EdgelessBlockElementView({
       const height = Math.max(MIN_CARD_HEIGHT, Math.ceil(content.scrollHeight + 2));
       host.style.height = previousHeight;
       if (Math.abs(element.frame.height - height) < 1) return;
-      reactEditor.history.batchUpdates(() => {
+      // Undoing a recorded height change would remeasure and record it again, trapping undo.
+      reactEditor.history.batchUpdatesWithoutHistory(() => {
         reactEditor.elements.updateElement(element.id, { frame: { height } });
       });
     };

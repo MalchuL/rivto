@@ -328,6 +328,25 @@ test("double-clicks empty canvas to append and focus a block at that canvas poin
   await expect(cards).toHaveCount(before + 1);
 });
 
+test("keeps earlier undo history after creating a card with a double-click", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const firstContent = page.locator(".edgeless-viewport [data-block-content]").first();
+  const original = await firstContent.textContent();
+  await firstContent.click();
+  await page.keyboard.type("History marker");
+  await expect(firstContent).toContainText("History marker");
+  const cards = page.locator("[data-edgeless-root]");
+  const before = await cards.count();
+  const point = await emptyCanvasPoint(page);
+  await page.mouse.dblclick(point.x, point.y);
+  await expect(cards).toHaveCount(before + 1);
+
+  await page.keyboard.press("Control+z");
+  await expect(cards).toHaveCount(before);
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".edgeless-viewport [data-block-content]").first()).toHaveText(original ?? "");
+});
+
 test("shows compact creation and contextual toolbars and places at the click point", async ({ page }) => {
   await switchMode(page, "edgeless");
   const viewport = page.locator(".edgeless-viewport");
