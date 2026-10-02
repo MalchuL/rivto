@@ -36,6 +36,10 @@
 
 /* Optional page interaction extensions. */
 @import "../extensions/block-drag/block-drag.css" layer(components);
+/* Plain-text projection. Scoped to `.plain-surface` so page and edgeless keep
+   their block chrome; this sheet only removes that chrome, draws optional
+   separators, and places nested bullets outside the contenteditable. */
+@import "../extensions/plain/plain.css" layer(components);
 @import "../extensions/bullet-threading/bullet-threading.css" layer(components);
 
 /* Edgeless canvas and visual objects. */

@@ -15,8 +15,14 @@ import type {
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 
-/** Local presentation strategy; never persisted in collaborative state. */
-export type EditorMode = "block" | "edgeless";
+/**
+ * Local presentation strategy; never persisted in collaborative state.
+ *
+ * `"plain"` is on this union because surfaces, keyboard filters, and block
+ * wrappers are keyed by `EditorMode`. An Obsidian-style text projection of the
+ * same block tree cannot register its own view without a mode value.
+ */
+export type EditorMode = "block" | "edgeless" | "plain";
 
 export interface CreateRivtoEditorOptions {
   /** Initial local presentation mode; defaults to block mode. */
@@ -41,7 +47,7 @@ export interface RivtoEditorApi {
   readonly elements: ElementManagerApi;
   /** Named command registry shared by managers and integrations. */
   readonly commands: CommandRegistryApi;
-  /** Local block/edgeless presentation mode. */
+  /** Local block, plain-text, or edgeless presentation mode. */
   readonly mode: ModeManagerApi;
   /** Local ordered text and whole-block selection state. */
   readonly selection: SelectionManagerApi;

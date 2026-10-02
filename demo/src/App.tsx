@@ -1,5 +1,6 @@
 import {
   createRivtoEditor,
+  type EditorMode,
   type RivtoEditorApi,
 } from "@chulane/rivto";
 import { BroadcastChannelProvider, YjsDoc } from "@chulane/crdt-doc";
@@ -20,6 +21,7 @@ import {
   KEYBOARD_BINDING_IDS,
   KANBAN_BLOCK_TYPE,
   pageDragExtension,
+  plainEditorExtension,
   bulletThreadingExtension,
   SEPARATOR_BLOCK_TYPE,
   standardPreset,
@@ -276,6 +278,7 @@ function createDemoEditor() {
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       todoItemExtension({ prompts: { todo: ["task"] } }),
       pageDragExtension(),
+      plainEditorExtension(),
       bulletThreadingExtension({
         anchor: demoThreadAnchor,
         excludeBlockTypes: [
@@ -531,6 +534,7 @@ function createEmptyDemoEditor() {
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
+      plainEditorExtension(),
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
@@ -573,7 +577,7 @@ function JournalDate({ date }: { readonly date: Date }) {
 /**
  * Shared chrome above each demo editor (mode, block IDs, delete, undo).
  *
- * Needed so visitors can flip Page ↔ Edgeless, toggle debug block IDs, and
+ * Needed so visitors can flip Page, Plain, and Edgeless, toggle debug block IDs, and
  * exercise delete/undo without digging into keyboard shortcuts. Reused by
  * journal, multi-editor, and sync surfaces.
  */
@@ -601,7 +605,7 @@ function DemoToolbar({
     thresholdInputValue = virtualizePageThreshold;
   }
   /** No-ops when already in `next` so repeated clicks do not thrash mode. */
-  const switchMode = (next: "block" | "edgeless") => {
+  const switchMode = (next: EditorMode) => {
     if (next === mode) return;
     setMode(next);
   };
@@ -672,6 +676,7 @@ function DemoToolbar({
         <div className="demo-mode-switch" role="group" aria-label="Editor mode">
           {/* `data-editor-mode` / `data-editor-action` are used by e2e. */}
           <button type="button" data-editor-mode="block" aria-pressed={mode === "block"} onClick={() => switchMode("block")}>Page</button>
+          <button type="button" data-editor-mode="plain" aria-pressed={mode === "plain"} onClick={() => switchMode("plain")}>Plain</button>
           <button type="button" data-editor-mode="edgeless" aria-pressed={mode === "edgeless"} onClick={() => switchMode("edgeless")}>Edgeless</button>
         </div>
         <button type="button" data-editor-action="delete" onClick={() => editor.selection.delete()}>Delete</button>
@@ -772,6 +777,7 @@ function createMultiEditor(
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
+      plainEditorExtension(),
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
@@ -906,6 +912,7 @@ function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: n
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
+      plainEditorExtension(),
       ...edgelessPreset(),
       edgelessVisualsExtension(edgelessOptions),
       blockIdExtension(),
