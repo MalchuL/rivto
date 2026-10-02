@@ -27,7 +27,9 @@ owners; do not rely only on this guide:
   registration and containment metadata.
 - `packages/rivto-editor-core/src/managers/block-registry-manager/types.ts` —
   defaults, property schemas, and `allowedParents`.
-- `packages/react-rivto-editor/src/blocks/block-tree/block-tree.css` — shared block-tree geometry.
+- `packages/react-rivto-editor/src/blocks/block-tree/block-tree.css` — shared
+  block-tree geometry. Read `packages/react-rivto-editor/docs/styling.md` before
+  styling a container or adding a feature stylesheet.
 
 Then inspect the closest example end to end:
 
@@ -229,9 +231,24 @@ block subtree. Use `BlockModal` for the existing native-dialog expansion pattern
 
 ## Style against the shared DOM contract
 
-Prefer extension-local mounted CSS for a new container. Change global
-`styles.css` only for a rule that genuinely belongs to every block tree or when
-maintaining an existing globally styled extension.
+Prefer Tailwind CSS utilities on the owning element, with a stable `rivto-*`,
+`page-*`, or `edgeless-*` hook first. Keep utilities in the component; add a
+colocated feature `.css` file only for rules utilities cannot express, such as
+recursive geometry, structural `:has()`, pseudo-elements, or imperatively
+created elements. Import package feature CSS from `src/styles/index.css` into
+`layer(components)` and start it with a comment explaining why CSS is needed.
+Change shared block-tree CSS only for geometry that belongs to every block tree.
+
+Keep block content outside the `rivto-ui` scoped reset so document typography
+retains host defaults. Add a `--rivto-*` token in `src/styles/tokens.css` only
+for a color or dimension hosts should be able to override. For package chrome,
+reuse installed shadcn/ui primitives where they fit; add a missing one with
+`pnpm --filter @chulane/rivto-react ui:add <name>` rather than editing generated
+files in `src/components/ui/`. Keep draggable rows in an in-flow disclosure
+instead of a portalled popover or dialog; see the styling guide's floating-panel
+constraint. Use `lucide-react` icons with `aria-hidden="true"` inside labelled
+controls; add `pointer-events-none` to an icon inside a plain button so the
+button remains the pointer target.
 
 Keep repeated or cross-file HTML class names in named constants. Prefer stable attributes such as
 `[data-block-type]`, direct-child selectors, and slot ownership attributes for
