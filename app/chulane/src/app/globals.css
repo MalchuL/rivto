@@ -1,0 +1,29 @@
+/**
+ * Provides the shared shell's baseline typography, colors, and spacing.
+ * Next.js compiles this Tailwind entry for both web and Electron; system fonts
+ * keep the initial screen independent of external font downloads.
+ */
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  background: #fafaf9;
+  color: #1c1917;
+  font-family: system-ui, sans-serif;
+}
+
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 4rem 2rem;
+}
+
+h1 {
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+p {
+  margin-top: 0.75rem;
+  color: #57534e;
+}

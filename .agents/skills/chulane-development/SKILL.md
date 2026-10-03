@@ -13,6 +13,8 @@ Read the repository's applicable `AGENTS.md`, manifests, and the implementation 
 
 The agreed rewrite replaces `app/chulane`, preserving it as `app/chulane_old`, while retaining the Rivto editor packages. When asked to implement that rewrite, inspect whether the rename has already happened; preserve existing work, avoid duplicate package identities in workspace resolution, and rewire the application hosts. Creating or loading this skill does not itself initiate the rewrite. For a scoped feature, implement that feature rather than restarting the entire application.
 
+The old application folder has already been renamed. Agents mayreference its source files and [CONTEXT.md](http://CONTEXT.md), along with the existing application host folders, when developing Chulane. Verify the actual folder paths before reading them. Do not repeat the rename. The final Chulane requirements take precedence over older code.
+
 ## Put behavior in its owner
 
 - Place domain rules, use cases, and replaceable service contracts under `src/domain/<context>/`. Keep React, Cordis, Drizzle, Zvec, Mastra, and transports outside domain rules.

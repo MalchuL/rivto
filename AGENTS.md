@@ -11,6 +11,23 @@ The pnpm workspace has four editor packages:
 
 Use `demo/` for integration, `e2e/` for Playwright, and `docs/` or `dev_notes/` for guidance.
 
+## Editor and Application Boundaries
+
+- All editor work belongs in `packages/`: document models, CRDT,
+  editing operations, selection, clipboard, undo, rendering,
+  extensions, and page/canvas surfaces.
+- All Chulane application work belongs in `app/chulane/`: domain
+  services, users, workspaces, projects, journals, tags, AI,
+  application plugins, storage, retrieval, ingestion, remote
+  synchronization, and application UI.
+- The application consumes the editor packages. Keep reusable
+  editor behavior in packages and product behavior in app/chulane.
+- Read the owning directory's AGENTS.md, CONTEXT.md, and package
+  manifests before editing. Old application folders may be consulted
+  as references.
+- Run checks for the affected owner. Root editor checks do not
+  necessarily validate app/chulane.
+
 ## Choosing Where to Change Code
 
 Recent development follows this stable pipeline:
