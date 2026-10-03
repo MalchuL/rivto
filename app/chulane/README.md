@@ -7,6 +7,13 @@ ESLint, `src/`, and the empty template). The application glossary is in
 Completed development stages are recorded in [PROGRESS.md](./PROGRESS.md).
 Upcoming stages are tracked in [TODO.md](./TODO.md).
 
+The shared UI uses Tailwind CSS v4 and shadcn/ui's Radix Nova preset with neutral
+colors, CSS theme variables, and system fonts. Application components live in
+`src/components`; shadcn primitives live in `src/components/ui`.
+`components.json` aliases resolve through the existing `@/*` → `src/*`
+TypeScript path. The starter's page-creation button stays disabled until the
+application services are implemented.
+
 From the repository root:
 
 ```sh
@@ -33,6 +40,19 @@ pnpm --filter @chulane/app check-types
 pnpm --filter @chulane/app lint
 pnpm --filter @chulane/app test
 ```
+
+Electron smoke tests require a graphical session. If the terminal does not
+inherit `DISPLAY`, set it to the existing desktop display when running tests.
+
+Add shadcn components from the repository root so dependency changes use the
+active workspace and its root lockfile:
+
+```sh
+pnpm --filter @chulane/app exec shadcn add <component>
+```
+
+Generated components should retain their behavior while following the
+repository's JSDoc and named class-constant conventions.
 
 The desktop uses a custom Next.js server, so this setup uses a normal Next.js
 build rather than standalone output. Distributable desktop installers are a

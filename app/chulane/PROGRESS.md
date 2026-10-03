@@ -33,5 +33,30 @@ Validation passed: type checks, lint, production build, and three Playwright
 smoke tests covering browser startup, Electron development and production
 startup, desktop reload, and local-server shutdown.
 
-Current checkpoint: a runnable application starter. Desktop installers and
+Checkpoint after stage 3: a runnable application starter. Desktop installers and
 application features belong to subsequent approved stages.
+
+## 4. Initialize the UI foundation — 2026-10-03
+
+- Confirmed `src/components` for application components and
+  `src/components/ui` for shadcn primitives.
+- The official shadcn CLI verified the existing Tailwind v4 setup and import
+  alias, initialized the Radix Nova preset, and installed the Button primitive.
+- Added `components.json` with aliases matching `@/*` → `src/*` and the shared
+  `src/app/globals.css` entry.
+- Replaced placeholder element styles with semantic theme tokens and Tailwind
+  layout classes. Retained system fonts for builds without font downloads.
+- Adapted generated TypeScript to the repository's JSDoc and class constants.
+- Added a styled starter with page creation disabled until application services
+  exist, and extended the three smoke tests to check resolved styles.
+- Kept dependency changes in the active root workspace lockfile; documented
+  the root command for adding future shadcn components.
+
+Validation: the new browser check failed before implementation, then passed.
+Type checks, lint, and production build passed. All three smoke tests passed,
+covering browser styles, Electron development/production styles, desktop reload,
+and local-server shutdown. Electron checks used the existing display (`DISPLAY=:1`)
+because the agent shell did not inherit it. Production screenshot inspected.
+
+Current checkpoint: a runnable application with its shared UI foundation.
+The next stage establishes Cordis composition and lifecycle with focused tests.
