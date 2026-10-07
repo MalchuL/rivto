@@ -27,10 +27,11 @@ export interface PointerTracker {
 
 /** Live destination surface operations used by a source drag provider. */
 export interface CrossDocumentPageRootController {
+  /** Executes placement reads and commits within the destination occurrence; its fixed model is available through getDocument without an explicit transfer model. */
   reactEditor: ReactEditor;
   root: HTMLElement;
   setPlacement: (placement: DropPlacement | null, empty?: boolean) => void;
-  resolvePlacement: (x: number, y: number, sources: readonly Block[]) => CrossDocumentBlockTransferPlacement & {
+  resolvePlacement: (x: number, y: number, sources: readonly Block[], sourceDocumentId: string) => CrossDocumentBlockTransferPlacement & {
     readonly indicator: DropPlacement | null;
   } | null;
 }

@@ -77,12 +77,14 @@ export class BaseBlockView implements BlockViewBehavior {
       ? Math.min(target.offset ?? 0, block.content.length)
       : block.content.length;
     const nextBlock = splitBlockAt(reactEditor, block, splitAt);
+    // Core mode can be edgeless while Enter comes from a page embedding.
+    // Only extend the canvas card's block range when editing its edgeless view.
     if (block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true)) {
       // Insertion created a sibling. Indent then prepend so Enter places the
       // new writing block as the first visible child.
       reactEditor.blocks.indentBlock(nextBlock.id);
       reactEditor.blocks.moveBlock(nextBlock.id, null);
-    } else if (reactEditor.mode.get() === "edgeless" && reactEditor.blocks.isRootBlock(block.id)) {
+    } else if (reactEditor.events.getSurfaceType() === "edgeless" && reactEditor.blocks.isRootBlock(block.id)) {
       const element = reactEditor.elements.getElements().find((candidate) =>
         candidate.type === "block" && candidate.props.endBlockId === block.id,
       );

@@ -7,11 +7,11 @@
  * @module
  */
 import { useCallback, useSyncExternalStore } from "react";
-import { useEditorContext } from "../../editor-context";
+import { useReactEditor } from "../editor/use-editor";
 
 /** @returns Stable detached elements refreshed only after element mutations. */
 export function useElements() {
-  const { reactEditor } = useEditorContext();
+  const reactEditor = useReactEditor();
   const subscribe = useCallback(
     (listener: () => void) => reactEditor.elements.subscribe(listener),
     [reactEditor],

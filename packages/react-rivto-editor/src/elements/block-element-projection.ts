@@ -14,8 +14,8 @@ export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
 export const EDGELESS_BLOCK_ELEMENT_ID_PREFIX = "rivto:block-element:";
 export const EDGELESS_CARD_DEFAULT_FRAME = { x: 60, y: 60, width: 720, height: 120 } as const;
 export const EDGELESS_BLOCK_PLACEMENT_STEP = 20;
-const placementSettings = new WeakMap<ReactEditor, boolean>();
-const defaultWidthSettings = new WeakMap<ReactEditor, number>();
+const placementSettings = new WeakMap<ReactEditor["extensions"], boolean>();
+const defaultWidthSettings = new WeakMap<ReactEditor["extensions"], number>();
 
 interface ReconciliationState {
   readonly memberships: ReadonlyMap<string, readonly string[]>;
@@ -28,7 +28,7 @@ interface ReconciliationState {
  * @param enabled - Whether new cards should search for a free frame.
  */
 export function setBlockElementOverlapAvoidance(reactEditor: ReactEditor, enabled: boolean): void {
-  placementSettings.set(reactEditor, enabled);
+  placementSettings.set(reactEditor.extensions, enabled);
 }
 
 /**
@@ -38,7 +38,7 @@ export function setBlockElementOverlapAvoidance(reactEditor: ReactEditor, enable
  * @param width - Positive finite width in canvas units.
  */
 export function setBlockElementDefaultWidth(reactEditor: ReactEditor, width: number): void {
-  defaultWidthSettings.set(reactEditor, Number.isFinite(width) && width > 0 ? width : EDGELESS_CARD_DEFAULT_FRAME.width);
+  defaultWidthSettings.set(reactEditor.extensions, Number.isFinite(width) && width > 0 ? width : EDGELESS_CARD_DEFAULT_FRAME.width);
 }
 
 /**
@@ -300,8 +300,8 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
   // Choose assignments globally. A greedy choice can steal the only suitable
   // card from a later segment and unnecessarily recreate that later card.
   const matches = maximumWeightMatching(weights);
-  const avoidOverlap = placementSettings.get(reactEditor) !== false;
-  const defaultWidth = defaultWidthSettings.get(reactEditor) ?? EDGELESS_CARD_DEFAULT_FRAME.width;
+  const avoidOverlap = placementSettings.get(reactEditor.extensions) !== false;
+  const defaultWidth = defaultWidthSettings.get(reactEditor.extensions) ?? EDGELESS_CARD_DEFAULT_FRAME.width;
   const occupied = existing.map((element) => element.frame);
 
   // Produce the canonical element for each segment. Matched cards retain all

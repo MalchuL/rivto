@@ -17,7 +17,6 @@ import type {
 } from "@chulane/rivto";
 import type { DocumentModel } from "@chulane/document-model";
 import {
-  BlockManager,
   BlockTypeManager,
   ClipboardManager,
   EventManager,
@@ -63,7 +62,7 @@ interface RuntimeExtensionsCapability extends ExtensionsCapability {
 
 /** Internal implementation; applications receive the capability-only interface. */
 export class ReactEditorImpl implements ReactEditor {
-  /** Framework-neutral document, command, mode, and history runtime. */
+  /** Framework-neutral core permanently bound to this document and its managers. */
   private readonly editor: RivtoEditorApi;
   /** Focused core element manager exposed without its coordinator. */
   readonly elements: ElementManagerApi;
@@ -137,7 +136,7 @@ export class ReactEditorImpl implements ReactEditor {
     this.disposers.push(() => extensions.destroy());
     const events = new EventManager(this);
     this.events = events;
-    const selection = new ReactSelectionManager(this, editor);
+    const selection = new ReactSelectionManager(this, editor.selection);
     this.selection = selection;
     this.disposers.push(() => selection.destroy());
     const keyboard = new KeyboardManager(this, options.keymap);
@@ -162,7 +161,7 @@ export class ReactEditorImpl implements ReactEditor {
       prepare: (candidate) => editor.blockListProps.prepare(candidate),
     } satisfies Omit<BlockListPropsManagerApi, "destroy">;
     this.blockTypes = new BlockTypeManager(this, editor);
-    this.blocks = new BlockManager(editor);
+    this.blocks = editor.blocks;
     this.clipboard = new ClipboardManager(this, editor);
     this.surfaces = new SurfaceManager(this);
     try {
@@ -171,7 +170,7 @@ export class ReactEditorImpl implements ReactEditor {
         this.blocks.subscribeRootIds(() => this.queueBlockElementReconciliation()),
         this.elements.subscribe(() => this.queueBlockElementReconciliation()),
       );
-      if (editor.getDocument()) this.queueBlockElementReconciliation();
+      this.queueBlockElementReconciliation();
     } catch (error) {
       this.destroy();
       throw error;
@@ -212,34 +211,26 @@ export class ReactEditorImpl implements ReactEditor {
     });
   }
 
-  /** Forwards the core editor's document/mode/registry revision stream. */
+  /** Forwards changes from this document, its local mode, and core definitions to React subscribers. */
   subscribe(listener: () => void): () => void {
     return this.editor.subscribe(listener);
   }
 
   /**
-   * @returns The document model currently presented by the core editor, or undefined while unbound.
+   * @returns The fixed source model used by every manager and subscription of this editor.
    */
-  getDocument(): DocumentModel | undefined {
-    return this.editor.getDocument();
-  }
+  getDocument(): DocumentModel { return this.editor.getDocument(); }
 
   /**
-   * Replaces the active core document while retaining every React manager.
-   * @param document - Caller-owned model to present.
-   * @returns No value.
-   */
-  setDocument(document: DocumentModel): void {
-    this.editor.setDocument(document);
-  }
-
-  /**
-   * Releases React managers without destroying the core editor.
+   * Releases React managers while the lifecycle owner retains the core and document.
    *
    * Selection restoration is cancelled while its extension dependencies remain
    * available. ExtensionManager then runs extension cleanup and owned registrations.
    * Event listeners are detached through the existing manager registrations. All
    * runtime disposers run even if cleanup fails, with errors reported afterward.
+   * Document/model disposal belongs to EditorStorage or the caller. Close the core
+   * after this synchronous React cleanup, then await model destruction before
+   * destroying the application's document registry and provider metadata.
    */
   destroy(): void {
     if (this.destroyed) return;
@@ -258,7 +249,7 @@ export class ReactEditorImpl implements ReactEditor {
   }
 }
 
-/** Creates a modular React runtime around an existing core editor. */
+/** Creates a modular React runtime around the supplied single-document core editor. */
 export const createReactEditor = (
   options: CreateReactEditorOptions,
 ): ReactEditor => new ReactEditorImpl(options);

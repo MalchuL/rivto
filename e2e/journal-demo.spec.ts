@@ -17,7 +17,7 @@ test("renders today and yesterday as one seamless two-document journal", async (
   await expect(documents.nth(0).locator("time")).toHaveAttribute("datetime", expected[0]!);
   await expect(documents.nth(1).locator("time")).toHaveAttribute("datetime", expected[1]!);
   await expect(documents.nth(1).locator(".page-surface")).toHaveAttribute("data-empty", "true");
-  await expect(documents.locator(".page-surface")).toHaveCount(2);
+  await expect(documents.locator(":scope > .page-surface")).toHaveCount(2);
 
   await documents.nth(1).getByRole("button", { name: "Add block", exact: true }).click();
   await expect(documents.nth(1).locator(".page-surface > [data-block-id]")).toHaveCount(1);

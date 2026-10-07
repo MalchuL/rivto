@@ -1,3 +1,4 @@
+import type { DocumentViewScope } from "./document-view";
 import type { EditorMode } from "@chulane/rivto";
 import type { KeyboardCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
@@ -21,6 +22,7 @@ import {
 import type { EditorEventHandler } from "./types";
 
 interface KeyboardRegistration {
+  readonly owner?: DocumentViewScope;
   readonly definition: KeyboardEventDefinition;
   shortcuts: ParsedShortcut[];
   readonly listener: EditorEventHandler<KeyboardEditorEvent>;
@@ -88,21 +90,24 @@ export class KeyboardManager implements KeyboardCapability {
   register(
     definition: KeyboardEventDefinition,
     listener: EditorEventHandler<KeyboardEditorEvent>,
+    owner?: DocumentViewScope,
   ): () => void {
     this.assertActive();
-    const id = definition.id.trim();
-    if (!id) throw new Error("Keyboard registration ID is required");
+    const semanticId = definition.id.trim();
+    const id = owner ? `${owner.id}:${semanticId}` : semanticId;
+    if (!semanticId) throw new Error("Keyboard registration ID is required");
     if (this.registrationIds.has(id)) {
       throw new Error(`Keyboard registration ${id} is already registered`);
     }
     const normalized = {
       ...definition,
-      id,
+      id: semanticId,
       keys: typeof definition.keys === "string"
         ? definition.keys
         : [...definition.keys],
     };
     const registration: KeyboardRegistration = {
+      owner,
       definition: normalized,
       shortcuts: this.resolveShortcuts(normalized, this.keymap),
       listener,
@@ -131,6 +136,8 @@ export class KeyboardManager implements KeyboardCapability {
   /**
    * Returns a stable inventory of installed bindings and orphan overrides.
    *
+   * View-local copies of an action share one inventory row and keymap override;
+   * the first installed definition supplies that row's defaults.
    * @returns Immutable snapshots until the next registry or override revision.
    */
   list(): readonly KeyboardBindingSnapshot[] {
@@ -221,7 +228,11 @@ export class KeyboardManager implements KeyboardCapability {
    * @returns No value.
    */
   private publish(): void {
-    const snapshots: Array<KeyboardBindingSnapshot & { conflicts: string[] }> = this.registrations.map((registration) => {
+    const actions = new Map<string, KeyboardRegistration>();
+    this.registrations.forEach((registration) => {
+      if (!actions.has(registration.definition.id)) actions.set(registration.definition.id, registration);
+    });
+    const snapshots: Array<KeyboardBindingSnapshot & { conflicts: string[] }> = [...actions.values()].map((registration) => {
       const definition = registration.definition;
       const defaultKeys = typeof definition.keys === "string" ? [definition.keys] : [...definition.keys];
       const overridden = Object.prototype.hasOwnProperty.call(this.keymap, definition.id);
@@ -242,7 +253,7 @@ export class KeyboardManager implements KeyboardCapability {
       } satisfies KeyboardBindingSnapshot;
     });
     Object.keys(this.keymap).forEach((id) => {
-      if (this.registrationIds.has(id)) return;
+      if (actions.has(id)) return;
       snapshots.push({
         id,
         defaultKeys: [],
@@ -298,6 +309,7 @@ export class KeyboardManager implements KeyboardCapability {
       .sort((left, right) => (right.definition.priority ?? 0) - (left.definition.priority ?? 0));
     let handled = false;
     for (const registration of registrations) {
+      if (registration.owner && registration.owner.getRoot() !== domEvent.root) continue;
       const definition = registration.definition;
       if (
         (definition.phase ?? "keydown") !== phase ||

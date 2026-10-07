@@ -21,6 +21,8 @@ export type EditorMode = "block" | "edgeless";
 export interface CreateRivtoEditorOptions {
   /** Initial local presentation mode; defaults to block mode. */
   mode?: EditorMode;
+  /** Fixed caller-owned model; editor destruction does not destroy it. */
+  document: DocumentModel;
 }
 
 /**
@@ -28,7 +30,7 @@ export interface CreateRivtoEditorOptions {
  *
  * Block and element behavior is intentionally available only through
  * `.blocks` and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
- * commands, selection, history, mode, snapshots, and subscriptions.
+ * commands, selection, history, mode, snapshots, and document subscriptions.
  */
 export interface RivtoEditorApi {
   /** Typed block operations. */
@@ -41,7 +43,7 @@ export interface RivtoEditorApi {
   readonly elements: ElementManagerApi;
   /** Named command registry shared by managers and integrations. */
   readonly commands: CommandRegistryApi;
-  /** Local block/edgeless presentation mode. */
+  /** Local block/edgeless presentation mode shared by views of this editor. */
   readonly mode: ModeManagerApi;
   /** Local ordered text and whole-block selection state. */
   readonly selection: SelectionManagerApi;
@@ -61,19 +63,12 @@ export interface RivtoEditorApi {
   subscribe(listener: () => void): () => void;
 
   /**
-   * @returns The document model currently presented by this editor, or undefined while unbound.
+   * @returns The fixed model used by every read, mutation, and subscription of this editor.
    */
-  getDocument(): DocumentModel | undefined;
+  getDocument(): DocumentModel;
 
   /**
-   * Replaces the active document while preserving editor and manager identity.
-   * @param document - Caller-owned model to present.
-   * @returns No value.
-   */
-  setDocument(document: DocumentModel): void;
-
-  /**
-   * Replaces supplied document sections and clears previous local history.
+   * Replaces supplied sections in the fixed document and clears its previous local history.
    *
    * @param snapshot - Snapshot-v6 sections to validate and load.
    * @returns No value.
@@ -81,7 +76,7 @@ export interface RivtoEditorApi {
   load(snapshot: EditorSnapshotUpdate): void;
 
   /**
-   * Materializes the complete portable document state.
+   * Materializes complete portable state from the fixed document.
    *
    * @returns Detached snapshot-v6 value.
    */
@@ -90,7 +85,7 @@ export interface RivtoEditorApi {
   /**
    * Releases runtime subscriptions, managers, and registries without destroying the caller-owned document.
    *
-   * @returns A Promise that resolves after runtime, provider, and CRDT cleanup.
+   * @returns A Promise that resolves after runtime cleanup; document consumers and provider connections remain owned by the caller.
    */
   destroy(): Promise<void>;
 }

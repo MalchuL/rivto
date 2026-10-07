@@ -21,6 +21,7 @@ const PAGE_DRAG_OVERLAY_CLASS = "page-drag-overlay";
  */
 async function seedLargeDocument(page: Page): Promise<void> {
   await page.goto("/");
+  await expect(page.locator('[data-journal-document="today"] [data-block-content]').first()).toBeVisible();
   await page.evaluate(() => {
     const runtime = (window as unknown as {
       __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
@@ -376,8 +377,12 @@ test("auto-scrolls a virtualized page while extending a pointer selection", asyn
 test("auto-scrolls a non-virtualized page while extending a pointer selection", async ({ page }) => {
   await seedOutlineDocument(page, 0);
   await page.getByRole("checkbox", { name: "Virtualize page" }).uncheck();
+  await expect(page.locator(`.${PAGE_SURFACE_CLASS} [data-block-id^="perf-root-"]`)).toHaveCount(2_000);
   const first = page.locator('[data-block-id="perf-root-0"] [data-block-content]');
+  // Activate the raw editor before measuring text; focus replaces its preview.
+  await first.click();
   await first.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   const point = await first.evaluate((element) => {
     const node = element.firstChild;
     if (!node) throw new Error("Expected first non-virtualized block text");
@@ -401,6 +406,11 @@ test("auto-scrolls a non-virtualized page while extending a pointer selection", 
   await page.mouse.move(point.x, point.y);
   await page.mouse.down();
   await page.mouse.move(initialHead.x, initialHead.y, { steps: 5 });
+  await expect.poll(() => page.evaluate(() => (
+    (window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+    }).__rivtoDemo.editor.selection.get()?.blocks.length ?? 0
+  ))).toBeGreaterThan(1);
   await page.mouse.move(point.x, page.viewportSize()!.height - 2, { steps: 5 });
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(startScroll + 100);
   await expect.poll(() => page.evaluate(() => (

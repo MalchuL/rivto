@@ -1,13 +1,14 @@
+import { createTestReactEditor as createReactEditor } from "../../test-utils";
 import { createTestCoreEditor as createEditor } from "../../test-utils";
 import type { ComponentType } from "react";
-import { createReactEditor } from "../../react-editor";
+
 import { BaseBlockView } from "../../views";
 
 const Renderer: ComponentType<{ blockId: string }> = () => null;
 
 describe("BlockManager", () => {
-  test("atomically registers and disposes model, renderer, and conversion command", () => {
-    const editor = createEditor();
+  test("atomically registers and disposes model, renderer, and conversion command", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const dispose = reactEditor.blockTypes.register({
@@ -34,8 +35,8 @@ describe("BlockManager", () => {
     editor.destroy();
   });
 
-  test("rejects containment that disagrees with an existing core definition", () => {
-    const editor = createEditor();
+  test("rejects containment that disagrees with an existing core definition", async () => {
+    const editor = await createEditor();
     editor.blockRegistry.defineBlock({
       type: "test.existing",
       metadata: { containment: { childOutline: "fixed" } },
@@ -53,8 +54,8 @@ describe("BlockManager", () => {
     editor.destroy();
   });
 
-  test("applies recursive defaults and rejects invalid React mutations atomically", () => {
-    const editor = createEditor();
+  test("applies recursive defaults and rejects invalid React mutations atomically", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     reactEditor.blockListProps.register({
       id: "collapse",
@@ -93,8 +94,8 @@ describe("BlockManager", () => {
     editor.destroy();
   });
 
-  test("rejects invalid descendants and repeated list-property deletions atomically", () => {
-    const editor = createEditor();
+  test("rejects invalid descendants and repeated list-property deletions atomically", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     reactEditor.blockListProps.register({
       id: "pair",

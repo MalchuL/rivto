@@ -9,4 +9,4 @@
 
 `createReactEditor` - Создает оболочку 
 
-`<EditorView reactEditor={todayEditor.reactEditor}>` - Использует оболочку для рендера в react
+`<EditorView reactEditor={todayEditor.reactEditor} onReady={todayEditor.releaseInitial}>` - Использует оболочку для рендера в react

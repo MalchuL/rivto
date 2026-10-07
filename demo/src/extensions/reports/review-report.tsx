@@ -11,7 +11,7 @@ import {
   ElementSlots,
   blockExtension,
   useBlockEditing,
-  useEditorMode,
+  SurfaceContext,
   useEditorRoot,
   useEditorSelection,
   useElements,
@@ -21,6 +21,7 @@ import type { EditorElement, RivtoEditorApi } from "@chulane/rivto";
 import { createPortal } from "react-dom";
 import {
   useState,
+  useContext,
   type ChangeEvent,
 } from "react";
 import {
@@ -326,7 +327,7 @@ function ReviewElementLayer({ editor, saveReport }: {
   readonly editor: RivtoEditorApi;
   readonly saveReport: SaveReviewReport;
 }) {
-  const { mode } = useEditorMode();
+  const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const elements = useElements();
   const selection = useEditorSelection();

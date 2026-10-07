@@ -20,10 +20,10 @@ describe("BroadcastChannelProvider editor sync", () => {
     const roomId = `room-${crypto.randomUUID()}`;
     const leftDoc = new YjsDoc(`${roomId}:left`);
     const rightDoc = new YjsDoc(`${roomId}:right`);
-    const left = createRivtoEditor();
-    const right = createRivtoEditor();
-    left.setDocument(new DocumentModelImpl(leftDoc));
-    right.setDocument(new DocumentModelImpl(rightDoc));
+    const leftFixture = await createRivtoEditor({ document: new DocumentModelImpl(leftDoc) });
+    const left = leftFixture;
+    const rightFixture = await createRivtoEditor({ document: new DocumentModelImpl(rightDoc) });
+    const right = rightFixture;
     const leftProvider = new BroadcastChannelProvider(roomId);
     const rightProvider = new BroadcastChannelProvider(roomId);
 
@@ -54,8 +54,8 @@ describe("BroadcastChannelProvider editor sync", () => {
     } finally {
       await leftDoc.detachProvider().catch(() => undefined);
       await rightDoc.detachProvider().catch(() => undefined);
-      left.destroy();
-      right.destroy();
+      leftFixture.destroy(); void leftDoc.destroy();
+      rightFixture.destroy(); void rightDoc.destroy();
     }
   });
 });

@@ -36,6 +36,10 @@ export const PAGE_END_SLOT_SELECTOR = `[${PAGE_END_SLOT_ATTRIBUTE}]`;
  * the marked element's native `isContentEditable` state to distinguish text
  * editing from structural selection; `data-block-content` remains responsible
  * only for persisted text offsets and DOM range conversion.
+ * A native control must carry this marker itself to opt into selection drags;
+ * a marker on its containing region does not opt the control in. A normal click
+ * still activates the control, and `data-prevent-text-editing` takes precedence
+ * over the marker when the control must own the complete pointer gesture.
  */
 export const BLOCK_SELECTION_ANCHOR_ATTRIBUTE = "data-block-selection-anchor";
 

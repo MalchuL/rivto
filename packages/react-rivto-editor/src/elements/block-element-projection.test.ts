@@ -1,5 +1,6 @@
+import { createTestReactEditor as createReactEditor } from "../test-utils";
 import { createTestCoreEditor as createRivtoEditor } from "../test-utils";
-import { createReactEditor } from "../react-editor";
+
 import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../extensions/built-ins/separator/separator-block";
 import {
   blockIdsOf,
@@ -14,11 +15,11 @@ import {
 } from "./block-element-projection";
 
 describe("edgeless block element reconciliation", () => {
-  const createRuntime = (editor: ReturnType<typeof createRivtoEditor>) => createReactEditor({
+  const createRuntime = (editor: Awaited<ReturnType<typeof createRivtoEditor>>) => createReactEditor({
     editor,
     extensions: [separatorBlockExtension()],
   });
-  const ranges = (editor: ReturnType<typeof createRivtoEditor>) => {
+  const ranges = (editor: Awaited<ReturnType<typeof createRivtoEditor>>) => {
     const rootIds = editor.blocks.getRootIds();
     return editor.elements.getElements().map((element) => blockIdsOf(element, rootIds));
   };
@@ -31,8 +32,8 @@ describe("edgeless block element reconciliation", () => {
       .toEqual({ x: 40, y: 0, width: 40, height: 40 });
   });
 
-  test("avoids only block cards when reconciling new ranges and supports opt-out", () => {
-    const editor = createRivtoEditor();
+  test("avoids only block cards when reconciling new ranges and supports opt-out", async () => {
+    const editor = await createRivtoEditor();
     const reactEditor = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, first).id;
@@ -46,7 +47,7 @@ describe("edgeless block element reconciliation", () => {
     reactEditor.destroy();
     editor.destroy();
 
-    const overlapEditor = createRivtoEditor();
+    const overlapEditor = await createRivtoEditor();
     const overlapRuntime = createRuntime(overlapEditor);
     const left = overlapEditor.blocks.insertBlock({ type: "paragraph" }).id;
     const split = overlapEditor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, left).id;
@@ -59,8 +60,8 @@ describe("edgeless block element reconciliation", () => {
     overlapEditor.destroy();
   });
 
-  test("uses the page-sized default card width and accepts a runtime override", () => {
-    const editor = createRivtoEditor();
+  test("uses the page-sized default card width and accepts a runtime override", async () => {
+    const editor = await createRivtoEditor();
     const reactEditor = createRuntime(editor);
     editor.blocks.insertBlock({ type: "paragraph" });
     setBlockElementDefaultWidth(reactEditor, 640);
@@ -74,7 +75,7 @@ describe("edgeless block element reconciliation", () => {
   });
 
   test("automatically reconciles block edits without adding derived history steps", async () => {
-    const editor = createRivtoEditor();
+    const editor = await createRivtoEditor();
     const reactEditor = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, first).id;
@@ -94,8 +95,8 @@ describe("edgeless block element reconciliation", () => {
     editor.destroy();
   });
 
-  test("keeps consecutive empty paragraphs as ordinary card content", () => {
-    const editor = createRivtoEditor();
+  test("keeps consecutive empty paragraphs as ordinary card content", async () => {
+    const editor = await createRivtoEditor();
     const reactEditor = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, first).id;
@@ -111,8 +112,8 @@ describe("edgeless block element reconciliation", () => {
     editor.destroy();
   });
 
-  test("ignores nested separators when partitioning document roots", () => {
-    const editor = createRivtoEditor();
+  test("ignores nested separators when partitioning document roots", async () => {
+    const editor = await createRivtoEditor();
     const reactEditor = createRuntime(editor);
     const root = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
     const child = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, root).id;
@@ -127,8 +128,8 @@ describe("edgeless block element reconciliation", () => {
     editor.destroy();
   });
 
-  test("elementContainsBlock accepts nested descendants of card roots", () => {
-    const editor = createRivtoEditor();
+  test("elementContainsBlock accepts nested descendants of card roots", async () => {
+    const editor = await createRivtoEditor();
     const root = editor.blocks.insertBlock({ type: "paragraph", content: "Root" }).id;
     const child = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, root).id;
     editor.blocks.indentBlock(child);
@@ -150,8 +151,8 @@ describe("edgeless block element reconciliation", () => {
     editor.destroy();
   });
 
-  test("keeps several empty roots inside persisted range boundaries", () => {
-    const editor = createRivtoEditor();
+  test("keeps several empty roots inside persisted range boundaries", async () => {
+    const editor = await createRivtoEditor();
     const reactEditor = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, first).id;
@@ -170,7 +171,7 @@ describe("edgeless block element reconciliation", () => {
   });
 
   test("keeps the first card on split and the earlier card on merge", async () => {
-    const editor = createRivtoEditor();
+    const editor = await createRivtoEditor();
     const reactEditor = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first).id;
@@ -197,7 +198,7 @@ describe("edgeless block element reconciliation", () => {
   });
 
   test("keeps element identity and geometry when the first range block moves across a separator", async () => {
-    const editor = createRivtoEditor();
+    const editor = await createRivtoEditor();
     const reactEditor = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first).id;
@@ -222,7 +223,7 @@ describe("edgeless block element reconciliation", () => {
   });
 
   test("keeps element identity and geometry when the last range block moves across a separator", async () => {
-    const editor = createRivtoEditor();
+    const editor = await createRivtoEditor();
     const reactEditor = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first).id;
@@ -247,7 +248,7 @@ describe("edgeless block element reconciliation", () => {
   });
 
   test("matches all reusable elements globally instead of taking the first local overlap", async () => {
-    const editor = createRivtoEditor();
+    const editor = await createRivtoEditor();
     const reactEditor = createRuntime(editor);
     const leftIds = ["a", "b", "c", "d", "e"].map((id, index, ids) =>
       editor.blocks.insertBlock({ id, type: "paragraph", content: id }, index ? ids[index - 1] : undefined).id);
@@ -273,8 +274,8 @@ describe("edgeless block element reconciliation", () => {
     editor.destroy();
   });
 
-  test("supports a custom separator block plugin", () => {
-    const editor = createRivtoEditor();
+  test("supports a custom separator block plugin", async () => {
+    const editor = await createRivtoEditor();
     const reactEditor = createReactEditor({
       editor,
       extensions: [{

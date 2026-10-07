@@ -1,3 +1,4 @@
+import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 /**
  * Checks Kanban's use of the ordinary block hierarchy: insertion and moves retain
  * card identities and descendants, and participate in document history.
@@ -5,13 +6,13 @@
  */
 import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../../test-utils";
-import { createReactEditor } from "../../../react-editor";
+
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import { kanbanExtension, KANBAN_BLOCK_TYPE } from "./kanban";
 import { indentBlocks, outdentBlocks } from "../../../views/ops/outline-ops";
 
-test("moves existing subtrees into, between and out of Kanban columns with undo", () => {
-  const editor = createTestCoreEditor();
+test("moves existing subtrees into, between and out of Kanban columns with undo", async () => {
+  const editor = await createTestCoreEditor();
   const reactEditor = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), kanbanExtension()],

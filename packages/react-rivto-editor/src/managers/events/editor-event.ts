@@ -28,7 +28,7 @@ export interface EditorEventInit<
   readonly reactEditor: ReactEditor;
   /** Root DOM element of the currently committed React surface. */
   readonly root: HTMLElement;
-  /** Editor mode captured for this dispatch. */
+  /** Editor mode captured for this dispatch, supplied by the receiving view's rendered surface. */
   readonly mode: EditorMode;
   /** Detached structured selection captured for this dispatch. */
   readonly selection: Selection | undefined;

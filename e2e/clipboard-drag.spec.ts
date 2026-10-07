@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { BLOCK_ID_SELECTOR, blockTypeSelector } from "./dom-markers";
+import { HOST_BLOCK_ID_SELECTOR as BLOCK_ID_SELECTOR, blockTypeSelector } from "./dom-markers";
 
 async function textPoint(
   content: import("@playwright/test").Locator,
@@ -31,7 +31,7 @@ async function caretOffset(content: import("@playwright/test").Locator): Promise
 
 const structuredBundle = JSON.stringify({
   version: 4,
-  startsWithText: true,
+  fromTextSelection: true,
   blocks: [{
     id: "copied",
     type: "paragraph",
@@ -44,7 +44,7 @@ const structuredBundle = JSON.stringify({
 });
 
 async function paste(page: import("@playwright/test").Page, asPlainText: boolean): Promise<void> {
-  const content = page.locator("[data-block-content]").first();
+  const content = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first();
   await content.click();
   await page.keyboard.press("End");
   await content.evaluate((element, { structured, plainText, forcePlainText }) => {
@@ -71,7 +71,7 @@ test.beforeEach(async ({ page }) => {
 for (const mode of ["block", "edgeless"] as const) {
   test(`cuts and pastes partial text inside one block in ${mode} mode`, async ({ page }) => {
     await page.locator(`[data-editor-mode="${mode}"]`).click();
-    const content = page.locator("[data-block-content]").first();
+    const content = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first();
     await content.click();
     const original = (await content.textContent())!;
     const blockCount = await page.locator(BLOCK_ID_SELECTOR).count();
@@ -86,7 +86,7 @@ for (const mode of ["block", "edgeless"] as const) {
       return { structured: data.getData("application/x-rivto+json"), text: data.getData("text/plain") };
     });
     expect(copied.text).toBe(original.slice(1, 4));
-    expect(JSON.parse(copied.structured)).toMatchObject({ startsWithText: true, blocks: [{ content: original.slice(1, 4), children: [] }] });
+    expect(JSON.parse(copied.structured)).toMatchObject({ fromTextSelection: true, blocks: [{ content: original.slice(1, 4), children: [] }] });
     await expect(content).toHaveText(original.slice(0, 1) + original.slice(4));
     await expect.poll(() => caretOffset(content)).toBe(1);
     await content.evaluate((element, copied) => {
@@ -108,8 +108,8 @@ for (const mode of ["block", "edgeless"] as const) {
 }
 
 test("normal structured text paste merges into the target", async ({ page }) => {
-  const content = page.locator("[data-block-content]").first();
-  const original = await page.locator("[data-block-content]").first().textContent();
+  const content = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first();
+  const original = await page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first().textContent();
   await paste(page, false);
   await expect(content).toHaveText(`${original}Copied`);
   await expect.poll(() => caretOffset(content)).toBe(`${original}Copied`.length);
@@ -117,20 +117,20 @@ test("normal structured text paste merges into the target", async ({ page }) => 
 
 test("Ctrl+Shift+V pastes multiline plain text inside one block", async ({ page }) => {
   const rootsBefore = await page.locator(`${BLOCK_ID_SELECTOR}.page-block`).count();
-  const original = await page.locator("[data-block-content]").first().textContent();
+  const original = await page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first().textContent();
   await paste(page, true);
-  await expect.poll(() => page.locator("[data-block-content]").first().textContent()).toBe(
+  await expect.poll(() => page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first().textContent()).toBe(
     `${original}Copied\n    second line`,
   );
-  await expect.poll(() => caretOffset(page.locator("[data-block-content]").first())).toBe(
+  await expect.poll(() => caretOffset(page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first())).toBe(
     `${original}Copied\n    second line`.length,
   );
   await expect(page.locator(`${BLOCK_ID_SELECTOR}.page-block`)).toHaveCount(rootsBefore);
 });
 
 test("copies a mouse text selection and pastes it inline", async ({ page }) => {
-  const source = page.locator("[data-block-content]").first();
-  const target = page.locator("[data-block-content]").nth(1);
+  const source = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first();
+  const target = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").nth(1);
   const copiedText = await source.textContent();
   const targetText = await target.textContent();
   await source.selectText();
@@ -208,7 +208,7 @@ test("copies Counter display text to every portable clipboard flavor", async ({ 
 });
 
 test("replaces invalid structured block properties with an Error block", async ({ page }) => {
-  const target = page.locator("[data-block-content]").first();
+  const target = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first();
   await target.click();
   await target.evaluate((element) => {
     const data = new DataTransfer();
@@ -236,7 +236,7 @@ test("replaces invalid structured block properties with an Error block", async (
 });
 
 test("copies a multi-block selection from the focused page", async ({ page }) => {
-  const contents = page.locator("[data-block-content]");
+  const contents = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])");
   const first = await contents.nth(0).textContent();
   const second = await contents.nth(1).textContent();
   await contents.nth(0).click({ modifiers: ["Control"] });
@@ -261,7 +261,15 @@ test("copies a multi-block selection from the focused page", async ({ page }) =>
 });
 
 test("copies and pastes a mouse-dragged multi-block selection", async ({ page }) => {
-  const contents = page.locator("[data-block-content]");
+  await page.setViewportSize({ width: 1280, height: 1800 });
+  // These three adjacent leaf roots have no embedding or descendants between them.
+  const contents = page.locator('[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]').filter({ hasText: /^(Finish the selection|Type `\/`|Try the interactive checkbox)/ });
+  await contents.first().click();
+  // Activating raw Markdown can change its height; measure endpoints afterward.
+  await contents.first().press("Control+Home");
+  await contents.first().press("ArrowRight");
+  await contents.first().press("ArrowRight");
+  await expect.poll(() => caretOffset(contents.first())).toBe(2);
   const before = await page.locator(BLOCK_ID_SELECTOR).count();
   const start = await textPoint(contents.nth(0), 2);
   const end = await textPoint(contents.nth(2), 8);
@@ -269,22 +277,29 @@ test("copies and pastes a mouse-dragged multi-block selection", async ({ page })
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 10 });
   await page.mouse.up();
-  await expect(page.locator("[data-block-selected]")).toHaveCount(3);
+  await expect(page.locator(`${BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(3);
 
   await page.keyboard.press("Control+c");
   await page.keyboard.press("Control+v");
 
   await expect(page.locator(BLOCK_ID_SELECTOR)).toHaveCount(before + 3);
-  await expect(page.locator("[data-block-selected]")).toHaveCount(3);
+  await expect(page.locator(`${BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(3);
   await page.keyboard.press("Tab");
-  await expect(page.locator("[data-block-selected]")).toHaveCount(3);
+  await expect(page.locator(`${BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(3);
   await page.keyboard.press("Delete");
   await expect(page.locator(BLOCK_ID_SELECTOR)).toHaveCount(before);
 });
 
 test("copies and pastes partial text across blocks with Shift+Alt", async ({ page }) => {
-  const contents = page.locator("[data-block-content]");
+  // Keep both endpoints away from the auto-scroll edges while measuring offsets.
+  await page.setViewportSize({ width: 1280, height: 1800 });
+  const contents = page.locator('[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]').filter({ hasText: /^(Start a selection in|This complete|Nested branch one owns|Reverse selection)/ });
   const before = await page.locator(BLOCK_ID_SELECTOR).count();
+  await contents.first().click();
+  // Activating raw Markdown can change its height; measure endpoints afterward.
+  await contents.first().press("Control+Home");
+  await contents.first().press("ArrowRight");
+  await contents.first().press("ArrowRight");
   const selectedText = `${(await contents.nth(0).textContent())?.slice(2)}\n${await contents.nth(1).textContent()}\n${(await contents.nth(2).textContent())?.slice(0, 8)}`;
   const start = await textPoint(contents.nth(0), 2);
   const end = await textPoint(contents.nth(2), 8);
@@ -296,7 +311,7 @@ test("copies and pastes partial text across blocks with Shift+Alt", async ({ pag
   await page.mouse.up();
   await page.keyboard.up("Alt");
   await page.keyboard.up("Shift");
-  await expect(page.locator("[data-block-selected]")).toHaveCount(0);
+  await expect(page.locator(`${BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(0);
 
   await page.evaluate(() => {
     document.addEventListener("copy", (event) => {
@@ -334,5 +349,5 @@ test("drags selected sibling roots together", async ({ page }) => {
   await expect(page.locator(".page-drag-overlay")).toContainText(firstText ?? "");
   await expect(page.locator(".page-drag-overlay")).toContainText(secondText ?? "");
   await page.mouse.up();
-  await expect(page.locator("[data-block-selected]")).toHaveCount(2);
+  await expect(page.locator(`${BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(2);
 });

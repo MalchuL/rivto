@@ -140,6 +140,7 @@ interface PromptMatch {
 }
 
 interface TodoCandidate extends PromptMatch {
+  readonly editor: ReactEditor;
   readonly blockId: string;
   readonly contentElement: HTMLElement;
 }
@@ -512,18 +513,22 @@ export function todoItemExtension(
         const current = candidate;
         if (!current) return;
         candidate = undefined;
-        const block = reactEditor.blocks.getBlockNode(current.blockId);
-        const match = block ? matchPrompt(block.content, prompts) : undefined;
-        if (!block || block.type === TODO_ITEM_BLOCK_TYPE || !match) {
-          decoratePrompt(current.contentElement);
-          return;
-        }
-        const owned = createTodoItemProps();
-        reactEditor.history.batchUpdates(() => {
-          reactEditor.blocks.setBlockType(current.blockId, TODO_ITEM_BLOCK_TYPE);
-          reactEditor.blocks.updateBlock(current.blockId, {
-            content: block.content.slice(match.prompt.length).replace(/^\s+/, ""),
-            props: { ...owned, status: match.status },
+        if (!current.contentElement.isConnected) return;
+        const editor = current.editor;
+        editor.events.runInView(() => {
+          const block = editor.blocks.getBlockNode(current.blockId);
+          const match = block ? matchPrompt(block.content, prompts) : undefined;
+          if (!block || block.type === TODO_ITEM_BLOCK_TYPE || !match) {
+            decoratePrompt(current.contentElement);
+            return;
+          }
+          const owned = createTodoItemProps();
+          editor.history.batchUpdates(() => {
+            editor.blocks.setBlockType(current.blockId, TODO_ITEM_BLOCK_TYPE);
+            editor.blocks.updateBlock(current.blockId, {
+              content: block.content.slice(match.prompt.length).replace(/^\s+/, ""),
+              props: { ...owned, status: match.status },
+            });
           });
         });
       };
@@ -568,8 +573,9 @@ export function todoItemExtension(
           scope: "content",
         }, ({ blockId, contentElement }) => {
           if (!blockId || !contentElement) return false;
-          queueMicrotask(() => {
-            const block = reactEditor.blocks.getBlockNode(blockId);
+          const editor = reactEditor.events.getDocumentView() ?? reactEditor;
+          queueMicrotask(() => editor.events.runInView(() => {
+            const block = editor.blocks.getBlockNode(blockId);
             if (!block || block.type === TODO_ITEM_BLOCK_TYPE) return;
             const match = matchPrompt(contentElement.textContent ?? "", prompts);
             if (!match) {
@@ -577,9 +583,9 @@ export function todoItemExtension(
               return;
             }
             if (candidate && candidate.blockId !== blockId) convertCandidate();
-            candidate = { blockId, contentElement, ...match };
+            candidate = { editor, blockId, contentElement, ...match };
             decoratePrompt(contentElement, match.prompt);
-          });
+          }));
           return false;
         }),
         reactEditor.events.register({

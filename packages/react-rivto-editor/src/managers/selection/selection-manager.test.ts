@@ -1,21 +1,42 @@
+import { createTestReactEditor as createReactEditor } from "../../test-utils";
 import { createCaretSelection, createTextSelection, createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor as createEditor } from "../../test-utils";
-import { createReactEditor, type ReactEditorImpl } from "../../react-editor";
+import { type ReactEditorImpl } from "../../react-editor";
 
 describe("ReactSelectionManager", () => {
-  test.each(["block", "edgeless"] as const)("keeps only the newest callback when cancellation schedules work in %s", (mode) => {
-    const editor = createEditor();
+  test("reports pending restoration only for the current DOM root", async () => {
+    const editor = await createEditor();
+    const reactEditor = createReactEditor({ editor });
+    const root = Object.assign(new EventTarget(), { ownerDocument: { defaultView: {
+      requestAnimationFrame: () => 1,
+      cancelAnimationFrame: () => {},
+    } } }) as unknown as HTMLElement;
+    let currentRoot = root;
+    reactEditor.events.getRoot = () => currentRoot;
+    const cancel = reactEditor.selection.scheduleIfSelectionUnchanged(() => {});
+    expect(reactEditor.selection.hasPendingSelectionCallback).toBe(true);
+    currentRoot = {} as HTMLElement;
+    expect(reactEditor.selection.hasPendingSelectionCallback).toBe(false);
+    currentRoot = root;
+    expect(reactEditor.selection.hasPendingSelectionCallback).toBe(true);
+    cancel();
+    expect(reactEditor.selection.hasPendingSelectionCallback).toBe(false);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+  test.each(["block", "edgeless"] as const)("keeps only the newest callback when cancellation schedules work in %s", async (mode) => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     reactEditor.mode.set(mode);
     const frames = new Map<number, FrameRequestCallback>();
     let nextFrame = 0;
-    const root = { ownerDocument: { defaultView: {
+    const root = Object.assign(new EventTarget(), { ownerDocument: { defaultView: {
       requestAnimationFrame: (callback: FrameRequestCallback) => {
         frames.set(++nextFrame, callback);
         return nextFrame;
       },
       cancelAnimationFrame: (frame: number) => { frames.delete(frame); },
-    } } } as unknown as HTMLElement;
+    } } }) as unknown as HTMLElement;
     reactEditor.events.getRoot = () => root;
     const calls: string[] = [];
     const oldCancel = reactEditor.selection.scheduleIfSelectionUnchanged(() => { calls.push("old"); }, () => {
@@ -37,18 +58,18 @@ describe("ReactSelectionManager", () => {
     editor.destroy();
   });
 
-  test.each(["replace", "clear", "away-and-back", "empty-away-and-back", "cancel", "destroy", "equivalent"] as const)(
+  test.each(["replace", "clear", "away-and-back", "empty-away-and-back", "cancel", "destroy", "native-input", "pointer", "key", "focus", "equivalent"] as const)(
     "guards deferred restoration after %s",
-    (change) => {
-      const editor = createEditor();
+    async (change) => {
+      const editor = await createEditor();
       const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
       const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }).id;
       const reactEditor = createReactEditor({ editor });
       let frame: FrameRequestCallback | undefined;
-      const root = { ownerDocument: { defaultView: {
+      const root = Object.assign(new EventTarget(), { ownerDocument: { defaultView: {
         requestAnimationFrame: (callback: FrameRequestCallback) => { frame = callback; return 1; },
         cancelAnimationFrame: () => { frame = undefined; },
-      } } } as unknown as HTMLElement;
+      } } }) as unknown as HTMLElement;
       reactEditor.events.getRoot = () => root;
       editor.selection.set(createCaretSelection(first, 1));
       if (change === "empty-away-and-back") editor.selection.clear();
@@ -71,6 +92,13 @@ describe("ReactSelectionManager", () => {
       }
       if (change === "equivalent" || change === "away-and-back") editor.selection.set(createCaretSelection(first, 1));
       if (change === "cancel") cancel();
+      if (change === "native-input") root.dispatchEvent(new Event("beforeinput"));
+      if (change === "pointer") root.dispatchEvent(new Event("pointerdown"));
+      if (change === "key") root.dispatchEvent(new Event("keydown"));
+      if (change === "focus") {
+        Object.assign(root, { contains: () => false });
+        root.dispatchEvent(Object.assign(new Event("focusout"), { relatedTarget: new EventTarget() }));
+      }
       if (change === "destroy") reactEditor.destroy();
       frame?.(0);
       expect(restorationCount).toBe(change === "equivalent" ? 1 : 0);
@@ -83,8 +111,8 @@ describe("ReactSelectionManager", () => {
     },
   );
 
-  test("delegates text deletion and whole-block selection to core", () => {
-    const editor = createEditor();
+  test("delegates text deletion and whole-block selection to core", async () => {
+    const editor = await createEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "BeforeAfter" }).id;
     const reactEditor = createReactEditor({ editor });
     const text = createTextSelection(
@@ -116,8 +144,8 @@ describe("ReactSelectionManager", () => {
     editor.destroy();
   });
 
-  test("shares text editing with core and tolerates a missing active surface", () => {
-    const editor = createEditor();
+  test("shares text editing with core and tolerates a missing active surface", async () => {
+    const editor = await createEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "text" }).id;
     const reactEditor = createReactEditor({ editor });
     const manager = reactEditor.selection;

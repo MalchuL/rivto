@@ -11,6 +11,7 @@ for (const repeat of [20, 200]) {
   test(`shares outline reads during indent and outdent with repeat=${repeat}`, async ({ page }) => {
     test.setTimeout(120_000);
     await page.goto(`/?repeat=${repeat}`);
+    await expect(page.locator('[data-journal-document="today"] [data-block-content]').first()).toBeVisible();
     const id = await page.evaluate(() => {
       const { editor } = (window as unknown as {
         __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };

@@ -91,13 +91,17 @@ test("Backspace and Delete remove an empty writing block after a structural bloc
 test("removing an empty parent promotes its first child and adopts later children", async ({ page }) => {
   const inserted = await insertSeparatorContinuation(page);
   await page.keyboard.press("Enter");
+  await expect(inserted.content).not.toBeFocused();
+  await expect(page.locator("[data-block-content]:focus")).toHaveCount(1);
   await page.keyboard.type("First child");
   const firstContent = page.locator("[data-block-content]:focus");
   const first = firstContent.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
   const firstId = await first.getAttribute(BLOCK_ID_ATTRIBUTE);
   if (!firstId) throw new Error("Expected first child ID");
   await page.keyboard.press("Tab");
+  await expect(blockById(page, firstId).locator("[data-block-content]")).toBeFocused();
   await page.keyboard.press("Enter");
+  await expect(page.locator("[data-block-content]:focus")).not.toHaveText("First child");
   await page.keyboard.type("Second child");
   const secondContent = page.locator("[data-block-content]:focus");
   const second = secondContent.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
@@ -159,6 +163,8 @@ test("undo works immediately after deleting blocks from a focused editable", asy
 });
 
 test("history shortcuts replace native contenteditable history", async ({ page }) => {
+  // Browsers can defer selectionchange until after an input and its undo.
+  await page.evaluate(() => document.addEventListener("selectionchange", (event) => event.stopImmediatePropagation(), true));
   const content = page.locator("[data-block-content]").first();
   const initial = await content.textContent();
   await content.click();

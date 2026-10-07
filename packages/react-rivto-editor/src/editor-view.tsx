@@ -1,11 +1,19 @@
+import type { DocumentModel } from "@chulane/document-model";
 import {
   useCallback,
+  useEffect,
+  useLayoutEffect,
+  useContext,
   useMemo,
+  useId,
   useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { EditorViewController } from "./managers/events/editor-view-controller";
+import { BlockElementRefBoundary } from "./blocks/block-wrapper/block-wrapper";
 import { EditorContext } from "./editor-context";
+import { EditorStorageContext } from "./editor-storage-context";
 import { EditorRootContext } from "./editor-root-context";
 import { DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN, PageVirtualizationContext } from "./page-virtualization-context";
 import type { ReactEditor } from "./types";
@@ -14,7 +22,13 @@ import type { ReactEditor } from "./types";
 export interface EditorViewProps {
   /** React runtime created and destroyed by the host application. */
   readonly reactEditor: ReactEditor;
-  /** Optional application chrome; extensions are registered at runtime creation. */
+  /** Optional block and descendants to display instead of the complete document. */
+  readonly rootBlockId?: string;
+  /** False suspends hidden-tab interaction while keeping its document acquired; defaults to true. */
+  readonly active?: boolean;
+  /** Notifies the host after this view acquires its model; does not transfer the view's release handle. */
+  readonly onReady?: (document: DocumentModel) => void;
+  /** Explicit PageSurface or EdgelessSurface, plus optional application chrome; extensions are registered at runtime creation. */
   readonly children?: ReactNode;
   /** False disables page virtualization, true always enables it, and a number sets the minimum root count; defaults to false. */
   readonly virtualizePageThreshold?: boolean | number;
@@ -38,26 +52,45 @@ function normalizeVirtualizationCount(value: number, fallback: number): number {
 }
 
 /**
- * Provides one reactive editor runtime to a React subtree.
+ * Provides a document-backed editing view using one shared reactive editor runtime.
  *
- * EditorView is intentionally a provider rather than a renderer. It does not
- * create or destroy the editor, choose a page/canvas surface, traverse blocks,
- * or render a DOM wrapper. The host owns runtime lifetime and the child surface
- * owns presentation and registers its own DOM root through `useEditorRoot`.
+ * EditorView provides document context and renders the supplied surface and application UI.
+ * It does not create or destroy the editor runtime, traverse blocks itself,
+ * or add a DOM wrapper around a loaded surface. The host owns runtime lifetime
+ * and the child surface owns presentation and registers its own DOM root through `useEditorRoot`.
+ * With EditorStorageContext, the view acquires its registered document on commit
+ * and releases it on cleanup; without storage the caller retains ownership.
+ * Nested occurrences share a document core while retaining independent event and UI state.
  *
  * Document data uses focused block, root, and element subscriptions below this
- * boundary. Mode and React registry subscriptions update only their owners, so
+ * boundary. Presentation and React registry subscriptions update only their owners, so
  * changing one block does not recreate the complete surface tree.
  *
  * @param props - Editor runtime and React subtree to bind together.
- * @returns A context provider; EditorView adds no DOM element.
+ * @returns The view's context providers and supplied surface, or a loading/error indicator before its model is available.
  */
 export function EditorView({
-  reactEditor,
+  reactEditor: hostEditor,
+  rootBlockId,
+  active = true,
+  onReady,
   children,
   virtualizePageThreshold = false,
   virtualizePageOverscan = DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN,
 }: EditorViewProps) {
+  const documentId = hostEditor.getDocument().id;
+  const parent = useContext(EditorContext);
+  const storage = useContext(EditorStorageContext);
+  const enabled = active && parent?.enabled !== false;
+  const controller = useMemo(() => new EditorViewController(hostEditor, rootBlockId, storage), [hostEditor, rootBlockId, storage]);
+  useEffect(() => controller.mount(), [controller]);
+  useLayoutEffect(() => controller.setEnabled(enabled), [controller, enabled]);
+  const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
+  useEffect(() => {
+    if (snapshot.retained && snapshot.document) onReady?.(snapshot.document);
+  }, [snapshot.retained, snapshot.document, onReady]);
+  const reactEditor = snapshot.api ?? hostEditor;
+  const domIdPrefix = useId();
   const [root, setRoot] = useState<HTMLElement | null>(null);
 
   const subscribeSurfaces = useCallback(
@@ -78,17 +111,8 @@ export function EditorView({
     () => reactEditor.extensions.revision,
     () => reactEditor.extensions.revision,
   );
-  const subscribeMode = useCallback(
-    (listener: () => void) => reactEditor.mode.subscribe(listener),
-    [reactEditor],
-  );
-  const mode = useSyncExternalStore(
-    subscribeMode,
-    () => reactEditor.mode.get(),
-    () => reactEditor.mode.get(),
-  );
-
-  const context = useMemo(() => ({ reactEditor }), [reactEditor]);
+  const context = useMemo(() => ({ reactEditor, documentId, document: snapshot.document, rootBlockId, domIdPrefix, view: controller, enabled }),
+    [reactEditor, documentId, snapshot.document, rootBlockId, domIdPrefix, controller, enabled]);
   const virtualization = useMemo(() => {
     let threshold = virtualizePageThreshold;
     if (typeof threshold === "number") {
@@ -103,38 +127,22 @@ export function EditorView({
   // The callback ref identity never changes, preventing React from unregistering
   // and registering the same surface root on ordinary editor renders.
   const rootRef = useCallback((element: HTMLElement | null) => {
-    reactEditor.events.setRoot(element);
+    controller.setRoot(element);
     setRoot(element);
-  }, [reactEditor]);
+  }, [controller]);
   const rootContext = useMemo(() => ({ element: root, ref: rootRef }), [root, rootRef]);
 
-  const Surface = reactEditor.surfaces.get(mode);
-  if (!Surface) throw new Error(`No React surface is registered for editor mode ${mode}`);
-  const beforeSurface = reactEditor.extensions.getComponents("beforeSurface");
-  const afterSurface = reactEditor.extensions.getComponents("afterSurface");
-  const editorWrappers = reactEditor.surfaces.getEditorWrappers(mode);
-  let content: ReactNode = (
-    <>
-      {children}
-      {beforeSurface.map((Component, index) => (
-        <Component key={`before-${Component.displayName ?? Component.name}-${index}`} />
-      ))}
-      <Surface />
-      {afterSurface.map((Component, index) => (
-        <Component key={`after-${Component.displayName ?? Component.name}-${index}`} />
-      ))}
-    </>
-  );
-  for (let index = editorWrappers.length - 1; index >= 0; index -= 1) {
-    const EditorWrapper = editorWrappers[index]!;
-    content = <EditorWrapper>{content}</EditorWrapper>;
+  if (!snapshot.api) {
+    return <div role="status">{snapshot.status === "error" ? "Unable to load document." : "Loading document…"}</div>;
   }
+
+  const content = <>{children}{snapshot.status === "missing" && <div role="status">Referenced block was deleted.</div>}</>;
 
   return (
     <EditorContext.Provider value={context}>
       <PageVirtualizationContext.Provider value={virtualization}>
         <EditorRootContext.Provider value={rootContext}>
-          {content}
+          <BlockElementRefBoundary>{content}</BlockElementRefBoundary>
         </EditorRootContext.Provider>
       </PageVirtualizationContext.Provider>
     </EditorContext.Provider>

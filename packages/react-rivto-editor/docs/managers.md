@@ -50,6 +50,7 @@ component registrations are valid.
 | `blockTypes` | Atomic core definition + renderer/view + optional slash conversion |
 | `blockListProps` | React lifecycle adapter for the core list-property policy registry |
 | `renderers` | Renderer lookup, duplicate checks, and unknown fallback |
+| `mode` | Core editor presentation state: `get`, `set`, and `subscribe`; never persisted |
 | `surfaces` | One root per mode plus ordered block/editor wrappers |
 | `extensions` | Extension setup/rollback, reverse cleanup, and mounted visual UI |
 | `events` | Active-surface ownership and delegated native DOM events |
@@ -59,7 +60,7 @@ component registrations are valid.
 
 `extensions.mount` has no mode argument. A mounted component is present beside
 every surface. Its DOM/keyboard registrations declare `mode`, and any React
-effect with surface-specific behavior checks `useEditorMode()`.
+effect with surface-specific behavior checks `useContext(SurfaceContext)`.
 
 `surfaces` owns wrappers because their composition is a property of rendering,
 not extension lifecycle. The first registered block or editor wrapper is

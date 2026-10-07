@@ -1,3 +1,4 @@
+import { createTestReactEditor as createReactEditor } from "../../test-utils";
 import { createCaretSelection, createTextSelection, createStructuralSelection } from "@chulane/rivto";
 /**
  * Regression tests for per-block selection snapshots used by React chrome.
@@ -8,11 +9,11 @@ import { createCaretSelection, createTextSelection, createStructuralSelection } 
  * `editor.revision` (so EditorView does not re-render the tree).
  */
 import { createTestCoreEditor as createEditor } from "../../test-utils";
-import { createReactEditor } from "../../react-editor";
+
 
 describe("useBlockSelected / useEditorSelection store contract", () => {
-  test("snapshot identity is stable until set actually changes", () => {
-    const editor = createEditor();
+  test("snapshot identity is stable until set actually changes", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" }).id;
     const caret = createCaretSelection(id, 1);
@@ -24,8 +25,8 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     editor.destroy();
   });
 
-  test("caret selection does not mark the block selected", () => {
-    const editor = createEditor();
+  test("caret selection does not mark the block selected", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" }).id;
     reactEditor.selection.set(createCaretSelection(id, 1));
@@ -38,8 +39,8 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     editor.destroy();
   });
 
-  test("whole-block selection marks only member ids", () => {
-    const editor = createEditor();
+  test("whole-block selection marks only member ids", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
@@ -51,8 +52,8 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     editor.destroy();
   });
 
-  test("selection set does not bump the React editor revision", () => {
-    const editor = createEditor();
+  test("selection set does not bump the React editor revision", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" }).id;
     const before = reactEditor.revision;

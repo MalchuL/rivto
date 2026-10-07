@@ -2,10 +2,11 @@
  * Demo-only document-order numbers drawn to the left of each page block.
  *
  * The ordinal is the block's depth-first position in the full outline, starting
- * at 1. Hierarchy changes rebuild that map once per editor; text edits do not.
+ * at 1. Hierarchy changes rebuild that map once per document; text edits do not.
  * Nested blocks keep the same left column as their ancestors. Edgeless cards omit the
  * numbers because their frames are not a vertical outline.
  */
+import type { DocumentModel } from "@chulane/document-model";
 import {
   useReactEditor,
   type BlockSlotProps,
@@ -37,7 +38,7 @@ interface BlockOrderCache {
   map: ReadonlyMap<string, BlockOrdinal>;
 }
 
-const blockOrders = new WeakMap<ReactEditor, BlockOrderCache>();
+const blockOrders = new WeakMap<DocumentModel, BlockOrderCache>();
 
 /**
  * Assigns a depth-first ordinal to every block in one detached forest.
@@ -69,16 +70,18 @@ function buildOrdinals(
 }
 
 /**
- * Returns the editor's ordinal map, building it on first read.
+ * Returns the displayed document's ordinal map, building it on first read.
  *
  * @param reactEditor - Editor whose outline supplies the numbers.
- * @returns The current ordinal map for that editor.
+ * @returns The shared ordinal map for that document.
  */
 function blockOrderSnapshot(reactEditor: ReactEditor): ReadonlyMap<string, BlockOrdinal> {
-  let cache = blockOrders.get(reactEditor);
+  const document = reactEditor.getDocument();
+  if (!document) throw new Error("Document context is required for gutter numbering");
+  let cache = blockOrders.get(document);
   if (!cache) {
     cache = { map: buildOrdinals(reactEditor.blocks.getBlocks()) };
-    blockOrders.set(reactEditor, cache);
+    blockOrders.set(document, cache);
   }
   return cache.map;
 }
@@ -86,11 +89,11 @@ function blockOrderSnapshot(reactEditor: ReactEditor): ReadonlyMap<string, Block
 /**
  * Drops a cached ordinal map so the next read follows the new hierarchy.
  *
- * @param reactEditor - Editor whose outline changed.
+ * @param document - Loaded model whose outline changed.
  * @returns Nothing.
  */
-function invalidateBlockOrder(reactEditor: ReactEditor): void {
-  blockOrders.delete(reactEditor);
+function invalidateBlockOrder(document: DocumentModel): void {
+  blockOrders.delete(document);
 }
 
 /**
@@ -132,7 +135,8 @@ export function blockNumberExtension(): ReactEditorExtension {
     setup(reactEditor) {
       // Invalidate once during structure observation. Rows read on document
       // publication, sharing one rebuild after all storage observers finish.
-      const unsubscribe = reactEditor.blocks.subscribeStructure(() => invalidateBlockOrder(reactEditor));
+      const document = reactEditor.getDocument();
+      const unsubscribe = document.blocks.subscribeStructure(() => invalidateBlockOrder(document));
       reactEditor.surfaces.registerBlockSlot({
         position: "left",
         mode: "block",
@@ -140,7 +144,7 @@ export function blockNumberExtension(): ReactEditorExtension {
       });
       return () => {
         unsubscribe();
-        invalidateBlockOrder(reactEditor);
+        invalidateBlockOrder(document);
       };
     },
   };

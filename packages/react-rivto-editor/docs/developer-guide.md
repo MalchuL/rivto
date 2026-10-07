@@ -13,10 +13,13 @@ The React package never owns or duplicates document data. It presents a core
 ## Normal setup
 
 ```tsx
-import { createRivtoEditor, DocumentModelImpl, YjsDoc } from "@chulane/rivto";
+import { createRivtoEditor } from "@chulane/rivto";
+import { DocumentStorage } from "@chulane/document-model";
+import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import {
   createReactEditor,
   EditorView,
+  PageSurface,
 } from "@chulane/rivto-react";
 import {
   blockExtension,
@@ -25,9 +28,10 @@ import {
   standardPreset,
 } from "@chulane/rivto-react/extensions";
 
-const document = new DocumentModelImpl(new YjsDoc("document-id"));
-const editor = createRivtoEditor();
-editor.setDocument(document);
+const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
+storage.registerDocument("document-id");
+const document = await storage.openDocument("document-id");
+const editor = createRivtoEditor({ document });
 const reactEditor = createReactEditor({
   editor,
   extensions: [
@@ -46,11 +50,13 @@ const reactEditor = createReactEditor({
   ],
 });
 
-root.render(<EditorView reactEditor={reactEditor} />);
+root.render(<EditorView reactEditor={reactEditor}><PageSurface /></EditorView>);
 
 // Host teardown:
 reactEditor.destroy();
 editor.destroy();
+await document.destroy();
+await storage.destroy();
 ```
 
 `standardPreset({ writing })` installs the default writing block (paragraph +
@@ -164,7 +170,7 @@ Hooks resolve current values through public getters:
 | `useBlockNode(id)` | One detached node with direct `childIds` |
 | `useRootBlockIds()` | Ordered root IDs |
 | `useReactEditor()` | Focused React runtime managers |
-| `useEditorMode()` | Mode manager |
+| `useContext(SurfaceContext)` | Current surface kind |
 | `useEditorSelection()` / selection hooks | Detached selection |
 | slash hooks | Slash-command manager |
 

@@ -1,7 +1,9 @@
 import type { ReactEditor } from "../../../types";
 import { resolveDropPlacement, type DropLayoutBlock, type DropRect } from "../placement/resolver";
 import type { DropBlock } from "../placement/types";
-import { collectDropLayout } from "./target";
+import { collectDropLayout, getDropBlocks, resolveSurfaceDrop } from "./target";
+import type { EditorBlock } from "@chulane/rivto";
+import { resolveCrossDocumentPageRootPlacement } from "../cross-document/placement";
 
 const defaults = { childDropIndent: 24, gapDropZone: 8, allowChildPlacement: true };
 function rect(top: number, height = 24, left = 0, width = 400): DropRect {
@@ -77,4 +79,78 @@ test.each(["vertical", "horizontal", "grid"] as const)("fresh %s geometry matche
   // Position changes without a new DOM identity list must still be read fresh.
   items[4] = item("next", 500);
   expect(layout[4]!.rect.top).toBe(500);
+});
+
+test.each([2, 2000])("embedded placement reads its subtree without visiting %i unrelated document roots", (count) => {
+  const root = { id: "branch", children: [] } as unknown as EditorBlock;
+  let nodeReads = 0;
+  let forestReads = 0;
+  const forest = Array.from({ length: count }, (_, index) => ({ id: `other-${index}`, children: [] }));
+  const runtime = {
+    rootBlockId: "branch",
+    blocks: {
+      getBlock: (id: string) => { nodeReads++; return id === "branch" ? root : undefined; },
+      getBlocks: () => { forestReads++; return forest; },
+    },
+  } as unknown as ReactEditor;
+  expect(getDropBlocks(runtime)).toEqual([root]);
+  expect(nodeReads).toBe(1);
+  expect(forestReads).toBe(0);
+});
+
+test("retains hidden siblings when dropping before a filtered container child", () => {
+  const fixture = surface([
+    item("storage", 0, { acceptsBody: true, axis: "vertical", rect: rect(0, 160) }),
+    item("visible", 40, { parentId: "storage" }),
+  ]);
+  fixture.runtime.views.acceptsDrop = () => true;
+  const blocks = [{ id: "storage", children: [{ id: "hidden", children: [] }, { id: "visible", children: [] }] }];
+  expect(resolveSurfaceDrop(fixture.root, fixture.runtime, [], blocks, { x: 12, y: 36 }, defaults))
+    .toMatchObject({ kind: "between", parentId: "storage", previousId: "hidden", nextId: "visible" });
+});
+
+test("does not measure an outline when the pointer is over blank canvas", () => {
+  const fixture = surface([item("block", 0)]);
+  Object.assign(fixture.root, { getAttribute: () => "edgeless" });
+  expect(resolveSurfaceDrop(fixture.root, fixture.runtime, [], [{ id: "block", children: [] }], { x: 100, y: 20 }, defaults)).toBeNull();
+  expect(fixture.reads).toEqual([]);
+});
+
+test("embedded placement accepts children but refuses gaps outside the displayed root and moves into itself", () => {
+  const fixture = surface([item("branch", 0, { rect: rect(0, 80) }), item("child", 40, { parentId: "branch" })]);
+  const branch = { id: "branch", children: [{ id: "child", children: [] }] } as unknown as EditorBlock;
+  const foreign = { id: "foreign", children: [] } as unknown as EditorBlock;
+  const runtime = Object.assign(fixture.runtime, {
+    rootBlockId: "branch",
+    getDocument: () => ({ id: "A" }),
+    blocks: { ...fixture.runtime.blocks, getBlock: () => branch },
+    views: { ...fixture.runtime.views, acceptsDrop: () => true },
+  }) as ReactEditor;
+  expect(resolveSurfaceDrop(fixture.root, runtime, [foreign], [branch], { x: 100, y: 52 }, defaults))
+    .toMatchObject({ kind: "inside", parentId: "child" });
+  expect(resolveSurfaceDrop(fixture.root, runtime, [foreign], [branch], { x: 12, y: 0 }, defaults)).toBeNull();
+  expect(resolveCrossDocumentPageRootPlacement(runtime, fixture.root, 100, 52, 24, 8, true, [branch], undefined, "A")).toBeNull();
+  // Identical IDs in another document are independent; do not remove that destination subtree.
+  expect(resolveCrossDocumentPageRootPlacement(runtime, fixture.root, 100, 52, 24, 8, true, [branch], undefined, "B"))
+    .toMatchObject({ targetId: "child", position: "inside" });
+});
+
+test("pointer drops use the visible canvas card instead of an overlapping card behind it", () => {
+  const items = [item("behind", 0, { rect: rect(0, 400) }),
+    item("first", 0, { rect: rect(0, 180), acceptsBody: true }), item("second", 196), item("following", 250)];
+  const fixture = surface(items);
+  const card = surface(items.slice(1, 3)).root;
+  const contains = fixture.root.contains.bind(fixture.root);
+  Object.assign(fixture.root, {
+    ownerDocument: { elementFromPoint: () => ({ closest: () => card }) },
+    contains: (element: HTMLElement) => element === card || contains(element),
+  });
+  Object.assign(fixture.runtime.views, { acceptsDrop: () => true });
+  expect(resolveSurfaceDrop(fixture.root, fixture.runtime, [], tree(items), { x: 100, y: 188 }, defaults))
+    .toMatchObject({ kind: "between", parentId: null, previousId: "first", nextId: "second" });
+  expect(fixture.reads).not.toContain("behind");
+  expect(resolveSurfaceDrop(fixture.root, fixture.runtime, [], tree(items), { x: 12, y: 2 }, defaults))
+    .toMatchObject({ kind: "between", parentId: null, previousId: "behind", nextId: "first", indicatorId: "first" });
+  expect(resolveSurfaceDrop(fixture.root, fixture.runtime, [], tree(items), { x: 12, y: 225 }, defaults))
+    .toMatchObject({ kind: "between", parentId: null, previousId: "second", nextId: "following", indicatorId: "second" });
 });

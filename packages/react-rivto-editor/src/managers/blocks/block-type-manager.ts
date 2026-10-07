@@ -31,7 +31,7 @@ export class BlockTypeManager implements BlockTypesCapability {
    * @throws On definition, renderer, view, or slash-command conflicts.
    */
   register(registration: ReactBlockRegistration): () => void {
-    const { blocks: core, blockRegistry: registry } = this.editor;
+    const core = this.editor.blocks;
     const { extensions, renderers, slashCommands, views } = this.reactEditor;
     extensions.assertActive();
     const { definition, render, slashCommand, view } = registration;
@@ -41,20 +41,14 @@ export class BlockTypeManager implements BlockTypesCapability {
 
     const disposers: Array<() => void> = [];
     try {
-      const existing = registry.get(definition.type);
+      const existing = this.editor.blockRegistry.get(definition.type);
       if (existing) {
         const containment = getBlockContainment(definition);
-        const existingContainment = getBlockContainment(existing);
-        if (containment && (
-          existingContainment?.childOutline !== containment.childOutline
-          || existingContainment?.outlineFloor !== containment.outlineFloor
-        )) {
+        const previous = getBlockContainment(existing);
+        if (containment && (previous?.childOutline !== containment.childOutline || previous?.outlineFloor !== containment.outlineFloor)) {
           throw new Error(`Block containment ${definition.type} does not match its existing definition`);
         }
-      } else {
-        disposers.push(extensions.own(registry.defineBlock(definition)));
-      }
-
+      } else disposers.push(this.editor.blockRegistry.defineBlock(definition));
       disposers.push(renderers.register(definition.type, render));
       if (view) disposers.push(views.register(definition.type, view));
       if (registration.separatesBlockElements) {

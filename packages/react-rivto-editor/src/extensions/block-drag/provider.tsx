@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { SurfaceContext } from "../../surfaces/surface";
 /**
  * dnd-kit integration for atomic movement of one block subtree or an eligible
  * sibling-root selection. Surface rendering enters through wrapper slots, so
@@ -42,7 +44,7 @@ import {
 } from "../built-ins/clipboard/cross-document-block-transfer";
 import { PageDragPreview } from "./preview/component";
 import { resolveCrossDocumentPageRootPlacement } from "./cross-document/placement";
-import { resolveSurfaceDrop } from "./pointer/target";
+import { getDropBlocks, resolveSurfaceDrop } from "./pointer/target";
 import type { CanonicalDropPlacement } from "./placement/types";
 import {
   type DropPlacement,
@@ -114,6 +116,7 @@ export function PageDragProvider({
   allowChildPlacement = true,
 }: PageDragExtensionOptions) {
   const reactEditor = useReactEditor();
+  const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const displayedPlacement = useRef<DropPlacement | null>(null);
   const activeMove = useRef<SelectedMoveRoots | undefined>(undefined);
@@ -146,7 +149,7 @@ export function PageDragProvider({
   });
 
   useLayoutEffect(() => {
-    if (!root || reactEditor.mode.get() !== "block") return;
+    if (!root) return;
     const controller: CrossDocumentPageRootController = {
       reactEditor,
       root,
@@ -155,16 +158,17 @@ export function PageDragProvider({
         if (empty) root.setAttribute("data-drop-empty", "true");
         else root.removeAttribute("data-drop-empty");
       },
-      resolvePlacement: (x, y, sources) => resolveCrossDocumentPageRootPlacement(
+      resolvePlacement: (x, y, sources, sourceDocumentId) => resolveCrossDocumentPageRootPlacement(
         reactEditor,
         root,
         x,
         y,
-        childDropIndent,
+        childDropIndent * (Number(root.dataset.edgelessZoom) || 1),
         gapDropZone,
         allowChildPlacement,
         sources,
         outerEdgeDropZone,
+        sourceDocumentId,
       ),
     };
     crossDocumentPageRootControllers.set(root, controller);
@@ -176,7 +180,7 @@ export function PageDragProvider({
       root.removeAttribute(CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE);
       root.removeAttribute("data-drop-empty");
     };
-  }, [allowChildPlacement, childDropIndent, reactEditor, gapDropZone, outerEdgeDropZone, placements, root]);
+  }, [allowChildPlacement, childDropIndent, reactEditor, gapDropZone, outerEdgeDropZone, placements, root, mode]);
 
   // A gesture abandoned by unmounting still owns a document listener.
   useLayoutEffect(() => () => {
@@ -230,9 +234,8 @@ export function PageDragProvider({
   };
 
   const updateCrossDocumentTarget = (): boolean => {
-    if (reactEditor.mode.get() !== "block") return false;
     const pointer = pointerTracker.current?.get() ?? null;
-    const controller = pointer ? findCrossDocumentPageController(root, pointer) : null;
+    const controller = pointer ? findCrossDocumentPageController(root, pointer, outerEdgeDropZone) : null;
     let handled = false;
     if (!pointer || !controller) {
       clearCrossDocumentTarget();
@@ -242,7 +245,7 @@ export function PageDragProvider({
         const block = reactEditor.blocks.getBlock(id);
         return block ? [block] : [];
       });
-      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources);
+      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources, reactEditor.getDocument().id);
       controller.setPlacement(placement?.indicator ?? null, placement?.targetId === null);
       crossDocumentTarget.current = placement ? {
         controller,
@@ -262,10 +265,10 @@ export function PageDragProvider({
    * @returns Accepted placement, or null when the gesture has no valid drop.
    */
   const validPlacement = (operation: PageDragOperation): DropPlacement | null => {
-    const zoom = reactEditor.mode.get() === "edgeless"
+    const zoom = mode === "edgeless"
       ? Number(root?.dataset.edgelessZoom) || 1
       : 1;
-    const blocks = excludeDropSubtrees(reactEditor.blocks.getBlocks(), new Set(activeMove.current?.ids ?? []));
+    const blocks = excludeDropSubtrees(getDropBlocks(reactEditor), new Set(activeMove.current?.ids ?? []));
     const livePointer = pointerTracker.current?.get() ?? null;
     const rect = operation.shape?.current.boundingRectangle;
     const pointer = livePointer ?? (rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null);
@@ -331,7 +334,7 @@ export function PageDragProvider({
         ownerDocument.removeEventListener("selectionchange", clearSelection, true);
       };
     }
-    const blocks = reactEditor.blocks.getBlocks();
+    const blocks = getDropBlocks(reactEditor);
     const move = selectedMoveRoots(
       blocks,
       reactEditor.selection.get(),
@@ -403,22 +406,26 @@ export function PageDragProvider({
     });
     const valid = placement && sources.length === move?.ids.length
       && reactEditor.views.acceptsDrop(placement, sources)
-      && isCurrentDropDestination(excludeDropSubtrees(reactEditor.blocks.getBlocks(), new Set(move.ids)), placement);
+      && isCurrentDropDestination(excludeDropSubtrees(getDropBlocks(reactEditor), new Set(move.ids)), placement);
     const validCrossDocument = crossDocument && sources.length === move?.ids.length
       && crossDocument.controller.reactEditor.views.acceptsDrop(crossDocument.destination, sources)
-      && isCurrentDropDestination(crossDocument.controller.reactEditor.blocks.getBlocks(), crossDocument.destination);
+      && isCurrentDropDestination(excludeDropSubtrees(
+        getDropBlocks(crossDocument.controller.reactEditor),
+        new Set(crossDocument.controller.reactEditor.getDocument() === reactEditor.getDocument() ? move.ids : []),
+      ), crossDocument.destination);
     resetGesture();
     if (event.canceled || !move) {
       // Nothing to commit; teardown above already removed every indicator.
     } else if (crossDocument && validCrossDocument) {
       let transferred = false;
       try {
-        crossDocumentBlockTransfer(
-          reactEditor,
-          crossDocument.controller.reactEditor,
-          move.ids,
-          crossDocument.placement,
-        );
+        const destination = crossDocument.controller;
+        const destinationDocument = destination.reactEditor.getDocument();
+        if (destinationDocument === reactEditor.getDocument()) {
+          reactEditor.blocks.moveBlocks(move.ids, crossDocument.placement.targetId, crossDocument.placement.position);
+        } else {
+          crossDocumentBlockTransfer(reactEditor, destination.reactEditor, move.ids, crossDocument.placement);
+        }
         transferred = true;
       } catch {
         transferred = false;
@@ -427,9 +434,7 @@ export function PageDragProvider({
         reactEditor.selection.clear();
         const firstId = move.ids[0]!;
         const lastId = move.ids.at(-1)!;
-        crossDocument.controller.reactEditor.selection.set(
-          createStructuralSelection([...move.ids], firstId, lastId),
-        );
+        crossDocument.controller.reactEditor.selection.set(createStructuralSelection([...move.ids], firstId, lastId));
         requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));
       }
     } else if (placement && valid) {

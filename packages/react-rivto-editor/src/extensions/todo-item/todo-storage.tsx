@@ -20,7 +20,7 @@ import {
 import type { EditorBlock, EditorBlockNode } from "@chulane/rivto";
 import { z } from "zod";
 import { ArrowDownIcon } from "lucide-react";
-import { useBlock, useBlockEditing, useReactEditor } from "../../hooks";
+import { useBlock, useBlockEditing, useReactEditor, useEditorRoot } from "../../hooks";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
@@ -248,6 +248,7 @@ export function TodoStorageBlockWrapper({ block, children }: BlockWrapperProps) 
 /** Renders search, disclosure filter menus, and persisted status-order controls. */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   const reactEditor = useReactEditor();
+  const { element: root } = useEditorRoot();
   const editing = useBlockEditing<TodoStorageProps>(blockId, { textEdit: false });
   const block = editing.block;
   const context = useContext(TodoStorageContext);
@@ -259,7 +260,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
 
   /** Persists a validated ordering-property patch. */
   const updateProps = (patch: Partial<TodoStorageProps>): void => {
-    reactEditor.blocks.updateBlock(blockId, { props: patch });
+    editing.setProps(patch);
   };
 
   /** Replaces one filter category while preserving the other categories. */
@@ -281,7 +282,6 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    const root = reactEditor.events.getRoot();
     const viewContext = root ? createBlockViewContext(reactEditor, blockId, root) : undefined;
     if (viewContext) todoStorageView.insertFirstChild(viewContext);
   };

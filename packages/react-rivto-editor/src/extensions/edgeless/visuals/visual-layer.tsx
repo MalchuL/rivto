@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { SurfaceContext } from "../../../surfaces/surface";
 /**
  * Edgeless visual plane: persisted visuals, group chrome, tools, and previews.
  *
@@ -9,7 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { useEditorMode, useEditorRoot } from "../../../hooks";
+import { useReactEditor, useEditorRoot } from "../../../hooks";
 import { useEdgelessSelected, useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
 import { ElementSlots } from "../../../blocks";
 import { DrawingCapture } from "./components/drawing-capture";
@@ -143,13 +145,15 @@ function EdgelessSelectionChrome({
  * @returns Portaled visual plane and tool chrome, or null outside edgeless mode.
  */
 export function EdgelessVisualLayer({
-  controller,
+  controller: sharedController,
   options,
 }: {
   readonly controller: EdgelessVisualController;
   readonly options: EdgelessVisualsOptions;
 }) {
-  const { mode } = useEditorMode();
+  const reactEditor = useReactEditor();
+  const controller = useMemo(() => sharedController.getDocumentView(reactEditor), [sharedController, reactEditor]);
+  const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const tool = useVisualTool(controller);
   useSyncExternalStore(

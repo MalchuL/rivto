@@ -10,7 +10,7 @@ import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
 import { type EditorBlockInput } from "@chulane/rivto";
-import { useBlockEditing, useBlockNode, useReactEditor } from "../../../hooks";
+import { useBlockEditing, useBlockNode, useReactEditor, useEditorRoot } from "../../../hooks";
 import {
   type BlockSlotProps,
   type ReactEditorExtension,
@@ -148,6 +148,7 @@ export function Columns({ blockId }: { readonly blockId: string }) {
  */
 function ColumnsColumn({ blockId }: { readonly blockId: string }) {
   const reactEditor = useReactEditor();
+  const { element: root } = useEditorRoot();
   const { block } = useBlockNode(blockId);
   const empty = block?.childIds.length === 0;
   /**
@@ -160,7 +161,6 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    const root = reactEditor.events.getRoot();
     const context = root ? createBlockViewContext(reactEditor, blockId, root) : undefined;
     if (context) columnsColumnView.insertFirstChild(context);
   };

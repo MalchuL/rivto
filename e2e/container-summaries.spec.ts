@@ -5,6 +5,7 @@ const ROW_CLASS = "page-block-row";
 const CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 const PAGE_SURFACE_CLASS = "page-surface";
 const DRAG_HANDLE_CLASS = "page-drag-handle";
+const DRAG_CONTAINER_ATTRIBUTE = "data-drag-container";
 
 test("slash converts the current root to each structural container", async ({ page }) => {
   for (const [query, command, type] of [
@@ -57,7 +58,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
     { type: "kanban", name: "Kanban", stats: "3 columns · 1 card" },
     { type: "columns", name: "Columns", stats: "2 columns" },
   ] as const;
-  const referenceToggle = page.locator(`[data-block-type="paragraph"] > .${ROW_CLASS} [data-collapse-toggle]`).first();
+  const referenceToggle = page.locator(`[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .${ROW_CLASS} [data-collapse-toggle]`).first();
   const referenceToggleBox = (await referenceToggle.boundingBox())!;
 
   for (const { type, name, stats } of containers) {
@@ -70,8 +71,12 @@ test("renders aligned contentless container summaries from reactive block snapsh
     await expect(summary).toHaveCSS("height", "0px");
     await expect(row).toHaveCSS("height", "24px");
 
-    const blockBox = (await block.boundingBox())!;
-    const childrenBox = (await block.locator(":scope > .page-block-children").boundingBox())!;
+    // content-visibility can paint skipped descendants after scrolling. Read
+    // both bounds together so a layout update cannot split the measurement.
+    const { blockBox, childrenBox } = await block.evaluate((element) => ({
+      blockBox: element.getBoundingClientRect().toJSON(),
+      childrenBox: element.querySelector(":scope > .page-block-children")!.getBoundingClientRect().toJSON(),
+    }));
     const topInset = childrenBox.y - blockBox.y;
     const bottomInset = blockBox.y + blockBox.height - childrenBox.y - childrenBox.height;
     expect(topInset, `${type} top inset`).toBeCloseTo(bottomInset, 0);
@@ -143,6 +148,10 @@ test("reveals root container handles across their body and lateral whitespace", 
     const body = block.locator(":scope > .page-block-children");
     const handle = block.locator(`:scope > .${ROW_CLASS} .${DRAG_HANDLE_CLASS}`);
     await expect(handle, `${type} optional drag extension handle`).toHaveCount(1);
+    await expect(block).toHaveAttribute(DRAG_CONTAINER_ATTRIBUTE, "");
+    await expect(block.locator(`[${DRAG_CONTAINER_ATTRIBUTE}]:is([data-block-type="table-row"], [data-block-type="table-cell"], [data-block-type="columns-column"], [data-block-type="kanban-column"])`))
+      .toHaveCount(0);
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     const handleBox = (await handle.boundingBox())!;
 
     await page.mouse.move(0, 0);
@@ -164,10 +173,10 @@ test("reveals root container handles across their body and lateral whitespace", 
     await expect(handle, `${type} root handle`).toHaveCSS("opacity", "1");
     await expect(handle, `${type} root handle`).toHaveCSS("pointer-events", "auto");
     await page.mouse.move(handlePoint.x, handlePoint.y, {
-      steps: Math.ceil(Math.hypot(handlePoint.x - bodyPoint.x, handlePoint.y - bodyPoint.y)),
+      steps: 16,
     });
     const hitLabel = await page.evaluate(({ x, y }) => (
-      document.elementFromPoint(x, y)?.getAttribute("aria-label")
+      document.elementFromPoint(x, y)?.closest(".page-drag-handle")?.getAttribute("aria-label")
     ), {
       x: handleBox.x + handleBox.width / 2,
       y: handleBox.y + handleBox.height / 2,
@@ -189,7 +198,7 @@ test("reveals root container handles across their body and lateral whitespace", 
       );
       await page.mouse.move(childBox.x + childBox.width / 2, childBox.y + childBox.height / 2, { steps: 20 });
       const childHitLabel = await page.evaluate(({ x, y }) => (
-        document.elementFromPoint(x, y)?.getAttribute("aria-label")
+        document.elementFromPoint(x, y)?.closest(".page-drag-handle")?.getAttribute("aria-label")
       ), {
         x: childBox.x + childBox.width / 2,
         y: childBox.y + childBox.height / 2,
@@ -199,3 +208,58 @@ test("reveals root container handles across their body and lateral whitespace", 
     }
   }
 });
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`uses registered view behavior for a custom container's handle in ${mode}`, async ({ page }) => {
+    await page.goto("/");
+    const id = await page.evaluate(() => {
+      const { editor, reactEditor } = (window as unknown as {
+        __rivtoDemo: {
+          editor: import("@chulane/rivto").RivtoEditorApi;
+          reactEditor: import("@chulane/rivto-react").ReactEditor;
+        };
+      }).__rivtoDemo;
+      // Reuse a layout view that rejects body drops, under a type unknown to CSS.
+      reactEditor.blockTypes.register({
+        definition: { type: "test-container", title: "Custom container" },
+        render: reactEditor.renderers.get("paragraph")!,
+        view: reactEditor.views.get("columns")!,
+      });
+      const block = editor.blocks.insertBlock({
+        type: "test-container", content: "Custom container",
+        children: [{ type: "columns-column", children: [{ type: "paragraph", content: "Child" }] }],
+      });
+      editor.load({ ...editor.dump(), blocks: [block], elements: [] });
+      return block.id;
+    });
+    const today = page.locator('[data-journal-document="today"]');
+    if (mode === "edgeless") await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+    const block = today.locator(`[data-block-id="${id}"]`);
+    const handle = block.locator(`:scope > .${ROW_CLASS} .${DRAG_HANDLE_CLASS}`);
+    await expect(block).toHaveAttribute(DRAG_CONTAINER_ATTRIBUTE, "");
+    await expect(block.locator(`[${DRAG_CONTAINER_ATTRIBUTE}]`)).toHaveCount(0);
+    expect(await block.evaluate((element) => getComputedStyle(element, "::before").content))
+      .toBe(mode === "block" ? '""' : "none");
+    await page.mouse.move(0, 0);
+    await expect(handle).toHaveCSS("opacity", "0");
+    await expect(handle).toHaveCSS("pointer-events", "auto");
+    await block.locator(":scope > .page-block-children").hover();
+    await expect(handle).toHaveCSS("opacity", "1");
+    await handle.hover();
+    await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
+    expect(await handle.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return element.ownerDocument.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === element;
+    })).toBe(true);
+
+    // Changing to an ordinary block must remove the old container decoration.
+    await page.evaluate((blockId) => {
+      (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      }).__rivtoDemo.editor.blocks.setBlockType(blockId, "paragraph");
+    }, id);
+    await expect(block).not.toHaveAttribute(DRAG_CONTAINER_ATTRIBUTE);
+    await page.mouse.move(0, 0);
+    await expect(handle).toHaveCSS("pointer-events", "none");
+  });
+}

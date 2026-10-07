@@ -1,3 +1,4 @@
+import { findViewElements } from "../../../../../managers/events/document-view";
 /**
  * Shared selection and focus operations for page navigation registrations.
  *
@@ -98,12 +99,15 @@ export function textSelectionEdge(
  * @returns Whether another editor accepted focus.
  */
 export function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirection): boolean {
-  const roots = Array.from(root.ownerDocument.querySelectorAll<HTMLElement>(PAGE_EDITOR_ROOT_SELECTOR));
+  // A subtree editor is contained by another page, not the next journal page.
+  const roots = Array.from(root.ownerDocument.querySelectorAll<HTMLElement>(PAGE_EDITOR_ROOT_SELECTOR))
+    .filter((candidate) => !candidate.parentElement?.closest(PAGE_EDITOR_ROOT_SELECTOR));
   const index = roots.indexOf(root);
+  if (index < 0) return false;
   const adjacent = roots[index + (direction === "up" ? -1 : 1)];
   if (!adjacent) return false;
   getPageVirtualizationControllerForElement(adjacent)?.mountFirstOrLastBlock(direction === "up" ? -1 : 1);
-  const blocks = Array.from(adjacent.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR));
+  const blocks = findViewElements(adjacent, BLOCK_ID_SELECTOR);
   if (direction === "up") blocks.reverse();
   let focused = false;
   for (const block of blocks) {

@@ -1,15 +1,30 @@
 import { createContext, useContext } from "react";
+import type { DocumentModel } from "@chulane/document-model";
+import type { EditorViewController } from "./managers/events/editor-view-controller";
 import type { ReactEditor } from "./types";
 
 /**
  * Reactive value shared by one EditorView subtree.
  *
  * The editor reference is stable for the lifetime of a mounted EditorView.
- * Both references stay stable for the lifetime of the mounted EditorView.
+ * Source views share that runtime through a document-bound API for reads and commands
+ * to the resolved model until the target moves to another document.
  */
 export interface EditorContextValue {
   /** React rendering and extension runtime. */
   readonly reactEditor: ReactEditor;
+  /** Model acquired by this view; absent while its document is loading. */
+  readonly document?: DocumentModel;
+  /** Identity used to route mutations to the single editor acquired by this view. */
+  readonly documentId: string;
+  /** Displayed source root limiting selection and keyboard navigation. */
+  readonly rootBlockId?: string;
+  /** Per-view DOM namespace; keeps collapse controls unique across source replicas. */
+  readonly domIdPrefix?: string;
+  /** Lifecycle and local UI notifications owned by this mounted occurrence. */
+  readonly view?: EditorViewController;
+  /** Hidden tabs retain their documents but suspend interaction in all nested views. */
+  readonly enabled?: boolean;
 }
 
 /**

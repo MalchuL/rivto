@@ -1,3 +1,4 @@
+import { createTestReactEditor as createReactEditor } from "../test-utils";
 /**
  * Generic view fallback and dispatcher wiring for unregistered block types.
  *
@@ -5,7 +6,7 @@
  */
 import { createCaretSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../test-utils";
-import { createReactEditor } from "../react-editor";
+
 import { defaultWritingBlockExtension, listShortcutsExtension } from "../extensions/built-ins/built-ins";
 import { tableExtension, createTableBlockInput } from "../extensions/containers/table/table";
 import { BaseBlockView } from "./base-view";
@@ -25,8 +26,8 @@ class RejectingBlockView extends BaseBlockView {
   }
 }
 
-test("resolve falls back to BaseBlockView and indent stays free at the root", () => {
-  const editor = createTestCoreEditor();
+test("resolve falls back to BaseBlockView and indent stays free at the root", async () => {
+  const editor = await createTestCoreEditor();
   const reactEditor = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension()],
@@ -43,8 +44,8 @@ test("resolve falls back to BaseBlockView and indent stays free at the root", ()
   editor.destroy();
 });
 
-test("asks the resolved view whether a drop is accepted", () => {
-  const editor = createTestCoreEditor();
+test("asks the resolved view whether a drop is accepted", async () => {
+  const editor = await createTestCoreEditor();
   const rejectingView = new RejectingBlockView();
   const reactEditor = createReactEditor({
     editor,
@@ -66,10 +67,10 @@ test("asks the resolved view whether a drop is accepted", () => {
 
 test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbered_list"])(
   "empty %s clears its marker before outdenting one level per Enter",
-  (type) => {
+  async (type) => {
     const originalFrame = globalThis.requestAnimationFrame;
     globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-    const editor = createTestCoreEditor();
+    const editor = await createTestCoreEditor();
     const reactEditor = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
@@ -115,16 +116,16 @@ test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbere
   },
 );
 
-test.each(["block", "edgeless"] as const)("empty root list marker clears in %s mode", (mode) => {
+test.each(["block", "edgeless"] as const)("empty root list marker clears in %s mode", async (mode) => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-  const editor = createTestCoreEditor();
+  const editor = await createTestCoreEditor();
   const reactEditor = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
   });
   try {
-    editor.mode.set(mode);
+    reactEditor.mode.set(mode);
     const id = editor.blocks.insertBlock({
       type: "paragraph",
       listProps: { type: "checkbox", checked: true, custom: "keep" },
@@ -141,10 +142,10 @@ test.each(["block", "edgeless"] as const)("empty root list marker clears in %s m
   }
 });
 
-test("empty checkbox clearing follows the host writing predicate for another block type", () => {
+test("empty checkbox clearing follows the host writing predicate for another block type", async () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-  const editor = createTestCoreEditor();
+  const editor = await createTestCoreEditor();
   const reactEditor = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension({
@@ -167,10 +168,10 @@ test("empty checkbox clearing follows the host writing predicate for another blo
   }
 });
 
-test("contentless custom blocks do not lose checkbox state on Enter", () => {
+test("contentless custom blocks do not lose checkbox state on Enter", async () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-  const editor = createTestCoreEditor();
+  const editor = await createTestCoreEditor();
   editor.blockRegistry.defineBlock({ type: "custom-control" });
   const reactEditor = createReactEditor({
     editor,
@@ -191,10 +192,10 @@ test("contentless custom blocks do not lose checkbox state on Enter", () => {
   }
 });
 
-test("empty block Enter respects an outline floor", () => {
+test("empty block Enter respects an outline floor", async () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-  const editor = createTestCoreEditor();
+  const editor = await createTestCoreEditor();
   const reactEditor = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],
@@ -218,7 +219,7 @@ test("empty block Enter respects an outline floor", () => {
 test("drop validation checks the destination parent and every source snapshot", async () => {
   const { kanbanExtension } = await import("../extensions/containers/kanban/kanban");
   const { columnsExtension } = await import("../extensions/containers/columns/columns");
-  const editor = createTestCoreEditor();
+  const editor = await createTestCoreEditor();
   const runtime = createReactEditor({ editor, extensions: [defaultWritingBlockExtension(), kanbanExtension(), columnsExtension(), tableExtension()] });
   try {
     for (const [parentType, shellType] of [["kanban", "kanban-column"], ["columns", "columns-column"], ["table", "table-row"], ["table-row", "table-cell"]]) {

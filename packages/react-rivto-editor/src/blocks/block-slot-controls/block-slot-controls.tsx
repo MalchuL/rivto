@@ -1,3 +1,4 @@
+import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
 /**
  * Built-in list and collapse contributions for the shared block left slot.
  *
@@ -58,8 +59,8 @@ export function BlockListSlot({ block }: BlockSlotProps) {
  */
 export function BlockCollapseSlot({ block }: BlockSlotProps) {
   const { operations } = useBlockNode(block.id);
+  const childrenId = useBlockChildrenId(block.id);
   if (!block.childIds.length) return null;
-  const childrenId = `block-children-${block.id}`;
   const collapsed = block.listProps.collapsed === true;
   return (
     <Button

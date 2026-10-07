@@ -52,10 +52,10 @@ Availability проверяется повторно непосредствен�
 
 ## Связи с другими managers
 
-`BlockManager.register()` может атомарно добавить type-conversion slash command. При rollback/dispose renderer, definition и command удаляются вместе. `slashCommandExtension()` монтирует menu UI и регистрирует generic list/duplicate/delete/collapse actions.
+`reactEditor.blockTypes.register()` может атомарно добавить type-conversion slash command. При rollback/dispose renderer, definition и command удаляются вместе. `slashCommandExtension()` монтирует menu UI и регистрирует generic list/duplicate/delete/collapse actions.
 
 ## Modes
 
 Registry общий для page и edgeless. Context всегда block-local, поэтому slash menu открывается внутри editable block как на page, так и внутри edgeless card. Canvas object selection без active text block сама по себе не создаёт slash context.
 
-Mode-specific command реализуется через `isAvailable`, читающий `reactEditor.mode`, либо отдельный mounted UI. Manager автоматически по mode commands не фильтрует.
+Mode-specific command реализуется через `isAvailable`, читающий `reactEditor.events.getSurfaceType()` для отображаемого view или `reactEditor.mode.get()` для режима документа, либо отдельный mounted UI. Manager автоматически по mode commands не фильтрует.

@@ -24,7 +24,7 @@ export interface UseEditorModeResult {
 /**
  * Returns the editor's active presentation mode and a stable mode setter.
  *
- * Mode is view-local runtime state and is never persisted in the collaborative
+ * Mode is editor-local runtime state shared by its views and never persisted in the collaborative
  * document. This hook subscribes directly to ModeManager.
  *
  * The returned `setMode` function keeps the same identity while the surrounding

@@ -15,12 +15,10 @@ import { Listeners } from "../utils";
  * Coordinates editor lifecycle around focused public managers.
  *
  * Block APIs live exclusively on `.blocks`. The runtime
- * owns cross-cutting commands, selection, history, mode, subscriptions,
+ * owns cross-cutting commands, selection, history, mode, document subscriptions,
  * clipboard bridges, and the shared revision stream.
  */
 export class EditorRuntime implements RivtoEditorApi {
-  /** Caller-owned block, element, and snapshot store currently presented by this runtime. */
-  private document?: DocumentModel;
   /** Public owner of typed block operations. */
   readonly blocks: BlockManager;
   /** Public owner of list-property defaults and semantic validation. */
@@ -31,7 +29,7 @@ export class EditorRuntime implements RivtoEditorApi {
   readonly elements: ElementManager;
   /** Named command handlers exposed to integrations and focused managers. */
   readonly commands = new CommandRegistry();
-  /** Local presentation mode shared by views of this runtime. */
+  /** Local presentation mode shared by views of this single-document runtime. */
   readonly mode: ModeManager;
   /** Local text and structural selection state; never persisted to the document. */
   readonly selection: SelectionManager;
@@ -43,47 +41,46 @@ export class EditorRuntime implements RivtoEditorApi {
   private readonly listeners = new Listeners<{ editorChanged: void }>();
   /** Owned subscription cleanup callbacks called during `destroy()`. */
   private readonly unsubscribeFns: Array<() => void> = [];
-  /** Detaches the broad update stream from the current document. */
-  private unsubscribeFromDocument: () => void = () => undefined;
   /** Monotonic snapshot incremented before notifying runtime subscribers. */
   private currentRevision = 0;
+  private readonly document: DocumentModel;
+  private destroyed = false;
 
   /**
-   * Creates an unbound runtime with stable managers and the requested mode.
+   * Creates a single-document runtime with stable managers and local interaction state.
    *
-   * @param options - Optional startup mode.
+   * @param options - Caller-owned document whose identity is fixed for this runtime; construction does not load other documents. The optional mode selects the initial local presentation.
+   * @throws If the document is missing or runtime initialization fails.
    */
-  constructor(options: CreateRivtoEditorOptions = {}) {
-    this.mode = new ModeManager(options.mode ?? "block");
-    this.history = new HistoryManager();
+  constructor(options: CreateRivtoEditorOptions) {
+    if (!options.document) throw new Error("Document is required");
+    this.document = options.document;
+    this.mode = new ModeManager(options.mode);
+    this.history = new HistoryManager(this.document.history);
     this.blockRegistry = new BlockRegistryManager();
     this.blockListProps = new BlockListPropsManager();
-    const unsubscribeFromBlockRegistryChanges = this.blockRegistry.subscribe(() => this.notifyChanges());
-    this.unsubscribeFns.push(unsubscribeFromBlockRegistryChanges);
     this.blocks = new BlockManager(this);
     this.elements = new ElementManager(this);
     this.selection = new SelectionManager(this);
     this.clipboard = new ClipboardManager(this);
-
-    // Keep the compatibility revision broad, but reserve expensive selection
-    // reconciliation for mutations that can invalidate IDs or document order.
-    this.unsubscribeFns.push(this.blocks.subscribeStructure(() => this.reconcileSelection()));
-    this.unsubscribeFns.push(this.elements.subscribeMembership(() => this.reconcileSelection()));
-    // Selection is local view state. React chrome subscribes through
-    // `editor.selection`; folding it into `revision` would re-render every block.
-    const unsubscribeFromModeChanges = this.mode.subscribe(() => {
-      if (this.document) this.history.stopCapturing();
-      this.reconcileSelection();
-      this.notifyChanges();
-      if (this.document) this.history.stopCapturing();
-    });
-    this.unsubscribeFns.push(unsubscribeFromModeChanges);
+    this.unsubscribeFns.push(
+      this.mode.subscribe(() => {
+        // A surface switch separates history captures without changing document data.
+        this.history.stopCapturing();
+        this.notifyChanges();
+        this.history.stopCapturing();
+      }),
+      this.blockRegistry.subscribe(() => this.notifyChanges()),
+      this.document.subscribe(() => this.notifyChanges()),
+      this.document.blocks.subscribeStructure(() => this.reconcileDocumentSelection()),
+      this.document.elements.subscribeMembership(() => this.reconcileDocumentSelection()),
+    );
   }
 
   /**
    * Returns the current monotonic runtime revision.
    *
-   * Document, mode, and block-definition changes increment this value before
+   * Changes in this document, local mode, and registered block definitions increment this value before
    * runtime subscribers are notified. Selection is excluded so caret and
    * block-range publishes do not invalidate the whole React tree.
    *
@@ -104,32 +101,8 @@ export class EditorRuntime implements RivtoEditorApi {
     return this.listeners.subscribe("editorChanged", listener);
   }
 
-  /**
-   * @returns The caller-owned document currently presented by this runtime, or undefined while unbound.
-   */
-  getDocument(): DocumentModel | undefined {
-    return this.document;
-  }
-
-  /**
-   * Atomically switches managers and retained subscriptions to another document.
-   *
-   * @param document - Caller-owned document to present.
-   * @returns No value.
-   */
-  setDocument(document: DocumentModel): void {
-    if (document === this.document) return;
-    this.unsubscribeFromDocument();
-    this.document = document;
-    this.history.setDocument(document.history);
-    this.blocks.setDocument(document);
-    this.elements.setDocument(document);
-    this.selection.clear();
-    this.unsubscribeFromDocument = document.subscribe(() => this.notifyChanges());
-    this.blocks.refreshSubscriptions();
-    this.elements.refreshSubscriptions();
-    this.notifyChanges();
-  }
+  /** @returns The model permanently owned by this editor's document operations. */
+  getDocument(): DocumentModel { return this.document; }
 
   /**
    * Replaces supplied document sections from a snapshot v6 update.
@@ -139,9 +112,10 @@ export class EditorRuntime implements RivtoEditorApi {
    *
    * @param snapshot - Snapshot sections to validate and load.
    * @returns No value.
+   * @throws When canonical snapshot validation fails or the CRDT cannot apply the update.
    */
   load(snapshot: EditorSnapshotUpdate): void {
-    this.requireDocument().loadSnapshot(snapshot);
+    this.document.loadSnapshot(snapshot);
     this.history.clear();
   }
 
@@ -151,20 +125,21 @@ export class EditorRuntime implements RivtoEditorApi {
    * @returns Detached snapshot v6 suitable for persistence or transfer.
    */
   dump(): EditorSnapshot {
-    return this.requireDocument().getSnapshot();
+    return this.document.getSnapshot();
   }
 
   /**
    * Reconciles local selection with the latest document.
    *
-   * Direct document edits, remote CRDT updates, undo/redo, and mode swaps can
+   * Direct document edits, remote CRDT updates, and undo/redo can
    * remove selected blocks. Deleted IDs are filtered, and block selections
    * are reordered to match the current tree.
    * When a block-selection endpoint disappeared, its replacement is chosen
    * from the same directional edge so top-down and bottom-up intent survives.
+   * All reads use the editor's permanently bound document.
    * @returns No value.
    */
-  private reconcileSelection(): void {
+  private reconcileDocumentSelection(): void {
     const selection = this.selection.get();
     if (!selection) return;
     const visibleIds: string[] = [];
@@ -179,10 +154,10 @@ export class EditorRuntime implements RivtoEditorApi {
       const selected = new Map(item.blocks.map((block) => [block.id, block]));
       const blocks = visibleIds.flatMap((id) => {
         const entry = selected.get(id);
-      return entry ? [{ id: entry.id, start: entry.start, end: entry.end }] : [];
-    });
-    const elements = (item.elements ?? []).filter((id) => this.elements.hasElement(id));
-    const hasPluginData = Object.keys(item.pluginData ?? {}).length > 0;
+        return entry ? [{ id: entry.id, start: entry.start, end: entry.end }] : [];
+      });
+      const elements = (item.elements ?? []).filter((id) => this.elements.hasElement(id));
+      const hasPluginData = Object.keys(item.pluginData ?? {}).length > 0;
       if (!blocks.length && !elements.length && !hasPluginData) {
         changed = true;
         return undefined;
@@ -194,10 +169,10 @@ export class EditorRuntime implements RivtoEditorApi {
       const forward = item.blocks.findIndex((block) => block.id === item.anchorBlockId)
         <= item.blocks.findIndex((block) => block.id === item.focusBlockId);
       const ids = new Set(blocks.map((block) => block.id));
-      const anchorBlockId = item.anchorBlockId && ids.has(item.anchorBlockId) ? item.anchorBlockId
-        : forward ? blocks[0]!.id : blocks.at(-1)!.id;
-      const focusBlockId = item.focusBlockId && ids.has(item.focusBlockId) ? item.focusBlockId
-        : forward ? blocks.at(-1)!.id : blocks[0]!.id;
+      let anchorBlockId = item.anchorBlockId;
+      if (!anchorBlockId || !ids.has(anchorBlockId)) anchorBlockId = forward ? blocks[0]!.id : blocks.at(-1)!.id;
+      let focusBlockId = item.focusBlockId;
+      if (!focusBlockId || !ids.has(focusBlockId)) focusBlockId = forward ? blocks.at(-1)!.id : blocks[0]!.id;
       changed ||= blocks.length !== item.blocks.length
         || blocks.some((block, index) => block.id !== item.blocks[index]?.id
           || block.start !== item.blocks[index]?.start
@@ -217,10 +192,12 @@ export class EditorRuntime implements RivtoEditorApi {
    *
    * Registered block definitions are removed in reverse order so callers see a
    * predictable teardown path even when definitions depend on earlier defaults.
-   * The caller-owned document remains usable and must be destroyed separately.
+   * The caller-owned document remains usable and must be released separately by its lifecycle owner.
    * @returns A Promise that resolves after runtime cleanup.
    */
   async destroy(): Promise<void> {
+    if (this.destroyed) return;
+    this.destroyed = true;
     const errors: unknown[] = [];
     const run = (operation: () => void): void => {
       try {
@@ -229,7 +206,6 @@ export class EditorRuntime implements RivtoEditorApi {
         errors.push(error);
       }
     };
-    run(this.unsubscribeFromDocument);
     this.unsubscribeFns.splice(0).forEach((unsubscribe) => run(unsubscribe));
     run(() => this.elements.destroy());
     run(() => this.blocks.destroy());
@@ -251,19 +227,15 @@ export class EditorRuntime implements RivtoEditorApi {
     this.listeners.emit("editorChanged");
   }
 
-  /** @returns The active document or throws while the editor is unbound. */
-  private requireDocument(): DocumentModel {
-    if (!this.document) throw new Error("Document is not set");
-    return this.document;
-  }
+
 }
 
 /**
- * Creates one unbound editor runtime whose document is attached with `setDocument`.
+ * Creates one editor runtime permanently bound to the document supplied by its lifecycle owner.
  *
- * @param options - Optional initial presentation mode.
+ * @param options - Caller-owned document; registries and interaction state are local to the returned editor.
  * @returns Runtime whose lifecycle is owned by the caller.
  */
-export function createRivtoEditor(options: CreateRivtoEditorOptions = {}): EditorRuntime {
+export function createRivtoEditor(options: CreateRivtoEditorOptions): EditorRuntime {
   return new EditorRuntime(options);
 }

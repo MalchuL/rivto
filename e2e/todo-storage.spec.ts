@@ -11,6 +11,10 @@ const DROP_INDICATOR_CLASS = "page-drop-indicator";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
+  await page.locator('[data-journal-document="today"] [data-block-type="todo-storage"]').scrollIntoViewIfNeeded();
+  // Offscreen TODO text uses content-visibility; let its real height settle
+  // before opening a menu or measuring a sortable row.
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 });
 
 test("keeps the storage surface inside its selection and aligns root controls", async ({ page }) => {
@@ -38,7 +42,7 @@ test("keeps the storage surface inside its selection and aligns root controls", 
     .toBe(await columnChildren.evaluate((element) => getComputedStyle(element).paddingLeft));
 
   const referenceRow = page.locator(
-    '[data-block-type="paragraph"] > .page-block-row:has([data-collapse-toggle])',
+    '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row:has([data-collapse-toggle])',
   ).first();
   const [referenceHandle, referenceToggle, storageHandle, storageToggle] = await Promise.all([
     referenceRow.locator(".page-drag-handle").boundingBox(),
@@ -273,7 +277,7 @@ test("creates a TODO storage from the slash menu", async ({ page }) => {
 test("starts writing in an empty TODO storage from the keyboard", async ({ page }) => {
   const storageId = await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
-    return editor.blocks.insertBlock({ type: "todo-storage", content: "" });
+    return editor.blocks.insertBlock({ type: "todo-storage", content: "" }).id;
   });
   const storage = page.locator(`[data-block-id="${storageId}"]`);
   const dropField = storage.getByRole("button", { name: "Drop blocks into TODO storage" });

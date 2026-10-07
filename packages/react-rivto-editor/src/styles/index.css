@@ -37,6 +37,7 @@
 /* Optional page interaction extensions. */
 @import "../extensions/block-drag/block-drag.css" layer(components);
 @import "../extensions/bullet-threading/bullet-threading.css" layer(components);
+@import "../extensions/embedding/embedding.css" layer(components);
 
 /* Edgeless canvas and visual objects. */
 @import "../extensions/edgeless/edgeless.css" layer(components);

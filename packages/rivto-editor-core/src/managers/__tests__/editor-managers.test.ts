@@ -1,8 +1,8 @@
 import { createTestEditor as createRivtoEditor, createStructuralSelection } from "../../editor/test-utils";
 
 describe("editor block managers", () => {
-  it("exposes separate registry and block managers", () => {
-    const editor = createRivtoEditor();
+  it("exposes separate registry and block managers", async () => {
+    const editor = await createRivtoEditor();
 
     expect(editor.blockRegistry.has("paragraph")).toBe(true);
     expect(editor.commands.has("block.insert")).toBe(false);
@@ -21,8 +21,8 @@ describe("editor block managers", () => {
     editor.destroy();
   });
 
-  it("removes only the requested blocks and ignores an unrelated selection", () => {
-    const editor = createRivtoEditor();
+  it("removes only the requested blocks and ignores an unrelated selection", async () => {
+    const editor = await createRivtoEditor();
     const firstId = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const secondId = editor.blocks.insertBlock({ type: "paragraph" }, firstId).id;
 

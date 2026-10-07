@@ -1,10 +1,11 @@
-import { createReactEditor } from "../../react-editor";
+import { createTestReactEditor as createReactEditor } from "../../test-utils";
+
 import { createTestCoreEditor } from "../../test-utils";
 import { listShortcutsExtension } from "../../extensions/built-ins/built-ins";
 
 describe("ClipboardManager", () => {
-  test("keeps descendants inside composed list formats", () => {
-    const editor = createTestCoreEditor();
+  test("keeps descendants inside composed list formats", async () => {
+    const editor = await createTestCoreEditor();
     const reactEditor = createReactEditor({ editor, extensions: [listShortcutsExtension()] });
     const id = reactEditor.blocks.insertBlock({
       type: "paragraph",

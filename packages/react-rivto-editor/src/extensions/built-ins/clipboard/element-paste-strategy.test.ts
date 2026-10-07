@@ -1,12 +1,13 @@
+import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 /** Element paste recreates visual-only clipboard bundles in edgeless mode. */
-import { createReactEditor } from "../../../react-editor";
+
 import { createTestCoreEditor } from "../../../test-utils";
 import { findEdgelessRuntime, installEdgelessRuntime } from "../selection/edgeless-runtime";
 import { ElementPasteStrategy } from "./element-paste-strategy";
 
 describe("ElementPasteStrategy", () => {
-  it("clones selected visual elements with fresh IDs and offset geometry", () => {
-    const editor = createTestCoreEditor({ mode: "edgeless" });
+  it("clones selected visual elements with fresh IDs and offset geometry", async () => {
+    const editor = await createTestCoreEditor({ mode: "edgeless" });
     editor.elements.insertElement({
       id: "source",
       type: "text",
@@ -53,8 +54,8 @@ describe("ElementPasteStrategy", () => {
     editor.destroy();
   });
 
-  it("restores a cut element's ID when it is free", () => {
-    const editor = createTestCoreEditor({ mode: "edgeless" });
+  it("restores a cut element's ID when it is free", async () => {
+    const editor = await createTestCoreEditor({ mode: "edgeless" });
     const source = {
       id: "cut-element",
       type: "text",
@@ -80,8 +81,8 @@ describe("ElementPasteStrategy", () => {
     editor.destroy();
   });
 
-  it("uses the block import map without reading block selection order", () => {
-    const editor = createTestCoreEditor({ mode: "edgeless" });
+  it("uses the block import map without reading block selection order", async () => {
+    const editor = await createTestCoreEditor({ mode: "edgeless" });
     const destinationId = editor.blocks.insertBlock({ type: "paragraph", content: "Pasted" }).id;
     const reactEditor = createReactEditor({ editor });
     const uninstall = installEdgelessRuntime(reactEditor);
@@ -119,4 +120,26 @@ describe("ElementPasteStrategy", () => {
     reactEditor.destroy();
     editor.destroy();
   });
+});
+
+it("pastes cards into an explicit second document and remaps their block references consistently", async () => {
+  const { DocumentModelImpl } = await import("@chulane/document-model");
+  const { YjsDoc } = await import("@chulane/crdt-doc");
+  const { createTestMultiEditor } = await import("../../../test-utils");
+  const { createReactEditor: createRuntime } = await import("../../../react-editor");
+  const { standardPreset } = await import("../built-ins");
+  const multi = await createTestMultiEditor([new DocumentModelImpl(new YjsDoc("A")), new DocumentModelImpl(new YjsDoc("B"))], undefined, { extensions: [standardPreset()] });
+  const runtime = multi.getEditor("B")!;
+  runtime.mode.set("edgeless");
+  const a = await multi.getSingleEditor("A"); const b = await multi.getSingleEditor("B");
+  const block = a.blocks.insertBlock({ id: "source-block", type: "paragraph", content: "Copied card" });
+  const card = a.elements.insertElement({ id: "source-card", type: "block", frame: { x: 10, y: 20, width: 100, height: 40 }, zIndex: 0, props: { startBlockId: block.id, endBlockId: block.id } });
+  await b.clipboard.paste( { bundle: { version: 4, blocks: [block], elements: [card] }, placement: { mergeText: false } });
+  const pasted = b.blocks.getBlocks()[0]!;
+  expect(pasted.id).toBe(block.id); expect(pasted.content).toBe("Copied card");
+  expect(b.elements.getElement("source-card")?.props).toMatchObject({ startBlockId: pasted.id, endBlockId: pasted.id });
+  expect(a.elements.getElement(card.id)?.props).toMatchObject({ startBlockId: block.id, endBlockId: block.id });
+  expect(a.blocks.getBlockNode(block.id)?.content).toBe("Copied card");
+  b.history.undo(); expect(b.blocks.getRootIds()).toEqual([]); expect(b.elements.hasElement("source-card")).toBe(false);
+  runtime.destroy(); await multi.destroy();
 });

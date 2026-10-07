@@ -22,8 +22,8 @@ import {
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { MarkdownContent } from "../../../blocks/markdown/markdown";
-import { useBlockEditing, useReactEditor } from "../../../hooks";
-import { type ReactEditorExtension } from "../../../managers";
+import { useBlockEditing, useReactEditor, useEditorRoot } from "../../../hooks";
+import { findRenderedBlock, type ReactEditorExtension } from "../../../managers";
 import type { ReactEditor } from "../../../types";
 import { TABLE_BLOCK_TYPE, TABLE_ROW_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE, tableCellView, tableRowView, tableView } from "./table-view";
 import { convertLeafToContainer } from "../../../views/ops/outline-ops";
@@ -203,16 +203,16 @@ function tableColumnCells(reactEditor: ReactEditor, tableId: string, column: num
 /**
  * Applies a transient column width directly to mounted cells during pointer movement.
  * @param reactEditor - Active React editor runtime.
+ * @param root - Displayed document occurrence containing the mounted cells.
  * @param tableId - Table containing the resized column.
  * @param column - Zero-based column index.
  * @param width - Preview width in CSS pixels.
  * @returns Nothing; persistence happens once when the pointer is released.
  */
-function previewTableColumnWidth(reactEditor: ReactEditor, tableId: string, column: number, width: number): void {
-  const root = reactEditor.events.getRoot();
+function previewTableColumnWidth(reactEditor: ReactEditor, root: HTMLElement | null, tableId: string, column: number, width: number): void {
   if (!root) return;
   tableColumnCells(reactEditor, tableId, column).forEach((cellId) => {
-    root.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(cellId)}"]`)
+    findRenderedBlock(root, cellId)
       ?.style.setProperty(COLUMN_WIDTH_PROPERTY, `${columnWidth(width)}px`);
   });
 }
@@ -370,6 +370,7 @@ function resolveCellColumn(
  */
 function TableCell({ blockId }: { readonly blockId: string }) {
   const reactEditor = useReactEditor();
+  const { element: root } = useEditorRoot();
   const { marker, host } = useBlockHost();
   const resize = useRef<ColumnResizeGesture | null>(null);
   const currentWidth = columnWidth(reactEditor.blocks.getBlockNode(blockId)?.props.tableColumnWidth);
@@ -404,7 +405,7 @@ function TableCell({ blockId }: { readonly blockId: string }) {
     const gesture = resize.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     gesture.width = columnWidth(gesture.startWidth + event.clientX - gesture.startX);
-    previewTableColumnWidth(reactEditor, gesture.tableId, gesture.column, gesture.width);
+    previewTableColumnWidth(reactEditor, root, gesture.tableId, gesture.column, gesture.width);
   };
   /**
    * Ends pointer capture and optionally persists the previewed width once.
@@ -419,7 +420,7 @@ function TableCell({ blockId }: { readonly blockId: string }) {
     event.currentTarget.removeAttribute("data-resizing");
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     if (commit) setTableColumnWidth(reactEditor, gesture.tableId, gesture.column, gesture.width);
-    else previewTableColumnWidth(reactEditor, gesture.tableId, gesture.column, gesture.startWidth);
+    else previewTableColumnWidth(reactEditor, root, gesture.tableId, gesture.column, gesture.startWidth);
   };
   /**
    * Offers keyboard resizing on the same accessible vertical separator.

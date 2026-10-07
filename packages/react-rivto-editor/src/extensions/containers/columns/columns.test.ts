@@ -1,3 +1,4 @@
+import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 /**
  * Checks that Columns uses the ordinary block hierarchy: nested identities
  * survive moves, shrinking the board relocates rather than deletes children,
@@ -6,7 +7,7 @@
  */
 import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../../test-utils";
-import { createReactEditor } from "../../../react-editor";
+
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import {
   columnsExtension,
@@ -17,8 +18,8 @@ import {
   COLUMNS_COLUMN_BLOCK_TYPE,
 } from "./columns";
 
-function createColumnsRuntime() {
-  const editor = createTestCoreEditor();
+async function createColumnsRuntime() {
+  const editor = await createTestCoreEditor();
   const reactEditor = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), columnsExtension()],
@@ -26,8 +27,8 @@ function createColumnsRuntime() {
   return { editor, reactEditor };
 }
 
-test("slash insert creates empty columns", () => {
-  const { editor, reactEditor } = createColumnsRuntime();
+test("slash insert creates empty columns", async () => {
+  const { editor, reactEditor } = await createColumnsRuntime();
   const before = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
   reactEditor.slashCommands.execute("block.columns.insert", { blockId: before });
   const board = editor.blocks.getBlock(before)!;
@@ -41,8 +42,8 @@ test("slash insert creates empty columns", () => {
   editor.destroy();
 });
 
-test("inserts equally sized columns and relocates nested blocks when a column is removed", () => {
-  const { editor, reactEditor } = createColumnsRuntime();
+test("inserts equally sized columns and relocates nested blocks when a column is removed", async () => {
+  const { editor, reactEditor } = await createColumnsRuntime();
   const boardId = editor.blocks.insertBlock(createColumnsBlockInput(2)).id;
   const board = editor.blocks.getBlock(boardId)!;
   expect(board.children).toHaveLength(2);
@@ -85,8 +86,8 @@ test("inserts equally sized columns and relocates nested blocks when a column is
   editor.destroy();
 });
 
-test("structural column deletion moves nested blocks instead of removing them", () => {
-  const { editor, reactEditor } = createColumnsRuntime();
+test("structural column deletion moves nested blocks instead of removing them", async () => {
+  const { editor, reactEditor } = await createColumnsRuntime();
   const boardId = editor.blocks.insertBlock(createColumnsBlockInput(2)).id;
   const [left, right] = editor.blocks.getBlock(boardId)!.children;
   const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Survive" }).id;

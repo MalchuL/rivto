@@ -2,15 +2,12 @@
  * Runtime registration for the built-in edgeless surface.
  *
  * The registration applies editor-local card placement options and connects
- * the shared edgeless surface component to the React surface manager. Canvas
+ * the explicit edgeless surface to shared snapping and placement defaults. Canvas
  * interaction behavior remains in the sibling edgeless extensions.
  *
  * @module
  */
-import { createElement } from "react";
 import {
-  EdgelessSnappingStore,
-  EdgelessSurface,
   type EdgelessSurfaceOptions,
 } from "./surface";
 import {
@@ -20,18 +17,26 @@ import {
 } from "../../elements/block-element-projection";
 import type { ReactEditor } from "../../types";
 
+const surfaceOptions = new WeakMap<object, EdgelessSurfaceOptions>();
+
+/** @param editor - View or host sharing the surface manager. @returns Configured canvas defaults, or empty options. */
+export function getEdgelessSurfaceOptions(editor: ReactEditor): EdgelessSurfaceOptions {
+  return surfaceOptions.get(editor.surfaces) ?? {};
+}
+
 /**
  * Registers the configured positioned-card surface.
  *
  * @param reactEditor - Runtime receiving the edgeless surface.
  * @param options - Snapping, overlap, and card-width configuration.
- * @returns No value.
+ * @returns Cleanup restoring the previous surface defaults.
  */
 export function registerEdgelessSurface(
   reactEditor: ReactEditor,
   options: EdgelessSurfaceOptions,
-): void {
-  const snapping = options.snapping ?? new EdgelessSnappingStore();
+): () => void {
+  const previous = surfaceOptions.get(reactEditor.surfaces);
+  surfaceOptions.set(reactEditor.surfaces, options);
   setBlockElementOverlapAvoidance(
     reactEditor,
     options.avoidBlockElementOverlap !== false,
@@ -40,9 +45,8 @@ export function registerEdgelessSurface(
     reactEditor,
     options.blockElementWidth ?? EDGELESS_CARD_DEFAULT_FRAME.width,
   );
-  reactEditor.surfaces.register("edgeless", () => createElement(EdgelessSurface, {
-    snapping,
-    avoidBlockElementOverlap: options.avoidBlockElementOverlap !== false,
-    blockElementWidth: options.blockElementWidth,
-  }));
+  return () => {
+    if (previous) surfaceOptions.set(reactEditor.surfaces, previous);
+    else surfaceOptions.delete(reactEditor.surfaces);
+  };
 }

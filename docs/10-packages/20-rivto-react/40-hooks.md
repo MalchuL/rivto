@@ -10,13 +10,24 @@
 - **Возвращает:** stable `ReactEditor`.
 - **Исключения:** та же provider error.
 
+### `useContext(SurfaceContext)`
+
+- **Аргументы:** exported `SurfaceContext`.
+- **Возвращает:** `"block" | "edgeless"`, kind ближайшего explicit surface; default `"block"`.
+- **Исключения:** отсутствуют.
+
+Context immutable; он описывает ближайший rendered surface, включая page embedding внутри canvas.
+Переключение основного surface выполняет host через core mode manager и JSX.
+
 ### `useEditorMode()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** `{ mode; setMode(mode): void }`.
-- **Исключения:** provider или mode manager errors.
+- **Возвращает:** `{ mode, setMode }`, текущее значение core `editor.mode` и stable setter.
+- **Исключения:** та же provider error.
 
-Mode локален и не входит в snapshot.
+Hook подписывается непосредственно на mode manager. Mode локален для core editor,
+общий для его views и не синхронизируется через CRDT. Повторный `setMode()` активного
+значения — no-op; конкретный rendered surface выбирается приложением через JSX.
 
 ### `useEditorSelection()`
 
@@ -70,7 +81,7 @@ Text selection намеренно возвращает `null`.
 ### `useBlockEditing(blockId, options?)`
 
 - **Аргументы:** `blockId`; optional `{ textEdit?: boolean }`, default `true`.
-- **Возвращает:** block/operations, `getProps`, `getProp`, `setProps`, `setProp`, `attributes`, `preventTextEditingAttributes`.
+- **Возвращает:** block/operations, `getActualContent`, `getProps`, `getProp`, `setProps`, `setProp`, `attributes`, `preventTextEditingAttributes`.
 - **Исключения:** provider error; setters передают schema/store errors.
 
 Imperative getters читают latest state и безопасны в event closures. `setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.

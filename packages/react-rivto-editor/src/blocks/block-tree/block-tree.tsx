@@ -1,3 +1,4 @@
+import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
 /**
  * Generic recursive block rendering shared by every document surface.
  *
@@ -18,7 +19,7 @@ import {
 } from "../block-wrapper/block-wrapper";
 import { BlockView } from "../block-view/block-view";
 import { UnknownBlock } from "../unknown-block/unknown-block";
-import { BlockSlots } from "../owner-slots/owner-slots";
+import { BlockBodySlot, BlockSlots } from "../owner-slots/owner-slots";
 
 const BLOCK_CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 
@@ -44,7 +45,10 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
           <div className={BLOCK_CONTENT_FLOW_CLASS}>{content}</div>
         </BlockSlots>
       </div>
-      <BlockElementRefBoundary>{children}</BlockElementRefBoundary>
+      <BlockElementRefBoundary>
+        <BlockBodySlot block={block} selected={isSelected} />
+        {children}
+      </BlockElementRefBoundary>
     </BlockView>
   );
 }
@@ -63,6 +67,7 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   const { block } = useBlockNode(blockId);
   const reactEditor = useReactEditor();
   const selected = useBlockSelected(blockId);
+  const childrenId = useBlockChildrenId(blockId);
   const subscribeRenderers = useCallback(
     (listener: () => void) => reactEditor.renderers.subscribe(listener),
     [reactEditor],
@@ -76,7 +81,6 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   if (!block) return null;
   const childIds = block.childIds;
   const Content = reactEditor.renderers.get(block.type) ?? UnknownBlock;
-  const childrenId = `block-children-${block.id}`;
   const collapseActive = reactEditor.blockListProps.has("collapse");
 
   return (

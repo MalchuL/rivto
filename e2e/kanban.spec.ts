@@ -103,7 +103,11 @@ test("moves Kanban cards in edgeless mode", async ({ page }) => {
   await expect.poll(() => chrome.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
   await expect.poll(() => lanes.evaluate((element) => {
     const last = element.lastElementChild as HTMLElement | null;
-    return last ? element.scrollWidth - (last.offsetLeft + last.offsetWidth) : 0;
+    if (!last) return 0;
+    // The lane's offsetParent may be the board. Compare in the scrollport's
+    // coordinates and retain its intentional trailing padding.
+    const right = last.getBoundingClientRect().right - element.getBoundingClientRect().left + element.scrollLeft;
+    return Math.abs(element.scrollWidth - right - Number.parseFloat(getComputedStyle(element).paddingRight));
   })).toBeLessThanOrEqual(2);
   const columns = page.locator('[data-block-type="kanban-column"]');
   const card = columns.first().locator('[data-block-type="paragraph"]');

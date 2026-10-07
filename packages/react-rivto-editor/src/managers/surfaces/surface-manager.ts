@@ -22,6 +22,8 @@ const SLOT_POSITION_SET = new Set<SlotPosition>(SLOT_POSITIONS);
 const BLOCK_SLOT_POSITION_SET = new Set<BlockSlotPosition>([
   ...SLOT_POSITIONS,
   ...BLOCK_FLOW_SLOT_POSITIONS,
+  // Below the block's main row, before its own children; used for the embedded source view.
+  "body",
 ]);
 
 /**
@@ -138,7 +140,7 @@ export class SurfaceManager implements SurfacesCapability {
   }
 
   /**
-   * Registers one priority-ordered component at a block-row anchor.
+   * Registers one priority-ordered component at a block-row or body anchor.
    *
    * @param registration - Component, anchor, ordering, and optional filters.
    * @returns Idempotent disposer removing this exact contribution.
@@ -162,7 +164,7 @@ export class SurfaceManager implements SurfacesCapability {
   /**
    * Resolves matching block-slot components from nearest to farthest.
    *
-   * @param position - Perimeter or in-flow anchor being rendered.
+   * @param position - Perimeter, row-flow, or below-row body anchor being rendered.
    * @param props - Current block presentation context.
    * @returns Defensive ordered component list.
    */

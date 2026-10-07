@@ -58,6 +58,8 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
     const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
     editor.blocks.removeBlocks(board.children[0]!.children.map((child) => child.id));
+    // Measure column feedback in one layout, away from outer-page scroll edges.
+    editor.load({ ...editor.dump(), blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
   });
 
   const board = page.locator('[data-block-type="columns"]').first();
@@ -69,6 +71,7 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
   const target = columns.first();
   await sourceRow.hover();
   await handle.hover();
+  await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
   const from = (await handle.boundingBox())!;
   const to = (await target.boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);

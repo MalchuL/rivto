@@ -1,3 +1,4 @@
+import type { ReactEditor } from "./types";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
@@ -18,6 +19,7 @@ import type {
   PasteStrategyRegistry,
   Selection,
 } from "@chulane/rivto";
+import type { DocumentModel } from "@chulane/document-model";
 import type { ComponentType, ReactNode } from "react";
 import type { BlockWrapperComponent } from "./blocks";
 import type {
@@ -52,61 +54,145 @@ import type {
 import type { BlockViewBehavior } from "./views/types";
 
 export interface BlocksCapability {
-  /** Applies definitions, list policy, processors, and validation to a detached block-input tree. */
+  /**
+   * Delegates complete recursive creation preparation to the core block manager.
+   *
+   * Applies definitions, list policy, processors, and validation to a detached block-input tree.
+   *
+   * @param input - Block forest to prepare without mutating the document.
+   * @returns Recursively copied forest ready for a React block operation.
+   * @throws {Error} When any definition, processor, or persisted value is invalid.
+   */
   prepareInput(
     input: readonly (EditorBlock | EditorBlockInput)[],
     onError?: BlockPrepareErrorHandler,
   ): EditorBlockInput[];
-  /** Prepares and inserts a block, returning the complete persisted subtree. */
-  insertBlock(input: EditorBlockInput, afterId?: string | null): EditorBlock;
-  /** Applies one valid patch and returns updated fields without descendants, or throws. */
-  updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;
-  /** Applies an entire valid patch batch and returns updated fields without descendants in input order, or throws. */
-  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlockNode[];
-  /** Deletes list-property keys and returns whether the mutation was applied. */
-  deleteListProps(id: string, keys: readonly string[]): boolean;
-  /** Deletes an entire valid key batch or throws. */
-  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void;
-  /** Current block revision used by React subscriptions. */
-  readonly revision: number;
-  /** @param id - Block identifier. @returns Whether the block exists. */
-  hasBlock(id: string): boolean;
-  /** @param id - Block identifier. @returns Detached subtree, or undefined when absent. */
-  getBlock(id: string): EditorBlock | undefined;
-  /** @param id - Block identifier. @returns Detached non-recursive block fields, or undefined when absent. */
-  getBlockNode(id: string): EditorBlockNode | undefined;
-  /** @returns The complete detached root forest. */
-  getBlocks(): EditorBlock[];
-  /** @returns Root block identifiers in document order. */
-  getRootIds(): string[];
   /**
+   * Inserts a recursively prepared and validated block through the core editor.
+   *
+   * Prepares and inserts a block, returning the complete persisted subtree.
+   *
+   * @param input - Block subtree to receive active defaults and validation.
+   * @param afterId - Sibling after which to insert, `null` for first position, or
+   * omitted for the end of the root list.
+   * @returns The complete persisted root block.
+   * @throws {Error} When list properties are invalid or core insertion fails.
+   */
+  insertBlock(input: EditorBlockInput, afterId?: string | null): EditorBlock;
+  /**
+   * Applies one patch after core-owned list-property validation.
+   *
+   * Applies one valid patch and returns updated fields without descendants, or throws.
+   *
+   * @param id - Identifier of the block to update.
+   * @param patch - Partial block fields to pass to the core manager.
+   * @returns Updated block fields without descendants.
+   * @throws {Error} When the block is missing or the operation is invalid.
+   */
+  updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;
+  /**
+   * Applies an ordered patch batch through core validation.
+   * Applies an entire valid patch batch and returns updated fields without descendants in input order, or throws.
+   *
+   * @param updates - Ordered identified patches to validate and apply atomically.
+   * @returns Updated block fields without descendants, in input order.
+   * @throws {Error} When any block is missing or any operation is invalid.
+   */
+  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlockNode[];
+  /**
+   * Deletes selected list-property keys after validating the resulting record.
+   *
+   * Deletes list-property keys and returns whether the mutation was applied.
+   *
+   * @param id - Identifier of the block to modify.
+   * @param keys - Property names to remove.
+   * @returns Whether any persisted property was deleted.
+   * @throws {Error} When the block is missing or the operation is invalid.
+   */
+  deleteListProps(id: string, keys: readonly string[]): boolean;
+  /**
+   * Deletes list-property keys through core batch validation.
+   * Deletes an entire valid key batch or throws.
+   *
+   * @param updates - Blocks and property names requested for deletion.
+   * @returns No value after applying every deletion.
+   * @throws {Error} When any block is missing or any operation is invalid.
+   */
+  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void;
+  /** @returns Current core block revision.
+   *
+   * Current block revision used by React subscriptions.
+   */
+  readonly revision: number;
+  /** @param id - Block identifier. @returns Whether the block exists.
+   *
+   * @param id - Block identifier. @returns Whether the block exists.
+   */
+  hasBlock(id: string): boolean;
+  /** @returns One detached block, when present.
+   *
+   * @param id - Block identifier. @returns Detached subtree, or undefined when absent.
+   */
+  getBlock(id: string): EditorBlock | undefined;
+  /** @returns Detached non-recursive block fields, when present.
+   *
+   * @param id - Block identifier. @returns Detached non-recursive block fields, or undefined when absent.
+   */
+  getBlockNode(id: string): EditorBlockNode | undefined;
+  /** @returns The complete detached root forest.
+   *
+   * @returns The complete detached root forest.
+   */
+  getBlocks(): EditorBlock[];
+  /** @returns Ordered root block identifiers.
+   *
+   * @returns Root block identifiers in document order.
+   */
+  getRootIds(): string[];
+  /** Subscribes to one recursive block snapshot.
+   *
    * Subscribes to one recursive block snapshot.
    * @param id - Block identifier to observe.
    * @param listener - Callback invoked after relevant changes.
    * @returns Function that removes the subscription.
    */
   subscribeBlock(id: string, listener: () => void): () => void;
-  /** Subscribes to one block's own fields and direct child IDs. */
+  /** Subscribes to one block's own fields and direct child IDs.
+   *
+   * Subscribes to one block's own fields and direct child IDs.
+   */
   subscribeBlockNode(id: string, listener: () => void): () => void;
-  /**
+  /** Subscribes to ordered root identifiers.
+   *
    * Subscribes to ordered root identifier changes.
    * @param listener - Callback invoked after root changes.
    * @returns Function that removes the subscription.
    */
   subscribeRootIds(listener: () => void): () => void;
-  /**
+  /** Subscribes to hierarchy changes.
+   *
    * Subscribes to hierarchy changes.
    * @param listener - Callback invoked after hierarchy changes.
    * @returns Function that removes the subscription.
    */
   subscribeStructure(listener: () => void): () => void;
-  /** @param id - Parent block identifier. @returns True when the block has at least one child. */
+  /** @returns True when the block has at least one child.
+   *
+   * @param id - Parent block identifier. @returns True when the block has at least one child.
+   */
   hasChildren(id: string): boolean;
-  /** @param id - Block identifier. @returns Parent ID, null at root, or undefined when absent. */
+  /** @returns A block's parent, root marker, or missing marker.
+   *
+   * @param id - Block identifier. @returns Parent ID, null at root, or undefined when absent.
+   */
   getParentId(id: string): string | null | undefined;
-  /** @param id - Block identifier. @returns True when the block exists and has no parent. */
+  /** @returns True when the block exists and has no parent.
+   *
+   * @param id - Block identifier. @returns True when the block exists and has no parent.
+   */
   isRootBlock(id: string): boolean;
-  /**
+  /** Imports a detached block forest with collision remapping.
+   *
    * Imports a detached forest and reports its destination identities.
    * @param blocks - Complete copied roots or creation inputs to import.
    * @param afterId - Existing sibling to follow, null to prepend, or undefined to append.
@@ -118,22 +204,36 @@ export interface BlocksCapability {
     afterId?: string | null,
     onError?: BlockPrepareErrorHandler,
   ): { roots: EditorBlock[]; idMap: ReadonlyMap<string, string> };
-  /** @param id - Block identifier to clear. @returns No value. */
+  /** Clears one block while preserving its identity.
+   *
+   * @param id - Block identifier to clear. @returns No value.
+   */
   clearBlock(id: string): void;
-  /** @param id - Block identifier. @param type - Destination block type. @returns No value. */
+  /** Converts one block to a registered type.
+   *
+   * @param id - Block identifier. @param type - Destination block type. @returns No value.
+   */
   setBlockType(id: string, type: string): void;
-  /** @param id - Block identifier to remove. @returns No value. */
+  /** Removes one block subtree.
+   *
+   * @param id - Block identifier to remove. @returns No value.
+   */
   removeBlock(id: string): void;
-  /** @param ids - Block subtree roots to remove. @returns No value. */
+  /** Removes several block subtrees atomically.
+   *
+   * @param ids - Block subtree roots to remove. @returns No value.
+   */
   removeBlocks(ids: readonly string[]): void;
-  /**
+  /** Merges source content and children into the target.
+   *
    * Merges a source block into a target.
    * @param targetId - Destination block identifier.
    * @param sourceId - Source block identifier.
    * @returns Resulting caret offset in the target.
    */
   mergeBlocks(targetId: string, sourceId: string): number;
-  /**
+  /** Moves one block relative to a target.
+   *
    * Moves one block relative to a destination.
    * @param id - Block identifier to move.
    * @param targetId - Destination block, or null for the list start.
@@ -141,7 +241,8 @@ export interface BlocksCapability {
    * @returns No value.
    */
   moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
-  /**
+  /** Moves several block roots as one group.
+   *
    * Moves several block roots relative to one destination.
    * @param ids - Ordered block roots to move.
    * @param targetId - Destination block, or null for the list start.
@@ -149,15 +250,28 @@ export interface BlocksCapability {
    * @returns No value.
    */
   moveBlocks(ids: readonly string[], targetId: string | null, position?: "before" | "after" | "inside"): void;
-  /** @param id - Block identifier to indent. @returns No value. */
+  /** Indents one block when eligible.
+   *
+   * @param id - Block identifier to indent. @returns No value.
+   */
   indentBlock(id: string): void;
-  /** @param ids - Ordered block roots to indent. @returns No value. */
+  /** Indents a block range when eligible.
+   *
+   * @param ids - Ordered block roots to indent. @returns No value.
+   */
   indentBlocks(ids: readonly string[]): void;
-  /** @param id - Block identifier to outdent. @returns No value. */
+  /** Outdents one block when eligible.
+   *
+   * @param id - Block identifier to outdent. @returns No value.
+   */
   outdentBlock(id: string): void;
-  /** @param ids - Ordered block roots to outdent. @returns No value. */
+  /** Outdents a block range when eligible.
+   *
+   * @param ids - Ordered block roots to outdent. @returns No value.
+   */
   outdentBlocks(ids: readonly string[]): void;
-  /**
+  /** Sets one opaque block property.
+   *
    * Sets or removes one native block property.
    * @param id - Block identifier.
    * @param key - Native property name.
@@ -165,7 +279,8 @@ export interface BlocksCapability {
    * @returns No value.
    */
   setBlockProp(id: string, key: string, value: unknown): void;
-  /**
+  /** Sets namespaced block plugin data.
+   *
    * Sets or removes one namespaced block plugin value.
    * @param id - Block identifier.
    * @param pluginId - Stable plugin namespace.
@@ -250,7 +365,31 @@ export interface EventsCapability {
   ): () => void;
   delete(id: string): boolean;
   setRoot(root: HTMLElement | null): void;
+  /** @returns The active document-view root, or the first mounted surface before interaction. */
   getRoot(): HTMLElement | null;
+  /**
+   * Reads the rendered surface of this view, or the active view on the shared runtime.
+   * Unlike `reactEditor.mode.get()`, which is shared by a document's views, this
+   * describes the receiving DOM surface: a page embedding returns `block` even
+   * when its document's core mode is `edgeless`. No additional mode is stored.
+   * Event dispatch captures this value in `event.mode`; handlers should use that
+   * snapshot. Use this method for view-specific commands outside event handlers,
+   * and the core mode manager for document-wide presentation choices.
+   * @returns Mounted view's surface type, or core mode when no recognized surface is mounted.
+   */
+  getSurfaceType(): EditorMode;
+  /** @returns API of the current DOM occurrence, or undefined without a registered view API; never acquires content. */
+  getDocumentView(): ReactEditor | undefined;
+  /**
+   * Registers an embedded document occurrence without installing another editor runtime.
+   * @param root - Mounted region displaying source blocks through the existing BlockTree.
+   * @param document - Model owning commands dispatched inside the region.
+   * @param rootBlockId - Source subtree boundary for selection and navigation.
+   * @returns Idempotent cleanup; a removed active view clears its local selection.
+   */
+  registerDocumentView(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: ReactEditor, deactivate?: () => void): () => void;
+  /** @param operation - Synchronous selection/focus work. @returns Its result in the active view's DOM scope; core models remain permanently bound. */
+  runInView<Result>(operation: () => Result): Result;
 }
 
 export interface KeyboardCapability {
@@ -322,7 +461,8 @@ export interface SelectionCapability {
   /**
    * Runs the callback next frame only if the model selection has not changed since scheduling.
    * Reserve callbacks for caret, DOM selection, and associated editing focus;
-   * each call replaces previous pending work even if selection is unchanged.
+   * each call replaces previous pending work for the same DOM root even if
+   * selection is unchanged. Other views keep their own pending DOM requests.
    * Keep document mutations and independent UI operations outside this scheduler.
    * @param callback - Work to perform next frame while the scheduled selection remains current.
    * @param onCancel - Optional cleanup when newer state or teardown supersedes the work.

@@ -9,6 +9,7 @@
  * @module
  */
 
+
 /** Page-local operations needed by commands that focus a currently unmounted root. */
 export interface PageVirtualizationController {
   /**
@@ -91,8 +92,11 @@ export function registerPageVirtualizationController(root: HTMLElement, controll
  * Finds the virtual page associated with a DOM scope.
  *
  * @param root - Surface or descendant used by a DOM navigation helper.
- * @returns Its page controller, or undefined when the page is not virtualized.
+ * Each native view owns its own page surface, preventing embedded sources from
+ * borrowing the host page controller or selecting blocks from another model.
+ * @returns Its page controller, or undefined for an unvirtualized or different document view.
  */
 export function getPageVirtualizationControllerForElement(root: HTMLElement): PageVirtualizationController | undefined {
-  return controllers.get(root.closest<HTMLElement>(`.${PAGE_SURFACE_CLASS}`) ?? root);
+  const page = root.closest<HTMLElement>(`.${PAGE_SURFACE_CLASS}`) ?? root;
+  return controllers.get(page);
 }

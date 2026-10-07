@@ -13,6 +13,7 @@ import {
   columnsExtension,
   MarkdownContent,
   useBlockEditing,
+  BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import {
@@ -37,6 +38,8 @@ interface SliderProps {
 interface CounterProps {
   count: number;
 }
+
+const COUNTER_SELECTION_ATTRIBUTES = { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
 
 export { duplicateBlockInput } from "./block-utils";
 export {
@@ -160,6 +163,7 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
     // button remains compact and retains its normal click behavior.
     <div {...editing.attributes} className="custom-counter-selection-region">
       <button
+        {...COUNTER_SELECTION_ATTRIBUTES}
         type="button"
         className="custom-counter-block"
         onClick={increment}

@@ -12,7 +12,7 @@ import type {
   EditorBlockNode as BlockNode,
   EditorBlockPatch as BlockPatch,
 } from "@chulane/rivto";
-import { useEditorContext } from "../../editor-context";
+import { useReactEditor } from "../editor/use-editor";
 import type { ReactEditor } from "../../types";
 
 /** Commands bound to one stable block ID. */
@@ -90,7 +90,7 @@ function useBlockOperations(reactEditor: ReactEditor, blockId: string): BlockOpe
  * @throws If called outside an EditorView subtree.
  */
 export function useBlock(blockId: string): UseBlockResult {
-  const { reactEditor } = useEditorContext();
+  const reactEditor = useReactEditor();
   const subscribe = useCallback(
     (listener: () => void) => reactEditor.blocks.subscribeBlock(blockId, listener),
     [blockId, reactEditor],
@@ -110,7 +110,7 @@ export function useBlock(blockId: string): UseBlockResult {
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockNode(blockId: string): UseBlockNodeResult {
-  const { reactEditor } = useEditorContext();
+  const reactEditor = useReactEditor();
   const subscribe = useCallback(
     (listener: () => void) => reactEditor.blocks.subscribeBlockNode(blockId, listener),
     [blockId, reactEditor],

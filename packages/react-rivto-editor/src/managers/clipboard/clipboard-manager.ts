@@ -73,20 +73,20 @@ export class ClipboardManager {
 
   /** Copies the current or supplied selection as structured data. */
   copy(...args: Parameters<CoreClipboardManager["copy"]>): ReturnType<CoreClipboardManager["copy"]> {
-    return this.editor.clipboard.copy(...args);
+    return this.reactEditor.events.runInView(() => this.editor.clipboard.copy(...args));
   }
 
   /** Copies an explicit text selection. */
   copyText(...args: Parameters<CoreClipboardManager["copyText"]>): ReturnType<CoreClipboardManager["copyText"]> {
-    return this.editor.clipboard.copyText(...args);
+    return this.reactEditor.events.runInView(() => this.editor.clipboard.copyText(...args));
   }
 
   /** Copies and deletes the current selection. */
-  cut(): ReturnType<CoreClipboardManager["cut"]> { return this.editor.clipboard.cut(); }
+  cut(): ReturnType<CoreClipboardManager["cut"]> { return this.reactEditor.events.runInView(() => this.editor.clipboard.cut()); }
 
   /** Pastes structured or plain clipboard data. */
   paste(...args: Parameters<CoreClipboardManager["paste"]>): ReturnType<CoreClipboardManager["paste"]> {
-    return this.editor.clipboard.paste(...args);
+    return this.reactEditor.events.runInView(() => this.editor.clipboard.paste(...args));
   }
 
   /**

@@ -41,7 +41,6 @@ import {
   insertBlockElementSeparator,
 } from "../../elements/block-element-projection";
 import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
-import { PageSurface } from "../../surfaces/page";
 import {
   type ReactBlockRegistration,
   type ReactEditorExtension,
@@ -62,13 +61,6 @@ export function defaultWritingBlockExtension(
   };
 }
 
-/** @returns The built-in recursive outline surface for block mode. */
-export const pageSurfaceExtension = (): ReactEditorExtension => ({
-  id: "surface.page",
-  setup: (reactEditor) => {
-    reactEditor.surfaces.register("block", PageSurface);
-  },
-});
 
 /**
  * Installs CRDT-backed undo/redo and native contenteditable history suppression.
@@ -231,7 +223,9 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
           const block = reactEditor.blocks.getBlock(blockId);
           if (!block) return;
           const input = duplicateBlockInput(block);
-          const isEdgelessRoot = reactEditor.mode.get() === "edgeless" && reactEditor.blocks.isRootBlock(blockId);
+          // Use the receiving view: a page embedding can share an edgeless core.
+          // Duplicating there should insert a sibling, not create a canvas card.
+          const isEdgelessRoot = reactEditor.events.getSurfaceType() === "edgeless" && reactEditor.blocks.isRootBlock(blockId);
           const sourceElement = isEdgelessRoot
             ? reactEditor.elements.getElements().find((element) => element.type === "block" && blockIdsOf(element, reactEditor.blocks.getRootIds()).includes(blockId))
             : undefined;
@@ -242,7 +236,6 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
               : block.id;
             duplicateId = reactEditor.blocks.insertBlock(input, afterId).id;
             if (isEdgelessRoot) reactEditor.elements.insertElement({
-              id: duplicateId,
               type: "block",
               frame: sourceElement
                 ? { ...sourceElement.frame, x: sourceElement.frame.x + 24, y: sourceElement.frame.y + 24 }
@@ -353,7 +346,6 @@ export const standardPreset = (
     defaultWritingBlockExtension(options.writing),
     errorBlockExtension(),
     separatorBlockExtension(),
-    pageSurfaceExtension(),
     historyExtension(),
     textSelectionExtension(),
     slashCommandExtension(options.slashMenu),

@@ -5,6 +5,7 @@
  */
 import {
   createTextSelection,
+  type EditorMode,
   hasBlockRanges,
   isCaretSelection,
   isStructuralSelection,
@@ -41,7 +42,7 @@ function isNativeControl(target: EventTarget | null): boolean {
  */
 export function registerCaretNavigation(reactEditor: ReactEditor): void {
   const lengthOf = (id: string) => reactEditor.blocks.getBlockNode(id)?.content.length ?? 0;
-  const movePlain = (root: HTMLElement, direction: "left" | "right" | VerticalDirection): boolean => {
+  const movePlain = (root: HTMLElement, direction: "left" | "right" | VerticalDirection, mode: EditorMode): boolean => {
     const selection = currentNavigationSelection(reactEditor.selection);
     const item = selection;
     if (!item || !hasBlockRanges(item) || isStructuralSelection(selection)) return false;
@@ -78,7 +79,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
         setNavigationCaret(root, reactEditor, moved);
         handled = true;
       } else {
-        handled = reactEditor.mode.get() === "block" && focusAdjacentEditor(root, direction);
+        handled = mode === "block" && focusAdjacentEditor(root, direction);
       }
     }
     return handled;
@@ -110,7 +111,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
   ) => reactEditor.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
-  }, ({ root, raw }) => !isNativeControl(raw.target) && movePlain(root, direction));
+  }, ({ root, raw, mode }) => !isNativeControl(raw.target) && movePlain(root, direction, mode));
   bindPlain(KEYBOARD_BINDING_IDS.caretLeft, "left");
   bindPlain(KEYBOARD_BINDING_IDS.caretRight, "right");
   bindPlain(KEYBOARD_BINDING_IDS.caretUp, "up");

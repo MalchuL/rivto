@@ -14,7 +14,6 @@ import {
 import type { MarkdownLinkClick } from "../../types";
 import {
   useBlockEditing,
-  useBlockNode,
 } from "../../hooks";
 import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
@@ -90,13 +89,16 @@ export function MarkdownContent({
   readonly onLinkClick?: (context: MarkdownLinkClick) => void;
 }) {
   const editing = useBlockEditing(blockId);
-  const { block, operations } = useBlockNode(blockId);
+  const { block, operations, getActualContent } = editing;
   const [isEditing, setIsEditing] = useState(false);
   const source = block?.content ?? "";
 
   const updateCode = useCallback((node: PositionedNode, value: string) => {
-    operations.setContent(replaceMarkdownCode(source, node, value));
-  }, [operations, source]);
+    // An external write can precede this old render's input handler in the
+    // same turn. Preserve its current surrounding text rather than the snapshot.
+    const current = getActualContent();
+    if (current !== undefined) operations.setContent(replaceMarkdownCode(current, node, value));
+  }, [getActualContent, operations]);
   const transformUrl = useCallback<UrlTransform>((url) => {
     const safe = defaultUrlTransform(url);
     if (safe || !onLinkClick) return safe;

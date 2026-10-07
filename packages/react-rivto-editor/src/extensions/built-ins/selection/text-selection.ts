@@ -133,7 +133,7 @@ interface PointerSelectionCoordinates {
  *
  * @example
  * ```tsx
- * <EditorView reactEditor={reactEditor}>
+ * <EditorView reactEditor={reactEditor} documentId={documentId}>
  *   <TextSelectionPlugin />
  *   <PageSurface />
  * </EditorView>
@@ -214,7 +214,10 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
     const effectiveHeadPosition = partialContentlessBlockId
       ? { blockId: partialContentlessBlockId, offset: 0 }
       : headPosition;
-    const crossBlock = (effectiveHeadPosition?.blockId ?? pointedBlockId) !== active.anchorPosition.blockId;
+    // Structural selection follows the owning block under the pointer. A
+    // contentless body can make caret lookup fall back to the anchor or a
+    // neighboring editable block, which must not decide the range boundary.
+    const crossBlock = (pointedBlockId ?? effectiveHeadPosition?.blockId) !== active.anchorPosition.blockId;
     const wholeBlocks = wantsWholeBlocks(current, Boolean(crossBlock));
     let handled = false;
     if (wholeBlocks && pointedBlockId && pointedBlockId !== headPosition?.blockId && (
@@ -310,14 +313,18 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
         // Three entry paths, because click-to-activate and drag-to-select share
         // this pointerdown and must not steal each other:
         // - Editable anchors always enter so caret drags keep working.
-        // - Native buttons seed a drag only. Nothing is published until the
-        //   movement threshold, so a click still activates the control; a drag
-        //   becomes structural selection and the later click is suppressed.
+        // - Controls explicitly marked as selection anchors seed a drag only.
+        //   Nothing is published until the movement threshold, so a click still
+        //   activates the control; a drag becomes structural selection and the
+        //   later click is suppressed. Marking a containing region does not opt
+        //   its controls in, and `data-prevent-text-editing` always opts them out.
         // - Remaining structural surface starts selection only when the target
         //   is not an excluded control (inputs, links, drop fields, sortable
         //   rows, `data-prevent-text-editing`). Those keep their own gesture.
         if (target && selectionAnchor && root.contains(selectionAnchor) && (
           selectionAnchor.isContentEditable
+          || (target.closest(STRUCTURAL_SELECTION_EXCLUDED_TARGET_SELECTOR) === selectionAnchor
+            && !target.closest(PREVENT_TEXT_EDITING_SELECTOR))
           || !isExcludedFromStructuralSelection(target)
         )) {
           if (releaseTimer !== undefined) view?.clearTimeout(releaseTimer);
@@ -483,7 +490,7 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
     type: "click",
     capture: true,
     scope: "block",
-  }, ({ raw: event, blockId, root }) => {
+  }, ({ raw: event, blockId, root, mode }) => {
       if (!blockId) return false;
       if (blockId === suppressClickBlockId) {
         // A control may still receive `click` after its pointer gesture became a
@@ -505,22 +512,41 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
 
       const selection = createVisibleStructuralSelection(selectionBlockIds(root), blockId, blockId);
       if (selection) reactEditor.selection.set(selection);
-      if (reactEditor.mode.get() === "edgeless") findEdgelessRuntime(reactEditor)?.deactivate();
+      if (mode === "edgeless") findEdgelessRuntime(reactEditor)?.deactivate();
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });
       return true;
   });
 
   reactEditor.events.register({
+    id: "text-selection.before-input",
+    type: "beforeinput",
+    scope: "content",
+  }, () => {
+    // Native selectionchange may arrive after typing and an immediate undo.
+    // Capture the live caret before input mutates the document so history can
+    // restore editable focus even when that asynchronous event has not arrived.
+    const selection = reactEditor.selection.readDOM();
+    if (selection) reactEditor.selection.set(selection);
+    return false;
+  });
+
+  reactEditor.events.register({
     id: "text-selection.selection-change",
     type: "selectionchange",
     target: "document",
-  }, () => {
+  }, ({ mode }) => {
       if (ownsCrossBlockSelection) return false;
+      // Canvas gestures own element selection. A retained native text range
+      // must not replace it while a transform preview is waiting to commit.
+      if (mode === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active) return false;
+      // Cut, paste, and reparenting can report the old native range before the
+      // next frame restores the command's caret. New input cancels that frame.
+      if (reactEditor.selection.hasPendingSelectionCallback) return false;
       const selection = reactEditor.selection.readDOM();
       if (selection) {
         reactEditor.selection.set(selection);
-      } else if (!(reactEditor.mode.get() === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active)) {
+      } else if (!(mode === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active)) {
         // Losing the browser range keeps a structural selection and clears carets.
         const current = reactEditor.selection.get();
         // Reparenting may detach native endpoints before the scheduled restore.

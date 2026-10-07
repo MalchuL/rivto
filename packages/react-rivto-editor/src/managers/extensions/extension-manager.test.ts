@@ -1,21 +1,22 @@
+import { createTestReactEditor as createReactEditor } from "../../test-utils";
 import { createTestCoreEditor as createEditor } from "../../test-utils";
 import type { ComponentType } from "react";
-import { createReactEditor } from "../../react-editor";
+
 
 const Mounted: ComponentType = () => null;
 
 describe("ExtensionManager", () => {
-  test("releases extensions when earlier runtime cleanup throws", () => {
-    const editor = createEditor();
+  test("releases extensions when earlier runtime cleanup throws", async () => {
+    const editor = await createEditor();
     let released = false;
     const reactEditor = createReactEditor({ editor, extensions: [{
       id: "cleanup",
       setup: () => () => { released = true; },
     }] });
-    const root = { ownerDocument: { defaultView: {
+    const root = Object.assign(new EventTarget(), { ownerDocument: { defaultView: {
       requestAnimationFrame: () => 1,
       cancelAnimationFrame: () => {},
-    } } } as unknown as HTMLElement;
+    } } }) as unknown as HTMLElement;
     reactEditor.events.getRoot = () => root;
     // A no-op stands in for selection restoration; this test exercises cancellation cleanup.
     reactEditor.selection.scheduleIfSelectionUnchanged(() => {}, () => {
@@ -29,8 +30,8 @@ describe("ExtensionManager", () => {
     editor.destroy();
   });
 
-  test("rolls back a throwing extension and continues teardown after a cleanup error", () => {
-    const editor = createEditor();
+  test("rolls back a throwing extension and continues teardown after a cleanup error", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const released: string[] = [];
     expect(() => reactEditor.extensions.install({
@@ -63,8 +64,8 @@ describe("ExtensionManager", () => {
     editor.destroy();
   });
 
-  test("owns repeated component registrations by registration identity", () => {
-    const editor = createEditor();
+  test("owns repeated component registrations by registration identity", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const manager = reactEditor.extensions;
     const first = manager.mount(Mounted);

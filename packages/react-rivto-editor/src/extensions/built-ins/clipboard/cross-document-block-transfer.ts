@@ -1,5 +1,6 @@
 import type {
   EditorBlock,
+  EditorBlockInput,
   RivtoEditorApi,
 } from "@chulane/rivto";
 import type { ReactEditor } from "../../../types";
@@ -12,20 +13,16 @@ export interface CrossDocumentBlockTransferPlacement {
   readonly position: "before" | "after" | "inside";
 }
 
-/** Complete data transported between two independent editor documents. */
-interface CrossDocumentBlockTransferBundle {
-  readonly blocks: readonly EditorBlock[];
-}
-
 /**
  * Collects every stable identifier in a detached subtree.
  * @param block - Subtree root to visit.
  * @param ids - Destination set receiving root and descendant identifiers.
  * @returns No value.
  */
-function collectBlockIds(block: EditorBlock, ids: Set<string>): void {
+function collectBlockIds(block: EditorBlockInput, ids: Set<string>): void {
+  if (!block.id) throw new Error("Transfer preparation must preserve block IDs");
   ids.add(block.id);
-  block.children.forEach((child) => collectBlockIds(child, ids));
+  block.children?.forEach((child) => collectBlockIds(child, ids));
 }
 
 /**
@@ -34,29 +31,23 @@ function collectBlockIds(block: EditorBlock, ids: Set<string>): void {
  * @returns Lossless detached subtree retaining stable identifiers.
  */
 function cloneBlock(block: EditorBlock): EditorBlock {
-  return {
-    ...block,
-    listProps: structuredClone(block.listProps),
-    props: structuredClone(block.props),
-    pluginData: structuredClone(block.pluginData),
-    children: block.children.map(cloneBlock),
-  };
+  return structuredClone(block);
 }
 
 /**
  * Builds the lossless payload and validates placement and identity conflicts.
  *
- * Complete destination preparation happens inside `importForest` before its
+ * Complete destination preparation happens through `prepareInput` before its
  * first write, preventing an unavailable custom type from partially importing.
  */
-function createCrossDocumentBlockTransferBundle(
+function getTransferBlocks(
   source: ReactEditor | RivtoEditorApi,
   destination: ReactEditor | RivtoEditorApi,
   rootIds: readonly string[],
   placement: CrossDocumentBlockTransferPlacement,
-): CrossDocumentBlockTransferBundle {
-  if (source === destination) throw new Error("Cross-document transfer requires different editors");
-  if (placement.targetId !== null && !destination.blocks.hasBlock(placement.targetId)) {
+): EditorBlock[] {
+  if (source.getDocument() === destination.getDocument()) throw new Error("Cross-document transfer requires different documents");
+  if (placement.targetId !== null && !destination.blocks.hasBlock(placement.targetId!)) {
     throw new Error(`Destination block ${placement.targetId} does not exist`);
   }
 
@@ -71,9 +62,7 @@ function createCrossDocumentBlockTransferBundle(
     if (destination.blocks.hasBlock(id)) throw new Error(`Destination already contains block ${id}`);
   }
 
-  return {
-    blocks: roots.map(cloneBlock),
-  };
+  return roots.map(cloneBlock);
 }
 
 /**
@@ -82,6 +71,12 @@ function createCrossDocumentBlockTransferBundle(
  * The destination is committed first. Only a successful insertion permits the
  * source deletion, so validation and insertion failures never lose source data.
  * Each batch remains one undo item in its owning Yjs history.
+ * @param source - Runtime supplying source snapshots and deletion commands.
+ * @param destination - Different document-bound runtime supplying destination preparation and insertion commands.
+ * @param rootIds - Source subtree identities to preserve during transfer.
+ * @param placement - Destination block relationship.
+ * @returns Nothing after insertion and source deletion.
+ * @throws If the models match, IDs collide, a block is missing, or destination preparation/insertion fails.
  */
 export function crossDocumentBlockTransfer(
   source: ReactEditor | RivtoEditorApi,
@@ -89,9 +84,17 @@ export function crossDocumentBlockTransfer(
   rootIds: readonly string[],
   placement: CrossDocumentBlockTransferPlacement,
 ): void {
-  const bundle = createCrossDocumentBlockTransferBundle(source, destination, rootIds, placement);
+  const destinationDocument = destination.getDocument();
+  const blocks = getTransferBlocks(source, destination, rootIds, placement);
+  const prepared = destination.blocks.prepareInput(blocks);
+  const sourceIds = new Set<string>(); const preparedIds = new Set<string>();
+  blocks.forEach((block) => collectBlockIds(block, sourceIds));
+  prepared.forEach((block) => collectBlockIds(block, preparedIds));
+  if (sourceIds.size !== preparedIds.size || [...sourceIds].some((id) => !preparedIds.has(id))) {
+    throw new Error("Transfer preparation must preserve block IDs");
+  }
   destination.history.batchUpdates(() => {
-    const insertedIds = destination.blocks.importForest(bundle.blocks).roots.map(({ id }) => id);
+    const insertedIds = prepared.map((block) => destinationDocument.blocks.insertBlock(block).id);
     if (placement.targetId !== null) {
       destination.blocks.moveBlocks(insertedIds, placement.targetId, placement.position);
     }

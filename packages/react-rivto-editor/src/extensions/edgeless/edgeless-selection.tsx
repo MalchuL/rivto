@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { SurfaceContext } from "../../surfaces/surface";
 /**
  * Pointer gestures for whole-object edgeless selection, including marquee.
  *
@@ -9,7 +11,6 @@
 import { BLOCK_CONTENT_SELECTOR } from "../../constants";
 import {
   useDOMEvent,
-  useEditorMode,
   useEditorRoot,
   useReactEditor,
   useKeyboardEvent,
@@ -131,7 +132,7 @@ function hideRectangle(node: HTMLElement | null): void {
 export function EdgelessInteractionOverlay() {
   const reactEditor = useReactEditor();
   const selection = getEdgelessRuntime(reactEditor);
-  const { mode } = useEditorMode();
+  const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const gesture = useRef<RectangleGesture | null>(null);
   const rectangleRef = useRef<HTMLElement | null>(null);

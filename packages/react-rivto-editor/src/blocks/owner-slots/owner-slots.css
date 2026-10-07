@@ -3,7 +3,7 @@
  *
  * `.rivto-slot` hosts controls registered through the surface manager. Slots
  * are absolute overlays positioned by `data-slot-position`; the logical
- * `start`/`end` block slots participate in row flow instead. Hosts may
+ * `start`/`end` block slots participate in row flow and `body` sits below it. Hosts may
  * override these public selectors together with their owner layout to make one
  * position flow. Built-in controls reset their legacy self-positioning here so
  * slot ownership supplies the geometry.
@@ -37,6 +37,12 @@
 
 .rivto-slot[data-slot-owner="block"][data-slot-position="start"] {
   flex-direction: row-reverse;
+}
+
+.rivto-slot[data-slot-owner="block"][data-slot-position="body"] {
+  position: relative;
+  display: block;
+  z-index: auto;
 }
 
 .rivto-slot > .page-drag-handle,

@@ -28,7 +28,9 @@ export class ElementPasteStrategy implements PasteStrategy {
    * @returns True when this strategy should run after any block insertion.
    */
   matches(context: PasteContext, _placement: PastePlacement): boolean {
-    if (this.reactEditor.mode.get() !== "edgeless") return false;
+    // Core mode can be edgeless even when paste targets a page embedding.
+    // Use the receiving surface so page paste does not create canvas elements.
+    if (this.reactEditor.events.getSurfaceType() !== "edgeless") return false;
     if (!context.bundle) return false;
     if (context.bundle.elements?.length) return true;
     return Boolean(this.canvasBlockSelection());

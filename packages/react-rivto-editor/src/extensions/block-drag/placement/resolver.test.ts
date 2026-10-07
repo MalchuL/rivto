@@ -94,3 +94,30 @@ test("disabled child placement keeps row-center drops at sibling depth", () => {
   expect(resolve(items, 100, 54)).toMatchObject({ kind: "between", parentId: null, previousId: "b" });
   expect(resolve(items, 100, 62)).toMatchObject({ kind: "between", parentId: null, previousId: "b" });
 });
+
+test("an indented gap stays between siblings when the preceding block rejects children", () => {
+  const items = [item("restricted", 0, 180), item("next", 196, 24)];
+  for (const y of [178, 188, 198]) {
+    expect(resolve(items, 200, y, (destination) => destination.parentId !== "restricted"))
+      .toMatchObject({ kind: "between", parentId: null, previousId: "restricted", nextId: "next" });
+  }
+});
+
+test.each([
+  { acceptsBody: true },
+  { fixed: true },
+  {},
+])("an outline gap allows nesting before the next block (%j)", (nextOptions) => {
+  const items = [item("previous", 0, 24), item("next", 40, 180, nextOptions)];
+  const accepts = (destination: CanonicalDropPlacement) => destination.parentId !== "next";
+  for (const y of [22, 32, 42]) {
+    expect(resolve(items, 12, y, accepts)).toMatchObject({ kind: "between", parentId: null, previousId: "previous", nextId: "next" });
+    expect(resolve(items, 36, y, accepts)).toMatchObject({ kind: "between", parentId: "previous", previousId: null, nextId: null, line: { x: 24, y: 24 } });
+  }
+});
+
+test("exposed leaf padding supports sibling and child outline gaps", () => {
+  const items = [item("embedding", 0, 180), item("next", 196, 24)];
+  expect(resolve(items, 12, 164)).toMatchObject({ kind: "between", parentId: null, previousId: "embedding", nextId: "next" });
+  expect(resolve(items, 36, 164)).toMatchObject({ kind: "between", parentId: "embedding", previousId: null, nextId: null, line: { x: 24, y: 180 } });
+});

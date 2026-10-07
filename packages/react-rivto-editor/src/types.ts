@@ -1,9 +1,9 @@
 import type {
   CommandRegistryApi,
   ElementManagerApi,
-  ModeManagerApi,
   RivtoEditorApi,
   HistoryManagerApi,
+  ModeManagerApi,
 } from "@chulane/rivto";
 import type { DocumentModel } from "@chulane/document-model";
 import type {
@@ -40,7 +40,7 @@ export interface MarkdownLinkClick {
 
 /** Creation options for the React presentation runtime. */
 export interface CreateReactEditorOptions {
-  /** Existing framework-neutral editor; ReactEditor never destroys it. */
+  /** Existing fixed document editor; the caller or EditorStorage owns its destruction. */
   readonly editor: RivtoEditorApi;
   /** Functional extensions installed synchronously in declaration order. */
   readonly extensions?: readonly ReactEditorExtension[];
@@ -51,7 +51,7 @@ export interface CreateReactEditorOptions {
 }
 
 /**
- * Coordinates React presentation managers around one core editor.
+ * Coordinates React presentation managers around one permanently bound core editor.
  *
  * Managers are public extension boundaries. Extensions register directly through
  * `blocks`, `renderers`, `views`, `surfaces`, `extensions`, `events`, `keyboard`,
@@ -64,10 +64,17 @@ export interface CreateReactEditorOptions {
 export interface ReactEditor {
   /** Core first-class element operations. */
   readonly elements: ElementManagerApi;
-  /** Local presentation mode. */
-  readonly mode: ModeManagerApi;
+  /** Document identity exposed on a scoped view; getDocument always returns this editor's model. */
+  readonly documentId?: string;
+  /**
+   * Root block of the displayed subtree, including the block and its descendants.
+   * Used to show a subtree in views such as embeddings; undefined shows the full document.
+   */
+  readonly rootBlockId?: string;
   /** Named command registry used by extensions. */
   readonly commands: CommandRegistryApi;
+  /** Core presentation mode; shared by this document's views and local to this editor. */
+  readonly mode: ModeManagerApi;
   /** Local history and transaction batching. */
   readonly history: HistoryManagerApi;
   /** Core editor revision forwarded for React's global invalidation boundary. */
@@ -112,17 +119,11 @@ export interface ReactEditor {
   readonly keyboard: KeyboardCapability;
   readonly selection: SelectionCapability;
   readonly slashCommands: SlashCommandsCapability;
-  /** Subscribes to document, mode, and selection changes from the core editor. */
+  /** Subscribes to this document, its local mode, and core definitions; selection has its own stream. */
   subscribe(listener: () => void): () => void;
   /**
-   * @returns The document model currently presented by the core editor, or undefined while unbound.
+   * @returns The permanently bound model used by every manager in this editor.
    */
-  getDocument(): DocumentModel | undefined;
-  /**
-   * Replaces the active document without recreating the React runtime.
-   * @param document - Caller-owned model to present.
-   * @returns No value.
-   */
-  setDocument(document: DocumentModel): void;
+  getDocument(): DocumentModel;
   destroy(): void;
 }

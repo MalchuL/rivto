@@ -11,6 +11,7 @@
 import { closestCenter } from "@dnd-kit/collision";
 import { useDraggable, useDroppable } from "@dnd-kit/react";
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks";
+import { findParentBlock } from "../../../managers/events/block-dom";
 import { useReactEditor } from "../../../hooks";
 import type { DropAxis } from "../../../views/types";
 import {
@@ -30,7 +31,7 @@ import { PageDragItemContext, PageDragStateContext } from "../state";
 import { blockContainment } from "../utils/containment";
 
 const PAGE_BLOCK_ROW_CLASS = "page-block-row";
-const PAGE_BLOCK_SELECTOR = "[data-block-id]";
+const DRAG_CONTAINER_ATTRIBUTE = "data-drag-container";
 
 /**
  * Decorates one BlockTree-owned BlockView with structural drag behavior.
@@ -43,6 +44,11 @@ const PAGE_BLOCK_SELECTOR = "[data-block-id]";
  * edgeless surfaces never import it. The button alone activates the draggable
  * sensor, so editable content retains ordinary caret and selection behavior.
  *
+ * Views with a dropAxis and no dropParentTypes mark their shell with
+ * `data-drag-container`, enabling full-container handle hover without naming
+ * block types in CSS. Structural rows and lanes retain row-only hover. The
+ * marker is removed when the view stops qualifying or this wrapper unmounts.
+ *
  * @param props - Block snapshot and the next ordered decorator or shared shell.
  * @returns A DOM-free ref provider plus row-portalled drag controls.
  */
@@ -50,13 +56,24 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
   const reactEditor = useReactEditor();
   const [blockElement, setBlockElement] = useState<HTMLDivElement | null>(null);
   const row = blockElement?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`) ?? null;
-  const parentId = blockElement?.parentElement?.closest<HTMLElement>(PAGE_BLOCK_SELECTOR)?.dataset.blockId;
+  const parentId = blockElement ? findParentBlock(blockElement)?.dataset.blockId : undefined;
   const targetView = reactEditor.views.resolve(block.id);
+  const isLayoutRoot = targetView.dropAxis !== undefined && targetView.dropParentTypes === undefined;
   const parentView = parentId ? reactEditor.views.resolve(parentId) : undefined;
   const parentOutline = parentId ? blockContainment(reactEditor, parentId)?.childOutline : undefined;
   const axis = parentOutline === "fixed" ? parentView?.dropAxis : undefined;
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
   const dropNode = sortable || targetView.acceptsDropContainer ? blockElement : row;
+
+  // Layout roots reveal their handle across the whole container. Structural
+  // rows and lanes declare dropParentTypes and retain ordinary row hover.
+  // Body-drop acceptance is independent: Columns rejects body drops but still
+  // needs container hover. Keep this marker owned and cleaned up by dragging.
+  useLayoutEffect(() => {
+    if (!blockElement || !isLayoutRoot) return;
+    blockElement.setAttribute(DRAG_CONTAINER_ATTRIBUTE, "");
+    return () => blockElement.removeAttribute(DRAG_CONTAINER_ATTRIBUTE);
+  }, [blockElement, isLayoutRoot]);
 
   return (
     <BlockElementRefProvider elementRef={setBlockElement}>

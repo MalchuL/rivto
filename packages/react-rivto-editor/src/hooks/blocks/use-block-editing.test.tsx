@@ -1,3 +1,4 @@
+import { createTestReactEditor as createReactEditor } from "../../test-utils";
 import { createTestCoreEditor as createEditor } from "../../test-utils";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -6,7 +7,7 @@ import {
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
 } from "../../constants";
 import { EditorView } from "../../editor-view";
-import { createReactEditor } from "../../react-editor";
+
 import {
   useBlockEditing,
   type UseBlockEditingResult,
@@ -18,8 +19,8 @@ interface TestProps extends Record<string, unknown> {
 }
 
 describe("useBlockEditing", () => {
-  test("returns mode-specific attributes and latest validated property methods", () => {
-    const editor = createEditor();
+  test("returns mode-specific attributes and latest validated property methods", async () => {
+    const editor = await createEditor();
     editor.blockRegistry.defineBlock({
       type: "test.editing",
       defaultProps: { count: 1, label: "Initial" },
@@ -51,7 +52,7 @@ describe("useBlockEditing", () => {
     const reactEditor = createReactEditor({ editor });
     reactEditor.surfaces.register("block", Surface);
 
-    renderToStaticMarkup(createElement(EditorView, { reactEditor }));
+    renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(Surface)));
 
     expect(structural?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
     expect(text?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
@@ -65,6 +66,15 @@ describe("useBlockEditing", () => {
     expect(structural?.getProps()).toEqual({ count: 1, label: "Initial" });
     expect(structural?.getProp("count")).toBe(1);
 
+    expect(structural?.getActualContent()).toBe("Text");
+    expect(text?.getActualContent()).toBe("Text");
+    editor.blocks.updateBlock(blockId, { content: "Updated without rerendering" });
+    expect(text?.block?.content).toBe("Text");
+    expect(structural?.getActualContent()).toBe("Updated without rerendering");
+    expect(text?.getActualContent()).toBe("Updated without rerendering");
+    text?.operations.setContent("");
+    expect(text?.getActualContent()).toBe("");
+
     structural?.setProps({ count: 2, label: "Patched" });
     expect(structural?.getProps()).toEqual({ count: 2, label: "Patched" });
     structural?.setProp("count", 3);
@@ -75,6 +85,8 @@ describe("useBlockEditing", () => {
     expect(() => structural?.setProp("count", -1)).toThrow("count must be non-negative");
 
     editor.blocks.removeBlock(blockId);
+    expect(structural?.getActualContent()).toBeUndefined();
+    expect(text?.getActualContent()).toBeUndefined();
     expect(structural?.getProps()).toBeUndefined();
     expect(structural?.getProp("count")).toBeUndefined();
     expect(() => structural?.setProp("count", 4)).toThrow(/not found/);

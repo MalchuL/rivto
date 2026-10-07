@@ -1,10 +1,11 @@
+import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 /**
  * Verifies the table extension creates rows and cells in the ordinary block tree,
  * inserts complete row and column boundaries, and participates in undo.
  * @module
  */
 import { createTestCoreEditor } from "../../../test-utils";
-import { createReactEditor } from "../../../react-editor";
+
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import {
   createTableBlockInput,
@@ -17,8 +18,8 @@ import {
   TABLE_ROW_BLOCK_TYPE,
 } from "./table";
 
-test("inserts rectangular rows and columns as draggable ordinary blocks", () => {
-  const editor = createTestCoreEditor();
+test("inserts rectangular rows and columns as draggable ordinary blocks", async () => {
+  const editor = await createTestCoreEditor();
   const reactEditor = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],

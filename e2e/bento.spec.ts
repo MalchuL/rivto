@@ -6,6 +6,8 @@ const RESIZE_LEFT = "Resize Bento tile from the left";
 const ROW_CLASS = "page-block-row";
 const CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 const PAGE_DRAG_HANDLE_CLASS = "page-drag-handle";
+// Child-region IDs have a per-view prefix; select direct tiles by the children container class.
+const BENTO_TILES_SELECTOR = ':scope > .page-block-children > [data-block-id]';
 
 /**
  * Drags one Bento edge handle by a horizontal pixel delta.
@@ -38,7 +40,7 @@ for (const mode of ["block", "edgeless"]) {
     }, mode);
     if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
     const board = page.locator('[data-block-type="bento"]');
-    const tiles = board.locator(':scope > [id^="block-children-"] > [data-block-id]');
+    const tiles = board.locator(BENTO_TILES_SELECTOR);
     await expect(tiles).toHaveCount(3);
     await expect(tiles.first()).toHaveCSS("flex-grow", "0");
     await expect(tiles.first()).toHaveCSS("flex-basis", "220px");
@@ -93,7 +95,7 @@ test("Bento edge resize freezes siblings until pointer release", async ({ page }
   });
   const board = page.locator('[data-block-type="bento"]');
   await board.getByRole("button", { name: "Expand Bento", exact: true }).click();
-  const tiles = board.locator(':scope > [id^="block-children-"] > [data-block-id]');
+  const tiles = board.locator(BENTO_TILES_SELECTOR);
   const first = tiles.first();
   const sibling = tiles.nth(1);
   await first.hover();
@@ -140,7 +142,7 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     });
     const board = page.locator('[data-block-type="bento"]');
     await board.getByRole("button", { name: "Expand Bento", exact: true }).click();
-    const tiles = board.locator(':scope > [id^="block-children-"] > [data-block-id]');
+    const tiles = board.locator(BENTO_TILES_SELECTOR);
     const source = tiles.first();
     const end = edge.startsWith("end-");
     const target = end ? tiles.last() : tiles.nth(1);
@@ -151,6 +153,7 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     const handle = source.locator(`:scope > .${ROW_CLASS} .${handleClass}`);
     await source.hover();
     await handle.hover();
+    await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
     const from = (await handle.boundingBox())!;
     const to = (await target.boundingBox())!;
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
@@ -170,9 +173,13 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
       const lineClass = "page-drop-indicator";
       const line = page.locator(`.${lineClass}`);
       await expect(line).toBeVisible();
-      const lineBox = (await line.boundingBox())!;
-      const targetBox = (await target.boundingBox())!;
-      const nextBox = end ? null : (await next.boundingBox())!;
+      // Related bounds must be read in the same frame while drag chrome settles.
+      const { lineBox, targetBox, nextBox } = await page.evaluate(({ targetId, nextId }) => {
+        const lineBox = document.querySelector(".page-drop-indicator")!.getBoundingClientRect().toJSON();
+        const targetBox = document.querySelector(`[data-block-id="${targetId}"]`)!.getBoundingClientRect().toJSON();
+        const nextBox = nextId ? document.querySelector(`[data-block-id="${nextId}"]`)!.getBoundingClientRect().toJSON() : null;
+        return { lineBox, targetBox, nextBox };
+      }, { targetId, nextId: end ? null : await next.getAttribute("data-block-id") });
       const sameRow = nextBox && Math.max(targetBox.y, nextBox.y)
         < Math.min(targetBox.y + targetBox.height, nextBox.y + nextBox.height);
       if (sameRow) {
@@ -226,7 +233,7 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
     });
   });
   const board = page.locator('[data-block-type="bento"]');
-  const tiles = board.locator(':scope > [id^="block-children-"] > [data-block-id]');
+  const tiles = board.locator(BENTO_TILES_SELECTOR);
   await expect(tiles).toHaveCount(2);
   const source = page.locator("[data-block-id]").filter({ has: page.getByText("From page", { exact: true }) }).first();
   const target = tiles.first();
@@ -271,7 +278,7 @@ test("drops a page block into an empty Bento grid", async ({ page }) => {
     });
   });
   const board = page.locator('[data-block-type="bento"]');
-  const tiles = board.locator(':scope > [id^="block-children-"] > [data-block-id]');
+  const tiles = board.locator(BENTO_TILES_SELECTOR);
   const source = page.locator("[data-block-id]").filter({ has: page.getByText("Drop me", { exact: true }) }).first();
   const handle = source.locator(`:scope > .${ROW_CLASS} .${PAGE_DRAG_HANDLE_CLASS}`);
   await source.hover();

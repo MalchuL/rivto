@@ -90,4 +90,4 @@ Setup идёт слева направо, cleanup — справа налево.
 - `surfaces.registerEditorWrapper(Wrapper, mode?)` оборачивает всё содержимое `EditorView`.
 - `surfaces.registerBlockWrapper(mode, Wrapper)` оборачивает каждый recursive block.
 
-Mounted component присутствует во всех modes. Mode-specific behavior ограничивайте через event definition или `useEditorMode()`.
+Mounted component присутствует во всех modes. Mode-specific behavior ограничивайте через event definition или `useContext(SurfaceContext)`.

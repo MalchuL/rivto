@@ -10,12 +10,6 @@ import type { ElementProcessor } from "./element-pipe";
 import type { ElementManagerApi } from "../types";
 import { Pipe } from "../../utils/pipe";
 
-interface ElementSubscription {
-  readonly bind: (document: DocumentModel) => () => void;
-  readonly listener: () => void;
-  dispose: () => void;
-}
-
 interface ElementProcessorRegistration {
   readonly processor: ElementProcessor;
   dispose: () => void;
@@ -26,14 +20,12 @@ export class ElementManager implements ElementManagerApi {
   /**
    * Editor-owned element processing pipeline.
    *
-   * It remains stable when the active document changes, so extension
+   * It remains stable across operations on different documents, so extension
    * processors follow this editor without becoming shared document state.
    */
   private readonly pipe = new Pipe<ElementInput>();
   private readonly processors = new Set<ElementProcessorRegistration>();
-  private readonly subscriptions = new Set<ElementSubscription>();
-  /** Document currently attached to the owning editor. */
-  private currentDocument?: DocumentModel;
+  private readonly subscriptions = new Set<() => void>();
 
   constructor(
     private readonly editor: RivtoEditorApi,
@@ -75,38 +67,28 @@ export class ElementManager implements ElementManagerApi {
 
   /** @param listener - Collection-change callback. @returns Its disposer. */
   subscribe(listener: () => void): () => void {
-    return this.retainSubscription(listener, (document) => document.elements.subscribe(listener));
+    return this.retainSubscription(this.document.elements.subscribe(listener));
   }
 
   /** @param id - Element to observe. @param listener - Change callback. @returns Its disposer. */
   subscribeElement(id: string, listener: () => void): () => void {
-    return this.retainSubscription(listener, (document) => document.elements.subscribeElement(id, listener));
+    return this.retainSubscription(this.document.elements.subscribeElement(id, listener));
   }
 
   /** @param listener - Membership-change callback. @returns Its disposer. */
   subscribeMembership(listener: () => void): () => void {
-    return this.retainSubscription(listener, (document) => document.elements.subscribeMembership(listener));
+    return this.retainSubscription(this.document.elements.subscribeMembership(listener));
   }
 
   /**
-   * Rebinds document subscriptions while retaining editor-owned processors.
-   * @param document - New active document.
-   * @returns No value.
+   * Inserts new or existing element data through the editor processing pipeline.
+   * Stable IDs are preserved for existing elements and deterministic derived records;
+   * the document manager allocates missing identities and checks local collisions.
+   * Application managers validate reuse of previously allocated database identities.
+   * @param input - Complete element data with an optional stable ID.
+   * @returns Complete persisted element after processing and identity validation.
+   * @throws If processing, validation, insertion, or application identity reuse fails.
    */
-  setDocument(document: DocumentModel): void {
-    this.subscriptions.forEach((subscription) => subscription.dispose());
-    this.currentDocument = document;
-    this.subscriptions.forEach((subscription) => {
-      subscription.dispose = subscription.bind(document);
-    });
-  }
-
-  /** @returns No value after publishing the active document to retained element subscribers. */
-  refreshSubscriptions(): void {
-    [...this.subscriptions].forEach(({ listener }) => listener());
-  }
-
-  /** @param input - Complete element creation data. @returns Complete persisted element. */
   insertElement(input: EditorElementInput): EditorElement {
     return this.editor.history.batchUpdates(() => this.document.elements.insertElement(this.pipe.process(input)));
   }
@@ -114,7 +96,7 @@ export class ElementManager implements ElementManagerApi {
   /**
    * Creates the element ID map for a destination import.
    *
-   * The active document preserves available IDs and replaces collisions. The
+   * The explicitly scoped document preserves available IDs and replaces collisions. The
    * returned map lets extensions rewrite group and connector references before
    * inserting elements; it does not insert or reserve IDs itself.
    *
@@ -122,7 +104,7 @@ export class ElementManager implements ElementManagerApi {
    * @returns Destination ID for every source element ID.
    */
   createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string> {
-    // Keep generation inside the active document. Callers use this map to
+    // Keep generation inside the scoped document. Callers use this map to
     // rewrite group and connector references before inserting the elements.
     return this.document.elements.createImportIdMap(sourceIds);
   }
@@ -150,35 +132,30 @@ export class ElementManager implements ElementManagerApi {
 
   /** Releases this manager's subscriptions and processors. */
   destroy(): void {
-    this.subscriptions.forEach((subscription) => subscription.dispose());
+    this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
     this.processors.forEach((registration) => registration.dispose());
     this.processors.clear();
   }
 
   /**
-   * Retains one subscription across document replacements.
-   * @param listener - Callback refreshed after a replacement or matching mutation.
-   * @param bind - Document-specific subscription factory.
+   * Retains an existing document subscription until explicitly removed or destroyed.
+   * Its listener remains bound to the model where the subscription was created.
+   * @param unsubscribe - Function that removes the existing document subscription.
    * @returns Function that permanently removes the retained subscription.
    */
-  private retainSubscription(listener: () => void, bind: ElementSubscription["bind"]): () => void {
-    const subscription: ElementSubscription = {
-      listener,
-      bind,
-      dispose: this.currentDocument ? bind(this.currentDocument) : () => undefined,
-    };
-    this.subscriptions.add(subscription);
+  private retainSubscription(unsubscribe: () => void): () => void {
+    this.subscriptions.add(unsubscribe);
     return () => {
-      if (!this.subscriptions.delete(subscription)) return;
-      subscription.dispose();
+      if (!this.subscriptions.delete(unsubscribe)) return;
+      unsubscribe();
     };
   }
 
-  /** @returns The active document or throws while the editor is unbound. */
+  /** @returns The explicit document or throws outside a document context. */
   private get document(): DocumentModel {
-    if (!this.currentDocument) throw new Error("Document is not set");
-    return this.currentDocument;
+    const document = this.editor.getDocument();
+    return document;
   }
 
   /**

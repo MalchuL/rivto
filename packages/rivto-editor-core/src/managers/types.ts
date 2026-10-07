@@ -3,7 +3,6 @@
  * Concrete manager classes implement these interfaces; consumers depend only
  * on the contracts collected here.
  */
-import type { DocumentHistoryManagerApi, DocumentModel } from "@chulane/document-model";
 import type {
   EditorBlock,
   EditorBlockInput,
@@ -88,10 +87,6 @@ export interface BlockManagerApi {
   subscribeRootIds(listener: () => void): () => void;
   /** @param listener - Structure listener. @returns Its disposer. */
   subscribeStructure(listener: () => void): () => void;
-  /** @param document - Active document. @returns No value. */
-  setDocument(document: DocumentModel): void;
-  /** @returns No value after refreshing retained subscriptions. */
-  refreshSubscriptions(): void;
   /** @param input - Detached root forest. @param onError - Optional one-shot node recovery. @returns Recursively prepared creation forest. */
   prepareInput(
     input: readonly (EditorBlock | EditorBlockInput)[],
@@ -187,11 +182,11 @@ export interface ElementManagerApi {
   subscribeElement(id: string, listener: () => void): () => void;
   /** @param listener - Membership listener. @returns Its disposer. */
   subscribeMembership(listener: () => void): () => void;
-  /** @param document - Active document. @returns No value. */
-  setDocument(document: DocumentModel): void;
-  /** @returns No value after refreshing retained subscriptions. */
-  refreshSubscriptions(): void;
-  /** @param input - Creation input. @returns Complete persisted element. */
+  /**
+   * Inserts data through processing and application checks, preserving stable IDs for existing records.
+   * @param input - Element input with an optional stable ID.
+   * @returns Complete persisted element with a supplied ID preserved or a missing ID allocated.
+   */
   insertElement(input: EditorElementInput): EditorElement;
   /** @param sourceIds - Source IDs. @returns Destination identity map. */
   createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string>;
@@ -255,8 +250,6 @@ export interface SelectionManagerApi {
 
 /** Public document-history and transaction contract. */
 export interface HistoryManagerApi {
-  /** @param manager - Active document history. @returns No value. */
-  setDocument(manager: DocumentHistoryManagerApi): void;
   /** @param operation - Captured operation. @returns Its result. */
   batchUpdates<Result>(operation: () => Result): Result;
   /** @param operation - Untracked operation. @returns Its result. */

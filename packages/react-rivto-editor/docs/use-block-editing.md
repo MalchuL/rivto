@@ -2,7 +2,8 @@
 
 `useBlockEditing` is the renderer-facing hook for one block. It returns:
 
-- `block` and `operations` from `useBlock`;
+- `block` and `operations` from `useBlockNode`;
+- a reader for current document content;
 - typed native-property readers and writers;
 - DOM `attributes` for either text editing or structural selection.
 
@@ -136,6 +137,10 @@ const editing = useBlockEditing<MyProps>(blockId);
 ```
 
 - `editing.block` is the reactive snapshot for the current render.
+- `editing.getActualContent()` reads the latest document content, including
+  updates since the last render. It returns `undefined` for an unknown or deleted
+  block and an empty string for an existing block without text. It does not read
+  uncommitted DOM edits.
 - `editing.block?.listProps.collapsed` reads the extension-owned collapse state.
 - `editing.operations` contains commands such as `remove`, `setType`, `indent`,
   and `outdent`.

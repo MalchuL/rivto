@@ -1,6 +1,9 @@
+import { createReactEditor as createRuntime } from "../react-editor";
+import { createTestReactEditor as createReactEditor } from "../test-utils";
 import { createTestCoreEditor as createEditor } from "../test-utils";
 import {
   createElement,
+  useContext,
   type ComponentType,
   type ReactNode,
 } from "react";
@@ -11,6 +14,7 @@ import {
   type BlockWrapperProps,
 } from "../blocks";
 import { EditorView } from "../editor-view";
+import { EditorViewController } from "../managers/events/editor-view-controller";
 import {
   EditorEvent,
   EventManager,
@@ -18,10 +22,7 @@ import {
   KeyboardManager,
   type ReactEditorExtension,
 } from "../managers";
-import {
-  createReactEditor,
-  type ReactEditor,
-} from "../react-editor";
+import { type ReactEditor } from "../react-editor";
 import {
   standardPreset,
   trailingBlockExtension,
@@ -29,9 +30,12 @@ import {
 import { pageDragExtension } from "../extensions/block-drag";
 import { edgelessPreset } from "../extensions/edgeless";
 import { isReactEditor, isRivtoEditor } from "../utils";
-import { createRivtoEditor } from "@chulane/rivto";
-import { DocumentModelImpl } from "@chulane/document-model";
-import { YjsDoc } from "@chulane/crdt-doc";
+import { EditorStorage } from "../editor-storage";
+import { EditorStorageContext } from "../editor-storage-context";
+import { createTestMultiEditor } from "../test-utils";
+import { PageSurface } from "../surfaces/page/page-surface";
+import { DocumentModelImpl, DocumentStorage } from "@chulane/document-model";
+import { YjsDoc, YjsDocumentRegistry, BroadcastChannelProvider } from "@chulane/crdt-doc";
 
 const Empty: ComponentType<{ blockId: string }> = () => null;
 const EmptyComponent: ComponentType = () => null;
@@ -43,54 +47,131 @@ const EmptyEditorWrapper: ComponentType<{ readonly children?: ReactNode }> = ({
 }) => children;
 
 describe("ReactEditor", () => {
-  test("can attach a document after the React runtime is created", async () => {
-    const editor = createRivtoEditor();
-    const reactEditor = createReactEditor({ editor });
-    const document = new DocumentModelImpl(new YjsDoc("react-first-document"));
-    document.blocks.insertBlock({ id: "first", type: "paragraph" });
-
-    expect(reactEditor.getDocument()).toBeUndefined();
-    reactEditor.setDocument(document);
-
-    expect(reactEditor.getDocument()).toBe(document);
-    expect(reactEditor.blocks.getRootIds()).toEqual(["first"]);
-    reactEditor.destroy();
-    await editor.destroy();
-    await document.destroy();
+  test("nested views inherit the nearest storage while independent providers keep equal document IDs separate", async () => {
+    const first = await createTestMultiEditor([new DocumentModelImpl(new YjsDoc("shared"))]);
+    const second = await createTestMultiEditor([new DocumentModelImpl(new YjsDoc("shared"))]);
+    const a = first.getEditor("shared")!;
+    const b = second.getEditor("shared")!;
+    a.blocks.insertBlock({ id: "same", type: "paragraph", content: "First user" });
+    b.blocks.insertBlock({ id: "same", type: "paragraph", content: "Second user" });
+    function Source() {
+      const storage = useContext(EditorStorageContext);
+      return storage?.getEditor("shared")?.blocks.getBlockNode("same")?.content;
+    }
+    const markup = renderToStaticMarkup(createElement(EditorStorageContext.Provider, { value: first },
+      createElement(EditorView, { reactEditor: a }, createElement(EditorView, { reactEditor: a, rootBlockId: "same" }, createElement(Source))),
+      createElement(EditorStorageContext.Provider, { value: second }, createElement(EditorView, { reactEditor: b }, createElement(Source))),
+      createElement(EditorView, { reactEditor: a }, createElement(Source)),
+    ));
+    expect(markup).toBe("First userSecond userFirst user");
+    expect(a.getDocument()).not.toBe(b.getDocument());
+    await first.destroy(); await second.destroy();
   });
 
-  test("keeps a shared document active after another React editor is destroyed", async () => {
-    const document = new DocumentModelImpl(new YjsDoc("react-shared-document"));
-    const firstCore = createRivtoEditor();
-    const secondCore = createRivtoEditor();
-    firstCore.setDocument(document);
-    secondCore.setDocument(document);
-    const first = createReactEditor({ editor: firstCore, extensions: [standardPreset()] });
-    const second = createReactEditor({ editor: secondCore, extensions: [standardPreset()] });
-    let firstUpdates = 0;
-    let secondUpdates = 0;
+  test("source APIs retain their document for direct commands, transactions, subscriptions, and undo", async () => {
+    const host = new DocumentModelImpl(new YjsDoc("host"));
+    const source = new DocumentModelImpl(new YjsDoc("bound-source"));
+    const replacement = new DocumentModelImpl(new YjsDoc("bound-replacement"));
+    const mediator = await createTestMultiEditor([host, source, replacement]);
+    const editor = await mediator.getSingleEditor(host.id);
+    const reactEditor = mediator.getEditor(host.id)!;
+    editor.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Host" });
+    source.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Source" });
+    replacement.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Replacement" });
+    reactEditor.mode.set("edgeless");
+    const sourceEditor = mediator.getEditor(source.id)!;
+    const controller = new EditorViewController(sourceEditor, "shared-id");
+    const closeView = controller.mount();
+    const view = controller.getSnapshot().api!;
+    expect(view.renderers).toBe(sourceEditor.renderers);
+    expect(view.events).not.toBe(sourceEditor.events);
+    expect("getView" in sourceEditor).toBe(false);
+    expect(view.blocks).toBe(sourceEditor.blocks);
+    expect(view.mode).toBe(sourceEditor.mode);
+    expect(view.mode.get()).toBe("block");
+    expect(reactEditor.mode).toBe(editor.mode);
+    expect(reactEditor.mode.get()).toBe("edgeless");
+    const changes: string[] = [];
+    const unsubscribe = view.blocks.subscribeBlockNode("shared-id", () => {
+      changes.push(view.blocks.getBlockNode("shared-id")!.content);
+    });
+    // Retain an ordinary manager method across an await and another document receiving focus.
+    const update = view.blocks.updateBlock.bind(view.blocks);
+    await Promise.resolve();
+    const replacementView = mediator.getEditor(replacement.id)!;
+    replacementView.blocks.updateBlock("shared-id", { content: "Replacement" });
+    expect(view.getDocument()).toBe(source);
+    expect(view.blocks.getRootIds()).toEqual(["shared-id"]);
+    const result = view.history.batchUpdates(() => {
+      update("shared-id", { content: "Edited source" });
+      view.blocks.setBlockProp("shared-id", "checked", true);
+      return "source transaction";
+    });
+    expect(result).toBe("source transaction");
+    expect(changes).toContain("Edited source");
+    expect(replacement.blocks.getBlockNode("shared-id")!.content).toBe("Replacement");
+    expect(source.blocks.getBlockNode("shared-id")!.props.checked).toBe(true);
+    replacementView.blocks.updateBlock("shared-id", { content: "Replacement" });
+    view.history.undo();
+    expect(source.blocks.getBlockNode("shared-id")).toMatchObject({ content: "Source", props: {} });
+    view.history.redo();
+    expect(source.blocks.getBlockNode("shared-id")!.content).toBe("Edited source");
+    expect(() => view.history.batchUpdates(() => { throw new Error("aborted callback"); })).toThrow("aborted callback");
+    expect(replacementView.blocks.getBlockNode("shared-id")!.content).toBe("Replacement");
+    const count = changes.length;
+    unsubscribe();
+    update("shared-id", { content: "After unsubscribe" });
+    expect(changes).toHaveLength(count);
+    closeView();
+    reactEditor.destroy();
+    await mediator.destroy();
+  });
+
+  test("opens a registered document with a factory and returns its fixed core", async () => {
+    const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
+    const editors = new EditorStorage({ openDocument: (id) => storage.openDocument(id), createEditor: (editor) => createRuntime({ editor, extensions: [standardPreset()] }) });
+    expect(editors.getDocuments()).toEqual([]);
+    storage.registerDocument("first");
+    const core = await editors.getSingleEditor("first");
+    core.blocks.insertBlock({ id: "first", type: "paragraph", content: "First document" });
+    const reactEditor = editors.getEditor("first")!;
+    expect(reactEditor.blocks).toBe(core.blocks);
+    expect("getSingleEditor" in reactEditor).toBe(false);
+    expect(reactEditor.getDocument()).toBe(core.getDocument());
+    expect(renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(PageSurface)))).toContain("First document");
+    await editors.destroy(); await storage.destroy();
+  });
+
+  test("keeps shared documents active after another React runtime is destroyed", async () => {
+    const channel = crypto.randomUUID();
+    const firstDoc = new YjsDoc(channel); const secondDoc = new YjsDoc(channel);
+    await firstDoc.attachProvider(new BroadcastChannelProvider(channel));
+    await secondDoc.attachProvider(new BroadcastChannelProvider(channel));
+    const firstModel = new DocumentModelImpl(firstDoc);
+    const secondModel = new DocumentModelImpl(secondDoc);
+    const firstCore = await createTestMultiEditor([firstModel], undefined, { extensions: [standardPreset()] });
+    const secondCore = await createTestMultiEditor([secondModel], undefined, { extensions: [standardPreset()] });
+    const firstRuntime = firstCore.getEditor(channel)!;
+    const secondRuntime = secondCore.getEditor(channel)!;
+    const first = firstRuntime;
+    const second = secondRuntime;
+    let firstUpdates = 0; let secondUpdates = 0;
     first.subscribe(() => { firstUpdates += 1; });
     second.subscribe(() => { secondUpdates += 1; });
-
-    const sharedId = firstCore.blocks.insertBlock({ type: "paragraph", content: "Shared" }).id;
-    expect(secondCore.blocks.getBlockNode(sharedId)?.content).toBe("Shared");
-    expect(firstUpdates).toBeGreaterThan(0);
-    expect(secondUpdates).toBeGreaterThan(0);
-
-    second.destroy();
-    await secondCore.destroy();
-    const secondUpdatesAfterDestroy = secondUpdates;
-    const survivingId = firstCore.blocks.insertBlock({ type: "paragraph", content: "Surviving" }).id;
-
-    expect(firstCore.blocks.getBlockNode(survivingId)?.content).toBe("Surviving");
-    expect(secondUpdates).toBe(secondUpdatesAfterDestroy);
-    first.destroy();
-    await firstCore.destroy();
-    await document.destroy();
+    const sharedId = first.blocks.insertBlock({ type: "paragraph", content: "Shared" }).id;
+    for (let attempt = 0; attempt < 100 && !second.blocks.hasBlock(sharedId); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(second.blocks.getBlockNode(sharedId)?.content).toBe("Shared");
+    expect(firstUpdates).toBeGreaterThan(0); expect(secondUpdates).toBeGreaterThan(0);
+    secondRuntime.destroy(); await secondCore.destroy();
+    const stopped = secondUpdates;
+    const survivingId = first.blocks.insertBlock({ type: "paragraph", content: "Surviving" }).id;
+    expect(first.blocks.getBlockNode(survivingId)?.content).toBe("Surviving");
+    expect(secondUpdates).toBe(stopped);
+    firstRuntime.destroy(); await firstCore.destroy();
   });
 
-  test("distinguishes React and core editor runtimes", () => {
-    const editor = createEditor();
+  test("distinguishes React and core editor runtimes", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
 
     expect(isReactEditor(reactEditor)).toBe(true);
@@ -102,10 +183,10 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("passes the complete ReactEditor runtime directly to extension setup", () => {
-    const editor = createEditor();
+  test("passes the complete ReactEditor runtime directly to extension setup", async () => {
+    const editor = await createEditor();
     let received: ReactEditor | undefined;
-    const reactEditor = createReactEditor({
+    const reactEditor = createRuntime({
       editor,
       extensions: [{
         id: "identity",
@@ -131,8 +212,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("sets extensions up in order and cleans them in reverse order", () => {
-    const editor = createEditor();
+  test("sets extensions up in order and cleans them in reverse order", async () => {
+    const editor = await createEditor();
     const calls: string[] = [];
     const extension = (id: string): ReactEditorExtension => ({
       id,
@@ -147,8 +228,8 @@ describe("ReactEditor", () => {
     expect(calls).toEqual(["setup:a", "setup:b", "cleanup:b", "cleanup:a"]);
   });
 
-  test("rejects duplicate extension IDs and cleans completed setup", () => {
-    const editor = createEditor();
+  test("rejects duplicate extension IDs and cleans completed setup", async () => {
+    const editor = await createEditor();
     let cleaned = false;
     const first: ReactEditorExtension = { id: "same", setup: () => () => { cleaned = true; } };
     expect(() => createReactEditor({ editor, extensions: [first, { id: "same", setup() {} }] })).toThrow(/already registered/);
@@ -156,8 +237,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("registers and disposes a model, renderer, and slash conversion atomically", () => {
-    const editor = createEditor();
+  test("registers and disposes a model, renderer, and slash conversion atomically", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const dispose = reactEditor.blockTypes.register({
       definition: { type: "test.card", title: "Card" },
@@ -175,8 +256,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("registers list slash commands that atomically reset checkbox state", () => {
-    const editor = createEditor();
+  test("registers list slash commands that atomically reset checkbox state", async () => {
+    const editor = await createEditor();
     const blockId = editor.blocks.insertBlock({
       type: "paragraph",
       listProps: { type: "checkbox", checked: true },
@@ -199,8 +280,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("configures the default paragraph slash command", () => {
-    const editor = createEditor();
+  test("configures the default paragraph slash command", async () => {
+    const editor = await createEditor();
     editor.blockRegistry.defineBlock({ type: "test.source" });
     const blockId = editor.blocks.insertBlock({ type: "test.source" }).id;
     const reactEditor = createReactEditor({
@@ -222,8 +303,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("rolls block registration back when its slash command conflicts", () => {
-    const editor = createEditor();
+  test("rolls block registration back when its slash command conflicts", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const releaseConflict = reactEditor.slashCommands.register({ id: "type.test.conflict", title: "Conflict", execute() {} });
     expect(() => reactEditor.blockTypes.register({
@@ -238,8 +319,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("keeps mode-specific block wrappers in registration order", () => {
-    const editor = createEditor();
+  test("keeps mode-specific block wrappers in registration order", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({
       editor,
       extensions: [{
@@ -260,8 +341,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("composes the first registered block wrapper outermost", () => {
-    const editor = createEditor();
+  test("composes the first registered block wrapper outermost", async () => {
+    const editor = await createEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Order" }).id;
     const block = editor.blocks.getBlockNode(blockId)!;
     const Shell: ComponentType<BlockShellProps> = () => createElement("span", { "data-layer": "shell" });
@@ -289,7 +370,7 @@ describe("ReactEditor", () => {
       }],
     });
 
-    const markup = renderToStaticMarkup(createElement(EditorView, { reactEditor }));
+    const markup = renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(Surface)));
     expect(markup).toContain(
       '<div data-layer="outer"><div data-layer="inner"><span data-layer="shell"></span></div></div>',
     );
@@ -297,8 +378,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("supports dynamic public presentation registration and disposal", () => {
-    const editor = createEditor();
+  test("supports dynamic public presentation registration and disposal", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const disposeComponent = reactEditor.extensions.mount(EmptyComponent);
     const disposeEditorWrapper = reactEditor.surfaces.registerEditorWrapper(EmptyEditorWrapper, "block");
@@ -323,8 +404,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("makes public presentation disposers idempotent", () => {
-    const editor = createEditor();
+  test("makes public presentation disposers idempotent", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const dispose = reactEditor.extensions.mount(EmptyComponent);
 
@@ -337,8 +418,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("runs extension cleanup before removing its owned registrations", () => {
-    const editor = createEditor();
+  test("runs extension cleanup before removing its owned registrations", async () => {
+    const editor = await createEditor();
     let sawMountedComponent = false;
     const reactEditor = createReactEditor({
       editor,
@@ -359,8 +440,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("removes dynamic presentation registrations in reverse order on destroy", () => {
-    const editor = createEditor();
+  test("removes dynamic presentation registrations in reverse order on destroy", async () => {
+    const editor = await createEditor();
     const First: ComponentType = () => null;
     const Second: ComponentType = () => null;
     const reactEditor = createReactEditor({ editor });
@@ -378,8 +459,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("rolls back partial extension presentation setup", () => {
-    const editor = createEditor();
+  test("rolls back partial extension presentation setup", async () => {
+    const editor = await createEditor();
     let failedRuntime: ReactEditor | undefined;
 
     expect(() => createReactEditor({
@@ -404,14 +485,14 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("standardPreset excludes optional edgeless and drag extensions", () => {
-    const editor = createEditor();
+  test("standardPreset excludes optional edgeless and drag extensions", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({
       editor,
       extensions: [standardPreset()],
     });
 
-    expect(reactEditor.surfaces.get("block")).toBeDefined();
+    expect(reactEditor.blockTypes.getDefinition("paragraph")).toBeDefined();
     expect(reactEditor.surfaces.get("edgeless")).toBeUndefined();
     expect(reactEditor.surfaces.getEditorWrappers("block")).toHaveLength(0);
     expect(reactEditor.surfaces.getBlockWrappers("block")).toHaveLength(0);
@@ -423,14 +504,14 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("installs optional edgeless and block drag extensions explicitly", () => {
-    const editor = createEditor();
+  test("installs optional edgeless and block drag extensions explicitly", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({
       editor,
       extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset()],
     });
 
-    expect(reactEditor.surfaces.get("edgeless")).toBeDefined();
+    expect(reactEditor.extensions.getComponents().length).toBeGreaterThan(0);
     expect(reactEditor.surfaces.getEditorWrappers("block")).toHaveLength(1);
     expect(reactEditor.surfaces.getBlockWrappers("block")).toHaveLength(1);
     expect(reactEditor.surfaces.getBlockWrappers("edgeless")).toHaveLength(1);
@@ -445,8 +526,8 @@ describe("ReactEditor", () => {
     expect(trailingBlockExtension(4).id).toBe("block.trailing-create");
   });
 
-  test("forwards core changes through one global revision stream", () => {
-    const editor = createEditor();
+  test("forwards core changes through one global revision stream", async () => {
+    const editor = await createEditor();
     const leftId = editor.blocks.insertBlock({ type: "paragraph", content: "left" }).id;
     const rightId = editor.blocks.insertBlock({ type: "paragraph", content: "right" }, leftId).id;
     const parentId = editor.blocks.insertBlock({
@@ -471,32 +552,30 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("forwards document replacement without recreating React managers", async () => {
-    const editor = createEditor();
+  test("uses two document APIs with shared registrations and independent subscriptions", async () => {
+    const editor = await createEditor();
     const first = editor.getDocument()!;
-    const second = new DocumentModelImpl(new YjsDoc("react-editor-swap"));
-    second.blocks.insertBlock({ id: "second", type: "paragraph", content: "Second" });
+    first.blocks.insertBlock({ id: "same", type: "paragraph", content: "First" });
+    const secondCore = await createEditor();
+    const second = { editor: secondCore, document: secondCore.getDocument(), release: () => secondCore.destroy() };
+    second.editor.blocks.insertBlock({ id: "same", type: "paragraph", content: "Second" });
     const reactEditor = createReactEditor({ editor });
-    const blocks = reactEditor.blocks;
+    const other = createReactEditor({ editor: secondCore });
+    expect(other.renderers).not.toBe(reactEditor.renderers);
+    expect(other.getDocument()).toBe(second.document);
     let updates = 0;
-    const dispose = reactEditor.subscribe(() => { updates += 1; });
-
-    reactEditor.setDocument(second);
-
-    expect(reactEditor.getDocument()).toBe(second);
-    expect(reactEditor.blocks).toBe(blocks);
-    expect(reactEditor.blocks.getRootIds()).toEqual(["second"]);
+    const dispose = reactEditor.blocks.subscribeBlockNode("same", () => { updates += 1; });
+    other.blocks.updateBlock("same", { content: "Changed second" });
+    expect(reactEditor.blocks.getBlockNode("same")?.content).toBe("First");
+    expect(other.blocks.getBlockNode("same")?.content).toBe("Changed second");
+    expect(updates).toBe(0);
+    reactEditor.blocks.updateBlock("same", { content: "Changed first" });
     expect(updates).toBe(1);
-    first.blocks.insertBlock({ id: "detached", type: "paragraph" });
-    expect(updates).toBe(1);
-
-    dispose();
-    reactEditor.destroy();
-    await editor.destroy();
+    dispose(); reactEditor.destroy(); other.destroy(); await second.release(); await editor.destroy();
   });
 
-  test("rolls back registrations when a duplicate surface fails setup", () => {
-    const editor = createEditor();
+  test("rolls back registrations when a duplicate surface fails setup", async () => {
+    const editor = await createEditor();
     let failedRuntime: ReactEditor | undefined;
 
     expect(() => createReactEditor({
@@ -517,8 +596,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("destroys event registrations when a duplicate binding fails setup", () => {
-    const editor = createEditor();
+  test("destroys event registrations when a duplicate binding fails setup", async () => {
+    const editor = await createEditor();
     let failedRuntime: ReactEditor | undefined;
 
     expect(() => createReactEditor({
@@ -546,8 +625,8 @@ describe("ReactEditor", () => {
     editor.destroy();
   });
 
-  test("rejects presentation registration after destruction", () => {
-    const editor = createEditor();
+  test("rejects presentation registration after destruction", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     reactEditor.destroy();
 
@@ -659,8 +738,8 @@ describe("delegated events", () => {
     return event as unknown as KeyboardEvent;
   }
 
-  test("uses separate event and keyboard managers across surface realms", () => {
-    const editor = createEditor();
+  test("uses separate event and keyboard managers across surface realms", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const events = reactEditor.events;
     expect(events).toBeInstanceOf(EventManager);
@@ -698,8 +777,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("orders handlers, claims events, and falls through conditional bindings", () => {
-    const editor = createEditor();
+  test("orders handlers, claims events, and falls through conditional bindings", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const events = reactEditor.events;
     const keyboard = reactEditor.keyboard;
@@ -737,8 +816,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("matches primary letter shortcuts by physical key across keyboard layouts", () => {
-    const editor = createEditor();
+  test("matches primary letter shortcuts by physical key across keyboard layouts", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const { root } = realm();
     reactEditor.events.setRoot(root as unknown as HTMLElement);
@@ -768,8 +847,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("filters keyboard targets, modes, and scopes before applying priority", () => {
-    const editor = createEditor();
+  test("filters keyboard targets, modes, and scopes before applying priority", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const { document, root, window } = realm();
     reactEditor.events.setRoot(root as unknown as HTMLElement);
@@ -803,7 +882,7 @@ describe("delegated events", () => {
 
     root.emit("keydown", keyboardEvent(root, "Tab"));
     root.emit("keydown", keyboardEvent(content, "Tab"));
-    editor.mode.set("edgeless");
+    reactEditor.mode.set("edgeless");
     root.emit("keydown", keyboardEvent(content, "Tab"));
     window.emit("keydown", keyboardEvent(root, "Escape"));
     expect(calls).toEqual(["low", "high", "low", "window"]);
@@ -811,8 +890,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("filters DOM modes and never resolves markers outside the active surface", () => {
-    const editor = createEditor();
+  test("filters DOM modes and never resolves markers outside the active surface", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const events = reactEditor.events;
     const { document, root } = realm();
@@ -848,7 +927,7 @@ describe("delegated events", () => {
       cancelable: true,
       preventDefault() {},
     } as unknown as PointerEvent);
-    editor.mode.set("edgeless");
+    reactEditor.mode.set("edgeless");
     document.emit("pointerdown", {
       type: "pointerdown",
       target: inside,
@@ -861,8 +940,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("filters delegated events by surface, block, and content scope", () => {
-    const editor = createEditor();
+  test("filters delegated events by surface, block, and content scope", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const events = reactEditor.events;
     const { root } = realm();
@@ -899,8 +978,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("deletes DOM registrations and releases their stable IDs", () => {
-    const editor = createEditor();
+  test("deletes DOM registrations and releases their stable IDs", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const register = () => reactEditor.events.register({
       id: "test.delete-dom",
@@ -918,8 +997,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("dispatches keyboard actions before ordinary DOM key handlers", () => {
-    const editor = createEditor();
+  test("dispatches keyboard actions before ordinary DOM key handlers", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const { root } = realm();
     reactEditor.events.setRoot(root as unknown as HTMLElement);
@@ -945,8 +1024,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("orders DOM handlers, applies when, and stops after a claim", () => {
-    const editor = createEditor();
+  test("orders DOM handlers, applies when, and stops after a claim", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const { root } = realm();
     reactEditor.events.setRoot(root as unknown as HTMLElement);
@@ -998,8 +1077,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("constructs exported editor event values directly", () => {
-    const editor = createEditor();
+  test("constructs exported editor event values directly", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const { root } = realm();
     const surface = root as unknown as HTMLElement;
@@ -1032,8 +1111,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("applies overrides, disabling, exact modifiers, and duplicate IDs", () => {
-    const editor = createEditor();
+  test("applies overrides, disabling, exact modifiers, and duplicate IDs", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({
       editor,
       keymap: {
@@ -1082,8 +1161,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("replaces the complete keymap and applies overrides registered later", () => {
-    const editor = createEditor();
+  test("replaces the complete keymap and applies overrides registered later", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const { root } = realm();
     reactEditor.events.setRoot(root as unknown as HTMLElement);
@@ -1118,8 +1197,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("updates one override defensively and rejects invalid keymaps atomically", () => {
-    const editor = createEditor();
+  test("updates one override defensively and rejects invalid keymaps atomically", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const { root } = realm();
     reactEditor.events.setRoot(root as unknown as HTMLElement);
@@ -1148,8 +1227,8 @@ describe("delegated events", () => {
     editor.destroy();
   });
 
-  test("supports keyup and all composition policies", () => {
-    const editor = createEditor();
+  test("supports keyup and all composition policies", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({ editor });
     const events = reactEditor.events;
     const keyboard = reactEditor.keyboard;

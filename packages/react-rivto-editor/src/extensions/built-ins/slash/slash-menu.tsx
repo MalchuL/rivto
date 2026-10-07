@@ -1,6 +1,8 @@
+import { useEditorContext } from "../../../editor-context";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
+import type { DocumentModel } from "@chulane/document-model";
 import type { SlashCommand } from "../../../managers/slash";
 import { createCaretSelection } from "@chulane/rivto";
 import {
@@ -53,6 +55,9 @@ export interface SlashMenuPositionOptions {
 const DEFAULT_POSITION = { width: 280, maxHeight: 320, gap: 6, viewportPadding: 8 };
 
 interface SlashSession {
+  readonly document?: DocumentModel;
+  readonly rootBlockId?: string;
+  readonly viewRoot: HTMLElement;
   readonly blockId: string;
   readonly slashOffset: number;
   readonly query: string;
@@ -145,6 +150,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   const gap = Math.max(0, options.gap ?? DEFAULT_POSITION.gap);
   const viewportPadding = Math.max(0, options.viewportPadding ?? DEFAULT_POSITION.viewportPadding);
   const reactEditor = useReactEditor();
+  const { view } = useEditorContext();
   const roots = reactEditor.blocks.getBlocks();
   const slashCommands = reactEditor.slashCommands;
   const { element: root } = useEditorRoot();
@@ -159,7 +165,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
 
   const available = useMemo(() => session
     ? slashCommands.getAll({ blockId: session.blockId })
-    : [], [slashCommands, slashCommands.revision, session?.blockId]);
+    : [], [reactEditor, slashCommands, slashCommands.revision, session?.blockId, session?.document, session?.rootBlockId]);
   const ranked = useMemo(() => rankSlashCommands(available, session?.query ?? ""), [available, session?.query]);
   const groups = useMemo(() => groupCommands(ranked.map(({ command }) => command)), [ranked]);
 
@@ -172,6 +178,8 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
     if (ignore && current) ignoredTrigger.current = `${current.blockId}:${current.slashOffset}`;
     setSession(null);
   }, []);
+
+  useEffect(() => view?.subscribeDeactivation(close), [view, close]);
 
   /** Validates the current caret and optionally discovers a freshly typed slash. */
   const refresh = useCallback((content: HTMLElement, blockId: string, discover: boolean) => {
@@ -204,7 +212,12 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
         setSession(null);
       } else {
         const position = popupPosition(content, { width, maxHeight, gap, viewportPadding });
+        const viewRoot = reactEditor.events.getRoot();
+        if (!viewRoot) return;
         setSession({
+          document: reactEditor.getDocument(),
+          rootBlockId: reactEditor.rootBlockId,
+          viewRoot,
           blockId,
           slashOffset: trigger.slashOffset,
           query: trigger.query,
@@ -216,7 +229,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
         });
       }
     }
-  }, [slashCommands, width, maxHeight, gap, viewportPadding]);
+  }, [reactEditor, slashCommands, width, maxHeight, gap, viewportPadding]);
 
   useDOMEvent({
     id: "slash.input",
@@ -238,7 +251,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   });
 
   useEffect(() => {
-    if (session && !reactEditor.blocks.hasBlock(session.blockId)) close();
+    if (session && (!session.viewRoot.isConnected || !reactEditor.blocks.hasBlock(session.blockId))) close();
   }, [close, reactEditor, roots, session]);
 
   useDOMEvent({
@@ -248,7 +261,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   }, () => {
     const current = sessionRef.current;
     if (root && current) {
-      const block = findRenderedBlock(root, current.blockId);
+      const block = findRenderedBlock(current.viewRoot, current.blockId);
       const content = block?.querySelector<HTMLElement>(BLOCK_CONTENT_SELECTOR);
       if (!content || content.closest(BLOCK_ID_SELECTOR) !== block) return close();
       refresh(content, current.blockId, false);
@@ -258,23 +271,25 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   const execute = useCallback((command: SlashCommand) => {
     const current = sessionRef.current;
     if (!current || !root) return;
-    const block = reactEditor.blocks.getBlockNode(current.blockId);
-    if (!block) return close();
-    const caret = current.slashOffset + current.query.length + 1;
-    if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
+    reactEditor.events.runInView(() => {
+      const block = reactEditor.blocks.getBlockNode(current.blockId);
+      if (!block) return close();
+      const caret = current.slashOffset + current.query.length + 1;
+      if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
 
-    reactEditor.history.batchUpdates(() => {
-      const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
-      reactEditor.blocks.updateBlock(current.blockId, { content: next });
-      reactEditor.selection.set(createCaretSelection(current.blockId, current.slashOffset));
-      slashCommands.execute(command.id, { blockId: current.blockId });
-    });
-    setSession(null);
+      reactEditor.history.batchUpdates(() => {
+        const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
+        reactEditor.blocks.updateBlock(current.blockId, { content: next });
+        reactEditor.selection.set(createCaretSelection(current.blockId, current.slashOffset));
+        slashCommands.execute(command.id, { blockId: current.blockId });
+      });
+      setSession(null);
 
-    requestAnimationFrame(() => {
-      if (reactEditor.selection.restoreDOM()) return;
-      root.ownerDocument.getSelection()?.removeAllRanges();
-      root.focus({ preventScroll: true });
+      reactEditor.selection.scheduleIfSelectionUnchanged(() => {
+        if (reactEditor.selection.restoreDOM()) return;
+        current.viewRoot.ownerDocument.getSelection()?.removeAllRanges();
+        current.viewRoot.focus({ preventScroll: true });
+      });
     });
   }, [close, reactEditor, root, slashCommands]);
 

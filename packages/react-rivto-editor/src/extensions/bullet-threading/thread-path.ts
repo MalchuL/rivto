@@ -6,6 +6,7 @@
  * @module
  */
 import { BLOCK_ID_SELECTOR } from "../../constants";
+import { DOCUMENT_VIEW_SELECTOR } from "../../managers/events/document-view";
 
 const BLOCK = `.page-block${BLOCK_ID_SELECTOR}`;
 /** Direct and single-wrapper root blocks supported by page container renderers. */
@@ -66,6 +67,9 @@ export function buildThreadPath({ root, rootLineOffset, excluded, continued, poi
   const active = root.ownerDocument.activeElement;
   const focused = active && root.contains(active) ? active.closest(BLOCK) : null;
   if (!focused) return "";
+  // An embedding owns its own overlay; the enclosing view must not thread
+  // through the source subtree merely because its DOM contains that view.
+  if (focused.closest(DOCUMENT_VIEW_SELECTOR) !== root.closest(DOCUMENT_VIEW_SELECTOR)) return "";
 
   const roots = root.querySelectorAll(ROOT_BLOCKS);
   const blocks: Element[] = [];

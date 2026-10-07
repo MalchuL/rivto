@@ -1,3 +1,5 @@
+import { getEdgelessSurfaceOptions } from "../register";
+import { SurfaceBoundary } from "../../../surfaces/surface";
 /**
  * React surface for the zoomable edgeless canvas.
  *
@@ -16,6 +18,7 @@ import {
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
 import {
   useCallback,
+  useMemo,
   useEffect,
   useRef,
   useState,
@@ -78,7 +81,16 @@ function gridDotFade(zoom: number): string {
  * important when a surface is replaced: its root, document, and window
  * listeners move together instead of leaving global listeners behind.
  */
-export function EdgelessSurface({
+/** @param props - Optional local canvas settings. @returns Explicit canvas with its extension UI. */
+export function EdgelessSurface(props: { readonly snapping?: EdgelessSnappingStore; readonly avoidBlockElementOverlap?: boolean; readonly blockElementWidth?: number } = {}) {
+  const editor = useReactEditor();
+  const configured = getEdgelessSurfaceOptions(editor);
+  const suppliedSnapping = props.snapping ?? configured.snapping;
+  const snapping = useMemo(() => suppliedSnapping ?? new EdgelessSnappingStore(), [suppliedSnapping]);
+  return <SurfaceBoundary type="edgeless"><EdgelessSurfaceContent {...configured} {...props} snapping={snapping} /></SurfaceBoundary>;
+}
+
+function EdgelessSurfaceContent({
   snapping,
   avoidBlockElementOverlap = true,
   blockElementWidth = EDGELESS_CARD_DEFAULT_FRAME.width,
@@ -349,7 +361,7 @@ export function EdgelessSurface({
   return (
     <main
       ref={rootRef}
-      className="edgeless-viewport"
+      data-rivto-surface="edgeless" className="edgeless-viewport"
       data-edgeless-zoom={zoom}
       data-edgeless-pan-x={pan.x}
       data-edgeless-pan-y={pan.y}

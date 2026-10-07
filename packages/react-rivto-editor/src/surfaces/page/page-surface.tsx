@@ -1,3 +1,4 @@
+import { SurfaceBoundary } from "../surface";
 /**
  * Window-scrolled page projection of the complete collaborative document.
  *
@@ -11,6 +12,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useState, type React
 import { flushSync } from "react-dom";
 import { defaultRangeExtractor, useWindowVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import { useEditorRoot, useReactEditor, useRootBlockIds } from "../../hooks";
+import { useEditorContext } from "../../editor-context";
 import { BlockTree } from "../../blocks";
 import { BlockElementRefProvider } from "../../blocks/block-wrapper/block-wrapper";
 import { ESTIMATED_ROOT_HEIGHT, usePageVirtualization } from "../../page-virtualization-context";
@@ -266,9 +268,14 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
  * The surface owns only page geometry and supplies document roots to BlockTree.
  * BlockTree keeps renderer selection, controls, and traversal identical to
  * every other surface that displays blocks.
+ * Page-end insertion is available only for complete-document views, because
+ * its commands add document roots rather than children of a displayed subtree.
  */
-export function PageSurface() {
+export function PageSurface() { return <SurfaceBoundary type="block"><PageSurfaceContent /></SurfaceBoundary>; }
+
+function PageSurfaceContent() {
   const rootIds = useRootBlockIds();
+  const { rootBlockId } = useEditorContext();
   const { ref } = useEditorRoot();
   const pageVirtualization = usePageVirtualization();
   const [surface, setSurface] = useState<HTMLElement | null>(null);
@@ -298,6 +305,7 @@ export function PageSurface() {
     <main
       ref={surfaceRef}
       className={PAGE_SURFACE_CLASS}
+      data-rivto-surface="block"
       data-rivto-page-editor-root
       data-empty={rootIds.length ? undefined : "true"}
       aria-label="Document editor"
@@ -307,7 +315,7 @@ export function PageSurface() {
       {/* PAGE_END_SLOT_ATTRIBUTE in constants.ts marks the TrailingBlock portal target. 
       * Uses to add "Add block" buttons at the end of the page.
       */}
-      <div data-page-end-slot="true" />
+      {rootBlockId === undefined && <div data-page-end-slot="true" />}
     </main>
   );
 }

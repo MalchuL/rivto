@@ -20,7 +20,7 @@ import {
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
   PREVENT_TEXT_EDITING_ATTRIBUTE,
 } from "../../constants";
-import { useEditorContext } from "../../editor-context";
+import { useReactEditor } from "../editor/use-editor";
 import {
   restoreDOMSelection,
   saveDOMSelection,
@@ -101,6 +101,12 @@ export interface UseBlockEditingResult<
   Props extends object,
   TextEdit extends boolean,
 > extends UseBlockNodeResult {
+  /**
+   * Reads current document content when called, including updates since the
+   * last render. Returns undefined for an unknown or deleted block; an empty
+   * string means the block exists and has no text. Does not read uncommitted DOM edits.
+   */
+  readonly getActualContent: () => string | undefined;
   /** Reads the latest complete property object, or undefined after deletion. */
   readonly getProps: () => Readonly<Props> | undefined;
   /** Reads one latest property value, or undefined after deletion/removal. */
@@ -165,7 +171,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   blockId: string,
   options: UseBlockEditingOptions = {},
 ): UseBlockEditingResult<Props, boolean> {
-  const { reactEditor } = useEditorContext();
+  const reactEditor = useReactEditor();
   const blockResult = useBlockNode(blockId);
   const elementRef = useRef<HTMLDivElement>(null);
   const syncedElementRef = useRef<HTMLDivElement | null>(null);
@@ -221,13 +227,15 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
     event.stopPropagation();
     const target = event.currentTarget;
     if (!target.isContentEditable) return;
-    // This hook owns the editable child's selection gesture. Prevent the
-    // browser from running a second rich-content selection over highlighted DOM.
-    event.preventDefault();
     const document = target.ownerDocument;
     const selection = document.getSelection();
     const anchor = document.caretPositionFromPoint?.(event.clientX, event.clientY);
     if (!selection || !anchor || !target.contains(anchor.offsetNode)) return;
+    // This hook owns the editable child's selection gesture. Prevent the
+    // browser from running a second rich-content selection over highlighted DOM.
+    // If hit-testing resolves the highlighted sibling instead, retain native
+    // focus and selection rather than preventing a gesture we cannot restore.
+    event.preventDefault();
     target.focus({ preventScroll: true });
     selection.setBaseAndExtent(
       anchor.offsetNode,
@@ -276,6 +284,10 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
     view.addEventListener("pointercancel", finish);
   }, []);
 
+  const getActualContent = useCallback(() => (
+    reactEditor.blocks.getBlockNode(blockId)?.content
+  ), [blockId, reactEditor]);
+
   const getProps = useCallback((): Readonly<Props> | undefined => (
     reactEditor.blocks.getBlockNode(blockId)?.props as Props | undefined
   ), [blockId, reactEditor]);
@@ -285,15 +297,15 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
   ), [getProps]);
 
   const setProps = useCallback((props: Partial<Props>): void => {
-    reactEditor.blocks.updateBlock(blockId, { props: props as Record<string, unknown> });
-  }, [blockId, reactEditor]);
+    blockResult.operations.update({ props: props as Record<string, unknown> });
+  }, [blockResult.operations]);
 
   const setProp = useCallback(<Key extends keyof Props,>(
     key: Key,
     value: Props[Key] | undefined,
   ): void => {
-    reactEditor.blocks.setBlockProp(blockId, String(key), value);
-  }, [blockId, reactEditor]);
+    blockResult.operations.setProp(String(key), value);
+  }, [blockResult.operations]);
 
   const attributes: BlockTextEditingAttributes | BlockSelectionAnchorAttributes = textEdit
     ? {
@@ -314,6 +326,7 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
 
   return {
     ...blockResult,
+    getActualContent,
     getProps,
     getProp,
     setProps,

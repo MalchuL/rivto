@@ -89,7 +89,7 @@ export class EdgelessVisualController {
   /** @param reactEditor - Owning React editor with first-class element storage. */
   constructor(readonly reactEditor: ReactEditor, readonly options: EdgelessVisualsOptions = {}) {
     this.selection = getEdgelessRuntime(reactEditor);
-    this.registerCommands();
+    this.registrations.push({ dispose: this.registerCommands() });
     this.registerClipboard();
     this.registerToolSelectShortcut();
     this.unsubscribeDocument = reactEditor.subscribe(() => {
@@ -97,6 +97,24 @@ export class EdgelessVisualController {
       this.reconciling = true;
       try { this.normalizeGroups(); this.normalizeConnectors(); } finally { this.reconciling = false; }
       this.emit();
+    });
+  }
+
+  /**
+   * Uses a view's document and selection while sharing this installed controller.
+   * The API creates no commands, listeners, or acquisitions. Tool state and
+   * revisions remain shared; model reads and writes use the supplied view API.
+   * @param reactEditor - Native view's document-bound editor API.
+   * @returns Controller API for renderers and retained handlers in that view.
+   */
+  getDocumentView(reactEditor: ReactEditor): EdgelessVisualController {
+    const selection = getEdgelessRuntime(reactEditor);
+    return new Proxy(this, {
+      get(target, key, receiver) {
+        if (key === "reactEditor") return reactEditor;
+        if (key === "selection") return selection;
+        return Reflect.get(target, key, receiver);
+      },
     });
   }
 
@@ -535,8 +553,11 @@ export class EdgelessVisualController {
   /** @returns Detached active canvas selection. */
   getSelection() { return this.selection.get(); }
 
-  private registerCommands(): void {
-    const register = (name: string, handler: (payload?: unknown) => unknown) => this.registrations.push(this.reactEditor.commands.register(name, handler));
+  private registerCommands(): () => void {
+    const registrations: Array<{ dispose(): void }> = [];
+    const register = (name: string, handler: (payload?: unknown) => unknown) => {
+      if (!this.reactEditor.commands.has(name)) registrations.push(this.reactEditor.commands.register(name, handler));
+    };
     register("edgeless.visual.create", (value) => {
       const data = value as VisualCommandPayload<"edgeless.visual.create">;
       return this.create(data);
@@ -585,6 +606,7 @@ export class EdgelessVisualController {
       const data = value as VisualCommandPayload<"edgeless.tool.set">;
       this.setTool(data);
     });
+    return () => registrations.reverse().forEach((registration) => registration.dispose());
   }
 
   private registerToolSelectShortcut(): void {

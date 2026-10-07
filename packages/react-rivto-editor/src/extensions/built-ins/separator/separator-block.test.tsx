@@ -1,7 +1,8 @@
+import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 import { createCaretSelection } from "@chulane/rivto";
 import { createTestCoreEditor as createRivtoEditor } from "../../../test-utils";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createReactEditor } from "../../../react-editor";
+
 import { defaultWritingBlockExtension } from "../built-ins";
 import {
   SEPARATOR_BLOCK_TYPE,
@@ -10,8 +11,8 @@ import {
 } from "./separator-block";
 
 describe("separator block extension", () => {
-  test("registers a contentless accessible separator renderer", () => {
-    const editor = createRivtoEditor();
+  test("registers a contentless accessible separator renderer", async () => {
+    const editor = await createRivtoEditor();
     const reactEditor = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
@@ -27,8 +28,8 @@ describe("separator block extension", () => {
     editor.destroy();
   });
 
-  test("inserts a separator after content and focuses a new writing block", () => {
-    const editor = createRivtoEditor();
+  test("inserts a separator after content and focuses a new writing block", async () => {
+    const editor = await createRivtoEditor();
     const reactEditor = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
@@ -49,8 +50,8 @@ describe("separator block extension", () => {
     editor.destroy();
   });
 
-  test("converts an empty leaf into a separator before inserting writing", () => {
-    const editor = createRivtoEditor();
+  test("converts an empty leaf into a separator before inserting writing", async () => {
+    const editor = await createRivtoEditor();
     const reactEditor = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],

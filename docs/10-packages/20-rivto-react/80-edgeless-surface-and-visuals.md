@@ -8,11 +8,14 @@ Canvas extensions подключаются отдельно от `standardPreset
 extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset()]
 ```
 
-Mode переключается локально:
+Surface выбирается локальным React state:
 
 ```tsx
-const { setMode } = useEditorMode();
-setMode("edgeless");
+const [canvas, setCanvas] = useState(false);
+<EditorView reactEditor={reactEditor}>
+  <button onClick={() => setCanvas(!canvas)}>Switch surface</button>
+  {canvas ? <EdgelessSurface /> : <PageSurface />}
+</EditorView>
 ```
 
 Root blocks проецируются в first-class elements type `"block"`. Один block card может содержать range соседних root blocks; separator partitions ranges. Frame и z-index сохраняются в core elements snapshot.

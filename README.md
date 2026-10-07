@@ -89,45 +89,57 @@ The package directories and public names differ; see the package map below.
 
 ```tsx
 import { useEffect, useState } from "react";
-import { YjsDoc } from "@chulane/crdt-doc";
-import { DocumentModelImpl } from "@chulane/document-model";
-import { createRivtoEditor } from "@chulane/rivto";
+import { YjsDocumentRegistry } from "@chulane/crdt-doc";
+import { DocumentStorage } from "@chulane/document-model";
 import {
-  createReactEditor,
-  EditorView,
-  standardPreset,
+  createReactEditor, EditorStorage, EditorStorageContext, EditorView, PageSurface, standardPreset,
   type ReactEditor,
 } from "@chulane/rivto-react";
 import "@chulane/rivto-react/styles.css";
 
 export function DocumentEditor() {
-  const [view, setView] = useState<ReactEditor | null>(null);
-
+  const [view, setView] = useState<{ reactEditor: ReactEditor; editors: EditorStorage; releaseInitial: () => Promise<void> } | null>(null);
   useEffect(() => {
-    const document = new DocumentModelImpl(new YjsDoc(crypto.randomUUID()));
-    const editor = createRivtoEditor();
-    editor.setDocument(document);
-    const reactEditor = createReactEditor({
-      editor,
-      extensions: [standardPreset()],
+    let active = true;
+    const documents = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
+    documents.registerDocument("document-id");
+    const editors = new EditorStorage({
+      openDocument: (id) => documents.openDocument(id),
+      createEditor: (editor) => createReactEditor({
+        editor,
+        extensions: [standardPreset()],
+      }),
     });
-    editor.blocks.insertBlock({ type: "paragraph", content: "Hello **Rivto**!" });
-    setView(reactEditor);
-
+    void editors.acquireEditor("document-id").then((acquisition) => {
+      acquisition.editor.blocks.insertBlock({ type: "paragraph", content: "Hello **Rivto**!" });
+      if (active) setView({ reactEditor: acquisition.editor, editors, releaseInitial: acquisition.release });
+      else void acquisition.release();
+    }).catch(console.error);
     return () => {
-      reactEditor.destroy();
-      void editor.destroy().finally(() => document.destroy());
+      active = false;
+      void editors.destroy().then(() => documents.destroy()).catch(console.error);
     };
   }, []);
-
-  return view ? <EditorView reactEditor={view} /> : null;
+  return view ? <EditorStorageContext.Provider value={view.editors}>
+    <EditorView reactEditor={view.reactEditor} onReady={view.releaseInitial}><PageSurface /></EditorView>
+  </EditorStorageContext.Provider> : null;
 }
 ```
 
-The core starts unbound: attach a `DocumentModelImpl` with `setDocument` before
-editing. Mutate content through managers such as `editor.blocks` and
-`editor.elements`. The host owns the document and destroys it after its views
-and editor sessions are finished using it.
+Each core and ReactEditor permanently edits one model. `EditorStorage` loads and
+caches both layers, with a host factory supplying fresh extensions per document.
+Each `EditorView` receives that document's ReactEditor. Inside an
+`EditorStorageContext.Provider`, it automatically retains its document while
+mounted, including nested embedding views; ReactEditor itself has no storage reference.
+
+Use `await editors.getSingleEditor(documentId)` to explicitly retain a core until
+`editors.closeEditor(documentId)`. Storage creates the core and passes it to the
+React factory; ReactEditor exposes its managers for ordinary editing commands.
+Ordinary commands require no document routing. Clipboard ID
+allocation belongs to document managers; application subclasses can enforce a
+shared database namespace even for closed documents. Transfers preserve IDs and
+keep independent histories. See [embeddings.md](embeddings.md) and
+[the demo database model](demo/src/database.ts) for the complete lifecycle.
 
 To enable the demo's optional features, import `pageDragExtension`,
 `edgelessPreset`, `edgelessVisualsExtension`, and `todoItemExtension` from
@@ -143,9 +155,10 @@ extensions: [
 ]
 ```
 
-Switch the view with `reactEditor.mode.set("edgeless")` or
-`reactEditor.mode.set("block")`. See [the demo setup](demo/src/App.tsx) for
-container creation, a mode toolbar, custom blocks, and synchronization.
+Choose `<PageSurface />` or `<EdgelessSurface />` inside each `<EditorView>`.
+Keep the choice in React state; core editors and the editor cache store no mode.
+See [the demo setup](demo/src/App.tsx) for container creation, a view toolbar,
+custom blocks, and synchronization.
 
 ## Run the demo
 
@@ -200,7 +213,7 @@ React and browser UI   Editor behavior   Persisted document       CRDT adapter
 | --- | --- | --- |
 | `packages/crdt-doc/` | `@chulane/crdt-doc` | Adapter-neutral CRDT contracts, Yjs adapter, shared values, and synchronization providers. Native Yjs imports stay here. |
 | `packages/document-model/` | `@chulane/document-model` | Canonical blocks, hierarchy, canvas elements, plugin data, transactions, and snapshots. |
-| `packages/rivto-editor-core/` | `@chulane/rivto` | Framework-neutral commands, selection, clipboard, editor modes, and undo managers. |
+| `packages/rivto-editor-core/` | `@chulane/rivto` | Framework-neutral document mediation, commands, selection, clipboard, and undo managers. |
 | `packages/react-rivto-editor/` | `@chulane/rivto-react` | React renderers and hooks, page/canvas surfaces, DOM selection and events, keyboard handling, slash commands, and extensions. |
 | `packages/graph-runtime/` | `@chulane/graph-runtime` | Optional headless graph execution, endpoint registration, value propagation, and slot flows. |
 | `packages/block-graph/` | `@chulane/block-graph` | Optional block-oriented bindings on top of the graph runtime. |

@@ -1,5 +1,6 @@
+import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 /** Core-backed edgeless selection notification and membership tests. */
-import { createReactEditor } from "../../../react-editor";
+
 import { createTestCoreEditor } from "../../../test-utils";
 import { EdgelessSelectionRuntime } from "./edgeless-runtime";
 
@@ -8,7 +9,7 @@ import { EdgelessSelectionRuntime } from "./edgeless-runtime";
  * @param editor - Core editor receiving the element.
  * @returns Stable element ID.
  */
-function element(editor: ReturnType<typeof createTestCoreEditor>): string {
+function element(editor: Awaited<ReturnType<typeof createTestCoreEditor>>): string {
   return editor.elements.insertElement({
     type: "rectangle",
     frame: { x: 0, y: 0, width: 10, height: 10 },
@@ -29,8 +30,8 @@ describe("EdgelessSelectionRuntime", () => {
     return calls;
   };
 
-  test("set does not notify when ordered membership is unchanged", () => {
-    const editor = createTestCoreEditor({ mode: "edgeless" });
+  test("set does not notify when ordered membership is unchanged", async () => {
+    const editor = await createTestCoreEditor({ mode: "edgeless" });
     const reactEditor = createReactEditor({ editor });
     const runtime = new EdgelessSelectionRuntime(reactEditor);
     const first = element(editor);
@@ -45,8 +46,8 @@ describe("EdgelessSelectionRuntime", () => {
     editor.destroy();
   });
 
-  test("set notifies when membership or order changes", () => {
-    const editor = createTestCoreEditor({ mode: "edgeless" });
+  test("set notifies when membership or order changes", async () => {
+    const editor = await createTestCoreEditor({ mode: "edgeless" });
     const reactEditor = createReactEditor({ editor });
     const runtime = new EdgelessSelectionRuntime(reactEditor);
     const first = element(editor);
@@ -60,8 +61,8 @@ describe("EdgelessSelectionRuntime", () => {
     editor.destroy();
   });
 
-  test("reactivates retained items and exposes active membership", () => {
-    const editor = createTestCoreEditor({ mode: "edgeless" });
+  test("reactivates retained items and exposes active membership", async () => {
+    const editor = await createTestCoreEditor({ mode: "edgeless" });
     const reactEditor = createReactEditor({ editor });
     const runtime = new EdgelessSelectionRuntime(reactEditor);
     const first = element(editor);
@@ -76,8 +77,8 @@ describe("EdgelessSelectionRuntime", () => {
     editor.destroy();
   });
 
-  test("clear is a no-op when selection is already active and empty", () => {
-    const editor = createTestCoreEditor({ mode: "edgeless" });
+  test("clear is a no-op when selection is already active and empty", async () => {
+    const editor = await createTestCoreEditor({ mode: "edgeless" });
     const reactEditor = createReactEditor({ editor });
     const runtime = new EdgelessSelectionRuntime(reactEditor);
     const calls = listen(runtime);

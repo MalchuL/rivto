@@ -1,3 +1,4 @@
+import { createTestReactEditor as createReactEditor } from "../../test-utils";
 /**
  * Verifies TODO extension registration, dynamic metadata, validation, prompt
  * configuration, and custom modal wiring without duplicating browser event
@@ -6,7 +7,7 @@
  * @module
  */
 import type { ReactElement } from "react";
-import { createReactEditor } from "../../react-editor";
+
 import { createTestCoreEditor as createRivtoEditor } from "../../test-utils";
 import { indentBlocks } from "../../views";
 import {
@@ -17,8 +18,8 @@ import {
 } from "./todo-item";
 
 describe("todoItemExtension", () => {
-  test("registers fresh validated TODO metadata for every creation", () => {
-    const editor = createRivtoEditor();
+  test("registers fresh validated TODO metadata for every creation", async () => {
+    const editor = await createRivtoEditor();
     const reactEditor = createReactEditor({ editor, extensions: [todoItemExtension()] });
 
     const first = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "First" }).id;
@@ -49,8 +50,8 @@ describe("todoItemExtension", () => {
     expect(() => todoItemExtension({ prompts: { todo: ["task", "task"] } })).not.toThrow();
   });
 
-  test("converts a leaf to storage in place and rejects populated containers", () => {
-    const editor = createRivtoEditor();
+  test("converts a leaf to storage in place and rejects populated containers", async () => {
+    const editor = await createRivtoEditor();
     const reactEditor = createReactEditor({ editor, extensions: [todoItemExtension()] });
     const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
     reactEditor.slashCommands.execute("type.todo-storage", { blockId: empty });
@@ -87,8 +88,8 @@ describe("todoItemExtension", () => {
     editor.destroy();
   });
 
-  test("wires a supplied properties modal into the registered renderer", () => {
-    const editor = createRivtoEditor();
+  test("wires a supplied properties modal into the registered renderer", async () => {
+    const editor = await createRivtoEditor();
     const CustomModal = (_props: TodoItemPropertiesModalProps) => null;
     const reactEditor = createReactEditor({
       editor,

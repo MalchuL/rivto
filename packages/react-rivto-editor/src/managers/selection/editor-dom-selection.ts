@@ -1,3 +1,4 @@
+import { DOCUMENT_VIEW_SELECTOR, isInDocumentView } from "../events/document-view";
 /**
  * DOM ↔ editor selection bridge for Rivto's multi-contenteditable surfaces.
  *
@@ -122,7 +123,7 @@ function blockIdForContent(content: HTMLElement): string | undefined {
  */
 function orderedContents(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)].filter((content) => (
-    Boolean(blockIdForContent(content))
+    Boolean(blockIdForContent(content)) && isInDocumentView(root, content)
   ));
 }
 
@@ -157,7 +158,7 @@ export function createVisibleStructuralSelection(
 export function orderedBlockIds(root: HTMLElement): string[] {
   return [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
     const blockId = block.getAttribute(BLOCK_ID_ATTRIBUTE);
-    return blockId ? [blockId] : [];
+    return blockId && isInDocumentView(root, block) ? [blockId] : [];
   });
 }
 
@@ -195,7 +196,7 @@ function readPosition(root: HTMLElement, node: Node | null, offset: number): Edi
   const element = isElementNode(node) ? node : node?.parentElement;
   const content = element?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
   const blockId = content ? blockIdForContent(content) : undefined;
-  if (!node || !content || !blockId || !root.contains(content)) return;
+  if (!node || !content || !blockId || !root.contains(content) || !isInDocumentView(root, content)) return;
 
   // Measure "how many characters from content start to (node, offset)".
   // setEnd accepts a Node (Text or Element), matching Selection's model.
@@ -237,7 +238,10 @@ export function readDOMPointPosition(root: HTMLElement, point: DOMSelectionPoint
  * That hit is valid CSS, but whole-block drags would then promote the parent
  * and cover its entire subtree. Hits outside the parent's own row snap to the
  * nearest nested row instead, so the parent joins the range only when the
- * pointer enters its content or chrome.
+ * pointer enters its content or chrome. Registered body slots also belong to
+ * the block itself, rather than its ordinary outline descendants. Hits inside
+ * another nested view resolve to the enclosing block in this surface, keeping
+ * the originating selection gesture within its own document occurrence.
  *
  * @param root - Active surface root that scopes valid block containers.
  * @param x - Horizontal viewport coordinate from a pointer event.
@@ -250,13 +254,21 @@ export function readBlockIdAtPoint(
   y: number,
 ): string | undefined {
   const hit = root.ownerDocument.elementFromPoint(x, y);
-  const block = hit instanceof Element ? hit.closest<HTMLElement>(BLOCK_ID_SELECTOR) : null;
+  let block = isElementNode(hit) ? hit.closest<HTMLElement>(BLOCK_ID_SELECTOR) : null;
+  // A nested view is one block in the originating surface. Its source rows
+  // must not turn a host selection endpoint into a nearby editable sibling.
+  while (block && !isInDocumentView(root, block)) {
+    block = block.parentElement?.closest<HTMLElement>(BLOCK_ID_SELECTOR) ?? null;
+  }
   if (!block || !root.contains(block)) return undefined;
 
   const ownRow = ownedBlockRow(block);
   // Keep the closest block when the pointer is in its own row, or when a
   // custom shell has no row to distinguish wrapping descendants from chrome.
-  const nestedHit = ownRow && !ownRow.contains(hit) ? nearestNestedBlock(block, x, y) : undefined;
+  // Body slots belong to that block even when it also has outline children.
+  const ownBody = block.querySelector(':scope > [data-slot-owner="block"][data-slot-position="body"]');
+  const nestedHit = ownRow && !ownRow.contains(hit) && !ownBody?.contains(hit)
+    ? nearestNestedBlock(block, x, y) : undefined;
   const target = nestedHit ?? block;
   return target.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
 }
@@ -284,7 +296,9 @@ function ownedBlockRow(block: HTMLElement): HTMLElement | null {
  * @returns Nearest nested BlockView, or `undefined` when none have a row.
  */
 function nearestNestedBlock(parent: HTMLElement, x: number, y: number): HTMLElement | undefined {
+  const root = parent.closest<HTMLElement>(DOCUMENT_VIEW_SELECTOR);
   return [...parent.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)]
+    .filter((candidate) => !root || isInDocumentView(root, candidate))
     .map((candidate) => {
       const row = ownedBlockRow(candidate);
       return row ? { candidate, distance: distanceToRect(row.getBoundingClientRect(), x, y) } : undefined;
@@ -311,7 +325,7 @@ export function createDOMSelection(
   // contentless renderer such as Counter disappears from a Shift+Alt range.
   const rendered = [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
     const id = block.getAttribute(BLOCK_ID_ATTRIBUTE);
-    if (!id) return [];
+    if (!id || !isInDocumentView(root, block)) return [];
     const content = [...block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)]
       .find((candidate) => candidate.closest(BLOCK_ID_SELECTOR) === block);
     return [{ id, content }];
@@ -382,7 +396,7 @@ function distanceToRect(rect: DOMRect, x: number, y: number): number {
  */
 function contentNearPoint(root: HTMLElement, x: number, y: number): HTMLElement | undefined {
   const hit = root.ownerDocument.elementFromPoint(x, y)?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
-  if (hit && root.contains(hit)) return hit;
+  if (hit && root.contains(hit) && isInDocumentView(root, hit)) return hit;
   return orderedContents(root)
     .map((content) => ({ content, distance: distanceToRect(content.getBoundingClientRect(), x, y) }))
     .sort((left, right) => left.distance - right.distance)[0]?.content;

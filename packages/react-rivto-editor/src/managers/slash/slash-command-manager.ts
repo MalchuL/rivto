@@ -66,7 +66,7 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
    * @param context - Active block context evaluated by availability predicates.
    */
   getAll(context: SlashCommandContext): SlashCommand[] {
-    return [...this.commands.values()].filter((command) => command.isAvailable?.(context) !== false);
+    return this.reactEditor.events.runInView(() => [...this.commands.values()].filter((command) => command.isAvailable?.(context) !== false));
   }
 
   /**
@@ -76,10 +76,12 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
    * @param context - Active block context revalidated before execution.
    */
   execute(id: string, context: SlashCommandContext): void {
-    const command = this.commands.get(id);
-    if (!command) throw new Error(`Unknown slash command ${id}`);
-    if (command.isAvailable?.(context) === false) throw new Error(`Slash command ${id} is unavailable`);
-    command.execute(context);
+    this.reactEditor.events.runInView(() => {
+      const command = this.commands.get(id);
+      if (!command) throw new Error(`Unknown slash command ${id}`);
+      if (command.isAvailable?.(context) === false) throw new Error(`Slash command ${id} is unavailable`);
+      command.execute(context);
+    });
   }
 
   /**

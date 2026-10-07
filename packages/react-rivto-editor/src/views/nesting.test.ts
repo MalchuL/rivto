@@ -1,3 +1,4 @@
+import { createTestReactEditor as createReactEditor } from "../test-utils";
 /**
  * Nested container matrix: kanban in bento, bento in bento, columns in a
  * kanban column, table in a bento tile, and bento in a table cell.
@@ -9,7 +10,7 @@
  * @module
  */
 import { createTestCoreEditor } from "../test-utils";
-import { createReactEditor } from "../react-editor";
+
 import { defaultWritingBlockExtension } from "../extensions/built-ins/built-ins";
 import { bentoExtension, createBentoBlockInput, BENTO_BLOCK_TYPE } from "../extensions/containers/bento/bento";
 import { kanbanExtension, createKanbanBlockInput } from "../extensions/containers/kanban/kanban";
@@ -18,8 +19,8 @@ import { tableExtension, createTableBlockInput, TABLE_BLOCK_TYPE, TABLE_CELL_BLO
 import { getBlockContainment } from "../managers/blocks/types";
 import { indentBlocks, outdentBlocks } from "./ops/outline-ops";
 
-function createNestedRuntime() {
-  const editor = createTestCoreEditor();
+async function createNestedRuntime() {
+  const editor = await createTestCoreEditor();
   const reactEditor = createReactEditor({
     editor,
     extensions: [
@@ -33,8 +34,8 @@ function createNestedRuntime() {
   return { editor, reactEditor };
 }
 
-test("kanban inside bento freezes tiles and floors cards at the column", () => {
-  const { editor, reactEditor } = createNestedRuntime();
+test("kanban inside bento freezes tiles and floors cards at the column", async () => {
+  const { editor, reactEditor } = await createNestedRuntime();
   const bento = editor.blocks.insertBlock(createBentoBlockInput()).id;
   const kanban = editor.blocks.insertBlock(createKanbanBlockInput()).id;
   editor.blocks.moveBlocks([kanban], bento, "inside");
@@ -76,8 +77,8 @@ test("kanban inside bento freezes tiles and floors cards at the column", () => {
   editor.destroy();
 });
 
-test("bento inside bento keeps each board as its own floor", () => {
-  const { editor, reactEditor } = createNestedRuntime();
+test("bento inside bento keeps each board as its own floor", async () => {
+  const { editor, reactEditor } = await createNestedRuntime();
   const outer = editor.blocks.insertBlock(createBentoBlockInput()).id;
   const inner = editor.blocks.insertBlock(createBentoBlockInput()).id;
   editor.blocks.moveBlocks([inner], outer, "inside");
@@ -99,8 +100,8 @@ test("bento inside bento keeps each board as its own floor", () => {
   editor.destroy();
 });
 
-test("columns inside a kanban column allow indent under the lane only", () => {
-  const { editor, reactEditor } = createNestedRuntime();
+test("columns inside a kanban column allow indent under the lane only", async () => {
+  const { editor, reactEditor } = await createNestedRuntime();
   const kanban = editor.blocks.insertBlock(createKanbanBlockInput()).id;
   const column = editor.blocks.getBlock(kanban)!.children[0]!;
   const columns = editor.blocks.insertBlock(createColumnsBlockInput(2)).id;
@@ -125,8 +126,8 @@ test("columns inside a kanban column allow indent under the lane only", () => {
   editor.destroy();
 });
 
-test("table inside a bento tile and bento inside a table cell compose floors", () => {
-  const { editor, reactEditor } = createNestedRuntime();
+test("table inside a bento tile and bento inside a table cell compose floors", async () => {
+  const { editor, reactEditor } = await createNestedRuntime();
   const bento = editor.blocks.insertBlock(createBentoBlockInput()).id;
   const table = editor.blocks.insertBlock(createTableBlockInput(2, 2)).id;
   editor.blocks.moveBlocks([table], bento, "inside");

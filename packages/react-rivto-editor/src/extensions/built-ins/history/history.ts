@@ -41,7 +41,7 @@ function inputHistoryAction(event: InputEvent): HistoryAction | undefined {
  *
  * @example
  * ```tsx
- * <EditorView reactEditor={reactEditor}>
+ * <EditorView reactEditor={reactEditor} documentId={documentId}>
  *   <HistoryPlugin />
  *   <PageSurface />
  * </EditorView>

@@ -70,3 +70,5 @@ export type {
   BlockViewOutcome,
   DropAxis,
 } from "./views";
+
+export { embeddingExtension, EMBEDDING_BLOCK_TYPE, type EmbeddingProps } from "./extensions/embedding/embedding";

@@ -14,26 +14,44 @@ import "@chulane/rivto-react/styles.css";
 
 ## Создание runtime
 
-Создавайте core и React runtime вне render body либо через lazy state initializer. `EditorView` использует готовый runtime, но не владеет им.
+Создавайте core и React runtime вне render body в effect с явным cleanup. `EditorView` использует готовый runtime, но не владеет им.
 
 ```tsx
-function createRuntime() {
-  const document = new DocumentModelImpl(new YjsDoc("document-id"));
-  const editor = createRivtoEditor();
-  editor.setDocument(document);
-  const reactEditor = createReactEditor({ editor, extensions: [standardPreset()] });
-  return { editor, reactEditor };
-}
+import { useEffect, useState } from "react";
+import { YjsDocumentRegistry } from "@chulane/crdt-doc";
+import { DocumentStorage } from "@chulane/document-model";
+import {
+  createReactEditor, EditorStorage, EditorStorageContext, EditorView, PageSurface, standardPreset,
+  type ReactEditor,
+} from "@chulane/rivto-react";
+import "@chulane/rivto-react/styles.css";
 
 export function DocumentEditor() {
-  const [runtime] = useState(createRuntime);
-
-  useEffect(() => () => {
-    runtime.reactEditor.destroy();
-    runtime.editor.destroy();
-  }, [runtime]);
-
-  return <EditorView reactEditor={runtime.reactEditor} />;
+  const [view, setView] = useState<{ reactEditor: ReactEditor; editors: EditorStorage; releaseInitial: () => Promise<void> } | null>(null);
+  useEffect(() => {
+    let active = true;
+    const documents = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
+    documents.registerDocument("document-id");
+    const editors = new EditorStorage({
+      openDocument: (id) => documents.openDocument(id),
+      createEditor: (editor) => createReactEditor({
+        editor,
+        extensions: [standardPreset()],
+      }),
+    });
+    void editors.acquireEditor("document-id").then((acquisition) => {
+      acquisition.editor.blocks.insertBlock({ type: "paragraph", content: "Hello **Rivto**!" });
+      if (active) setView({ reactEditor: acquisition.editor, editors, releaseInitial: acquisition.release });
+      else void acquisition.release();
+    }).catch(console.error);
+    return () => {
+      active = false;
+      void editors.destroy().then(() => documents.destroy()).catch(console.error);
+    };
+  }, []);
+  return view ? <EditorStorageContext.Provider value={view.editors}>
+    <EditorView reactEditor={view.reactEditor} onReady={view.releaseInitial}><PageSurface /></EditorView>
+  </EditorStorageContext.Provider> : null;
 }
 ```
 
@@ -42,11 +60,11 @@ export function DocumentEditor() {
 `standardPreset()` регистрирует default writing type. После создания React runtime можно вставлять blocks:
 
 ```ts
-editor.blocks.insertBlock({
+reactEditor.blocks.insertBlock({
   type: DEFAULT_WRITING_BLOCK_TYPE,
   content: "# Первый документ",
 });
-editor.history.clear();
+reactEditor.history.clear();
 ```
 
 `history.clear()` после seed/load делает начальные данные baseline.
@@ -58,22 +76,20 @@ Children `EditorView` находятся в том же context перед activ
 ```tsx
 function Toolbar() {
   const reactEditor = useReactEditor();
-  const { mode, setMode } = useEditorMode();
   return <header>
     <button onClick={() => reactEditor.history.undo()}>Undo</button>
     <button onClick={() => reactEditor.history.redo()}>Redo</button>
-    <button onClick={() => setMode(mode === "block" ? "edgeless" : "block")}>Mode</button>
   </header>;
 }
 
-<EditorView reactEditor={reactEditor}><Toolbar /></EditorView>
+<EditorView reactEditor={reactEditor}><Toolbar /><PageSurface /></EditorView>
 ```
 
 ## Частые ошибки
 
 - Runtime внутри каждого render теряет selection/history и создаёт listeners заново.
-- `standardPreset()` включает page surface; edgeless mode требует `...edgelessPreset()`.
+- `standardPreset()` устанавливает writing behavior. Surface задаётся явно; canvas interaction требует `...edgelessPreset()`.
 - Без `standardPreset()` нужно самостоятельно зарегистрировать surface и writing behavior.
 - Без styles layout, selection и overlays отображаются неверно.
-- Prop `EditorView.editor` принимает `ReactEditor`, а не core editor.
+- Prop `EditorView.reactEditor` принимает `ReactEditor`, а не core editor.
 - Cleanup идёт в порядке React runtime → core runtime → providers/CRDT.

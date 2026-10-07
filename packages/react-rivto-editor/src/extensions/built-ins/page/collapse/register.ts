@@ -31,20 +31,39 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     when: ({ block }) => block.childIds.length > 0,
   });
   const reconcile = () => {
-    const root = reactEditor.events.getRoot();
     const current = reactEditor.selection.get();
-    const next = reconcileCollapsedSelection(reactEditor.blocks.getBlocks(), current);
-    if (next !== current) {
-      if (next) reactEditor.selection.set(next);
-      else reactEditor.selection.clear();
-      // A native Range retains detached text nodes after React removes a
-      // collapsed subtree. Clear it and focus the page's block-selection owner.
-      root?.ownerDocument.getSelection()?.removeAllRanges();
-      root?.focus({ preventScroll: true });
+    if (!current) return;
+    const view = reactEditor.events.getDocumentView();
+    const api = view ?? reactEditor;
+    if (!api.selection.get()) {
+      // A remote move can put selected blocks outside the active subtree.
+      if (view) api.selection.clear();
+      return;
     }
+    const reconcileView = () => {
+      const root = view?.events.getRoot();
+      const boundary = view?.rootBlockId;
+      let blocks;
+      if (boundary) {
+        const block = api.blocks.getBlock(boundary);
+        blocks = block ? [block] : [];
+      } else blocks = api.blocks.getBlocks();
+      const next = reconcileCollapsedSelection(blocks, current);
+      if (next !== current) {
+        if (next) api.selection.set(next);
+        else api.selection.clear();
+        // A native Range retains detached text nodes after React removes a
+        // collapsed subtree. Clear it and focus the page's block-selection owner.
+        root?.ownerDocument.getSelection()?.removeAllRanges();
+        root?.focus({ preventScroll: true });
+      }
+    };
+    if (view) view.events.runInView(reconcileView);
+    else reconcileView();
   };
   const unsubscribeDocument = reactEditor.subscribe(reconcile);
   const unsubscribeSelection = reactEditor.selection.subscribe(reconcile);
+  const uninstallReconciliation = () => { unsubscribeSelection(); unsubscribeDocument(); };
 
   const setCollapsed = (value: boolean | "toggle"): boolean => {
     const current = reactEditor.selection.get();
@@ -86,7 +105,6 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
   }, () => setCollapsed("toggle"));
 
   return () => {
-    unsubscribeSelection();
-    unsubscribeDocument();
+    uninstallReconciliation();
   };
 }

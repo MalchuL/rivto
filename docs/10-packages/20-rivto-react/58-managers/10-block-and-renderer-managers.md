@@ -46,7 +46,7 @@ Defaults объединяются shallowly в registration order. Ошибка 
 
 ## `BlockManager` operations
 
-`reactEditor.blocks` владеет guarded mutations и делегирует core block reads/structure operations.
+`reactEditor.blocks` — тот же core block manager. React не создаёт дополнительную forwarding facade; validation и mutations остаются в core.
 
 `prepareInput(input)` делегирует recursive preparation core `BlockManager`.
 

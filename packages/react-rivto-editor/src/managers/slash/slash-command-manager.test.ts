@@ -1,9 +1,10 @@
+import { createTestReactEditor as createReactEditor } from "../../test-utils";
 import { createTestCoreEditor as createEditor } from "../../test-utils";
-import { createReactEditor } from "../../react-editor";
+
 
 describe("ReactSlashCommandManager", () => {
-  test("owns storage, execution, revision, and disposal", () => {
-    const editor = createEditor();
+  test("owns storage, execution, revision, and disposal", async () => {
+    const editor = await createEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const reactEditor = createReactEditor({ editor });
     const manager = reactEditor.slashCommands;
@@ -27,8 +28,8 @@ describe("ReactSlashCommandManager", () => {
     editor.destroy();
   });
 
-  test("validates registrations and command availability", () => {
-    const editor = createEditor();
+  test("validates registrations and command availability", async () => {
+    const editor = await createEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const reactEditor = createReactEditor({ editor });
     const manager = reactEditor.slashCommands;

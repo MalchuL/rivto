@@ -154,19 +154,22 @@ export class EdgelessSelectionRuntime {
 
   /** Removes edgeless-owned data while retaining other generic selection data. */
   destroy(): void {
-    const current = this.reactEditor.selection.get();
+    const editor = this.reactEditor;
+    const current = editor.selection.get();
     if (!current || (!(current.elements?.length) && !(EDGELESS_SELECTION_PLUGIN_KEY in (current.pluginData ?? {})))) return;
     const pluginData = { ...current.pluginData };
     delete pluginData[EDGELESS_SELECTION_PLUGIN_KEY];
     if (current.blocks.length || Object.keys(pluginData).length) {
-      this.reactEditor.selection.set({ ...current, elements: [], pluginData });
+      editor.selection.set({ ...current, elements: [], pluginData });
     } else {
-      this.reactEditor.selection.clear();
+      editor.selection.clear();
     }
   }
 }
 
-const runtimes = new WeakMap<ReactEditor, EdgelessSelectionRuntime>();
+// Installation belongs to the shared editor; adapters read through each view's
+// bound selection API so identical element IDs in other views stay unselected.
+const runtimes = new WeakMap<ReactEditor["extensions"], WeakMap<ReactEditor, EdgelessSelectionRuntime>>();
 
 /**
  * Installs the core-backed canvas selection adapter for one React editor.
@@ -174,34 +177,46 @@ const runtimes = new WeakMap<ReactEditor, EdgelessSelectionRuntime>();
  * @returns Disposer that removes the adapter.
  */
 export function installEdgelessRuntime(reactEditor: ReactEditor): () => void {
-  if (runtimes.has(reactEditor)) throw new Error("Edgeless selection runtime is already installed");
+  if (runtimes.has(reactEditor.extensions)) throw new Error("Edgeless selection runtime is already installed");
   const runtime = new EdgelessSelectionRuntime(reactEditor);
-  runtimes.set(reactEditor, runtime);
+  const adapters = new WeakMap<ReactEditor, EdgelessSelectionRuntime>();
+  adapters.set(reactEditor, runtime);
+  runtimes.set(reactEditor.extensions, adapters);
   return () => {
-    if (runtimes.get(reactEditor) !== runtime) return;
-    runtimes.delete(reactEditor);
+    if (runtimes.get(reactEditor.extensions) !== adapters) return;
+    runtimes.delete(reactEditor.extensions);
     runtime.destroy();
   };
 }
 
 /**
  * Returns the installed canvas selection adapter.
- * @param reactEditor - Owning React editor instance.
+ * View-bound APIs receive a cached adapter that reads their local selection;
+ * installation and cleanup remain owned by the shared extension runtime.
+ * @param reactEditor - Owning React editor instance or its document-bound view API.
  * @returns Installed adapter.
  */
 export function getEdgelessRuntime(reactEditor: ReactEditor): EdgelessSelectionRuntime {
-  const runtime = runtimes.get(reactEditor);
+  const runtime = findEdgelessRuntime(reactEditor);
   if (!runtime) throw new Error("Install edgelessSelectionExtension before edgeless interactions");
   return runtime;
 }
 
 /**
  * Returns the optional installed adapter.
- * @param reactEditor - Owning React editor instance.
+ * View-bound APIs receive a cached adapter while the shared extension is installed.
+ * @param reactEditor - Owning React editor instance or its document-bound view API.
  * @returns Installed adapter, or undefined.
  */
 export function findEdgelessRuntime(reactEditor: ReactEditor): EdgelessSelectionRuntime | undefined {
-  return runtimes.get(reactEditor);
+  const adapters = runtimes.get(reactEditor.extensions);
+  if (!adapters) return undefined;
+  let runtime = adapters.get(reactEditor);
+  if (!runtime) {
+    runtime = new EdgelessSelectionRuntime(reactEditor);
+    adapters.set(reactEditor, runtime);
+  }
+  return runtime;
 }
 
 /** @returns Reactive full canvas selection for ordered element consumers. */

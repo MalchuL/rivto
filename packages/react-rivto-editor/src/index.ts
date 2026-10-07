@@ -12,6 +12,7 @@ export * from "./capabilities";
 export * from "./components";
 export * from "./constants";
 export * from "./editor-view";
+export { EditorStorageContext } from "./editor-storage-context";
 export * from "./hooks";
 export {
   blockExtension,
@@ -212,3 +213,11 @@ export type {
   BlockViewOutcome,
   DropAxis,
 } from "./views";
+
+export { embeddingExtension, EMBEDDING_BLOCK_TYPE, type EmbeddingProps } from "./extensions/embedding/embedding";
+
+export { PageSurface } from "./surfaces/page/page-surface";
+export { EdgelessSurface } from "./extensions/edgeless/surface/edgeless-surface";
+export { SurfaceContext } from "./surfaces/surface";
+
+export * from "./editor-storage";

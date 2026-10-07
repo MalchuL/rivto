@@ -1,13 +1,14 @@
+import { createTestReactEditor as createReactEditor } from "../../test-utils";
 import { createTestCoreEditor as createEditor } from "../../test-utils";
 import type { ComponentType } from "react";
-import { createReactEditor } from "../../react-editor";
+
 
 const renderer: ComponentType<{ blockId: string }> = () => null;
 const fallback: ComponentType<{ blockId: string }> = () => null;
 
 describe("RendererManager", () => {
-  test("registers exact renderers and falls back without exposing mutable state", () => {
-    const editor = createEditor();
+  test("registers exact renderers and falls back without exposing mutable state", async () => {
+    const editor = await createEditor();
     const reactEditor = createReactEditor({
       editor,
       unknownBlockRenderer: fallback,

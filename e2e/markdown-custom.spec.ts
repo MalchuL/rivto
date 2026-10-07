@@ -209,7 +209,7 @@ test("preserves a newer Markdown edit when code input arrives before React reren
 });
 
 test("filters typo queries, converts in place, and undoes query removal with conversion", async ({ page }) => {
-  const content = page.locator("[data-block-content]").last();
+  const content = page.locator('[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]').last();
   const block = content.locator(BLOCK_ANCESTOR_XPATH);
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
   if (!id) throw new Error("Expected block ID");
@@ -264,7 +264,7 @@ test("keeps a filtered slash menu beside the caret when it opens upward", async 
 });
 
 test("executes the highlighted command after grouped slash navigation", async ({ page }) => {
-  const editor = page.locator("[data-block-content]").last();
+  const editor = page.locator('[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]').last();
   const block = editor.locator(BLOCK_ANCESTOR_XPATH);
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
   if (!id) throw new Error("Expected block ID");
@@ -273,9 +273,13 @@ test("executes the highlighted command after grouped slash navigation", async ({
   await editor.click();
   await page.keyboard.press("End");
   await page.keyboard.type("/c");
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowDown");
+  // Registration of embedding and TODO commands changes the result count.
+  // Navigate the rendered groups to Delete rather than assume its old index.
+  const options = page.locator("[data-slash-command]");
+  const commandIds = await options.evaluateAll((items) => items.map((item) => item.getAttribute("data-slash-command")));
+  const activeId = await page.locator("[data-active]").getAttribute("data-slash-command");
+  const steps = (commandIds.indexOf("block.delete") - commandIds.indexOf(activeId) + commandIds.length) % commandIds.length;
+  for (let index = 0; index < steps; index++) await page.keyboard.press("ArrowDown");
   await expect(page.locator("[data-active]")).toHaveAttribute("data-slash-command", "block.delete");
   await page.keyboard.press("Enter");
 
@@ -284,7 +288,7 @@ test("executes the highlighted command after grouped slash navigation", async ({
 });
 
 test("Escape preserves slash text and custom controls update or select their block", async ({ page }) => {
-  const editor = page.locator("[data-block-content]").last();
+  const editor = page.locator('[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]').last();
   await editor.click();
   await page.keyboard.press("End");
   await page.keyboard.type(" /count");
@@ -314,7 +318,7 @@ test("Escape preserves slash text and custom controls update or select their blo
 });
 
 test("mouse slash execution creates a contentless Counter and undo restores dormant text", async ({ page }) => {
-  const content = page.locator("[data-block-content]").last();
+  const content = page.locator('[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]').last();
   const block = content.locator(BLOCK_ANCESTOR_XPATH);
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
   if (!id) throw new Error("Expected block ID");

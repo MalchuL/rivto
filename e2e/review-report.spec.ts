@@ -83,13 +83,12 @@ test("saves a slash-created Review report and reproduces it with native load", a
     }, blockId);
 
     await page.getByLabel("Restore Review report").setInputFiles(reportPath);
-    const reproduced = await page.evaluate(() => {
+    await expect.poll(() => page.evaluate(() => {
       const core = (window as unknown as {
         __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
       return core.dump();
-    });
-    expect(reproduced).toEqual(report.snapshot);
+    })).toEqual(report.snapshot);
   } finally {
     const generated = (await readdir(reportDirectory).catch(() => [])).filter(
       (name) => name.includes(slug) && name.endsWith(".json"),

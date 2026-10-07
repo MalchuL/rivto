@@ -70,7 +70,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     type: "pointerdown",
     capture: true,
     scope: "block",
-  }, ({ raw: event, root }) => {
+  }, ({ raw: event, root, mode }) => {
     if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) return false;
     if (
       !(event.target instanceof Element) ||
@@ -88,10 +88,10 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
       reactEditor.blocks.getBlocks(),
       current,
       blockId,
-      reactEditor.mode.get() === "edgeless",
+      mode === "edgeless",
       (candidate) => reactEditor.blockListProps.has("collapse") && candidate.listProps.collapsed === true,
     );
-    const canvas = reactEditor.mode.get() === "edgeless" ? findEdgelessRuntime(reactEditor) : undefined;
+    const canvas = mode === "edgeless" ? findEdgelessRuntime(reactEditor) : undefined;
     if (next && canvas) canvas.setBlocks(next);
     else if (next) reactEditor.selection.set(next);
     else reactEditor.selection.clear();

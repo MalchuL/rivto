@@ -72,10 +72,7 @@ export function registerClipboard(
   reactEditor: ReactEditor,
   options: ClipboardExtensionOptions = {},
 ): () => void {
-  const unregisterElementPaste = reactEditor.clipboard.pasteStrategies.register(
-    ELEMENT_PASTE_STRATEGY_ID,
-    new ElementPasteStrategy(reactEditor),
-  );
+  const unregisterElementPaste = reactEditor.clipboard.pasteStrategies.register(ELEMENT_PASTE_STRATEGY_ID, new ElementPasteStrategy(reactEditor));
   const resolveDefaultBlockType = (): string =>
     options.defaultBlockType ?? reactEditor.createDefaultBlock().type;
   // ClipboardEvent does not expose keyboard modifiers. Remember only the
@@ -93,7 +90,9 @@ export function registerClipboard(
 
   /** Returns a core-compatible block selection for active canvas root objects. */
   const canvasSelection = (): Selection | undefined => {
-    if (reactEditor.mode.get() !== "edgeless") return undefined;
+    // Core mode may be edgeless while the active view is a page embedding.
+    // Its clipboard actions must use the page selection, not canvas objects.
+    if (reactEditor.events.getSurfaceType() !== "edgeless") return undefined;
     const snapshot = findEdgelessRuntime(reactEditor)?.get();
     const blockIds = snapshot?.active ? snapshot.items.flatMap((id) => {
       const element = reactEditor.elements.getElement(id);

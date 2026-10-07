@@ -23,6 +23,7 @@ import {
 /** Local selection manager shared by core commands and browser adapters. */
 export class SelectionManager implements SelectionManagerApi {
   private value: Selection | undefined;
+
   private selectedBlockIds = new Set<string>();
   private selectedElementIds = new Set<string>();
   private readonly listeners = new Listeners<{ selectionChanged: void }>();
@@ -70,6 +71,7 @@ export class SelectionManager implements SelectionManagerApi {
    */
   resolveBlockSelection(selection: Selection | undefined = this.value): ResolvedSelection | undefined {
     if (!selection?.blocks.length) return undefined;
+
     const all = this.flattenBlocks(this.editor.blocks.getBlocks());
     const byId = new Map(all.map((block) => [block.id, block]));
     const members = selection.blocks.flatMap((entry) => {
@@ -108,9 +110,9 @@ export class SelectionManager implements SelectionManagerApi {
    * @returns No value.
    */
   set(selection: Selection): void {
-    const all = this.flattenBlocks(this.editor.blocks.getBlocks());
     const item = selection;
     if (!item || item.type !== "selection" || !Array.isArray(item.blocks)) throw new Error("Invalid selection");
+    const all = this.flattenBlocks(this.editor.blocks.getBlocks());
     if (item.blocks.length) {
       assertBlockRangeEndpoints(item);
       if (!this.editor.blocks.hasBlock(item.anchorBlockId) || !this.editor.blocks.hasBlock(item.focusBlockId)) {
@@ -155,6 +157,7 @@ export class SelectionManager implements SelectionManagerApi {
    * @returns No value.
    */
   delete(): void {
+
     const current = this.get();
     const range = this.resolveBlockSelection(current);
     const elementIds = [...new Set(current?.elements ?? [])];
