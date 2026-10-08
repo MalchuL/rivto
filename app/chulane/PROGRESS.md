@@ -58,5 +58,42 @@ covering browser styles, Electron development/production styles, desktop reload,
 and local-server shutdown. Electron checks used the existing display (`DISPLAY=:1`)
 because the agent shell did not inherit it. Production screenshot inspected.
 
-Current checkpoint: a runnable application with its shared UI foundation.
+Checkpoint after stage 4: a runnable application with its shared UI foundation.
 The next stage establishes Cordis composition and lifecycle with focused tests.
+
+## 5. Initialize the application runtime — 2026-10-04
+
+- Added `@deepseek-ai/cordis` directly and a small composition boundary in
+  `src/runtime/application.ts`. One application fiber owns bundled plugins;
+  hosts await startup and disposal, and startup failures roll back resources.
+- Added `test:unit` using Node's built-in test runner with recursive discovery
+  of colocated TypeScript tests. No additional test framework is required, and
+  an empty suite fails. `test:smoke` runs the build and Playwright; `test` runs both.
+- Runtime tests exercise asynchronous setup, dependency injection, service and
+  listener cleanup, awaited effects, repeated disposal, and failed-startup rollback.
+- Unified browser and Electron startup through `src/runtime/server.ts`, retaining
+  Next.js App Router. The host starts Cordis before opening its loopback listener.
+- Changed Electron quit to request and await runtime cleanup. Development HMR
+  connections are closed during teardown, and quitting during startup cannot
+  reopen a window or turn canceled navigation into an application failure.
+- Updated ADR 0001 to record Next.js as the UI host and Cordis as the composition
+  owner, and to remove its obsolete first-release synchronization deferral.
+- Corrected the Electron launcher and runtime composition to strict TypeScript
+  ES modules, including the unit-test runner. `build:runtime` emits ignored
+  `dist/` output; development commands compile before launch, and the production
+  build compiles both the hosts and Next.js. No compilation dependency was added.
+- Added explicit TypeScript and ES module requirements to `AGENTS.md`, disabled
+  JavaScript source inclusion, and removed the CommonJS lint exception.
+
+Validation passed: composition tests failed before implementation, then passed;
+web lifecycle and desktop startup-cancellation checks also demonstrated their
+expected failures before the corresponding fixes. Final validation passed two
+unit tests, five Playwright smoke tests, type checks, lint, and production build.
+Electron checks used `DISPLAY=:1` on this workstation.
+For the TypeScript correction, the compiled-host regression failed before the
+compiler pipeline existed, then passed. Both unit tests, all five smoke tests,
+strict type checks, lint, and the production build passed again.
+
+Current checkpoint: both hosts own a tested Cordis lifecycle. Application domain
+services and third-party plugin installation are subsequent stages. Next:
+local users, workspace ownership, and SQLite-backed application services.

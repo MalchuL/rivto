@@ -29,6 +29,9 @@ importers:
 
   app/chulane:
     dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.4
+        version: 4.0.4
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -715,6 +718,21 @@ packages:
 
   '@bcoe/v8-coverage@0.2.3':
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
+
+  '@deepseek-ai/cordis@4.0.4':
+    resolution: {integrity: sha512-obgyxqWAmFn3Re8kvsuUnyW+ihrz6eJCnJO4fh1cQzDtmPYz/zzVeUkH9R94I0OwSVOocK67Kgakm04j/oQXzg==}
+    hasBin: true
+    peerDependencies:
+      '@deepseek-ai/cordis-plugin-include': ~1.0.9
+      '@deepseek-ai/cordis-plugin-loader': ~1.0.5
+    peerDependenciesMeta:
+      '@deepseek-ai/cordis-plugin-include':
+        optional: true
+      '@deepseek-ai/cordis-plugin-loader':
+        optional: true
+
+  '@deepseek-ai/cosmokit@1.8.5':
+    resolution: {integrity: sha512-LXsrlem9z8dq4sLflj2yuCuYX7KqhdzF5hZly3eZyuTo8d6oDSOXuEgC5DbQWKW+lksm6zmOutQLsP/ma6wR6A==}
 
   '@dnd-kit/abstract@0.5.0':
     resolution: {integrity: sha512-hi13iMJgjPX/KDYVKg5VeDIhmYiV6buc9bAX+tCLYf4QdyYjPbsXjn2sPo6m7fQ6SGJBEFgHJ2PemeKDUbwBaA==}
@@ -2510,6 +2528,9 @@ packages:
 
   '@sinonjs/fake-timers@10.3.0':
     resolution: {integrity: sha512-V4BG07kuYSUkTCSBHG8G8TNhM+F19jXFWnQtzj+we8DrkpSBCee9Z3Ms8yiGer/dlmhe35/Xdgyo3/0rQKg7YA==}
+
+  '@standard-schema/spec@1.1.0':
+    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
@@ -6895,6 +6916,13 @@ snapshots:
 
   '@bcoe/v8-coverage@0.2.3': {}
 
+  '@deepseek-ai/cordis@4.0.4':
+    dependencies:
+      '@deepseek-ai/cosmokit': 1.8.5
+      '@standard-schema/spec': 1.1.0
+
+  '@deepseek-ai/cosmokit@1.8.5': {}
+
   '@dnd-kit/abstract@0.5.0':
     dependencies:
       '@dnd-kit/geometry': 0.5.0
@@ -9346,6 +9374,8 @@ snapshots:
   '@sinonjs/fake-timers@10.3.0':
     dependencies:
       '@sinonjs/commons': 3.0.1
+
+  '@standard-schema/spec@1.1.0': {}
 
   '@swc/helpers@0.5.15':
     dependencies:

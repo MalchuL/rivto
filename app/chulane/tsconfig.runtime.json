@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": false,
+    "noEmitOnError": true,
+    "incremental": false,
+    "rootDir": ".",
+    "outDir": "dist",
+    "plugins": []
+  },
+  "include": [
+    "electron/**/*.ts",
+    "scripts/**/*.ts",
+    "src/runtime/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/**/*.test.ts"
+  ]
+}

@@ -3,16 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1",
-    "build": "next build",
-    "start": "next start",
+    "dev": "pnpm build:runtime && node dist/src/runtime/server.js --development",
+    "build": "pnpm build:runtime && next build",
+    "start": "node dist/src/runtime/server.js",
     "lint": "eslint",
-    "dev:desktop": "electron . --development",
+    "dev:desktop": "pnpm build:runtime && electron . --development",
     "start:desktop": "electron .",
-    "check-types": "next typegen && tsc --noEmit",
-    "test": "pnpm build && playwright test"
+    "check-types": "next typegen && tsc --noEmit && tsc --noEmit -p tsconfig.runtime.json",
+    "test:unit": "pnpm build:runtime && node dist/scripts/test-unit.js",
+    "test:smoke": "pnpm build && playwright test",
+    "test": "pnpm test:unit && pnpm test:smoke",
+    "build:runtime": "tsc -p tsconfig.runtime.json"
   },
   "dependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "lucide-react": "^0.525.0",
@@ -36,6 +40,9 @@
     "typescript": "5.8.3"
   },
   "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22.6.0"
+  },
   "type": "module",
-  "main": "electron/main.cjs"
+  "main": "dist/electron/main.js"
 }

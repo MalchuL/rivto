@@ -1,6 +1,6 @@
 # Chulane reimplementation plan
 
-Status: all decisions settled; ready for the user's shared-understanding confirmation before implementation. The numbered interview and accepted decisions are recorded in [chulane-reimplementation.md](./chulane-reimplementation.md).
+Status: implementation is underway; completed stages are recorded in [PROGRESS.md](../app/chulane/PROGRESS.md). Storage-independent service boundaries were accepted on 2026-10-09; Markdown's role remains open until document persistence. The numbered interview and original accepted decisions are recorded in [chulane-reimplementation.md](./chulane-reimplementation.md).
 
 ## Scope and destination
 
@@ -41,7 +41,9 @@ Local users configure providers and credentials. Future backend adapters define 
 
 ## Persistence, retrieval, and synchronization
 
-Drizzle with SQLite is the canonical local record store. Store durable CRDT state/updates for documents rather than using portable JSON import as the synchronization mechanism. Restore persisted CRDT state before editing. Preserve Rivto's stable entity identities and transaction rules; reuse its existing local-tab synchronization.
+Storage-independent application services expose domain operations to UI and AI tools, enforcing validation and access rules without exposing SQL, file operations, or a generic database transaction API. Drizzle with SQLite is the initial record adapter for local users and workspaces; persistence may combine a database and filesystem. Separate page operations (`PageService`), durable document content (`DocumentStore`), and attachment bytes and metadata (`AttachmentStore`) as those features are implemented. Define durability and failure guarantees per operation; hybrid adapters coordinate recovery without assuming one transaction spans SQLite and files. See [ADR 0001](../docs/adr/0001-chulane-local-first-service-boundaries.md).
+
+Before document persistence, decide whether Markdown is canonical content or a readable mirror/export, and where metadata and content live. Canonical Markdown requires decisions about stable IDs, external-edit reconciliation, conflicts, and representation of canvas and structured blocks; do not assume a lossless Markdown round trip. Store durable CRDT state/updates for documents rather than using portable JSON import as the synchronization mechanism. Restore persisted CRDT state before editing. Preserve Rivto's stable entity identities and transaction rules; reuse its existing local-tab synchronization.
 
 Zvec supplies replaceable vector storage/retrieval. Index Chulane page text, textual canvas content, and extracted text from ingested external files. Apply user access checks and configured project/page inclusion and exclusion before returning knowledge to agents. Derive indexes from canonical content and reconcile them after content changes or deletion. Managed file storage is behind a replaceable service: copy source files into it, retain citation identity, and support explicit reimport and conversion to pages when content can be extracted. Filesystem watching is deferred.
 
