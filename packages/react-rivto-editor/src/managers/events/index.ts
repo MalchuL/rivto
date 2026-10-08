@@ -10,3 +10,4 @@ export * from "./keymap";
 export * from "./selection";
 export * from "./shortcut";
 export * from "./types";
+export { DocumentViewDOM, type DocumentViewScope } from "./document-view";

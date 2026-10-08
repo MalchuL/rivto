@@ -7,6 +7,7 @@
  */
 import {
   blockExtension,
+  editorControlProps,
   kanbanExtension,
   bentoExtension,
   tableExtension,
@@ -132,6 +133,7 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
       <label>
         <span>Value: {value}</span>
         <input
+          {...editorControlProps}
           type="range"
           min="0"
           max="100"
@@ -164,6 +166,7 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
     <div {...editing.attributes} className="custom-counter-selection-region">
       <button
         {...COUNTER_SELECTION_ATTRIBUTES}
+        {...editorControlProps}
         type="button"
         className="custom-counter-block"
         onClick={increment}

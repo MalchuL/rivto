@@ -5,6 +5,7 @@ import type { SurfacesCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
 import type { ReactEditorImpl } from "../../react-editor";
 import type {
+  ResolvedSlot,
   BlockWrapperRegistration,
   BlockSlotPosition,
   BlockSlotProps,
@@ -42,8 +43,9 @@ export class SurfaceManager implements SurfacesCapability {
   }>();
   private readonly blockWrappers = new Map<EditorMode, BlockWrapperRegistration[]>();
   private readonly editorWrappers: EditorWrapperRegistration[] = [];
-  private readonly blockSlots: BlockSlotRegistration[] = [];
-  private readonly elementSlots: ElementSlotRegistration[] = [];
+  private readonly blockSlots: Array<BlockSlotRegistration & { readonly id: number }> = [];
+  private readonly elementSlots: Array<ElementSlotRegistration & { readonly id: number }> = [];
+  private nextSlotId = 0;
 
   /**
    * Creates empty presentation registries.
@@ -151,10 +153,12 @@ export class SurfaceManager implements SurfacesCapability {
       registration.priority,
       BLOCK_SLOT_POSITION_SET,
     );
-    this.blockSlots.push(registration);
+    const entry = { ...registration, id: this.nextSlotId++ };
+    this.blockSlots.push(entry);
+    this.blockSlots.sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
     this.store.changed();
     return this.reactEditor.extensions.own(() => {
-      const index = this.blockSlots.indexOf(registration);
+      const index = this.blockSlots.indexOf(entry);
       if (index < 0) return;
       this.blockSlots.splice(index, 1);
       this.store.changed();
@@ -172,7 +176,7 @@ export class SurfaceManager implements SurfacesCapability {
     position: BlockSlotPosition,
     props: BlockSlotProps,
   ): readonly ComponentType<BlockSlotProps>[] {
-    return this.resolveSlots(this.blockSlots, position, props).map(({ component }) => component);
+    return this.getBlockSlotEntries(position, props).map(({ component }) => component);
   }
 
   /**
@@ -187,10 +191,12 @@ export class SurfaceManager implements SurfacesCapability {
       registration.priority,
       SLOT_POSITION_SET,
     );
-    this.elementSlots.push(registration);
+    const entry = { ...registration, id: this.nextSlotId++ };
+    this.elementSlots.push(entry);
+    this.elementSlots.sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
     this.store.changed();
     return this.reactEditor.extensions.own(() => {
-      const index = this.elementSlots.indexOf(registration);
+      const index = this.elementSlots.indexOf(entry);
       if (index < 0) return;
       this.elementSlots.splice(index, 1);
       this.store.changed();
@@ -208,7 +214,27 @@ export class SurfaceManager implements SurfacesCapability {
     position: SlotPosition,
     props: ElementSlotProps,
   ): readonly ComponentType<ElementSlotProps>[] {
-    return this.resolveSlots(this.elementSlots, position, props).map(({ component }) => component);
+    return this.getElementSlotEntries(position, props).map(({ component }) => component);
+  }
+
+  /**
+   * Resolves ordered block slots while preserving each registration's React identity.
+   * @param position - Anchor being rendered.
+   * @param props - Current owner context, evaluated against each dynamic filter.
+   * @returns Matching entries with IDs unchanged by neighboring registrations.
+   */
+  getBlockSlotEntries(position: BlockSlotPosition, props: BlockSlotProps): readonly ResolvedSlot<BlockSlotProps>[] {
+    return this.resolveSlots(this.blockSlots, position, props);
+  }
+
+  /**
+   * Resolves ordered element slots while preserving each registration's React identity.
+   * @param position - Anchor being rendered.
+   * @param props - Current owner context, evaluated against each dynamic filter.
+   * @returns Matching entries with IDs unchanged by neighboring registrations.
+   */
+  getElementSlotEntries(position: SlotPosition, props: ElementSlotProps): readonly ResolvedSlot<ElementSlotProps>[] {
+    return this.resolveSlots(this.elementSlots, position, props);
   }
 
   /** Validates the shared public fields of a slot registration. */
@@ -224,7 +250,7 @@ export class SurfaceManager implements SurfacesCapability {
     }
   }
 
-  /** Filters and stably orders one owner-kind registration list. */
+  /** Filters one owner-kind list whose stable priority order is maintained during registration. */
   private resolveSlots<
     Props extends { readonly mode: EditorMode },
     Position extends string,
@@ -242,8 +268,7 @@ export class SurfaceManager implements SurfacesCapability {
     return registrations
       .filter((registration) => registration.position === position &&
         matchesMode(registration.mode, props.mode) &&
-        (!registration.when || registration.when(props)))
-      .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
+        (!registration.when || registration.when(props)));
   }
 
   /**

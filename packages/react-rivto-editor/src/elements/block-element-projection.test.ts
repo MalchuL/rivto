@@ -274,6 +274,44 @@ describe("edgeless block element reconciliation", () => {
     editor.destroy();
   });
 
+  test("repairs a missing range end without replacing the card owning its start", async () => {
+    const editor = await createRivtoEditor();
+    const reactEditor = createRuntime(editor);
+    const first = editor.blocks.insertBlock({ type: "paragraph" }).id;
+    const last = editor.blocks.insertBlock({ type: "paragraph" }, first).id;
+    editor.elements.insertElement({
+      id: "card", type: "block", frame: { x: 300, y: 200, width: 400, height: 150 }, zIndex: 4,
+      props: { startBlockId: first, endBlockId: "missing" },
+    });
+    reconcileBlockElements(reactEditor);
+    expect(editor.elements.getElements()).toEqual([expect.objectContaining({
+      id: "card", frame: { x: 300, y: 200, width: 400, height: 150 }, zIndex: 4,
+      props: { startBlockId: first, endBlockId: last },
+    })]);
+    reactEditor.destroy();
+    editor.destroy();
+  });
+
+  test("reconciles root cards without reading descendant snapshots", async () => {
+    const editor = await createRivtoEditor();
+    const reactEditor = createRuntime(editor);
+    const first = editor.blocks.insertBlock({ type: "paragraph" }).id;
+    const child = editor.blocks.insertBlock({ type: "paragraph" }, first).id;
+    editor.blocks.indentBlock(child);
+    await Promise.resolve();
+    const getBlocks = editor.blocks.getBlocks;
+    editor.blocks.getBlocks = () => { throw new Error("Unexpected full-tree read"); };
+    try {
+      reconcileBlockElements(reactEditor);
+      expect(ranges(editor)).toEqual([[first]]);
+      expect(editor.blocks.getParentId(child)).toBe(first);
+    } finally {
+      editor.blocks.getBlocks = getBlocks;
+      reactEditor.destroy();
+      editor.destroy();
+    }
+  });
+
   test("supports a custom separator block plugin", async () => {
     const editor = await createRivtoEditor();
     const reactEditor = createReactEditor({

@@ -7,6 +7,7 @@
  * picks a value. Controls are shadcn primitives (`NativeSelect`, `Checkbox`)
  * plus the shared edgeless size and color controls.
  */
+import { editorControlProps } from "../../../../constants";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Checkbox } from "../../../../components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
@@ -42,7 +43,7 @@ function PropertySelect({
   readonly children: ReactNode;
 }) {
   return (
-    <NativeSelect size="sm" className={SELECT_CLASS} aria-label={label} value={String(value ?? "")} onChange={(event) => onChange(event.currentTarget.value)}>
+    <NativeSelect {...editorControlProps} size="sm" className={SELECT_CLASS} aria-label={label} value={String(value ?? "")} onChange={(event) => onChange(event.currentTarget.value)}>
       <NativeSelectOption value="" disabled>Mixed</NativeSelectOption>
       {children}
     </NativeSelect>
@@ -114,7 +115,7 @@ export function VisualProperties({
     );
   const paintToggle = (label: string, key: "filled" | "stroked", enabled: boolean) => (
     <span className={PAINT_TOGGLE_CLASS} title={enabled ? `Disable ${label.toLowerCase()}` : `Enable ${label.toLowerCase()}`}>
-      <Checkbox
+      <Checkbox {...editorControlProps}
         aria-label={`Enable ${label.toLowerCase()}`}
         checked={enabled}
         onCheckedChange={(checked) => preview({ [key]: checked === true })}

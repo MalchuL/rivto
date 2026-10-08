@@ -141,6 +141,18 @@ describe("portable outline selection", () => {
 
   test("collapse reconciliation maps hidden selections to their visible ancestor", () => {
     const blocks = [outlineBlock("a", [outlineBlock("hidden"), outlineBlock("also-hidden")], true), outlineBlock("b")];
+    const nodes = blocks.flatMap((block) => [block, ...block.children]);
+    const lookup = {
+      getBlockNode: (id: string) => {
+        const block = nodes.find((node) => node.id === id);
+        return block && { ...block, childIds: block.children.map((child) => child.id) };
+      },
+      getParentId: (id: string) => blocks.find((block) => block.children.some((child) => child.id === id))?.id,
+      getOrderedIds: (ids: Iterable<string>) => {
+        const selected = new Set(ids);
+        return nodes.filter((node) => selected.has(node.id)).map((node) => node.id);
+      },
+    };
     const hiddenCaret: Selection = {
       type: "selection",
       blocks: [{ id: "hidden", start: 2, end: 2 }],
@@ -148,9 +160,10 @@ describe("portable outline selection", () => {
       focusBlockId: "hidden",
     };
 
-    expect(reconcileCollapsedSelection(blocks, hiddenCaret)).toEqual(createStructuralSelection(["a"]));
+    expect(reconcileCollapsedSelection(lookup, hiddenCaret)).toEqual(createStructuralSelection(["a"]));
+    expect(reconcileCollapsedSelection(lookup, hiddenCaret, "hidden")).toBe(hiddenCaret);
     expect(reconcileCollapsedSelection(
-      blocks,
+      lookup,
       createStructuralSelection(["hidden", "b", "also-hidden"], "hidden", "b"),
     )).toEqual(createStructuralSelection(["a", "b"], "a", "b"));
   });

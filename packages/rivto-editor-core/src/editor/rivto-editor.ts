@@ -3,7 +3,6 @@
  */
 import { BlockListPropsManager, BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, HistoryManager, ModeManager, SelectionManager } from "../managers";
 import {
-  type Block,
   type DocumentModel,
 } from "@chulane/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
@@ -142,12 +141,7 @@ export class EditorRuntime implements RivtoEditorApi {
   private reconcileDocumentSelection(): void {
     const selection = this.selection.get();
     if (!selection) return;
-    const visibleIds: string[] = [];
-    const visit = (blocks: Block[]): void => blocks.forEach((block) => {
-      visibleIds.push(block.id);
-      visit(block.children);
-    });
-    visit(this.blocks.getBlocks());
+    const visibleIds = this.blocks.getOrderedIds(selection.blocks.map((block) => block.id));
     let changed = false;
     const valid = (() : Selection | undefined => {
       const item = selection;

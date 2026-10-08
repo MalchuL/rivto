@@ -5,6 +5,7 @@
  * The shared block tree and drag extension render and move every card in both modes.
  * @module
  */
+import { editorControlProps } from "../../../constants";
 import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { BlockWrapperProps } from "../../../blocks";
@@ -114,7 +115,7 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
     });
   };
   const addButton = (
-    <Button variant="ghost" className={ADD_COLUMN_CLASS} type="button" aria-label="Add Kanban column" onClick={addColumn}>
+    <Button {...editorControlProps} variant="ghost" className={ADD_COLUMN_CLASS} type="button" aria-label="Add Kanban column" onClick={addColumn}>
       <PlusIcon />
     </Button>
   );
@@ -173,7 +174,7 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
         {cardCount}
       </span>
       {addCardHost && editing.block?.listProps.collapsed !== true && createPortal(
-        <Button ref={addCardButton} variant="ghost" className={ADD_CARD_CLASS} type="button" aria-label={`Add card to ${editing.block?.content ?? "column"}`} onClick={addCard}>
+        <Button {...editorControlProps} ref={addCardButton} variant="ghost" className={ADD_CARD_CLASS} type="button" aria-label={`Add card to ${editing.block?.content ?? "column"}`} onClick={addCard}>
           <PlusIcon />
         </Button>, addCardHost,
       )}

@@ -5,6 +5,7 @@
  *
  * @module
  */
+import { editorControlProps } from "../../constants";
 import {
   useCallback,
   memo,
@@ -106,7 +107,7 @@ export function MarkdownContent({
   }, [onLinkClick]);
   const components = useMemo<Components>(() => ({
     a: ({ node: _node, href = "", ...props }) => (
-      <a
+      <a {...editorControlProps}
         {...props}
         href={href}
         tabIndex={-1}

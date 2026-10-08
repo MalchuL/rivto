@@ -15,6 +15,7 @@ import {
   type HTMLAttributes,
   type RefObject,
 } from "react";
+import { isCaretSelection, resolveBlockRange } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_ATTRIBUTE,
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
@@ -197,12 +198,44 @@ export function useBlockEditing<Props extends object = Record<string, unknown>>(
     const wasMounted = syncedElementRef.current === element;
     syncedElementRef.current = element;
     const content = blockResult.block?.content ?? "";
-    if (element.textContent === content) return;
+    if (element.textContent !== content) {
+      const selection = wasMounted ? saveDOMSelection(element) : null;
+      element.textContent = content;
+      restoreDOMSelection(element, selection);
+    }
 
-    const selection = wasMounted ? saveDOMSelection(element) : null;
-    element.textContent = content;
-    restoreDOMSelection(element, selection);
   }, [blockResult.block?.content, textEdit]);
+
+  useLayoutEffect(() => {
+    const element = textEdit ? elementRef.current : reactEditor.events.getRoot();
+    if (!element || !reactEditor.selection.hasPendingSelectionCallback) return;
+    const selection = reactEditor.selection.snapshot();
+    if (selection?.focusBlockId !== blockId || !isCaretSelection(selection)) return;
+
+    // A structural command remounts the focused editable before its scheduled
+    // frame. Restore its caret immediately after the commit so the next key cannot land
+    // on the document body. Only the pending command's own caret may take focus;
+    // expanded ranges still wait until every endpoint has synchronized its text.
+    // A contentless renderer uses the surface root so shortcuts such as undo
+    // remain available after its previous editable element has been removed.
+    let mounted = true;
+    // Wait for the remaining layout effects without waiting for a paint.
+    // Focusing inside the commit forces layout while React is still updating
+    // sibling blocks. A newer selection or an unmount invalidates this work.
+    queueMicrotask(() => {
+      if (!mounted || !element.isConnected || !reactEditor.selection.hasPendingSelectionCallback ||
+        reactEditor.selection.snapshot() !== selection) return;
+      element.focus({ preventScroll: true });
+      if (textEdit) {
+        const range = selection.blocks[0]!;
+        const point = { textOffset: resolveBlockRange(element.textContent?.length ?? 0, range.start, range.end).startOffset };
+        restoreDOMSelection(element, { anchor: point, focus: point });
+      } else {
+        element.ownerDocument.getSelection()?.removeAllRanges();
+      }
+    });
+    return () => { mounted = false; };
+  }, [blockId, reactEditor, textEdit]);
 
   const commit = useCallback((element: HTMLDivElement) => {
     // ponytail: composition commits whole plain text; use beforeinput deltas if

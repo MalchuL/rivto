@@ -1,3 +1,4 @@
+import type { DocumentViewScope } from "./managers/events/document-view";
 import type { ReactEditor } from "./types";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
@@ -44,6 +45,7 @@ import type {
   SlashCommand,
   SlashCommandContext,
   SurfaceComponent,
+  ResolvedSlot,
   BlockSlotPosition,
   BlockSlotProps,
   BlockSlotRegistration,
@@ -51,7 +53,7 @@ import type {
   ElementSlotRegistration,
   SlotPosition,
 } from "./managers";
-import type { BlockViewBehavior } from "./views/types";
+import type { BlockViewAction, BlockViewBehavior, BlockViewContext } from "./views/types";
 
 export interface BlocksCapability {
   /**
@@ -149,6 +151,8 @@ export interface BlocksCapability {
    * @returns Root block identifiers in document order.
    */
   getRootIds(): string[];
+  /** @param ids - Candidate IDs. @returns Unique placed IDs in document order, omitting missing records. */
+  getOrderedIds(ids: Iterable<string>): string[];
   /** Subscribes to one recursive block snapshot.
    *
    * Subscribes to one recursive block snapshot.
@@ -305,7 +309,26 @@ export interface BlockTypesCapability {
 }
 
 /** Core list-property policy whose registrations are owned by the active React extension. */
-export type BlockListPropsCapability = Omit<BlockListPropsManagerApi, "destroy">;
+export type BlockListPropsRegistration = Parameters<BlockListPropsManagerApi["register"]>[0] & {
+  /** Returns inherited properties for the following split block; omitted leaves writing defaults intact. */
+  readonly prepareSplit?: (block: EditorBlock) => Record<string, unknown>;
+  /** Handles a split before the ordinary outline action. True stops the fallback; the caller owns the transaction. */
+  readonly onSplit?: (context: BlockViewContext) => boolean;
+  /** Returns false to hide this block's children. Omitted leaves them visible. */
+  readonly childrenVisible?: (block: Pick<EditorBlockNode, "listProps">) => boolean;
+};
+
+/** Core property validation combined with optional React outline behavior. */
+export interface BlockListPropsCapability extends Omit<BlockListPropsManagerApi, "destroy" | "register"> {
+  /** Registers property validation and presentation behavior together; returns their owned cleanup. */
+  register(registration: BlockListPropsRegistration): () => void;
+  /** Returns merged split properties in registration order, or undefined when no extension supplies them. */
+  prepareSplit(block: EditorBlock): Record<string, unknown> | undefined;
+  /** Runs split handlers in registration order until one handles the request. */
+  onSplit(context: BlockViewContext): boolean;
+  /** Returns true unless an installed behavior hides the block's children. */
+  childrenVisible(block: Pick<EditorBlockNode, "listProps">): boolean;
+}
 
 /** React-owned registry for portable clipboard formatting and parsing. */
 export interface ClipboardCapability {
@@ -339,6 +362,13 @@ export interface RenderersCapability {
 }
 /** Per-type outline, split, and drop behavior resolved by page dispatchers. */
 export interface ViewsCapability {
+  /**
+   * Resolves the context block's behavior and falls back when it defers.
+   * @param action - Semantic operation to invoke.
+   * @param args - Block context and operation-specific arguments.
+   * @returns True when the operation was handled or explicitly rejected.
+   */
+  dispatch<Action extends BlockViewAction>(action: Action, ...args: Parameters<BlockViewBehavior[Action]>): boolean;
   /** Registers one behavior object for a persisted block type. */
   register(type: string, view: BlockViewBehavior): () => void;
   /** Removes the view registered for a persisted block type. */
@@ -356,6 +386,12 @@ export interface ViewsCapability {
 }
 
 export interface EventsCapability {
+  /**
+   * Binds local registrations to one view and shares document-wide settings.
+   * @param owner - View providing identity, DOM root, and registration cleanup.
+   * @returns Methods explicitly bound to that view and the shared manager.
+   */
+  forView(owner: DocumentViewScope): EventsCapability;
   register<
     Target extends DOMEventTarget = "surface",
     Type extends DOMEventName<Target> = DOMEventName<Target>,
@@ -393,6 +429,12 @@ export interface EventsCapability {
 }
 
 export interface KeyboardCapability {
+  /**
+   * Binds local registrations to one view and shares document-wide settings.
+   * @param owner - View providing identity, DOM root, and registration cleanup.
+   * @returns Methods explicitly bound to that view and the shared manager.
+   */
+  forView(owner: DocumentViewScope): KeyboardCapability;
   /** Registers one stable semantic action and returns its idempotent disposer. */
   register(
     definition: KeyboardEventDefinition,
@@ -416,6 +458,10 @@ export interface KeyboardCapability {
 }
 
 export interface SurfacesCapability {
+  /** @returns Matching block slots with stable registration IDs, ordered by priority. */
+  getBlockSlotEntries(position: BlockSlotPosition, props: BlockSlotProps): readonly ResolvedSlot<BlockSlotProps>[];
+  /** @returns Matching element slots with stable registration IDs, ordered by priority. */
+  getElementSlotEntries(position: SlotPosition, props: ElementSlotProps): readonly ResolvedSlot<ElementSlotProps>[];
   register(mode: EditorMode, surface: SurfaceComponent): () => void;
   delete(mode: EditorMode): boolean;
   get(mode: EditorMode): SurfaceComponent | undefined;

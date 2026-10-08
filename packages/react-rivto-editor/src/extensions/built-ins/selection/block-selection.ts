@@ -89,7 +89,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
       current,
       blockId,
       mode === "edgeless",
-      (candidate) => reactEditor.blockListProps.has("collapse") && candidate.listProps.collapsed === true,
+      (candidate) => !reactEditor.blockListProps.childrenVisible(candidate),
     );
     const canvas = mode === "edgeless" ? findEdgelessRuntime(reactEditor) : undefined;
     if (next && canvas) canvas.setBlocks(next);

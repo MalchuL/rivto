@@ -1,3 +1,5 @@
+import { focusCaret, scheduleBlockFocus } from "../../../../../views/ops/focus-ops";
+import { convertEmptyToList } from "../../../../../views/ops/text-ops";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
@@ -20,8 +22,46 @@ import { listShortcutPatch } from "./utils";
  * @returns No value.
  */
 export function registerListShortcuts(reactEditor: ReactEditor): void {
+  const listCommands: readonly { type: BlockListType; title: string }[] = [
+    { type: "list", title: "List" },
+    { type: "checkbox", title: "Checkbox" },
+    { type: "numbered_list", title: "Numbered list" },
+    { type: "start_numbered_list", title: "Start numbered list" },
+    { type: "continue_numbered_list", title: "Continue numbered list" },
+  ];
+  listCommands.forEach(({ type, title }) => reactEditor.slashCommands.register({
+    id: `list.${type}`,
+    title,
+    group: "Lists",
+    isAvailable: ({ blockId }) => reactEditor.blockListProps.has("list") &&
+      reactEditor.blocks.getBlockNode(blockId)?.listProps.type !== type,
+    execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
+  }));
+
   reactEditor.blockListProps.register({
     id: "list",
+    prepareSplit: (block) => {
+      let type: BlockListType = "list";
+      if (block.listProps.type === "checkbox") type = "checkbox";
+      else if (isNumberedListType(block.listProps.type)) type = "numbered_list";
+      return { type, checked: false };
+    },
+    onSplit: ({ reactEditor, block, root }) => {
+      if (reactEditor.isEmptyBlock(block) &&
+        (block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type))) {
+        // The first Enter removes only the visible list state; the block keeps
+        // its outline position and unrelated properties for the next press.
+        reactEditor.blocks.deleteListProps(block.id, ["type", "checked"]);
+        focusCaret(reactEditor, root, block.id, 0);
+        return true;
+      }
+      if (!reactEditor.blocks.getParentId(block.id) && reactEditor.isEmptyBlock(block) && block.listProps.type !== "list") {
+        convertEmptyToList(reactEditor, block.id);
+        scheduleBlockFocus(reactEditor, root, block.id, 0);
+        return true;
+      }
+      return false;
+    },
     defaults: { type: "list", checked: false },
     isValid: (candidate) =>
       BLOCK_LIST_TYPES.includes(candidate.type as BlockListType) &&

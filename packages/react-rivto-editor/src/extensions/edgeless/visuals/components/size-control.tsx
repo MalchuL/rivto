@@ -7,6 +7,7 @@
  * `accent-color`. The preview swaps between a dot whose diameter tracks the
  * value and a serif "T" whose font size tracks it.
  */
+import { editorControlProps } from "../../../../constants";
 import { useEffect, useState } from "react";
 
 /** Preview glyph shown before the slider. */
@@ -62,7 +63,7 @@ export function SizeControl({
           <span className={DOT_CLASS} style={{ width: diameter, height: diameter }} />
         )}
       </span>
-      <input
+      <input {...editorControlProps}
         type="range"
         className={RANGE_CLASS}
         aria-label={label}

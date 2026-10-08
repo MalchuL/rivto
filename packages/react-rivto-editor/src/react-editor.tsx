@@ -1,3 +1,4 @@
+import { BlockListPropsManager } from "./managers/blocks/block-list-props-manager";
 /**
  * React runtime coordinator.
  *
@@ -8,7 +9,6 @@
  * @module
  */
 import type {
-  BlockListPropsManagerApi,
   CommandRegistryApi,
   ElementManagerApi,
   HistoryManagerApi,
@@ -151,15 +151,7 @@ export class ReactEditorImpl implements ReactEditor {
     });
     this.renderers = new RendererManager(this, options.unknownBlockRenderer);
     this.views = new ViewManager(this);
-    this.blockListProps = {
-      register: (registration) => {
-        this.extensions.assertActive();
-        return this.extensions.own(editor.blockListProps.register(registration));
-      },
-      has: (id) => editor.blockListProps.has(id),
-      validate: (candidate) => editor.blockListProps.validate(candidate),
-      prepare: (candidate) => editor.blockListProps.prepare(candidate),
-    } satisfies Omit<BlockListPropsManagerApi, "destroy">;
+    this.blockListProps = new BlockListPropsManager(this, editor.blockListProps);
     this.blockTypes = new BlockTypeManager(this, editor);
     this.blocks = editor.blocks;
     this.clipboard = new ClipboardManager(this, editor);

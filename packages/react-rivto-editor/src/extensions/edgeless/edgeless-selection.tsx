@@ -8,7 +8,7 @@ import { SurfaceContext } from "../../surfaces/surface";
  * gesture crosses slop so later moves only intersect and call `selection.set`,
  * which no-ops when membership is unchanged.
  */
-import { BLOCK_CONTENT_SELECTOR } from "../../constants";
+import { BLOCK_CONTENT_SELECTOR, EDITOR_CONTROL_SELECTOR } from "../../constants";
 import {
   useDOMEvent,
   useEditorRoot,
@@ -48,10 +48,10 @@ const MARQUEE_SLOP_PX = 3;
  * Returns true for controls that retain their normal interaction without Primary.
  *
  * @param target - Event target under the pointer.
- * @returns True when the target is editable content or a native control.
+ * @returns True when the target is editable content or a marked control.
  */
 function isInteractive(target: Element): boolean {
-  return Boolean(target.closest(`${BLOCK_CONTENT_SELECTOR}, input, textarea, select, button, a`));
+  return Boolean(target.closest(`${BLOCK_CONTENT_SELECTOR}, ${EDITOR_CONTROL_SELECTOR}`));
 }
 
 /**

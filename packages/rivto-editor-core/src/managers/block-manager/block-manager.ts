@@ -129,6 +129,51 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
+   * Orders unique placed IDs without materializing unrelated subtrees.
+   *
+   * Each block's path contains its root position followed by child positions.
+   * Comparing these paths puts siblings in order and parents before descendants.
+   * Only selected blocks, their ancestors, and sibling ID lists are read.
+   * Paths are cached within this call, so moves and undo need no invalidation.
+   *
+   * @param ids - Block identifiers; missing or detached records are omitted.
+   * @returns IDs in depth-first document order, with ancestors before children.
+   */
+  getOrderedIds(ids: Iterable<string>): string[] {
+    // A stored record may be detached from the tree, so check placement too.
+    const placed = [...new Set(ids)].filter((id) => this.getBlockNode(id) !== undefined);
+    if (placed.length < 2) return placed;
+    const paths = new Map<string, number[]>();
+    const siblings = new Map<string | null, Map<string, number>>();
+    const pathOf = (id: string): number[] => {
+      const cached = paths.get(id);
+      if (cached) return cached;
+      const parent = this.getParentId(id) ?? null;
+      let positions = siblings.get(parent);
+      if (!positions) {
+        // Index each sibling list once, even when several selected blocks share it.
+        const children = parent === null ? this.getRootIds() : this.getBlockNode(parent)!.childIds;
+        positions = new Map(children.map((child, index) => [child, index]));
+        siblings.set(parent, positions);
+      }
+      // For example, [2, 0] is the first child of the third root.
+      const path = [...(parent === null ? [] : pathOf(parent)), positions.get(id)!];
+      paths.set(id, path);
+      return path;
+    };
+    return placed.sort((left, right) => {
+      const a = pathOf(left);
+      const b = pathOf(right);
+      // The first differing position determines which branch comes first.
+      for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
+        if (a[index] !== b[index]) return a[index]! - b[index]!;
+      }
+      // A shared prefix puts the shorter path (the ancestor) first.
+      return a.length - b.length;
+    });
+  }
+
+  /**
    * Subscribes to changes affecting one recursive block snapshot.
    *
    * @param id - Block identifier to observe.

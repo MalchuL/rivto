@@ -110,3 +110,20 @@ describe("SurfaceManager", () => {
     editor.destroy();
   });
 });
+
+test("slot identities survive priority insertions and distinguish repeated components", async () => {
+  const editor = await createEditor();
+  const reactEditor = createReactEditor({ editor });
+  const block = editor.blocks.insertBlock({ type: "paragraph" });
+  const props: BlockSlotProps = { block: editor.blocks.getBlockNode(block.id)!, mode: "block", selected: false };
+  const manager = reactEditor.surfaces;
+  manager.registerBlockSlot({ position: "left", component: LowBlockSlot });
+  manager.registerBlockSlot({ position: "left", component: LowBlockSlot });
+  const original = manager.getBlockSlotEntries("left", props);
+  expect(original[0]!.id).not.toBe(original[1]!.id);
+  const remove = manager.registerBlockSlot({ position: "left", component: HighBlockSlot, priority: 10 });
+  expect(manager.getBlockSlotEntries("left", props).slice(1)).toEqual(original);
+  remove();
+  expect(manager.getBlockSlotEntries("left", props)).toEqual(original);
+  reactEditor.destroy(); editor.destroy();
+});

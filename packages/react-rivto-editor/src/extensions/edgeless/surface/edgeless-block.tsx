@@ -7,6 +7,7 @@
  * measure is scoped to geometry and content, never to selection, so reading
  * `scrollHeight` cannot hitch pointermove.
  */
+import { editorControlProps } from "../../../constants";
 import type { EditorElement } from "@chulane/rivto";
 import { memo, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { useEdgelessSelected } from "../../built-ins/selection/edgeless-runtime";
@@ -114,7 +115,7 @@ function EdgelessBlockElementView({
       </div>
       <ElementSlots element={element} selected={selected} />
       {RESIZE_HANDLES.map((corner) => (
-        <button
+        <button {...editorControlProps}
           key={corner}
           type="button"
           className={RESIZE_HANDLE_CLASS}

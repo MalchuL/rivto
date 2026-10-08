@@ -81,6 +81,25 @@ export class KeyboardManager implements KeyboardCapability {
   }
 
   /**
+   * Binds registrations to a view while keeping keymap settings shared by the document.
+   * @param owner - View that owns registration IDs and cleanup.
+   * @returns Local registration methods and explicitly delegated shared keymap methods.
+   */
+  forView(owner: DocumentViewScope): KeyboardCapability {
+    const revision = () => this.revision;
+    return {
+      forView: (view) => this.forView(view),
+      register: (definition, listener) => owner.own(this.register(definition, listener, owner)),
+      delete: (id) => this.delete(`${owner.id}:${id}`),
+      list: () => this.list(),
+      get revision() { return revision(); },
+      subscribe: (listener) => this.subscribe(listener),
+      replaceKeymap: (keymap) => this.replaceKeymap(keymap),
+      setKeymapOverride: (id, keys) => this.setKeymapOverride(id, keys),
+    };
+  }
+
+  /**
    * Registers one semantic keyboard action in declaration order.
    *
    * @param definition - Stable ID, default keys, filters, and composition policy.

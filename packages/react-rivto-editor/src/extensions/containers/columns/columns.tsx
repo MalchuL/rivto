@@ -5,6 +5,7 @@
  * deleting them. Drag, clipboard, snapshots, and undo remain owned by core.
  * @module
  */
+import { editorControlProps } from "../../../constants";
 import { type KeyboardEvent, type MouseEvent } from "react";
 import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { Button } from "../../../components/ui/button";
@@ -190,17 +191,17 @@ function ColumnsControls({ block }: BlockSlotProps) {
     <div className={SETTINGS_CLASS}>
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="icon-sm" type="button" aria-label="Columns settings">
+          <Button {...editorControlProps} variant="outline" size="icon-sm" type="button" aria-label="Columns settings">
             <SettingsIcon />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" className={PANEL_CLASS} role="group" aria-label="Column count">
           <strong>Columns</strong>
           <div className={COUNT_CLASS}>
-            <Button variant="outline" size="icon-sm" type="button" aria-label="Remove column" disabled={count <= COLUMNS_MIN_COUNT}
+            <Button {...editorControlProps} variant="outline" size="icon-sm" type="button" aria-label="Remove column" disabled={count <= COLUMNS_MIN_COUNT}
               onClick={() => setColumnsCount(reactEditor, block.id, count - 1)}><MinusIcon /></Button>
             <output className={COUNT_VALUE_CLASS} aria-live="polite">{count}</output>
-            <Button variant="outline" size="icon-sm" type="button" aria-label="Add column" disabled={count >= COLUMNS_MAX_COUNT}
+            <Button {...editorControlProps} variant="outline" size="icon-sm" type="button" aria-label="Add column" disabled={count >= COLUMNS_MAX_COUNT}
               onClick={() => setColumnsCount(reactEditor, block.id, count + 1)}><PlusIcon /></Button>
           </div>
         </PopoverContent>

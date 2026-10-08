@@ -18,7 +18,7 @@ import {
   type KeyboardSelectionTarget,
 } from "../../../../managers";
 import type { ReactEditor } from "../../../../types";
-import { createBlockViewContext, dispatchViewAction } from "../../../../views";
+import { createBlockViewContext } from "../../../../views";
 import { getPageVirtualizationControllerForElement } from "../../../../surfaces/page/page-virtualization-controller";
 
 /** Active viewport settlement for one page surface. */
@@ -218,9 +218,7 @@ export function applyIndentShortcut(
   };
   viewportSettlements.set(root, settlement);
   view?.addEventListener("wheel", onWheel, { passive: true });
-  const claimed = dispatchViewAction(
-    reactEditor.views.resolve(context.block.id),
-    reactEditor.views.fallback,
+  const claimed = reactEditor.views.dispatch(
     outdent ? "onOutdent" : "onIndent",
     context,
     targetIds,

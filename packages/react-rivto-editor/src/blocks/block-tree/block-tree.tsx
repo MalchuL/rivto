@@ -81,7 +81,6 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   if (!block) return null;
   const childIds = block.childIds;
   const Content = reactEditor.renderers.get(block.type) ?? UnknownBlock;
-  const collapseActive = reactEditor.blockListProps.has("collapse");
 
   return (
     <BlockWrapper
@@ -90,7 +89,7 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
       isSelected={selected}
       content={<BlockContent renderer={Content} blockId={block.id} />}
     >
-      {childIds.length > 0 && (!collapseActive || block.listProps.collapsed !== true) && (
+      {childIds.length > 0 && reactEditor.blockListProps.childrenVisible(block) && (
         <div id={childrenId} className="page-block-children">
           {childIds.map((childId) => (
             <MemoBlockTreeNode key={childId} blockId={childId} />

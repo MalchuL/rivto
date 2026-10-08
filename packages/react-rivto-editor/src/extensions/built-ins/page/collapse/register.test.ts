@@ -45,9 +45,8 @@ test.each([
 
   a.blocks.updateBlock("parent", { listProps: { collapsed: true } });
   expect(a.selection.get()?.focusBlockId).toBe("parent");
-  expect(reads.first).toBeGreaterThan(0);
-  // Collapse traversal, selection validation, and the resulting selection notification.
-  expect(reads.first).toBeLessThanOrEqual(3);
+  // Only selected blocks and their ancestors are needed, regardless of document size.
+  expect(reads.first).toBe(0);
   expect(reads.second).toBe(0);
   expect(changes).toEqual(["B", "B", "A"]);
   expect(core.getDocument("A")).toBe(first);

@@ -620,3 +620,30 @@ test("destroying a runtime during drag releases window pointer ownership to surv
   expect(moves).toBe(1);
   closeFirst(); closeSecond(); await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });
+
+test("view keymap updates share inventory and dispatch without inheriting manager state", async () => {
+  const f = await fixture();
+  const realm = new DocumentRealm();
+  const view = new EditorViewController(f.editor);
+  const surface = root(realm);
+  view.setRoot(surface);
+  const close = view.mount();
+  await eventually(() => expect(view.getSnapshot().retained).toBe(true));
+  const api = view.getSnapshot().api!;
+  let calls = 0;
+  api.keyboard.register({ id: "local.action", keys: "a" }, () => { calls += 1; return true; });
+  api.keyboard.replaceKeymap({ "local.action": ["b"] });
+  expect(api.keyboard.list()).toBe(f.editor.keyboard.list());
+  expect(api.keyboard.revision).toBe(f.editor.keyboard.revision);
+  expect(f.editor.keyboard.list().find((binding) => binding.id === "local.action")?.keys).toEqual(["b"]);
+  surface.dispatchEvent(event("keydown", surface, "a"));
+  expect(calls).toBe(0);
+  surface.dispatchEvent(event("keydown", surface, "b"));
+  expect(calls).toBe(1);
+  api.destroy();
+  expect(f.editor.blocks.getBlockNode("same-id")?.content).toBe("A");
+  close();
+  surface.dispatchEvent(event("keydown", surface, "b"));
+  expect(calls).toBe(1);
+  await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
+});

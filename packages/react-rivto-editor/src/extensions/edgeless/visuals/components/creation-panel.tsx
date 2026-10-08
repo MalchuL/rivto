@@ -6,6 +6,7 @@
  * line-style controls that new objects of that category inherit. Defaults are
  * persisted through the visual controller so they survive tool switches.
  */
+import { editorControlProps } from "../../../../constants";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
 import type { EdgelessVisualController } from "../controller";
@@ -137,7 +138,7 @@ export function CreationPanel({
         tools={preset("Text", { kind: "text" }, "text")}
         defaults={
           <>
-            <NativeSelect
+            <NativeSelect {...editorControlProps}
               size="sm"
               className={SELECT_CLASS}
               aria-label="Default font"
@@ -188,7 +189,7 @@ export function CreationPanel({
         <>
           <ColorControl label="Default connector color" value={defaults.connector.stroke} onChange={(stroke) => controller.setCreationDefaults("connector", { stroke })} />
           <SizeControl label="Default connector width" preview="dot" value={defaults.connector.strokeWidth} max={24} onChange={(strokeWidth) => controller.setCreationDefaults("connector", { strokeWidth })} />
-          <NativeSelect
+          <NativeSelect {...editorControlProps}
             size="sm"
             className={SELECT_CLASS}
             aria-label="Default connector line style"

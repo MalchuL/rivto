@@ -5,12 +5,8 @@
  *
  * @module
  */
-import { BLOCK_ID_SELECTOR } from "../../constants";
-import { DOCUMENT_VIEW_SELECTOR } from "../../managers/events/document-view";
+import { DocumentViewDOM, DOCUMENT_VIEW_SELECTOR } from "../../managers/events/document-view";
 
-const BLOCK = `.page-block${BLOCK_ID_SELECTOR}`;
-/** Direct and single-wrapper root blocks supported by page container renderers. */
-const ROOT_BLOCKS = `:scope > ${BLOCK}, :scope > :not(.page-block) > ${BLOCK}`;
 const ROOT_LEAD_RADIUS = 6;
 
 /** Measured anchor coordinates relative to the body-hosted overlay. */
@@ -24,7 +20,7 @@ export interface ThreadPoint {
 }
 
 interface ThreadPathOptions {
-  readonly root: Element;
+  readonly root: HTMLElement;
   readonly rootLineOffset: number;
   readonly excluded: ReadonlySet<string>;
   readonly continued: ReadonlySet<string> | null;
@@ -64,16 +60,18 @@ export function buildThreadPath({ root, rootLineOffset, excluded, continued, poi
     const type = block.getAttribute("data-block-type") ?? "";
     return !excluded.has(type) && (!continued || continued.has(type));
   };
+  const dom = new DocumentViewDOM(root);
   const active = root.ownerDocument.activeElement;
-  const focused = active && root.contains(active) ? active.closest(BLOCK) : null;
+  const focused = active && root.contains(active) ? dom.getBlock(active) : null;
   if (!focused) return "";
   // An embedding owns its own overlay; the enclosing view must not thread
   // through the source subtree merely because its DOM contains that view.
-  if (focused.closest(DOCUMENT_VIEW_SELECTOR) !== root.closest(DOCUMENT_VIEW_SELECTOR)) return "";
+  if (active?.closest(DOCUMENT_VIEW_SELECTOR) !== root.closest(DOCUMENT_VIEW_SELECTOR)) return "";
 
-  const roots = root.querySelectorAll(ROOT_BLOCKS);
+  // Direct and wrapped root blocks share the same document boundary regardless of wrapper depth.
+  const roots = dom.getRootBlocks();
   const blocks: Element[] = [];
-  for (let block: Element | null = focused; block && root.contains(block); block = block.parentElement?.closest(BLOCK) ?? null) {
+  for (let block: Element | null = focused; block && root.contains(block); block = dom.getParent(block)) {
     blocks.unshift(block);
   }
   // A container stays connected to its parent, but its own descendants do not get threads.

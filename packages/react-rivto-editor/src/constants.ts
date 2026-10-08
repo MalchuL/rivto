@@ -69,3 +69,24 @@ export const PREVENT_TEXT_EDITING_SELECTOR = `[${PREVENT_TEXT_EDITING_ATTRIBUTE}
  * promote the parent.
  */
 export const BLOCK_ROW_CLASS = "page-block-row";
+
+/**
+ * Marks a control that owns clicks and pointer input inside a block.
+ * Apply this to custom controls as well as semantic buttons, inputs, and links.
+ * A control can opt into selection dragging by also carrying the selection-anchor
+ * attribute; the prevent-text-editing attribute always prevents that opt-in.
+ */
+export const EDITOR_CONTROL_ATTRIBUTE = "data-editor-control";
+
+/** Matches marked controls without depending on their HTML tag or component. */
+export const EDITOR_CONTROL_SELECTOR = `[${EDITOR_CONTROL_ATTRIBUTE}]`;
+
+/**
+ * Props for a control that owns clicks and pointer input inside the editor.
+ * Spread these onto the control in its extension or renderer; shared UI
+ * components remain independent of editor behavior and must forward the props
+ * to their DOM element. Combine with the selection-anchor attribute when the
+ * control should also allow structural selection drags. This adds no handlers
+ * and does not change native element semantics or keyboard behavior.
+ */
+export const editorControlProps = { [EDITOR_CONTROL_ATTRIBUTE]: "" } as const;

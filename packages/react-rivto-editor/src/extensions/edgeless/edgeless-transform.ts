@@ -1,3 +1,5 @@
+import { canvasPoint } from "./visuals/utils/canvas-point";
+import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../constants";
 /**
  * Delegated move, resize, and rotate for edgeless cards, visuals, and groups.
  *
@@ -42,7 +44,7 @@ const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
 const BLOCK_SELECTOR = "[data-block-id]";
 // Bento edge handles are not buttons. Exclude them so card transform does not
 // steal pointerdown before the tile can preview a width.
-const CONTROL_SELECTOR = "[data-block-content], [data-edgeless-ui], button:not([data-edgeless-drag-handle]), input, textarea, select, a, [contenteditable=true], [data-bento-resize-edge]";
+const CONTROL_SELECTOR = `[data-block-content], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}:not([data-edgeless-drag-handle]), ${PREVENT_TEXT_EDITING_SELECTOR}, [contenteditable=true], [data-bento-resize-edge]`;
 const RESIZE_CORNERS = new Set<ResizeCorner>(["n", "e", "s", "w", "nw", "ne", "sw", "se"]);
 const CONNECTOR_PREVIEW_CLASS = "edgeless-connector-live-preview";
 const CONNECTOR_LABEL_CLASS = "edgeless-connector-label";
@@ -143,11 +145,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
   const rotationAt = (root: HTMLElement, active: TransformStart, clientX: number, clientY: number, shiftKey = false): number => {
     const frame = active.frames.get(active.ids[0]!);
     if (!frame) return active.rotation ?? 0;
-    const rect = root.getBoundingClientRect();
-    const zoom = Number(root.dataset.edgelessZoom) || 1;
-    const panX = Number(root.dataset.edgelessPanX) || 0;
-    const panY = Number(root.dataset.edgelessPanY) || 0;
-    const point = { x: (clientX - rect.left - panX) / zoom, y: (clientY - rect.top - panY) / zoom };
+    const point = canvasPoint({ clientX, clientY }, root);
     const angle = Math.atan2(point.y - frame.y - frame.height / 2, point.x - frame.x - frame.width / 2) * 180 / Math.PI;
     const next = normalizeRotation((active.rotation ?? 0) + angle - (active.pointerAngle ?? angle));
     return shiftKey ? normalizeRotation(Math.round(next / 15) * 15) : next;
@@ -548,6 +546,7 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
     const snapCandidates = canvasElements
       .filter((element) => element.type !== "connector" && element.type !== "group" && !moving.has(element.id))
       .map((element) => rotatedFrameBounds(element.frame, rotation(element.id)));
+    const pointer = rotating ? canvasPoint(event, root) : undefined;
     start = {
       kind,
       x: event.clientX,
@@ -561,8 +560,8 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       rotation: rotating ? rotation(id) : undefined,
       pointerAngle: rotating && frames.get(id)
         ? Math.atan2(
-          (event.clientY - root.getBoundingClientRect().top - (Number(root.dataset.edgelessPanY) || 0)) / (Number(root.dataset.edgelessZoom) || 1) - frames.get(id)!.y - frames.get(id)!.height / 2,
-          (event.clientX - root.getBoundingClientRect().left - (Number(root.dataset.edgelessPanX) || 0)) / (Number(root.dataset.edgelessZoom) || 1) - frames.get(id)!.x - frames.get(id)!.width / 2,
+          pointer!.y - frames.get(id)!.y - frames.get(id)!.height / 2,
+          pointer!.x - frames.get(id)!.x - frames.get(id)!.width / 2,
         ) * 180 / Math.PI
         : undefined,
       returnToGroup: resize || rotating ? undefined : returnToGroup,

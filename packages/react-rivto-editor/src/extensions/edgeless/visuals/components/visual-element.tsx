@@ -4,6 +4,7 @@
  * Selection handles subscribe per visual ID so marquee growth over a neighbor
  * does not re-render this node or recreate its label editor.
  */
+import { editorControlProps } from "../../../../constants";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import {
   EditableLabel,
@@ -284,7 +285,7 @@ export function VisualElement({
       {content}
       {element && <ElementSlots element={element} selected={selected} />}
       {selected && visual.kind !== "connector" && RESIZE_HANDLES.map((corner) => (
-        <button
+        <button {...editorControlProps}
           key={corner}
           className={VISUAL_RESIZE_CLASS}
           data-edgeless-resize-handle={corner}
@@ -293,7 +294,7 @@ export function VisualElement({
         />
       ))}
       {selected && visual.kind !== "connector" && (
-        <button
+        <button {...editorControlProps}
           className={VISUAL_ROTATION_CLASS}
           data-edgeless-rotation-handle="true"
           type="button"
@@ -303,7 +304,7 @@ export function VisualElement({
       {selected && visual.kind === "connector" && source && target && (["source", "target"] as const).map((key) => {
         const point = (key === "source" ? source : target).position;
         return (
-          <button
+          <button {...editorControlProps}
             key={key}
             className="edgeless-connector-endpoint"
             data-edgeless-connector-endpoint={key}

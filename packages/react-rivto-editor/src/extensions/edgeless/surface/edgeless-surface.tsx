@@ -1,3 +1,4 @@
+import { EDITOR_CONTROL_SELECTOR } from "../../../constants";
 import { getEdgelessSurfaceOptions } from "../register";
 import { SurfaceBoundary } from "../../../surfaces/surface";
 /**
@@ -260,7 +261,7 @@ function EdgelessSurfaceContent({
     const target = event.target;
     if (!root || !(target instanceof Element) || event.button !== 0) return;
     if (root.dataset.edgelessTool === "pan" || root.dataset.edgelessTool === "place") return;
-    if (target.closest("[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], button, input, textarea, select, a") ||
+    if (target.closest(`[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}`) ||
       target.closest(".edgeless-drawing-capture[data-active]")) return;
     const rect = root.getBoundingClientRect();
     const x = (event.clientX - rect.left - pan.x) / zoom;

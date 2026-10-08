@@ -1,4 +1,4 @@
-import { findViewElements, isInDocumentView } from "../../../managers/events/document-view";
+import { DocumentViewDOM, isInDocumentView } from "../../../managers/events/document-view";
 /** Measures one active surface and resolves its explicit drop regions. */
 import type { EditorBlock } from "@chulane/rivto";
 import type { ReactEditor } from "../../../types";
@@ -32,11 +32,12 @@ export function getDropBlocks(runtime: ReactEditor): EditorBlock[] {
  * rectangle getters; blocks without a direct page row or client rectangles are omitted.
  */
 export function collectDropLayout(root: HTMLElement, runtime: ReactEditor): DropLayoutBlock[] {
-  return findViewElements(root, "[data-block-id]").flatMap((element) => {
+  const dom = new DocumentViewDOM(root);
+  return dom.getBlocks().flatMap((element) => {
     const id = element.dataset.blockId;
-    const row = element.querySelector<HTMLElement>(":scope > .page-block-row");
+    const row = dom.getRow(element);
     if (!id || !row || !element.getClientRects().length) return [];
-    const parent = element.parentElement?.closest<HTMLElement>("[data-block-id]");
+    const parent = dom.getParent(element);
     const view = runtime.views.resolve(id);
     return [{
       id, parentId: parent && root.contains(parent) ? parent.dataset.blockId ?? null : null,

@@ -11,7 +11,6 @@ import {
   type EditorBlockInput as BlockInput,
   createStructuralSelection,
 } from "@chulane/rivto";
-import type { BlockListType } from "./page/list";
 import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard/clipboard";
 import { registerHistory, type HistoryExtensionOptions } from "./history/history";
 import { registerTextSelection } from "./selection/text-selection";
@@ -196,22 +195,7 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
   id: "slash.commands",
   setup: (reactEditor) => {
     reactEditor.extensions.mount(() => createElement(SlashMenu, { options }));
-    const listCommands: readonly { type: BlockListType; title: string }[] = [
-      { type: "list", title: "List" },
-      { type: "checkbox", title: "Checkbox" },
-      { type: "numbered_list", title: "Numbered list" },
-      { type: "start_numbered_list", title: "Start numbered list" },
-      { type: "continue_numbered_list", title: "Continue numbered list" },
-    ];
     const disposers = [
-      ...listCommands.map(({ type, title }) => reactEditor.slashCommands.register({
-        id: `list.${type}`,
-        title,
-        group: "Lists",
-        isAvailable: ({ blockId }) => reactEditor.blockListProps.has("list") &&
-          reactEditor.blocks.getBlockNode(blockId)?.listProps.type !== type,
-        execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
-      })),
       // Clone the complete subtree while leaving persisted IDs for the store to generate.
       reactEditor.slashCommands.register({
         id: "block.duplicate",
@@ -258,30 +242,6 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
           reactEditor.selection.set(createStructuralSelection([blockId]));
           reactEditor.selection.delete();
         },
-      }),
-      reactEditor.slashCommands.register({
-        id: "block.collapse",
-        title: "Collapse block",
-        group: "Actions",
-        keywords: ["fold", "hide"],
-        isAvailable: ({ blockId }) => {
-          const block = reactEditor.blocks.getBlockNode(blockId);
-          return reactEditor.blockListProps.has("collapse") &&
-            Boolean(block?.childIds.length && block.listProps.collapsed !== true);
-        },
-        execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
-      }),
-      reactEditor.slashCommands.register({
-        id: "block.expand",
-        title: "Expand block",
-        group: "Actions",
-        keywords: ["unfold", "show"],
-        isAvailable: ({ blockId }) => {
-          const block = reactEditor.blocks.getBlockNode(blockId);
-          return reactEditor.blockListProps.has("collapse") &&
-            Boolean(block?.childIds.length && block.listProps.collapsed === true);
-        },
-        execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
       }),
     ];
     // Core slash registrations are stack-like and therefore dispose in reverse.

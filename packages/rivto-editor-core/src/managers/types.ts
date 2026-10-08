@@ -79,6 +79,8 @@ export interface BlockManagerApi {
   getBlocks(): EditorBlock[];
   /** @returns Root block IDs in document order. */
   getRootIds(): string[];
+  /** @param ids - Candidate IDs. @returns Unique placed IDs in document order, omitting missing records. */
+  getOrderedIds(ids: Iterable<string>): string[];
   /** @param id - Block ID. @param listener - Change listener. @returns Its disposer. */
   subscribeBlock(id: string, listener: () => void): () => void;
   /** @param id - Block ID. @param listener - Node change listener. @returns Its disposer. */

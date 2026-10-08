@@ -2,8 +2,6 @@ import type { DocumentModel } from "@chulane/document-model";
 import type { EditorAcquisition, EditorStorage } from "../../editor-storage";
 import type { ReactEditor } from "../../types";
 import type { SelectionCapability } from "../../capabilities";
-import { EventManager } from "./event-manager";
-import { KeyboardManager } from "./keyboard-manager";
 import { DOCUMENT_VIEW_ATTRIBUTE, type DocumentViewScope } from "./document-view";
 
 /** Immutable loading state observed by the EditorView boundary. */
@@ -170,27 +168,9 @@ export class EditorViewController implements DocumentViewScope {
    * @returns Document-bound API sharing registries, DOM events, and lifecycle with this editor.
    */
   private createApi(document: DocumentModel): ReactEditor {
-    const run = <Result,>(operation: () => Result): Result => {
-      return (this.editor.events as EventManager).withViewRoot(this.getRoot(), operation);
-    };
-    const events = Object.assign(Object.create(this.editor.events), {
-      getRoot: () => this.getRoot(),
-      setRoot: (root: HTMLElement | null) => this.setRoot(root),
-      runInView: run,
-      register: (definition: Parameters<EventManager["register"]>[0], listener: Parameters<EventManager["register"]>[1]) =>
-        this.own((this.editor.events as EventManager).register(definition, listener, this)),
-      delete: (id: string) => this.editor.events.delete(`${this.id}:${id}`),
-    });
-    const keyboard = Object.assign(Object.create(this.editor.keyboard), {
-      register: (definition: Parameters<KeyboardManager["register"]>[0], listener: Parameters<KeyboardManager["register"]>[1]) =>
-        this.own((this.editor.keyboard as KeyboardManager).register(definition, listener, this)),
-      delete: (id: string) => this.editor.keyboard.delete(`${this.id}:${id}`),
-    });
-    const api = Object.create(this.editor) as ReactEditor;
-    Object.defineProperties(api, {
-      documentId: { value: document.id }, rootBlockId: { value: this.rootBlockId },
-      events: { value: events }, keyboard: { value: keyboard },
-    });
+    const events = this.editor.events.forView(this);
+    const keyboard = this.editor.keyboard.forView(this);
+    const run = events.runInView;
     const selection = this.editor.selection;
     let checkedSelection: ReturnType<typeof selection.snapshot>;
     let checkedRevision = -1; let contained = false;
@@ -228,8 +208,37 @@ export class EditorViewController implements DocumentViewScope {
       restoreDOM: (value = selectionApi.get(), options?: Parameters<SelectionCapability["restoreDOM"]>[1]) =>
         Boolean(value) && run(() => selection.restoreDOM(value, options)),
     };
-    Object.defineProperty(api, "selection", { value: selectionApi });
-    return api;
+    const editor = this.editor;
+    return {
+      documentId: document.id,
+      rootBlockId: this.rootBlockId,
+      events,
+      keyboard,
+      selection: selectionApi,
+      blocks: editor.blocks,
+      blockTypes: editor.blockTypes,
+      blockListProps: editor.blockListProps,
+      elements: editor.elements,
+      mode: editor.mode,
+      commands: editor.commands,
+      history: editor.history,
+      renderers: editor.renderers,
+      views: editor.views,
+      clipboard: editor.clipboard,
+      surfaces: editor.surfaces,
+      extensions: editor.extensions,
+      slashCommands: editor.slashCommands,
+      get revision() { return editor.revision; },
+      get createDefaultBlock() { return editor.createDefaultBlock; },
+      set createDefaultBlock(value) { editor.createDefaultBlock = value; },
+      get isEmptyBlock() { return editor.isEmptyBlock; },
+      set isEmptyBlock(value) { editor.isEmptyBlock = value; },
+      installDefaultWriting: (options) => editor.installDefaultWriting(options),
+      subscribe: (listener) => editor.subscribe(listener),
+      getDocument: () => document,
+      // A view releases its acquisition through mount cleanup; it never destroys the shared editor.
+      destroy: () => {},
+    };
   }
 
   private bind(document: DocumentModel, retained = false): void {

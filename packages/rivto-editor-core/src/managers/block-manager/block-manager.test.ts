@@ -6,6 +6,25 @@
 import { createTestEditor, createStructuralSelection } from "../../editor/test-utils";
 
 describe("block feature ownership independent of presentation", () => {
+  it("orders selected IDs through their ancestors and follows moves and undo", async () => {
+    const editor = await createTestEditor();
+    editor.blocks.importForest([
+      { id: "a", type: "paragraph", children: [{ id: "child", type: "paragraph" }] },
+      { id: "b", type: "paragraph" },
+      { id: "c", type: "paragraph" },
+    ]);
+    const forest = jest.spyOn(editor.runtime.blocks, "getBlocks");
+    expect(editor.blocks.getOrderedIds(["b", "child", "a", "child", "missing"]))
+      .toEqual(["a", "child", "b"]);
+    editor.history.clear();
+    editor.blocks.moveBlock("b", "a", "before");
+    expect(editor.blocks.getOrderedIds(["child", "b", "a"])).toEqual(["b", "a", "child"]);
+    editor.history.undo();
+    expect(editor.blocks.getOrderedIds(["child", "b", "a"])).toEqual(["a", "child", "b"]);
+    expect(forest).not.toHaveBeenCalled();
+    editor.destroy();
+  });
+
   it("returns the complete block assembled during insertion", async () => {
     const editor = await createTestEditor();
 

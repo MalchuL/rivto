@@ -79,7 +79,7 @@ export function textSelectionEdge(
     navigationOutlineBlocks(editor, selection.focusBlockId),
     null,
     false,
-    (block) => reactEditor.blockListProps.has("collapse") && block.listProps.collapsed === true,
+    (block) => !reactEditor.blockListProps.childrenVisible(block),
   ).map(({ block }) => block.id);
   const anchorIndex = ids.indexOf(ends.anchor.blockId);
   const headIndex = ids.indexOf(ends.head.blockId);

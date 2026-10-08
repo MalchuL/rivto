@@ -111,3 +111,11 @@ export interface ElementSlotRegistration {
   /** Optional synchronous presentation filter. */
   readonly when?: (props: ElementSlotProps) => boolean;
 }
+
+/** Stable identity of one installed slot, retained while neighboring slots change. */
+export interface ResolvedSlot<Props> {
+  /** Manager-local identity assigned once per registration, including repeated components. */
+  readonly id: number;
+  /** Component rendered with the current owner context. */
+  readonly component: ComponentType<Props>;
+}

@@ -15,10 +15,11 @@ import { SurfaceContext } from "../../surfaces/surface";
  * @module
  */
 import type { EditorBlockNode, EditorElement } from "@chulane/rivto";
-import { Fragment, type ComponentType, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useReactEditor } from "../../hooks";
 import {
   SLOT_POSITIONS,
+  type ResolvedSlot,
   type BlockSlotPosition,
   type BlockSlotProps,
   type ElementSlotProps,
@@ -35,7 +36,7 @@ function SlotHost<Props extends object>({
 }: {
   readonly owner: "block" | "element";
   readonly position: BlockSlotPosition;
-  readonly components: readonly ComponentType<Props>[];
+  readonly components: readonly ResolvedSlot<Props>[];
   readonly props: Props;
 }) {
   if (!components.length) return null;
@@ -45,8 +46,8 @@ function SlotHost<Props extends object>({
       data-slot-owner={owner}
       data-slot-position={position}
     >
-      {components.map((Component, index) => (
-        <Fragment key={`${(Component.displayName ?? Component.name) || "slot"}-${index}`}>
+      {components.map(({ id, component: Component }) => (
+        <Fragment key={id}>
           <Component {...props} />
         </Fragment>
       ))}
@@ -89,14 +90,14 @@ export function BlockSlots({
     <SlotHost
       owner="block"
       position="start"
-      components={reactEditor.surfaces.getBlockSlots("start", slotProps)}
+      components={reactEditor.surfaces.getBlockSlotEntries("start", slotProps)}
       props={slotProps}
     />
     {children}
     <SlotHost
       owner="block"
       position="end"
-      components={reactEditor.surfaces.getBlockSlots("end", slotProps)}
+      components={reactEditor.surfaces.getBlockSlotEntries("end", slotProps)}
       props={slotProps}
     />
     {SLOT_POSITIONS.map((position) => (
@@ -104,7 +105,7 @@ export function BlockSlots({
         key={position}
         owner="block"
         position={position}
-        components={reactEditor.surfaces.getBlockSlots(position, slotProps)}
+        components={reactEditor.surfaces.getBlockSlotEntries(position, slotProps)}
         props={slotProps}
       />
     ))}
@@ -137,7 +138,7 @@ export function BlockBodySlot({ block, selected }: Omit<BlockSlotProps, "mode">)
   return <SlotHost
     owner="block"
     position="body"
-    components={reactEditor.surfaces.getBlockSlots("body", props)}
+    components={reactEditor.surfaces.getBlockSlotEntries("body", props)}
     props={props}
   />;
 }
@@ -163,7 +164,7 @@ export function ElementSlots({
       key={position}
       owner="element"
       position={position}
-      components={reactEditor.surfaces.getElementSlots(position, slotProps)}
+      components={reactEditor.surfaces.getElementSlotEntries(position, slotProps)}
       props={slotProps}
     />
   ))}</>;

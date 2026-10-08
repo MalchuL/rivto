@@ -13,7 +13,7 @@ import {
   type ReactEditor,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
-import { useCallback, useSyncExternalStore, type CSSProperties } from "react";
+import { useCallback, useRef, useSyncExternalStore, type CSSProperties } from "react";
 
 const DEMO_BLOCK_NUMBER_CLASS = "demo-block-number";
 
@@ -107,8 +107,16 @@ function useBlockOrdinal(block: BlockSlotProps["block"]): BlockOrdinal | undefin
   // Read after document publication: undo can notify structure observers
   // before every affected root/child snapshot has been invalidated.
   const subscribe = useCallback((listener: () => void) => reactEditor.subscribe(listener), [reactEditor]);
-  const getBlockOrderSnapshot = useCallback(() => blockOrderSnapshot(reactEditor), [reactEditor]);
-  return useSyncExternalStore(subscribe, getBlockOrderSnapshot, getBlockOrderSnapshot).get(block.id);
+  const previous = useRef<BlockOrdinal | undefined>(undefined);
+  const getBlockOrderSnapshot = useCallback(() => {
+    const current = blockOrderSnapshot(reactEditor).get(block.id);
+    // Unchanged labels keep their snapshot and skip a render.
+    if (current?.number !== previous.current?.number || current?.depth !== previous.current?.depth) {
+      previous.current = current;
+    }
+    return previous.current;
+  }, [reactEditor, block.id]);
+  return useSyncExternalStore(subscribe, getBlockOrderSnapshot, getBlockOrderSnapshot);
 }
 
 /** Draws the block's document-order number in the page's left gutter. */

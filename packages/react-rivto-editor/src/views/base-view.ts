@@ -17,10 +17,9 @@ import {
 import type { KeyboardSelectionTarget } from "../managers";
 import { navigationDomRoot } from "../extensions/built-ins/page/navigation/utils/scope";
 import { removeEmptyBlockAfterStructuralPredecessor } from "../extensions/built-ins/page/block-merge/utils";
-import { isNumberedListType } from "../extensions/built-ins/page/list";
 import { scheduleBlockFocus, focusCaret } from "./ops/focus-ops";
 import { indentBlocks, outdentBlocks } from "./ops/outline-ops";
-import { convertEmptyToList, mergeBlocks, resetToWritingType, splitBlockAt } from "./ops/text-ops";
+import { mergeBlocks, resetToWritingType, splitBlockAt } from "./ops/text-ops";
 import type {
   BlockViewBehavior,
   BlockViewContext,
@@ -52,25 +51,11 @@ export class BaseBlockView implements BlockViewBehavior {
   onSplit(context: BlockViewContext, target: KeyboardSelectionTarget): BlockViewOutcome {
     const { reactEditor, block, root } = context;
     const { isEmptyBlock } = reactEditor;
-    if (isEmptyBlock(block) &&
-      (block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type))) {
-      // The first Enter removes only the visible list state; the block keeps
-      // its outline position and unrelated properties for the next press.
-      reactEditor.blocks.deleteListProps(block.id, ["type", "checked"]);
-      focusCaret(reactEditor, root, block.id, 0);
-      return "handled";
-    }
+    if (reactEditor.blockListProps.onSplit(context)) return "handled";
     if (isEmptyBlock(block) && reactEditor.blocks.getParentId(block.id)) {
       // Lift one permitted level per Enter, stopping at container outline floors.
       outdentBlocks(reactEditor, [block.id]);
       focusCaret(reactEditor, root, block.id, 0);
-      return "handled";
-    }
-    const listActive = reactEditor.blockListProps.has("list");
-    const collapseActive = reactEditor.blockListProps.has("collapse");
-    if (listActive && isEmptyBlock(block) && block.listProps.type !== "list") {
-      convertEmptyToList(reactEditor, block.id);
-      scheduleBlockFocus(reactEditor, root, block.id, 0);
       return "handled";
     }
     const splitAt = target.collapsed
@@ -79,7 +64,7 @@ export class BaseBlockView implements BlockViewBehavior {
     const nextBlock = splitBlockAt(reactEditor, block, splitAt);
     // Core mode can be edgeless while Enter comes from a page embedding.
     // Only extend the canvas card's block range when editing its edgeless view.
-    if (block.children.length > 0 && (!collapseActive || block.listProps.collapsed !== true)) {
+    if (block.children.length > 0 && reactEditor.blockListProps.childrenVisible(block)) {
       // Insertion created a sibling. Indent then prepend so Enter places the
       // new writing block as the first visible child.
       reactEditor.blocks.indentBlock(nextBlock.id);
@@ -162,7 +147,7 @@ export class BaseBlockView implements BlockViewBehavior {
    */
   onMergeForward(context: BlockViewContext, target: KeyboardSelectionTarget): BlockViewOutcome {
     const { reactEditor, block, root } = context;
-    if (reactEditor.blockListProps.has("collapse") && block.listProps.collapsed === true) return "default";
+    if (!reactEditor.blockListProps.childrenVisible(block)) return "default";
     const scope = navigationDomRoot(root, block.id);
     if (removeEmptyBlockAfterStructuralPredecessor(reactEditor, scope, block.id)) return "handled";
     const next = findNextEditableBlock(scope, target.blockId);

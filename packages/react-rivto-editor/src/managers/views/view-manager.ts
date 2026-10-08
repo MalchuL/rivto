@@ -1,3 +1,4 @@
+import { dispatchViewAction } from "../../views/dispatch";
 /**
  * Registry of per-type block views with a shared generic fallback.
  *
@@ -10,7 +11,7 @@
 import type { ReactEditorImpl } from "../../react-editor";
 import { BaseBlockView } from "../../views/base-view";
 import type { EditorBlock } from "@chulane/rivto";
-import type { BlockDropDestination, BlockViewBehavior } from "../../views/types";
+import type { BlockDropDestination, BlockViewAction, BlockViewBehavior } from "../../views/types";
 import type { ViewsCapability } from "../../capabilities";
 
 /** Shared fallback used for unregistered and unknown block types. */
@@ -103,6 +104,16 @@ export class ViewManager implements ViewsCapability {
   resolve(blockId: string): BlockViewBehavior {
     const type = this.reactEditor.blocks.getBlockNode(blockId)?.type;
     return (type && this.views.get(type)?.view) || this.fallback;
+  }
+
+  /**
+   * Resolves the block's behavior and runs the shared fallback when it defers.
+   * @param action - Semantic operation requested by an extension.
+   * @param args - Current block context and arguments for that operation.
+   * @returns Whether the operation handled or explicitly rejected the request.
+   */
+  dispatch<Action extends BlockViewAction>(action: Action, ...args: Parameters<BlockViewBehavior[Action]>): boolean {
+    return dispatchViewAction(this.resolve(args[0].block.id), this.fallback, action, ...args);
   }
 
   /**

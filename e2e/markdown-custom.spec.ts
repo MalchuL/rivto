@@ -328,6 +328,14 @@ test("mouse slash execution creates a contentless Counter and undo restores dorm
   const initial = await editor.textContent();
   await page.keyboard.press("End");
   await page.keyboard.type(" /count");
+  // Undo must work immediately after a renderer loses its editable element,
+  // even when the deferred selection callback has not reached its next frame.
+  await page.evaluate(() => {
+    const original = window.requestAnimationFrame;
+    window.requestAnimationFrame = (callback) => original(() => {
+      window.setTimeout(() => callback(performance.now()), 1000);
+    });
+  });
   await page.locator('[data-slash-command="type.demo.counter"]').click();
   const converted = page.locator(blockIdSelector(id));
   await expect(converted).toHaveAttribute("data-block-type", "demo.counter");

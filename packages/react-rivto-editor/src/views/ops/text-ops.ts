@@ -8,7 +8,6 @@
  * @module
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
-import { isNumberedListType } from "../../extensions/built-ins/page/list";
 import type { ReactEditor } from "../../types";
 
 /**
@@ -28,17 +27,12 @@ export function splitBlockAt(
   block: EditorBlock,
   splitAt: number,
 ): EditorBlock {
-  const listActive = reactEditor.blockListProps.has("list");
+  const listProps = reactEditor.blockListProps.prepareSplit(block);
   const clamped = Math.max(0, Math.min(splitAt, block.content.length));
   reactEditor.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
   const nextBlock = reactEditor.blocks.insertBlock({
     ...reactEditor.createDefaultBlock(),
-    ...(listActive ? { listProps: {
-      type: block.listProps.type === "checkbox"
-        ? "checkbox"
-        : isNumberedListType(block.listProps.type) ? "numbered_list" : "list",
-      checked: false,
-    } } : {}),
+    ...(listProps ? { listProps } : {}),
     content: block.content.slice(clamped),
   }, block.id);
   reactEditor.selection.set(createCaretSelection(nextBlock.id, 0));

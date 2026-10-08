@@ -6,6 +6,7 @@
  *
  * @module
  */
+import { editorControlProps } from "../../constants";
 import {
   createContext,
   useContext,
@@ -180,7 +181,7 @@ function FilterOption({ id, checked, label, onToggle }: {
 }) {
   return (
     <Label className={TODO_STORAGE_FILTER_OPTION_CLASS} htmlFor={id}>
-      <Checkbox id={id} checked={checked} onCheckedChange={onToggle} />
+      <Checkbox {...editorControlProps} id={id} checked={checked} onCheckedChange={onToggle} />
       {label}
     </Label>
   );
@@ -302,7 +303,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   return (
     <div {...editing.attributes} className={TODO_STORAGE_CONTENT_CLASS}>
       <div {...editing.preventTextEditingAttributes} className={TODO_STORAGE_TOOLBAR_CLASS}>
-        <Input
+        <Input {...editorControlProps}
           className={TODO_STORAGE_SEARCH_CLASS}
           type="search"
           aria-label="Search TODOs"
@@ -341,7 +342,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
               onToggle={() => updateFilters("projects", toggleFilter(context.filters.projects, project))}
             />)}
           </fieldset>}
-          <Button variant="outline" size="sm" className={TODO_STORAGE_CLEAR_CLASS} type="button" onClick={clearFilters}>Clear filters</Button>
+          <Button {...editorControlProps} variant="outline" size="sm" className={TODO_STORAGE_CLEAR_CLASS} type="button" onClick={clearFilters}>Clear filters</Button>
         </TodoStorageMenu>
         <TodoStorageMenu label="Order" panelLabel="Ordering">
           <FilterOption

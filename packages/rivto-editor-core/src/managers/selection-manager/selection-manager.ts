@@ -6,7 +6,6 @@
  * only sentinel and means the live end of the block. Invalid offsets copy and
  * delete as an empty slice.
  */
-import type { Block } from "@chulane/document-model";
 import { Listeners } from "../../utils";
 import type { RivtoEditorApi } from "../../editor/types";
 import type { SelectionManagerApi } from "../types";
@@ -72,10 +71,8 @@ export class SelectionManager implements SelectionManagerApi {
   resolveBlockSelection(selection: Selection | undefined = this.value): ResolvedSelection | undefined {
     if (!selection?.blocks.length) return undefined;
 
-    const all = this.flattenBlocks(this.editor.blocks.getBlocks());
-    const byId = new Map(all.map((block) => [block.id, block]));
     const members = selection.blocks.flatMap((entry) => {
-      const block = byId.get(entry.id);
+      const block = this.editor.blocks.getBlock(entry.id);
       if (!block) return [];
       // `end: -1` becomes the live length. Invalid offsets become an empty
       // slice at a clamped caret instead of throwing.
@@ -112,7 +109,6 @@ export class SelectionManager implements SelectionManagerApi {
   set(selection: Selection): void {
     const item = selection;
     if (!item || item.type !== "selection" || !Array.isArray(item.blocks)) throw new Error("Invalid selection");
-    const all = this.flattenBlocks(this.editor.blocks.getBlocks());
     if (item.blocks.length) {
       assertBlockRangeEndpoints(item);
       if (!this.editor.blocks.hasBlock(item.anchorBlockId) || !this.editor.blocks.hasBlock(item.focusBlockId)) {
@@ -127,10 +123,7 @@ export class SelectionManager implements SelectionManagerApi {
       if (!this.editor.blocks.hasBlock(block.id)) throw new Error(`Selection block ${block.id} not found`);
     });
     const byId = new Map(item.blocks.map((block) => [block.id, block]));
-    const blocks = all.flatMap((block) => {
-      const entry = byId.get(block.id);
-      return entry ? [{ id: block.id, start: entry.start, end: entry.end }] : [];
-    });
+    const blocks = this.editor.blocks.getOrderedIds(byId.keys()).map((id) => ({ ...byId.get(id)! }));
     (item.elements ?? []).forEach((id) => {
       if (!this.editor.elements.hasElement(id)) throw new Error(`Selection element ${id} not found`);
     });
@@ -231,15 +224,6 @@ export class SelectionManager implements SelectionManagerApi {
       elements: [...(selection.elements ?? [])],
       pluginData: structuredClone(selection.pluginData ?? {}),
     };
-  }
-
-  /**
-   * Flattens detached blocks in depth-first document order.
-   * @param blocks - Document forest to visit.
-   * @returns Ordered blocks, including descendants.
-   */
-  private flattenBlocks(blocks: Block[]): Block[] {
-    return blocks.flatMap((block) => [block, ...this.flattenBlocks(block.children)]);
   }
 
   /** Notifies a stable listener snapshot. */

@@ -15,7 +15,7 @@ import {
   readKeyboardSelection,
   shouldDeleteSelection,
 } from "../../../../../managers";
-import { createBlockViewContext, dispatchViewAction } from "../../../../../views";
+import { createBlockViewContext } from "../../../../../views";
 
 /**
  * Registers forward merging at a collapsed block-end caret.
@@ -36,9 +36,7 @@ export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
     if (!target?.collapsed || !block || target.offset !== block.content.length) return false;
     const context = createBlockViewContext(reactEditor, target.blockId, root, reactEditor.selection.get());
     if (!context) return false;
-    return dispatchViewAction(
-      reactEditor.views.resolve(context.block.id),
-      reactEditor.views.fallback,
+    return reactEditor.views.dispatch(
       "onMergeForward",
       context,
       target,

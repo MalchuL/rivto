@@ -5,6 +5,7 @@
  * snapshots, and undo behavior remain owned by the existing editor managers.
  * @module
  */
+import { editorControlProps } from "../../../constants";
 import { type EditorBlock, type EditorBlockInput } from "@chulane/rivto";
 import { createPortal } from "react-dom";
 import { PlusIcon } from "lucide-react";
@@ -326,7 +327,7 @@ function TableRow({ blockId }: { readonly blockId: string }) {
   const { marker, host } = useBlockHost();
   return <>
     <div ref={marker} className={ROW_CLASS} />
-    {host && createPortal(<Button variant="outline" size="icon-xs" className={`${ADD_ROW_CLASS} ${BOUNDARY_BUTTON_CLASS}`} type="button"
+    {host && createPortal(<Button {...editorControlProps} variant="outline" size="icon-xs" className={`${ADD_ROW_CLASS} ${BOUNDARY_BUTTON_CLASS}`} type="button"
       aria-label="Add table row below" onClick={() => insertTableRow(reactEditor, blockId)}><PlusIcon /></Button>, host)}
   </>;
 }
@@ -445,7 +446,7 @@ function TableCell({ blockId }: { readonly blockId: string }) {
     <div ref={marker} className={CELL_CLASS}>
       <MarkdownContent blockId={blockId} />
     </div>
-    {host && createPortal(<Button variant="outline" size="icon-xs" className={`${ADD_COLUMN_CLASS} ${BOUNDARY_BUTTON_CLASS}`} type="button"
+    {host && createPortal(<Button {...editorControlProps} variant="outline" size="icon-xs" className={`${ADD_COLUMN_CLASS} ${BOUNDARY_BUTTON_CLASS}`} type="button"
       aria-label="Add table column to the right" onClick={() => insertTableColumn(reactEditor, blockId)}><PlusIcon /></Button>, host)}
     {host && createPortal(<div className={RESIZE_COLUMN_CLASS} role="separator" tabIndex={0}
       aria-label="Resize table column" aria-orientation="vertical"

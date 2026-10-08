@@ -6,6 +6,7 @@
  *
  * @module
  */
+import { editorControlProps } from "../../constants";
 import {
   useCallback,
   useId,
@@ -319,29 +320,29 @@ export function DefaultTodoItemPropertiesModal({
               title text is the public accessible name hosts and tests rely on. */}
           <DialogTitle className="text-base">TODO item properties</DialogTitle>
           <DialogDescription className="sr-only">Edit status, description, priority, and project.</DialogDescription>
-          <Button variant="ghost" size="icon-sm" className={TODO_MODAL_CLOSE_CLASS} type="button" aria-label="Close properties" onClick={finish}>
+          <Button {...editorControlProps} variant="ghost" size="icon-sm" className={TODO_MODAL_CLOSE_CLASS} type="button" aria-label="Close properties" onClick={finish}>
             <XIcon />
           </Button>
         </div>
         <div className={TODO_MODAL_FIELDS_CLASS}>
           <Label className={TODO_MODAL_FIELD_CLASS} htmlFor={`${fieldId}-status`}>Status
-            <NativeSelect id={`${fieldId}-status`} className="w-full" value={draft.status}
+            <NativeSelect {...editorControlProps} id={`${fieldId}-status`} className="w-full" value={draft.status}
               onChange={(event) => setDraft({ ...draft, status: event.target.value as TodoItemStatus })}>
               {TODO_STATUSES.map((status) => <NativeSelectOption key={status} value={status}>{status}</NativeSelectOption>)}
             </NativeSelect>
           </Label>
           <Label className={TODO_MODAL_FIELD_CLASS} htmlFor={`${fieldId}-description`}>Description
-            <Textarea id={`${fieldId}-description`} className="min-h-[72px]" value={draft.description}
+            <Textarea {...editorControlProps} id={`${fieldId}-description`} className="min-h-[72px]" value={draft.description}
               onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
           </Label>
           <Label className={TODO_MODAL_FIELD_CLASS} htmlFor={`${fieldId}-priority`}>Priority
-            <NativeSelect id={`${fieldId}-priority`} className="w-full" value={draft.priority}
+            <NativeSelect {...editorControlProps} id={`${fieldId}-priority`} className="w-full" value={draft.priority}
               onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) as TodoItemProps["priority"] })}>
               {[1, 2, 3, 4].map((priority) => <NativeSelectOption key={priority} value={priority}>{priority}</NativeSelectOption>)}
             </NativeSelect>
           </Label>
           <Label className={TODO_MODAL_FIELD_CLASS} htmlFor={`${fieldId}-project`}>Project
-            <Input id={`${fieldId}-project`} value={draft.project}
+            <Input {...editorControlProps} id={`${fieldId}-project`} value={draft.project}
               onChange={(event) => setDraft({ ...draft, project: event.target.value })} />
           </Label>
         </div>
@@ -422,7 +423,7 @@ export function TodoItem({
       data-todo-status={block.props.status}
       data-todo-priority={block.props.priority}
     >
-      <Button
+      <Button {...editorControlProps}
         {...editing.preventTextEditingAttributes}
         variant="ghost"
         size="icon-xs"
@@ -442,7 +443,7 @@ export function TodoItem({
           onInput={updateName}
           onCompositionEnd={finishComposition}
         />
-        <Input
+        <Input {...editorControlProps}
           {...editing.preventTextEditingAttributes}
           className={TODO_DESCRIPTION_CLASS}
           aria-label="Description"
@@ -451,7 +452,7 @@ export function TodoItem({
           onChange={(event) => commitInlineProperty({ description: event.currentTarget.value })}
         />
         <div className={TODO_META_CLASS}>
-          <NativeSelect
+          <NativeSelect {...editorControlProps}
             {...editing.preventTextEditingAttributes}
             className={TODO_PRIORITY_CLASS}
             aria-label="Priority"
@@ -462,7 +463,7 @@ export function TodoItem({
           >
             {[1, 2, 3, 4].map((priority) => <NativeSelectOption key={priority} value={priority}>P{priority}</NativeSelectOption>)}
           </NativeSelect>
-          <Input
+          <Input {...editorControlProps}
             {...editing.preventTextEditingAttributes}
             className={TODO_PROJECT_CLASS}
             aria-label="Project"
@@ -472,7 +473,7 @@ export function TodoItem({
           />
         </div>
       </div>
-      <Button
+      <Button {...editorControlProps}
         {...editing.preventTextEditingAttributes}
         variant="ghost"
         size="icon-xs"

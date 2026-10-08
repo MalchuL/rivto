@@ -1,7 +1,8 @@
+import { editorControlProps } from "../../constants";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { EditorBlock } from "@chulane/rivto";
 import type { BlockResolution } from "../../editor-storage";
-import type { ReactEditor } from "../../types";
+import { useAcquiredEditor } from "../../hooks/editor/use-acquired-editor";
 import { z } from "zod";
 import { Link2Icon } from "lucide-react";
 import { Button } from "../../components/ui/button";
@@ -42,7 +43,7 @@ function EmbeddingControls({ block }: BlockSlotProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="ghost" size="icon-xs" aria-label="Edit embedding" title="Edit embedding">
+        <Button {...editorControlProps} type="button" variant="ghost" size="icon-xs" aria-label="Edit embedding" title="Edit embedding">
           <Link2Icon aria-hidden="true" />
         </Button>
       </PopoverTrigger>
@@ -62,13 +63,13 @@ function EmbeddingControls({ block }: BlockSlotProps) {
           </div>
           <label className="flex flex-col gap-1.5 text-sm">
             Document ID
-            <Input name="targetDocumentId" aria-label="Target document ID" defaultValue={props.targetDocumentId} placeholder="Document ID" />
+            <Input {...editorControlProps} name="targetDocumentId" aria-label="Target document ID" defaultValue={props.targetDocumentId} placeholder="Document ID" />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
             Block ID
-            <Input name="targetBlockId" aria-label="Target block ID" defaultValue={props.targetBlockId} placeholder="Block ID" />
+            <Input {...editorControlProps} name="targetBlockId" aria-label="Target block ID" defaultValue={props.targetBlockId} placeholder="Block ID" />
           </label>
-          <Button type="submit" size="sm" className="self-end">Save embedding</Button>
+          <Button {...editorControlProps} type="submit" size="sm" className="self-end">Save embedding</Button>
         </form>
       </PopoverContent>
     </Popover>
@@ -84,7 +85,6 @@ function EmbeddingBody({ block }: BlockSlotProps) {
   const targetAddress = JSON.stringify([targetDocumentId, targetBlockId]);
   const ownAddress = JSON.stringify([reactEditor.getDocument().id, blockId]);
   const references = useContext(EditorStorageContext);
-  const [source, setSource] = useState<ReactEditor>();
   const [location, setLocation] = useState<BlockResolution & { targetAddress: string; error?: unknown }>({ targetAddress: "", ambiguous: false });
   const resolvedAddress = JSON.stringify([location.documentId, targetBlockId]);
   const locationIsCurrent = location.targetAddress === targetAddress;
@@ -103,36 +103,21 @@ function EmbeddingBody({ block }: BlockSlotProps) {
       });
     });
   }, [targetAddress, targetDocumentId, targetBlockId, references]);
-  useEffect(() => {
-    setSource(undefined);
-    if (!references || !location.documentId || cycle) return;
-    const controller = new AbortController();
-    let release: (() => Promise<void>) | undefined;
-    void references.acquireEditor(location.documentId, { signal: controller.signal }).then((acquisition) => {
-      release = acquisition.release;
-      if (controller.signal.aborted) void release().catch(console.error);
-      else setSource(acquisition.editor);
-    }).catch((error) => {
-      if (!controller.signal.aborted) setLocation((current) => ({ ...current, error }));
-    });
-    return () => {
-      controller.abort();
-      void release?.().catch(console.error);
-    };
-  }, [references, location.documentId, cycle]);
+  const { editor: source, error: sourceError } = useAcquiredEditor(references, cycle ? undefined : location.documentId);
+  const error = location.error ?? sourceError;
   let message = "Loading embedded block…";
   if (!targetDocumentId || !targetBlockId) message = "Choose a target document and block.";
   else if (cycle) message = "Recursive block reference.";
   else if (!references) message = "Block resolution is unavailable.";
-  else if (location.error) message = "Unable to load referenced block.";
+  else if (error) message = "Unable to load referenced block.";
   return (
     <>
       {locationIsCurrent && location.ambiguous && <div role="status">Multiple documents contain this block; showing the first match.</div>}
       {!cycle && targetBlockId && locationIsCurrent && location.documentId && source?.getDocument().id === location.documentId ? (
         <ancestryContext.Provider value={ancestry}>
-          {Boolean(location.error) && <div role="status">Unable to load referenced block.</div>}
-          <div className={`${EMBEDDED_SURFACE_CLASS} min-w-0 max-w-full`} hidden={Boolean(location.error)}>
-            <EditorView reactEditor={source} rootBlockId={targetBlockId} active={!location.error}><PageSurface /></EditorView>
+          {Boolean(error) && <div role="status">Unable to load referenced block.</div>}
+          <div className={`${EMBEDDED_SURFACE_CLASS} min-w-0 max-w-full`} hidden={Boolean(error)}>
+            <EditorView reactEditor={source} rootBlockId={targetBlockId} active={!error}><PageSurface /></EditorView>
           </div>
         </ancestryContext.Provider>
       ) : <div role="status" className="px-2 pb-2">{message}</div>}

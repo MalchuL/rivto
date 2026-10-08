@@ -1,3 +1,4 @@
+import { DocumentViewDOM } from "../events/document-view";
 import { DOCUMENT_VIEW_SELECTOR, isInDocumentView } from "../events/document-view";
 /**
  * DOM ↔ editor selection bridge for Rivto's multi-contenteditable surfaces.
@@ -254,19 +255,17 @@ export function readBlockIdAtPoint(
   y: number,
 ): string | undefined {
   const hit = root.ownerDocument.elementFromPoint(x, y);
-  let block = isElementNode(hit) ? hit.closest<HTMLElement>(BLOCK_ID_SELECTOR) : null;
+  const dom = new DocumentViewDOM(root);
   // A nested view is one block in the originating surface. Its source rows
   // must not turn a host selection endpoint into a nearby editable sibling.
-  while (block && !isInDocumentView(root, block)) {
-    block = block.parentElement?.closest<HTMLElement>(BLOCK_ID_SELECTOR) ?? null;
-  }
+  const block = dom.getBlock(isElementNode(hit) ? hit : null);
   if (!block || !root.contains(block)) return undefined;
 
-  const ownRow = ownedBlockRow(block);
+  const ownRow = dom.getRow(block);
   // Keep the closest block when the pointer is in its own row, or when a
   // custom shell has no row to distinguish wrapping descendants from chrome.
   // Body slots belong to that block even when it also has outline children.
-  const ownBody = block.querySelector(':scope > [data-slot-owner="block"][data-slot-position="body"]');
+  const ownBody = dom.getBody(block);
   const nestedHit = ownRow && !ownRow.contains(hit) && !ownBody?.contains(hit)
     ? nearestNestedBlock(block, x, y) : undefined;
   const target = nestedHit ?? block;
@@ -321,13 +320,24 @@ export function createDOMSelection(
   anchor: EditorPosition,
   head: EditorPosition,
 ): Selection | undefined {
+  if (anchor.blockId === head.blockId) {
+    const content = new DocumentViewDOM(root).findContent(anchor.blockId);
+    if (content) {
+      return createTextSelection([{ id: anchor.blockId, length: content.textContent?.length ?? 0 }], anchor, head);
+    }
+  }
+  // Index content once; nested blocks must not rescan their descendants.
+  const contents = new Map<Element | null, HTMLElement>();
+  for (const content of orderedContents(root)) {
+    const block = content.closest(BLOCK_ID_SELECTOR);
+    if (!contents.has(block)) contents.set(block, content);
+  }
   // Start from every BlockView, not only editable hosts. Otherwise a
   // contentless renderer such as Counter disappears from a Shift+Alt range.
   const rendered = [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
     const id = block.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!id || !isInDocumentView(root, block)) return [];
-    const content = [...block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)]
-      .find((candidate) => candidate.closest(BLOCK_ID_SELECTOR) === block);
+    const content = contents.get(block);
     return [{ id, content }];
   });
   const selectionBlocks = getPageVirtualizationControllerForElement(root)?.getSelectionBlocks()
@@ -566,7 +576,7 @@ function pointAtOffset(content: HTMLElement, requestedOffset: number): { node: N
  */
 export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosition): DOMSelectionPoint | undefined {
   getPageVirtualizationControllerForElement(root)?.mountBlocks([position.blockId]);
-  const content = orderedContents(root).find((candidate) => blockIdForContent(candidate) === position.blockId);
+  const content = new DocumentViewDOM(root).findContent(position.blockId);
   return content ? { ...pointAtOffset(content, position.offset), content } : undefined;
 }
 
@@ -599,17 +609,19 @@ export function restoreEditorDOMSelection(
       options,
     );
   }
-  const contents = orderedContents(root);
-  const lengthOf = (id: string): number => {
-    const content = contents.find((candidate) => blockIdForContent(candidate) === id);
-    return content?.textContent?.length ?? 0;
-  };
   if (isStructuralSelection(selection)) return false;
+  const dom = new DocumentViewDOM(root);
+  const contents = new Map<string, HTMLElement | null>();
+  const contentOf = (id: string): HTMLElement | null => {
+    if (!contents.has(id)) contents.set(id, dom.findContent(id));
+    return contents.get(id)!;
+  };
+  const lengthOf = (id: string): number => contentOf(id)?.textContent?.length ?? 0;
   const ends = resolveSelectionEndpoints(selection, lengthOf);
   if (!ends) return false;
 
-  const anchorContent = contents.find((content) => blockIdForContent(content) === ends.anchor.blockId);
-  const headContent = contents.find((content) => blockIdForContent(content) === ends.head.blockId);
+  const anchorContent = contentOf(ends.anchor.blockId);
+  const headContent = contentOf(ends.head.blockId);
   if (!anchorContent || !headContent) return false;
 
   const anchor = pointAtOffset(anchorContent, ends.anchor.offset);

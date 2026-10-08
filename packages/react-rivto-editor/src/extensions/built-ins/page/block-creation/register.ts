@@ -11,7 +11,7 @@
 import { firstKeyboardTarget, isEditableKeyboardEvent, shouldDeleteSelection } from "../../../../managers";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../managers";
 import type { ReactEditor } from "../../../../types";
-import { createBlockViewContext, dispatchViewAction } from "../../../../views";
+import { createBlockViewContext } from "../../../../views";
 
 /**
  * Installs outline block splitting for Page and Edgeless surfaces.
@@ -50,9 +50,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
       }
       const context = createBlockViewContext(reactEditor, target.blockId, root, reactEditor.selection.get());
       if (!context) return;
-      claimed = dispatchViewAction(
-        reactEditor.views.resolve(context.block.id),
-        reactEditor.views.fallback,
+      claimed = reactEditor.views.dispatch(
         "onSplit",
         context,
         target,

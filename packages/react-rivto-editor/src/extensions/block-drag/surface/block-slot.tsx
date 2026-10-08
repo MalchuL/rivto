@@ -10,6 +10,7 @@
  *
  * @module
  */
+import { editorControlProps } from "../../../constants";
 import { useCallback, useContext, useSyncExternalStore } from "react";
 import { GripVerticalIcon } from "lucide-react";
 import type { BlockSlotProps } from "../../../managers";
@@ -37,7 +38,7 @@ export function PageDragBlockSlot({ block }: BlockSlotProps) {
   const arm = useCallback(() => item?.placements.arm(block.id), [block.id, item]);
   if (!item) return null;
   return (
-    <button
+    <button {...editorControlProps}
       ref={draggable?.handleRef}
       type="button"
       className={`${PAGE_DRAG_HANDLE_CLASS} inline-flex items-center justify-center`}

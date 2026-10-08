@@ -9,6 +9,7 @@
  * `data-edgeless-ui` so canvas pointer handlers can ignore chrome hits, and an
  * accessible label that doubles as the native tooltip.
  */
+import { editorControlProps } from "../../../../constants";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "cn";
 import {
@@ -162,11 +163,11 @@ export function EdgelessToolButton({
     "data-edgeless-ui": "true",
   };
   return pressed === undefined ? (
-    <Button variant="ghost" size="icon" {...shared}>
+    <Button {...editorControlProps} variant="ghost" size="icon" {...shared}>
       {content}
     </Button>
   ) : (
-    <Toggle pressed={pressed} {...shared}>
+    <Toggle {...editorControlProps} pressed={pressed} {...shared}>
       {content}
     </Toggle>
   );

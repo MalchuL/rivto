@@ -1,13 +1,13 @@
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
-import { DOCUMENT_VIEW_SELECTOR, type DocumentViewScope } from "./document-view";
+import type { DocumentViewScope } from "./document-view";
+import { DocumentViewRegistry } from "./document-view-registry";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorMode } from "@chulane/rivto";
 import type { EventsCapability } from "../../capabilities";
 import type { ReactEditor } from "../../types";
 import type { ReactEditorImpl } from "../../react-editor";
-import type { ReactSelectionManager } from "../selection/selection-manager";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
@@ -49,11 +49,6 @@ interface ConnectedListener extends NativeListenerGroup {
   readonly listener: EventListener;
 }
 
-// Window pointer continuations belong to the editor that started the gesture,
-// including when the pointer crosses another editor's view on the same page.
-const pointerRoots = new WeakMap<Document, HTMLElement>();
-const pointerEventRoots = new WeakMap<Event, HTMLElement>();
-
 /**
  * Owns every delegated native browser event for one React editor.
  *
@@ -66,12 +61,7 @@ export class EventManager implements EventsCapability {
   private readonly registrationDisposers = new Map<string, () => void>();
   private readonly connected: ConnectedListener[] = [];
   private readonly claimedEvents = new WeakSet<globalThis.Event>();
-  private root: HTMLElement | null = null;
-  private activeView: HTMLElement | null = null;
-  private operationRoot?: HTMLElement | null;
-  private pointerView?: HTMLElement;
-  private readonly eventViews = new WeakMap<globalThis.Event, HTMLElement | null>();
-  private readonly documentViews = new Map<HTMLElement, { document: DocumentModel; rootBlockId?: string; api?: ReactEditor; deactivate?: () => void }>();
+  private readonly documentViews: DocumentViewRegistry;
   private destroyed = false;
 
   /**
@@ -79,7 +69,29 @@ export class EventManager implements EventsCapability {
    *
    * @param reactEditor - Owning React runtime for payloads and registration lifecycle.
    */
-  constructor(private readonly reactEditor: ReactEditorImpl) {}
+  constructor(private readonly reactEditor: ReactEditorImpl) {
+    this.documentViews = new DocumentViewRegistry(reactEditor, () => this.reconnect());
+  }
+
+  /**
+   * Binds event registrations and DOM operations to one mounted occurrence.
+   * Shared listener state stays on this manager; the view owns local disposers.
+   * @param owner - View supplying a stable identity and its current DOM root.
+   * @returns Event methods that retain this view even when another view gains focus.
+   */
+  forView(owner: DocumentViewScope): EventsCapability {
+    return {
+      forView: (view) => this.forView(view),
+      register: (definition, listener) => owner.own(this.register(definition, listener, owner)),
+      delete: (id) => this.delete(`${owner.id}:${id}`),
+      getRoot: () => owner.getRoot(),
+      setRoot: (root) => owner.setRoot(root),
+      getSurfaceType: () => this.withViewRoot(owner.getRoot(), () => this.getSurfaceType()),
+      getDocumentView: () => this.withViewRoot(owner.getRoot(), () => this.getDocumentView()),
+      registerDocumentView: (...args) => this.registerDocumentView(...args),
+      runInView: (operation) => this.withViewRoot(owner.getRoot(), operation),
+    };
+  }
 
   /**
    * Registers a typed delegated DOM event.
@@ -153,28 +165,14 @@ export class EventManager implements EventsCapability {
    * @param root - Mounted surface root element, or null during unmount.
    */
   setRoot(root: HTMLElement | null): void {
-    if (this.destroyed && root === null) {
-      this.root = null;
-      return;
-    }
+    if (this.destroyed && root === null) return;
     this.assertActive();
-    if (root === this.root) return;
-    if (this.root) (this.reactEditor.selection as ReactSelectionManager).cancelPendingSelectionCallback(this.root);
-    this.root = root;
-    this.activeView = null;
-    this.reconnect();
+    this.documentViews.setRoot(root);
   }
 
   /** @returns The focused view occurrence, or a mounted full-document surface before interaction; falls back to the first subtree when no full document is mounted. */
   getRoot(): HTMLElement | null {
-    if (this.operationRoot !== undefined) return this.operationRoot;
-    if (this.activeView || this.root) return this.activeView ?? this.root;
-    // Child refs mount first. Prefer the full document over an embedding until
-    // an interaction explicitly activates one of its subtree occurrences.
-    for (const [root, view] of this.documentViews) {
-      if (view.rootBlockId === undefined) return root;
-    }
-    return this.documentViews.keys().next().value ?? null;
+    return this.documentViews.getRoot();
   }
 
   /**
@@ -192,9 +190,7 @@ export class EventManager implements EventsCapability {
    * or when the root has no recognized surface type.
    */
   getSurfaceType(): EditorMode {
-    const surface = this.getRoot()?.getAttribute("data-rivto-surface");
-    if (surface === "block" || surface === "edgeless") return surface;
-    return this.reactEditor.mode.get();
+    return this.documentViews.getSurfaceType();
   }
 
   /**
@@ -202,8 +198,7 @@ export class EventManager implements EventsCapability {
    * @returns Mounted view's document-bound API, or undefined when no registered view supplies one.
    */
   getDocumentView(): ReactEditor | undefined {
-    const root = this.getRoot();
-    return root ? this.documentViews.get(root)?.api : undefined;
+    return this.documentViews.getDocumentView();
   }
 
   /**
@@ -219,39 +214,12 @@ export class EventManager implements EventsCapability {
    */
   registerDocumentView(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: ReactEditor, deactivate?: () => void): () => void {
     this.assertActive();
-    const entry = { document, rootBlockId, api, deactivate };
-    this.documentViews.set(root, entry);
-    this.reconnect();
-    return () => {
-      if (this.documentViews.get(root) !== entry) return;
-      this.documentViews.delete(root);
-      (this.reactEditor.selection as ReactSelectionManager).cancelPendingSelectionCallback(root);
-      if (this.pointerView === root) {
-        this.pointerView = undefined;
-        if (pointerRoots.get(root.ownerDocument) === root) pointerRoots.delete(root.ownerDocument);
-      }
-      this.reconnect();
-      deactivate?.();
-      if (this.activeView !== root) return;
-      this.activeView = null;
-      // Retain source undo while the target is missing; the next view interaction chooses its own history again.
-      // Replacing a full-document surface (page/canvas) keeps core selection.
-      // Removing the active embedded subtree releases its occurrence's selection.
-      if (entry.rootBlockId !== undefined) this.reactEditor.selection.clear();
-      if (root.contains(root.ownerDocument.activeElement)) {
-        const parent = root.parentElement?.closest<HTMLElement>(DOCUMENT_VIEW_SELECTOR);
-        if (parent && this.documentViews.has(parent)) parent.focus({ preventScroll: true });
-        else this.root?.focus({ preventScroll: true });
-      }
-    };
+    return this.documentViews.registerDocumentView(root, document, rootBlockId, api, deactivate);
   }
 
   /** Enters a view's DOM scope for synchronous operations and restores the previous root. */
   withViewRoot<Result>(root: HTMLElement | null, operation: () => Result): Result {
-    const previous = this.operationRoot;
-    this.operationRoot = root;
-    try { return operation(); }
-    finally { this.operationRoot = previous; }
+    return this.documentViews.withViewRoot(root, operation);
   }
 
   /**
@@ -261,7 +229,7 @@ export class EventManager implements EventsCapability {
    * @returns The operation's result after restoring the previous document context.
    */
   runInView<Result>(operation: () => Result): Result {
-    return this.withViewRoot(this.getRoot(), operation);
+    return this.documentViews.runInView(operation);
   }
 
   /** Releases every registration and native listener in reverse order. */
@@ -273,13 +241,7 @@ export class EventManager implements EventsCapability {
     this.registrationDisposers.clear();
     this.registrationIds.clear();
     this.registrations.length = 0;
-    this.root = null;
-    this.activeView = null;
-    this.documentViews.clear();
-    if (this.pointerView && pointerRoots.get(this.pointerView.ownerDocument) === this.pointerView) {
-      pointerRoots.delete(this.pointerView.ownerDocument);
-    }
-    this.pointerView = undefined;
+    this.documentViews.destroy();
   }
 
   /** Throws when a registration is attempted after runtime destruction. */
@@ -307,14 +269,16 @@ export class EventManager implements EventsCapability {
 
   private reconnect(): void {
     this.disconnect();
-    if (!this.root && !this.documentViews.size) return;
+    if (this.destroyed) return;
+    const roots = this.documentViews.getRoots();
+    if (!roots.size) return;
     const groups = new Map<string, NativeListenerGroup>();
     for (const registration of this.registrations) {
       const group: NativeListenerGroup = registration;
       const key = [group.target, group.type, group.capture, group.passive].join(":");
       if (!groups.has(key)) groups.set(key, group);
     }
-    if (this.documentViews.size) {
+    if (this.documentViews.hasDocumentViews) {
       // Activation and gesture lifetime belong to views even without interaction extensions.
       const lifecycle: NativeListenerGroup[] = [
         { target: "surface", type: "focusin", capture: false, passive: false },
@@ -324,8 +288,6 @@ export class EventManager implements EventsCapability {
       ];
       lifecycle.forEach((group) => groups.set([group.target, group.type, group.capture, group.passive].join(":"), group));
     }
-    const roots = new Set(this.documentViews.keys());
-    if (this.root) roots.add(this.root);
     for (const group of groups.values()) {
       const targets = new Set<EventTarget>();
       for (const root of roots) {
@@ -356,59 +318,9 @@ export class EventManager implements EventsCapability {
    * @returns Nothing.
    */
   private dispatch(group: NativeListenerGroup, raw: globalThis.Event, attachedRoot?: HTMLElement): void {
-    const fallback = this.getRoot();
-    if (!fallback || raw.defaultPrevented || this.claimedEvents.has(raw)) return;
-    const selectionNode = raw.type === "selectionchange" ? fallback.ownerDocument.getSelection()?.anchorNode : undefined;
-    const target = selectionNode ?? raw.target;
-    const ElementConstructor = fallback.ownerDocument.defaultView!.Element;
-    const element = target instanceof ElementConstructor ? target : (target as Node | null)?.parentElement;
-    const boundary = element?.closest<HTMLElement>(DOCUMENT_VIEW_SELECTOR);
-    const activatesView = raw.type === "focusin" || raw.type === "pointerdown" || raw.type === "input" || raw.type === "keydown";
-    const pointerContinuation = raw.type === "pointermove" || raw.type === "pointerup" || raw.type === "pointercancel";
-    const pointerRoot = pointerEventRoots.get(raw) ?? pointerRoots.get(fallback.ownerDocument);
-    if (pointerContinuation && pointerRoot) {
-      pointerEventRoots.set(raw, pointerRoot);
-      if (!this.documentViews.has(pointerRoot)) return;
-    }
-    // A nested editor owns its nearest view even when this runtime uses capture listeners.
-    if (boundary && !this.documentViews.has(boundary) && !this.pointerView) {
-      // Another editor can take focus without discarding this editor's selection.
-      // Keep the last occurrence so returning to it can extend that selection.
-      if (activatesView) {
-        if (this.activeView) this.documentViews.get(this.activeView)?.deactivate?.();
-      }
-      return;
-    }
-    const candidate = boundary && this.documentViews.has(boundary) ? boundary : undefined;
-    let chosen = this.activeView;
-    if (this.eventViews.has(raw)) chosen = this.eventViews.get(raw) ?? null;
-    else {
-      if (pointerContinuation && this.pointerView && this.documentViews.has(this.pointerView)) chosen = this.pointerView;
-      else if (candidate) chosen = candidate;
-      else if (element && this.root?.contains(element)) chosen = null;
-      this.eventViews.set(raw, chosen);
-      if (raw.type === "pointerdown" && chosen) {
-        this.pointerView = chosen;
-        pointerRoots.set(chosen.ownerDocument, chosen);
-      }
-      if (raw.type === "pointerup" || raw.type === "pointercancel") {
-        this.pointerView = undefined;
-        pointerRoots.delete(fallback.ownerDocument);
-      }
-    }
-    const root = chosen ?? this.root ?? fallback;
-    if (attachedRoot && attachedRoot !== root) return;
-    const changed = chosen !== this.activeView;
-    // Hover belongs to the pointed view's handlers without taking editing focus
-    // or clearing the selection in the view where the user is working.
-    if (changed && activatesView) {
-      if (this.activeView) {
-        this.documentViews.get(this.activeView)?.deactivate?.();
-        this.reactEditor.selection.clear();
-      }
-      this.activeView = chosen;
-    }
-    this.withViewRoot(root, () => this.dispatchRegistrations(group, raw, root));
+    if (raw.defaultPrevented || this.claimedEvents.has(raw)) return;
+    const root = this.documentViews.resolveEventRoot(raw, attachedRoot);
+    if (root) this.withViewRoot(root, () => this.dispatchRegistrations(group, raw, root));
   }
 
   private dispatchRegistrations(group: NativeListenerGroup, raw: globalThis.Event, root: HTMLElement): void {
@@ -459,7 +371,7 @@ export class EventManager implements EventsCapability {
     const contentElement = closestContent && root.contains(closestContent)
       ? closestContent
       : null;
-    const reactEditor = this.documentViews.get(root)?.api ?? this.reactEditor;
+    const reactEditor = this.documentViews.getApi(root) ?? this.reactEditor;
     return new EditorEvent({
       raw: raw as never,
       reactEditor,

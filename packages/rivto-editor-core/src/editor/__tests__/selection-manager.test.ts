@@ -33,7 +33,7 @@ describe("EditorRuntime selection", () => {
     unsubscribe(); await editor.destroy();
   });
 
-  it("does not traverse the document to reconcile selection after property-only updates", async () => {
+  it("does not traverse the document to reconcile a caret after property or structure updates", async () => {
     const editor = await createRivtoEditor();
     const selected = editor.blocks.insertBlock({ type: "paragraph", content: "Task" }).id;
     editor.selection.set(testCaret(selected, 0));
@@ -43,7 +43,18 @@ describe("EditorRuntime selection", () => {
     expect(getBlocks).not.toHaveBeenCalled();
 
     editor.blocks.insertBlock({ type: "paragraph", content: "Next" }, selected);
-    expect(getBlocks).toHaveBeenCalledTimes(1);
+    expect(getBlocks).not.toHaveBeenCalled();
+    editor.destroy();
+  });
+
+  it("reads only selected subtrees when setting and resolving a caret", async () => {
+    const editor = await createRivtoEditor();
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    editor.blocks.insertBlock({ type: "paragraph", content: "Other" }, first);
+    const forest = jest.spyOn(editor.runtime.blocks, "getBlocks");
+    editor.selection.set(testCaret(first, 2));
+    expect(editor.selection.resolveBlockSelection()?.start).toEqual({ blockId: first, offset: 2 });
+    expect(forest).not.toHaveBeenCalled();
     editor.destroy();
   });
 

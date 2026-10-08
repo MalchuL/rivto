@@ -17,6 +17,7 @@
  *
  * @module
  */
+import { editorControlProps } from "../../constants";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Button } from "../../components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../../components/ui/collapsible";
@@ -77,7 +78,7 @@ export function TodoStorageMenu({ label, panelLabel, children }: TodoStorageMenu
   return (
     <Collapsible ref={root} open={open} onOpenChange={setOpen} className={TODO_STORAGE_MENU_CLASS} onKeyDown={closeOnEscape}>
       <CollapsibleTrigger asChild>
-        <Button variant="outline" size="sm" type="button" className={TODO_STORAGE_MENU_TRIGGER_CLASS}>{label}</Button>
+        <Button {...editorControlProps} variant="outline" size="sm" type="button" className={TODO_STORAGE_MENU_TRIGGER_CLASS}>{label}</Button>
       </CollapsibleTrigger>
       <CollapsibleContent role="dialog" aria-label={panelLabel} className={TODO_STORAGE_MENU_PANEL_CLASS}>
         {children}

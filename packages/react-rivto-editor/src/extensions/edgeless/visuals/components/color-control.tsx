@@ -7,6 +7,7 @@
  * selection shows a checkerboard face (see `visuals.css`) and the parent
  * commits undo entries once the interaction settles.
  */
+import { editorControlProps } from "../../../../constants";
 import { useEffect, useState } from "react";
 
 /** `edgeless-color-swatch` and `edgeless-color-swatch-face` are hooks for the mixed checkerboard rule. */
@@ -41,7 +42,7 @@ export function ColorControl({
   return (
     <label className={SWATCH_CLASS} data-mixed={mixed || undefined} data-disabled={disabled || undefined} title={label}>
       <span className={FACE_CLASS} style={{ backgroundColor: draft }} aria-hidden="true" />
-      <input
+      <input {...editorControlProps}
         type="color"
         className={INPUT_CLASS}
         aria-label={label}

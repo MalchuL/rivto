@@ -1595,6 +1595,40 @@ test("empty nested checkbox clears before outdenting inside a canvas card", asyn
   await expect(cardChild(card, secondId)).toHaveCount(1);
 });
 
+test("empty nested checkbox handles Enter before the next animation frame", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();
+  const directChildren = cardChildren(card);
+  const firstId = await directChildren.first().getAttribute(BLOCK_ID_ATTRIBUTE);
+  const second = directChildren.nth(1);
+  const secondId = await second.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!firstId || !secondId) throw new Error("Expected sibling blocks inside a canvas card");
+  const content = second.locator(":scope > .page-block-row [data-block-content]");
+  await content.focus();
+  await page.keyboard.press("Control+a");
+  await page.keyboard.type("[ ] ");
+  await expect(second.locator(":scope > .page-block-row .page-list-checkbox")).toHaveCount(1);
+  // Reparenting must restore editing focus even before the deferred selection
+  // callback gets its next frame. Holding RAF makes rapid Tab/Enter deterministic.
+  await page.evaluate(() => {
+    const original = window.requestAnimationFrame;
+    window.requestAnimationFrame = (callback) => original(() => {
+      window.setTimeout(() => callback(performance.now()), 1000);
+    });
+  });
+  await page.keyboard.press("Tab");
+  const nested = card.locator(`${blockIdSelector(firstId)} > .page-block-children > ${blockIdSelector(secondId)}`);
+  await expect(nested).toHaveCount(1);
+
+  await page.keyboard.press("Enter");
+  await expect(nested).toHaveCount(1);
+  await expect(nested.locator(":scope > .page-block-row .page-list-checkbox")).toHaveCount(0);
+  await page.keyboard.press("Enter");
+  await expect(cardChild(card, secondId)).toHaveCount(1);
+  await page.keyboard.type("continued");
+  await expect(cardChild(card, secondId).locator(":scope > .page-block-row [data-block-content]")).toHaveText("continued");
+});
+
 test("keeps an indented block drag handle visible while moving onto it", async ({ page }) => {
   await switchMode(page, "edgeless");
   const card = page.locator("[data-edgeless-root]").filter({ has: page.locator(".page-block-children") }).first();

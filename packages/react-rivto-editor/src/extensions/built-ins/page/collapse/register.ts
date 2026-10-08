@@ -19,8 +19,35 @@ import { collapseTargets } from "./utils";
  * @returns Cleanup for document and selection reconciliation subscriptions.
  */
 export function registerCollapse(reactEditor: ReactEditor): () => void {
+  reactEditor.slashCommands.register({
+    id: "block.collapse",
+    title: "Collapse block",
+    group: "Actions",
+    keywords: ["fold", "hide"],
+    isAvailable: ({ blockId }) => {
+      const block = reactEditor.blocks.getBlockNode(blockId);
+      return reactEditor.blockListProps.has("collapse") &&
+        Boolean(block?.childIds.length && block.listProps.collapsed !== true);
+    },
+    execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
+  });
+
+  reactEditor.slashCommands.register({
+    id: "block.expand",
+    title: "Expand block",
+    group: "Actions",
+    keywords: ["unfold", "show"],
+    isAvailable: ({ blockId }) => {
+      const block = reactEditor.blocks.getBlockNode(blockId);
+      return reactEditor.blockListProps.has("collapse") &&
+        Boolean(block?.childIds.length && block.listProps.collapsed === true);
+    },
+    execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
+  });
+
   reactEditor.blockListProps.register({
     id: "collapse",
+    childrenVisible: (block) => block.listProps.collapsed !== true,
     defaults: { collapsed: false },
     isValid: (candidate) => typeof candidate.collapsed === "boolean",
   });
@@ -43,12 +70,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
     const reconcileView = () => {
       const root = view?.events.getRoot();
       const boundary = view?.rootBlockId;
-      let blocks;
-      if (boundary) {
-        const block = api.blocks.getBlock(boundary);
-        blocks = block ? [block] : [];
-      } else blocks = api.blocks.getBlocks();
-      const next = reconcileCollapsedSelection(blocks, current);
+      const next = reconcileCollapsedSelection(api.blocks, current, boundary);
       if (next !== current) {
         if (next) api.selection.set(next);
         else api.selection.clear();

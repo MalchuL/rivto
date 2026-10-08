@@ -7,7 +7,7 @@
  *
  * @module
  */
-import type { BlockManager, EditorBlock, EditorElement } from "@chulane/rivto";
+import type { BlockManager, EditorBlock, EditorBlockNode, EditorElement } from "@chulane/rivto";
 import type { ReactEditor } from "../types";
 
 export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
@@ -98,7 +98,7 @@ function maximumWeightMatching(weights: readonly (readonly number[])[]): number[
   const columns = weights[0]?.length ?? 0;
   if (!rows || !columns) return Array(rows).fill(-1);
   const size = Math.max(rows, columns);
-  const maximum = Math.max(0, ...weights.flat());
+  const maximum = weights.reduce((max, row) => row.reduce((value, weight) => Math.max(value, weight), max), 0);
   const potentialsByRow = Array(size + 1).fill(0) as number[];
   const potentialsByColumn = Array(size + 1).fill(0) as number[];
   const columnRows = Array(size + 1).fill(0) as number[];
@@ -149,6 +149,51 @@ function maximumWeightMatching(weights: readonly (readonly number[])[]): number[
     const row = columnRows[column]! - 1;
     if (row >= 0 && row < rows && weights[row]![column - 1]! > 0) result[row] = column - 1;
   }
+  return result;
+}
+
+/**
+ * Matches independent groups separately so unrelated cards do not enlarge the matrix.
+ * @param scores - Sparse segment-to-card scores; absent entries have zero weight.
+ * @returns Existing card index for each segment, or -1 without a reusable card.
+ */
+function matchConnectedSegments(scores: readonly ReadonlyMap<number, number>[]): number[] {
+  const rowsByCard = new Map<number, number[]>();
+  scores.forEach((row, index) => row.forEach((_, card) => {
+    const rows = rowsByCard.get(card) ?? [];
+    rows.push(index);
+    rowsByCard.set(card, rows);
+  }));
+  const result = Array<number>(scores.length).fill(-1);
+  const visited = new Set<number>();
+  scores.forEach((_, start) => {
+    if (visited.has(start)) return;
+    const rows = [start];
+    const cards = new Set<number>();
+    visited.add(start);
+    for (const row of rows) {
+      scores[row]!.forEach((_, card) => {
+        if (cards.has(card)) return;
+        cards.add(card);
+        for (const neighbor of rowsByCard.get(card)!) {
+          if (visited.has(neighbor)) continue;
+          visited.add(neighbor);
+          rows.push(neighbor);
+        }
+      });
+    }
+    if (!cards.size) return;
+    rows.sort((a, b) => a - b);
+    const columns = [...cards].sort((a, b) => a - b);
+    if (rows.length === 1 && columns.length === 1) {
+      result[start] = columns[0]!;
+      return;
+    }
+    const matches = maximumWeightMatching(rows.map((row) => columns.map((card) => scores[row]!.get(card) ?? 0)));
+    matches.forEach((column, index) => {
+      if (column >= 0) result[rows[index]!] = columns[column]!;
+    });
+  });
   return result;
 }
 
@@ -245,7 +290,10 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
 
   // Build the two sides of the projection: current document roots and the
   // persisted canvas elements that render ranges of those roots as cards.
-  const roots = reactEditor.blocks.getBlocks();
+  const roots = reactEditor.blocks.getRootIds().flatMap((id) => {
+    const node = reactEditor.blocks.getBlockNode(id);
+    return node ? [node] : [];
+  });
   const rootOrder = roots.map((block) => block.id);
   const rootSet = new Set(rootOrder);
   const existing = reactEditor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
@@ -262,8 +310,8 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
 
   // Root separator blocks are boundaries, not card content. Every non-empty
   // run between them must be represented by exactly one block element.
-  const segments: EditorBlock[][] = [];
-  let segment: EditorBlock[] = [];
+  const segments: EditorBlockNode[][] = [];
+  let segment: EditorBlockNode[] = [];
   roots.forEach((block) => {
     if (reactEditor.blockTypes.separatesBlockElements(block.type)) {
       if (segment.length) segments.push(segment);
@@ -276,30 +324,43 @@ export function reconcileBlockElements(reactEditor: ReactEditor): void {
   const anchorBonus = continuityBase ** 3;
   const retentionBonus = continuityBase ** 4;
 
-  // Score every possible segment-to-card pairing. Reusing any overlapping
-  // card wins first; keeping the card that owned the first block breaks ties;
-  // overlap counts then preserve as much previous membership as possible.
-  const weights = segments.map((blocks) => {
-    const ids = new Set(blocks.map((block) => block.id));
-    return existing.map((element) => {
-      const previous = previousRanges.get(element.id) ?? [];
-      const previousOverlap = previous.filter((id) => ids.has(id)).length;
-      const currentOverlap = (currentRanges.get(element.id) ?? []).filter((id) => ids.has(id)).length;
-      // Keeping the element that owned the segment's first block makes splits
-      // retain their first card and merges retain the earlier card. Retention
-      // has higher priority so this preference never recreates another reusable
-      // element elsewhere on the canvas.
-      const ownsFirst = previous[0] === blocks[0]!.id || element.props.startBlockId === blocks[0]!.id
-        ? anchorBonus
-        : 0;
-      const canReuse = previousOverlap > 0 || currentOverlap > 0 ? retentionBonus : 0;
-      return canReuse + ownsFirst + previousOverlap * continuityBase + currentOverlap;
+  // Index block membership once to find candidate cards.
+  const segmentByBlock = new Map<string, number>();
+  segments.forEach((blocks, index) => blocks.forEach((block) => segmentByBlock.set(block.id, index)));
+  const scores = segments.map(() => new Map<number, number>());
+  existing.forEach((element, card) => {
+    const previous = previousRanges.get(element.id) ?? [];
+    const current = currentRanges.get(element.id) ?? [];
+    const overlaps = new Map<number, { previous: number; current: number }>();
+    const count = (ids: readonly string[], field: "previous" | "current") => {
+      ids.forEach((id) => {
+        const index = segmentByBlock.get(id);
+        if (index === undefined) return;
+        const overlap = overlaps.get(index) ?? { previous: 0, current: 0 };
+        overlap[field] += 1;
+        overlaps.set(index, overlap);
+      });
+    };
+    count(previous, "previous");
+    count(current, "current");
+    // A valid start can retain a card whose end temporarily disappeared.
+    const start = element.props.startBlockId;
+    const startSegment = typeof start === "string" ? segmentByBlock.get(start) : undefined;
+    if (startSegment !== undefined && segments[startSegment]![0]!.id === start && !overlaps.has(startSegment)) {
+      overlaps.set(startSegment, { previous: 0, current: 0 });
+    }
+    overlaps.forEach((overlap, index) => {
+      // First-block ownership breaks ties; retaining a reusable card wins first.
+      const first = segments[index]![0]!.id;
+      const ownsFirst = previous[0] === first || element.props.startBlockId === first;
+      const canReuse = overlap.previous > 0 || overlap.current > 0;
+      scores[index]!.set(card, (canReuse ? retentionBonus : 0) + (ownsFirst ? anchorBonus : 0)
+        + overlap.previous * continuityBase + overlap.current);
     });
   });
 
-  // Choose assignments globally. A greedy choice can steal the only suitable
-  // card from a later segment and unnecessarily recreate that later card.
-  const matches = maximumWeightMatching(weights);
+  // Solve competing assignments together, preserving split/merge continuity.
+  const matches = matchConnectedSegments(scores);
   const avoidOverlap = placementSettings.get(reactEditor.extensions) !== false;
   const defaultWidth = defaultWidthSettings.get(reactEditor.extensions) ?? EDGELESS_CARD_DEFAULT_FRAME.width;
   const occupied = existing.map((element) => element.frame);

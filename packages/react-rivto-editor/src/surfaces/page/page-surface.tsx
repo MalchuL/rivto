@@ -185,7 +185,6 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
       mountAdjacentBlocks,
       mountFirstOrLastBlock,
       getSelectionBlocks: () => {
-        const collapseActive = reactEditor.blockListProps.has("collapse");
         /**
          * Flattens the visible outline without depending on mounted BlockViews.
          * @param blocks - Current sibling forest in canonical order.
@@ -194,7 +193,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
         const visit = (blocks: ReturnType<typeof reactEditor.blocks.getBlocks>): Array<{ id: string; length: number }> => (
           blocks.flatMap((block) => [
             { id: block.id, length: block.content.length },
-            ...(collapseActive && block.listProps.collapsed === true ? [] : visit(block.children)),
+            ...(!reactEditor.blockListProps.childrenVisible(block) ? [] : visit(block.children)),
           ])
         );
         return visit(reactEditor.blocks.getBlocks());

@@ -4,6 +4,7 @@
  * Block cards reuse the same right-side panel chrome as visual elements while
  * persisting layout behavior through their existing opaque element props.
  */
+import { editorControlProps } from "../../../../constants";
 import type { EditorElement } from "@chulane/rivto";
 import { useId } from "react";
 import { Checkbox } from "../../../../components/ui/checkbox";
@@ -41,7 +42,7 @@ export function BlockProperties({
       <PropertyGroup title="Layout">
         <PropertyRow label="Height">
           <div className={AUTO_HEIGHT_FIELD_CLASS}>
-            <Checkbox
+            <Checkbox {...editorControlProps}
               id={autoHeightId}
               className={AUTO_HEIGHT_INPUT_CLASS}
               aria-label="Automatic card height"
