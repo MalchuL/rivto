@@ -208,10 +208,10 @@ function ReviewBlock({
           saving={saving}
           error={error}
           includeReportBlock={props.includeReportBlock}
-          onAboveChange={(blocksAbove) => editing.setProp("blocksAbove", blocksAbove)}
-          onBelowChange={(blocksBelow) => editing.setProp("blocksBelow", blocksBelow)}
+          onAboveChange={(blocksAbove) => editing.operations.setProp("blocksAbove", blocksAbove)}
+          onBelowChange={(blocksBelow) => editing.operations.setProp("blocksBelow", blocksBelow)}
           onIncludeReportBlockChange={(includeReportBlock) => (
-            editing.setProp("includeReportBlock", includeReportBlock)
+            editing.operations.setProp("includeReportBlock", includeReportBlock)
           )}
           onSave={() => void save()}
           onRestore={() => editor.load(props.snapshot!)}

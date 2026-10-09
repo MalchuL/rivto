@@ -80,8 +80,7 @@ export function registerCollapse(reactEditor: ReactEditor): () => void {
         root?.focus({ preventScroll: true });
       }
     };
-    if (view) view.events.runInView(reconcileView);
-    else reconcileView();
+    reconcileView();
   };
   const unsubscribeDocument = reactEditor.subscribe(reconcile);
   const unsubscribeSelection = reactEditor.selection.subscribe(reconcile);

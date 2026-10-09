@@ -123,7 +123,7 @@ export function registerListShortcuts(reactEditor: ReactEditor): void {
     id: "list.shortcut.input",
     type: "input",
     scope: "content",
-  }, ({ raw: event, blockId, root }) => {
+  }, ({ reactEditor, raw: event, blockId, root }) => {
     if (!(event instanceof InputEvent) || event.inputType !== "insertText" || !blockId) {
       return false;
     }

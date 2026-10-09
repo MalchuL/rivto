@@ -11,7 +11,7 @@ import type { EdgelessVisualController } from "../controller";
 import { EdgelessToolButton } from "./tool-button";
 
 /** Bottom-centered bar; `edgeless-selection-toolbar` is a stable hook. */
-const SELECTION_TOOLBAR_CLASS = `${UI_SCOPE_CLASS} edgeless-selection-toolbar absolute bottom-[62px] left-1/2 z-21 flex max-w-[calc(100%-48px)] -translate-x-1/2 gap-[3px] overflow-x-auto rounded-xl border border-border bg-background/95 p-[5px] shadow-(--rivto-edgeless-chrome-shadow)`;
+const SELECTION_TOOLBAR_CLASS = `${UI_SCOPE_CLASS} edgeless-selection-toolbar`;
 
 const alignments = [
   ["left", "Align left", "align-left"],

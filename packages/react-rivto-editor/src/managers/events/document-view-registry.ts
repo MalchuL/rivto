@@ -13,7 +13,6 @@ const pointerEventRoots = new WeakMap<Event, HTMLElement>();
 export class DocumentViewRegistry {
   private root: HTMLElement | null = null;
   private activeView: HTMLElement | null = null;
-  private operationRoot?: HTMLElement | null;
   private pointerView?: HTMLElement;
   private readonly eventViews = new WeakMap<globalThis.Event, HTMLElement | null>();
   private readonly documentViews = new Map<HTMLElement, { document: DocumentModel; rootBlockId?: string; api?: ReactEditor; deactivate?: () => void }>();
@@ -55,7 +54,6 @@ export class DocumentViewRegistry {
 
   /** @returns The focused view occurrence, or a mounted full-document surface before interaction; falls back to the first subtree when no full document is mounted. */
   getRoot(): HTMLElement | null {
-    if (this.operationRoot !== undefined) return this.operationRoot;
     if (this.activeView || this.root) return this.activeView ?? this.root;
     // Child refs mount first. Prefer the full document over an embedding until
     // an interaction explicitly activates one of its subtree occurrences.
@@ -71,7 +69,7 @@ export class DocumentViewRegistry {
    * The core mode manager belongs to the document and chooses its main presentation.
    * This method reads the receiving DOM occurrence instead: a page embedding
    * returns `block` even inside an `edgeless` document. Scoped event managers use
-   * their own view root; the shared manager uses the active or synchronous operation
+   * their own view root; the shared manager uses the active
    * root. No additional mode state is stored, and the core mode remains shared.
    * Dispatch captures this value once in `event.mode`; handlers use that snapshot.
    * View-specific commands outside dispatch can call this method, while operations
@@ -79,8 +77,8 @@ export class DocumentViewRegistry {
    * @returns Current DOM occurrence's surface kind, or core mode before mounting
    * or when the root has no recognized surface type.
    */
-  getSurfaceType(): EditorMode {
-    const surface = this.getRoot()?.getAttribute("data-rivto-surface");
+  getSurfaceType(root = this.getRoot()): EditorMode {
+    const surface = root?.getAttribute("data-rivto-surface");
     if (surface === "block" || surface === "edgeless") return surface;
     return this.reactEditor.mode.get();
   }
@@ -131,24 +129,6 @@ export class DocumentViewRegistry {
         else this.root?.focus({ preventScroll: true });
       }
     };
-  }
-
-  /** Enters a view's DOM scope for synchronous operations and restores the previous root. */
-  withViewRoot<Result>(root: HTMLElement | null, operation: () => Result): Result {
-    const previous = this.operationRoot;
-    this.operationRoot = root;
-    try { return operation(); }
-    finally { this.operationRoot = previous; }
-  }
-
-  /**
-   * Runs deferred selection or command work in the active DOM occurrence.
-   * Explicit view roots take precedence over browser focus; core models never switch.
-   * @param operation - Synchronous work to execute.
-   * @returns The operation's result after restoring the previous document context.
-   */
-  runInView<Result>(operation: () => Result): Result {
-    return this.withViewRoot(this.getRoot(), operation);
   }
 
   /**

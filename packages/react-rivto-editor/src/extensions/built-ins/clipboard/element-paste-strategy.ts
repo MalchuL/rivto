@@ -21,6 +21,9 @@ export class ElementPasteStrategy implements PasteStrategy {
    */
   constructor(private readonly reactEditor: ReactEditor) {}
 
+  /** Returns an independent strategy using the receiving view's surface and selection. */
+  createViewStrategy(reactEditor: ReactEditor): ElementPasteStrategy { return new ElementPasteStrategy(reactEditor); }
+
   /**
    * Accepts edgeless pastes that carry canvas elements or selected block objects.
    * @param context - Shared clipboard payload and paste intent.

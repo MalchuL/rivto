@@ -19,7 +19,7 @@ import type { EditorBlockInput } from "@chulane/rivto";
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { BLOCK_ID_ATTRIBUTE } from "../../../constants";
-import { useBlockEditing, useReactEditor } from "../../../hooks";
+import { useBlockSelectionAnchor, useBlockNode, useReactEditor } from "../../../hooks";
 import type { ReactEditorExtension } from "../../../managers";
 import { bentoView } from "./bento-view";
 import type { ReactEditor } from "../../../types";
@@ -166,12 +166,13 @@ export function createBentoBlockInput(): EditorBlockInput {
  * @returns Contentless board header; the shared tree renders its tiles.
  */
 export function Bento({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing(blockId, { textEdit: false });
+  const editing = useBlockNode(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
   const block = editing.block;
   if (!block) return null;
   const tileCount = block.childIds.length;
   return (
-    <div {...editing.attributes} className={SUMMARY_CLASS}>
+    <div {...attributes} className={SUMMARY_CLASS}>
       {block.listProps.collapsed === true && <>
         <strong>Bento</strong>
         <span className={SUMMARY_STATS_CLASS}>{tileCount} {tileCount === 1 ? "tile" : "tiles"}</span>

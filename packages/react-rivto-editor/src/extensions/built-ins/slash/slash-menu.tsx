@@ -271,26 +271,26 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   const execute = useCallback((command: SlashCommand) => {
     const current = sessionRef.current;
     if (!current || !root) return;
-    reactEditor.events.runInView(() => {
-      const block = reactEditor.blocks.getBlockNode(current.blockId);
-      if (!block) return close();
-      const caret = current.slashOffset + current.query.length + 1;
-      if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
 
-      reactEditor.history.batchUpdates(() => {
-        const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
-        reactEditor.blocks.updateBlock(current.blockId, { content: next });
-        reactEditor.selection.set(createCaretSelection(current.blockId, current.slashOffset));
-        slashCommands.execute(command.id, { blockId: current.blockId });
-      });
-      setSession(null);
+    const block = reactEditor.blocks.getBlockNode(current.blockId);
+    if (!block) return close();
+    const caret = current.slashOffset + current.query.length + 1;
+    if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
 
-      reactEditor.selection.scheduleIfSelectionUnchanged(() => {
-        if (reactEditor.selection.restoreDOM()) return;
-        current.viewRoot.ownerDocument.getSelection()?.removeAllRanges();
-        current.viewRoot.focus({ preventScroll: true });
-      });
+    reactEditor.history.batchUpdates(() => {
+      const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
+      reactEditor.blocks.updateBlock(current.blockId, { content: next });
+      reactEditor.selection.set(createCaretSelection(current.blockId, current.slashOffset));
+      slashCommands.execute(command.id, { blockId: current.blockId });
     });
+    setSession(null);
+
+    reactEditor.selection.scheduleIfSelectionUnchanged(() => {
+      if (reactEditor.selection.restoreDOM()) return;
+      current.viewRoot.ownerDocument.getSelection()?.removeAllRanges();
+      current.viewRoot.focus({ preventScroll: true });
+    });
+
   }, [close, reactEditor, root, slashCommands]);
 
   const currentResults = useCallback(() => {

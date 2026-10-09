@@ -27,7 +27,7 @@ export function registerBlockCreation(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockCreate,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,
-  }, ({ raw: event, root }) => {
+  }, ({ reactEditor, raw: event, root }) => {
     if (!isEditableKeyboardEvent(event)) return false;
     // Read the key event's native caret synchronously. A newly focused editor
     // can receive Enter before the browser's deferred selectionchange event.

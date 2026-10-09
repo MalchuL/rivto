@@ -7,7 +7,7 @@
  * including transitions from an empty selection back to an empty selection.
  */
 import type { SelectionManagerApi, Selection } from "@chulane/rivto";
-import type { EventsCapability, RestoreDOMSelectionOptions, SelectionCapability } from "../../capabilities";
+import type { ReactEditorView, EventsCapability, RestoreDOMSelectionOptions, SelectionCapability } from "../../capabilities";
 import type { ReactEditor } from "../../types";
 import { readEditorDOMSelection, restoreEditorDOMSelection } from "./editor-dom-selection";
 
@@ -49,6 +49,34 @@ export class ReactSelectionManager implements SelectionCapability {
   ) {}
 
   /**
+   * Binds DOM reads and scheduled work to one occurrence; core state stays shared.
+   * @param reactEditor - View editor providing root access through events, including null after unmount.
+   * @returns Selection operations that retain their view across deferred calls.
+   */
+  createViewApi(reactEditor: ReactEditorView): SelectionCapability {
+    const events = reactEditor.events;
+    const { pendingSelectionCallbacks } = this;
+    return {
+      createViewApi: (next) => this.createViewApi(next),
+      get: () => this.get(),
+      snapshot: () => this.snapshot(),
+      subscribe: (listener) => this.subscribe(listener),
+      clear: () => this.clear(),
+      delete: () => this.delete(),
+      set: (value) => this.set(value),
+      isBlockSelected: (id) => this.isBlockSelected(id),
+      isElementSelected: (id) => this.isElementSelected(id),
+      readDOM: () => this.readDOM(events.getRoot()),
+      restoreDOM: (value = this.get(), options) => this.restoreDOM(value, options, events.getRoot()),
+      scheduleIfSelectionUnchanged: (callback, onCancel) => this.scheduleIfSelectionUnchanged(callback, onCancel, events),
+      get hasPendingSelectionCallback() {
+        const root = events.getRoot();
+        return root !== null && pendingSelectionCallbacks.has(root);
+      },
+    };
+  }
+
+  /**
    * Identifies a pending callback in the current view whose scheduled model selection remains current.
    * @returns False after any effective core selection change, including explicit clearing.
    */
@@ -68,7 +96,7 @@ export class ReactSelectionManager implements SelectionCapability {
    * @returns No value.
    */
   set(selection: Selection): void {
-    this.reactEditor.events.runInView(() => this.coreSelection.set(selection));
+    this.coreSelection.set(selection);
   }
 
   /** Clears local selection. */
@@ -101,10 +129,10 @@ export class ReactSelectionManager implements SelectionCapability {
 
   /**
    * Reads current native endpoints.
+   * @param root - Receiving DOM occurrence; omitted on the shared API to use the active view.
    * @returns Browser selection, or undefined outside this editor.
    */
-  readDOM(): Selection | undefined {
-    const root = this.reactEditor.events.getRoot();
+  readDOM(root = this.reactEditor.events.getRoot()): Selection | undefined {
     return root ? readEditorDOMSelection(root) : undefined;
   }
 
@@ -112,13 +140,14 @@ export class ReactSelectionManager implements SelectionCapability {
    * Restores a non-structural range after DOM reconciliation.
    * @param selection - Selection to restore, defaulting to current state.
    * @param options - Virtual endpoint mounting and navigation policy.
+   * @param root - Receiving DOM occurrence; null means the view has unmounted.
    * @returns Whether both text endpoints could be restored.
    */
   restoreDOM(
     selection: Selection | undefined = this.get(),
     options?: RestoreDOMSelectionOptions,
+    root = this.reactEditor.events.getRoot(),
   ): boolean {
-    const root = this.reactEditor.events.getRoot();
     return root && selection ? restoreEditorDOMSelection(root, selection, options) : false;
   }
 
@@ -143,10 +172,15 @@ export class ReactSelectionManager implements SelectionCapability {
    *
    * @param callback - Work to run next frame if selection has not changed since scheduling.
    * @param onCancel - Cleanup for caller-owned resources when the callback cannot run.
+   * @param events - View-bound root access retained until invocation or cancellation.
    * @returns An idempotent cancellation function, also invoked during runtime teardown.
    */
-  scheduleIfSelectionUnchanged(callback: () => void, onCancel?: () => void): () => void {
-    const root = this.reactEditor.events.getRoot();
+  scheduleIfSelectionUnchanged(
+    callback: () => void,
+    onCancel?: () => void,
+    events = this.reactEditor.events.getDocumentView()?.events ?? this.reactEditor.events,
+  ): () => void {
+    const root = events.getRoot();
     const previous = root ? this.pendingSelectionCallbacks.get(root) : undefined;
     // Schedule and cancel through the root's own window, including editors in an iframe.
     // Without a mounted root/window there is no valid frame to run the caller's work in.
@@ -157,7 +191,6 @@ export class ReactSelectionManager implements SelectionCapability {
       return () => {};
     }
     // Capture the mounted occurrence, not whichever view is active next frame.
-    const events = this.reactEditor.events.getDocumentView()?.events ?? this.reactEditor.events;
     const pending: PendingSelectionCallback = { root, events, view, callback, onCancel, active: true };
     /**
      * Cancels only this request, even after newer work replaces it.
@@ -243,7 +276,7 @@ export class ReactSelectionManager implements SelectionCapability {
       this.pendingSelectionCallbacks.delete(pending.root);
       // The caller performs any selection restoration or focus work. This scheduler
       // only guards invocation; it does not restore anything after the callback runs.
-      pending.events.runInView(pending.callback);
+      pending.callback();
     }
   }
 

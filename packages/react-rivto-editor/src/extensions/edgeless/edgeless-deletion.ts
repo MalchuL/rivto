@@ -32,7 +32,7 @@ export function registerEdgelessDeletion(reactEditor: ReactEditor): void {
         !target.isContentEditable &&
         !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName);
     },
-  }, ({ root }) => {
+  }, ({ reactEditor, root }) => {
     const canvas = selection.get();
     let handled = false;
     if (canvas.active && canvas.items.length && reactEditor.commands.has("edgeless.visual.delete")) {

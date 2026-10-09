@@ -26,7 +26,7 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
   const isCollapsed = (block: EditorBlock) => (
     !reactEditor.blockListProps.childrenVisible(block)
   );
-  const move = (root: HTMLElement, direction: VerticalDirection): boolean => {
+  const move = (reactEditor: ReactEditor, root: HTMLElement, direction: VerticalDirection): boolean => {
     const selection = currentNavigationSelection(reactEditor.selection);
     const blocks = selection;
     const textLike = blocks && !isStructuralSelection(selection);
@@ -53,9 +53,9 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMoveUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveUp],
-  }, ({ root }) => move(root, "up"));
+  }, ({ reactEditor, root }) => move(reactEditor, root, "up"));
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMoveDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveDown],
-  }, ({ root }) => move(root, "down"));
+  }, ({ reactEditor, root }) => move(reactEditor, root, "down"));
 }

@@ -59,7 +59,7 @@ export function registerHistory(
   options: HistoryExtensionOptions = {},
 ): void {
   /** Executes one history step and restores focus after React renders it. */
-  const run = (root: HTMLElement, action: HistoryAction): void => {
+  const run = (reactEditor: ReactEditor, root: HTMLElement, action: HistoryAction): void => {
     if (!root) return;
     reactEditor.history[action]();
     // Only restore selection and its focus here; undo/redo has already changed the document.
@@ -74,8 +74,8 @@ export function registerHistory(
     id: KEYBOARD_BINDING_IDS.historyUndo,
     keys: options.undoKeys ?? ["Primary+z"],
     composing: "prevent",
-  }, ({ root }) => {
-    run(root, "undo");
+  }, ({ reactEditor, root }) => {
+    run(reactEditor, root, "undo");
     return true;
   });
 
@@ -83,8 +83,8 @@ export function registerHistory(
     id: KEYBOARD_BINDING_IDS.historyRedo,
     keys: options.redoKeys ?? ["Primary+Shift+z", "Primary+y"],
     composing: "prevent",
-  }, ({ root }) => {
-    run(root, "redo");
+  }, ({ reactEditor, root }) => {
+    run(reactEditor, root, "redo");
     return true;
   });
 
@@ -92,11 +92,11 @@ export function registerHistory(
     id: "history.before-input",
     type: "beforeinput",
     scope: "surface",
-  }, ({ raw: event, root }) => {
+  }, ({ reactEditor, raw: event, root }) => {
     const action = inputHistoryAction(event);
     if (!action) return false;
 
-    if (!event.isComposing) run(root, action);
+    if (!event.isComposing) run(reactEditor, root, action);
     return true;
   });
 }

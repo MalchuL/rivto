@@ -13,12 +13,12 @@ import { useEffect, useState } from "react";
 /** Preview glyph shown before the slider. */
 export type SizePreview = "dot" | "text";
 
-const CONTROL_CLASS = "edgeless-size-control inline-flex min-h-7 items-center gap-1.5 px-0.5 text-[0.7rem]/none font-semibold";
-const PREVIEW_CLASS = "grid size-7 place-items-center text-secondary-foreground";
-const DOT_CLASS = "block rounded-full bg-current shadow-[inset_0_0_0_1px_rgb(0_0_0/12%)]";
-const LETTER_CLASS = "block font-serif leading-none font-bold tracking-[-0.02em] select-none";
-const RANGE_CLASS = "w-[88px] accent-(--rivto-accent)";
-const VALUE_CLASS = "min-w-[1.4rem] text-muted-foreground tabular-nums";
+const CONTROL_CLASS = "edgeless-size-control";
+const PREVIEW_CLASS = "edgeless-size-control-preview";
+const DOT_CLASS = "edgeless-size-control-dot";
+const LETTER_CLASS = "edgeless-size-control-letter";
+const RANGE_CLASS = "edgeless-size-control-range";
+const VALUE_CLASS = "edgeless-size-control-value";
 
 /**
  * Renders a labeled slider with a size preview and numeric readout.

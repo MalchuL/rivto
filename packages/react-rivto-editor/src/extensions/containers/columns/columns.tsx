@@ -11,7 +11,7 @@ import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
 import { type EditorBlockInput } from "@chulane/rivto";
-import { useBlockEditing, useBlockNode, useReactEditor, useEditorRoot } from "../../../hooks";
+import { useBlockSelectionAnchor, useBlockNode, useReactEditor, useEditorRoot } from "../../../hooks";
 import {
   type BlockSlotProps,
   type ReactEditorExtension,
@@ -130,11 +130,12 @@ export function setColumnsCount(reactEditor: ReactEditor, blockId: string, count
  * @returns Structural selection region and a compact collapsed summary.
  */
 export function Columns({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing(blockId, { textEdit: false });
+  const editing = useBlockNode(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
   const block = editing.block;
   if (!block) return null;
   const count = block.childIds.length;
-  return <div {...editing.attributes} className={COLUMNS_CLASS}>
+  return <div {...attributes} className={COLUMNS_CLASS}>
     {block.listProps.collapsed === true && <>
       <strong>Columns</strong>
       <span className={COLUMNS_STATS_CLASS}>{count} {count === 1 ? "column" : "columns"}</span>

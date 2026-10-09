@@ -20,10 +20,10 @@ export function registerEmptyBlockReset(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.emptyBlockReset,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.emptyBlockReset],
-    when: ({ raw: event, blockId }) =>
+    when: ({ reactEditor, raw: event, blockId }) =>
       isEditableKeyboardEvent(event) &&
       !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, reactEditor, blockId)),
-  }, ({ root, blockId }) => {
+  }, ({ reactEditor, root, blockId }) => {
     const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, reactEditor, blockId));
     if (!target?.collapsed || target.offset !== 0) return false;
     const context = createBlockViewContext(reactEditor, target.blockId, root, reactEditor.selection.get());

@@ -1,6 +1,6 @@
 import type { DocumentViewScope } from "./document-view";
 import type { EditorMode } from "@chulane/rivto";
-import type { KeyboardCapability } from "../../capabilities";
+import type { ReactEditorView, KeyboardCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
 import type { ReactEditorImpl } from "../../react-editor";
 import type { EditorEvent } from "./editor-event";
@@ -82,13 +82,14 @@ export class KeyboardManager implements KeyboardCapability {
 
   /**
    * Binds registrations to a view while keeping keymap settings shared by the document.
-   * @param owner - View that owns registration IDs and cleanup.
+   * @param reactEditor - View editor whose occurrence owns registration IDs and cleanup.
    * @returns Local registration methods and explicitly delegated shared keymap methods.
    */
-  forView(owner: DocumentViewScope): KeyboardCapability {
+  createViewApi(reactEditor: ReactEditorView): KeyboardCapability {
+    const owner = reactEditor.view;
     const revision = () => this.revision;
     return {
-      forView: (view) => this.forView(view),
+      createViewApi: (view) => this.createViewApi(view),
       register: (definition, listener) => owner.own(this.register(definition, listener, owner)),
       delete: (id) => this.delete(`${owner.id}:${id}`),
       list: () => this.list(),

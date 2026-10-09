@@ -45,7 +45,7 @@ import type {
   SurfacesCapability,
   ViewsCapability,
 } from "./capabilities";
-import { reconcileBlockElements } from "./elements/block-element-projection";
+import { BlockElementProjection } from "./elements/block-element-projection";
 import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/built-ins/page/default-writing-block";
 
 export type { CreateReactEditorOptions, ReactEditor } from "./types";
@@ -105,7 +105,8 @@ export class ReactEditorImpl implements ReactEditor {
   /** React-owned slash-command registry. */
   readonly slashCommands: SlashCommandsCapability;
   private destroyed = false;
-  private reconciliationQueued = false;
+  /** Document-owned projection shared by all mounted surfaces. */
+  readonly blockElements: BlockElementProjection;
   /** Runtime-owned cleanup, kept private behind the public capability contracts. */
   private readonly disposers: Array<() => void> = [];
 
@@ -156,13 +157,15 @@ export class ReactEditorImpl implements ReactEditor {
     this.blocks = editor.blocks;
     this.clipboard = new ClipboardManager(this, editor);
     this.surfaces = new SurfaceManager(this);
+    this.blockElements = new BlockElementProjection(this);
+    this.disposers.push(() => this.blockElements.destroy());
     try {
       this.extensions.initialize(options.extensions ?? []);
       this.disposers.push(
-        this.blocks.subscribeRootIds(() => this.queueBlockElementReconciliation()),
-        this.elements.subscribe(() => this.queueBlockElementReconciliation()),
+        this.blocks.subscribeRootIds(this.blockElements.schedule),
+        this.elements.subscribe(this.blockElements.schedule),
       );
-      this.queueBlockElementReconciliation();
+      this.blockElements.schedule();
     } catch (error) {
       this.destroy();
       throw error;
@@ -187,20 +190,6 @@ export class ReactEditorImpl implements ReactEditor {
       this.createDefaultBlock = previousCreate;
       this.isEmptyBlock = previousIsEmpty;
     };
-  }
-
-  /**
-   * Coalesces synchronous document edits before repairing the React-owned block
-   * element projection. This keeps initialization and collaborative update
-   * bursts deterministic without coupling the projection to a mounted surface.
-   */
-  private queueBlockElementReconciliation(): void {
-    if (this.reconciliationQueued || this.destroyed) return;
-    this.reconciliationQueued = true;
-    queueMicrotask(() => {
-      this.reconciliationQueued = false;
-      if (!this.destroyed) reconcileBlockElements(this);
-    });
   }
 
   /** Forwards changes from this document, its local mode, and core definitions to React subscribers. */

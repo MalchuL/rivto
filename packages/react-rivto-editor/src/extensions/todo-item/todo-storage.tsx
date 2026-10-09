@@ -21,7 +21,7 @@ import {
 import type { EditorBlock, EditorBlockNode } from "@chulane/rivto";
 import { z } from "zod";
 import { ArrowDownIcon } from "lucide-react";
-import { useBlock, useBlockEditing, useReactEditor, useEditorRoot } from "../../hooks";
+import { useBlock, useBlockSelectionAnchor, usePreventTextEditing, useBlockNode, useReactEditor, useEditorRoot } from "../../hooks";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
@@ -250,7 +250,9 @@ export function TodoStorageBlockWrapper({ block, children }: BlockWrapperProps) 
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   const reactEditor = useReactEditor();
   const { element: root } = useEditorRoot();
-  const editing = useBlockEditing<TodoStorageProps>(blockId, { textEdit: false });
+  const editing = useBlockNode<TodoStorageProps>(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
+  const preventTextEditingAttributes = usePreventTextEditing();
   const block = editing.block;
   const context = useContext(TodoStorageContext);
   const fieldId = useId();
@@ -261,7 +263,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
 
   /** Persists a validated ordering-property patch. */
   const updateProps = (patch: Partial<TodoStorageProps>): void => {
-    editing.setProps(patch);
+    editing.operations.setProps(patch);
   };
 
   /** Replaces one filter category while preserving the other categories. */
@@ -290,7 +292,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   if (block.listProps.collapsed === true) {
     const itemCount = childIds.length;
     return (
-      <div {...editing.attributes} className={TODO_STORAGE_SUMMARY_CLASS}>
+      <div {...attributes} className={TODO_STORAGE_SUMMARY_CLASS}>
         <strong>TODO storage</strong>
         <span className={TODO_STORAGE_SUMMARY_STATS_CLASS}>{itemCount} {itemCount === 1 ? "item" : "items"}</span>
       </div>
@@ -301,8 +303,8 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   // sortable status rows keep valid document offsets for keyboard dragging;
   // see `TodoStorageMenu` for the dnd-kit constraint behind this choice.
   return (
-    <div {...editing.attributes} className={TODO_STORAGE_CONTENT_CLASS}>
-      <div {...editing.preventTextEditingAttributes} className={TODO_STORAGE_TOOLBAR_CLASS}>
+    <div {...attributes} className={TODO_STORAGE_CONTENT_CLASS}>
+      <div {...preventTextEditingAttributes} className={TODO_STORAGE_TOOLBAR_CLASS}>
         <Input {...editorControlProps}
           className={TODO_STORAGE_SEARCH_CLASS}
           type="search"
@@ -359,7 +361,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
       </div>
       {childIds.length === 0 && (
         <div
-          {...editing.preventTextEditingAttributes}
+          {...preventTextEditingAttributes}
           className={TODO_STORAGE_DROP_FIELD_CLASS}
           role="button"
           tabIndex={0}

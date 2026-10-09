@@ -81,6 +81,9 @@ function wantsWholeBlocks(
 
 /** Live state retained only for the duration of one pointer selection gesture. */
 interface PointerSelection {
+  /** API and DOM root that own this gesture, independent of later focus changes. */
+  readonly editor: ReactEditor;
+  readonly root: HTMLElement;
   /** Pointer-down viewport position used to ignore accidental tiny movement. */
   readonly startX: number;
   readonly startY: number;
@@ -148,6 +151,8 @@ export function registerTextSelection(reactEditor: ReactEditor): () => void {
 /** Owns pointer selection, delayed range restoration, and auto-scroll for one editor. */
 class TextSelectionController {
   private pointer: PointerSelection | null = null;
+  private timerView: Window | null = null;
+  private scrollView: Window | null = null;
   private releaseTimer: number | undefined;
   private suppressClickBlockId: string | undefined;
   private ownsCrossBlockSelection = false;
@@ -174,8 +179,7 @@ class TextSelectionController {
     headPosition: EditorPosition,
     forceWholeBlocks = false,
   ): void => {
-      const root = this.reactEditor.events.getRoot();
-      if (!root) return;
+      const root = active.root;
       active.crossBlock = headPosition.blockId !== active.anchorPosition.blockId;
       active.head = head;
       active.wholeBlocks = forceWholeBlocks;
@@ -184,7 +188,7 @@ class TextSelectionController {
         : createDOMSelection(root, active.anchorPosition, headPosition);
       if (!active.selection) return;
 
-      this.reactEditor.selection.set(active.selection);
+      active.editor.selection.set(active.selection);
       if (active.wholeBlocks) {
         root.ownerDocument.getSelection()?.removeAllRanges();
         // Keep the originating contenteditable focused for the duration of the
@@ -206,8 +210,7 @@ class TextSelectionController {
     active: PointerSelection,
     current: PointerSelectionCoordinates,
   ): boolean => {
-    const root = this.reactEditor.events.getRoot();
-    if (!root) return false;
+    const root = active.root;
     const pointedBlockId = readBlockIdAtPoint(root, current.x, current.y);
     const head = active.anchor ? readDOMSelectionPoint(root, current.x, current.y) : undefined;
     const headPosition = head && readDOMPointPosition(root, head);
@@ -260,7 +263,7 @@ class TextSelectionController {
 
   /** Stops the frame loop that advances a selection beside a viewport edge. */
   private stopAutoScroll = (): void => {
-    const view = this.reactEditor.events.getRoot()?.ownerDocument.defaultView;
+    const view = this.scrollView;
     if (this.autoScrollFrame !== undefined) view?.cancelAnimationFrame(this.autoScrollFrame);
     this.autoScrollFrame = undefined;
   };
@@ -280,6 +283,7 @@ class TextSelectionController {
     const view = root.ownerDocument.defaultView;
     const scrollElement = root.ownerDocument.scrollingElement;
     if (!view || !scrollElement) return;
+    this.scrollView = view;
     this.autoScrollFrame = view.requestAnimationFrame(() => {
       this.autoScrollFrame = undefined;
       const active = this.pointer;
@@ -303,8 +307,8 @@ class TextSelectionController {
   private stop = (): false => {
       this.stopAutoScroll();
       this.latestPointer = undefined;
-      const root = this.reactEditor.events.getRoot();
       const completed = this.pointer;
+      const root = completed?.root;
       this.pointer = null;
       if (!root || !completed?.selection || (!completed.wholeBlocks && !completed.head) ||
         (!completed.crossBlock && !this.ownsCrossBlockSelection)) return false;
@@ -319,7 +323,8 @@ class TextSelectionController {
       }
       // Firefox and Chromium can emit one delayed selectionchange after
       // pointer-up. Keep the synthetic result authoritative through that task.
-      this.releaseTimer = root.ownerDocument.defaultView?.setTimeout(() => {
+      this.timerView = root.ownerDocument.defaultView;
+      this.releaseTimer = this.timerView?.setTimeout(() => {
         if (completed.wholeBlocks) {
           root.ownerDocument.getSelection()?.removeAllRanges();
         } else {
@@ -331,7 +336,7 @@ class TextSelectionController {
       return false;
   };
 
-  private onPointerDown = ({ raw: event, blockId, root }: EditorEvent<"surface", "pointerdown">) => {
+  private onPointerDown = ({ reactEditor, raw: event, blockId, root }: EditorEvent<"surface", "pointerdown">) => {
     const view = root.ownerDocument.defaultView;
     let handled = false;
     if (event.ctrlKey || event.metaKey) {
@@ -382,13 +387,13 @@ class TextSelectionController {
 
         // A second click can arrive before the browser dispatches the first
         // click's selectionchange. Read its live caret before extending it.
-        const nativeSelection = event.shiftKey ? this.reactEditor.selection.readDOM() : undefined;
-        if (nativeSelection) this.reactEditor.selection.set(nativeSelection);
-        const current = nativeSelection ?? this.reactEditor.selection.get();
+        const nativeSelection = event.shiftKey ? reactEditor.selection.readDOM() : undefined;
+        if (nativeSelection) reactEditor.selection.set(nativeSelection);
+        const current = nativeSelection ?? reactEditor.selection.get();
         // Shift extends the existing selection instead of replacing its anchor.
         if (event.shiftKey && clickedPosition) {
           const item = current;
-          const lengthOf = (id: string) => this.reactEditor.blocks.getBlockNode(id)?.content.length ?? 0;
+          const lengthOf = (id: string) => reactEditor.blocks.getBlockNode(id)?.content.length ?? 0;
           const ends = item ? resolveSelectionEndpoints(item, lengthOf) : undefined;
           const originId = ends?.anchor.blockId ?? item?.anchorBlockId;
           const wholeBlocks = originId
@@ -398,7 +403,7 @@ class TextSelectionController {
             this.ownsCrossBlockSelection = true;
             this.pointer = null;
             const next = createVisibleStructuralSelection(this.selectionBlockIds(root), originId, clickedPosition.blockId);
-            if (next) this.reactEditor.selection.set(next);
+            if (next) reactEditor.selection.set(next);
             root.ownerDocument.getSelection()?.removeAllRanges();
             root.focus({ preventScroll: true });
             this.releaseTimer = view?.setTimeout(() => { this.ownsCrossBlockSelection = false; });
@@ -409,7 +414,7 @@ class TextSelectionController {
             const originIndex = originFromBlock ? ids.indexOf(originFromBlock) : -1;
             const clickIndex = originFromBlock ? ids.indexOf(clickedPosition.blockId) : -1;
             const originContentLength = originFromBlock
-              ? (this.reactEditor.blocks.getBlockNode(originFromBlock)?.content.length ?? 0)
+              ? (reactEditor.blocks.getBlockNode(originFromBlock)?.content.length ?? 0)
               : 0;
             const anchorPosition = ends?.anchor ?? (originFromBlock
               ? {
@@ -421,6 +426,7 @@ class TextSelectionController {
             if (anchor && anchorPosition) {
               this.ownsCrossBlockSelection = true;
               const active: PointerSelection = {
+                editor: reactEditor, root,
                 startX: event.clientX,
                 startY: event.clientY,
                 anchor,
@@ -441,6 +447,7 @@ class TextSelectionController {
             // editable host. Explicit structural anchors bypass that fallback so
             // they retain their own block ID before movement begins.
             this.pointer = {
+              editor: reactEditor, root,
               startX: event.clientX,
               startY: event.clientY,
               anchorPosition: { blockId, offset: 0 },
@@ -451,6 +458,7 @@ class TextSelectionController {
             const anchor = clicked;
             const anchorPosition = anchor && readDOMPointPosition(root, anchor);
             this.pointer = anchor && anchorPosition ? {
+              editor: reactEditor, root,
               startX: event.clientX,
               startY: event.clientY,
               anchor,
@@ -474,7 +482,7 @@ class TextSelectionController {
     return handled;
   };
 
-  private onClick = ({ raw: event, blockId, root, mode }: EditorEvent<"surface", "click">) => {
+  private onClick = ({ reactEditor, raw: event, blockId, root, mode }: EditorEvent<"surface", "click">) => {
     if (!blockId) return false;
     if (blockId === this.suppressClickBlockId) {
       // A control may still receive `click` after its pointer gesture became a
@@ -495,40 +503,40 @@ class TextSelectionController {
     if (!anchor || anchor.isContentEditable || !root.contains(anchor)) return false;
 
     const selection = createVisibleStructuralSelection(this.selectionBlockIds(root), blockId, blockId);
-    if (selection) this.reactEditor.selection.set(selection);
-    if (mode === "edgeless") findEdgelessRuntime(this.reactEditor)?.deactivate();
+    if (selection) reactEditor.selection.set(selection);
+    if (mode === "edgeless") findEdgelessRuntime(reactEditor)?.deactivate();
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });
     return true;
   };
 
-  private onBeforeInput = () => {
+  private onBeforeInput = ({ reactEditor }: EditorEvent<"surface", "beforeinput">) => {
     // Native selectionchange may arrive after typing and an immediate undo.
     // Capture the live caret before input mutates the document so history can
     // restore editable focus even when that asynchronous event has not arrived.
-    const selection = this.reactEditor.selection.readDOM();
-    if (selection) this.reactEditor.selection.set(selection);
+    const selection = reactEditor.selection.readDOM();
+    if (selection) reactEditor.selection.set(selection);
     return false;
   };
 
-  private onSelectionChange = ({ mode }: EditorEvent<"document", "selectionchange">) => {
+  private onSelectionChange = ({ reactEditor, mode }: EditorEvent<"document", "selectionchange">) => {
     if (this.ownsCrossBlockSelection) return false;
     // Canvas gestures own element selection. A retained native text range
     // must not replace it while a transform preview is waiting to commit.
-    if (mode === "edgeless" && findEdgelessRuntime(this.reactEditor)?.get().active) return false;
+    if (mode === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active) return false;
     // Cut, paste, and reparenting can report the old native range before the
     // next frame restores the command's caret. New input cancels that frame.
-    if (this.reactEditor.selection.hasPendingSelectionCallback) return false;
-    const selection = this.reactEditor.selection.readDOM();
+    if (reactEditor.selection.hasPendingSelectionCallback) return false;
+    const selection = reactEditor.selection.readDOM();
     if (selection) {
-      this.reactEditor.selection.set(selection);
-    } else if (!(mode === "edgeless" && findEdgelessRuntime(this.reactEditor)?.get().active)) {
+      reactEditor.selection.set(selection);
+    } else if (!(mode === "edgeless" && findEdgelessRuntime(reactEditor)?.get().active)) {
       // Losing the browser range keeps a structural selection and clears carets.
-      const current = this.reactEditor.selection.get();
+      const current = reactEditor.selection.get();
       // Reparenting may detach native endpoints before the scheduled restore.
       // Keep that model selection; explicit core clears still invalidate it.
-      if (current && !isStructuralSelection(current) && !this.reactEditor.selection.hasPendingSelectionCallback) {
-        this.reactEditor.selection.clear();
+      if (current && !isStructuralSelection(current) && !reactEditor.selection.hasPendingSelectionCallback) {
+        reactEditor.selection.clear();
       }
     }
     return false;
@@ -584,9 +592,8 @@ class TextSelectionController {
     return () => {
       this.stopAutoScroll();
       this.latestPointer = undefined;
-      const root = this.reactEditor.events.getRoot();
       if (this.releaseTimer !== undefined) {
-        root?.ownerDocument.defaultView?.clearTimeout(this.releaseTimer);
+        this.timerView?.clearTimeout(this.releaseTimer);
       }
       this.ownsCrossBlockSelection = false;
       this.suppressClickBlockId = undefined;

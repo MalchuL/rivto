@@ -6,6 +6,8 @@ import {
   BLOCK_CONTENT_ATTRIBUTE,
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
 } from "../../constants";
+import { useBlockNode, type UseBlockNodeResult } from "./use-block";
+import { useBlockSelectionAnchor } from "./use-block-selection-anchor";
 import { EditorView } from "../../editor-view";
 
 import {
@@ -19,7 +21,7 @@ interface TestProps extends Record<string, unknown> {
 }
 
 describe("useBlockEditing", () => {
-  test("returns mode-specific attributes and latest validated property methods", async () => {
+  test("composes text editing and structural anchors with validated property commands", async () => {
     const editor = await createEditor();
     editor.blockRegistry.defineBlock({
       type: "test.editing",
@@ -36,16 +38,19 @@ describe("useBlockEditing", () => {
       } as never,
     });
     const blockId = editor.blocks.insertBlock({ type: "test.editing", content: "Text" }).id;
-    let structural: UseBlockEditingResult<TestProps, false> | undefined;
-    let text: UseBlockEditingResult<TestProps, true> | undefined;
+    let structural: UseBlockNodeResult<TestProps> | undefined;
+    let text: UseBlockEditingResult<TestProps> | undefined;
 
     const Surface = () => {
-      structural = useBlockEditing<TestProps>(blockId, { textEdit: false });
+      structural = useBlockNode<TestProps>(blockId);
+      const attributes = useBlockSelectionAnchor(blockId);
+      expect(attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
+      expect("contentEditable" in attributes).toBe(false);
       text = useBlockEditing<TestProps>(blockId);
       return createElement(
         "div",
         null,
-        createElement("button", structural.attributes),
+        createElement("button", attributes),
         createElement("div", text.attributes),
       );
     };
@@ -54,7 +59,6 @@ describe("useBlockEditing", () => {
 
     renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(Surface)));
 
-    expect(structural?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
     expect(text?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
     expect(text?.attributes[BLOCK_CONTENT_ATTRIBUTE]).toBe("");
     expect(text?.attributes.contentEditable).toBe("plaintext-only");
@@ -63,33 +67,31 @@ describe("useBlockEditing", () => {
     expect(structural && "setCollapsed" in structural.operations).toBe(false);
     structural?.operations.update({ listProps: { collapsed: true } });
     expect(editor.blocks.getBlockNode(blockId)?.listProps.collapsed).toBe(true);
-    expect(structural?.getProps()).toEqual({ count: 1, label: "Initial" });
-    expect(structural?.getProp("count")).toBe(1);
+    expect(editor.blocks.getBlockNode(blockId)?.props).toEqual({ count: 1, label: "Initial" });
+    expect(editor.blocks.getBlockNode(blockId)?.props.count).toBe(1);
 
-    expect(structural?.getActualContent()).toBe("Text");
-    expect(text?.getActualContent()).toBe("Text");
+    expect(editor.blocks.getBlockNode(blockId)?.content).toBe("Text");
     editor.blocks.updateBlock(blockId, { content: "Updated without rerendering" });
     expect(text?.block?.content).toBe("Text");
-    expect(structural?.getActualContent()).toBe("Updated without rerendering");
-    expect(text?.getActualContent()).toBe("Updated without rerendering");
+    expect(editor.blocks.getBlockNode(blockId)?.content).toBe("Updated without rerendering");
     text?.operations.setContent("");
-    expect(text?.getActualContent()).toBe("");
+    expect(editor.blocks.getBlockNode(blockId)?.content).toBe("");
 
-    structural?.setProps({ count: 2, label: "Patched" });
-    expect(structural?.getProps()).toEqual({ count: 2, label: "Patched" });
-    structural?.setProp("count", 3);
-    expect(structural?.getProp("count")).toBe(3);
-    structural?.setProp("label", undefined);
-    expect(structural?.getProp("label")).toBeUndefined();
-    expect(structural?.getProps()).toEqual({ count: 3 });
-    expect(() => structural?.setProp("count", -1)).toThrow("count must be non-negative");
+    structural?.operations.setProps({ count: 2, label: "Patched" });
+    expect(editor.blocks.getBlockNode(blockId)?.props).toEqual({ count: 2, label: "Patched" });
+    structural?.operations.setProp("count", 3);
+    expect(editor.blocks.getBlockNode(blockId)?.props.count).toBe(3);
+    structural?.operations.setProp("label", undefined);
+    expect(editor.blocks.getBlockNode(blockId)?.props.label).toBeUndefined();
+    expect(editor.blocks.getBlockNode(blockId)?.props).toEqual({ count: 3 });
+    expect(() => structural?.operations.setProp("count", -1)).toThrow("count must be non-negative");
+    expect(editor.blocks.getBlockNode(blockId)?.props.count).toBe(3);
 
     editor.blocks.removeBlock(blockId);
-    expect(structural?.getActualContent()).toBeUndefined();
-    expect(text?.getActualContent()).toBeUndefined();
-    expect(structural?.getProps()).toBeUndefined();
-    expect(structural?.getProp("count")).toBeUndefined();
-    expect(() => structural?.setProp("count", 4)).toThrow(/not found/);
+    expect(editor.blocks.getBlockNode(blockId)?.content).toBeUndefined();
+    expect(editor.blocks.getBlockNode(blockId)?.props).toBeUndefined();
+    expect(editor.blocks.getBlockNode(blockId)?.props.count).toBeUndefined();
+    expect(() => structural?.operations.setProp("count", 4)).toThrow(/not found/);
 
     reactEditor.destroy();
     editor.destroy();

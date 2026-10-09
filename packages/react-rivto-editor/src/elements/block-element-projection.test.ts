@@ -9,9 +9,6 @@ import {
   EDGELESS_BLOCK_ELEMENT_ID_PREFIX,
   elementContainsBlock,
   nonOverlappingBlockFrame,
-  reconcileBlockElements,
-  setBlockElementDefaultWidth,
-  setBlockElementOverlapAvoidance,
 } from "./block-element-projection";
 
 describe("edgeless block element reconciliation", () => {
@@ -39,7 +36,7 @@ describe("edgeless block element reconciliation", () => {
     const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, first).id;
     editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, separator);
     editor.elements.insertElement({ type: "rectangle", frame: { x: 60, y: 60, width: 1000, height: 1000 }, zIndex: 0 });
-    reconcileBlockElements(reactEditor);
+    reactEditor.blockElements.reconcile();
     const cards = editor.elements.getElements().filter((element) => element.type === "block");
     expect(cards).toHaveLength(2);
     expect(blockFramesOverlap(cards[0]!.frame, cards[1]!.frame)).toBe(false);
@@ -52,8 +49,8 @@ describe("edgeless block element reconciliation", () => {
     const left = overlapEditor.blocks.insertBlock({ type: "paragraph" }).id;
     const split = overlapEditor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, left).id;
     overlapEditor.blocks.insertBlock({ type: "paragraph" }, split);
-    setBlockElementOverlapAvoidance(overlapRuntime, false);
-    reconcileBlockElements(overlapRuntime);
+    overlapRuntime.blockElements.setOverlapAvoidance(false);
+    overlapRuntime.blockElements.reconcile();
     const overlapping = overlapEditor.elements.getElements();
     expect(blockFramesOverlap(overlapping[0]!.frame, overlapping[1]!.frame)).toBe(true);
     overlapRuntime.destroy();
@@ -64,9 +61,9 @@ describe("edgeless block element reconciliation", () => {
     const editor = await createRivtoEditor();
     const reactEditor = createRuntime(editor);
     editor.blocks.insertBlock({ type: "paragraph" });
-    setBlockElementDefaultWidth(reactEditor, 640);
+    reactEditor.blockElements.setDefaultWidth(640);
 
-    reconcileBlockElements(reactEditor);
+    reactEditor.blockElements.reconcile();
 
     expect(EDGELESS_CARD_DEFAULT_FRAME.width).toBe(720);
     expect(editor.elements.getElements()[0]!.frame.width).toBe(640);
@@ -103,7 +100,7 @@ describe("edgeless block element reconciliation", () => {
     const secondEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, empty).id;
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, secondEmpty).id;
 
-    reconcileBlockElements(reactEditor);
+    reactEditor.blockElements.reconcile();
 
     const elements = editor.elements.getElements();
     expect(ranges(editor)).toEqual([[first, empty, secondEmpty, last]]);
@@ -120,7 +117,7 @@ describe("edgeless block element reconciliation", () => {
     editor.blocks.indentBlock(child);
     editor.elements.insertElement({ id: "card", type: "block", frame: { x: 1, y: 2, width: 300, height: 120 }, zIndex: 0, props: { startBlockId: root, endBlockId: root } });
 
-    reconcileBlockElements(reactEditor);
+    reactEditor.blockElements.reconcile();
 
     expect(editor.elements.getElements()).toHaveLength(1);
     expect(blockIdsOf(editor.elements.getElement("card")!, editor.blocks.getRootIds())).toEqual([root]);
@@ -160,7 +157,7 @@ describe("edgeless block element reconciliation", () => {
     const firstEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, first).id;
     const secondEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, firstEmpty).id;
 
-    reconcileBlockElements(reactEditor);
+    reactEditor.blockElements.reconcile();
 
     expect(editor.elements.getElements()).toHaveLength(1);
     expect(ranges(editor)).toEqual([[first, firstEmpty, secondEmpty, last]]);
@@ -177,7 +174,7 @@ describe("edgeless block element reconciliation", () => {
     const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, first).id;
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, middle).id;
     editor.elements.insertElement({ id: "original-card", type: "block", frame: { x: 410, y: 220, width: 360, height: 180 }, zIndex: 4, props: { startBlockId: first, endBlockId: last } });
-    reconcileBlockElements(reactEditor);
+    reactEditor.blockElements.reconcile();
     await Promise.resolve();
 
     const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, first).id;
@@ -208,7 +205,7 @@ describe("edgeless block element reconciliation", () => {
     const rightLast = editor.blocks.insertBlock({ type: "paragraph", content: "Right last" }, rightFirst).id;
     editor.elements.insertElement({ id: "left-card", type: "block", frame: { x: 10, y: 20, width: 300, height: 120 }, zIndex: 1, props: { startBlockId: first, endBlockId: last } });
     editor.elements.insertElement({ id: "right-card", type: "block", frame: { x: 500, y: 200, width: 400, height: 180 }, zIndex: 2, props: { startBlockId: rightFirst, endBlockId: rightLast } });
-    reconcileBlockElements(reactEditor);
+    reactEditor.blockElements.reconcile();
 
     editor.blocks.moveBlock(first, rightFirst, "after");
     await Promise.resolve();
@@ -233,7 +230,7 @@ describe("edgeless block element reconciliation", () => {
     const rightLast = editor.blocks.insertBlock({ type: "paragraph", content: "Right last" }, rightFirst).id;
     editor.elements.insertElement({ id: "left-card", type: "block", frame: { x: 10, y: 20, width: 300, height: 120 }, zIndex: 1, props: { startBlockId: first, endBlockId: last } });
     editor.elements.insertElement({ id: "right-card", type: "block", frame: { x: 500, y: 200, width: 400, height: 180 }, zIndex: 2, props: { startBlockId: rightFirst, endBlockId: rightLast } });
-    reconcileBlockElements(reactEditor);
+    reactEditor.blockElements.reconcile();
 
     editor.blocks.moveBlock(last, rightFirst, "after");
     await Promise.resolve();
@@ -257,7 +254,7 @@ describe("edgeless block element reconciliation", () => {
     const rightLast = editor.blocks.insertBlock({ id: "g", type: "paragraph", content: "g" }, rightFirst).id;
     editor.elements.insertElement({ id: "left-card", type: "block", frame: { x: 10, y: 20, width: 300, height: 120 }, zIndex: 1, props: { startBlockId: leftIds[0]!, endBlockId: leftIds.at(-1)! } });
     editor.elements.insertElement({ id: "right-card", type: "block", frame: { x: 500, y: 200, width: 400, height: 180 }, zIndex: 2, props: { startBlockId: rightFirst, endBlockId: rightLast } });
-    reconcileBlockElements(reactEditor);
+    reactEditor.blockElements.reconcile();
 
     editor.history.batchUpdates(() => {
       editor.blocks.moveBlocks([rightFirst, rightLast], leftIds[2]!, "after");
@@ -283,7 +280,7 @@ describe("edgeless block element reconciliation", () => {
       id: "card", type: "block", frame: { x: 300, y: 200, width: 400, height: 150 }, zIndex: 4,
       props: { startBlockId: first, endBlockId: "missing" },
     });
-    reconcileBlockElements(reactEditor);
+    reactEditor.blockElements.reconcile();
     expect(editor.elements.getElements()).toEqual([expect.objectContaining({
       id: "card", frame: { x: 300, y: 200, width: 400, height: 150 }, zIndex: 4,
       props: { startBlockId: first, endBlockId: last },
@@ -302,7 +299,7 @@ describe("edgeless block element reconciliation", () => {
     const getBlocks = editor.blocks.getBlocks;
     editor.blocks.getBlocks = () => { throw new Error("Unexpected full-tree read"); };
     try {
-      reconcileBlockElements(reactEditor);
+      reactEditor.blockElements.reconcile();
       expect(ranges(editor)).toEqual([[first]]);
       expect(editor.blocks.getParentId(child)).toBe(first);
     } finally {
@@ -330,9 +327,20 @@ describe("edgeless block element reconciliation", () => {
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     editor.blocks.insertBlock({ type: "test.separator" }, first);
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getRootIds().at(-1)).id;
-    reconcileBlockElements(reactEditor);
+    reactEditor.blockElements.reconcile();
     expect(ranges(editor)).toEqual([[first], [last]]);
     reactEditor.destroy();
     editor.destroy();
   });
+});
+
+test("queued projection work cannot mutate the document after runtime destruction", async () => {
+  const core = await createRivtoEditor();
+  const runtime = createReactEditor({ editor: core });
+  core.blocks.insertBlock({ type: "paragraph", content: "Pending card" });
+  runtime.blockElements.schedule();
+  runtime.destroy();
+  await Promise.resolve();
+  expect(core.elements.getElements()).toHaveLength(0);
+  core.destroy();
 });

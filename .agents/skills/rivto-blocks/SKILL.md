@@ -143,22 +143,24 @@ control only when that control must own its pointer/text gesture.
 
 ### Contentless or control-only blocks
 
-Call `useBlockEditing<Props>(blockId, { textEdit: false })` and spread
-`editing.attributes` on the one region representing the whole block:
+Call `useBlockNode<Props>(blockId)` and `useBlockSelectionAnchor(blockId)`; spread
+the returned anchor attributes on the one region representing the whole block:
 
 ```tsx
 const CONTROL_REGION_CLASS = "my-control-region";
 
 function ControlBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<ControlProps>(blockId, { textEdit: false });
+  const editing = useBlockNode<ControlProps>(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
+  const reactEditor = useReactEditor();
   if (!editing.block) return null;
   return (
-    <div {...editing.attributes} className={CONTROL_REGION_CLASS}>
+    <div {...attributes} className={CONTROL_REGION_CLASS}>
       <button
         type="button"
         onClick={(event) => {
           if (event.defaultPrevented) return;
-          editing.setProp("value", nextValue(editing.getProp("value")));
+          editing.operations.setProp("value", nextValue(reactEditor.blocks.getBlockNode(blockId)?.props.value));
         }}
       >
         Action
@@ -194,9 +196,9 @@ anchor and do not spread a second editing attribute set.
 - Put creation defaults in `defaultProps`; use a factory only when each creation
   needs fresh values.
 - Add a Zod `propSchema` for meaningful native props. Update props through
-  `editing.setProp`, `editing.setProps`, or `reactEditor.blocks`; never mutate
+  `editing.operations.setProp`, `editing.operations.setProps`, or `reactEditor.blocks`; never mutate
   the detached reactive snapshot.
-- Read current values again inside event handlers with `getProp` rather than
+- Read current values again inside event handlers with `reactEditor.blocks.getBlockNode(blockId)` rather than
   using a stale render capture.
 - Use `allowedParents` only for a real persisted placement invariant. Include
   `null` only when root placement is valid.

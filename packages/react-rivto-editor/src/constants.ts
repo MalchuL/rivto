@@ -32,7 +32,7 @@ export const PAGE_END_SLOT_SELECTOR = `[${PAGE_END_SLOT_ATTRIBUTE}]`;
 /**
  * Opt-in marker for a renderer region from which selection may begin.
  *
- * Every `useBlockEditing` mode returns this marker. The text-selection extension uses
+ * `useBlockTextEditing` and `useBlockSelectionAnchor` return this marker. The text-selection extension uses
  * the marked element's native `isContentEditable` state to distinguish text
  * editing from structural selection; `data-block-content` remains responsible
  * only for persisted text offsets and DOM range conversion.
@@ -49,7 +49,7 @@ export const BLOCK_SELECTION_ANCHOR_SELECTOR = `[${BLOCK_SELECTION_ANCHOR_ATTRIB
 /**
  * Opt-in marker for an interactive child that owns its pointer interaction.
  *
- * `useBlockEditing` places this marker alongside a pointer handler that prevents
+ * `usePreventTextEditing` places this marker alongside a pointer handler that prevents
  * an ancestor preview from entering raw-text mode. Delegated extensions cannot
  * depend on React propagation alone—especially for capture-phase clicks—so the
  * marker also lets structural selection exclude the same region without knowing

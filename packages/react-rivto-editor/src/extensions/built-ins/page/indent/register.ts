@@ -20,7 +20,7 @@ export function registerIndent(
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockIndent,
     keys: indentKeys,
-  }, ({ root, raw: event }) => applyIndentShortcut(
+  }, ({ reactEditor, root, raw: event }) => applyIndentShortcut(
     reactEditor.selection,
     root,
     event,
@@ -30,7 +30,7 @@ export function registerIndent(
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockOutdent,
     keys: outdentKeys,
-  }, ({ root, raw: event }) => applyIndentShortcut(
+  }, ({ reactEditor, root, raw: event }) => applyIndentShortcut(
     reactEditor.selection,
     root,
     event,

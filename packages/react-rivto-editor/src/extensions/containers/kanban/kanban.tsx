@@ -11,7 +11,7 @@ import { createPortal } from "react-dom";
 import type { BlockWrapperProps } from "../../../blocks";
 import type { EditorBlockInput } from "@chulane/rivto";
 import { createCaretSelection } from "@chulane/rivto";
-import { useBlockEditing, useReactEditor } from "../../../hooks";
+import { useBlockEditing, useBlockSelectionAnchor, useBlockNode, useReactEditor } from "../../../hooks";
 import { focusBlock, type ReactEditorExtension } from "../../../managers";
 import { KANBAN_BLOCK_TYPE, KANBAN_COLUMN_BLOCK_TYPE, kanbanColumnView, kanbanView } from "./kanban-view";
 import { convertLeafToContainer } from "../../../views/ops/outline-ops";
@@ -83,7 +83,8 @@ function useKanbanCounts(boardId: string): { readonly columnCount: number; reado
  */
 export function Kanban({ blockId }: { readonly blockId: string }) {
   const reactEditor = useReactEditor();
-  const editing = useBlockEditing(blockId, { textEdit: false });
+  const editing = useBlockNode(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
   const { columnCount, cardCount } = useKanbanCounts(blockId);
   const block = editing.block;
   const title = useRef<HTMLDivElement>(null);
@@ -120,7 +121,7 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
     </Button>
   );
   if (!block) return null;
-  return <div ref={title} {...editing.attributes} className={BOARD_SUMMARY_CLASS}>
+  return <div ref={title} {...attributes} className={BOARD_SUMMARY_CLASS}>
     {collapsed && <>
       <strong>Kanban</strong>
       <span className={BOARD_SUMMARY_STATS_CLASS}>{columnCount} {columnCount === 1 ? "column" : "columns"} · {cardCount} {cardCount === 1 ? "card" : "cards"}</span>

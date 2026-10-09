@@ -29,7 +29,7 @@ export function registerSelectionDeletion(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.selectionDelete,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
-    when: ({ selection, raw: event, blockId }) => {
+    when: ({ reactEditor, selection, raw: event, blockId }) => {
       const root = reactEditor.events.getRoot();
       if (!root) return false;
       const editableEvent = isEditableKeyboardEvent(event);
@@ -41,7 +41,7 @@ export function registerSelectionDeletion(reactEditor: ReactEditor): void {
         isStructuralSelection(current);
       return rootBlockSelection || editableEvent;
     },
-  }, ({ root }) => {
+  }, ({ reactEditor, root }) => {
     const current = reactEditor.selection.get();
     reactEditor.history.batchUpdates(() => {
       if (current && isStructuralSelection(current)) {

@@ -1,3 +1,4 @@
+import type { BlockElementProjection } from "./elements/block-element-projection";
 import type {
   CommandRegistryApi,
   ElementManagerApi,
@@ -64,6 +65,8 @@ export interface CreateReactEditorOptions {
 export interface ReactEditor {
   /** Core first-class element operations. */
   readonly elements: ElementManagerApi;
+  /** Shared block-card projection and defaults for this document. */
+  readonly blockElements: Pick<BlockElementProjection, "reconcile" | "schedule" | "setDefaultWidth" | "setOverlapAvoidance">;
   /** Document identity exposed on a scoped view; getDocument always returns this editor's model. */
   readonly documentId?: string;
   /**

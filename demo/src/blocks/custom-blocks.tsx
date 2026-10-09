@@ -13,7 +13,9 @@ import {
   tableExtension,
   columnsExtension,
   MarkdownContent,
-  useBlockEditing,
+  useReactEditor,
+  useBlockSelectionAnchor,
+  useBlockNode,
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
@@ -61,10 +63,11 @@ export {
  * @returns The markdown body and range control, or null after deletion.
  */
 function SliderBlock({ blockId }: { readonly blockId: string }) {
-  const { block, getProp, setProp } = useBlockEditing<SliderProps>(blockId);
+  const { block, operations: { setProp } } = useBlockNode<SliderProps>(blockId);
+  const reactEditor = useReactEditor();
   const draggingRef = useRef(false);
   const [draftValue, setDraftValue] = useState<number | null>(null);
-  const committedValue = getProp("value") ?? 50;
+  const committedValue = block?.props.value ?? 50;
   const value = draftValue ?? committedValue;
 
   /**
@@ -75,9 +78,9 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
    */
   const commitValue = useCallback((next: number) => {
     setDraftValue(null);
-    if (next === (getProp("value") ?? 50)) return;
+    if (next === (reactEditor.blocks.getBlockNode(blockId)?.props.value ?? 50)) return;
     setProp("value", next);
-  }, [getProp, setProp]);
+  }, [reactEditor, blockId, setProp]);
 
   /**
    * Marks the current pointer gesture as an in-progress drag.
@@ -152,18 +155,21 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
 
 /** Demo contentless block proving controls can participate in structural selection. */
 function CounterBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<CounterProps>(blockId, { textEdit: false });
+  const editing = useBlockNode<CounterProps>(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
+  const reactEditor = useReactEditor();
   if (!editing.block) return null;
-  const count = editing.getProp("count") ?? 0;
+  const count = editing.block.props.count ?? 0;
   const increment = (event: MouseEvent<HTMLButtonElement>) => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
-    editing.setProp("count", (editing.getProp("count") ?? 0) + 1);
+    const current = reactEditor.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+    editing.operations.setProp("count", (current?.count ?? 0) + 1);
   };
   return (
     // The renderer region fills the block row, making its otherwise empty
     // right-hand side a valid structural-selection anchor. The actual Counter
     // button remains compact and retains its normal click behavior.
-    <div {...editing.attributes} className="custom-counter-selection-region">
+    <div {...attributes} className="custom-counter-selection-region">
       <button
         {...COUNTER_SELECTION_ATTRIBUTES}
         {...editorControlProps}

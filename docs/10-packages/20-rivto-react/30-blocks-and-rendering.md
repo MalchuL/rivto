@@ -10,13 +10,16 @@ import { z } from "zod";
 interface CounterProps { count: number }
 
 function CounterBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<CounterProps>(blockId, { textEdit: false });
+  const editing = useBlockNode<CounterProps>(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
+  const reactEditor = useReactEditor();
   if (!editing.block) return null;
-  return <div {...editing.attributes}>
+  return <div {...attributes}>
     <button onClick={(event) => {
       if (event.defaultPrevented) return;
-      editing.setProp("count", (editing.getProp("count") ?? 0) + 1);
-    }}>Count: {editing.getProp("count") ?? 0}</button>
+      const current = reactEditor.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+      editing.operations.setProp("count", (current?.count ?? 0) + 1);
+    }}>Count: {editing.block?.props.count ?? 0}</button>
   </div>;
 }
 
@@ -60,7 +63,7 @@ function TextBlock({ blockId }: { blockId: string }) {
 
 ## Control и mixed blocks
 
-`textEdit: false` возвращает structural selection anchor без contenteditable. Interactive controls учитывают `event.defaultPrevented`, потому что completed selection drag может claim последующий click.
+`useBlockSelectionAnchor(blockId)` возвращает structural selection anchor без contenteditable и восстанавливает ожидающий фокус на корне редактора. Interactive controls учитывают `event.defaultPrevented`, потому что completed selection drag может claim последующий click.
 
 Если renderer сочетает Markdown и controls, `MarkdownContent` уже владеет editing attributes. Не добавляйте второй editable owner вокруг него. Такой pattern используется Slider в `demo/src/blocks/custom-blocks.tsx`.
 

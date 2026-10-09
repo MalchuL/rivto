@@ -14,19 +14,17 @@
  * @module
  */
 import { useContext, useLayoutEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { DragDropProvider } from "@dnd-kit/react";
 import { Accessibility, AutoScroller, KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { SurfaceContext } from "../../surfaces/surface";
 import { useEditorRoot, useReactEditor } from "../../hooks";
 import { PageDragController } from "./controller";
-import { PageDragPreview } from "./preview/component";
+import { PageDragOverlay } from "./preview/overlay";
 import { createDropPlacementStore, PageDragStateContext } from "./state";
 import { PageDragAutoScrollPolicy } from "./surface/auto-scroll";
 import type { PageDragExtensionOptions } from "./types";
 export type { PageDragExtensionOptions } from "./types";
 
-const PAGE_DRAG_OVERLAY_CLASS = "page-drag-overlay";
 const DRAG_PLUGINS = [Accessibility, AutoScroller];
 /**
  * Viewport pixels one arrow press moves the keyboard stand-in rectangle.
@@ -84,27 +82,6 @@ export function PageDragProvider({
     return block ? [block] : [];
   });
 
-  // Native modal dialogs occupy the top layer; previews must join that layer.
-  const modalRoot = root?.querySelector("dialog:modal");
-  const overlayHost = modalRoot ?? root?.ownerDocument.body;
-  const overlay = activeBlocks.length > 0 && overlayHost ? createPortal(
-    <div
-      ref={(element) => { controller.previewElement = element; }}
-      className={`${PAGE_DRAG_OVERLAY_CLASS} pointer-events-none box-border max-h-[220px] w-[min(520px,70vw)] max-w-[520px] overflow-hidden rounded-md border border-accent-foreground/30 bg-background px-3.5 py-2.5 text-foreground opacity-70 shadow-lg`}
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        zIndex: 2147483647,
-        transform: `translate3d(${controller.previewPosition?.x ?? 0}px, ${controller.previewPosition?.y ?? 0}px, 0)`,
-        willChange: "transform",
-      }}
-      aria-hidden="true"
-    >
-      <PageDragPreview blocks={activeBlocks} childrenVisible={(block) => reactEditor.blockListProps.childrenVisible(block)} />
-    </div>,
-    overlayHost,
-  ) : null;
   const dragContext = useMemo(() => ({ placements }), [placements]);
 
   return (
@@ -118,7 +95,8 @@ export function PageDragProvider({
       >
         <PageDragAutoScrollPolicy getPointer={controller.getDragPointer} />
         {children}
-        {overlay}
+        <PageDragOverlay root={root} controller={controller} blocks={activeBlocks}
+          childrenVisible={(block) => reactEditor.blockListProps.childrenVisible(block)} />
       </DragDropProvider>
     </PageDragStateContext.Provider>
   );

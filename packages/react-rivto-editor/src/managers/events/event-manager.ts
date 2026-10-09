@@ -5,7 +5,7 @@ import type { DocumentViewScope } from "./document-view";
 import { DocumentViewRegistry } from "./document-view-registry";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorMode } from "@chulane/rivto";
-import type { EventsCapability } from "../../capabilities";
+import type { ReactEditorView, EventsCapability } from "../../capabilities";
 import type { ReactEditor } from "../../types";
 import type { ReactEditorImpl } from "../../react-editor";
 import {
@@ -76,20 +76,23 @@ export class EventManager implements EventsCapability {
   /**
    * Binds event registrations and DOM operations to one mounted occurrence.
    * Shared listener state stays on this manager; the view owns local disposers.
-   * @param owner - View supplying a stable identity and its current DOM root.
+   * @param reactEditor - View editor supplying a stable identity, current DOM root, and registration cleanup.
    * @returns Event methods that retain this view even when another view gains focus.
    */
-  forView(owner: DocumentViewScope): EventsCapability {
+  createViewApi(reactEditor: ReactEditorView): EventsCapability {
+    const owner = reactEditor.view;
     return {
-      forView: (view) => this.forView(view),
+      createViewApi: (view) => this.createViewApi(view),
       register: (definition, listener) => owner.own(this.register(definition, listener, owner)),
       delete: (id) => this.delete(`${owner.id}:${id}`),
       getRoot: () => owner.getRoot(),
       setRoot: (root) => owner.setRoot(root),
-      getSurfaceType: () => this.withViewRoot(owner.getRoot(), () => this.getSurfaceType()),
-      getDocumentView: () => this.withViewRoot(owner.getRoot(), () => this.getDocumentView()),
+      getSurfaceType: () => this.documentViews.getSurfaceType(owner.getRoot()),
+      getDocumentView: () => {
+        const root = owner.getRoot();
+        return root ? this.documentViews.getApi(root) : undefined;
+      },
       registerDocumentView: (...args) => this.registerDocumentView(...args),
-      runInView: (operation) => this.withViewRoot(owner.getRoot(), operation),
     };
   }
 
@@ -217,20 +220,9 @@ export class EventManager implements EventsCapability {
     return this.documentViews.registerDocumentView(root, document, rootBlockId, api, deactivate);
   }
 
-  /** Enters a view's DOM scope for synchronous operations and restores the previous root. */
-  withViewRoot<Result>(root: HTMLElement | null, operation: () => Result): Result {
-    return this.documentViews.withViewRoot(root, operation);
-  }
 
-  /**
-   * Runs deferred selection or command work in the active DOM occurrence.
-   * Explicit view roots take precedence over browser focus; core models never switch.
-   * @param operation - Synchronous work to execute.
-   * @returns The operation's result after restoring the previous document context.
-   */
-  runInView<Result>(operation: () => Result): Result {
-    return this.documentViews.runInView(operation);
-  }
+
+
 
   /** Releases every registration and native listener in reverse order. */
   destroy(): void {
@@ -320,7 +312,7 @@ export class EventManager implements EventsCapability {
   private dispatch(group: NativeListenerGroup, raw: globalThis.Event, attachedRoot?: HTMLElement): void {
     if (raw.defaultPrevented || this.claimedEvents.has(raw)) return;
     const root = this.documentViews.resolveEventRoot(raw, attachedRoot);
-    if (root) this.withViewRoot(root, () => this.dispatchRegistrations(group, raw, root));
+    if (root) this.dispatchRegistrations(group, raw, root);
   }
 
   private dispatchRegistrations(group: NativeListenerGroup, raw: globalThis.Event, root: HTMLElement): void {
@@ -378,8 +370,8 @@ export class EventManager implements EventsCapability {
       root,
       // Route handlers by the receiving surface: core mode may be edgeless
       // while this event belongs to a page embedding of the same document.
-      mode: this.getSurfaceType(),
-      selection: this.reactEditor.selection.get(),
+      mode: this.documentViews.getSurfaceType(root),
+      selection: reactEditor.selection.get(),
       eventTarget,
       insideRoot,
       blockElement,

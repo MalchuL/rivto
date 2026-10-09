@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/pop
 import { PageSurface } from "../../surfaces/page";
 import { EditorView } from "../../editor-view";
 import { EditorStorageContext } from "../../editor-storage-context";
-import { useBlockEditing, useReactEditor } from "../../hooks";
+import { useBlockSelectionAnchor, useBlockNode, useReactEditor } from "../../hooks";
 import type { BlockSlotProps, ReactEditorExtension } from "../../managers";
 
 /** Persisted block type for a live reference to another workspace block. */
@@ -28,10 +28,11 @@ export interface EmbeddingProps extends Record<string, unknown> {
 
 /** Renders the selectable reference anchor without adding a header above the source editor. */
 function EmbeddingBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<EmbeddingProps>(blockId, { textEdit: false });
+  const editing = useBlockNode<EmbeddingProps>(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
   if (!editing.block) return null;
   return (
-    <div {...editing.attributes} className={`${EMBEDDING_CLASS} w-full min-w-0 max-w-full box-border min-h-(--rivto-default-block-height)`} />
+    <div {...attributes} className={`${EMBEDDING_CLASS} w-full min-w-0 max-w-full box-border min-h-(--rivto-default-block-height)`} />
   );
 }
 

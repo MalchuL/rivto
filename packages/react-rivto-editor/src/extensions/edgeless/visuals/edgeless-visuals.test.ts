@@ -22,7 +22,7 @@ describe("edgelessVisualsExtension", () => {
 
     reactEditor.selection.set(createCaretSelection(blockId, 2));
 
-    reactEditor.events.runInView(() => {
+
     const first = extension.createRectangle({ frame: { x: 10, y: 20, width: 40, height: 30 }, rotation: 375 });
     const second = extension.createEllipse({ frame: { x: 90, y: 50, width: 20, height: 20 } });
     expect(reactEditor.selection.get()).toMatchObject({
@@ -54,7 +54,7 @@ describe("edgelessVisualsExtension", () => {
     expect(visuals.find((visual) => visual.id === first.id)?.frame).toMatchObject({ x: 15, y: 27 });
     expect(editor.elements.getElements().filter((element) => element.type === "group")).toHaveLength(2);
 
-    });
+
 
     reactEditor.destroy();
     expect(editor.commands.has("edgeless.visual.create")).toBe(false);

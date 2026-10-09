@@ -13,18 +13,19 @@ import type {
   EditorBlockPatch as BlockPatch,
 } from "@chulane/rivto";
 import { useReactEditor } from "../editor/use-editor";
-import type { ReactEditor } from "../../types";
 
 /** Commands bound to one stable block ID. */
-export interface BlockOperations {
+export interface BlockOperations<Props extends object = Record<string, unknown>> {
   /** Applies any supported mutable block patch through `block.update`. */
   update(patch: BlockPatch): void;
   /** Replaces the block's collaborative plain-text content. */
   setContent(content: string): void;
   /** Converts the block to another registered native type. */
   setType(type: string): void;
-  /** Sets or removes one native property without replacing sibling properties. */
-  setProp(key: string, value: unknown): void;
+  /** Validates and patches multiple native properties without replacing others. */
+  setProps(props: Partial<Props>): void;
+  /** Validates and sets one native property; undefined removes that key without replacing siblings. */
+  setProp<Key extends keyof Props>(key: Key, value: Props[Key] | undefined): void;
   /** Sets or removes data owned by one plugin namespace. */
   setPluginData(pluginId: string, value: unknown): void;
   /** Removes the block subtree. */
@@ -51,26 +52,33 @@ export interface UseBlockResult {
   readonly operations: BlockOperations;
 }
 
+/** Node properties use the renderer's declared schema; the generic does not validate reads. */
+export type TypedBlockNode<Props extends object> = Omit<BlockNode, "props"> & { readonly props: Readonly<Props> };
+
 /** Reactive node snapshot and stable commands returned by useBlockNode. */
-export interface UseBlockNodeResult {
+export interface UseBlockNodeResult<Props extends object = Record<string, unknown>> {
   /** Current own fields and direct child IDs, or undefined after deletion. */
-  readonly block: BlockNode | undefined;
+  readonly block: TypedBlockNode<Props> | undefined;
   /** Memoized commands permanently bound to the requested block ID. */
-  readonly operations: BlockOperations;
+  readonly operations: BlockOperations<Props>;
 }
 
 /**
  * Creates stable ID-bound commands without subscribing to document values.
- * @param reactEditor - Active editor runtime.
+ * Uses the active editor runtime from the surrounding EditorView.
  * @param blockId - Stable block ID.
- * @returns Commands that read current document state when invoked.
+ * @returns Commands that read current document state when invoked. Property writes
+ * validate through the registered block definition; invalid writes throw without mutation.
+ * @throws If called outside an EditorView subtree.
  */
-function useBlockOperations(reactEditor: ReactEditor, blockId: string): BlockOperations {
-  return useMemo<BlockOperations>(() => ({
+export function useBlockOperations<Props extends object = Record<string, unknown>>(blockId: string): BlockOperations<Props> {
+  const reactEditor = useReactEditor();
+  return useMemo<BlockOperations<Props>>(() => ({
     update: (patch) => reactEditor.blocks.updateBlock(blockId, patch),
     setContent: (content) => reactEditor.blocks.updateBlock(blockId, { content }),
     setType: (type) => reactEditor.blocks.setBlockType(blockId, type),
-    setProp: (key, value) => reactEditor.blocks.setBlockProp(blockId, key, value),
+    setProps: (props) => reactEditor.blocks.updateBlock(blockId, { props: props as Record<string, unknown> }),
+    setProp: (key, value) => reactEditor.blocks.setBlockProp(blockId, String(key), value),
     setPluginData: (pluginId, value) => reactEditor.blocks.setBlockPluginData(blockId, pluginId, value),
     remove: () => reactEditor.blocks.removeBlock(blockId),
     mergeInto: (targetId) => reactEditor.blocks.mergeBlocks(targetId, blockId),
@@ -100,7 +108,7 @@ export function useBlock(blockId: string): UseBlockResult {
     [blockId, reactEditor],
   );
   const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  return { block, operations: useBlockOperations(reactEditor, blockId) };
+  return { block, operations: useBlockOperations(blockId) };
 }
 
 /**
@@ -109,7 +117,7 @@ export function useBlock(blockId: string): UseBlockResult {
  * @returns Current node snapshot and commands bound to its ID.
  * @throws If called outside an EditorView subtree.
  */
-export function useBlockNode(blockId: string): UseBlockNodeResult {
+export function useBlockNode<Props extends object = Record<string, unknown>>(blockId: string): UseBlockNodeResult<Props> {
   const reactEditor = useReactEditor();
   const subscribe = useCallback(
     (listener: () => void) => reactEditor.blocks.subscribeBlockNode(blockId, listener),
@@ -120,5 +128,5 @@ export function useBlockNode(blockId: string): UseBlockNodeResult {
     [blockId, reactEditor],
   );
   const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  return { block, operations: useBlockOperations(reactEditor, blockId) };
+  return { block: block as TypedBlockNode<Props> | undefined, operations: useBlockOperations<Props>(blockId) };
 }

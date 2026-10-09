@@ -1,7 +1,7 @@
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorAcquisition, EditorStorage } from "../../editor-storage";
 import type { ReactEditor } from "../../types";
-import type { SelectionCapability } from "../../capabilities";
+import type { ReactEditorView, SelectionCapability } from "../../capabilities";
 import { DOCUMENT_VIEW_ATTRIBUTE, type DocumentViewScope } from "./document-view";
 
 /** Immutable loading state observed by the EditorView boundary. */
@@ -168,9 +168,6 @@ export class EditorViewController implements DocumentViewScope {
    * @returns Document-bound API sharing registries, DOM events, and lifecycle with this editor.
    */
   private createApi(document: DocumentModel): ReactEditor {
-    const events = this.editor.events.forView(this);
-    const keyboard = this.editor.keyboard.forView(this);
-    const run = events.runInView;
     const selection = this.editor.selection;
     let checkedSelection: ReturnType<typeof selection.snapshot>;
     let checkedRevision = -1; let contained = false;
@@ -193,29 +190,32 @@ export class EditorViewController implements DocumentViewScope {
     const selectionApi: SelectionCapability = {
       subscribe: selection.subscribe.bind(selection),
       clear: selection.clear.bind(selection),
-      readDOM: () => run(() => selection.readDOM()),
-      scheduleIfSelectionUnchanged: (...args: Parameters<SelectionCapability["scheduleIfSelectionUnchanged"]>) => run(() => selection.scheduleIfSelectionUnchanged(...args)),
-      get hasPendingSelectionCallback() { return run(() => selection.hasPendingSelectionCallback); },
+      createViewApi: (next) => selection.createViewApi(next),
+      readDOM: () => viewSelection.readDOM(),
+      scheduleIfSelectionUnchanged: (callback, onCancel) => viewSelection.scheduleIfSelectionUnchanged(callback, onCancel),
+      get hasPendingSelectionCallback() { return viewSelection.hasPendingSelectionCallback; },
       get: () => ownsSelection() ? selection.get() : undefined,
       snapshot: () => ownsSelection() ? selection.snapshot() : undefined,
-      set: (value: Parameters<SelectionCapability["set"]>[0]) => run(() => {
+      set: (value: Parameters<SelectionCapability["set"]>[0]) => {
         if (value?.type === "selection" && Array.isArray(value.blocks) && !containsSelection(value)) { selection.clear(); return; }
-        selection.set(value);
-      }),
+        viewSelection.set(value);
+      },
       isBlockSelected: (id: string) => ownsSelection() && selection.isBlockSelected(id),
       isElementSelected: (id: string) => ownsSelection() && selection.isElementSelected(id),
-      delete: () => { if (ownsSelection()) run(() => selection.delete()); },
+      delete: () => { if (ownsSelection()) viewSelection.delete(); },
       restoreDOM: (value = selectionApi.get(), options?: Parameters<SelectionCapability["restoreDOM"]>[1]) =>
-        Boolean(value) && run(() => selection.restoreDOM(value, options)),
+        Boolean(value) && viewSelection.restoreDOM(value, options),
     };
     const editor = this.editor;
-    return {
+    const api: ReactEditorView = {
+      view: this,
       documentId: document.id,
       rootBlockId: this.rootBlockId,
-      events,
-      keyboard,
+      get events() { return events; },
+      get keyboard() { return keyboard; },
       selection: selectionApi,
       blocks: editor.blocks,
+      blockElements: editor.blockElements,
       blockTypes: editor.blockTypes,
       blockListProps: editor.blockListProps,
       elements: editor.elements,
@@ -224,10 +224,10 @@ export class EditorViewController implements DocumentViewScope {
       history: editor.history,
       renderers: editor.renderers,
       views: editor.views,
-      clipboard: editor.clipboard,
+      get clipboard() { return clipboard; },
       surfaces: editor.surfaces,
       extensions: editor.extensions,
-      slashCommands: editor.slashCommands,
+      get slashCommands() { return slashCommands; },
       get revision() { return editor.revision; },
       get createDefaultBlock() { return editor.createDefaultBlock; },
       set createDefaultBlock(value) { editor.createDefaultBlock = value; },
@@ -239,6 +239,13 @@ export class EditorViewController implements DocumentViewScope {
       // A view releases its acquisition through mount cleanup; it never destroys the shared editor.
       destroy: () => {},
     };
+    // Factories capture the view; selection needs its events API to be ready first.
+    const events = editor.events.createViewApi(api);
+    const keyboard = editor.keyboard.createViewApi(api);
+    const viewSelection = selection.createViewApi(api);
+    const clipboard = editor.clipboard.createViewApi(api);
+    const slashCommands = editor.slashCommands.createViewApi(api);
+    return api;
   }
 
   private bind(document: DocumentModel, retained = false): void {

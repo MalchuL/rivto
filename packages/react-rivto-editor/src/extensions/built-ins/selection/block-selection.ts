@@ -17,11 +17,11 @@ import { findEdgelessRuntime } from "./edgeless-runtime";
  * the next click means "select this block".
  */
 export function registerBlockSelection(reactEditor: ReactEditor): () => void {
-  const setModifierDown = (value: boolean) => {
-    const root = reactEditor.events.getRoot();
+  const markedRoots = new Set<HTMLElement>();
+  const setModifierDown = (root: HTMLElement, value: boolean) => {
     if (!root) return;
-    if (value) root.dataset.blockSelecting = "true";
-    else delete root.dataset.blockSelecting;
+    if (value) { root.dataset.blockSelecting = "true"; markedRoots.add(root); }
+    else { delete root.dataset.blockSelecting; markedRoots.delete(root); }
   };
 
   reactEditor.keyboard.register({
@@ -31,8 +31,8 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     // Every editor in a realm observes the same window keyboard event. Only
     // the surface containing its native target may expose modifier UI.
     when: ({ insideRoot }) => insideRoot,
-  }, () => {
-    setModifierDown(true);
+  }, ({ root }) => {
+    setModifierDown(root, true);
     return false;
   });
   reactEditor.keyboard.register({
@@ -41,27 +41,27 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     phase: "keyup",
     target: "window",
     when: ({ insideRoot }) => insideRoot,
-  }, () => {
-    setModifierDown(false);
+  }, ({ root }) => {
+    setModifierDown(root, false);
     return false;
   });
   reactEditor.events.register({
     id: "block-selection.modifier-blur",
     type: "blur",
     target: "window",
-  }, () => {
-    setModifierDown(false);
+  }, ({ root }) => {
+    setModifierDown(root, false);
     return false;
   });
   reactEditor.events.register({
     id: "block-selection.modifier-focus-owner",
     type: "focusin",
     target: "document",
-  }, ({ insideRoot }) => {
+  }, ({ root, insideRoot }) => {
     // Keyup is delivered to the newly focused editor when focus changes while
     // Ctrl/Meta is held. Clear the old root at focus time so it cannot retain
     // stale modifier styling indefinitely.
-    if (!insideRoot) setModifierDown(false);
+    if (!insideRoot) setModifierDown(root, false);
     return false;
   });
 
@@ -70,7 +70,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     type: "pointerdown",
     capture: true,
     scope: "block",
-  }, ({ raw: event, root, mode }) => {
+  }, ({ reactEditor, raw: event, root, mode }) => {
     if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) return false;
     if (
       !(event.target instanceof Element) ||
@@ -101,7 +101,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
   });
 
   return () => {
-    const root = reactEditor.events.getRoot();
-    if (root) delete root.dataset.blockSelecting;
+    markedRoots.forEach((root) => { delete root.dataset.blockSelecting; });
+    markedRoots.clear();
   };
 }

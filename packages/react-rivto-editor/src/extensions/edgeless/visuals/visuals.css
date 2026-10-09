@@ -474,3 +474,14 @@
     linear-gradient(315deg, #d0ccd8 25%, transparent 25%) 0 0 / 8px 8px,
     linear-gradient(45deg, #d0ccd8 25%, #f4f2f7 25%) 0 0 / 8px 8px;
 }
+
+/* Connector previews share canvas coordinates and never intercept a gesture. */
+.edgeless-connector-live-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 2147483638;
+}

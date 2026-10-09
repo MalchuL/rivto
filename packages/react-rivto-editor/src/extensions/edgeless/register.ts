@@ -12,8 +12,6 @@ import {
 } from "./surface";
 import {
   EDGELESS_CARD_DEFAULT_FRAME,
-  setBlockElementDefaultWidth,
-  setBlockElementOverlapAvoidance,
 } from "../../elements/block-element-projection";
 import type { ReactEditor } from "../../types";
 
@@ -37,13 +35,9 @@ export function registerEdgelessSurface(
 ): () => void {
   const previous = surfaceOptions.get(reactEditor.surfaces);
   surfaceOptions.set(reactEditor.surfaces, options);
-  setBlockElementOverlapAvoidance(
-    reactEditor,
-    options.avoidBlockElementOverlap !== false,
+  reactEditor.blockElements.setOverlapAvoidance(options.avoidBlockElementOverlap !== false,
   );
-  setBlockElementDefaultWidth(
-    reactEditor,
-    options.blockElementWidth ?? EDGELESS_CARD_DEFAULT_FRAME.width,
+  reactEditor.blockElements.setDefaultWidth(options.blockElementWidth ?? EDGELESS_CARD_DEFAULT_FRAME.width,
   );
   return () => {
     if (previous) surfaceOptions.set(reactEditor.surfaces, previous);

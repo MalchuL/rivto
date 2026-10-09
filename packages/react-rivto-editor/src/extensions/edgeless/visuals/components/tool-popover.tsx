@@ -13,12 +13,12 @@ import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
 import type { ToolCategory } from "../types";
 
 /** Floating panel above the toolbar; `edgeless-tool-popover` is a stable hook. */
-const POPOVER_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-popover absolute bottom-[calc(100%+10px)] left-1/2 z-22 flex w-[min(320px,calc(100vw-48px))] -translate-x-1/2 flex-col gap-2.5 rounded-xl border border-border bg-popover/98 p-2.5 text-popover-foreground shadow-[0_10px_28px_rgb(42_34_72/16%)]`;
-const SECTION_CLASS = "flex flex-col gap-1.5";
-const HEADING_CLASS = "text-[0.68rem]/none font-[650] tracking-[0.04em] text-muted-foreground uppercase";
+const POPOVER_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-popover`;
+const SECTION_CLASS = "edgeless-tool-popover-section";
+const HEADING_CLASS = "edgeless-tool-popover-heading";
 /* Tool buttons inside the popover widen to fit an icon plus a short label. */
-const TOOLS_CLASS = "flex flex-wrap gap-[5px] [&_button]:w-auto [&_button]:min-w-10 [&_button]:gap-1.5 [&_button]:px-1.5 [&_button]:touch-none";
-const DEFAULTS_CLASS = "flex flex-wrap items-center gap-2";
+const TOOLS_CLASS = "edgeless-tool-popover-tools";
+const DEFAULTS_CLASS = "edgeless-tool-popover-defaults";
 
 /**
  * Renders the Tools / Defaults popover for one create-tool category.

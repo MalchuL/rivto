@@ -23,7 +23,7 @@ import {
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { MarkdownContent } from "../../../blocks/markdown/markdown";
-import { useBlockEditing, useReactEditor, useEditorRoot } from "../../../hooks";
+import { useBlockSelectionAnchor, useBlockNode, useReactEditor, useEditorRoot } from "../../../hooks";
 import { findRenderedBlock, type ReactEditorExtension } from "../../../managers";
 import type { ReactEditor } from "../../../types";
 import { TABLE_BLOCK_TYPE, TABLE_ROW_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE, tableCellView, tableRowView, tableView } from "./table-view";
@@ -305,11 +305,12 @@ function useTableDimensions(tableId: string): { readonly rows: number; readonly 
  * @returns Contentless table header; the shared tree renders its rows.
  */
 export function Table({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing(blockId, { textEdit: false });
+  const editing = useBlockNode(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
   const { rows, columns } = useTableDimensions(blockId);
   const block = editing.block;
   if (!block) return null;
-  return <div {...editing.attributes} className={`${TABLE_CLASS} ${TABLE_SUMMARY_CLASS}`}>
+  return <div {...attributes} className={`${TABLE_CLASS} ${TABLE_SUMMARY_CLASS}`}>
     {block.listProps.collapsed === true && <>
       <strong>Table</strong>
       <span className={TABLE_SUMMARY_STATS_CLASS}>{rows} × {columns}</span>

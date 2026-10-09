@@ -132,3 +132,25 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* The controller owns only the preview position; its appearance stays here. */
+.page-drag-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  box-sizing: border-box;
+  max-height: 220px;
+  width: min(520px, 70vw);
+  max-width: 520px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in oklab, var(--rivto-accent-foreground) 30%, transparent);
+  background: var(--rivto-background);
+  padding: 10px 14px;
+  color: var(--rivto-foreground);
+  opacity: 0.7;
+  box-shadow: var(--shadow-lg);
+  will-change: transform;
+}

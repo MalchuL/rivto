@@ -78,13 +78,24 @@ Detached `block` обновляется по подписке на его subtre
 
 Text selection намеренно возвращает `null`.
 
-### `useBlockEditing(blockId, options?)`
+### `useBlockEditing(blockId)`
 
-- **Аргументы:** `blockId`; optional `{ textEdit?: boolean }`, default `true`.
-- **Возвращает:** block/operations, `getActualContent`, `getProps`, `getProp`, `setProps`, `setProp`, `attributes`, `preventTextEditingAttributes`.
+- **Аргументы:** `blockId`; хук предназначен для текстового блока.
+- **Возвращает:** block/operations, `attributes`, `preventTextEditingAttributes`. Методы `setProps` и типизированный `setProp` находятся в `operations`.
 - **Исключения:** provider error; setters передают schema/store errors.
 
-Imperative getters читают latest state и безопасны в event closures. `setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
+В рендере читайте `block.props`, а внутри event closures — актуальный `reactEditor.blocks.getBlockNode(blockId)`. `operations.setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
+
+### Отдельные команды и DOM
+
+`useBlockOperations<Props>(blockId)` возвращает стабильные команды без подписки.
+`useBlockNode<Props>(blockId)` добавляет реактивный snapshot; generic описывает
+схему props, но не проверяет её при чтении. Записи валидируются менеджером.
+
+`useBlockTextEditing(blockId, block?.content)` возвращает текстовые attributes без
+второй подписки. `useBlockSelectionAnchor(blockId)` возвращает структурный anchor
+и восстанавливает ожидающий фокус. `usePreventTextEditing()` независимо обслуживает
+вложенные контролы и снимает временные pointer listeners при unmount.
 
 ## Interaction hooks
 

@@ -1,11 +1,11 @@
 # `useBlockEditing`
 
-`useBlockEditing` is the renderer-facing hook for one block. It returns:
+`useBlockEditing` composes the data and DOM hooks for one text block. It returns:
 
 - `block` and `operations` from `useBlockNode`;
-- a reader for current document content;
-- typed native-property readers and writers;
-- DOM `attributes` for either text editing or structural selection.
+- typed native-property commands under `operations`;
+- DOM `attributes` for text editing;
+- `preventTextEditingAttributes` for nested interactive controls.
 
 The important rule is:
 
@@ -15,7 +15,7 @@ Do not spread them on every element in a renderer.
 
 ## Text blocks
 
-Text editing is the default:
+Text editing uses the composite hook:
 
 ```tsx
 function TextBlock({ blockId }: { blockId: string }) {
@@ -50,7 +50,7 @@ beside the spread. Do not replace the returned `ref`, `onInput`,
 
 ## Contentless or control blocks
 
-Disable text editing for blocks such as Counter:
+Use node state and a structural anchor for blocks such as Counter:
 
 ```tsx
 interface CounterProps {
@@ -58,19 +58,19 @@ interface CounterProps {
 }
 
 function CounterBlock({ blockId }: { blockId: string }) {
-  const editing = useBlockEditing<CounterProps>(
-    blockId,
-    { textEdit: false },
-  );
-  const count = editing.getProp("count") ?? 0;
+  const editing = useBlockNode<CounterProps>(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
+  const reactEditor = useReactEditor();
+  const count = editing.block?.props.count ?? 0;
 
   return (
-    <div {...editing.attributes} className="counter-selection-region">
+    <div {...attributes} className="counter-selection-region">
       <button
         type="button"
         onClick={(event) => {
           if (event.defaultPrevented) return;
-          editing.setProp("count", (editing.getProp("count") ?? 0) + 1);
+          const current = reactEditor.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+          editing.operations.setProp("count", (current?.count ?? 0) + 1);
         }}
       >
         Count: {count}
@@ -87,7 +87,7 @@ empty space around the compact button select the block while the button keeps
 its own action. Putting the attributes directly on an interactive control keeps
 that control's native click instead of turning the click into block selection.
 
-Both modes provide `data-block-selection-anchor`. With `textEdit: false`, the
+Both hooks provide `data-block-selection-anchor`. With `useBlockSelectionAnchor`, the
 anchor element is not contenteditable, so the selection plugin interprets its
 gesture structurally. Interactive descendants must ignore a click whose event
 is already `defaultPrevented`, because a completed selection drag claims the
@@ -106,8 +106,8 @@ interface SliderProps {
 }
 
 function SliderBlock({ blockId }: { blockId: string }) {
-  const editing = useBlockEditing<SliderProps>(blockId);
-  const value = editing.getProp("value") ?? 50;
+  const editing = useBlockNode<SliderProps>(blockId);
+  const value = editing.block?.props.value ?? 50;
 
   return (
     <div className="slider-block">
@@ -118,7 +118,7 @@ function SliderBlock({ blockId }: { blockId: string }) {
         max={100}
         value={value}
         onChange={(event) => {
-          editing.setProp("value", Number(event.currentTarget.value));
+          editing.operations.setProp("value", Number(event.currentTarget.value));
         }}
       />
     </div>
@@ -127,8 +127,8 @@ function SliderBlock({ blockId }: { blockId: string }) {
 ```
 
 `MarkdownContent` owns and spreads its text-editing attributes internally. The
-outer Slider renderer uses the hook for typed property access, but does not
-spread a second set of attributes.
+outer Slider renderer uses `useBlockNode` for typed property access, without
+allocating another text controller or spreading a second set of attributes.
 
 ## Returned state and methods
 
@@ -137,26 +137,47 @@ const editing = useBlockEditing<MyProps>(blockId);
 ```
 
 - `editing.block` is the reactive snapshot for the current render.
-- `editing.getActualContent()` reads the latest document content, including
+- `reactEditor.blocks.getBlockNode(blockId)?.content` reads the latest document content, including
   updates since the last render. It returns `undefined` for an unknown or deleted
   block and an empty string for an existing block without text. It does not read
   uncommitted DOM edits.
 - `editing.block?.listProps.collapsed` reads the extension-owned collapse state.
 - `editing.operations` contains commands such as `remove`, `setType`, `indent`,
   and `outdent`.
-- `editing.getProps()` reads the latest complete property object.
-- `editing.getProp(key)` reads one latest property.
-- `editing.setProps(patch)` validates and patches several supplied keys.
-- `editing.setProp(key, value)` validates one key.
-- `editing.setProp(key, undefined)` removes that key when its block schema
+- `reactEditor.blocks.getBlockNode(blockId)?.props` reads the latest complete property object, or undefined after deletion.
+- `reactEditor.blocks.getBlockNode(blockId)?.props[key]` reads one latest property, or undefined after deletion/removal.
+- `editing.operations.setProps(patch)` validates and patches several supplied keys.
+- `editing.operations.setProp(key, value)` validates one key.
+- `editing.operations.setProp(key, undefined)` removes that key when its block schema
   permits it.
 
-Use `getProp` again inside event handlers instead of incrementing a value
+Read the manager again inside event handlers instead of incrementing a value
 captured by an older render:
 
 ```tsx
-editing.setProp("count", (editing.getProp("count") ?? 0) + 1);
+const reactEditor = useReactEditor();
+const current = reactEditor.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+editing.operations.setProp("count", (current?.count ?? 0) + 1);
 ```
 
 Property validation is performed by the registered core block definition.
 Invalid updates throw and do not change the document.
+
+## Choosing the smallest hook
+
+- `useBlockOperations<Props>(blockId)` returns stable commands without subscribing.
+  Use it when the block snapshot already arrives through component props.
+- `useBlockNode<Props>(blockId)` returns a reactive node and those commands.
+  Read `block.props` during render; the generic describes the registered schema
+  and does not perform runtime validation of reads.
+- `useBlockTextEditing(blockId, block?.content)` binds one editable without
+  another document subscription. It synchronizes even when the DOM element is
+  replaced while content stays unchanged.
+- `useBlockSelectionAnchor(blockId)` supplies structural selection attributes
+  and pending focus restoration without creating a text controller.
+- `usePreventTextEditing()` supplies nested control attributes independently;
+  temporary pointer listeners are released when the consumer unmounts.
+
+Property methods now live only under `operations`. The old `textEdit` option and
+imperative getters on `useBlockEditing` were removed. Read current manager state
+inside callbacks when an update since the last render must be preserved.

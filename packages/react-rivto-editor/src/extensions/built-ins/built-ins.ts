@@ -203,7 +203,7 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
         group: "Actions",
         keywords: ["copy", "clone"],
         isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId),
-        execute: ({ blockId }) => {
+        execute: ({ blockId, reactEditor }) => {
           const block = reactEditor.blocks.getBlock(blockId);
           if (!block) return;
           const input = duplicateBlockInput(block);
@@ -238,7 +238,7 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
         group: "Actions",
         keywords: ["remove"],
         isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId),
-        execute: ({ blockId }) => {
+        execute: ({ blockId, reactEditor }) => {
           reactEditor.selection.set(createStructuralSelection([blockId]));
           reactEditor.selection.delete();
         },

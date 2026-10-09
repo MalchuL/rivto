@@ -27,10 +27,10 @@ export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMergeForward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
-    when: ({ raw: event, blockId }) =>
+    when: ({ reactEditor, raw: event, blockId }) =>
       isEditableKeyboardEvent(event) &&
       !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, reactEditor, blockId)),
-  }, ({ root, blockId }) => {
+  }, ({ reactEditor, root, blockId }) => {
     const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, reactEditor, blockId));
     const block = target?.collapsed ? reactEditor.blocks.getBlockNode(target.blockId) : undefined;
     if (!target?.collapsed || !block || target.offset !== block.content.length) return false;

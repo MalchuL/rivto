@@ -137,7 +137,7 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,
         keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSeparatorCreate],
         when: ({ raw: event }) => isEditableKeyboardEvent(event),
-      }, ({ root }) => {
+      }, ({ reactEditor, root }) => {
         const nativeSelection = reactEditor.selection.readDOM();
         if (nativeSelection) reactEditor.selection.set(nativeSelection);
         const target = firstKeyboardTarget(nativeSelection ?? reactEditor.selection.get());

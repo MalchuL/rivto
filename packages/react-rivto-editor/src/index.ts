@@ -144,6 +144,7 @@ export type {
   ClipboardFormatContext,
   ClipboardFormatter,
   ClipboardParser,
+  ViewPasteStrategy,
   PortableBlockFormats,
   DOMEventDefinition,
   DOMEventName,

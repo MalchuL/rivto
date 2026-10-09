@@ -14,33 +14,6 @@ export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
 export const EDGELESS_BLOCK_ELEMENT_ID_PREFIX = "rivto:block-element:";
 export const EDGELESS_CARD_DEFAULT_FRAME = { x: 60, y: 60, width: 720, height: 120 } as const;
 export const EDGELESS_BLOCK_PLACEMENT_STEP = 20;
-const placementSettings = new WeakMap<ReactEditor["extensions"], boolean>();
-const defaultWidthSettings = new WeakMap<ReactEditor["extensions"], number>();
-
-interface ReconciliationState {
-  readonly memberships: ReadonlyMap<string, readonly string[]>;
-}
-
-/**
- * Configures whether future reconciled block cards avoid existing cards.
- *
- * @param reactEditor - Runtime whose reconciler reads the behavior.
- * @param enabled - Whether new cards should search for a free frame.
- */
-export function setBlockElementOverlapAvoidance(reactEditor: ReactEditor, enabled: boolean): void {
-  placementSettings.set(reactEditor.extensions, enabled);
-}
-
-/**
- * Configures the width used only when the reconciler creates a new block card.
- *
- * @param reactEditor - Runtime whose reconciler reads the width.
- * @param width - Positive finite width in canvas units.
- */
-export function setBlockElementDefaultWidth(reactEditor: ReactEditor, width: number): void {
-  defaultWidthSettings.set(reactEditor.extensions, Number.isFinite(width) && width > 0 ? width : EDGELESS_CARD_DEFAULT_FRAME.width);
-}
-
 /**
  * Tests whether two positive frames overlap with area; touching edges are allowed.
  *
@@ -76,11 +49,6 @@ export function nonOverlappingBlockFrame(
     }
   }
 }
-
-// Range endpoints are canonical persisted data, but moving an endpoint makes
-// them temporarily ambiguous. The last reconciled membership is an in-memory
-// matching hint only; explicit separator block types determine every segment.
-const reconciliationStates = new WeakMap<ReactEditor, ReconciliationState>();
 
 /**
  * Finds the maximum-weight one-to-one assignment between segments and elements.
@@ -275,138 +243,188 @@ export function insertBlockElementSeparator(reactEditor: ReactEditor, afterId: s
   return reactEditor.blocks.insertBlock({ type, content: "" }, afterId);
 }
 
-/**
- * Reconciles persisted block elements with current root runs.
- * Registered root separator types define unambiguous runs; empty paragraphs
- * are ordinary card content. Membership matching remains necessary because
- * moving a stored start/end block can make its range cross a separator before
- * derived props are repaired. Global assignment preserves the most existing
- * elements instead of letting a greedy local match recreate another card.
- *
- * @param reactEditor - React runtime that owns separator policy and the projection.
- * @returns No value; required element changes are committed synchronously.
- */
-export function reconcileBlockElements(reactEditor: ReactEditor): void {
+/** Owns the document's block-card projection, settings, and deferred reconciliation. */
+export class BlockElementProjection {
+  // Range endpoints are canonical persisted data, but moving an endpoint makes
+  // them temporarily ambiguous. The last reconciled membership is an in-memory
+  // matching hint only; explicit separator block types determine every segment.
+  private memberships: ReadonlyMap<string, readonly string[]> = new Map();
+  private avoidOverlap = true;
+  private defaultWidth: number = EDGELESS_CARD_DEFAULT_FRAME.width;
+  private queued = false;
+  private destroyed = false;
 
-  // Build the two sides of the projection: current document roots and the
-  // persisted canvas elements that render ranges of those roots as cards.
-  const roots = reactEditor.blocks.getRootIds().flatMap((id) => {
-    const node = reactEditor.blocks.getBlockNode(id);
-    return node ? [node] : [];
-  });
-  const rootOrder = roots.map((block) => block.id);
-  const rootSet = new Set(rootOrder);
-  const existing = reactEditor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
-  const currentRanges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
+  /** @param reactEditor - Document runtime whose roots and cards stay consistent. */
+  constructor(private readonly reactEditor: ReactEditor) {}
 
-  // A moved range endpoint can temporarily make its persisted start/end pair
-  // describe the wrong run. Prefer the last known membership in that case so
-  // the same card keeps its identity and canvas geometry through the move.
-  const previousState = reconciliationStates.get(reactEditor);
-  const previousRanges = new Map(existing.map((element) => {
-    const cached = previousState?.memberships.get(element.id);
-    return [element.id, cached ? cached.filter((id) => rootSet.has(id)) : currentRanges.get(element.id) ?? []] as const;
-  }));
+  /**
+   * Configures whether future reconciled block cards avoid existing cards.
+   * The setting belongs to this document runtime, independent of mounted views.
+   * @param enabled - Whether new cards should search for a free frame.
+   */
+  setOverlapAvoidance(enabled: boolean): void { this.avoidOverlap = enabled; }
 
-  // Root separator blocks are boundaries, not card content. Every non-empty
-  // run between them must be represented by exactly one block element.
-  const segments: EditorBlockNode[][] = [];
-  let segment: EditorBlockNode[] = [];
-  roots.forEach((block) => {
-    if (reactEditor.blockTypes.separatesBlockElements(block.type)) {
-      if (segment.length) segments.push(segment);
-      segment = [];
-    } else segment.push(block);
-  });
-  if (segment.length) segments.push(segment);
+  /**
+   * Configures the width used only when the reconciler creates a new block card.
+   * The setting belongs to this document runtime; existing frames remain unchanged.
+   * @param width - Positive finite width in canvas units; invalid values use 720.
+   */
+  setDefaultWidth(width: number): void {
+    this.defaultWidth = Number.isFinite(width) && width > 0 ? width : EDGELESS_CARD_DEFAULT_FRAME.width;
+  }
 
-  const continuityBase = rootOrder.length + 1;
-  const anchorBonus = continuityBase ** 3;
-  const retentionBonus = continuityBase ** 4;
-
-  // Index block membership once to find candidate cards.
-  const segmentByBlock = new Map<string, number>();
-  segments.forEach((blocks, index) => blocks.forEach((block) => segmentByBlock.set(block.id, index)));
-  const scores = segments.map(() => new Map<number, number>());
-  existing.forEach((element, card) => {
-    const previous = previousRanges.get(element.id) ?? [];
-    const current = currentRanges.get(element.id) ?? [];
-    const overlaps = new Map<number, { previous: number; current: number }>();
-    const count = (ids: readonly string[], field: "previous" | "current") => {
-      ids.forEach((id) => {
-        const index = segmentByBlock.get(id);
-        if (index === undefined) return;
-        const overlap = overlaps.get(index) ?? { previous: 0, current: 0 };
-        overlap[field] += 1;
-        overlaps.set(index, overlap);
-      });
-    };
-    count(previous, "previous");
-    count(current, "current");
-    // A valid start can retain a card whose end temporarily disappeared.
-    const start = element.props.startBlockId;
-    const startSegment = typeof start === "string" ? segmentByBlock.get(start) : undefined;
-    if (startSegment !== undefined && segments[startSegment]![0]!.id === start && !overlaps.has(startSegment)) {
-      overlaps.set(startSegment, { previous: 0, current: 0 });
-    }
-    overlaps.forEach((overlap, index) => {
-      // First-block ownership breaks ties; retaining a reusable card wins first.
-      const first = segments[index]![0]!.id;
-      const ownsFirst = previous[0] === first || element.props.startBlockId === first;
-      const canReuse = overlap.previous > 0 || overlap.current > 0;
-      scores[index]!.set(card, (canReuse ? retentionBonus : 0) + (ownsFirst ? anchorBonus : 0)
-        + overlap.previous * continuityBase + overlap.current);
+  /**
+   * Coalesces synchronous document edits before repairing the React-owned block
+   * element projection. This keeps initialization and collaborative update
+   * bursts deterministic without coupling the projection to a mounted surface.
+   */
+  schedule = (): void => {
+    if (this.queued || this.destroyed) return;
+    this.queued = true;
+    queueMicrotask(() => {
+      this.queued = false;
+      if (!this.destroyed) this.reconcile();
     });
-  });
+  };
 
-  // Solve competing assignments together, preserving split/merge continuity.
-  const matches = matchConnectedSegments(scores);
-  const avoidOverlap = placementSettings.get(reactEditor.extensions) !== false;
-  const defaultWidth = defaultWidthSettings.get(reactEditor.extensions) ?? EDGELESS_CARD_DEFAULT_FRAME.width;
-  const occupied = existing.map((element) => element.frame);
+  /** Cancels queued work and releases previous membership hints. */
+  destroy(): void {
+    this.destroyed = true;
+    this.memberships = new Map();
+  }
 
-  // Produce the canonical element for each segment. Matched cards retain all
-  // presentation state; only new cards receive default placement and sizing.
-  const desired = segments.map((blocks, index): EditorElement => {
-    const existingElement = existing[matches[index] ?? -1];
-    const preferred = { ...EDGELESS_CARD_DEFAULT_FRAME, width: defaultWidth, x: 60 + index * 24, y: 60 + index * 24 };
-    const frame = existingElement?.frame ?? (avoidOverlap ? nonOverlappingBlockFrame(preferred, occupied) : preferred);
-    if (!existingElement) occupied.push(frame);
-    return {
-      id: existingElement?.id ?? `${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${blocks[0]!.id}`,
-      type: EDGELESS_BLOCK_ELEMENT_TYPE,
-      frame,
-      zIndex: existingElement?.zIndex ?? index,
-      props: { ...existingElement?.props, ...blockRangeProps(blocks.map((block) => block.id)) },
-    };
-  });
+  /**
+   * Reconciles persisted block elements with current root runs.
+   * Registered root separator types define unambiguous runs; empty paragraphs
+   * are ordinary card content. Membership matching remains necessary because
+   * moving a stored start/end block can make its range cross a separator before
+   * derived props are repaired. Global assignment preserves the most existing
+   * elements instead of letting a greedy local match recreate another card.
+   *
+   * @returns No value; required element changes are committed synchronously.
+   */
+  reconcile(): void {
+    if (this.destroyed) return;
+    const reactEditor = this.reactEditor;
 
-  // Diff the desired projection against persisted elements. Updates are
-  // limited to range boundaries so reconciliation never resets card geometry.
-  const desiredIds = new Set(desired.map((element) => element.id));
-  const remove = existing.filter((element) => !desiredIds.has(element.id)).map((element) => element.id);
-  const insert = desired.filter((element) => !reactEditor.elements.hasElement(element.id));
-  const update = desired.flatMap((element) => {
-    const current = reactEditor.elements.getElement(element.id);
-    return current && (current.props.startBlockId !== element.props.startBlockId || current.props.endBlockId !== element.props.endBlockId)
-      ? [{ id: element.id, patch: { props: element.props } }]
-      : [];
-  });
+    // Build the two sides of the projection: current document roots and the
+    // persisted canvas elements that render ranges of those roots as cards.
+    const roots = reactEditor.blocks.getRootIds().flatMap((id) => {
+      const node = reactEditor.blocks.getBlockNode(id);
+      return node ? [node] : [];
+    });
+    const rootOrder = roots.map((block) => block.id);
+    const rootSet = new Set(rootOrder);
+    const existing = reactEditor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
+    const currentRanges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
 
-  // Save exact membership before publishing writes; a following structural
-  // change can then match cards even when persisted endpoints are ambiguous.
-  const desiredMemberships = new Map(desired.map((element, index) => [
-    element.id,
-    segments[index]!.map((block) => block.id),
-  ]));
-  reconciliationStates.set(reactEditor, {
-    memberships: desiredMemberships,
-  });
-  if (!remove.length && !insert.length && !update.length) return;
+    // A moved range endpoint can temporarily make its persisted start/end pair
+    // describe the wrong run. Prefer the last known membership in that case so
+    // the same card keeps its identity and canvas geometry through the move.
+    const previousRangesById = this.memberships;
+    const previousRanges = new Map(existing.map((element) => {
+      const cached = previousRangesById.get(element.id);
+      return [element.id, cached ? cached.filter((id) => rootSet.has(id)) : currentRanges.get(element.id) ?? []] as const;
+    }));
 
-  reactEditor.history.batchUpdatesWithoutHistory(() => {
-    if (remove.length) reactEditor.elements.removeElements(remove);
-    insert.forEach((element) => reactEditor.elements.insertElement(element));
-    if (update.length) reactEditor.elements.updateElements(update);
-  });
+    // Root separator blocks are boundaries, not card content. Every non-empty
+    // run between them must be represented by exactly one block element.
+    const segments: EditorBlockNode[][] = [];
+    let segment: EditorBlockNode[] = [];
+    roots.forEach((block) => {
+      if (reactEditor.blockTypes.separatesBlockElements(block.type)) {
+        if (segment.length) segments.push(segment);
+        segment = [];
+      } else segment.push(block);
+    });
+    if (segment.length) segments.push(segment);
+
+    const continuityBase = rootOrder.length + 1;
+    const anchorBonus = continuityBase ** 3;
+    const retentionBonus = continuityBase ** 4;
+
+    // Index block membership once to find candidate cards.
+    const segmentByBlock = new Map<string, number>();
+    segments.forEach((blocks, index) => blocks.forEach((block) => segmentByBlock.set(block.id, index)));
+    const scores = segments.map(() => new Map<number, number>());
+    existing.forEach((element, card) => {
+      const previous = previousRanges.get(element.id) ?? [];
+      const current = currentRanges.get(element.id) ?? [];
+      const overlaps = new Map<number, { previous: number; current: number }>();
+      const count = (ids: readonly string[], field: "previous" | "current") => {
+        ids.forEach((id) => {
+          const index = segmentByBlock.get(id);
+          if (index === undefined) return;
+          const overlap = overlaps.get(index) ?? { previous: 0, current: 0 };
+          overlap[field] += 1;
+          overlaps.set(index, overlap);
+        });
+      };
+      count(previous, "previous");
+      count(current, "current");
+      // A valid start can retain a card whose end temporarily disappeared.
+      const start = element.props.startBlockId;
+      const startSegment = typeof start === "string" ? segmentByBlock.get(start) : undefined;
+      if (startSegment !== undefined && segments[startSegment]![0]!.id === start && !overlaps.has(startSegment)) {
+        overlaps.set(startSegment, { previous: 0, current: 0 });
+      }
+      overlaps.forEach((overlap, index) => {
+        // First-block ownership breaks ties; retaining a reusable card wins first.
+        const first = segments[index]![0]!.id;
+        const ownsFirst = previous[0] === first || element.props.startBlockId === first;
+        const canReuse = overlap.previous > 0 || overlap.current > 0;
+        scores[index]!.set(card, (canReuse ? retentionBonus : 0) + (ownsFirst ? anchorBonus : 0)
+          + overlap.previous * continuityBase + overlap.current);
+      });
+    });
+
+    // Solve competing assignments together, preserving split/merge continuity.
+    const matches = matchConnectedSegments(scores);
+    const avoidOverlap = this.avoidOverlap;
+    const defaultWidth = this.defaultWidth;
+    const occupied = existing.map((element) => element.frame);
+
+    // Produce the canonical element for each segment. Matched cards retain all
+    // presentation state; only new cards receive default placement and sizing.
+    const desired = segments.map((blocks, index): EditorElement => {
+      const existingElement = existing[matches[index] ?? -1];
+      const preferred = { ...EDGELESS_CARD_DEFAULT_FRAME, width: defaultWidth, x: 60 + index * 24, y: 60 + index * 24 };
+      const frame = existingElement?.frame ?? (avoidOverlap ? nonOverlappingBlockFrame(preferred, occupied) : preferred);
+      if (!existingElement) occupied.push(frame);
+      return {
+        id: existingElement?.id ?? `${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${blocks[0]!.id}`,
+        type: EDGELESS_BLOCK_ELEMENT_TYPE,
+        frame,
+        zIndex: existingElement?.zIndex ?? index,
+        props: { ...existingElement?.props, ...blockRangeProps(blocks.map((block) => block.id)) },
+      };
+    });
+
+    // Diff the desired projection against persisted elements. Updates are
+    // limited to range boundaries so reconciliation never resets card geometry.
+    const desiredIds = new Set(desired.map((element) => element.id));
+    const remove = existing.filter((element) => !desiredIds.has(element.id)).map((element) => element.id);
+    const insert = desired.filter((element) => !reactEditor.elements.hasElement(element.id));
+    const update = desired.flatMap((element) => {
+      const current = reactEditor.elements.getElement(element.id);
+      return current && (current.props.startBlockId !== element.props.startBlockId || current.props.endBlockId !== element.props.endBlockId)
+        ? [{ id: element.id, patch: { props: element.props } }]
+        : [];
+    });
+
+    // Save exact membership before publishing writes; a following structural
+    // change can then match cards even when persisted endpoints are ambiguous.
+    const desiredMemberships = new Map(desired.map((element, index) => [
+      element.id,
+      segments[index]!.map((block) => block.id),
+    ]));
+    this.memberships = desiredMemberships;
+    if (!remove.length && !insert.length && !update.length) return;
+
+    reactEditor.history.batchUpdatesWithoutHistory(() => {
+      if (remove.length) reactEditor.elements.removeElements(remove);
+      insert.forEach((element) => reactEditor.elements.insertElement(element));
+      if (update.length) reactEditor.elements.updateElements(update);
+    });
+  }
 }

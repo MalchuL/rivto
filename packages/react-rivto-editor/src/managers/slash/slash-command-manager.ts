@@ -1,5 +1,6 @@
-import type { SlashCommandsCapability } from "../../capabilities";
+import type { ReactEditorView, SlashCommandsCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
+import type { ReactEditor } from "../../types";
 import type { ReactEditorImpl } from "../../react-editor";
 import type { SlashCommand, SlashCommandContext, SlashCommandRevisionListener } from "./types";
 
@@ -13,6 +14,20 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
    * @param reactEditor - Owning React runtime providing extension lifecycle.
    */
   constructor(private readonly reactEditor: ReactEditorImpl) {}
+
+  /** Binds execution to a view while keeping a single document-wide registry. */
+  createViewApi(reactEditor: ReactEditorView): SlashCommandsCapability {
+    const { store } = this;
+    return {
+      createViewApi: (view) => this.createViewApi(view),
+      register: (command) => this.register(command),
+      delete: (id) => this.delete(id),
+      subscribe: (listener) => this.subscribe(listener),
+      get revision() { return store.revision; },
+      getAll: (context) => this.getAll(context, reactEditor),
+      execute: (id, context) => this.execute(id, context, reactEditor),
+    };
+  }
 
   /** Monotonic command-registry revision. */
   get revision(): number {
@@ -65,8 +80,8 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
    *
    * @param context - Active block context evaluated by availability predicates.
    */
-  getAll(context: SlashCommandContext): SlashCommand[] {
-    return this.reactEditor.events.runInView(() => [...this.commands.values()].filter((command) => command.isAvailable?.(context) !== false));
+  getAll(context: Pick<SlashCommandContext, "blockId">, reactEditor: ReactEditor = this.reactEditor.events.getDocumentView() ?? this.reactEditor): SlashCommand[] {
+    return [...this.commands.values()].filter((command) => command.isAvailable?.({ ...context, reactEditor }) !== false);
   }
 
   /**
@@ -75,13 +90,11 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
    * @param id - Stable command identity.
    * @param context - Active block context revalidated before execution.
    */
-  execute(id: string, context: SlashCommandContext): void {
-    this.reactEditor.events.runInView(() => {
-      const command = this.commands.get(id);
-      if (!command) throw new Error(`Unknown slash command ${id}`);
-      if (command.isAvailable?.(context) === false) throw new Error(`Slash command ${id} is unavailable`);
-      command.execute(context);
-    });
+  execute(id: string, context: Pick<SlashCommandContext, "blockId">, reactEditor: ReactEditor = this.reactEditor.events.getDocumentView() ?? this.reactEditor): void {
+    const command = this.commands.get(id);
+    if (!command) throw new Error(`Unknown slash command ${id}`);
+    if (command.isAvailable?.({ ...context, reactEditor }) === false) throw new Error(`Slash command ${id} is unavailable`);
+    command.execute({ ...context, reactEditor });
   }
 
   /**

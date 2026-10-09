@@ -1,8 +1,8 @@
 # Styling, Tailwind, and shadcn/ui
 
-`@chulane/rivto-react` styles its chrome with Tailwind CSS v4 utilities and
-shadcn/ui primitives, and keeps the rules Tailwind cannot express in one small
-CSS file per feature. This document explains the stylesheet entry, the design
+`@chulane/rivto-react` uses shadcn/ui primitives and colocated feature CSS.
+Tailwind CSS v4 supplies theme tokens and compiles utilities, including `@apply`
+in feature stylesheets. Static appearance belongs outside behavior and JSX. This document explains the stylesheet entry, the design
 tokens hosts can override, when to write utilities versus CSS, and how to add
 or refresh shadcn primitives.
 
@@ -41,7 +41,10 @@ src/**/<feature>.css   colocated structural rules, one per feature
 `index.css` declares the cascade order `theme, base, components, utilities`,
 imports `tailwindcss/theme.css` and `tailwindcss/utilities.css` into their
 layers, scans the package source with `@source "../"`, and imports each
-feature stylesheet into `layer(components)`. Because everything the package
+structural feature stylesheet into `layer(components)`. Edgeless `controls.css`
+shares `layer(utilities)` with shadcn defaults; selectors with `[data-slot]`
+let feature controls override the primitives without editing vendored files.
+Because everything the package
 emits is layered, unlayered host CSS loaded after the bundle still wins over
 every rule and can retheme any token.
 
@@ -92,24 +95,29 @@ lists, and paragraphs inside documents keep user-agent margins.
 
 ## Utilities or CSS?
 
-Prefer Tailwind utilities on the owning element, colocated with the component
-as a named class constant (`const PANEL_CLASS = "..."`). Keep the stable
-`rivto-*`, `page-*`, or `edgeless-*` hook as the first token in the constant so
-hosts, tests, and the feature stylesheet can still target it.
+Keep static appearance in the owning feature's colocated `.css` file. TSX
+uses short named class constants with stable `rivto-*`, `page-*`, or
+`edgeless-*` hooks. Preserve existing hooks used by hosts and tests.
 
-Write a rule in the feature's colocated `.css` file only when utilities on the
-element cannot express it:
+Use ordinary CSS declarations or `@apply` for existing theme utilities. Keep
+state in selectors (`data-*`, `aria-*`, focus and hover), and dynamic geometry
+such as pointer coordinates, zoom, and live preview dimensions in inline styles.
+A React component and its controller must not both write the same geometry.
 
-- recursive block-tree geometry (`.page-block-children` nesting, hover hit
-  regions drawn with `::before`);
-- structural `:has()` selectors across siblings or ancestors;
-- native pseudo-classes and pseudo-elements Tailwind cannot reach, such as the
-  block modal's `:modal` and `::backdrop`;
-- CSS counters, SVG presentation attributes, keyframes, and layered gradients;
-- elements created imperatively outside React (drag ghosts, snap guides).
+Feature CSS also owns recursive block-tree geometry, sibling `:has()` rules,
+modal backdrops, CSS counters, SVG presentation, keyframes, gradients, and
+imperatively created drag or connector previews. Each stylesheet starts with
+a comment describing its scope and is imported from `src/styles/index.css`.
 
-Each feature stylesheet starts with a comment explaining which of these it
-covers and is imported from `src/styles/index.css` into `layer(components)`.
+Structural rules belong to `layer(components)`. Control appearance that
+customizes shadcn defaults belongs to `layer(utilities)`, using the control's
+class and `[data-slot]` where primitive defaults must be overridden. Host CSS
+can override these classes without `!important`; do not edit generated
+primitives for editor-specific appearance or interaction markers.
+
+Existing utility-based components can migrate when their owning feature is
+refactored. New control code should follow the feature CSS convention rather
+than introducing another long utility string into TSX.
 
 ## Icons
 

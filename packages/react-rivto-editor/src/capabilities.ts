@@ -55,6 +55,22 @@ import type {
 } from "./managers";
 import type { BlockViewAction, BlockViewBehavior, BlockViewContext } from "./views/types";
 
+/** Editor API for one occurrence, with its registration lifecycle and DOM root. */
+export interface ReactEditorView extends ReactEditor {
+  /** Owns local registrations and supplies the current root, including null after unmount. */
+  readonly view: DocumentViewScope;
+}
+
+/** Creates an API for one occurrence while retaining the manager's shared state. */
+export interface ViewApiFactory<T> {
+  /**
+   * Creates methods bound to the supplied occurrence without acquiring a document.
+   * @param reactEditor - View editor supplying local APIs, identity, root, and cleanup.
+   * @returns API that retains this occurrence when focus moves to another view.
+   */
+  createViewApi(reactEditor: ReactEditorView): T;
+}
+
 export interface BlocksCapability {
   /**
    * Delegates complete recursive creation preparation to the core block manager.
@@ -331,7 +347,7 @@ export interface BlockListPropsCapability extends Omit<BlockListPropsManagerApi,
 }
 
 /** React-owned registry for portable clipboard formatting and parsing. */
-export interface ClipboardCapability {
+export interface ClipboardCapability extends ViewApiFactory<ClipboardCapability> {
   /** Core paste-strategy registry shared with React clipboard extensions. */
   readonly pasteStrategies: PasteStrategyRegistry;
   /** @param selection - Optional selection override. @returns Structured copy data, when available. */
@@ -385,13 +401,7 @@ export interface ViewsCapability {
   readonly fallback: BlockViewBehavior;
 }
 
-export interface EventsCapability {
-  /**
-   * Binds local registrations to one view and shares document-wide settings.
-   * @param owner - View providing identity, DOM root, and registration cleanup.
-   * @returns Methods explicitly bound to that view and the shared manager.
-   */
-  forView(owner: DocumentViewScope): EventsCapability;
+export interface EventsCapability extends ViewApiFactory<EventsCapability> {
   register<
     Target extends DOMEventTarget = "surface",
     Type extends DOMEventName<Target> = DOMEventName<Target>,
@@ -424,17 +434,9 @@ export interface EventsCapability {
    * @returns Idempotent cleanup; a removed active view clears its local selection.
    */
   registerDocumentView(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: ReactEditor, deactivate?: () => void): () => void;
-  /** @param operation - Synchronous selection/focus work. @returns Its result in the active view's DOM scope; core models remain permanently bound. */
-  runInView<Result>(operation: () => Result): Result;
 }
 
-export interface KeyboardCapability {
-  /**
-   * Binds local registrations to one view and shares document-wide settings.
-   * @param owner - View providing identity, DOM root, and registration cleanup.
-   * @returns Methods explicitly bound to that view and the shared manager.
-   */
-  forView(owner: DocumentViewScope): KeyboardCapability;
+export interface KeyboardCapability extends ViewApiFactory<KeyboardCapability> {
   /** Registers one stable semantic action and returns its idempotent disposer. */
   register(
     definition: KeyboardEventDefinition,
@@ -490,7 +492,7 @@ export interface SurfacesCapability {
   subscribe(listener: () => void): () => void;
 }
 
-export interface SelectionCapability {
+export interface SelectionCapability extends ViewApiFactory<SelectionCapability> {
   get(): Selection | undefined;
   set(selection: Selection): void;
   clear(): void;
@@ -525,12 +527,12 @@ export interface RestoreDOMSelectionOptions {
   readonly scroll?: boolean;
 }
 
-export interface SlashCommandsCapability {
+export interface SlashCommandsCapability extends ViewApiFactory<SlashCommandsCapability> {
   readonly revision: number;
   register(command: SlashCommand): () => void;
   delete(id: string): boolean;
-  getAll(context: SlashCommandContext): SlashCommand[];
-  execute(id: string, context: SlashCommandContext): void;
+  getAll(context: Pick<SlashCommandContext, "blockId">): SlashCommand[];
+  execute(id: string, context: Pick<SlashCommandContext, "blockId">): void;
   subscribe(listener: () => void): () => void;
 }
 

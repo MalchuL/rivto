@@ -167,7 +167,10 @@ Hooks resolve current values through public getters:
 | Hook | Value |
 | --- | --- |
 | `useBlock(id)` | One detached recursive block snapshot |
-| `useBlockNode(id)` | One detached node with direct `childIds` |
+| `useBlockNode(id)` | One detached node with direct `childIds` and bound operations |
+| `useBlockOperations(id)` | Bound commands without a document subscription |
+| `useBlockTextEditing(id, content)` | Plain-text DOM binding without another subscription |
+| `useBlockSelectionAnchor(id)` | Structural selection marker and pending focus restoration |
 | `useRootBlockIds()` | Ordered root IDs |
 | `useReactEditor()` | Focused React runtime managers |
 | `useContext(SurfaceContext)` | Current surface kind |

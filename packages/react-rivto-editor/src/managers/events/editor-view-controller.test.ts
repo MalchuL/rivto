@@ -7,7 +7,6 @@ import { EditorStorage } from "../../editor-storage";
 import { createReactEditor } from "../../react-editor";
 import { EditorViewController } from "./editor-view-controller";
 import { getEdgelessRuntime, installEdgelessRuntime } from "../../extensions/built-ins/selection/edgeless-runtime";
-import { reconcileBlockElements, setBlockElementDefaultWidth } from "../../elements/block-element-projection";
 import { getEdgelessSurfaceOptions, registerEdgelessSurface } from "../../extensions/edgeless/register";
 
 async function eventually(assertion: () => void): Promise<void> {
@@ -152,10 +151,10 @@ test.each(["block", "edgeless"] as const)("view and shared selection calls repla
   const api = view.getSnapshot().api!;
   const calls: string[] = [];
   const cancelOld = api.selection.scheduleIfSelectionUnchanged(() => calls.push("old"), () => calls.push("cancelled"));
-  api.events.runInView(() => f.editor.selection.scheduleIfSelectionUnchanged(() => {
+  f.editor.selection.scheduleIfSelectionUnchanged(() => {
     expect(f.editor.events.getRoot()).toBe(viewRoot);
     calls.push("new");
-  }));
+  });
   expect(calls).toEqual(["cancelled"]);
   expect(frames.size).toBe(1);
   expect(api.selection.hasPendingSelectionCallback).toBe(true);
@@ -187,7 +186,7 @@ test("replacing a root cancels only its restoration and retains another view's D
   const calls: string[] = [];
   first.getSnapshot().api!.selection.scheduleIfSelectionUnchanged(() => calls.push("first"), () => calls.push("cancelled"));
   second.getSnapshot().api!.selection.scheduleIfSelectionUnchanged(() => {
-    expect(f.editor.events.getRoot()).toBe(second.getRoot());
+    expect(second.getSnapshot().api!.events.getRoot()).toBe(second.getRoot());
     calls.push("second");
   });
   first.setRoot(root(realm));
@@ -195,10 +194,9 @@ test("replacing a root cancels only its restoration and retains another view's D
   expect(frames.size).toBe(1);
   expect(first.getSnapshot().api!.selection.hasPendingSelectionCallback).toBe(false);
   expect(second.getSnapshot().api!.selection.hasPendingSelectionCallback).toBe(true);
-  (f.editor.events as import("./event-manager").EventManager).withViewRoot(first.getRoot(), () => {
-    for (const callback of frames.values()) callback(0);
-    expect(f.editor.events.getRoot()).toBe(first.getRoot());
-  });
+  const activeRoot = f.editor.events.getRoot();
+  for (const callback of frames.values()) callback(0);
+  expect(f.editor.events.getRoot()).toBe(activeRoot);
   expect(calls).toEqual(["cancelled", "second"]);
   closeFirst(); closeSecond();
   await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
@@ -430,7 +428,7 @@ test("events read each view's surface type while sharing the core mode, managers
   expect(f.editor.mode.get()).toBe("edgeless");
   expect(f.editor.events.getSurfaceType()).toBe("block");
   expect(fullApi.events.getSurfaceType()).toBe("edgeless");
-  expect(f.editor.events.runInView(() => fullApi.events.runInView(() => f.editor.events.getSurfaceType()))).toBe("edgeless");
+  expect(fullApi.events.getSurfaceType()).toBe("edgeless");
   expect(f.editor.events.getSurfaceType()).toBe("block");
   closeEmbedded(); closeFull(); restoreOptions();
   expect(f.editor.events.getSurfaceType()).toBe("edgeless");
@@ -448,9 +446,9 @@ test("canvas adapters share installation and settings while selection belongs to
   const closeFirst = first.mount(); const closeDuplicate = duplicate.mount();
   await eventually(() => expect(duplicate.getSnapshot().retained).toBe(true));
   const api = first.getSnapshot().api!;
-  setBlockElementDefaultWidth(f.editor, 321);
+  f.editor.blockElements.setDefaultWidth(321);
   api.elements.removeElements(api.elements.getElements().map((element) => element.id));
-  reconcileBlockElements(api);
+  api.blockElements.reconcile();
   expect(api.elements.getElements()[0]!.frame.width).toBe(321);
   const id = api.elements.getElements()[0]!.id;
   firstRoot.dispatchEvent(event("focusin", firstRoot));
@@ -645,5 +643,57 @@ test("view keymap updates share inventory and dispatch without inheriting manage
   close();
   surface.dispatchEvent(event("keydown", surface, "b"));
   expect(calls).toBe(1);
+  await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
+});
+
+test("retained slash and clipboard APIs keep their surface without changing the active view", async () => {
+  const f = await fixture();
+  const realm = new DocumentRealm();
+  const canvas = new EditorViewController(f.editor);
+  const page = new EditorViewController(f.editor);
+  const canvasRoot = root(realm); const pageRoot = root(realm);
+  canvasRoot.setAttribute("data-rivto-surface", "edgeless");
+  pageRoot.setAttribute("data-rivto-surface", "block");
+  canvas.setRoot(canvasRoot); page.setRoot(pageRoot);
+  const closeCanvas = canvas.mount(); const closePage = page.mount();
+  await eventually(() => expect(page.getSnapshot().retained).toBe(true));
+  const canvasApi = canvas.getSnapshot().api!; const pageApi = page.getSnapshot().api!;
+  canvasRoot.dispatchEvent(event("focusin", canvasRoot));
+  const calls: string[] = [];
+  const disposeCommand = f.editor.slashCommands.register({
+    id: "view.explicit", title: "Explicit view",
+    execute: ({ reactEditor }) => {
+      calls.push(reactEditor.events.getSurfaceType());
+      expect(f.editor.events.getRoot()).toBe(canvasRoot);
+    },
+  });
+  await Promise.resolve();
+  pageApi.slashCommands.execute("view.explicit", { blockId: "same-id" });
+  canvasApi.slashCommands.execute("view.explicit", { blockId: "same-id" });
+  expect(calls).toEqual(["block", "edgeless"]);
+  // Hover dispatch supplies its receiver without replacing the focused root.
+  f.editor.events.register({ id: "view.hover", type: "pointermove" }, ({ reactEditor, mode }) => {
+    expect(reactEditor).toBe(pageApi);
+    expect(mode).toBe("block");
+    expect(f.editor.events.getRoot()).toBe(canvasRoot);
+    return false;
+  });
+  pageRoot.dispatchEvent(event("pointermove", pageRoot));
+  canvasApi.selection.set(createCaretSelection("same-id", 1));
+  pageApi.clipboard.paste({ text: "Unfocused paste", defaultBlockType: "paragraph" });
+  expect(f.editor.blocks.getBlockNode("same-id")?.content).toBe("A");
+  const { ElementPasteStrategy } = await import("../../extensions/built-ins/clipboard/element-paste-strategy");
+  const removeStrategy = f.editor.clipboard.pasteStrategies.register("view.elements", new ElementPasteStrategy(f.editor));
+  const bundle = { version: 4 as const, blocks: [], elements: [{
+    id: "visual-source", type: "text", frame: { x: 0, y: 0, width: 100, height: 40 },
+    zIndex: 1, props: { text: "Paste" },
+  }] };
+  const before = f.editor.elements.getElements().filter(({ type }) => type === "text").length;
+  pageApi.clipboard.paste({ bundle });
+  expect(f.editor.elements.getElements().filter(({ type }) => type === "text")).toHaveLength(before);
+  canvasApi.clipboard.paste({ bundle });
+  expect(f.editor.elements.getElements().filter(({ type }) => type === "text")).toHaveLength(before + 1);
+  expect(f.editor.events.getRoot()).toBe(canvasRoot);
+  removeStrategy(); disposeCommand(); closePage(); closeCanvas();
   await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });
