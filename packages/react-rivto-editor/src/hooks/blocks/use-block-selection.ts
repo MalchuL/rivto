@@ -7,7 +7,7 @@
  */
 import { useCallback, useSyncExternalStore } from "react";
 import { hasBlockRanges, type Selection } from "@chulane/rivto";
-import { useReactEditor } from "../editor/use-editor";
+import { useEditorView } from "../editor/use-editor-view";
 import { useEditorSelection } from "../editor/use-editor-selection";
 
 /**
@@ -21,15 +21,15 @@ import { useEditorSelection } from "../editor/use-editor-selection";
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockSelected(blockId: string): boolean {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.selection.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => editorView.selection.subscribe(listener),
+    [editorView],
   );
   return useSyncExternalStore(
     subscribe,
-    () => reactEditor.selection.isBlockSelected(blockId),
-    () => reactEditor.selection.isBlockSelected(blockId),
+    () => editorView.selection.isBlockSelected(blockId),
+    () => editorView.selection.isBlockSelected(blockId),
   );
 }
 

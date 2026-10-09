@@ -6,7 +6,7 @@
 
 Основной entry экспортирует:
 
-- `createReactEditor`, `EditorView`, runtime types;
+- `createEditorRuntime`, `EditorView`, runtime types;
 - `standardPreset`, `blockExtension`, `pageDragExtension`, `edgelessPreset`, `edgelessSurfaceExtension`;
 - default writing, separator и error block APIs;
 - `edgelessVisualsExtension` и visual types;
@@ -47,7 +47,7 @@ Registrations обычно возвращают idempotent disposer и авто�
 src/types.ts + capabilities.ts
   public contracts
 
-src/react-editor.tsx + editor-view.tsx
+src/editor-view-api.ts + editor-view.tsx
   composition and React boundary
 
 src/managers/

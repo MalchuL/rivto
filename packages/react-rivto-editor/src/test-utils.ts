@@ -1,4 +1,5 @@
-import { createReactEditor, type CreateReactEditorOptions, type ReactEditor } from "./react-editor";
+import { EditorViewApi } from "./editor-view-api";
+import { createEditorRuntime, type CreateEditorRuntimeOptions } from "./editor-runtime";
 import { createRivtoEditor, type CreateRivtoEditorOptions, type RivtoEditorApi } from "@chulane/rivto";
 import { DocumentModelImpl, type DocumentModel, type DocumentStorage } from "@chulane/document-model";
 import { YjsDoc } from "@chulane/crdt-doc";
@@ -25,12 +26,37 @@ export async function createTestCoreEditor(options: Partial<CreateRivtoEditorOpt
 }
 
 /** Creates a React runtime bound directly to the fixture's document. */
-export function createTestReactEditor(options: Omit<CreateReactEditorOptions, "editor"> & { readonly editor: RivtoEditorApi }): ReactEditor {
-  return createReactEditor(options);
+export function createTestReactEditor(options: Omit<CreateEditorRuntimeOptions, "editor"> & { readonly editor: RivtoEditorApi }): import("./types").EditorViewApi {
+  const runtime = createEditorRuntime(options);
+  let root: HTMLElement | null = null;
+  let unregister: (() => void) | undefined;
+  const disposers = new Set<() => void>();
+  const editor = new EditorViewApi(runtime, {
+    id: crypto.randomUUID(),
+    getRoot: () => root,
+    setRoot: (next) => {
+      unregister?.();
+      root = next;
+      unregister = next ? runtime.events.registerDocumentView(next, runtime.getDocument(), undefined, editor) : undefined;
+    },
+    own: (dispose) => { disposers.add(dispose); return () => { disposers.delete(dispose); dispose(); }; },
+  });
+  const destroy = editor.destroy.bind(editor);
+  runtime.extensions.own(destroy);
+  editor.destroy = () => {
+    const errors: unknown[] = [];
+    for (const cleanup of [destroy, () => unregister?.(), ...disposers, () => runtime.destroy()]) {
+      try { cleanup(); } catch (error) { errors.push(error); }
+    }
+    disposers.clear();
+    if (errors.length === 1) throw errors[0];
+    if (errors.length) throw new AggregateError(errors, "Test editor cleanup failed");
+  };
+  return editor;
 }
 
 /** Opens seeded test models under one cache; storage only loads later identities. */
-export async function createTestMultiEditor(models: readonly DocumentModel[], storage?: DocumentStorage, options: Omit<CreateReactEditorOptions, "editor"> | (() => Omit<CreateReactEditorOptions, "editor">) = {}): Promise<EditorStorage> {
+export async function createTestMultiEditor(models: readonly DocumentModel[], storage?: DocumentStorage, options: Omit<CreateEditorRuntimeOptions, "editor"> | (() => Omit<CreateEditorRuntimeOptions, "editor">) = {}): Promise<EditorStorage> {
   const seeds = new Map(models.map((model) => [model.id, model]));
   const runtime = new EditorStorage({
     openDocument: async (id) => {
@@ -42,7 +68,7 @@ export async function createTestMultiEditor(models: readonly DocumentModel[], st
     createEditor: (editor) => {
       editor.blockRegistry.defineBlock({ type: DEFAULT_WRITING_BLOCK_TYPE });
       const configuration = typeof options === "function" ? options() : options;
-      return createReactEditor({ ...configuration, editor });
+      return createEditorRuntime({ ...configuration, editor });
     },
     lookupDocumentIds: storage ? (id, lookupOptions) => storage.findDocumentIdsWithBlock(id, lookupOptions) : undefined,
     subscribeDocumentIds: storage ? (listener) => storage.subscribe(listener) : undefined,

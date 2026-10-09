@@ -8,7 +8,7 @@
  * @module
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
-import type { ReactEditor } from "../../types";
+import type { EditorViewApi } from "../../types";
 
 /**
  * Slices a block at a caret and inserts a following writing block.
@@ -17,65 +17,65 @@ import type { ReactEditor } from "../../types";
  * active. The caller decides whether the new block should then indent under
  * the source's visible children.
  *
- * @param reactEditor - Runtime providing writing factories and list-prop flags.
+ * @param editorView - Editor view providing writing factories and list-prop flags.
  * @param block - Source block whose content is split.
  * @param splitAt - Inclusive UTF-16 offset kept on the source block.
  * @returns Complete inserted block.
  */
 export function splitBlockAt(
-  reactEditor: ReactEditor,
+  editorView: EditorViewApi,
   block: EditorBlock,
   splitAt: number,
 ): EditorBlock {
-  const listProps = reactEditor.blockListProps.prepareSplit(block);
+  const listProps = editorView.blockListProps.prepareSplit(block);
   const clamped = Math.max(0, Math.min(splitAt, block.content.length));
-  reactEditor.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
-  const nextBlock = reactEditor.blocks.insertBlock({
-    ...reactEditor.createDefaultBlock(),
+  editorView.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
+  const nextBlock = editorView.blocks.insertBlock({
+    ...editorView.createDefaultBlock(),
     ...(listProps ? { listProps } : {}),
     content: block.content.slice(clamped),
   }, block.id);
-  reactEditor.selection.set(createCaretSelection(nextBlock.id, 0));
+  editorView.selection.set(createCaretSelection(nextBlock.id, 0));
   return nextBlock;
 }
 
 /**
  * Converts an empty non-list block into a list item in place.
  *
- * @param reactEditor - Runtime whose list-prop registration must be active.
+ * @param editorView - Editor view whose list-prop registration must be active.
  * @param blockId - Empty block to convert.
  * @returns Nothing; the same block keeps the caret.
  */
-export function convertEmptyToList(reactEditor: ReactEditor, blockId: string): void {
-  reactEditor.blocks.updateBlock(blockId, { listProps: { type: "list", checked: false } });
-  reactEditor.selection.set(createCaretSelection(blockId, 0));
+export function convertEmptyToList(editorView: EditorViewApi, blockId: string): void {
+  editorView.blocks.updateBlock(blockId, { listProps: { type: "list", checked: false } });
+  editorView.selection.set(createCaretSelection(blockId, 0));
 }
 
 /**
  * Appends a source block into a surviving target and returns the join offset.
  *
- * @param reactEditor - Runtime owning the core merge command.
+ * @param editorView - Editor view owning the core merge command.
  * @param targetId - Block that remains after the merge.
  * @param sourceId - Block transferred and removed.
  * @returns Target content offset where the source text begins.
  */
 export function mergeBlocks(
-  reactEditor: ReactEditor,
+  editorView: EditorViewApi,
   targetId: string,
   sourceId: string,
 ): number {
-  const joinOffset = reactEditor.blocks.mergeBlocks(targetId, sourceId);
-  reactEditor.selection.set(createCaretSelection(targetId, joinOffset));
+  const joinOffset = editorView.blocks.mergeBlocks(targetId, sourceId);
+  editorView.selection.set(createCaretSelection(targetId, joinOffset));
   return joinOffset;
 }
 
 /**
  * Resets a custom block to the host writing type.
  *
- * @param reactEditor - Runtime providing the writing-type factory.
+ * @param editorView - Editor view providing the writing-type factory.
  * @param blockId - Block whose native type is replaced.
  * @returns Nothing; identity is preserved.
  */
-export function resetToWritingType(reactEditor: ReactEditor, blockId: string): void {
-  reactEditor.blocks.setBlockType(blockId, reactEditor.createDefaultBlock().type);
+export function resetToWritingType(editorView: EditorViewApi, blockId: string): void {
+  editorView.blocks.setBlockType(blockId, editorView.createDefaultBlock().type);
 }

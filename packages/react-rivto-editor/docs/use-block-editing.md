@@ -60,7 +60,7 @@ interface CounterProps {
 function CounterBlock({ blockId }: { blockId: string }) {
   const editing = useBlockNode<CounterProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const count = editing.block?.props.count ?? 0;
 
   return (
@@ -69,7 +69,7 @@ function CounterBlock({ blockId }: { blockId: string }) {
         type="button"
         onClick={(event) => {
           if (event.defaultPrevented) return;
-          const current = reactEditor.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+          const current = editorView.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
           editing.operations.setProp("count", (current?.count ?? 0) + 1);
         }}
       >
@@ -137,15 +137,15 @@ const editing = useBlockEditing<MyProps>(blockId);
 ```
 
 - `editing.block` is the reactive snapshot for the current render.
-- `reactEditor.blocks.getBlockNode(blockId)?.content` reads the latest document content, including
+- `editorView.blocks.getBlockNode(blockId)?.content` reads the latest document content, including
   updates since the last render. It returns `undefined` for an unknown or deleted
   block and an empty string for an existing block without text. It does not read
   uncommitted DOM edits.
 - `editing.block?.listProps.collapsed` reads the extension-owned collapse state.
 - `editing.operations` contains commands such as `remove`, `setType`, `indent`,
   and `outdent`.
-- `reactEditor.blocks.getBlockNode(blockId)?.props` reads the latest complete property object, or undefined after deletion.
-- `reactEditor.blocks.getBlockNode(blockId)?.props[key]` reads one latest property, or undefined after deletion/removal.
+- `editorView.blocks.getBlockNode(blockId)?.props` reads the latest complete property object, or undefined after deletion.
+- `editorView.blocks.getBlockNode(blockId)?.props[key]` reads one latest property, or undefined after deletion/removal.
 - `editing.operations.setProps(patch)` validates and patches several supplied keys.
 - `editing.operations.setProp(key, value)` validates one key.
 - `editing.operations.setProp(key, undefined)` removes that key when its block schema
@@ -155,8 +155,8 @@ Read the manager again inside event handlers instead of incrementing a value
 captured by an older render:
 
 ```tsx
-const reactEditor = useReactEditor();
-const current = reactEditor.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+const editorView = useEditorView();
+const current = editorView.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
 editing.operations.setProp("count", (current?.count ?? 0) + 1);
 ```
 

@@ -5,7 +5,7 @@ import type {
   EditorMode,
   Selection,
 } from "@chulane/rivto";
-import type { ReactEditor } from "../../types";
+import type { EditorViewApi } from "../../types";
 import type {
   DOMEventMap,
   DOMEventName,
@@ -25,7 +25,7 @@ export interface EditorEventInit<
   /** Original native browser event. */
   readonly raw: DOMEventMap<Target>[Type];
   /** React editor owning browser interaction and focused document capabilities. */
-  readonly reactEditor: ReactEditor;
+  readonly editorView: EditorViewApi;
   /** Root DOM element of the currently committed React surface. */
   readonly root: HTMLElement;
   /** Editor mode captured for this dispatch, supplied by the receiving view's rendered surface. */
@@ -55,7 +55,7 @@ export class EditorEvent<
   Type extends DOMEventName<Target> = DOMEventName<Target>,
 > {
   readonly raw: DOMEventMap<Target>[Type];
-  readonly reactEditor: ReactEditor;
+  readonly editorView: EditorViewApi;
   readonly root: HTMLElement;
   readonly mode: EditorMode;
   readonly selection: Selection | undefined;
@@ -68,7 +68,7 @@ export class EditorEvent<
   /** Creates one normalized snapshot from registry-resolved values. */
   constructor(init: EditorEventInit<Target, Type>) {
     this.raw = init.raw;
-    this.reactEditor = init.reactEditor;
+    this.editorView = init.editorView;
     this.root = init.root;
     this.mode = init.mode;
     this.selection = init.selection;

@@ -18,15 +18,15 @@ test("saves a slash-created Review report and reproduces it with native load", a
     const blockId = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!blockId) throw new Error("Expected slash target block ID");
     const runtimeState = await page.evaluate((id) => {
-      const reactEditor = (
+      const editorRuntime = (
         window as unknown as {
-        __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditor };
+        __rivtoDemo: { editorRuntime: import("@chulane/rivto-react").EditorRuntime };
       }
-      ).__rivtoDemo.reactEditor;
+      ).__rivtoDemo.editorRuntime;
       return {
-        commands: reactEditor.slashCommands.getAll({ blockId: id }).map(({ id: commandId }) => commandId),
-        definition: reactEditor.blockTypes.getDefinition("demo.review")?.type,
-        element: reactEditor.elements.getElement("demo-review-element")?.type,
+        commands: editorRuntime.slashCommands.getAll({ blockId: id, editorView: editorRuntime.events.getDocumentView()! }).map(({ id: commandId }) => commandId),
+        definition: editorRuntime.blockTypes.getDefinition("demo.review")?.type,
+        element: editorRuntime.elements.getElement("demo-review-element")?.type,
       };
     }, blockId);
     expect(runtimeState).toMatchObject({

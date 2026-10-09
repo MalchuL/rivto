@@ -1,3 +1,4 @@
+import type { EditorRuntime } from "../../../../../editor-runtime";
 /**
  * Keyboard registration for native-looking horizontal and vertical caret movement.
  *
@@ -18,7 +19,7 @@ import {
   resolveSelectionEndpoints,
   verticalCaretPosition,
 } from "../../../../../managers";
-import type { ReactEditor } from "../../../../../types";
+import type { EditorViewApi } from "../../../../../types";
 import { navigationDomRoot, navigationOutlineBlocks } from "../utils/scope";
 import {
   currentNavigationSelection,
@@ -37,13 +38,13 @@ function isNativeControl(target: EventTarget | null): boolean {
 /**
  * Registers caret movement and vertical text-extension shortcuts.
  *
- * @param reactEditor - Runtime receiving the keyboard bindings.
+ * @param editorRuntime - Runtime receiving the keyboard bindings.
  * @returns No value.
  */
-export function registerCaretNavigation(reactEditor: ReactEditor): void {
-  const lengthOf = (id: string) => reactEditor.blocks.getBlockNode(id)?.content.length ?? 0;
-  const movePlain = (root: HTMLElement, direction: "left" | "right" | VerticalDirection, mode: EditorMode): boolean => {
-    const selection = currentNavigationSelection(reactEditor.selection);
+export function registerCaretNavigation(editorRuntime: EditorRuntime): void {
+  const lengthOf = (id: string) => editorRuntime.blocks.getBlockNode(id)?.content.length ?? 0;
+  const movePlain = (editorView: EditorViewApi, root: HTMLElement, direction: "left" | "right" | VerticalDirection, mode: EditorMode): boolean => {
+    const selection = currentNavigationSelection(editorView.selection);
     const item = selection;
     if (!item || !hasBlockRanges(item) || isStructuralSelection(selection)) return false;
     const ends = resolveSelectionEndpoints(item, lengthOf);
@@ -52,22 +53,22 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     let handled = false;
     if (!isCaretSelection(item)) {
       const towardStart = direction === "left" || direction === "up";
-      setNavigationCaret(root, reactEditor, textSelectionEdge(
-        reactEditor,
-        reactEditor,
+      setNavigationCaret(root, editorView, textSelectionEdge(
+        editorView,
+        editorView,
         item,
         towardStart ? "start" : "end",
       ));
       handled = true;
     } else if (direction === "left" || direction === "right") {
-      const block = reactEditor.blocks.getBlockNode(ends.head.blockId);
+      const block = editorView.blocks.getBlockNode(ends.head.blockId);
       const adjacent = direction === "left" && ends.head.offset === 0
         ? findPreviousEditableBlock(scope, ends.head.blockId)
         : direction === "right" && ends.head.offset === (block?.content.length ?? -1)
           ? findNextEditableBlock(scope, ends.head.blockId)
           : null;
       if (adjacent) {
-        setNavigationCaret(root, reactEditor, {
+        setNavigationCaret(root, editorView, {
           blockId: adjacent.blockId,
           offset: direction === "left" ? adjacent.content.textContent?.length ?? 0 : 0,
         });
@@ -76,7 +77,7 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     } else {
       const moved = verticalCaretPosition(scope, ends.head, direction);
       if (moved) {
-        setNavigationCaret(root, reactEditor, moved);
+        setNavigationCaret(root, editorView, moved);
         handled = true;
       } else {
         handled = mode === "block" && focusAdjacentEditor(root, direction);
@@ -85,8 +86,8 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     return handled;
   };
 
-  const extendText = (root: HTMLElement, direction: VerticalDirection): boolean => {
-    const selection = currentNavigationSelection(reactEditor.selection);
+  const extendText = (editorView: EditorViewApi, root: HTMLElement, direction: VerticalDirection): boolean => {
+    const selection = currentNavigationSelection(editorView.selection);
     const item = selection;
     if (!item || !hasBlockRanges(item) || isStructuralSelection(selection)) return false;
     const ends = resolveSelectionEndpoints(item, lengthOf);
@@ -94,35 +95,35 @@ export function registerCaretNavigation(reactEditor: ReactEditor): void {
     const scope = navigationDomRoot(root, ends.head.blockId);
     const moved = verticalCaretPosition(scope, ends.head, direction);
     if (!moved) return false;
-    const outline = pageEntries(navigationOutlineBlocks(reactEditor, ends.head.blockId)).map(({ block }) => ({
+    const outline = pageEntries(navigationOutlineBlocks(editorView, ends.head.blockId)).map(({ block }) => ({
       id: block.id,
       length: block.content.length,
     }));
     const next = createTextSelection(outline, ends.anchor, moved);
     if (!next) return false;
-    reactEditor.selection.set(next);
-    reactEditor.selection.restoreDOM();
+    editorView.selection.set(next);
+    editorView.selection.restoreDOM();
     return true;
   };
 
   const bindPlain = (
     id: string,
     direction: "left" | "right" | VerticalDirection,
-  ) => reactEditor.keyboard.register({
+  ) => editorRuntime.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
-  }, ({ root, raw, mode }) => !isNativeControl(raw.target) && movePlain(root, direction, mode));
+  }, ({ editorView, root, raw, mode }) => !isNativeControl(raw.target) && movePlain(editorView, root, direction, mode));
   bindPlain(KEYBOARD_BINDING_IDS.caretLeft, "left");
   bindPlain(KEYBOARD_BINDING_IDS.caretRight, "right");
   bindPlain(KEYBOARD_BINDING_IDS.caretUp, "up");
   bindPlain(KEYBOARD_BINDING_IDS.caretDown, "down");
 
-  reactEditor.keyboard.register({
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.caretExtendUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendUp],
-  }, ({ root, raw }) => !isNativeControl(raw.target) && extendText(root, "up"));
-  reactEditor.keyboard.register({
+  }, ({ editorView, root, raw }) => !isNativeControl(raw.target) && extendText(editorView, root, "up"));
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.caretExtendDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendDown],
-  }, ({ root, raw }) => !isNativeControl(raw.target) && extendText(root, "down"));
+  }, ({ editorView, root, raw }) => !isNativeControl(raw.target) && extendText(editorView, root, "down"));
 }

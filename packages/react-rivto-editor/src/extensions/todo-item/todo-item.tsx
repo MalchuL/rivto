@@ -33,9 +33,9 @@ export function todoItemExtension(
   const PropertiesModal = options.propertiesModal ?? DefaultTodoItemPropertiesModal;
   return {
     id: "block.todo-item",
-    setup: (reactEditor) => {
+    setup: (editorRuntime) => {
       const disposers = [
-        reactEditor.blockTypes.register({
+        editorRuntime.blockTypes.register({
           definition: {
             type: TODO_STORAGE_BLOCK_TYPE,
             title: "TODO storage",
@@ -51,11 +51,11 @@ export function todoItemExtension(
             group: "Turn into",
             keywords: ["tasks", "todos"],
             isAvailable: ({ blockId }) => (
-              reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId)
+              editorRuntime.blocks.hasBlock(blockId) && !editorRuntime.blocks.hasChildren(blockId)
             ),
           },
         }),
-        reactEditor.blockTypes.register({
+        editorRuntime.blockTypes.register({
           definition: {
             type: TODO_ITEM_BLOCK_TYPE,
             title: "TODO item",
@@ -64,11 +64,11 @@ export function todoItemExtension(
           },
           render: ({ blockId }) => <TodoItem blockId={blockId} propertiesModal={PropertiesModal} />,
         }),
-        reactEditor.surfaces.registerBlockWrapper("block", TodoStorageVisibility),
-        reactEditor.surfaces.registerBlockWrapper("edgeless", TodoStorageVisibility),
-        reactEditor.surfaces.registerBlockWrapper("block", TodoStorageBlockWrapper),
-        reactEditor.surfaces.registerBlockWrapper("edgeless", TodoStorageBlockWrapper),
-        new TodoPromptController(reactEditor, prompts).setup(),
+        editorRuntime.surfaces.registerBlockWrapper("block", TodoStorageVisibility),
+        editorRuntime.surfaces.registerBlockWrapper("edgeless", TodoStorageVisibility),
+        editorRuntime.surfaces.registerBlockWrapper("block", TodoStorageBlockWrapper),
+        editorRuntime.surfaces.registerBlockWrapper("edgeless", TodoStorageBlockWrapper),
+        new TodoPromptController(editorRuntime, prompts).setup(),
       ];
       return () => {
         disposers.reverse().forEach((dispose) => dispose());

@@ -609,12 +609,14 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`restores a caret after a transient empty native selection on ${mode}`, async ({ page }) => {
     if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
     const result = await page.evaluate(async () => {
-      const { editor, reactEditor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi; reactEditor: import("@chulane/rivto-react").ReactEditor };
+      const { editor, editorRuntime } = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi; editorRuntime: import("@chulane/rivto-react").EditorRuntime };
       }).__rivtoDemo;
       const id = editor.blocks.getRootIds()[1]!;
       editor.selection.set({ type: "selection", blocks: [{ id, start: 1, end: 1 }], anchorBlockId: id, focusBlockId: id });
-      reactEditor.selection.restoreDOM();
+      const view = editorRuntime.events.getDocumentView();
+      if (!view) throw new Error("Expected mounted editor view");
+      view.selection.restoreDOM();
       const content = document.querySelector<HTMLElement>(`[data-block-id="${id}"] [contenteditable]`)!;
       content.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
       document.getSelection()?.removeAllRanges();

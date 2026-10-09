@@ -1,4 +1,4 @@
-import type { ReactEditor } from "../../../types";
+import type { EditorViewApi } from "../../../types";
 import { resolveDropPlacement, type DropLayoutBlock, type DropRect } from "../placement/resolver";
 import type { DropBlock } from "../placement/types";
 import { collectDropLayout, getDropBlocks, resolveSurfaceDrop } from "./target";
@@ -41,7 +41,7 @@ function surface(items: DropLayoutBlock[]) {
       const entry = items.find((candidate) => candidate.id === id)!;
       return { dropAxis: entry.axis, acceptsDropContainer: entry.acceptsBody, dropPlacement: entry.options };
     } },
-  } as unknown as ReactEditor;
+  } as unknown as EditorViewApi;
   return { root, runtime, reads };
 }
 
@@ -92,7 +92,7 @@ test.each([2, 2000])("embedded placement reads its subtree without visiting %i u
       getBlock: (id: string) => { nodeReads++; return id === "branch" ? root : undefined; },
       getBlocks: () => { forestReads++; return forest; },
     },
-  } as unknown as ReactEditor;
+  } as unknown as EditorViewApi;
   expect(getDropBlocks(runtime)).toEqual([root]);
   expect(nodeReads).toBe(1);
   expect(forestReads).toBe(0);
@@ -125,7 +125,7 @@ test("embedded placement accepts children but refuses gaps outside the displayed
     getDocument: () => ({ id: "A" }),
     blocks: { ...fixture.runtime.blocks, getBlock: () => branch },
     views: { ...fixture.runtime.views, acceptsDrop: () => true },
-  }) as ReactEditor;
+  }) as EditorViewApi;
   expect(resolveSurfaceDrop(fixture.root, runtime, [foreign], [branch], { x: 100, y: 52 }, defaults))
     .toMatchObject({ kind: "inside", parentId: "child" });
   expect(resolveSurfaceDrop(fixture.root, runtime, [foreign], [branch], { x: 12, y: 0 }, defaults)).toBeNull();

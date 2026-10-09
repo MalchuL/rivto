@@ -53,7 +53,7 @@ export function VisualElement({
   readonly onReconnect: (key: "source" | "target", endpoint: ConnectorEndpoint) => void;
 }) {
   const selected = useEdgelessSelected(visual.id);
-  const element = controller.reactEditor.elements.getElement(visual.id);
+  const element = controller.editor.elements.getElement(visual.id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<{ key: "source" | "target"; endpoint: ConnectorEndpoint } | null>(null);
   const focusPointRef = useRef<EditableLabelFocusPoint | null>(null);

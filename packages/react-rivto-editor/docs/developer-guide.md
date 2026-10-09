@@ -10,6 +10,27 @@ Rivto has two deliberately separate layers:
 The React package never owns or duplicates document data. It presents a core
 `RivtoEditorApi` and translates browser interactions into editor operations.
 
+## Runtime and rendered editors
+
+`createEditorRuntime` creates shared document infrastructure and installs extensions
+once. Pass it to `<EditorView runtime={runtime}>`. Each occurrence constructs its own
+`EditorViewApi`; `useEditorView()` and event payloads return that occurrence editor.
+Blocks, history, rendering definitions, and extension registrations remain shared.
+DOM selection, local event registrations, and clipboard/slash execution belong to
+the receiving occurrence. Closing one view does not destroy its shared runtime.
+
+An extension's `setup(runtime)` registers behavior. Its event handlers use
+`event.editorView`, and slash callbacks use `context.editorView`, for operations
+that depend on a rendered surface. A global toolbar must explicitly choose a
+mounted editor through `runtime.events.getDocumentView()` before restoring DOM
+selection or executing a view command; absence means there is no mounted target.
+
+`createViewApi` and `ViewApiFactory` are removed. View managers are constructed
+inside `EditorViewApi`, with their shared registries supplied as dependencies.
+Hosts replace `createReactEditor` with `createEditorRuntime` and the `EditorView`
+prop `reactEditor` with `runtime`. The core editor and persisted document formats
+are unchanged.
+
 ## Normal setup
 
 ```tsx
@@ -17,7 +38,7 @@ import { createRivtoEditor } from "@chulane/rivto";
 import { DocumentStorage } from "@chulane/document-model";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import {
-  createReactEditor,
+  createEditorRuntime,
   EditorView,
   PageSurface,
 } from "@chulane/rivto-react";
@@ -32,7 +53,7 @@ const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspa
 storage.registerDocument("document-id");
 const document = await storage.openDocument("document-id");
 const editor = createRivtoEditor({ document });
-const reactEditor = createReactEditor({
+const editorRuntime = createEditorRuntime({
   editor,
   extensions: [
     standardPreset({
@@ -50,10 +71,10 @@ const reactEditor = createReactEditor({
   ],
 });
 
-root.render(<EditorView reactEditor={reactEditor}><PageSurface /></EditorView>);
+root.render(<EditorView runtime={editorRuntime}><PageSurface /></EditorView>);
 
 // Host teardown:
-reactEditor.destroy();
+editorRuntime.destroy();
 editor.destroy();
 await document.destroy();
 await storage.destroy();
@@ -172,7 +193,7 @@ Hooks resolve current values through public getters:
 | `useBlockTextEditing(id, content)` | Plain-text DOM binding without another subscription |
 | `useBlockSelectionAnchor(id)` | Structural selection marker and pending focus restoration |
 | `useRootBlockIds()` | Ordered root IDs |
-| `useReactEditor()` | Focused React runtime managers |
+| `useEditorView()` | Operations for the nearest rendered occurrence |
 | `useContext(SurfaceContext)` | Current surface kind |
 | `useEditorSelection()` / selection hooks | Detached selection |
 | slash hooks | Slash-command manager |
@@ -209,10 +230,10 @@ An extension is a setup function with a stable ID:
 ```ts
 const commentsExtension = (): ReactEditorExtension => ({
   id: "acme.comments",
-  setup(reactEditor) {
+  setup(editorRuntime) {
     const disposeExternalResource = connectComments();
-    reactEditor.keyboard.register(definition, handler);
-    reactEditor.surfaces.registerBlockWrapper("block", CommentWrapper);
+    editorRuntime.keyboard.register(definition, handler);
+    editorRuntime.surfaces.registerBlockWrapper("block", CommentWrapper);
     return disposeExternalResource;
   },
 });
@@ -224,7 +245,7 @@ Extensions receive public capabilities:
 - `events`: delegated native DOM registrations
 - `keyboard`: semantic bindings and runtime keymap overrides
 - `surfaces`: surfaces and ordered block/editor wrappers
-- `selection`: DOM selection conversion/highlighting
+- `selection`: document model selection; DOM conversion belongs to the occurrence editor
 - `slashCommands`: shared typed slash registry
 - `renderers`: lower-level renderer lookup/registration
 - `extensions`: mounted visual components
@@ -232,7 +253,8 @@ Extensions receive public capabilities:
 Concrete manager classes and lifecycle bookkeeping are internal package
 implementation. Registrations are owned automatically during extension setup,
 return idempotent disposers, roll back on setup failure, and unwind in reverse
-order during `ReactEditor.destroy()`.
+order during `EditorRuntime.destroy()`. Closing a view cancels its DOM work and
+local registrations while the shared runtime stays available to other views.
 
 Use `blockExtension()` for a normal custom block. It prevents half-installed
 types by registering the core definition, React renderer, and slash conversion
@@ -252,7 +274,7 @@ scope, editor mode, capture phase, and condition. Returning `true` claims and
 prevents the event; returning `false` lets later handlers/native behavior run.
 
 Keyboard definitions use stable binding IDs and semantic key strings. Hosts can
-override keys in `createReactEditor({ keymap })` without replacing behavior.
+override keys in `createEditorRuntime({ keymap })` without replacing behavior.
 
 There are two selection representations:
 
@@ -261,7 +283,7 @@ There are two selection representations:
 
 The text-selection extension keeps them aligned. Page and edgeless extensions
 add their mode-specific whole-block gestures. Selection code should use
-`reactEditor.selection` for DOM conversion and `editor.selection` for portable
+`editorView.selection` for DOM conversion and `editor.selection` for portable
 state.
 
 ## Source map
@@ -291,7 +313,7 @@ src/
 Recommended reading order:
 
 1. `demo/src/App.tsx`
-2. `src/react-editor.tsx`
+2. `src/editor-view-api.ts`
 3. `src/extensions/built-ins/built-ins.ts`
 4. `src/editor-view.tsx`
 5. `src/hooks/blocks/use-block.ts`
@@ -335,3 +357,12 @@ The minimum regression coverage for subscription work is:
 - lazy paths repair after local, remote, and history changes;
 - registry changes update consumers of that registry;
 - extension setup rollback and Strict Mode teardown leave no registrations.
+
+## Shared document operations
+
+Use the exported `SharedEditorApi` type when an operation accepts either
+`EditorRuntime` or `EditorViewApi` and only needs their shared document managers
+and registrations. It excludes DOM events, selection, clipboard/slash execution,
+and destruction because those contracts differ between runtime and view.
+Use `EditorViewApi` for occurrence-specific interaction, `EditorRuntime` for
+runtime ownership, or an existing manager capability when only that manager is needed.

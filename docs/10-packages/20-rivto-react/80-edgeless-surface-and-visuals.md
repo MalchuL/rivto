@@ -12,7 +12,7 @@ Surface выбирается локальным React state:
 
 ```tsx
 const [canvas, setCanvas] = useState(false);
-<EditorView reactEditor={reactEditor}>
+<EditorView runtime={editorRuntime}>
   <button onClick={() => setCanvas(!canvas)}>Switch surface</button>
   {canvas ? <EdgelessSurface /> : <PageSurface />}
 </EditorView>
@@ -58,7 +58,7 @@ const visuals = edgelessVisualsExtension({
   stickers: [{ id: "mint", label: "Mint", fill: "#d3f9d8" }],
 });
 
-const reactEditor = createReactEditor({
+const editorRuntime = createEditorRuntime({
   editor,
   extensions: [standardPreset(), ...edgelessPreset(), visuals],
 });
@@ -112,4 +112,4 @@ const rectangle = visuals.createRectangle({
 
 ## Demo reference
 
-`demo/src/App.tsx` создаёт rectangle, ellipse, sticker, drawing, free text, connectors и nested group через тот же public imperative object `visuals`. Это хороший seed pattern: extension instance создаётся до `createReactEditor()`, передаётся в extensions, затем используется после setup.
+`demo/src/App.tsx` создаёт rectangle, ellipse, sticker, drawing, free text, connectors и nested group через тот же public imperative object `visuals`. Это хороший seed pattern: extension instance создаётся до `createEditorRuntime()`, передаётся в extensions, затем используется после setup.

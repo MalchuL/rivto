@@ -28,40 +28,40 @@ class RejectingBlockView extends BaseBlockView {
 
 test("resolve falls back to BaseBlockView and indent stays free at the root", async () => {
   const editor = await createTestCoreEditor();
-  const reactEditor = createReactEditor({
+  const editorView = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension()],
   });
   const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
   const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first).id;
-  expect(reactEditor.views.resolve(second)).toBeInstanceOf(BaseBlockView);
-  expect(reactEditor.views.has("paragraph")).toBe(false);
+  expect(editorView.views.resolve(second)).toBeInstanceOf(BaseBlockView);
+  expect(editorView.views.has("paragraph")).toBe(false);
   editor.blocks.indentBlock(second);
   expect(editor.blocks.getParentId(second)).toBe(first);
   editor.blocks.outdentBlock(second);
   expect(editor.blocks.getParentId(second)).toBeNull();
-  reactEditor.destroy();
+  editorView.destroy();
   editor.destroy();
 });
 
 test("asks the resolved view whether a drop is accepted", async () => {
   const editor = await createTestCoreEditor();
   const rejectingView = new RejectingBlockView();
-  const reactEditor = createReactEditor({
+  const editorView = createReactEditor({
     editor,
     extensions: [
       defaultWritingBlockExtension(),
       {
         id: "test.reject-drop",
-        setup: (reactEditor) => reactEditor.views.register("paragraph", rejectingView),
+        setup: (editorRuntime) => editorRuntime.views.register("paragraph", rejectingView),
       },
     ],
   });
   const targetId = editor.blocks.insertBlock({ type: "paragraph" }).id;
 
-  expect(reactEditor.views.acceptsDrop({ kind: "inside", parentId: targetId }, [editor.blocks.getBlock(targetId)!])).toBe(false);
+  expect(editorView.views.acceptsDrop({ kind: "inside", parentId: targetId }, [editor.blocks.getBlock(targetId)!])).toBe(false);
 
-  reactEditor.destroy();
+  editorView.destroy();
   editor.destroy();
 });
 
@@ -71,7 +71,7 @@ test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbere
     const originalFrame = globalThis.requestAnimationFrame;
     globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
     const editor = await createTestCoreEditor();
-    const reactEditor = createReactEditor({
+    const editorView = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
     });
@@ -88,7 +88,7 @@ test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbere
       /** @returns Nothing after dispatching one Enter from a fresh block snapshot. */
       const pressEnter = () => {
         const selection = createCaretSelection(child, 0);
-        const context = createBlockViewContext(reactEditor, child, {} as HTMLElement, selection)!;
+        const context = createBlockViewContext(editorView, child, {} as HTMLElement, selection)!;
         const target = firstKeyboardTarget(selection)!;
         editor.history.batchUpdates(() => view.onSplit(context, target));
       };
@@ -109,7 +109,7 @@ test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbere
       editor.history.undo();
       expect(editor.blocks.getBlockNode(child)?.listProps.type).toBe(type);
     } finally {
-      reactEditor.destroy();
+      editorView.destroy();
       editor.destroy();
       globalThis.requestAnimationFrame = originalFrame;
     }
@@ -120,23 +120,23 @@ test.each(["block", "edgeless"] as const)("empty root list marker clears in %s m
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
   const editor = await createTestCoreEditor();
-  const reactEditor = createReactEditor({
+  const editorView = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
   });
   try {
-    reactEditor.mode.set(mode);
+    editorView.mode.set(mode);
     const id = editor.blocks.insertBlock({
       type: "paragraph",
       listProps: { type: "checkbox", checked: true, custom: "keep" },
     }).id;
     const selection = createCaretSelection(id, 0);
-    const context = createBlockViewContext(reactEditor, id, {} as HTMLElement, selection)!;
+    const context = createBlockViewContext(editorView, id, {} as HTMLElement, selection)!;
     expect(new BaseBlockView().onSplit(context, firstKeyboardTarget(selection)!)).toBe("handled");
     expect(editor.blocks.getParentId(id)).toBeNull();
     expect(editor.blocks.getBlockNode(id)?.listProps).toEqual({ custom: "keep" });
   } finally {
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
     globalThis.requestAnimationFrame = originalFrame;
   }
@@ -146,7 +146,7 @@ test("empty checkbox clearing follows the host writing predicate for another blo
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
   const editor = await createTestCoreEditor();
-  const reactEditor = createReactEditor({
+  const editorView = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension({
       type: "note",
@@ -158,11 +158,11 @@ test("empty checkbox clearing follows the host writing predicate for another blo
       type: "note", listProps: { type: "checkbox", checked: true },
     }).id;
     const selection = createCaretSelection(id, 0);
-    const context = createBlockViewContext(reactEditor, id, {} as HTMLElement, selection)!;
+    const context = createBlockViewContext(editorView, id, {} as HTMLElement, selection)!;
     expect(new BaseBlockView().onSplit(context, firstKeyboardTarget(selection)!)).toBe("handled");
     expect(editor.blocks.getBlockNode(id)?.listProps.type).toBeUndefined();
   } finally {
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
     globalThis.requestAnimationFrame = originalFrame;
   }
@@ -173,7 +173,7 @@ test("contentless custom blocks do not lose checkbox state on Enter", async () =
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
   const editor = await createTestCoreEditor();
   editor.blockRegistry.defineBlock({ type: "custom-control" });
-  const reactEditor = createReactEditor({
+  const editorView = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
   });
@@ -182,11 +182,11 @@ test("contentless custom blocks do not lose checkbox state on Enter", async () =
       type: "custom-control", listProps: { type: "checkbox", checked: true },
     }).id;
     const selection = createCaretSelection(id, 0);
-    const context = createBlockViewContext(reactEditor, id, {} as HTMLElement, selection)!;
+    const context = createBlockViewContext(editorView, id, {} as HTMLElement, selection)!;
     new BaseBlockView().onSplit(context, firstKeyboardTarget(selection)!);
     expect(editor.blocks.getBlockNode(id)?.listProps.type).toBe("checkbox");
   } finally {
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
     globalThis.requestAnimationFrame = originalFrame;
   }
@@ -196,7 +196,7 @@ test("empty block Enter respects an outline floor", async () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
   const editor = await createTestCoreEditor();
-  const reactEditor = createReactEditor({
+  const editorView = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],
   });
@@ -206,11 +206,11 @@ test("empty block Enter respects an outline floor", async () => {
     const child = editor.blocks.insertBlock({ type: "paragraph" }).id;
     editor.blocks.moveBlocks([child], cell, "inside");
     const selection = createCaretSelection(child, 0);
-    const context = createBlockViewContext(reactEditor, child, {} as HTMLElement, selection)!;
+    const context = createBlockViewContext(editorView, child, {} as HTMLElement, selection)!;
     expect(new BaseBlockView().onSplit(context, firstKeyboardTarget(selection)!)).toBe("handled");
     expect(editor.blocks.getParentId(child)).toBe(cell);
   } finally {
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
     globalThis.requestAnimationFrame = originalFrame;
   }

@@ -1,7 +1,7 @@
 import { DocumentViewDOM, isInDocumentView } from "../../../managers/events/document-view";
 /** Measures one active surface and resolves its explicit drop regions. */
 import type { EditorBlock } from "@chulane/rivto";
-import type { ReactEditor } from "../../../types";
+import type { EditorViewApi } from "../../../types";
 import { blockContainment } from "../utils/containment";
 import { resolveDropPlacement, type DropLayoutBlock, type DropLayoutOptions } from "../placement/resolver";
 import type { DropBlock } from "../placement/types";
@@ -15,7 +15,7 @@ import type { DropPlacement, PointerCoordinates } from "../types";
  * @returns The displayed subtree, the complete forest for a document view,
  * or an empty list when the scoped root has been deleted.
  */
-export function getDropBlocks(runtime: ReactEditor): EditorBlock[] {
+export function getDropBlocks(runtime: EditorViewApi): EditorBlock[] {
   if (!runtime.rootBlockId) return runtime.blocks.getBlocks();
   const root = runtime.blocks.getBlock(runtime.rootBlockId);
   return root ? [root] : [];
@@ -31,7 +31,7 @@ export function getDropBlocks(runtime: ReactEditor): EditorBlock[] {
  * @returns Rendered block identities and layout policies with live viewport
  * rectangle getters; blocks without a direct page row or client rectangles are omitted.
  */
-export function collectDropLayout(root: HTMLElement, runtime: ReactEditor): DropLayoutBlock[] {
+export function collectDropLayout(root: HTMLElement, runtime: EditorViewApi): DropLayoutBlock[] {
   const dom = new DocumentViewDOM(root);
   return dom.getBlocks().flatMap((element) => {
     const id = element.dataset.blockId;
@@ -72,7 +72,7 @@ export function collectDropLayout(root: HTMLElement, runtime: ReactEditor): Drop
  */
 export function resolveSurfaceDrop(
   root: HTMLElement | null,
-  runtime: ReactEditor,
+  runtime: EditorViewApi,
   sources: readonly EditorBlock[],
   blocks: readonly DropBlock[],
   pointer: PointerCoordinates,

@@ -179,7 +179,7 @@ Every registration/disposal calls `reconnect`, which detaches and recreates all 
 
 ### 38. Dynamic uninstall would leave stale default-writing callbacks
 
-`defaultWritingBlockExtension` installs global factories but its cleanup only unregisters the block contribution ([default-writing-block.tsx:75](../packages/react-rivto-editor/src/extensions/built-ins/page/default-writing-block.tsx#L75)); `installDefaultWriting` has no disposer or ownership stack ([react-editor.tsx:104](../packages/react-rivto-editor/src/react-editor.tsx#L104)). Once extensions become dynamic, uninstall leaves callbacks for an unavailable type. Make default-writing installation an owned, reversible registration.
+`defaultWritingBlockExtension` installs global factories but its cleanup only unregisters the block contribution ([default-writing-block.tsx:75](../packages/react-rivto-editor/src/extensions/built-ins/page/default-writing-block.tsx#L75)); `installDefaultWriting` has no disposer or ownership stack ([react-editor.tsx:104](../packages/react-rivto-editor/src/editor-view-api.ts#L104)). Once extensions become dynamic, uninstall leaves callbacks for an unavailable type. Make default-writing installation an owned, reversible registration.
 
 ### 39. `EditorView` has one hard-coded layout bucket
 
@@ -257,7 +257,7 @@ Implementation rules:
 5. Keep `setKeymapOverride` for instant edits. `undefined` restores declared defaults; `[]` disables. Persistence belongs to Demo/application state, not the editor package.
 6. Make keydown/keyup pairing internal for stateful gestures such as paste-as-plain-text and pan.
 
-Demo should add a `KeyboardPanel` that subscribes with `useSyncExternalStore`, lists default/effective bindings and status, edits a local input, calls `setKeymapOverride`, and offers Disable/Restore buttons. Replace the URL-only E2E with a test that edits a binding, uses it immediately, restores it, and confirms that the `ReactEditor` instance and page did not reload.
+Demo should add a `KeyboardPanel` that subscribes with `useSyncExternalStore`, lists default/effective bindings and status, edits a local input, calls `setKeymapOverride`, and offers Disable/Restore buttons. Replace the URL-only E2E with a test that edits a binding, uses it immediately, restores it, and confirms that the `EditorViewApi` instance and page did not reload.
 
 BlockSuite supplies the right ownership precedent (extension-local keymaps); Logseq supplies the useful inventory, display, persistence, and conflict precedent. Rivto does not need Logseq's heavyweight global reinstall because its manager already reparses overrides in place.
 

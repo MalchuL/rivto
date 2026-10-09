@@ -7,8 +7,8 @@
  * including transitions from an empty selection back to an empty selection.
  */
 import type { SelectionManagerApi, Selection } from "@chulane/rivto";
-import type { ReactEditorView, EventsCapability, RestoreDOMSelectionOptions, SelectionCapability } from "../../capabilities";
-import type { ReactEditor } from "../../types";
+import type { EventsCapability, RestoreDOMSelectionOptions, SelectionCapability } from "../../capabilities";
+import type { EditorViewApi } from "../../types";
 import { readEditorDOMSelection, restoreEditorDOMSelection } from "./editor-dom-selection";
 
 export { createCaretSelection, createTextSelection } from "@chulane/rivto";
@@ -32,62 +32,67 @@ interface PendingSelectionCallback {
 /** DOM adapter over the core selection manager. */
 export class ReactSelectionManager implements SelectionCapability {
 
+  private checkedSelection: Selection | undefined;
+  private checkedRevision = -1;
+  private contained = false;
+
+  private containsSelection(selection: Selection): boolean {
+    const rootId = this.editorView.rootBlockId;
+    if (!rootId) return true;
+    return selection.blocks.every(({ id }) => {
+      let current: string | null | undefined = id;
+      while (current) {
+        if (current === rootId) return true;
+        current = this.editorView.getDocument().blocks.getParentId(current);
+      }
+      return false;
+    });
+  }
+
+  private ownsSelection(): boolean {
+    const root = this.editorView.events.getRoot();
+    if (this.editorView.runtime.events.getRoot() !== root) return false;
+    const value = this.coreSelection.snapshot();
+    if (!value) return false;
+    if (!this.editorView.rootBlockId) return true;
+    const revision = this.editorView.getDocument().blocks.revision;
+    // Rows reuse the immutable snapshot; check subtree membership once per revision.
+    if (value !== this.checkedSelection || revision !== this.checkedRevision) {
+      this.checkedSelection = value;
+      this.checkedRevision = revision;
+      this.contained = this.containsSelection(value);
+    }
+    return this.contained;
+  }
+
   /** One pending frame per DOM root, cancelled by any effective core selection change. */
   private readonly pendingSelectionCallbacks = new Map<HTMLElement, PendingSelectionCallback>();
   /**
-   * Creates a bridge scoped to one React runtime.
-   * Every view delegates to this one manager and shares the core selection.
+   * Creates a DOM bridge scoped to one rendered occurrence.
+   * Each view owns its DOM adapter while sharing the document core selection.
    * DOM requests capture the receiving view's event scope and remain separate
-   * by root. Removing a surface cancels its own pending work; runtime teardown
-   * cancels all remaining requests before shared extensions are destroyed.
-   * @param reactEditor - Owning React runtime providing the active DOM root.
+   * by root. Removing a surface cancels its own pending work; view teardown
+   * cancels its remaining requests before shared extensions are destroyed.
+   * @param editorView - Owning view editor providing its fixed DOM occurrence.
    * @param coreSelection - Core manager providing the document's local selection state.
    */
   constructor(
-    private readonly reactEditor: ReactEditor,
+    private readonly editorView: EditorViewApi,
     private readonly coreSelection: Omit<SelectionManagerApi, "resolveBlockSelection">,
   ) {}
-
-  /**
-   * Binds DOM reads and scheduled work to one occurrence; core state stays shared.
-   * @param reactEditor - View editor providing root access through events, including null after unmount.
-   * @returns Selection operations that retain their view across deferred calls.
-   */
-  createViewApi(reactEditor: ReactEditorView): SelectionCapability {
-    const events = reactEditor.events;
-    const { pendingSelectionCallbacks } = this;
-    return {
-      createViewApi: (next) => this.createViewApi(next),
-      get: () => this.get(),
-      snapshot: () => this.snapshot(),
-      subscribe: (listener) => this.subscribe(listener),
-      clear: () => this.clear(),
-      delete: () => this.delete(),
-      set: (value) => this.set(value),
-      isBlockSelected: (id) => this.isBlockSelected(id),
-      isElementSelected: (id) => this.isElementSelected(id),
-      readDOM: () => this.readDOM(events.getRoot()),
-      restoreDOM: (value = this.get(), options) => this.restoreDOM(value, options, events.getRoot()),
-      scheduleIfSelectionUnchanged: (callback, onCancel) => this.scheduleIfSelectionUnchanged(callback, onCancel, events),
-      get hasPendingSelectionCallback() {
-        const root = events.getRoot();
-        return root !== null && pendingSelectionCallbacks.has(root);
-      },
-    };
-  }
 
   /**
    * Identifies a pending callback in the current view whose scheduled model selection remains current.
    * @returns False after any effective core selection change, including explicit clearing.
    */
   get hasPendingSelectionCallback(): boolean {
-    const root = this.reactEditor.events.getRoot();
+    const root = this.editorView.events.getRoot();
     return root !== null && this.pendingSelectionCallbacks.has(root);
   }
 
   /** @returns Detached current selection. */
   get(): Selection | undefined {
-    return this.coreSelection.get();
+    return this.ownsSelection() ? this.coreSelection.get() : undefined;
   }
 
   /**
@@ -96,6 +101,7 @@ export class ReactSelectionManager implements SelectionCapability {
    * @returns No value.
    */
   set(selection: Selection): void {
+    if (!this.containsSelection(selection)) { this.clear(); return; }
     this.coreSelection.set(selection);
   }
 
@@ -115,24 +121,24 @@ export class ReactSelectionManager implements SelectionCapability {
 
   /** Deletes the current selection through core. */
   delete(): void {
-    this.coreSelection.delete();
+    if (this.ownsSelection()) this.coreSelection.delete();
   }
 
   /** @returns Stable core selection snapshot. */
-  snapshot(): Selection | undefined { return this.coreSelection.snapshot(); }
+  snapshot(): Selection | undefined { return this.ownsSelection() ? this.coreSelection.snapshot() : undefined; }
 
   /** @returns Whether a block has structural selection coverage. */
-  isBlockSelected(id: string): boolean { return this.coreSelection.isBlockSelected(id); }
+  isBlockSelected(id: string): boolean { return this.ownsSelection() && this.coreSelection.isBlockSelected(id); }
 
   /** @returns Whether an element belongs to the current selection. */
-  isElementSelected(id: string): boolean { return this.coreSelection.isElementSelected(id); }
+  isElementSelected(id: string): boolean { return this.ownsSelection() && this.coreSelection.isElementSelected(id); }
 
   /**
    * Reads current native endpoints.
-   * @param root - Receiving DOM occurrence; omitted on the shared API to use the active view.
+   * @param root - Receiving DOM occurrence; omitted to use this view’s mounted root.
    * @returns Browser selection, or undefined outside this editor.
    */
-  readDOM(root = this.reactEditor.events.getRoot()): Selection | undefined {
+  readDOM(root = this.editorView.events.getRoot()): Selection | undefined {
     return root ? readEditorDOMSelection(root) : undefined;
   }
 
@@ -146,7 +152,7 @@ export class ReactSelectionManager implements SelectionCapability {
   restoreDOM(
     selection: Selection | undefined = this.get(),
     options?: RestoreDOMSelectionOptions,
-    root = this.reactEditor.events.getRoot(),
+    root = this.editorView.events.getRoot(),
   ): boolean {
     return root && selection ? restoreEditorDOMSelection(root, selection, options) : false;
   }
@@ -178,7 +184,7 @@ export class ReactSelectionManager implements SelectionCapability {
   scheduleIfSelectionUnchanged(
     callback: () => void,
     onCancel?: () => void,
-    events = this.reactEditor.events.getDocumentView()?.events ?? this.reactEditor.events,
+    events = this.editorView.events,
   ): () => void {
     const root = events.getRoot();
     const previous = root ? this.pendingSelectionCallbacks.get(root) : undefined;
@@ -229,7 +235,7 @@ export class ReactSelectionManager implements SelectionCapability {
 
   /**
    * Cancels DOM restoration belonging to a surface that is being removed or replaced.
-   * EventManager calls this before releasing the root; requests in other views
+   * The view registry calls this before releasing the root; requests in other views
    * are retained. Cleanup that schedules more work for this same root is also cancelled.
    * @param root - Exact surface root whose pending frame and resources must be released.
    * @returns No value; roots without pending work are harmless.
@@ -286,7 +292,7 @@ export class ReactSelectionManager implements SelectionCapability {
    * resources exactly once, including when destruction is repeated.
    * Requests for every mounted view are cancelled here, including shared work
    * scheduled by their cancellation callbacks while cleanup is running.
-   * No view owns a separate selection manager or independent core selection.
+   * Views own separate DOM adapters, but never independent core selection state.
    * @returns No value.
    */
   destroy(): void {

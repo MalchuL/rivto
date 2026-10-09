@@ -37,7 +37,7 @@ export function BlockProperties({
       title="Block card"
       count={elements.length}
       ariaLabel="Block properties"
-      onClose={() => controller.reactEditor.commands.execute("edgeless.selection.clear")}
+      onClose={() => controller.editor.commands.execute("edgeless.selection.clear")}
     >
       <PropertyGroup title="Layout">
         <PropertyRow label="Height">

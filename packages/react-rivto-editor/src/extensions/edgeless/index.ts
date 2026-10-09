@@ -24,7 +24,7 @@ export function edgelessSurfaceExtension(
 ): ReactEditorExtension {
   return {
     id: "surface.edgeless",
-    setup: (reactEditor) => registerEdgelessSurface(reactEditor, options),
+    setup: (editorRuntime) => registerEdgelessSurface(editorRuntime, options),
   };
 }
 
@@ -32,9 +32,9 @@ export function edgelessSurfaceExtension(
 export function edgelessSelectionExtension(): ReactEditorExtension {
   return {
     id: "selection.edgeless",
-    setup: (reactEditor) => {
-      const disposeRuntime = installEdgelessRuntime(reactEditor);
-      reactEditor.extensions.mount(EdgelessInteractionOverlay);
+    setup: (editorRuntime) => {
+      const disposeRuntime = installEdgelessRuntime(editorRuntime);
+      editorRuntime.extensions.mount(EdgelessInteractionOverlay);
       return disposeRuntime;
     },
   };
@@ -54,15 +54,15 @@ export function edgelessMovementExtension(): ReactEditorExtension {
 export function edgelessTransformExtension(): ReactEditorExtension {
   return {
     id: "transform.edgeless",
-    setup: (reactEditor) => {
-      reactEditor.surfaces.registerElementSlot({
+    setup: (editorRuntime) => {
+      editorRuntime.surfaces.registerElementSlot({
         position: "left-top",
         priority: 100,
         component: EdgelessElementDragSlot,
         mode: "edgeless",
         when: ({ element, selected }) => selected && element.type !== "connector",
       });
-      return registerEdgelessTransform(reactEditor);
+      return registerEdgelessTransform(editorRuntime);
     },
   };
 }

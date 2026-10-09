@@ -29,9 +29,9 @@ export async function run(): Promise<void> {
     return block ? createElement("div", { ...attributes, key: domKey }) : null;
   }
   const render = (editorIndex: number, id: string, text: boolean, domKey = 0) => {
-    const reactEditor = editors[editorIndex]!;
+    const editorView = editors[editorIndex]!;
     flushSync(() => root.render(createElement(EditorContext.Provider, {
-      value: { reactEditor, documentId: reactEditor.getDocument().id },
+      value: { editorView, documentId: editorView.getDocument().id },
     }, text ? createElement(Text, { id, domKey }) : createElement(Commands, { id }))));
   };
   const editable = () => host.querySelector<HTMLDivElement>("[contenteditable]")!;

@@ -15,7 +15,7 @@ import { usePreventTextEditing, type PreventTextEditingAttributes } from "./use-
  *
  * `block` is the reactive node snapshot from `useBlockNode` and does not include
  * descendants. For callbacks created during an older render, read current values
- * through reactEditor.blocks.getBlockNode(blockId), not the captured snapshot.
+ * through editorView.blocks.getBlockNode(blockId), not the captured snapshot.
  * Current document content excludes uncommitted DOM edits; undefined denotes an
  * unknown/deleted block, while an empty string denotes an existing textless block.
  */

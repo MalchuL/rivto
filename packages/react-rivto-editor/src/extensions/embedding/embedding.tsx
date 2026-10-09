@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/pop
 import { PageSurface } from "../../surfaces/page";
 import { EditorView } from "../../editor-view";
 import { EditorStorageContext } from "../../editor-storage-context";
-import { useBlockSelectionAnchor, useBlockNode, useReactEditor } from "../../hooks";
+import { useBlockSelectionAnchor, useBlockNode, useEditorView } from "../../hooks";
 import type { BlockSlotProps, ReactEditorExtension } from "../../managers";
 
 /** Persisted block type for a live reference to another workspace block. */
@@ -38,7 +38,7 @@ function EmbeddingBlock({ blockId }: { readonly blockId: string }) {
 
 /** Edits the reference in a right-slot popover, saving both IDs as one document update. */
 function EmbeddingControls({ block }: BlockSlotProps) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const [open, setOpen] = useState(false);
   const props = block.props as EmbeddingProps;
   return (
@@ -52,7 +52,7 @@ function EmbeddingControls({ block }: BlockSlotProps) {
         <form className="flex flex-col gap-3" onSubmit={(event) => {
           event.preventDefault();
           const fields = new FormData(event.currentTarget);
-          reactEditor.blocks.updateBlock(block.id, { props: {
+          editorView.blocks.updateBlock(block.id, { props: {
             targetDocumentId: String(fields.get("targetDocumentId") ?? "").trim(),
             targetBlockId: String(fields.get("targetBlockId") ?? "").trim(),
           } });
@@ -80,11 +80,11 @@ function EmbeddingControls({ block }: BlockSlotProps) {
 /** Acquires and renders the editable source subtree below the reference row. */
 function EmbeddingBody({ block }: BlockSlotProps) {
   const blockId = block.id;
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const ancestors = useContext(ancestryContext);
   const { targetDocumentId, targetBlockId } = block.props as EmbeddingProps;
   const targetAddress = JSON.stringify([targetDocumentId, targetBlockId]);
-  const ownAddress = JSON.stringify([reactEditor.getDocument().id, blockId]);
+  const ownAddress = JSON.stringify([editorView.getDocument().id, blockId]);
   const references = useContext(EditorStorageContext);
   const [location, setLocation] = useState<BlockResolution & { targetAddress: string; error?: unknown }>({ targetAddress: "", ambiguous: false });
   const resolvedAddress = JSON.stringify([location.documentId, targetBlockId]);
@@ -118,7 +118,7 @@ function EmbeddingBody({ block }: BlockSlotProps) {
         <ancestryContext.Provider value={ancestry}>
           {Boolean(error) && <div role="status">Unable to load referenced block.</div>}
           <div className={`${EMBEDDED_SURFACE_CLASS} min-w-0 max-w-full`} hidden={Boolean(error)}>
-            <EditorView reactEditor={source} rootBlockId={targetBlockId} active={!error}><PageSurface /></EditorView>
+            <EditorView runtime={source} rootBlockId={targetBlockId} active={!error}><PageSurface /></EditorView>
           </div>
         </ancestryContext.Provider>
       ) : <div role="status" className="px-2 pb-2">{message}</div>}
@@ -136,8 +136,8 @@ function EmbeddingBody({ block }: BlockSlotProps) {
 export function embeddingExtension(): ReactEditorExtension {
   return {
     id: "block.embedding",
-    setup: (reactEditor) => {
-      const dispose = reactEditor.blockTypes.register({
+    setup: (editorRuntime) => {
+      const dispose = editorRuntime.blockTypes.register({
         definition: {
           type: EMBEDDING_BLOCK_TYPE,
           title: "Embedded block",
@@ -147,22 +147,22 @@ export function embeddingExtension(): ReactEditorExtension {
         render: (props) => <EmbeddingBlock {...props} />,
         slashCommand: { title: "Embedded block" },
       });
-      const body = reactEditor.surfaces.registerBlockSlot({
+      const body = editorRuntime.surfaces.registerBlockSlot({
         position: "body",
         component: EmbeddingBody,
         when: ({ block }) => block.type === EMBEDDING_BLOCK_TYPE,
       });
-      const controls = reactEditor.surfaces.registerBlockSlot({
+      const controls = editorRuntime.surfaces.registerBlockSlot({
         position: "right",
         component: EmbeddingControls,
         when: ({ block }) => block.type === EMBEDDING_BLOCK_TYPE,
       });
-      const formatter = reactEditor.clipboard.registerFormatter({
+      const formatter = editorRuntime.clipboard.registerFormatter({
         id: "embedding.reference",
         matches: ({ block }) => block.type === EMBEDDING_BLOCK_TYPE,
         format: ({ block }, current) => ({ ...current, plain: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}`, markdown: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}` }),
       });
-      const paste = reactEditor.clipboard.pasteStrategies.register("paste.embedding-references", {
+      const paste = editorRuntime.clipboard.pasteStrategies.register("paste.embedding-references", {
         matches: (context) => Boolean(context.bundle?.sourceDocumentId && context.blockIdMap),
         paste: (context) => {
           const map = context.blockIdMap!;
@@ -170,8 +170,8 @@ export function embeddingExtension(): ReactEditorExtension {
             if (block.type === EMBEDDING_BLOCK_TYPE && block.props.targetDocumentId === context.bundle!.sourceDocumentId) {
               const targetId = map.get(String(block.props.targetBlockId));
               const pastedId = map.get(block.id);
-              if (targetId && pastedId) reactEditor.blocks.updateBlock(pastedId, {
-                props: { ...block.props, targetDocumentId: reactEditor.getDocument().id, targetBlockId: targetId },
+              if (targetId && pastedId) editorRuntime.blocks.updateBlock(pastedId, {
+                props: { ...block.props, targetDocumentId: editorRuntime.getDocument().id, targetBlockId: targetId },
               });
             }
             visit(block.children);

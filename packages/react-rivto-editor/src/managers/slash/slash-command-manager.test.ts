@@ -6,8 +6,8 @@ describe("ReactSlashCommandManager", () => {
   test("owns storage, execution, revision, and disposal", async () => {
     const editor = await createEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph" }).id;
-    const reactEditor = createReactEditor({ editor });
-    const manager = reactEditor.slashCommands;
+    const editorView = createReactEditor({ editor });
+    const manager = editorView.slashCommands;
     let executed = false;
     const revision = manager.revision;
     const dispose = manager.register({
@@ -24,15 +24,15 @@ describe("ReactSlashCommandManager", () => {
     expect(manager.delete("test.command")).toBe(false);
     dispose();
     expect(manager.getAll({ blockId }).map(({ id }) => id)).not.toContain("test.command");
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("validates registrations and command availability", async () => {
     const editor = await createEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph" }).id;
-    const reactEditor = createReactEditor({ editor });
-    const manager = reactEditor.slashCommands;
+    const editorView = createReactEditor({ editor });
+    const manager = editorView.slashCommands;
     expect(() => manager.register({ id: "", title: "Missing", execute() {} })).toThrow("ID");
     expect(() => manager.register({ id: "missing", title: "", execute() {} })).toThrow("title");
     manager.register({
@@ -45,7 +45,7 @@ describe("ReactSlashCommandManager", () => {
     expect(manager.getAll({ blockId: "other" })).toEqual([]);
     expect(() => manager.execute("conditional", { blockId: "other" })).toThrow("unavailable");
     expect(() => manager.execute("unknown", { blockId })).toThrow("Unknown");
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 });

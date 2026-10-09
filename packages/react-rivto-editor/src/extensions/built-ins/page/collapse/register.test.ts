@@ -1,7 +1,7 @@
 import { DocumentStorage } from "@chulane/document-model";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { createCaretSelection } from "@chulane/rivto";
-import { createReactEditor } from "../../../../react-editor";
+import { createEditorRuntime } from "../../../../editor-runtime";
 import { createTestMultiEditor } from "../../../../test-utils";
 import { registerCollapse } from "./register";
 

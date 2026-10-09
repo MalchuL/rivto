@@ -1,13 +1,12 @@
 import { ClipboardManager as CoreClipboardManager, BLOCK_PASTE_STRATEGY_ID, TEXT_PASTE_STRATEGY_ID, PRESERVE_NEWLINES_PASTE_STRATEGY_ID } from "@chulane/rivto";
-import type { ReactEditorView, ClipboardCapability } from "../../capabilities";
-import type { ReactEditor } from "../../types";
+import type { EditorViewApi } from "../../types";
 import type {
   PasteStrategy,
   EditorBlock,
   EditorBlockInput,
   RivtoEditorApi,
 } from "@chulane/rivto";
-import type { ReactEditorImpl } from "../../react-editor";
+import type { EditorRuntime } from "../../editor-runtime";
 
 /** Portable text representations produced for one block forest. */
 export interface PortableBlockFormats {
@@ -58,7 +57,7 @@ const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (charact
 /** Optional view binding for paste algorithms that depend on a rendered surface. */
 export interface ViewPasteStrategy extends PasteStrategy {
   /** Returns an algorithm bound to the receiving occurrence, without changing registrations. */
-  createViewStrategy(reactEditor: ReactEditor): PasteStrategy;
+  createViewStrategy(editorView: EditorViewApi): PasteStrategy;
 }
 
 /** Ordered React-owned portable clipboard contributions. */
@@ -69,38 +68,13 @@ export class ClipboardManager {
   /**
    * Creates the React-owned formatter and parser registry.
    *
-   * @param reactEditor - Owning React runtime providing extension lifecycle.
+   * @param editorRuntime - Owning React runtime providing extension lifecycle.
    * @param editor - Core runtime providing clipboard operations.
    */
   constructor(
-    private readonly reactEditor: ReactEditorImpl,
+    private readonly editorRuntime: EditorRuntime,
     private readonly editor: RivtoEditorApi,
   ) {}
-
-  /** Binds clipboard operations to a view; parsers and formatters stay document-owned. */
-  createViewApi(reactEditor: ReactEditorView): ClipboardCapability {
-    return {
-      createViewApi: (view) => this.createViewApi(view),
-      pasteStrategies: this.pasteStrategies,
-      copy: (selection) => {
-        const current = selection ?? reactEditor.selection.get();
-        return current ? this.copy(current) : undefined;
-      },
-      copyText: (selection) => this.copyText(selection),
-      cut: () => {
-        const selection = reactEditor.selection.get();
-        if (!selection) return;
-        const bundle = this.copy(selection);
-        if (bundle) reactEditor.selection.delete();
-        return bundle;
-      },
-      paste: (input) => this.paste(input, reactEditor),
-      registerFormatter: (formatter) => this.registerFormatter(formatter),
-      registerParser: (parser) => this.registerParser(parser),
-      format: (blocks) => this.format(blocks),
-      parse: (data) => this.parse(data),
-    };
-  }
 
   /** Core paste strategies extended by React clipboard integrations. */
   get pasteStrategies(): CoreClipboardManager["pasteStrategies"] { return this.editor.clipboard.pasteStrategies; }
@@ -119,7 +93,8 @@ export class ClipboardManager {
   cut(): ReturnType<CoreClipboardManager["cut"]> { return this.editor.clipboard.cut(); }
 
   /** Pastes structured or plain clipboard data. */
-  paste(input: Parameters<CoreClipboardManager["paste"]>[0] = {}, reactEditor: ReactEditor = this.reactEditor.events.getDocumentView() ?? this.reactEditor): ReturnType<CoreClipboardManager["paste"]> {
+  paste(input: Parameters<CoreClipboardManager["paste"]>[0], editorView: EditorViewApi): ReturnType<CoreClipboardManager["paste"]> {
+    input ??= {};
     // A local pipeline retains the destination even if a strategy invokes another paste.
     const clipboard = new CoreClipboardManager(this.editor);
     for (const id of [BLOCK_PASTE_STRATEGY_ID, TEXT_PASTE_STRATEGY_ID, PRESERVE_NEWLINES_PASTE_STRATEGY_ID]) {
@@ -127,10 +102,10 @@ export class ClipboardManager {
     }
     this.pasteStrategies.getPasteStrategies().forEach((strategy, index) => {
       const bind = (strategy as Partial<ViewPasteStrategy>).createViewStrategy;
-      clipboard.pasteStrategies.register(String(index), bind ? bind.call(strategy, reactEditor) : strategy);
+      clipboard.pasteStrategies.register(String(index), bind ? bind.call(strategy, editorView) : strategy);
     });
     // An inactive view has no caret; undefined would make core borrow another view's selection.
-    const selection = input.textTarget ?? reactEditor.selection.get() ?? { type: "selection" as const, blocks: [], elements: [] };
+    const selection = input.textTarget ?? editorView.selection.get() ?? { type: "selection" as const, blocks: [], elements: [] };
     return clipboard.paste({ ...input, textTarget: selection });
   }
 
@@ -146,7 +121,7 @@ export class ClipboardManager {
       throw new Error(`Clipboard formatter ${formatter.id || "<empty>"} is already registered`);
     }
     this.formatters.push(formatter);
-    return this.reactEditor.extensions.own(() => {
+    return this.editorRuntime.extensions.own(() => {
       const index = this.formatters.indexOf(formatter);
       if (index >= 0) this.formatters.splice(index, 1);
     });
@@ -164,7 +139,7 @@ export class ClipboardManager {
       throw new Error(`Clipboard parser ${parser.id || "<empty>"} is already registered`);
     }
     this.parsers.push(parser);
-    return this.reactEditor.extensions.own(() => {
+    return this.editorRuntime.extensions.own(() => {
       const index = this.parsers.indexOf(parser);
       if (index >= 0) this.parsers.splice(index, 1);
     });

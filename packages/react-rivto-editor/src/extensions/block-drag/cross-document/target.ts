@@ -40,7 +40,7 @@ export function findCrossDocumentPageController(
     if (!parent) break;
     // A subtree view's padding is outside its displayed block. Measuring the
     // whole surface leaves that padding targeting the embedded document.
-    const subtree = crossDocumentPageRootControllers.get(pageRoot)?.reactEditor.rootBlockId
+    const subtree = crossDocumentPageRootControllers.get(pageRoot)?.editorView.rootBlockId
       ? pageRoot.querySelector<HTMLElement>(":scope > [data-block-id]") : null;
     const rect = (subtree ?? pageRoot).getBoundingClientRect();
     const edge = Math.min(Math.max(0, outerEdgeDropZone), rect.height / 3);

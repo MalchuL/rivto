@@ -1,3 +1,6 @@
+import type { DocumentViewScope } from "./managers/events/document-view";
+import type { EditorRuntime } from "./editor-runtime";
+import type { ReactSelectionManager } from "./managers/selection/selection-manager";
 import type { BlockElementProjection } from "./elements/block-element-projection";
 import type {
   CommandRegistryApi,
@@ -21,7 +24,6 @@ import type {
   ExtensionsCapability,
   KeyboardCapability,
   RenderersCapability,
-  SelectionCapability,
   SlashCommandsCapability,
   SurfacesCapability,
   ViewsCapability,
@@ -40,7 +42,7 @@ export interface MarkdownLinkClick {
 }
 
 /** Creation options for the React presentation runtime. */
-export interface CreateReactEditorOptions {
+export interface CreateEditorRuntimeOptions {
   /** Existing fixed document editor; the caller or EditorStorage owns its destruction. */
   readonly editor: RivtoEditorApi;
   /** Functional extensions installed synchronously in declaration order. */
@@ -56,19 +58,23 @@ export interface CreateReactEditorOptions {
  *
  * Managers are public extension boundaries. Extensions register directly through
  * `blocks`, `renderers`, `views`, `surfaces`, `extensions`, `events`, `keyboard`,
- * `selection`, and `slashCommands`; ReactEditor deliberately exposes no
+ * `selection`, and `slashCommands`; EditorViewApi deliberately exposes no
  * forwarding registry methods or mutable collections.
  *
  * Writing-block factories are installed by `defaultWritingBlockExtension`
  * (or a host equivalent) via {@link installDefaultWriting}.
  */
-export interface ReactEditor {
+export interface EditorViewApi {
+  /** Shared document infrastructure; this occurrence never destroys it. */
+  readonly runtime: EditorRuntime;
+  /** Stable occurrence identity, root, and registration ownership. */
+  readonly view: DocumentViewScope;
   /** Core first-class element operations. */
   readonly elements: ElementManagerApi;
   /** Shared block-card projection and defaults for this document. */
   readonly blockElements: Pick<BlockElementProjection, "reconcile" | "schedule" | "setDefaultWidth" | "setOverlapAvoidance">;
   /** Document identity exposed on a scoped view; getDocument always returns this editor's model. */
-  readonly documentId?: string;
+  readonly documentId: string;
   /**
    * Root block of the displayed subtree, including the block and its descendants.
    * Used to show a subtree in views such as embeddings; undefined shows the full document.
@@ -120,7 +126,7 @@ export interface ReactEditor {
   readonly events: EventsCapability;
   /** Semantic keyboard actions and runtime shortcut overrides. */
   readonly keyboard: KeyboardCapability;
-  readonly selection: SelectionCapability;
+  readonly selection: ReactSelectionManager;
   readonly slashCommands: SlashCommandsCapability;
   /** Subscribes to this document, its local mode, and core definitions; selection has its own stream. */
   subscribe(listener: () => void): () => void;
@@ -130,3 +136,18 @@ export interface ReactEditor {
   getDocument(): DocumentModel;
   destroy(): void;
 }
+
+/**
+ * Document managers and registrations shared by EditorRuntime and EditorViewApi.
+ *
+ * Use this contract for operations independent of a mounted occurrence. DOM
+ * events, selection, clipboard/slash execution, and destruction have different
+ * contracts on runtime and view and are deliberately excluded.
+ */
+export type SharedEditorApi = Pick<EditorViewApi,
+  | "blocks" | "elements" | "history" | "commands" | "mode"
+  | "blockTypes" | "blockListProps" | "blockElements"
+  | "renderers" | "views" | "surfaces" | "extensions"
+  | "createDefaultBlock" | "isEmptyBlock" | "installDefaultWriting"
+  | "revision" | "subscribe" | "getDocument"
+>;

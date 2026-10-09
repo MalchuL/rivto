@@ -1,4 +1,5 @@
-import type { ReactEditor } from "../../../types";
+import type { EditorRuntime } from "../../../editor-runtime";
+import type { EditorViewApi } from "../../../types";
 import { KEYBOARD_BINDING_IDS } from "../../../managers";
 
 /** One document-history action recognized from a browser editing event. */
@@ -36,12 +37,12 @@ function inputHistoryAction(event: InputEvent): HistoryAction | undefined {
  * text selections are rebuilt from block-relative offsets, while structural or
  * empty selections focus the registered surface root and clear native ranges.
  *
- * Register the extension once during `createReactEditor`. Its listeners are scoped to the
+ * Register the extension once during `createEditorRuntime`. Its listeners are scoped to the
  * active surface root and automatically removed by `useDOMEvent`.
  *
  * @example
  * ```tsx
- * <EditorView reactEditor={reactEditor} documentId={documentId}>
+ * <EditorView runtime={editorRuntime} documentId={documentId}>
  *   <HistoryPlugin />
  *   <PageSurface />
  * </EditorView>
@@ -55,48 +56,48 @@ export interface HistoryExtensionOptions {
 }
 
 export function registerHistory(
-  reactEditor: ReactEditor,
+  editorRuntime: EditorRuntime,
   options: HistoryExtensionOptions = {},
 ): void {
   /** Executes one history step and restores focus after React renders it. */
-  const run = (reactEditor: ReactEditor, root: HTMLElement, action: HistoryAction): void => {
+  const run = (editorView: EditorViewApi, root: HTMLElement, action: HistoryAction): void => {
     if (!root) return;
-    reactEditor.history[action]();
+    editorView.history[action]();
     // Only restore selection and its focus here; undo/redo has already changed the document.
-    reactEditor.selection.scheduleIfSelectionUnchanged(() => {
-      if (reactEditor.selection.restoreDOM()) return;
+    editorView.selection.scheduleIfSelectionUnchanged(() => {
+      if (editorView.selection.restoreDOM()) return;
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });
     });
   };
 
-  reactEditor.keyboard.register({
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.historyUndo,
     keys: options.undoKeys ?? ["Primary+z"],
     composing: "prevent",
-  }, ({ reactEditor, root }) => {
-    run(reactEditor, root, "undo");
+  }, ({ editorView, root }) => {
+    run(editorView, root, "undo");
     return true;
   });
 
-  reactEditor.keyboard.register({
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.historyRedo,
     keys: options.redoKeys ?? ["Primary+Shift+z", "Primary+y"],
     composing: "prevent",
-  }, ({ reactEditor, root }) => {
-    run(reactEditor, root, "redo");
+  }, ({ editorView, root }) => {
+    run(editorView, root, "redo");
     return true;
   });
 
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "history.before-input",
     type: "beforeinput",
     scope: "surface",
-  }, ({ reactEditor, raw: event, root }) => {
+  }, ({ editorView, raw: event, root }) => {
     const action = inputHistoryAction(event);
     if (!action) return false;
 
-    if (!event.isComposing) run(reactEditor, root, action);
+    if (!event.isComposing) run(editorView, root, action);
     return true;
   });
 }

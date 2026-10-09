@@ -2,11 +2,11 @@
 
 ## `EventManager`
 
-`reactEditor.events` держит один delegated transport на active surface realm вместо listener на каждом block.
+`runtime.events` владеет общим delegated transport и маршрутизирует события к зарегистрированным отображениям. `editor.events` — локальный ViewEventManager: он использует root и cleanup своего отображения.
 
 ### Properties
 
-Public properties отсутствуют. Private state: ordered registrations, connected native listener groups, current `root` и claimed native events.
+Public properties отсутствуют. Private state: ordered registrations, connected native listener groups, реестр корней отображений и claimed native events.
 
 ### `register(definition, listener)`
 
@@ -21,13 +21,13 @@ Handler получает `EditorEvent` со properties `raw`, `editor`, `root`, 
 ### Остальные methods
 
 - `delete(id)` принимает registration ID, возвращает `boolean`, не throws для missing ID.
-- `setRoot(root)` принимает `HTMLElement | null`, возвращает `void`, disconnects old realm и reconnects surface/document/window listeners; throws после destroy, кроме final `null` cleanup.
+- `editor.events.setRoot(root)` принимает `HTMLElement | null` и обновляет root конкретного отображения через его контроллер; общие surface/document/window listeners переподключаются через реестр. У `runtime.events` этого метода нет.
 - `getRoot()` возвращает current element или `null`.
 - `destroy()` возвращает `void`, повторно безопасен.
 
 ### Modes
 
-Registration без `mode` работает в обеих surfaces. `mode: "block"`, `"edgeless"` или array фильтруется на dispatch по актуальному core mode. При switch root заменяется, поэтому window/document listeners также переходят в realm нового surface document.
+Registration без `mode` работает в обеих surfaces. `mode: "block"`, `"edgeless"` или array фильтруется на dispatch по поверхности отображения, получившего событие. При switch root заменяется, поэтому window/document listeners также переходят в realm нового surface document.
 
 Scope означает:
 
@@ -37,7 +37,7 @@ Scope означает:
 
 ## `KeyboardManager`
 
-`reactEditor.keyboard` строит semantic actions поверх четырёх EventManager transports: surface/window × keydown/keyup.
+`editorRuntime.keyboard` строит semantic actions поверх четырёх EventManager transports: surface/window × keydown/keyup.
 
 ### Properties
 

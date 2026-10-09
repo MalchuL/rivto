@@ -21,27 +21,27 @@ import { useEffect, useState } from "react";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
 import {
-  createReactEditor, EditorStorage, EditorStorageContext, EditorView, PageSurface, standardPreset,
-  type ReactEditor,
+  createEditorRuntime, EditorStorage, EditorStorageContext, EditorView, PageSurface, standardPreset,
+  type EditorViewApi,
 } from "@chulane/rivto-react";
 import "@chulane/rivto-react/styles.css";
 
 export function DocumentEditor() {
-  const [view, setView] = useState<{ reactEditor: ReactEditor; editors: EditorStorage; releaseInitial: () => Promise<void> } | null>(null);
+  const [view, setView] = useState<{ editorRuntime: EditorViewApi; editors: EditorStorage; releaseInitial: () => Promise<void> } | null>(null);
   useEffect(() => {
     let active = true;
     const documents = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
     documents.registerDocument("document-id");
     const editors = new EditorStorage({
       openDocument: (id) => documents.openDocument(id),
-      createEditor: (editor) => createReactEditor({
+      createEditor: (editor) => createEditorRuntime({
         editor,
         extensions: [standardPreset()],
       }),
     });
     void editors.acquireEditor("document-id").then((acquisition) => {
       acquisition.editor.blocks.insertBlock({ type: "paragraph", content: "Hello **Rivto**!" });
-      if (active) setView({ reactEditor: acquisition.editor, editors, releaseInitial: acquisition.release });
+      if (active) setView({ editorRuntime: acquisition.editor, editors, releaseInitial: acquisition.release });
       else void acquisition.release();
     }).catch(console.error);
     return () => {
@@ -50,7 +50,7 @@ export function DocumentEditor() {
     };
   }, []);
   return view ? <EditorStorageContext.Provider value={view.editors}>
-    <EditorView reactEditor={view.reactEditor} onReady={view.releaseInitial}><PageSurface /></EditorView>
+    <EditorView runtime={view.editorRuntime} onReady={view.releaseInitial}><PageSurface /></EditorView>
   </EditorStorageContext.Provider> : null;
 }
 ```
@@ -60,11 +60,11 @@ export function DocumentEditor() {
 `standardPreset()` регистрирует default writing type. После создания React runtime можно вставлять blocks:
 
 ```ts
-reactEditor.blocks.insertBlock({
+editorRuntime.blocks.insertBlock({
   type: DEFAULT_WRITING_BLOCK_TYPE,
   content: "# Первый документ",
 });
-reactEditor.history.clear();
+editorRuntime.history.clear();
 ```
 
 `history.clear()` после seed/load делает начальные данные baseline.
@@ -75,14 +75,14 @@ Children `EditorView` находятся в том же context перед activ
 
 ```tsx
 function Toolbar() {
-  const reactEditor = useReactEditor();
+  const editorRuntime = useEditorView();
   return <header>
-    <button onClick={() => reactEditor.history.undo()}>Undo</button>
-    <button onClick={() => reactEditor.history.redo()}>Redo</button>
+    <button onClick={() => editorRuntime.history.undo()}>Undo</button>
+    <button onClick={() => editorRuntime.history.redo()}>Redo</button>
   </header>;
 }
 
-<EditorView reactEditor={reactEditor}><Toolbar /><PageSurface /></EditorView>
+<EditorView runtime={editorRuntime}><Toolbar /><PageSurface /></EditorView>
 ```
 
 ## Частые ошибки
@@ -91,5 +91,5 @@ function Toolbar() {
 - `standardPreset()` устанавливает writing behavior. Surface задаётся явно; canvas interaction требует `...edgelessPreset()`.
 - Без `standardPreset()` нужно самостоятельно зарегистрировать surface и writing behavior.
 - Без styles layout, selection и overlays отображаются неверно.
-- Prop `EditorView.reactEditor` принимает `ReactEditor`, а не core editor.
+- Prop `EditorView.editorRuntime` принимает `EditorViewApi`, а не core editor.
 - Cleanup идёт в порядке React runtime → core runtime → providers/CRDT.

@@ -7,8 +7,10 @@
  *
  * @module
  */
-import type { BlockManager, EditorBlock, EditorBlockNode, EditorElement } from "@chulane/rivto";
-import type { ReactEditor } from "../types";
+import type { EditorBlock, EditorBlockNode, EditorElement } from "@chulane/rivto";
+import type { BlocksCapability } from "../capabilities";
+import type { SharedEditorApi } from "../types";
+import type { EditorRuntime } from "../editor-runtime";
 
 export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
 export const EDGELESS_BLOCK_ELEMENT_ID_PREFIX = "rivto:block-element:";
@@ -202,9 +204,14 @@ export function blockIdsOf(element: EditorElement, rootIds: readonly string[]): 
  *
  * Card move hit-testing must accept nested/indented blocks; {@link blockIdsOf}
  * alone only lists roots and would reject every child hit.
+ * @param blocks - Document block manager used to follow parent IDs.
+ * @param element - Card whose root range defines the contained subtrees.
+ * @param rootIds - Ordered document roots used to resolve the card's range.
+ * @param blockId - Block to locate in those subtrees.
+ * @returns Whether the block is a card root or one of its descendants.
  */
 export function elementContainsBlock(
-  editor: { readonly blocks: Pick<BlockManager, "getParentId"> },
+  blocks: BlocksCapability,
   element: EditorElement,
   rootIds: readonly string[],
   blockId: string,
@@ -217,7 +224,7 @@ export function elementContainsBlock(
       contains = true;
       break;
     }
-    id = editor.blocks.getParentId(id);
+    id = blocks.getParentId(id);
   }
   return contains;
 }
@@ -232,15 +239,15 @@ export function blockRangeProps(blockIds: readonly string[]): BlockElementProps 
  * Inserts the default plugin-registered boundary after one root block.
  * Automatic edgeless workflows use this instead of knowing a persisted type.
  *
- * @param reactEditor - Runtime whose first separator registration is preferred.
+ * @param editor - Document API whose first separator registration is preferred.
  * @param afterId - Root block after which the separator is inserted.
  * @returns Complete inserted separator block.
  * @throws When the active preset provides no separator block plugin.
  */
-export function insertBlockElementSeparator(reactEditor: ReactEditor, afterId: string): EditorBlock {
-  const type = reactEditor.blockTypes.getDefaultBlockElementSeparatorType();
+export function insertBlockElementSeparator(editor: SharedEditorApi, afterId: string): EditorBlock {
+  const type = editor.blockTypes.getDefaultBlockElementSeparatorType();
   if (!type) throw new Error("No block element separator type is registered");
-  return reactEditor.blocks.insertBlock({ type, content: "" }, afterId);
+  return editor.blocks.insertBlock({ type, content: "" }, afterId);
 }
 
 /** Owns the document's block-card projection, settings, and deferred reconciliation. */
@@ -254,8 +261,8 @@ export class BlockElementProjection {
   private queued = false;
   private destroyed = false;
 
-  /** @param reactEditor - Document runtime whose roots and cards stay consistent. */
-  constructor(private readonly reactEditor: ReactEditor) {}
+  /** @param editorRuntime - Document runtime whose roots and cards stay consistent. */
+  constructor(private readonly editorRuntime: EditorRuntime) {}
 
   /**
    * Configures whether future reconciled block cards avoid existing cards.
@@ -305,17 +312,17 @@ export class BlockElementProjection {
    */
   reconcile(): void {
     if (this.destroyed) return;
-    const reactEditor = this.reactEditor;
+    const editorRuntime = this.editorRuntime;
 
     // Build the two sides of the projection: current document roots and the
     // persisted canvas elements that render ranges of those roots as cards.
-    const roots = reactEditor.blocks.getRootIds().flatMap((id) => {
-      const node = reactEditor.blocks.getBlockNode(id);
+    const roots = editorRuntime.blocks.getRootIds().flatMap((id) => {
+      const node = editorRuntime.blocks.getBlockNode(id);
       return node ? [node] : [];
     });
     const rootOrder = roots.map((block) => block.id);
     const rootSet = new Set(rootOrder);
-    const existing = reactEditor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
+    const existing = editorRuntime.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
     const currentRanges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
 
     // A moved range endpoint can temporarily make its persisted start/end pair
@@ -332,7 +339,7 @@ export class BlockElementProjection {
     const segments: EditorBlockNode[][] = [];
     let segment: EditorBlockNode[] = [];
     roots.forEach((block) => {
-      if (reactEditor.blockTypes.separatesBlockElements(block.type)) {
+      if (editorRuntime.blockTypes.separatesBlockElements(block.type)) {
         if (segment.length) segments.push(segment);
         segment = [];
       } else segment.push(block);
@@ -404,9 +411,9 @@ export class BlockElementProjection {
     // limited to range boundaries so reconciliation never resets card geometry.
     const desiredIds = new Set(desired.map((element) => element.id));
     const remove = existing.filter((element) => !desiredIds.has(element.id)).map((element) => element.id);
-    const insert = desired.filter((element) => !reactEditor.elements.hasElement(element.id));
+    const insert = desired.filter((element) => !editorRuntime.elements.hasElement(element.id));
     const update = desired.flatMap((element) => {
-      const current = reactEditor.elements.getElement(element.id);
+      const current = editorRuntime.elements.getElement(element.id);
       return current && (current.props.startBlockId !== element.props.startBlockId || current.props.endBlockId !== element.props.endBlockId)
         ? [{ id: element.id, patch: { props: element.props } }]
         : [];
@@ -421,10 +428,10 @@ export class BlockElementProjection {
     this.memberships = desiredMemberships;
     if (!remove.length && !insert.length && !update.length) return;
 
-    reactEditor.history.batchUpdatesWithoutHistory(() => {
-      if (remove.length) reactEditor.elements.removeElements(remove);
-      insert.forEach((element) => reactEditor.elements.insertElement(element));
-      if (update.length) reactEditor.elements.updateElements(update);
+    editorRuntime.history.batchUpdatesWithoutHistory(() => {
+      if (remove.length) editorRuntime.elements.removeElements(remove);
+      insert.forEach((element) => editorRuntime.elements.insertElement(element));
+      if (update.length) editorRuntime.elements.updateElements(update);
     });
   }
 }

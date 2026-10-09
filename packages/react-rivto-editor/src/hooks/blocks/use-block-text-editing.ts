@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, type HTMLAttributes, type RefObject } from "react";
 import { BLOCK_CONTENT_ATTRIBUTE, BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../constants";
-import { useReactEditor } from "../editor/use-editor";
+import { useEditorView } from "../editor/use-editor-view";
 import { BlockEditingController } from "./block-editing-controller";
 import { useRestoreBlockFocus, type BlockSelectionAnchorAttributes } from "./use-block-selection-anchor";
 
@@ -33,10 +33,10 @@ export interface BlockTextEditingAttributes extends BlockSelectionAnchorAttribut
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockTextEditing(blockId: string, content: string | undefined): BlockTextEditingAttributes {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const setContent = useCallback((value: string) => {
-    reactEditor.blocks.updateBlock(blockId, { content: value });
-  }, [reactEditor, blockId]);
+    editorView.blocks.updateBlock(blockId, { content: value });
+  }, [editorView, blockId]);
   const controller = useMemo(() => new BlockEditingController(setContent), [setContent]);
   // Reconcile command-driven or remote content without treating the detached
   // block snapshot as mutable React state. Run after each commit so replacing

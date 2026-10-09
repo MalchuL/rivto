@@ -8,7 +8,7 @@ import { dispatchViewAction } from "../../views/dispatch";
  *
  * @module
  */
-import type { ReactEditorImpl } from "../../react-editor";
+import type { EditorRuntime } from "../../editor-runtime";
 import { BaseBlockView } from "../../views/base-view";
 import type { EditorBlock } from "@chulane/rivto";
 import type { BlockDropDestination, BlockViewAction, BlockViewBehavior } from "../../views/types";
@@ -29,9 +29,9 @@ export class ViewManager implements ViewsCapability {
   /**
    * Creates a view registry bound to one React runtime.
    *
-   * @param reactEditor - Owning React runtime providing blocks and extension lifecycle.
+   * @param editorRuntime - Owning React runtime providing blocks and extension lifecycle.
    */
-  constructor(private readonly reactEditor: ReactEditorImpl) {}
+  constructor(private readonly editorRuntime: EditorRuntime) {}
 
   /**
    * Registers one behavior object for a unique non-empty block type.
@@ -41,7 +41,7 @@ export class ViewManager implements ViewsCapability {
    * @returns Idempotent disposer removing this exact view.
    */
   register(type: string, view: BlockViewBehavior): () => void {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     if (!type.trim()) throw new Error("Block view type is required");
     if (this.views.has(type)) throw new Error(`Block view ${type} is already registered`);
     const registration: {
@@ -52,7 +52,7 @@ export class ViewManager implements ViewsCapability {
       dispose: () => undefined,
     };
     this.views.set(type, registration);
-    registration.dispose = this.reactEditor.extensions.own(() => {
+    registration.dispose = this.editorRuntime.extensions.own(() => {
       if (this.views.get(type) !== registration) return;
       this.views.delete(type);
     });
@@ -66,7 +66,7 @@ export class ViewManager implements ViewsCapability {
    * @returns `true` when a view existed and was disposed.
    */
   delete(type: string): boolean {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     const registration = this.views.get(type);
     if (!registration) return false;
     registration.dispose();
@@ -102,7 +102,7 @@ export class ViewManager implements ViewsCapability {
    * @returns A specialized view or the shared generic fallback.
    */
   resolve(blockId: string): BlockViewBehavior {
-    const type = this.reactEditor.blocks.getBlockNode(blockId)?.type;
+    const type = this.editorRuntime.blocks.getBlockNode(blockId)?.type;
     return (type && this.views.get(type)?.view) || this.fallback;
   }
 
@@ -130,7 +130,7 @@ export class ViewManager implements ViewsCapability {
    */
   acceptsDrop(destination: BlockDropDestination, sources: readonly EditorBlock[]): boolean {
     const parent = destination.parentId
-      ? this.reactEditor.blocks.getBlock(destination.parentId)
+      ? this.editorRuntime.blocks.getBlock(destination.parentId)
       : undefined;
     if (destination.parentId && !parent) return false;
     const view = parent ? this.resolve(parent.id) : this.fallback;
@@ -138,7 +138,7 @@ export class ViewManager implements ViewsCapability {
       const sourceView = this.get(source.type) ?? this.fallback;
       return (!view.dropChildTypes || view.dropChildTypes.includes(source.type))
         && (!sourceView.dropParentTypes || Boolean(parent && sourceView.dropParentTypes.includes(parent.type)));
-    }) && view.acceptsDrop({ reactEditor: this.reactEditor, destination, sources });
+    }) && view.acceptsDrop({ editor: this.editorRuntime, destination, sources });
   }
 
   /** Shared generic view used when a type registers no specialization. */

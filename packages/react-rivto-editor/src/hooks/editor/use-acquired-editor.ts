@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import type { EditorStorage } from "../../editor-storage";
-import type { ReactEditor } from "../../types";
+import type { EditorRuntime } from "../../editor-runtime";
 
 /** Result of retaining a source editor for a mounted React consumer. */
 interface AcquiredEditor {
-  readonly editor?: ReactEditor;
+  readonly editor?: EditorRuntime;
   readonly error?: unknown;
 }
 

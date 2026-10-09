@@ -2,7 +2,7 @@ import { useLayoutEffect, type RefObject } from "react";
 import { isCaretSelection, resolveBlockRange } from "@chulane/rivto";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../constants";
 import { restoreDOMSelection } from "../../managers";
-import { useReactEditor } from "../editor/use-editor";
+import { useEditorView } from "../editor/use-editor-view";
 
 /** Props spread onto any renderer region from which selection may begin. */
 export interface BlockSelectionAnchorAttributes {
@@ -26,13 +26,13 @@ const selectionAnchorAttributes: BlockSelectionAnchorAttributes = { [BLOCK_SELEC
  * @returns Nothing; layout cleanup cancels stale queued focus restoration.
  */
 export function useRestoreBlockFocus(blockId: string, elementRef?: RefObject<HTMLDivElement | null>): void {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   /** Restores a pending command's caret after commit; cleanup cancels stale work. */
   useLayoutEffect(() => {
     const textEdit = elementRef !== undefined;
-    const element = elementRef ? elementRef.current : reactEditor.events.getRoot();
-    if (!element || !reactEditor.selection.hasPendingSelectionCallback) return;
-    const selection = reactEditor.selection.snapshot();
+    const element = elementRef ? elementRef.current : editorView.events.getRoot();
+    if (!element || !editorView.selection.hasPendingSelectionCallback) return;
+    const selection = editorView.selection.snapshot();
     if (selection?.focusBlockId !== blockId || !isCaretSelection(selection)) return;
 
     // A structural command remounts the focused editable before its scheduled
@@ -46,8 +46,8 @@ export function useRestoreBlockFocus(blockId: string, elementRef?: RefObject<HTM
     // Focusing inside the commit forces layout while React is still updating
     // sibling blocks. A newer selection or an unmount invalidates this work.
     queueMicrotask(() => {
-      if (!mounted || !element.isConnected || !reactEditor.selection.hasPendingSelectionCallback ||
-        reactEditor.selection.snapshot() !== selection) return;
+      if (!mounted || !element.isConnected || !editorView.selection.hasPendingSelectionCallback ||
+        editorView.selection.snapshot() !== selection) return;
       element.focus({ preventScroll: true });
       if (textEdit) {
         const range = selection.blocks[0]!;
@@ -58,7 +58,7 @@ export function useRestoreBlockFocus(blockId: string, elementRef?: RefObject<HTM
       }
     });
     return () => { mounted = false; };
-  }, [reactEditor, blockId, elementRef]);
+  }, [editorView, blockId, elementRef]);
 }
 
 /**

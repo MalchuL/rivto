@@ -1,8 +1,7 @@
 import type { DocumentViewScope } from "./document-view";
 import type { EditorMode } from "@chulane/rivto";
-import type { ReactEditorView, KeyboardCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
-import type { ReactEditorImpl } from "../../react-editor";
+import type { EditorRuntime } from "../../editor-runtime";
 import type { EditorEvent } from "./editor-event";
 import { modeMatches, scopeMatches } from "./event-manager";
 import { KeyboardEditorEvent } from "./keyboard-editor-event";
@@ -35,7 +34,7 @@ type KeyboardDOMEvent =
   | EditorEvent<"window", "keyup">;
 
 /** Owns semantic keyboard bindings while EventManager owns native transport. */
-export class KeyboardManager implements KeyboardCapability {
+export class KeyboardManager {
   private readonly registrations: KeyboardRegistration[] = [];
   private readonly registrationIds = new Set<string>();
   private readonly registrationDisposers = new Map<string, () => void>();
@@ -48,31 +47,31 @@ export class KeyboardManager implements KeyboardCapability {
   /**
    * Creates keyboard transport before extensions register DOM or keyboard behavior.
    *
-   * @param reactEditor - Owning React runtime providing events and extensions.
+   * @param editorRuntime - Owning React runtime providing events and extensions.
    * @param keymap - Initial semantic binding overrides.
    */
   constructor(
-    private readonly reactEditor: ReactEditorImpl,
+    private readonly editorRuntime: EditorRuntime,
     keymap: KeymapOverrides = {},
   ) {
     this.keymap = cloneKeymap(keymap);
     validateKeymap(this.keymap);
     this.publish();
     this.transportDisposers = [
-      reactEditor.events.register<"surface", "keydown">({
+      editorRuntime.events.register<"surface", "keydown">({
         id: "rivto.keyboard.surface.keydown",
         type: "keydown",
       }, (event) => this.dispatch(event, "keydown")),
-      reactEditor.events.register<"surface", "keyup">({
+      editorRuntime.events.register<"surface", "keyup">({
         id: "rivto.keyboard.surface.keyup",
         type: "keyup",
       }, (event) => this.dispatch(event, "keyup")),
-      reactEditor.events.register<"window", "keydown">({
+      editorRuntime.events.register<"window", "keydown">({
         id: "rivto.keyboard.window.keydown",
         type: "keydown",
         target: "window",
       }, (event) => this.dispatch(event, "keydown")),
-      reactEditor.events.register<"window", "keyup">({
+      editorRuntime.events.register<"window", "keyup">({
         id: "rivto.keyboard.window.keyup",
         type: "keyup",
         target: "window",
@@ -80,25 +79,6 @@ export class KeyboardManager implements KeyboardCapability {
     ];
   }
 
-  /**
-   * Binds registrations to a view while keeping keymap settings shared by the document.
-   * @param reactEditor - View editor whose occurrence owns registration IDs and cleanup.
-   * @returns Local registration methods and explicitly delegated shared keymap methods.
-   */
-  createViewApi(reactEditor: ReactEditorView): KeyboardCapability {
-    const owner = reactEditor.view;
-    const revision = () => this.revision;
-    return {
-      createViewApi: (view) => this.createViewApi(view),
-      register: (definition, listener) => owner.own(this.register(definition, listener, owner)),
-      delete: (id) => this.delete(`${owner.id}:${id}`),
-      list: () => this.list(),
-      get revision() { return revision(); },
-      subscribe: (listener) => this.subscribe(listener),
-      replaceKeymap: (keymap) => this.replaceKeymap(keymap),
-      setKeymapOverride: (id, keys) => this.setKeymapOverride(id, keys),
-    };
-  }
 
   /**
    * Registers one semantic keyboard action in declaration order.
@@ -137,7 +117,7 @@ export class KeyboardManager implements KeyboardCapability {
 
     let active = true;
     let dispose: () => void = () => undefined;
-    dispose = this.reactEditor.extensions.own(() => {
+    dispose = this.editorRuntime.extensions.own(() => {
       if (!active) return;
       active = false;
       const index = this.registrations.indexOf(registration);
@@ -313,7 +293,7 @@ export class KeyboardManager implements KeyboardCapability {
     const raw = domEvent.raw;
     const event = new KeyboardEditorEvent({
       raw,
-      reactEditor: domEvent.reactEditor,
+      editorView: domEvent.editorView,
       root: domEvent.root,
       mode: domEvent.mode,
       selection: domEvent.selection,
@@ -355,7 +335,7 @@ export class KeyboardManager implements KeyboardCapability {
 
   private assertActive(): void {
     if (this.destroyed) throw new Error("Keyboard runtime is destroyed");
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
   }
 }
 

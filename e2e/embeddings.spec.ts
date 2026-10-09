@@ -4,12 +4,12 @@ interface DemoInspection {
   storage: import("@chulane/document-model").DocumentStorage;
   editor: import("@chulane/rivto-react").EditorStorage;
   registry: import("@chulane/crdt-doc").YjsDocumentRegistry;
-  panes: Set<{ id: string; reactEditor: import("@chulane/rivto-react").ReactEditor }>;
+  panes: Set<{ id: string; editorRuntime: import("@chulane/rivto-react").EditorRuntime }>;
 }
 
 interface JournalInspection {
   editor: import("@chulane/rivto").RivtoEditorApi;
-  reactEditor: import("@chulane/rivto-react").ReactEditor;
+  editorRuntime: import("@chulane/rivto-react").EditorRuntime;
 }
 
 for (const repeat of [0, 200]) {
@@ -98,8 +98,8 @@ for (const repeat of [0, 200]) {
       await content.hover();
       expect(await readSelection()).toEqual(selected);
       expect(await page.evaluate(() => {
-        const { reactEditor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-        return reactEditor.events.getRoot()?.getAttribute("role");
+        const { editorRuntime } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+        return editorRuntime.events.getRoot()?.getAttribute("role");
       })).toBe("region");
       await content.click();
       await content.press("End");
@@ -601,12 +601,12 @@ test("edits source through shared-runtime embeds, survives source pane closure, 
   await page.evaluate((id) => {
     const inspection = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
     const pane = [...inspection.panes].find((entry) => entry.id === "source")!;
-    pane.reactEditor.history.batchUpdates(() => pane.reactEditor.blocks.removeBlock(id));
+    pane.editorRuntime.history.batchUpdates(() => pane.editorRuntime.blocks.removeBlock(id));
   }, target);
   await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(2);
   await page.evaluate(() => {
     const inspection = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    [...inspection.panes].find((entry) => entry.id === "source")!.reactEditor.history.undo();
+    [...inspection.panes].find((entry) => entry.id === "source")!.editorRuntime.history.undo();
   });
   await expect(embeds).toHaveCount(2);
   await expect(embeds.first().locator('[data-block-content]').first()).toHaveText("Source has no pane");
@@ -617,7 +617,7 @@ test("references follow the same block into a new document identity without pers
   const target = `${room}:source-block`;
   await page.evaluate(async (blockId) => {
     const { editor, panes } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    const source = [...panes].find((pane) => pane.id === "source")!.reactEditor;
+    const source = [...panes].find((pane) => pane.id === "source")!.editorRuntime;
     const snapshot = source.blocks.getBlock(blockId)!;
     const inspection = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
     inspection.storage.registerDocument("new-source");
@@ -643,7 +643,7 @@ test("references follow the same block into a new document identity without pers
   await expect(content).toHaveText("Moved source edit");
   const props = await page.evaluate(() => {
     const { panes } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    return [...panes].find((pane) => pane.id === "references")!.reactEditor.blocks.getBlocks().filter((block) => block.type === "embedding").map((block) => block.props);
+    return [...panes].find((pane) => pane.id === "references")!.editorRuntime.blocks.getBlocks().filter((block) => block.type === "embedding").map((block) => block.props);
   });
   expect(props).toEqual([{ targetDocumentId: "source", targetBlockId: target }, { targetDocumentId: "source", targetBlockId: target }]);
 });
@@ -652,7 +652,7 @@ test("shared keyboard handling creates source siblings without expanding the ref
   await openDemo(page);
   await page.evaluate(() => {
     const panes = [...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes];
-    const source = panes.find((pane) => pane.id === "source")!.reactEditor;
+    const source = panes.find((pane) => pane.id === "source")!.editorRuntime;
     const root = source.blocks.getRootIds()[0]!;
     source.history.batchUpdates(() => source.blocks.getBlockNode(root)!.childIds.forEach((id) => source.blocks.removeBlock(id)));
   });
@@ -661,18 +661,18 @@ test("shared keyboard handling creates source siblings without expanding the ref
   await content.click(); await content.press("End");
   await expect.poll(() => page.evaluate(() => {
     const { panes } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    return [...panes].find((pane) => pane.id === "source")!.reactEditor.selection.get()?.blocks[0]?.id;
+    return [...panes].find((pane) => pane.id === "source")!.editorRuntime.selection.get()?.blocks[0]?.id;
   })).toContain(":source-block");
   await content.press("Enter");
   await expect(first.locator('[data-block-id]')).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => {
     const panes = [...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes];
-    return panes.find((pane) => pane.id === "source")!.reactEditor.blocks.getRootIds().length;
+    return panes.find((pane) => pane.id === "source")!.editorRuntime.blocks.getRootIds().length;
   })).toBe(2);
   const host = await page.evaluate(() => {
     const panes = [...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes];
     const pane = panes.find((pane) => pane.id === "references")!;
-    return { roots: pane.reactEditor.blocks.getRootIds().length, selection: pane.reactEditor.selection.get() };
+    return { roots: pane.editorRuntime.blocks.getRootIds().length, selection: pane.editorRuntime.selection.get() };
   });
   expect(host.roots).toBe(3);
   expect(host.selection?.blocks.every(({ id }) => id.endsWith(":source-block")) ?? true).toBe(true);
@@ -683,8 +683,8 @@ test("cycles stop before recursive acquisition and target changes release the pr
   await page.evaluate((roomId) => {
     const inspection = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
     const source = [...inspection.panes].find((pane) => pane.id === "source")!;
-    source.reactEditor.blocks.insertBlock({ id: `${roomId}:cycle`, type: "embedding", props: { targetDocumentId: "references", targetBlockId: `${roomId}:embed-1` } });
-    source.reactEditor.blocks.moveBlocks([`${roomId}:cycle`], `${roomId}:source-block`, "inside");
+    source.editorRuntime.blocks.insertBlock({ id: `${roomId}:cycle`, type: "embedding", props: { targetDocumentId: "references", targetBlockId: `${roomId}:embed-1` } });
+    source.editorRuntime.blocks.moveBlocks([`${roomId}:cycle`], `${roomId}:source-block`, "inside");
   }, room);
   await expect(page.getByText("Recursive block reference.", { exact: true }).first()).toBeVisible();
   await page.locator(`[data-document-pane="references"] [data-block-id="${room}:embed-1"]`).first().hover();
@@ -828,7 +828,7 @@ for (const repeat of [0, 200]) {
       const keyboard = Date.now() - keyboardStart;
       const timing = await page.evaluate(async ({ target, index }) => {
         const panes = [...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes];
-        const source = panes.find((pane) => pane.id === "source")!.reactEditor;
+        const source = panes.find((pane) => pane.id === "source")!.editorRuntime;
         const start = performance.now();
         source.blocks.updateBlock(target, { content: `Command sample ${index}` });
         const command = performance.now() - start;
@@ -867,7 +867,7 @@ test("one host selection follows the clicked occurrence and source keyboard edit
     document.querySelectorAll('[role="region"]')[1])).toBe(true);
   await expect.poll(() => page.evaluate(() => {
     const { panes } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    return [...panes].find((pane) => pane.id === "source")!.reactEditor.selection.get()?.blocks;
+    return [...panes].find((pane) => pane.id === "source")!.editorRuntime.selection.get()?.blocks;
   })).toEqual([{ id: `${room}:source-block`, start: 12, end: 12 }]);
   await second.press("Control+z");
   await expect(second).toHaveText("Source text");
@@ -908,7 +908,7 @@ test("slash conversion and native clipboard paste use the source model in an emb
   await content.fill("Paste here"); await content.click(); await content.press("End");
   await expect.poll(() => page.evaluate(() => {
     const { panes } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    return [...panes].find((pane) => pane.id === "source")!.reactEditor.selection.get()?.blocks[0]?.start;
+    return [...panes].find((pane) => pane.id === "source")!.editorRuntime.selection.get()?.blocks[0]?.start;
   })).toBe(10);
   await content.evaluate((element) => {
     const clipboardData = new DataTransfer();
@@ -975,7 +975,7 @@ test("document tabs share one editor cache and retain inactive documents without
   const before = await page.evaluate(() => {
     const info = (window as unknown as { __rivtoDocuments: DemoInspection & { channels: Map<string, number> } }).__rivtoDocuments;
     const panes = [...info.panes];
-    return { shared: panes.every((pane) => info.editor.getEditor(pane.id) === pane.reactEditor && !("editorStorage" in pane.reactEditor)), channels: [...info.channels] };
+    return { shared: panes.every((pane) => info.editor.getEditor(pane.id) === pane.editorRuntime && !("editorStorage" in pane.editorRuntime)), channels: [...info.channels] };
   });
   expect(before.shared).toBe(true);
   await referencesTab.click();
@@ -1014,8 +1014,8 @@ async function checkTwoUsers(first: Page, second: Page, route: string): Promise<
       const info = (window as unknown as { __rivtoDocuments: DemoInspection & { channels: Map<string, number> } }).__rivtoDocuments;
       const panes = [...info.panes];
       return {
-        oneEditorStorage: panes.every((pane) => info.editor.getEditor(pane.id) === pane.reactEditor && !("editorStorage" in pane.reactEditor)),
-        singleEditors: new Set(panes.map((pane) => pane.reactEditor)).size,
+        oneEditorStorage: panes.every((pane) => info.editor.getEditor(pane.id) === pane.editorRuntime && !("editorStorage" in pane.editorRuntime)),
+        singleEditors: new Set(panes.map((pane) => pane.editorRuntime)).size,
         loaded: info.editor.getDocuments().map((doc) => doc.id).sort(),
         channels: [...info.channels.keys()].map((channel) => JSON.parse(channel)[1]),
         unopenedLoaded: info.editor.getDocument(unopened) !== undefined,

@@ -61,14 +61,15 @@ export type {
   TodoStorageProps,
 } from "./extensions/todo-item/todo-item";
 export {
-  createReactEditor,
-} from "./react-editor";
+  createEditorRuntime,
+  EditorRuntime,
+} from "./editor-runtime";
 export type {
-  CreateReactEditorOptions,
+  CreateEditorRuntimeOptions,
+  SharedEditorApi,
   MarkdownLinkClick,
-  ReactEditor,
 } from "./types";
-export { isReactEditor, isRivtoEditor } from "./utils";
+export { isEditorViewApi, isRivtoEditor } from "./utils";
 export {
   createIsEmptyDefaultBlock,
   resolveIsEmptyBlock,
@@ -222,3 +223,5 @@ export { EdgelessSurface } from "./extensions/edgeless/surface/edgeless-surface"
 export { SurfaceContext } from "./surfaces/surface";
 
 export * from "./editor-storage";
+
+export { EditorViewApi } from "./editor-view-api";

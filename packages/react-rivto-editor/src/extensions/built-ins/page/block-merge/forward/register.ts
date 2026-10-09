@@ -1,3 +1,4 @@
+import type { EditorRuntime } from "../../../../../editor-runtime";
 /**
  * Forward Delete dispatch at editable block boundaries.
  *
@@ -6,7 +7,6 @@
  *
  * @module
  */
-import type { ReactEditor } from "../../../../../types";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -20,23 +20,23 @@ import { createBlockViewContext } from "../../../../../views";
 /**
  * Registers forward merging at a collapsed block-end caret.
  *
- * @param reactEditor - Runtime receiving the keyboard binding.
+ * @param editorRuntime - Runtime receiving the keyboard binding.
  * @returns No value.
  */
-export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
-  reactEditor.keyboard.register({
+export function registerForwardBlockMerge(editorRuntime: EditorRuntime): void {
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMergeForward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
-    when: ({ reactEditor, raw: event, blockId }) =>
+    when: ({ editorView, raw: event, blockId }) =>
       isEditableKeyboardEvent(event) &&
-      !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, reactEditor, blockId)),
-  }, ({ reactEditor, root, blockId }) => {
-    const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, reactEditor, blockId));
-    const block = target?.collapsed ? reactEditor.blocks.getBlockNode(target.blockId) : undefined;
+      !shouldDeleteSelection(readKeyboardSelection(editorView.selection, editorView.blocks, blockId)),
+  }, ({ editorView, root, blockId }) => {
+    const target = firstKeyboardTarget(readKeyboardSelection(editorView.selection, editorView.blocks, blockId));
+    const block = target?.collapsed ? editorView.blocks.getBlockNode(target.blockId) : undefined;
     if (!target?.collapsed || !block || target.offset !== block.content.length) return false;
-    const context = createBlockViewContext(reactEditor, target.blockId, root, reactEditor.selection.get());
+    const context = createBlockViewContext(editorView, target.blockId, root, editorView.selection.get());
     if (!context) return false;
-    return reactEditor.views.dispatch(
+    return editorView.views.dispatch(
       "onMergeForward",
       context,
       target,

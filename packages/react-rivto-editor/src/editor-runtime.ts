@@ -2,7 +2,7 @@ import { BlockListPropsManager } from "./managers/blocks/block-list-props-manage
 /**
  * React runtime coordinator.
  *
- * Concrete registration state belongs to focused managers. ReactEditor only
+ * Concrete registration state belongs to focused managers. EditorRuntime only
  * wires those managers around one core editor, installs extensions, and owns
  * final destruction ordering.
  *
@@ -22,7 +22,6 @@ import {
   EventManager,
   ExtensionManager,
   KeyboardManager,
-  ReactSelectionManager,
   ReactSlashCommandManager,
   RendererManager,
   SurfaceManager,
@@ -30,25 +29,20 @@ import {
   type ReactEditorExtension,
   type RegistrationDisposer,
 } from "./managers";
-import type { CreateReactEditorOptions, ReactEditor } from "./types";
+import type { CreateEditorRuntimeOptions, SharedEditorApi } from "./types";
 import type {
   BlockListPropsCapability,
   BlocksCapability,
   BlockTypesCapability,
-  ClipboardCapability,
-  EventsCapability,
   ExtensionsCapability,
-  KeyboardCapability,
   RenderersCapability,
-  SelectionCapability,
-  SlashCommandsCapability,
   SurfacesCapability,
   ViewsCapability,
 } from "./capabilities";
 import { BlockElementProjection } from "./elements/block-element-projection";
 import type { CreateDefaultBlock, IsEmptyBlock } from "./extensions/built-ins/page/default-writing-block";
 
-export type { CreateReactEditorOptions, ReactEditor } from "./types";
+export type { CreateEditorRuntimeOptions } from "./types";
 
 const WRITING_NOT_INSTALLED =
   "Install defaultWritingBlockExtension (or call installDefaultWriting) before using writing factories";
@@ -60,8 +54,8 @@ interface RuntimeExtensionsCapability extends ExtensionsCapability {
   assertActive(): void;
 }
 
-/** Internal implementation; applications receive the capability-only interface. */
-export class ReactEditorImpl implements ReactEditor {
+/** Shared document managers, extension registrations, and their destruction order. */
+export class EditorRuntime implements SharedEditorApi {
   /** Framework-neutral core permanently bound to this document and its managers. */
   private readonly editor: RivtoEditorApi;
   /** Focused core element manager exposed without its coordinator. */
@@ -91,19 +85,19 @@ export class ReactEditorImpl implements ReactEditor {
   /** Core list-property policy with React extension lifecycle ownership. */
   readonly blockListProps: BlockListPropsCapability;
   /** React-owned portable clipboard formatter and parser registry. */
-  readonly clipboard: ClipboardCapability;
+  readonly clipboard: ClipboardManager;
   /** Root surfaces and their ordered block/editor wrappers. */
   readonly surfaces: SurfacesCapability;
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
   readonly extensions: RuntimeExtensionsCapability;
   /** Delegated surface/document/window DOM event runtime. */
-  readonly events: EventsCapability;
+  readonly events: EventManager;
   /** Semantic keyboard bindings and runtime keymap overrides. */
-  readonly keyboard: KeyboardCapability;
-  /** Current-surface DOM selection conversion and highlighting. */
-  readonly selection: SelectionCapability;
+  readonly keyboard: KeyboardManager;
+  /** Model selection shared by occurrences; DOM adapters belong to each EditorViewApi. */
+  readonly selection: RivtoEditorApi["selection"];
   /** React-owned slash-command registry. */
-  readonly slashCommands: SlashCommandsCapability;
+  readonly slashCommands: ReactSlashCommandManager;
   private destroyed = false;
   /** Document-owned projection shared by all mounted surfaces. */
   readonly blockElements: BlockElementProjection;
@@ -125,7 +119,7 @@ export class ReactEditorImpl implements ReactEditor {
    * Writing-block registration is not done here — hosts install
    * `defaultWritingBlockExtension` (included by `standardPreset`).
    */
-  constructor(options: CreateReactEditorOptions) {
+  constructor(options: CreateEditorRuntimeOptions) {
     const editor = options.editor;
     this.editor = editor;
     this.elements = editor.elements;
@@ -137,9 +131,8 @@ export class ReactEditorImpl implements ReactEditor {
     this.disposers.push(() => extensions.destroy());
     const events = new EventManager(this);
     this.events = events;
-    const selection = new ReactSelectionManager(this, editor.selection);
-    this.selection = selection;
-    this.disposers.push(() => selection.destroy());
+    this.disposers.push(() => events.cancelPendingSelections());
+    this.selection = editor.selection;
     const keyboard = new KeyboardManager(this, options.keymap);
     this.keyboard = keyboard;
     const slashCommands = new ReactSlashCommandManager(this);
@@ -231,6 +224,6 @@ export class ReactEditorImpl implements ReactEditor {
 }
 
 /** Creates a modular React runtime around the supplied single-document core editor. */
-export const createReactEditor = (
-  options: CreateReactEditorOptions,
-): ReactEditor => new ReactEditorImpl(options);
+export const createEditorRuntime = (
+  options: CreateEditorRuntimeOptions,
+): EditorRuntime => new EditorRuntime(options);

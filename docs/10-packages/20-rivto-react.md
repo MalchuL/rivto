@@ -24,7 +24,7 @@ import { createRivtoEditor } from "@chulane/rivto";
 import { DocumentStorage } from "@chulane/document-model";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import {
-  createReactEditor,
+  createEditorRuntime,
   EditorView,
   PageSurface,
   standardPreset,
@@ -35,20 +35,20 @@ const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspa
 storage.registerDocument("document-id");
 const document = await storage.openDocument("document-id");
 const editor = createRivtoEditor({ document });
-const reactEditor = createReactEditor({
+const editorRuntime = createEditorRuntime({
   editor,
   extensions: [standardPreset()],
 });
 
 export function RivtoView() {
-  return <EditorView reactEditor={reactEditor}><PageSurface /></EditorView>;
+  return <EditorView runtime={editorRuntime}><PageSurface /></EditorView>;
 }
 ```
 
 Application владеет обоими lifecycle. Сначала уничтожайте React runtime:
 
 ```ts
-reactEditor.destroy();
+editorRuntime.destroy();
 editor.destroy();
 await document.destroy();
 await storage.destroy();

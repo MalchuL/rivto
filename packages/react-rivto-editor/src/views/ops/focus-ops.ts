@@ -9,26 +9,26 @@
  */
 import { createCaretSelection } from "@chulane/rivto";
 import { focusBlock } from "../../managers";
-import type { ReactEditor } from "../../types";
+import type { EditorViewApi } from "../../types";
 
 /**
  * Publishes a collapsed caret and focuses it after the next paint.
  *
- * @param reactEditor - Runtime whose portable selection is updated immediately.
+ * @param editorView - Editor view whose portable selection is updated immediately.
  * @param root - Surface or card that contains the target BlockView.
  * @param blockId - Block that should own the caret.
  * @param offset - UTF-16 caret offset inside that block.
  * @returns Nothing; focus is scheduled asynchronously.
  */
 export function focusCaret(
-  reactEditor: ReactEditor,
+  editorView: EditorViewApi,
   root: HTMLElement,
   blockId: string,
   offset: number,
 ): void {
-  reactEditor.selection.set(createCaretSelection(blockId, offset));
+  editorView.selection.set(createCaretSelection(blockId, offset));
   // Only place the caret and its editing focus; model mutations happen before scheduling.
-  reactEditor.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, offset));
+  editorView.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, offset));
 }
 
 /**
@@ -36,13 +36,13 @@ export function focusCaret(
  * A newer model selection cancels the pending focus through the shared selection
  * scheduler, so delayed work cannot replace a more recent selection.
  *
- * @param reactEditor - Runtime whose current selection guards deferred focus.
+ * @param editorView - Editor view whose current selection guards deferred focus.
  * @param root - Surface or card that contains the target BlockView.
  * @param blockId - Block that should own the caret.
  * @param offset - UTF-16 caret offset inside that block.
  * @returns Nothing; focus is scheduled asynchronously.
  */
-export function scheduleBlockFocus(reactEditor: ReactEditor, root: HTMLElement, blockId: string, offset: number): void {
+export function scheduleBlockFocus(editorView: EditorViewApi, root: HTMLElement, blockId: string, offset: number): void {
   // Only place the caret and its editing focus; model mutations happen before scheduling.
-  reactEditor.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, offset));
+  editorView.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, offset));
 }

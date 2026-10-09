@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 import type { RivtoEditorApi } from "@chulane/rivto";
-import type { ReactEditor } from "@chulane/rivto-react";
+import type { EditorRuntime } from "@chulane/rivto-react";
 
 interface DemoInspection {
-  __rivtoDemo: { editor: RivtoEditorApi; reactEditor: ReactEditor };
+  __rivtoDemo: { editor: RivtoEditorApi; editorRuntime: EditorRuntime };
 }
 
 test("core mode changes render the surface while embeddings keep their page view", async ({ page }) => {
@@ -11,8 +11,8 @@ test("core mode changes render the surface while embeddings keep their page view
   const today = page.locator('[data-journal-document="today"]');
   await expect(today.locator('[data-rivto-surface]').first()).toHaveAttribute("data-rivto-surface", "block");
   await page.evaluate(() => {
-    const { editor, reactEditor } = (window as unknown as DemoInspection).__rivtoDemo;
-    if (reactEditor.mode !== editor.mode) throw new Error("React must share the core mode manager");
+    const { editor, editorRuntime } = (window as unknown as DemoInspection).__rivtoDemo;
+    if (editorRuntime.mode !== editor.mode) throw new Error("React must share the core mode manager");
     editor.mode.set("edgeless");
   });
   await expect(today.locator('[data-rivto-surface]').first()).toHaveAttribute("data-rivto-surface", "edgeless");
@@ -22,8 +22,8 @@ test("core mode changes render the surface while embeddings keep their page view
   const content = embedded.locator('[data-block-content]').first();
   await content.focus();
   await expect.poll(() => page.evaluate(() => {
-    const { editor, reactEditor } = (window as unknown as DemoInspection).__rivtoDemo;
-    return { core: editor.mode.get(), surface: reactEditor.events.getSurfaceType() };
+    const { editor, editorRuntime } = (window as unknown as DemoInspection).__rivtoDemo;
+    return { core: editor.mode.get(), surface: editorRuntime.events.getSurfaceType() };
   })).toEqual({ core: "edgeless", surface: "block" });
   await today.getByRole("button", { name: "Page", exact: true }).click();
   await expect(today.locator('[data-rivto-surface]').first()).toHaveAttribute("data-rivto-surface", "block");

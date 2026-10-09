@@ -160,7 +160,7 @@ permits a drag to become structural selection.
 function Counter({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode<CounterProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   if (!editing.block) return null;
 
   return (
@@ -171,7 +171,7 @@ function Counter({ blockId }: { readonly blockId: string }) {
         className={COUNTER_BUTTON_CLASS}
         onClick={(event) => {
           if (event.defaultPrevented) return;
-          const current = reactEditor.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+          const current = editorView.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
           editing.operations.setProp("count", (current?.count ?? 0) + 1);
         }}
       >
@@ -242,7 +242,7 @@ Container behavior is declared separately with `ContainerBlockView`:
 - `acceptsDropContainer` enables drops on the full body, including empty fields;
 - `dropChildTypes` restricts direct children accepted by dragging (omit for unrestricted content);
 - `dropParentTypes` restricts where a dragged structural shell may be placed;
-- `acceptsDrop({ destination, sources, reactEditor })` validates an exact destination
+- `acceptsDrop({ destination, sources, editor })` validates an exact destination
   against source snapshots, including sources from another document;
 - containment metadata describes fixed or free outline behavior;
 
@@ -281,7 +281,7 @@ blockExtension({
 
 Use one stable type constant. Put creation defaults and validation in the core
 definition. Read current property values again inside callbacks. Mutate through
-`editing.operations.setProp`, `editing.operations.setProps`, or `reactEditor.blocks`; never mutate the
+`editing.operations.setProp`, `editing.operations.setProps`, or `editorView.blocks`; never mutate the
 detached render snapshot.
 
 Use a dedicated extension only when the feature also owns formatters, wrappers,

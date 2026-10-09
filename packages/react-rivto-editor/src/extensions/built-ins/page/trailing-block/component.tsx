@@ -4,7 +4,7 @@
 import { createCaretSelection } from "@chulane/rivto";
 import { createPortal } from "react-dom";
 import { PlusIcon } from "lucide-react";
-import { useEditorRoot, useReactEditor } from "../../../../hooks";
+import { useEditorRoot, useEditorView } from "../../../../hooks";
 import { editorControlProps, PAGE_END_SLOT_SELECTOR } from "../../../../constants";
 import { focusBlock } from "../../../../managers";
 import type { TrailingBlockProps } from "./types";
@@ -15,7 +15,7 @@ const TRAILING_BLOCK_CLASS = "page-trailing-block";
 
 /** Page-end controls that create every writing block up to the activated row. */
 export function TrailingBlock({ count }: TrailingBlockProps) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const { element: root } = useEditorRoot();
   const slot = root?.querySelector<HTMLElement>(PAGE_END_SLOT_SELECTOR);
   if (!root || !slot) return null;
@@ -31,16 +31,16 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
           aria-label={amount === 1 ? "Add block" : `Add ${amount} blocks`}
           onClick={() => {
             let id = "";
-            reactEditor.history.batchUpdates(() => {
+            editorView.history.batchUpdates(() => {
               for (let current = 0; current < amount; current += 1) {
-                id = reactEditor.blocks.insertBlock(
-                  reactEditor.createDefaultBlock(),
+                id = editorView.blocks.insertBlock(
+                  editorView.createDefaultBlock(),
                   id || undefined,
                 ).id;
               }
             });
             if (!id) return;
-            reactEditor.selection.set(createCaretSelection(id, 0));
+            editorView.selection.set(createCaretSelection(id, 0));
             requestAnimationFrame(() => focusBlock(root, id, 0));
           }}
         >

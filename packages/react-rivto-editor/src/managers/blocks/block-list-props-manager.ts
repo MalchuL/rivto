@@ -1,6 +1,6 @@
 import type { BlockListPropsManagerApi, EditorBlock, EditorBlockNode } from "@chulane/rivto";
 import type { BlockListPropsCapability, BlockListPropsRegistration } from "../../capabilities";
-import type { ReactEditorImpl } from "../../react-editor";
+import type { EditorRuntime } from "../../editor-runtime";
 import type { BlockViewContext } from "../../views/types";
 
 /** Owns React list behavior while the core manager validates persisted properties. */
@@ -8,7 +8,7 @@ export class BlockListPropsManager implements BlockListPropsCapability {
   private readonly registrations = new Set<BlockListPropsRegistration>();
 
   /** @param editor - Extension lifecycle owner. @param core - Existing property validation manager. */
-  constructor(private readonly editor: ReactEditorImpl, private readonly core: BlockListPropsManagerApi) {}
+  constructor(private readonly editor: EditorRuntime, private readonly core: BlockListPropsManagerApi) {}
 
   /**
    * Registers property validation and optional outline behavior as one owned resource.

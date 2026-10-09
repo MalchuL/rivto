@@ -11,7 +11,7 @@ import { createPortal } from "react-dom";
 import type { BlockWrapperProps } from "../../../blocks";
 import type { EditorBlockInput } from "@chulane/rivto";
 import { createCaretSelection } from "@chulane/rivto";
-import { useBlockEditing, useBlockSelectionAnchor, useBlockNode, useReactEditor } from "../../../hooks";
+import { useBlockEditing, useBlockSelectionAnchor, useBlockNode, useEditorView } from "../../../hooks";
 import { focusBlock, type ReactEditorExtension } from "../../../managers";
 import { KANBAN_BLOCK_TYPE, KANBAN_COLUMN_BLOCK_TYPE, kanbanColumnView, kanbanView } from "./kanban-view";
 import { convertLeafToContainer } from "../../../views/ops/outline-ops";
@@ -54,19 +54,19 @@ export function createKanbanBlockInput(): EditorBlockInput {
  * @returns Direct column count and the sum of cards in those columns.
  */
 function useKanbanCounts(boardId: string): { readonly columnCount: number; readonly cardCount: number } {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.blocks.subscribeStructure(listener),
-    [reactEditor],
+    (listener: () => void) => editorView.blocks.subscribeStructure(listener),
+    [editorView],
   );
   const getSnapshot = useCallback(() => {
-    const columnIds = reactEditor.blocks.getBlockNode(boardId)?.childIds ?? [];
+    const columnIds = editorView.blocks.getBlockNode(boardId)?.childIds ?? [];
     let cardCount = 0;
     columnIds.forEach((columnId) => {
-      cardCount += (reactEditor.blocks.getBlockNode(columnId)?.childIds.length ?? 0);
+      cardCount += (editorView.blocks.getBlockNode(columnId)?.childIds.length ?? 0);
     });
     return `${columnIds.length}:${cardCount}`;
-  }, [boardId, reactEditor]);
+  }, [boardId, editorView]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const separator = snapshot.indexOf(":");
   return {
@@ -82,7 +82,7 @@ function useKanbanCounts(boardId: string): { readonly columnCount: number; reado
  * @returns Structural selection region and a compact collapsed summary.
  */
 export function Kanban({ blockId }: { readonly blockId: string }) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const editing = useBlockNode(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
   const { columnCount, cardCount } = useKanbanCounts(blockId);
@@ -105,13 +105,13 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
    */
   const addColumn = () => {
     let columnId = "";
-    reactEditor.history.batchUpdates(() => {
-      reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
-      columnId = reactEditor.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" }).id;
-      reactEditor.blocks.moveBlocks([columnId], blockId, "inside");
+    editorView.history.batchUpdates(() => {
+      editorView.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
+      columnId = editorView.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" }).id;
+      editorView.blocks.moveBlocks([columnId], blockId, "inside");
     });
     requestAnimationFrame(() => {
-      const root = reactEditor.events.getRoot();
+      const root = editorView.events.getRoot();
       if (root) focusBlock(root, columnId, 0);
     });
   };
@@ -139,7 +139,7 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
 function KanbanColumn({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId);
   const cardCount = editing.block?.childIds.length ?? 0;
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const header = useRef<HTMLDivElement>(null);
   const addCardButton = useRef<HTMLButtonElement>(null);
   const [addCardHost, setAddCardHost] = useState<HTMLElement | null>(null);
@@ -158,13 +158,13 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
    */
   const addCard = () => {
     let cardId = "";
-    reactEditor.history.batchUpdates(() => {
-      cardId = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock()).id;
-      reactEditor.blocks.moveBlocks([cardId], blockId, "inside");
-      reactEditor.selection.set(createCaretSelection(cardId, 0));
+    editorView.history.batchUpdates(() => {
+      cardId = editorView.blocks.insertBlock(editorView.createDefaultBlock()).id;
+      editorView.blocks.moveBlocks([cardId], blockId, "inside");
+      editorView.selection.set(createCaretSelection(cardId, 0));
     });
     requestAnimationFrame(() => {
-      const root = reactEditor.events.getRoot();
+      const root = editorView.events.getRoot();
       if (root) focusBlock(root, cardId, 0);
     });
   };
@@ -199,14 +199,14 @@ function KanbanDialog({ block, children }: BlockWrapperProps) {
 export function kanbanExtension(): ReactEditorExtension {
   return {
     id: "block.kanban",
-    setup: (reactEditor) => {
+    setup: (editorRuntime) => {
       const disposers = [
-        reactEditor.surfaces.registerBlockWrapper("block", KanbanDialog),
-        reactEditor.surfaces.registerBlockWrapper("edgeless", KanbanDialog),
-        reactEditor.surfaces.registerBlockSlot({
+        editorRuntime.surfaces.registerBlockWrapper("block", KanbanDialog),
+        editorRuntime.surfaces.registerBlockWrapper("edgeless", KanbanDialog),
+        editorRuntime.surfaces.registerBlockSlot({
           position: "right", component: BlockModalButton, when: ({ block }) => block.type === KANBAN_BLOCK_TYPE,
         }),
-        reactEditor.blockTypes.register({
+        editorRuntime.blockTypes.register({
           definition: {
             type: KANBAN_BLOCK_TYPE,
             title: "Kanban",
@@ -215,7 +215,7 @@ export function kanbanExtension(): ReactEditorExtension {
           render: Kanban,
           view: kanbanView,
         }),
-        reactEditor.blockTypes.register({
+        editorRuntime.blockTypes.register({
           definition: {
             type: KANBAN_COLUMN_BLOCK_TYPE,
             title: "Kanban column",
@@ -224,14 +224,14 @@ export function kanbanExtension(): ReactEditorExtension {
           render: KanbanColumn,
           view: kanbanColumnView,
         }),
-        reactEditor.slashCommands.register({
+        editorRuntime.slashCommands.register({
           id: "block.kanban.insert",
           title: "Kanban",
           group: "Turn into",
           keywords: ["board", "cards", "tasks"],
-          isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId),
-          execute: ({ blockId }) => {
-            convertLeafToContainer(reactEditor, blockId, createKanbanBlockInput());
+          isAvailable: ({ blockId }) => editorRuntime.blocks.hasBlock(blockId) && !editorRuntime.blocks.hasChildren(blockId),
+          execute: ({ blockId, editorView }) => {
+            convertLeafToContainer(editorView, blockId, createKanbanBlockInput());
           },
         }),
       ];

@@ -1,9 +1,11 @@
 import type {
   EditorBlock,
   EditorBlockInput,
-  RivtoEditorApi,
 } from "@chulane/rivto";
-import type { ReactEditor } from "../../../types";
+import type { SharedEditorApi } from "../../../types";
+
+/** Document operations required by transfer; accepts core, runtime, and view editors. */
+type BlockTransferEditor = Pick<SharedEditorApi, "blocks" | "history" | "getDocument">;
 
 /** Destination used by a cross-document page drag. */
 export interface CrossDocumentBlockTransferPlacement {
@@ -41,8 +43,8 @@ function cloneBlock(block: EditorBlock): EditorBlock {
  * first write, preventing an unavailable custom type from partially importing.
  */
 function getTransferBlocks(
-  source: ReactEditor | RivtoEditorApi,
-  destination: ReactEditor | RivtoEditorApi,
+  source: BlockTransferEditor,
+  destination: BlockTransferEditor,
   rootIds: readonly string[],
   placement: CrossDocumentBlockTransferPlacement,
 ): EditorBlock[] {
@@ -79,8 +81,8 @@ function getTransferBlocks(
  * @throws If the models match, IDs collide, a block is missing, or destination preparation/insertion fails.
  */
 export function crossDocumentBlockTransfer(
-  source: ReactEditor | RivtoEditorApi,
-  destination: ReactEditor | RivtoEditorApi,
+  source: BlockTransferEditor,
+  destination: BlockTransferEditor,
   rootIds: readonly string[],
   placement: CrossDocumentBlockTransferPlacement,
 ): void {

@@ -1,8 +1,8 @@
 import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl, type DocumentModel } from "@chulane/document-model";
 import { createRivtoEditor, type RivtoEditorApi } from "@chulane/rivto";
-import { createReactEditor } from "./react-editor";
-import type { ReactEditor } from "./types";
+import { createEditorRuntime } from "./editor-runtime";
+import type { EditorRuntime } from "./editor-runtime";
 
 /** Loading and construction policies; returned models become storage-owned. */
 export interface EditorStorageOptions {
@@ -10,10 +10,10 @@ export interface EditorStorageOptions {
   readonly openDocument?: (documentId: string) => Promise<DocumentModel>;
   /**
    * Configures the supplied storage-owned core's definitions, defaults, and commands
-   * and returns a React runtime wrapping that same core. Defaults to createReactEditor.
+   * and returns a React runtime wrapping that same core. Defaults to createEditorRuntime.
    * Storage creates and disposes the core; this callback must not replace it.
    */
-  readonly createEditor?: (editor: RivtoEditorApi) => ReactEditor;
+  readonly createEditor?: (editor: RivtoEditorApi) => EditorRuntime;
   /** Lists containing document IDs from application metadata without acquiring their content; ordinary edits never invoke it. */
   readonly lookupDocumentIds?: (blockId: string, options: { readonly signal?: AbortSignal }) => Promise<readonly string[]>;
   /** Replaces preferred-document-first resolution; receives the persisted address and never changes its props. */
@@ -38,7 +38,7 @@ export interface BlockResolution {
 
 /** One independently releasable view consumer of an editor and its model. */
 export interface EditorAcquisition {
-  readonly editor: ReactEditor;
+  readonly editor: EditorRuntime;
   readonly document: DocumentModel;
   /** Idempotently releases this consumer, destroying editor and model after the last consumer. */
   release(): Promise<void>;
@@ -47,8 +47,8 @@ export interface EditorAcquisition {
 interface Entry {
   consumers: number;
   explicit: boolean;
-  pending: Promise<ReactEditor>;
-  editor?: ReactEditor;
+  pending: Promise<EditorRuntime>;
+  editor?: EditorRuntime;
   core?: RivtoEditorApi;
   closing?: Promise<void>;
 }
@@ -73,18 +73,18 @@ export class EditorStorage {
   /** @param options - Optional document loader, editor factory, and embedding lookup policy. */
   constructor(private readonly options: EditorStorageOptions = {}) {
     this.openDocument = options.openDocument ?? (async (id) => new DocumentModelImpl(new YjsDoc(id)));
-    this.createEditor = options.createEditor ?? ((editor) => createReactEditor({ editor }));
+    this.createEditor = options.createEditor ?? ((editor) => createEditorRuntime({ editor }));
     this.unsubscribeRegistry = options.subscribeDocumentIds?.(() => this.notifyDocuments());
   }
 
   /** @param listener - Open/close or registry observer; text edits do not notify it. @returns Cleanup. */
   subscribeDocuments(listener: () => void): () => void { this.documentListeners.add(listener); return () => { this.documentListeners.delete(listener); }; }
   /** @returns Usable editors, excluding pending and closing entries. */
-  getEditors(): readonly ReactEditor[] { return [...this.entries.values()].flatMap((entry) => entry.editor && !entry.closing ? [entry.editor] : []); }
+  getEditors(): readonly EditorRuntime[] { return [...this.entries.values()].flatMap((entry) => entry.editor && !entry.closing ? [entry.editor] : []); }
   /** @returns Loaded models without acquiring them. */
   getDocuments(): readonly DocumentModel[] { return this.getEditors().map((editor) => editor.getDocument()); }
   /** @param documentId - Requested identity. @returns Constructed editor, or undefined before construction, while closing, or absent. */
-  getEditor(documentId: string): ReactEditor | undefined {
+  getEditor(documentId: string): EditorRuntime | undefined {
     const entry = this.entries.get(documentId);
     return entry?.closing ? undefined : entry?.editor;
   }
@@ -156,7 +156,7 @@ export class EditorStorage {
    * @returns Matching single editor in sorted document ID order, or undefined when absent.
    * Multiple documents may contain the ID; use resolveBlock when ambiguity matters.
    */
-  findEditorWithBlock(blockId: string): ReactEditor | undefined {
+  findEditorWithBlock(blockId: string): EditorRuntime | undefined {
     return this.getEditors().filter((editor) => editor.blocks.hasBlock(blockId))
       .sort((a, b) => a.getDocument().id.localeCompare(b.getDocument().id))[0];
   }
@@ -291,8 +291,8 @@ export class EditorStorage {
   }
 
   /** Transfers the loaded model into a fixed core; setup failures dispose every created resource. */
-  private async load(id: string, entry: Entry): Promise<ReactEditor> {
-    let document: DocumentModel | undefined; let editor: ReactEditor | undefined;
+  private async load(id: string, entry: Entry): Promise<EditorRuntime> {
+    let document: DocumentModel | undefined; let editor: EditorRuntime | undefined;
     try {
       document = await this.openDocument(id);
       if (document.id !== id) throw new Error(`Expected document ${id}, received ${document.id}`);
@@ -319,7 +319,7 @@ export class EditorStorage {
     if (entry.closing) return entry.closing;
     entry.closing = (async () => {
       try {
-        let editor: ReactEditor;
+        let editor: EditorRuntime;
         try { editor = await entry.pending; } catch { return; }
         const errors: unknown[] = [];
         for (const action of [() => editor.destroy(), () => entry.core!.destroy(), () => editor.getDocument().destroy()]) {

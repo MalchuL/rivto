@@ -1,41 +1,44 @@
 # React editor managers
 
-`ReactEditor` is a coordinator, not a registry. Extensions receive the complete
-runtime and extend it through focused public managers:
+`EditorRuntime` owns shared document infrastructure. Extensions receive this
+runtime and extend it through focused registration managers:
 
 ```ts
 const extension: ReactEditorExtension = {
   id: "acme.cards",
-  setup(reactEditor) {
-    reactEditor.surfaces.registerBlockWrapper("block", CardControls);
-    reactEditor.events.register(/* DOM definition */, /* action */);
-    reactEditor.keyboard.register(/* keyboard definition */, /* action */);
-    reactEditor.extensions.mount(CardOverlay);
+  setup(editorRuntime) {
+    editorRuntime.surfaces.registerBlockWrapper("block", CardControls);
+    editorRuntime.events.register(/* DOM definition */, /* action */);
+    editorRuntime.keyboard.register(/* keyboard definition */, /* action */);
+    editorRuntime.extensions.mount(CardOverlay);
   },
 };
 ```
 
 Mutable maps and arrays remain private. Every registration validates that the
 runtime is active, preserves declaration order, returns an idempotent disposer,
-and is automatically released by `ReactEditor.destroy()`.
+and is automatically released by `EditorRuntime.destroy()`.
 
-Every manager constructor receives its owning `ReactEditor`. Managers resolve
-the core editor, active surface, registration ownership, and siblings from
-that owner when an operation runs. Keyboard keymap overrides and the
-unknown-renderer fallback remain explicit configuration.
+Each rendered occurrence has a `EditorViewApi` with local event, keyboard,
+selection, clipboard, and slash managers. Their constructors receive the shared
+registrations and the occurrence dependencies they need. Core blocks, history,
+and rendering definitions are reused directly. Keyboard keymap overrides and
+the unknown-renderer fallback remain explicit document-wide configuration.
 
-Applications use the capability interfaces exposed by `ReactEditor`. Concrete
-manager classes and lifecycle bookkeeping stay internal to the package.
+Components receive this occurrence API through `useEditorView()`. Event and
+slash handlers receive it in their callback context. Shared managers never
+substitute an active occurrence when executing clipboard or slash operations;
+the receiving editor is explicit. Local cleanup does not destroy the runtime.
 
 Registries with stable keys also expose explicit deletion:
 
 ```ts
-reactEditor.blockTypes.delete("acme.card");
-reactEditor.renderers.delete("persisted.unknown");
-reactEditor.surfaces.delete("edgeless");
-reactEditor.slashCommands.delete("acme.command");
-reactEditor.keyboard.delete("acme.shortcut");
-reactEditor.events.delete("acme.pointer");
+editorRuntime.blockTypes.delete("acme.card");
+editorRuntime.renderers.delete("persisted.unknown");
+editorRuntime.surfaces.delete("edgeless");
+editorRuntime.slashCommands.delete("acme.command");
+editorRuntime.keyboard.delete("acme.shortcut");
+editorRuntime.events.delete("acme.pointer");
 ```
 
 Each returns `true` only when it removed a React-owned registration. Mounted
@@ -78,7 +81,7 @@ own store rather than one editor-wide invalidation counter.
 Normal custom blocks use one atomic call:
 
 ```tsx
-const dispose = reactEditor.blockTypes.register({
+const dispose = editorRuntime.blockTypes.register({
   definition: cardDefinition,
   render: CardContent,
   slashCommand: {
@@ -97,5 +100,5 @@ loaded persisted type.
 
 Extension custom cleanup runs before registrations created by that extension.
 Manager-owned registrations then unwind in reverse order. The event manager
-disconnects native listeners after extension teardown. Destroying `ReactEditor`
+disconnects native listeners after extension teardown. Destroying `EditorViewApi`
 does not destroy its core editor.

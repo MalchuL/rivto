@@ -10,7 +10,7 @@ import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
  */
 import { memo, useCallback, useSyncExternalStore, type ComponentType } from "react";
 import { BLOCK_ROW_CLASS } from "../../constants";
-import { useBlockNode, useBlockSelected, useReactEditor } from "../../hooks";
+import { useBlockNode, useBlockSelected, useEditorView } from "../../hooks";
 import {
   BlockElementRefBoundary,
   BlockWrapper,
@@ -65,22 +65,22 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
  */
 function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   const { block } = useBlockNode(blockId);
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const selected = useBlockSelected(blockId);
   const childrenId = useBlockChildrenId(blockId);
   const subscribeRenderers = useCallback(
-    (listener: () => void) => reactEditor.renderers.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => editorView.renderers.subscribe(listener),
+    [editorView],
   );
   useSyncExternalStore(
     subscribeRenderers,
-    () => reactEditor.renderers.revision,
-    () => reactEditor.renderers.revision,
+    () => editorView.renderers.revision,
+    () => editorView.renderers.revision,
   );
 
   if (!block) return null;
   const childIds = block.childIds;
-  const Content = reactEditor.renderers.get(block.type) ?? UnknownBlock;
+  const Content = editorView.renderers.get(block.type) ?? UnknownBlock;
 
   return (
     <BlockWrapper
@@ -89,7 +89,7 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
       isSelected={selected}
       content={<BlockContent renderer={Content} blockId={block.id} />}
     >
-      {childIds.length > 0 && reactEditor.blockListProps.childrenVisible(block) && (
+      {childIds.length > 0 && editorView.blockListProps.childrenVisible(block) && (
         <div id={childrenId} className="page-block-children">
           {childIds.map((childId) => (
             <MemoBlockTreeNode key={childId} blockId={childId} />

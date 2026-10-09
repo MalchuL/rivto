@@ -1,14 +1,14 @@
 # React runtime и lifecycle
 
-## `createReactEditor(options)`
+## `createEditorRuntime(options)`
 
-- **Аргументы:** `options: CreateReactEditorOptions`.
-- **Возвращает:** `ReactEditor`.
+- **Аргументы:** `options: CreateEditorRuntimeOptions`.
+- **Возвращает:** `EditorRuntime`.
 - **Исключения:** registration conflicts, duplicate extension IDs, invalid setup и ошибки пользовательского `setup()`.
 
 Managers создаются до extensions. При ошибке setup уже созданные registrations очищаются.
 
-### `CreateReactEditorOptions`
+### `CreateEditorRuntimeOptions`
 
 - **`editor: RivtoEditorApi`:** обязательный core, постоянно связанный с одним документом. Caller или EditorStorage владеет его lifecycle.
 - **`extensions?: readonly ReactEditorExtension[]`:** устанавливаются синхронно в declaration order.
@@ -19,7 +19,7 @@ Managers создаются до extensions. При ошибке setup уже с
 
 ### Properties
 
-- **`reactEditor: ReactEditor`:** host-owned React runtime.
+- **`runtime: EditorRuntime`:** общий runtime документа, принадлежащий host.
 - **`children?: ReactNode`:** application chrome рядом с extension UI и surface.
 
 ### Вызов
@@ -33,15 +33,15 @@ View подписывается на загрузку документа и Reac
 ## `EditorStorageContext`
 
 `<EditorStorageContext.Provider value={editors}>` передаёт host-owned кеш
-представлениям и вложенным embedding. ReactEditor хранит только свой core и не
-содержит ссылку на storage. Каждый пользователь может предоставить собственный
+представлениям и вложенным embedding. EditorRuntime хранит свой core и не содержит ссылку на storage; EditorViewApi
+связывает этот runtime с конкретным отображением. Каждый пользователь может предоставить собственный
 кеш; вложенные views используют ближайший provider. Provider не создаёт storage
 и не уничтожает его: application явно вызывает `editors.destroy()` при cleanup.
 Обычные команды обращаются напрямую к единственному core, без поиска документа.
 Без provider standalone view использует caller-owned editor, а embedding сообщает,
 что resolution недоступен. Provider требуется для автоматического retain/release.
 
-## Properties `ReactEditor`
+## Properties `EditorViewApi`
 
 - **`revision: number`:** core revision getter.
 - **`createDefaultBlock: CreateDefaultBlock`:** writing factory; throws до установки writing extension.
@@ -50,7 +50,7 @@ View подписывается на загрузку документа и Reac
 
 Чтение properties безопасно; их operations могут валидировать registrations и payloads.
 
-## Methods `ReactEditor`
+## Methods `EditorViewApi`
 
 ### `installDefaultWriting(options)`
 
@@ -70,13 +70,13 @@ View подписывается на загрузку документа и Reac
 
 Одновременно разрешено несколько distinct listeners; новая подписка не заменяет предыдущую. Поскольку delegation ведёт в core `Listeners` с `Set`, одинаковая function reference регистрируется эффективно один раз. Для разных независимых consumers передавайте разные callbacks и храните каждый returned disposer.
 
-Disposer idempotent и удаляет только соответствующую function. Immediate notification при подписке отсутствует. `ReactEditor.subscribe()` сообщает только core runtime revisions; изменения React-only renderer/surface/extension registries нужно слушать через их собственные `subscribe()` streams.
+Disposer idempotent и удаляет только соответствующую function. Immediate notification при подписке отсутствует. `EditorViewApi.subscribe()` сообщает только core runtime revisions; изменения React-only renderer/surface/extension registries нужно слушать через их собственные `subscribe()` streams.
 
 ### Core mode и отображаемая поверхность
 
-`reactEditor.mode` — общий для документа core ModeManager. Он определяет выбор
+`editorRuntime.mode` — общий для документа core ModeManager. Он определяет выбор
 основной presentation и сохраняет независимый stream изменений.
-`reactEditor.events.getSurfaceType()` — метод чтения типа отображаемой поверхности: у view это его
+`editorRuntime.events.getSurfaceType()` — метод чтения типа отображаемой поверхности: у view это его
 собственная поверхность, у общего runtime — активный view. Без mounted view
 возвращается core mode. Page embedding остаётся `block`, когда тот же документ
 открыт в `edgeless`; дополнительное состояние режима не сохраняется.
@@ -90,16 +90,16 @@ EventManager читает тип поверхности из DOM root текущ
 ### `getDocument()` и `EditorView`
 
 `getDocument()` всегда возвращает модель этого редактора, включая вызовы до mount
-и после await. ReactEditor предоставляет focused managers своего core без
+и после await. EditorViewApi предоставляет focused managers своего core без
 getter для core. Все managers постоянно связаны с ним; selection и history
 независимы от других документов. Storage создаёт и хранит core и передаёт его
 в `createEditor(editor)`; последующее уничтожение core остаётся обязанностью storage.
 `EditorViewController`, принадлежащий компоненту `EditorView`, ограничивает DOM
 events и selection одним displayed occurrence, сохраняя document managers и
-registrations этого ReactEditor. Контроллер создаёт локальные adapters, регистрирует
-DOM root и освобождает их при unmount; публичного `ReactEditor.getView()` больше нет.
+registrations этого EditorViewApi. Контроллер создаёт локальные adapters, регистрирует
+DOM root и освобождает их при unmount; публичного `EditorViewApi.getView()` больше нет.
 
-`EditorView` принимает уже выбранный ReactEditor без documentId. При наличии `EditorStorageContext.Provider`
+`EditorView` принимает уже выбранный EditorViewApi без documentId. При наличии `EditorStorageContext.Provider`
 view автоматически получает отдельный consumer и освобождает его при unmount,
 включая вложенные embedding views. Для открытия другого документа используйте
 `await editors.acquireEditor(id)` или `await editors.getSingleEditor(id)`.
@@ -116,8 +116,13 @@ renderer вызывает `blocks.updateBlock(id, patch)` своего реда�
 - **Возвращает:** `void`.
 - **Исключения:** custom extension cleanup errors.
 
-Повторный вызов безопасен. Уничтожаются React subscriptions/extensions/built-ins/slash/keyboard/events; core и модель остаются у lifecycle owner. Для кеша дождитесь `editors.destroy()`, который сначала уничтожает каждый ReactEditor, затем core, затем модель и providers. После этого host уничтожает DocumentStorage. Без кеша host сам вызывает React cleanup, core.destroy и await model.destroy.
+Повторный вызов безопасен. Уничтожаются React subscriptions/extensions/built-ins/slash/keyboard/events; core и модель остаются у lifecycle owner. Для кеша дождитесь `editors.destroy()`, который сначала уничтожает каждый EditorViewApi, затем core, затем модель и providers. После этого host уничтожает DocumentStorage. Без кеша host сам вызывает React cleanup, core.destroy и await model.destroy.
 
 ## Автоматическая reconciliation
 
 Runtime подписан на root/elements updates своего документа и через `queueMicrotask()` объединяет updates перед восстановлением edgeless block-element projection. Host ничего дополнительно не вызывает.
+
+`useEditorView()` возвращает экземпляр отображения. Его `runtime` общий для
+повторных отображений документа. `EditorViewController` владеет acquisition и
+локальными registrations; `EditorViewApi.destroy()` отменяет DOM-задачи отображения,
+а `EditorRuntime.destroy()` освобождает общие расширения и менеджеры.

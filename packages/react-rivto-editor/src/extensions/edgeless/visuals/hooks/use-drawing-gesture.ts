@@ -75,7 +75,7 @@ export function useDrawingGesture({
   const [connectorHover, setConnectorHover] = useState<ConnectorHover | null>(null);
   const attachPad = ATTACH_PAD_PX / Math.max(zoom, 0.01);
 
-  const creationCandidates = (): VisualFrame[] => controller.reactEditor.elements.getElements()
+  const creationCandidates = (): VisualFrame[] => controller.editor.elements.getElements()
     .filter((element) => element.type !== "connector" && element.type !== "group")
     .map((element) => element.frame);
 
@@ -94,7 +94,7 @@ export function useDrawingGesture({
   );
 
   const objectAt = (point: CanvasPoint): string | undefined => {
-    const candidates = controller.reactEditor.elements.getElements()
+    const candidates = controller.editor.elements.getElements()
       .filter((element) => element.type !== "connector" && element.type !== "group"
         && pointInRotatedFrame(point, inflateFrame(element.frame, attachPad), controller.getRotation(element.id)))
       .sort((a, b) => b.zIndex - a.zIndex);
@@ -166,7 +166,7 @@ export function useDrawingGesture({
   }, [root, tool]);
 
   useEffect(() => {
-    const dispose = controller.reactEditor.keyboard.register({
+    const dispose = controller.editor.keyboard.register({
       id: "edgeless.gesture-cancel",
       keys: ["Escape"],
       mode: "edgeless",
@@ -246,7 +246,7 @@ export function useDrawingGesture({
     const previous = active.points.at(-1)!;
     active.points.push(point);
     if (tool.tool === "eraser") {
-      const elements = controller.reactEditor.elements.getElements().filter((element) => element.type !== "group");
+      const elements = controller.editor.elements.getElements().filter((element) => element.type !== "group");
       elements.forEach((element) => {
         if (!segmentIntersectsRotatedFrame(previous, point, element.frame, controller.getRotation(element.id))) return;
         let id = element.id;

@@ -24,7 +24,7 @@ for (const repeat of [0, 200]) {
     const originalNumber = await number.textContent();
     await page.evaluate(() => {
       const runtime = window as unknown as {
-        __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditor };
+        __rivtoDemo: { editorRuntime: import("@chulane/rivto-react").EditorRuntime };
         __outlineReads: number;
         __contentQueries: number;
       };
@@ -34,7 +34,7 @@ for (const repeat of [0, 200]) {
         if (selector === "[data-block-content]") runtime.__contentQueries += 1;
         return query.call(this, selector);
       } as typeof query;
-      const blocks = runtime.__rivtoDemo.reactEditor.blocks;
+      const blocks = runtime.__rivtoDemo.editorRuntime.blocks;
       const getBlocks = blocks.getBlocks.bind(blocks);
       runtime.__outlineReads = 0;
       blocks.getBlocks = () => {

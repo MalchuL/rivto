@@ -4,14 +4,14 @@ import { DocumentStorage, type DocumentModel } from "@chulane/document-model";
 import { DemoDatabase, DBDocumentModel } from "./database";
 import { DemoEditorSurface } from "./editor-surface";
 import {
-  EditorStorage, EditorStorageContext, type EditorAcquisition, createReactEditor, EditorView, embeddingExtension, EMBEDDING_BLOCK_TYPE,
-  edgelessPreset, pageDragExtension, standardPreset, type ReactEditor,
+  EditorStorage, EditorStorageContext, type EditorAcquisition, createEditorRuntime, EditorView, embeddingExtension, EMBEDDING_BLOCK_TYPE,
+  edgelessPreset, pageDragExtension, standardPreset, type EditorRuntime,
 } from "@chulane/rivto-react";
 
 interface Pane {
   id: string;
   instanceId: string;
-  readonly reactEditor: ReactEditor;
+  readonly editorRuntime: EditorRuntime;
   release(): Promise<void>;
 }
 interface Runtime {
@@ -61,7 +61,7 @@ export function DocumentsDemo() {
         const databaseSubscription = database.subscribe(listener);
         return () => { registrySubscription(); databaseSubscription(); };
       },
-      createEditor: (editor) => createReactEditor({ editor, extensions: [
+      createEditor: (editor) => createEditorRuntime({ editor, extensions: [
         standardPreset(), pageDragExtension(), ...edgelessPreset(), embeddingExtension(),
       ] }),
     });
@@ -78,7 +78,7 @@ export function DocumentsDemo() {
       if (!active) { await acquisition.release(); return; }
       const pane: Pane = {
         id, instanceId: crypto.randomUUID(),
-        reactEditor: acquisition.editor, release: acquisition.release,
+        editorRuntime: acquisition.editor, release: acquisition.release,
       };
       livePanes.add(pane);
       setPanes((current) => [...current, pane]);
@@ -164,8 +164,8 @@ export function DocumentsDemo() {
             <section className="multi-editor-pane" key={pane.instanceId} data-document-pane={pane.id}
               hidden={tabs && activeTab !== pane.instanceId}>
               <button type="button" onClick={() => close(pane)}>Close {pane.id}</button>
-              <button type="button" onClick={() => pane.reactEditor.mode.set(pane.reactEditor.mode.get() === "block" ? "edgeless" : "block")}>Toggle mode</button>
-              <EditorView reactEditor={pane.reactEditor} active={!tabs || activeTab === pane.instanceId} onReady={() => {
+              <button type="button" onClick={() => pane.editorRuntime.mode.set(pane.editorRuntime.mode.get() === "block" ? "edgeless" : "block")}>Toggle mode</button>
+              <EditorView runtime={pane.editorRuntime} active={!tabs || activeTab === pane.instanceId} onReady={() => {
                 const seed = runtime.seeded.get(pane.id);
                 if (seed) { runtime.seeded.delete(pane.id); void seed.release().catch(console.error); }
               }}>

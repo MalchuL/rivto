@@ -1,4 +1,4 @@
-export * from "./use-editor";
+export * from "./use-editor-view";
 export * from "./use-editor-mode";
 export * from "./use-dom-event";
 export * from "./use-keyboard-event";

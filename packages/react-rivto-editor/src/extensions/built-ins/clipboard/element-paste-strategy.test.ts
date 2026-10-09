@@ -15,9 +15,9 @@ describe("ElementPasteStrategy", () => {
       zIndex: 2,
       props: { text: "Copied" },
     });
-    const reactEditor = createReactEditor({ editor });
-    const uninstall = installEdgelessRuntime(reactEditor);
-    const created = new ElementPasteStrategy(reactEditor).paste({
+    const editorView = createReactEditor({ editor });
+    const uninstall = installEdgelessRuntime(editorView);
+    const created = new ElementPasteStrategy(editorView).paste({
       bundle: {
         version: 4,
         blocks: [],
@@ -48,9 +48,9 @@ describe("ElementPasteStrategy", () => {
       frame: { x: 34, y: 44, width: 100, height: 40 },
       props: { text: "Copied" },
     });
-    expect(findEdgelessRuntime(reactEditor)?.get().items).toEqual([]);
+    expect(findEdgelessRuntime(editorView)?.get().items).toEqual([]);
     uninstall();
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
@@ -65,10 +65,10 @@ describe("ElementPasteStrategy", () => {
     };
     editor.elements.insertElement(source);
     editor.elements.removeElement(source.id);
-    const reactEditor = createReactEditor({ editor });
-    const uninstall = installEdgelessRuntime(reactEditor);
+    const editorView = createReactEditor({ editor });
+    const uninstall = installEdgelessRuntime(editorView);
 
-    const created = new ElementPasteStrategy(reactEditor).paste({
+    const created = new ElementPasteStrategy(editorView).paste({
       bundle: { version: 4, blocks: [], elements: [source], selectedElementIds: [source.id] },
       selection: undefined,
     }, {});
@@ -77,17 +77,17 @@ describe("ElementPasteStrategy", () => {
     expect([...(created?.elementIdMap ?? [])]).toEqual([[source.id, source.id]]);
     expect(editor.elements.getElement(source.id)?.props).toEqual({ text: "Cut" });
     uninstall();
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   it("uses the block import map without reading block selection order", async () => {
     const editor = await createTestCoreEditor({ mode: "edgeless" });
     const destinationId = editor.blocks.insertBlock({ type: "paragraph", content: "Pasted" }).id;
-    const reactEditor = createReactEditor({ editor });
-    const uninstall = installEdgelessRuntime(reactEditor);
+    const editorView = createReactEditor({ editor });
+    const uninstall = installEdgelessRuntime(editorView);
 
-    const created = new ElementPasteStrategy(reactEditor).paste({
+    const created = new ElementPasteStrategy(editorView).paste({
       bundle: {
         version: 4,
         blocks: [{
@@ -117,7 +117,7 @@ describe("ElementPasteStrategy", () => {
       endBlockId: destinationId,
     });
     uninstall();
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 });
@@ -126,7 +126,7 @@ it("pastes cards into an explicit second document and remaps their block referen
   const { DocumentModelImpl } = await import("@chulane/document-model");
   const { YjsDoc } = await import("@chulane/crdt-doc");
   const { createTestMultiEditor } = await import("../../../test-utils");
-  const { createReactEditor: createRuntime } = await import("../../../react-editor");
+  const { createTestReactEditor: createRuntime } = await import("../../../test-utils");
   const { standardPreset } = await import("../built-ins");
   const multi = await createTestMultiEditor([new DocumentModelImpl(new YjsDoc("A")), new DocumentModelImpl(new YjsDoc("B"))], undefined, { extensions: [standardPreset()] });
   const runtime = multi.getEditor("B")!;

@@ -6,7 +6,7 @@ import type {
   EditorEvent,
   EditorEventHandler,
 } from "../../managers";
-import { useReactEditor } from "./use-editor";
+import { useEditorView } from "./use-editor-view";
 
 /**
  * Registers one typed native event through the editor's unified DOM runtime.
@@ -22,7 +22,7 @@ export function useDOMEvent<
   definition: DOMEventDefinition<Target, Type>,
   listener: EditorEventHandler<EditorEvent<Target, Type>>,
 ): void {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const definitionRef = useRef(definition);
   const listenerRef = useRef(listener);
   definitionRef.current = definition;
@@ -35,7 +35,7 @@ export function useDOMEvent<
   const passive = definition.passive;
   const type = definition.type;
 
-  useEffect(() => reactEditor.events.register({
+  useEffect(() => editorView.events.register({
     ...definitionRef.current,
     when: (event) => definitionRef.current.when?.(event) ?? true,
   },
@@ -43,7 +43,7 @@ export function useDOMEvent<
   ), [
     capture,
     definition.id,
-    reactEditor,
+    editorView,
     modeKey,
     passive,
     scope,

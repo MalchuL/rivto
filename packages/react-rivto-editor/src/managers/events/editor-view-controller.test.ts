@@ -1,10 +1,11 @@
+import { EditorViewApi } from "../../editor-view-api";
 import { createCaretSelection, createStructuralSelection } from "@chulane/rivto";
 import { registerCollapse } from "../../extensions/built-ins/page/collapse/register";
 import { DocumentStorage } from "@chulane/document-model";
 import { DemoDatabase, DBDocumentModel } from "../../../../../demo/src/database";
 import { BroadcastChannelProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { EditorStorage } from "../../editor-storage";
-import { createReactEditor } from "../../react-editor";
+import { createEditorRuntime } from "../../editor-runtime";
 import { EditorViewController } from "./editor-view-controller";
 import { getEdgelessRuntime, installEdgelessRuntime } from "../../extensions/built-ins/selection/edgeless-runtime";
 import { getEdgelessSurfaceOptions, registerEdgelessSurface } from "../../extensions/edgeless/register";
@@ -64,7 +65,7 @@ async function fixture() {
   const modelA = await storage.create("A", [{ id: "same-id", type: "paragraph", content: "A" }]);
   const modelB = await storage.create("B", [{ id: "same-id", type: "paragraph", content: "B" }]);
   const seeds = new Map([["A", modelA], ["B", modelB]]);
-  const core = new EditorStorage({ openDocument: async (id) => { const model = seeds.get(id); seeds.delete(id); return model ?? storage.openDocument(id); }, createEditor: (editor) => { editor.blockRegistry.defineBlock({ type: "paragraph" }); return createReactEditor({ editor }); } });
+  const core = new EditorStorage({ openDocument: async (id) => { const model = seeds.get(id); seeds.delete(id); return model ?? storage.openDocument(id); }, createEditor: (editor) => { editor.blockRegistry.defineBlock({ type: "paragraph" }); return createEditorRuntime({ editor }); } });
   const a = await core.acquireEditor("A"); const b = await core.acquireEditor("B");
   const editor = a.editor;
   return { storage, a, b, core, editor, connections, disconnections };
@@ -151,14 +152,14 @@ test.each(["block", "edgeless"] as const)("view and shared selection calls repla
   const api = view.getSnapshot().api!;
   const calls: string[] = [];
   const cancelOld = api.selection.scheduleIfSelectionUnchanged(() => calls.push("old"), () => calls.push("cancelled"));
-  f.editor.selection.scheduleIfSelectionUnchanged(() => {
+  api.selection.scheduleIfSelectionUnchanged(() => {
     expect(f.editor.events.getRoot()).toBe(viewRoot);
     calls.push("new");
   });
   expect(calls).toEqual(["cancelled"]);
   expect(frames.size).toBe(1);
   expect(api.selection.hasPendingSelectionCallback).toBe(true);
-  expect(f.editor.selection.hasPendingSelectionCallback).toBe(true);
+  expect(api.selection.hasPendingSelectionCallback).toBe(true);
   cancelOld();
   for (const callback of frames.values()) callback(0);
   expect(calls).toEqual(["cancelled", "new"]);
@@ -227,7 +228,7 @@ test.each(["block", "edgeless"] as const)("view cleanup cancels local DOM work, 
   secondApi.selection.scheduleIfSelectionUnchanged(() => { throw new Error("destroyed runtime ran"); }, () => {
     cancelled.push("second");
     // A view's cancellation can schedule shared work; teardown must cancel that too.
-    f.editor.selection.scheduleIfSelectionUnchanged(() => { throw new Error("teardown work ran"); }, () => { cancelled.push("runtime"); });
+    secondApi.selection.scheduleIfSelectionUnchanged(() => { throw new Error("teardown work ran"); }, () => { cancelled.push("runtime"); });
   });
   expect(frames.size).toBe(2);
   let inputs = 0;
@@ -252,7 +253,7 @@ test.each(["block", "edgeless"] as const)("view cleanup cancels local DOM work, 
   const cleanup = () => { cleanups += 1; expect(frames.size).toBe(0); };
   f.editor.extensions.install({ id: "cleanup.order", setup: () => cleanup });
   f.editor.destroy();
-  expect(cancelled).toEqual(["first", "second", "remounted", "runtime"]);
+  expect(cancelled).toEqual(["first", "second", "runtime", "remounted"]);
   expect(cleanups).toBe(1);
   expect(secondApi.selection.hasPendingSelectionCallback).toBe(false);
   expect(remountedApi.selection.hasPendingSelectionCallback).toBe(false);
@@ -506,7 +507,7 @@ test("two editors synchronize their two shared documents while each third docume
   const modelD = await second.create("D", [{ id: "shared", type: "paragraph", content: "Only second user" }]);
   await eventually(() => expect(second.getDocumentIds()).toEqual(expect.arrayContaining(["A", "B", "C", "D"])));
   const seeds = [new Map([["A", modelA], ["B", modelB], ["C", modelC]]), new Map([["D", modelD]])];
-  const cores = stores.map((storage, user) => new EditorStorage({ openDocument: async (id) => { const model = seeds[user]!.get(id); seeds[user]!.delete(id); return model ?? storage.openDocument(id); }, createEditor: (editor) => { editor.blockRegistry.defineBlock({ type: "paragraph" }); return createReactEditor({ editor }); } }));
+  const cores = stores.map((storage, user) => new EditorStorage({ openDocument: async (id) => { const model = seeds[user]!.get(id); seeds[user]!.delete(id); return model ?? storage.openDocument(id); }, createEditor: (editor) => { editor.blockRegistry.defineBlock({ type: "paragraph" }); return createEditorRuntime({ editor }); } }));
   const leases = await Promise.all([["A", "B", "C"], ["A", "B", "D"]].map((ids, user) => Promise.all(ids.map((id) => cores[user]!.acquireEditor(id)))));
   const views = leases.map((entries, user) => entries.map((entry) => new EditorViewController(entry.editor, undefined, cores[user])));
   const cleanups = views.flat().map((view) => view.mount());
@@ -662,8 +663,8 @@ test("retained slash and clipboard APIs keep their surface without changing the 
   const calls: string[] = [];
   const disposeCommand = f.editor.slashCommands.register({
     id: "view.explicit", title: "Explicit view",
-    execute: ({ reactEditor }) => {
-      calls.push(reactEditor.events.getSurfaceType());
+    execute: ({ editorView }) => {
+      calls.push(editorView.events.getSurfaceType());
       expect(f.editor.events.getRoot()).toBe(canvasRoot);
     },
   });
@@ -672,8 +673,8 @@ test("retained slash and clipboard APIs keep their surface without changing the 
   canvasApi.slashCommands.execute("view.explicit", { blockId: "same-id" });
   expect(calls).toEqual(["block", "edgeless"]);
   // Hover dispatch supplies its receiver without replacing the focused root.
-  f.editor.events.register({ id: "view.hover", type: "pointermove" }, ({ reactEditor, mode }) => {
-    expect(reactEditor).toBe(pageApi);
+  f.editor.events.register({ id: "view.hover", type: "pointermove" }, ({ editorView, mode }) => {
+    expect(editorView).toBe(pageApi);
     expect(mode).toBe("block");
     expect(f.editor.events.getRoot()).toBe(canvasRoot);
     return false;
@@ -695,5 +696,28 @@ test("retained slash and clipboard APIs keep their surface without changing the 
   expect(f.editor.elements.getElements().filter(({ type }) => type === "text")).toHaveLength(before + 1);
   expect(f.editor.events.getRoot()).toBe(canvasRoot);
   removeStrategy(); disposeCommand(); closePage(); closeCanvas();
+  await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
+});
+
+
+test("view editors share runtime registrations and keep independent DOM managers", async () => {
+  const f = await fixture();
+  const first = new EditorViewController(f.editor);
+  const second = new EditorViewController(f.editor);
+  const a = first.getSnapshot().api!;
+  const b = second.getSnapshot().api!;
+  expect(a).toBeInstanceOf(EditorViewApi);
+  expect(a.runtime).toBe(f.editor);
+  expect(b.runtime).toBe(f.editor);
+  expect(a.blocks).toBe(b.blocks);
+  expect(a.history).toBe(b.history);
+  expect(a.clipboard.pasteStrategies).toBe(b.clipboard.pasteStrategies);
+  expect(a.events).not.toBe(b.events);
+  expect(a.selection).not.toBe(b.selection);
+  expect("readDOM" in f.editor.selection).toBe(false);
+  expect("createViewApi" in a.clipboard).toBe(false);
+  a.destroy();
+  b.blocks.updateBlock("same-id", { content: "Runtime remains available" });
+  expect(b.blocks.getBlockNode("same-id")?.content).toBe("Runtime remains available");
   await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });

@@ -54,10 +54,10 @@ describe("useBlockEditing", () => {
         createElement("div", text.attributes),
       );
     };
-    const reactEditor = createReactEditor({ editor });
-    reactEditor.surfaces.register("block", Surface);
+    const editorView = createReactEditor({ editor });
+    editorView.surfaces.register("block", Surface);
 
-    renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(Surface)));
+    renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
 
     expect(text?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
     expect(text?.attributes[BLOCK_CONTENT_ATTRIBUTE]).toBe("");
@@ -93,7 +93,7 @@ describe("useBlockEditing", () => {
     expect(editor.blocks.getBlockNode(blockId)?.props.count).toBeUndefined();
     expect(() => structural?.operations.setProp("count", 4)).toThrow(/not found/);
 
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 });

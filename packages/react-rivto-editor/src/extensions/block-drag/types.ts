@@ -10,7 +10,7 @@
 import type { EditorBlock as Block } from "@chulane/rivto";
 import type { ReactNode } from "react";
 import type { CrossDocumentBlockTransferPlacement } from "../built-ins/clipboard/cross-document-block-transfer";
-import type { ReactEditor } from "../../types";
+import type { EditorViewApi } from "../../types";
 import type { CanonicalDropPlacement } from "./placement/types";
 
 /** Viewport pointer coordinates for a drag gesture. */
@@ -28,7 +28,7 @@ export interface PointerTracker {
 /** Live destination surface operations used by a source drag provider. */
 export interface CrossDocumentPageRootController {
   /** Executes placement reads and commits within the destination occurrence; its fixed model is available through getDocument without an explicit transfer model. */
-  reactEditor: ReactEditor;
+  editorView: EditorViewApi;
   root: HTMLElement;
   setPlacement: (placement: DropPlacement | null, empty?: boolean) => void;
   resolvePlacement: (x: number, y: number, sources: readonly Block[], sourceDocumentId: string) => CrossDocumentBlockTransferPlacement & {

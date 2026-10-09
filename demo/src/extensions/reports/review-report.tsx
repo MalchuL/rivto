@@ -374,11 +374,11 @@ export function reviewReportExtensions(options: {
     }),
     {
       id: "demo.review-report.elements",
-      setup: (reactEditor) => {
-        reactEditor.extensions.mount(() => (
+      setup: (editorRuntime) => {
+        editorRuntime.extensions.mount(() => (
           <ReviewElementLayer editor={options.editor} saveReport={options.saveReport} />
         ));
-        return reactEditor.elements.registerProcessor({
+        return editorRuntime.elements.registerProcessor({
           id: "demo.review-report.props",
           priority: 0,
           processor: (element) => element.type === REVIEW_REPORT_TYPE

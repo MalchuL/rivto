@@ -6,7 +6,7 @@
  */
 import type { BlockRegistryManager, RivtoEditorApi } from "@chulane/rivto";
 import type { BlockTypesCapability } from "../../capabilities";
-import type { ReactEditorImpl } from "../../react-editor";
+import type { EditorRuntime } from "../../editor-runtime";
 import { getBlockContainment, type ReactBlockRegistration } from "./types";
 
 /** Coordinates one block type's core definition and React presentation. */
@@ -16,11 +16,11 @@ export class BlockTypeManager implements BlockTypesCapability {
 
   /**
    * Creates the block-type registration manager.
-   * @param reactEditor - Owning React runtime providing presentation managers.
+   * @param editorRuntime - Owning React runtime providing presentation managers.
    * @param editor - Core runtime providing definitions and block mutations.
    */
   constructor(
-    private readonly reactEditor: ReactEditorImpl,
+    private readonly editorRuntime: EditorRuntime,
     private readonly editor: RivtoEditorApi,
   ) {}
 
@@ -32,7 +32,7 @@ export class BlockTypeManager implements BlockTypesCapability {
    */
   register(registration: ReactBlockRegistration): () => void {
     const core = this.editor.blocks;
-    const { extensions, renderers, slashCommands, views } = this.reactEditor;
+    const { extensions, renderers, slashCommands, views } = this.editorRuntime;
     extensions.assertActive();
     const { definition, render, slashCommand, view } = registration;
     if (renderers.has(definition.type)) {
@@ -92,7 +92,7 @@ export class BlockTypeManager implements BlockTypesCapability {
    * @returns Whether a complete registration existed and was disposed.
    */
   delete(type: string): boolean {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     const dispose = this.registrations.get(type);
     if (!dispose) return false;
     dispose();

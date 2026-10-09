@@ -4,10 +4,10 @@
 
 ## Runtime hooks
 
-### `useReactEditor()`
+### `useEditorView()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** stable `ReactEditor`.
+- **Возвращает:** stable `EditorViewApi`.
 - **Исключения:** та же provider error.
 
 ### `useContext(SurfaceContext)`
@@ -84,7 +84,7 @@ Text selection намеренно возвращает `null`.
 - **Возвращает:** block/operations, `attributes`, `preventTextEditingAttributes`. Методы `setProps` и типизированный `setProp` находятся в `operations`.
 - **Исключения:** provider error; setters передают schema/store errors.
 
-В рендере читайте `block.props`, а внутри event closures — актуальный `reactEditor.blocks.getBlockNode(blockId)`. `operations.setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
+В рендере читайте `block.props`, а внутри event closures — актуальный `editorView.blocks.getBlockNode(blockId)`. `operations.setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
 
 ### Отдельные команды и DOM
 

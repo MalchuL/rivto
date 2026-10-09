@@ -1,14 +1,15 @@
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorAcquisition, EditorStorage } from "../../editor-storage";
-import type { ReactEditor } from "../../types";
-import type { ReactEditorView, SelectionCapability } from "../../capabilities";
+import type { EditorViewApi } from "../../types";
+import { EditorViewApi as ViewEditor } from "../../editor-view-api";
+import type { EditorRuntime } from "../../editor-runtime";
 import { DOCUMENT_VIEW_ATTRIBUTE, type DocumentViewScope } from "./document-view";
 
 /** Immutable loading state observed by the EditorView boundary. */
 export interface EditorViewSnapshot {
   readonly status: "loading" | "available" | "missing" | "error";
   readonly document?: DocumentModel;
-  readonly api?: ReactEditor;
+  readonly api?: EditorViewApi;
   readonly error?: unknown;
   readonly retained?: boolean;
 }
@@ -35,7 +36,7 @@ export class EditorViewController implements DocumentViewScope {
    * @param rootBlockId - Optional subtree; omitted to display the full document.
    * @param storage - Optional host cache from EditorStorageContext; omitted for a caller-owned standalone editor.
    */
-  constructor(readonly editor: ReactEditor, readonly rootBlockId?: string, private readonly storage?: EditorStorage) { this.bind(editor.getDocument()); }
+  constructor(readonly editor: EditorRuntime, readonly rootBlockId?: string, private readonly storage?: EditorStorage) { this.bind(editor.getDocument()); }
 
   /** @returns Current immutable document/loading snapshot. */
   getSnapshot = (): EditorViewSnapshot => this.snapshot;
@@ -97,6 +98,7 @@ export class EditorViewController implements DocumentViewScope {
       this.request = undefined;
       this.unsubscribeBlock?.(); this.unsubscribeBlock = undefined;
       this.unregisterRoot?.(); this.unregisterRoot = undefined;
+      this.snapshot.api?.destroy();
       this.registrations.forEach((release) => release());
       // StrictMode can mount this controller again; its next acquisition needs fresh view bindings.
       this.publish({ status: "loading" });
@@ -144,113 +146,9 @@ export class EditorViewController implements DocumentViewScope {
     );
   }
 
-  /**
-   * Scopes selection and DOM events to a rendered occurrence of this document.
-   *
-   * The returned API acquires no document and shares presentation registrations
-   * with its host. Managers delegate directly to the permanently bound core,
-   * so retained callbacks keep using their source after focus changes.
-   * Subscriptions remain attached to the model used when they are registered.
-   * Synchronous transaction callbacks use that same core; asynchronous
-   * work must call the returned managers again after awaiting.
-   * Selection reads return empty values outside the selected document and
-   * occurrence; local shortcuts and event registrations are owned by the scope.
-   *
-   * The controller's rootBlockId constrains selection and navigation. Its mounted
-   * DOM root routes local events and shortcuts; the controller owns their cleanup.
-   * Document managers, registries, and lifecycle remain shared by these views.
-   * Retained manager methods use this model on every call, including after focus
-   * changes. Transaction callbacks are synchronous; after awaiting, call the
-   * bound managers again rather than relying on a surrounding context.
-   * The API has no independent destruction or acquisition ownership.
-   *
-   * @param document - Fixed source model displayed by this occurrence.
-   * @returns Document-bound API sharing registries, DOM events, and lifecycle with this editor.
-   */
-  private createApi(document: DocumentModel): ReactEditor {
-    const selection = this.editor.selection;
-    let checkedSelection: ReturnType<typeof selection.snapshot>;
-    let checkedRevision = -1; let contained = false;
-    const containsSelection = (value: Parameters<SelectionCapability["set"]>[0]) => !this.rootBlockId || value.blocks.every(({ id }) => {
-      let current: string | null | undefined = id;
-      while (current) { if (current === this.rootBlockId) return true; current = document.blocks.getParentId(current); }
-      return false;
-    });
-    const ownsSelection = () => {
-      if (this.getRoot() === null || this.editor.events.getRoot() !== this.getRoot()) return false;
-      const value = selection.snapshot();
-      if (!value) return false;
-      if (!this.rootBlockId) return true;
-      // Rows share an immutable snapshot; membership is checked once per revision.
-      if (value !== checkedSelection || document.blocks.revision !== checkedRevision) {
-        checkedSelection = value; checkedRevision = document.blocks.revision; contained = containsSelection(value);
-      }
-      return contained;
-    };
-    const selectionApi: SelectionCapability = {
-      subscribe: selection.subscribe.bind(selection),
-      clear: selection.clear.bind(selection),
-      createViewApi: (next) => selection.createViewApi(next),
-      readDOM: () => viewSelection.readDOM(),
-      scheduleIfSelectionUnchanged: (callback, onCancel) => viewSelection.scheduleIfSelectionUnchanged(callback, onCancel),
-      get hasPendingSelectionCallback() { return viewSelection.hasPendingSelectionCallback; },
-      get: () => ownsSelection() ? selection.get() : undefined,
-      snapshot: () => ownsSelection() ? selection.snapshot() : undefined,
-      set: (value: Parameters<SelectionCapability["set"]>[0]) => {
-        if (value?.type === "selection" && Array.isArray(value.blocks) && !containsSelection(value)) { selection.clear(); return; }
-        viewSelection.set(value);
-      },
-      isBlockSelected: (id: string) => ownsSelection() && selection.isBlockSelected(id),
-      isElementSelected: (id: string) => ownsSelection() && selection.isElementSelected(id),
-      delete: () => { if (ownsSelection()) viewSelection.delete(); },
-      restoreDOM: (value = selectionApi.get(), options?: Parameters<SelectionCapability["restoreDOM"]>[1]) =>
-        Boolean(value) && viewSelection.restoreDOM(value, options),
-    };
-    const editor = this.editor;
-    const api: ReactEditorView = {
-      view: this,
-      documentId: document.id,
-      rootBlockId: this.rootBlockId,
-      get events() { return events; },
-      get keyboard() { return keyboard; },
-      selection: selectionApi,
-      blocks: editor.blocks,
-      blockElements: editor.blockElements,
-      blockTypes: editor.blockTypes,
-      blockListProps: editor.blockListProps,
-      elements: editor.elements,
-      mode: editor.mode,
-      commands: editor.commands,
-      history: editor.history,
-      renderers: editor.renderers,
-      views: editor.views,
-      get clipboard() { return clipboard; },
-      surfaces: editor.surfaces,
-      extensions: editor.extensions,
-      get slashCommands() { return slashCommands; },
-      get revision() { return editor.revision; },
-      get createDefaultBlock() { return editor.createDefaultBlock; },
-      set createDefaultBlock(value) { editor.createDefaultBlock = value; },
-      get isEmptyBlock() { return editor.isEmptyBlock; },
-      set isEmptyBlock(value) { editor.isEmptyBlock = value; },
-      installDefaultWriting: (options) => editor.installDefaultWriting(options),
-      subscribe: (listener) => editor.subscribe(listener),
-      getDocument: () => document,
-      // A view releases its acquisition through mount cleanup; it never destroys the shared editor.
-      destroy: () => {},
-    };
-    // Factories capture the view; selection needs its events API to be ready first.
-    const events = editor.events.createViewApi(api);
-    const keyboard = editor.keyboard.createViewApi(api);
-    const viewSelection = selection.createViewApi(api);
-    const clipboard = editor.clipboard.createViewApi(api);
-    const slashCommands = editor.slashCommands.createViewApi(api);
-    return api;
-  }
-
   private bind(document: DocumentModel, retained = false): void {
     const existing = this.snapshot.document === document;
-    const api = existing && this.snapshot.api ? this.snapshot.api : this.createApi(document);
+    const api = existing && this.snapshot.api ? this.snapshot.api : new ViewEditor(this.editor, this, this.rootBlockId);
     let status: EditorViewSnapshot["status"] = "available";
     if (this.rootBlockId) {
       if (document.blocks.hasBlock(this.rootBlockId)) this.seen = true;

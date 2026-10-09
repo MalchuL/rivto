@@ -117,7 +117,7 @@ export function CreationPanel({
               label="Eraser"
               icon="eraser"
               pressed={tool.tool === "eraser"}
-              onClick={() => { controller.reactEditor.commands.execute("edgeless.tool.set", { tool: "eraser" }); }}
+              onClick={() => { controller.editor.commands.execute("edgeless.tool.set", { tool: "eraser" }); }}
             />
           </>
         }
@@ -179,7 +179,7 @@ export function CreationPanel({
               pressed={tool.tool === "connector" && tool.route === route}
               onClick={() => {
                 controller.setCreationDefaults("connector", { route });
-                controller.reactEditor.commands.execute("edgeless.tool.set", { tool: "connector", route });
+                controller.editor.commands.execute("edgeless.tool.set", { tool: "connector", route });
               }}
             />
           ))}

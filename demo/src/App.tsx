@@ -8,7 +8,7 @@ import {
 import { BroadcastChannelProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
 import {
-  createReactEditor,
+  createEditorRuntime,
   createKanbanBlockInput,
   createBentoBlockInput,
   createTableBlockInput,
@@ -22,7 +22,7 @@ import {
   EditorView,
   EditorStorage,
   EditorStorageContext,
-  type ReactEditor,
+  type EditorRuntime,
   embeddingExtension,
   EMBEDDING_BLOCK_TYPE,
   KEYBOARD_BINDING_IDS,
@@ -282,13 +282,13 @@ async function createDemoDocument() {
 async function destroyDemoEditor(runtime: {
   readonly storage: DocumentStorage;
   readonly editor: RivtoEditorApi;
-  readonly reactEditor: ReactEditor;
+  readonly editorRuntime: EditorRuntime;
   readonly editorStorage?: EditorStorage;
 }): Promise<void> {
   if (runtime.editorStorage) {
     await runtime.editorStorage.destroy();
   } else {
-    runtime.reactEditor.destroy();
+    runtime.editorRuntime.destroy();
     runtime.editor.destroy();
     await runtime.editor.getDocument().destroy();
   }
@@ -324,7 +324,7 @@ async function createDemoEditor() {
       return document ?? resources.storage.openDocument(id);
     },
     createEditor: (documentEditor) => {
-      return createReactEditor({
+      return createEditorRuntime({
         editor: documentEditor,
         keymap: alternateKeymap,
         extensions: [
@@ -353,12 +353,12 @@ async function createDemoEditor() {
     },
   });
   const editor = await editorStorage.getSingleEditor(resources.document.id);
-  const reactEditor = editorStorage.getEditor(editor.getDocument().id)!;
+  const editorRuntime = editorStorage.getEditor(editor.getDocument().id)!;
   // Playwright and host scripts locate this demo instance through window, not React refs.
   // The token changes on each create so a stale handle cannot be mistaken for a remount.
   const demoToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   Object.assign(window, {
-    __rivtoDemo: { token: demoToken, editor, reactEditor },
+    __rivtoDemo: { token: demoToken, editor, editorRuntime },
   });
   const introId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
@@ -576,7 +576,7 @@ async function createDemoEditor() {
   }, paragraphId);
   editor.history.clear();
 
-  return { ...resources, editor, reactEditor, editorStorage };
+  return { ...resources, editor, editorRuntime, editorStorage };
 }
 
 /**
@@ -588,7 +588,7 @@ async function createDemoEditor() {
 async function createEmptyDemoEditor() {
   const resources = await createDemoDocument();
   const editor = createRivtoEditor({ document: resources.document });
-  const reactEditor = createReactEditor({
+  const editorRuntime = createEditorRuntime({
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
@@ -601,7 +601,7 @@ async function createEmptyDemoEditor() {
       ...demoReviewReports(editor),
     ],
   });
-  return { ...resources, editor, reactEditor };
+  return { ...resources, editor, editorRuntime };
 }
 
 /**
@@ -799,7 +799,7 @@ function JournalDemoApp() {
         {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
         <section className="journal-document" data-journal-document="today">
           <EditorStorageContext.Provider value={todayEditor.editorStorage}>
-            <EditorView reactEditor={todayEditor.reactEditor}
+            <EditorView runtime={todayEditor.editorRuntime}
               virtualizePageThreshold={virtualizePageThreshold} virtualizePageOverscan={virtualizePageOverscan}>
               <DemoToolbar
                 editor={todayEditor.editor}
@@ -818,7 +818,7 @@ function JournalDemoApp() {
           </EditorStorageContext.Provider>
         </section>
         <section className="journal-document" data-journal-document="yesterday">
-          <EditorView reactEditor={yesterdayEditor.reactEditor}>
+          <EditorView runtime={yesterdayEditor.editorRuntime}>
             <JournalDate date={dates.yesterday} />
             <PageSurface />
           </EditorView>
@@ -842,7 +842,7 @@ async function createMultiEditor(
 ) {
   const resources = await createDemoDocument();
   const editor = createRivtoEditor({ document: resources.document });
-  const reactEditor = createReactEditor({
+  const editorRuntime = createEditorRuntime({
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
@@ -895,7 +895,7 @@ async function createMultiEditor(
     editor.blocks.insertBlock({ id: "right-counter", type: COUNTER_BLOCK_TYPE, props: { count: 20 } });
   }
   editor.history.clear();
-  return { ...resources, editor, reactEditor };
+  return { ...resources, editor, editorRuntime };
 }
 
 /** Used by e2e: hidden `editor.dump()` for asserting structure not shown in the UI. */
@@ -921,7 +921,7 @@ function MultiEditorPane({
     // `data-multi-editor` is used by e2e to scope left/right locators.
     <section className="multi-editor-pane" data-multi-editor={side}>
       <BlockIdsVisibleProvider visible={showBlockIds}>
-        <EditorView reactEditor={runtime.reactEditor}>
+        <EditorView runtime={runtime.editorRuntime}>
           <DemoToolbar editor={runtime.editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
           <RevisionsPanel />
           <DocumentStateDump editor={runtime.editor} />
@@ -1016,7 +1016,7 @@ async function createSyncedPeer(side: "left" | "right", roomId: string, repeatCo
     throw failure;
   }
   const editor = createRivtoEditor({ document: document! });
-  const reactEditor = createReactEditor({
+  const editorRuntime = createEditorRuntime({
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
@@ -1049,7 +1049,7 @@ async function createSyncedPeer(side: "left" | "right", roomId: string, repeatCo
     });
     editor.history.clear();
   }
-  return { storage, editor, reactEditor };
+  return { storage, editor, editorRuntime };
 }
 
 /**
@@ -1094,7 +1094,7 @@ function SyncEditorsApp() {
           // `data-editor-sync` is used by e2e to scope sync panes.
           <section key={side} className="multi-editor-pane" data-editor-sync={side}>
             <BlockIdsVisibleProvider visible={showBlockIds}>
-              <EditorView reactEditor={peers[side].reactEditor}>
+              <EditorView runtime={peers[side].editorRuntime}>
                 <DemoToolbar editor={peers[side].editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
                 <RevisionsPanel />
                 <DemoEditorSurface />

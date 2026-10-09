@@ -1,4 +1,5 @@
-import { createReactEditor as createRuntime } from "../react-editor";
+import type { EditorRuntime } from "../editor-runtime";
+import { createEditorRuntime as createRuntime } from "../editor-runtime";
 import { createTestReactEditor as createReactEditor } from "../test-utils";
 import { createTestCoreEditor as createEditor } from "../test-utils";
 import {
@@ -22,14 +23,14 @@ import {
   KeyboardManager,
   type ReactEditorExtension,
 } from "../managers";
-import { type ReactEditor } from "../react-editor";
+import { type EditorViewApi } from "../editor-view-api";
 import {
   standardPreset,
   trailingBlockExtension,
 } from "../extensions/built-ins/built-ins";
 import { pageDragExtension } from "../extensions/block-drag";
 import { edgelessPreset } from "../extensions/edgeless";
-import { isReactEditor, isRivtoEditor } from "../utils";
+import { isEditorViewApi, isRivtoEditor } from "../utils";
 import { EditorStorage } from "../editor-storage";
 import { EditorStorageContext } from "../editor-storage-context";
 import { createTestMultiEditor } from "../test-utils";
@@ -46,7 +47,7 @@ const EmptyEditorWrapper: ComponentType<{ readonly children?: ReactNode }> = ({
   children,
 }) => children;
 
-describe("ReactEditor", () => {
+describe("EditorViewApi", () => {
   test("nested views inherit the nearest storage while independent providers keep equal document IDs separate", async () => {
     const first = await createTestMultiEditor([new DocumentModelImpl(new YjsDoc("shared"))]);
     const second = await createTestMultiEditor([new DocumentModelImpl(new YjsDoc("shared"))]);
@@ -59,9 +60,9 @@ describe("ReactEditor", () => {
       return storage?.getEditor("shared")?.blocks.getBlockNode("same")?.content;
     }
     const markup = renderToStaticMarkup(createElement(EditorStorageContext.Provider, { value: first },
-      createElement(EditorView, { reactEditor: a }, createElement(EditorView, { reactEditor: a, rootBlockId: "same" }, createElement(Source))),
-      createElement(EditorStorageContext.Provider, { value: second }, createElement(EditorView, { reactEditor: b }, createElement(Source))),
-      createElement(EditorView, { reactEditor: a }, createElement(Source)),
+      createElement(EditorView, { runtime: a }, createElement(EditorView, { runtime: a, rootBlockId: "same" }, createElement(Source))),
+      createElement(EditorStorageContext.Provider, { value: second }, createElement(EditorView, { runtime: b }, createElement(Source))),
+      createElement(EditorView, { runtime: a }, createElement(Source)),
     ));
     expect(markup).toBe("First userSecond userFirst user");
     expect(a.getDocument()).not.toBe(b.getDocument());
@@ -74,11 +75,11 @@ describe("ReactEditor", () => {
     const replacement = new DocumentModelImpl(new YjsDoc("bound-replacement"));
     const mediator = await createTestMultiEditor([host, source, replacement]);
     const editor = await mediator.getSingleEditor(host.id);
-    const reactEditor = mediator.getEditor(host.id)!;
+    const editorRuntime = mediator.getEditor(host.id)!;
     editor.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Host" });
     source.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Source" });
     replacement.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Replacement" });
-    reactEditor.mode.set("edgeless");
+    editorRuntime.mode.set("edgeless");
     const sourceEditor = mediator.getEditor(source.id)!;
     const controller = new EditorViewController(sourceEditor, "shared-id");
     const closeView = controller.mount();
@@ -89,8 +90,8 @@ describe("ReactEditor", () => {
     expect(view.blocks).toBe(sourceEditor.blocks);
     expect(view.mode).toBe(sourceEditor.mode);
     expect(view.mode.get()).toBe("block");
-    expect(reactEditor.mode).toBe(editor.mode);
-    expect(reactEditor.mode.get()).toBe("edgeless");
+    expect(editorRuntime.mode).toBe(editor.mode);
+    expect(editorRuntime.mode.get()).toBe("edgeless");
     const changes: string[] = [];
     const unsubscribe = view.blocks.subscribeBlockNode("shared-id", () => {
       changes.push(view.blocks.getBlockNode("shared-id")!.content);
@@ -123,7 +124,7 @@ describe("ReactEditor", () => {
     update("shared-id", { content: "After unsubscribe" });
     expect(changes).toHaveLength(count);
     closeView();
-    reactEditor.destroy();
+    editorRuntime.destroy();
     await mediator.destroy();
   });
 
@@ -134,11 +135,11 @@ describe("ReactEditor", () => {
     storage.registerDocument("first");
     const core = await editors.getSingleEditor("first");
     core.blocks.insertBlock({ id: "first", type: "paragraph", content: "First document" });
-    const reactEditor = editors.getEditor("first")!;
-    expect(reactEditor.blocks).toBe(core.blocks);
-    expect("getSingleEditor" in reactEditor).toBe(false);
-    expect(reactEditor.getDocument()).toBe(core.getDocument());
-    expect(renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(PageSurface)))).toContain("First document");
+    const editorRuntime = editors.getEditor("first")!;
+    expect(editorRuntime.blocks).toBe(core.blocks);
+    expect("getSingleEditor" in editorRuntime).toBe(false);
+    expect(editorRuntime.getDocument()).toBe(core.getDocument());
+    expect(renderToStaticMarkup(createElement(EditorView, { runtime: editorRuntime }, createElement(PageSurface)))).toContain("First document");
     await editors.destroy(); await storage.destroy();
   });
 
@@ -172,43 +173,44 @@ describe("ReactEditor", () => {
 
   test("distinguishes React and core editor runtimes", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
+    const editorView = createReactEditor({ editor });
 
-    expect(isReactEditor(reactEditor)).toBe(true);
-    expect(isRivtoEditor(reactEditor)).toBe(false);
-    expect(isReactEditor(editor)).toBe(false);
+    expect(isEditorViewApi(editorView)).toBe(true);
+    expect(isEditorViewApi(editorView.runtime)).toBe(false);
+    expect(isRivtoEditor(editorView)).toBe(false);
+    expect(isEditorViewApi(editor)).toBe(false);
     expect(isRivtoEditor(editor)).toBe(true);
 
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
-  test("passes the complete ReactEditor runtime directly to extension setup", async () => {
+  test("passes the complete EditorViewApi runtime directly to extension setup", async () => {
     const editor = await createEditor();
-    let received: ReactEditor | undefined;
-    const reactEditor = createRuntime({
+    let received: EditorRuntime | undefined;
+    const editorRuntime = createRuntime({
       editor,
       extensions: [{
         id: "identity",
-        setup(reactEditor) {
-          received = reactEditor;
+        setup(editorRuntime) {
+          received = editorRuntime;
         },
       }],
     });
 
-    expect(received).toBe(reactEditor);
-    const exposesCore: "editor" extends keyof typeof reactEditor ? true : false = false;
+    expect(received).toBe(editorRuntime);
+    const exposesCore: "editor" extends keyof typeof editorRuntime ? true : false = false;
     type RemovedBatching = Extract<
       "batchUpdates" | "batchUpdatesWithoutHistory",
-      keyof typeof reactEditor
+      keyof typeof editorRuntime
     >;
     const exposesBatching: Record<RemovedBatching, never> = {};
     expect(exposesCore).toBe(false);
     expect(exposesBatching).toEqual({});
-    expect(reactEditor).not.toHaveProperty("batchUpdates");
-    expect(reactEditor).not.toHaveProperty("batchUpdatesWithoutHistory");
-    expect(received?.events).toBe(reactEditor.events);
-    reactEditor.destroy();
+    expect(editorRuntime).not.toHaveProperty("batchUpdates");
+    expect(editorRuntime).not.toHaveProperty("batchUpdatesWithoutHistory");
+    expect(received?.events).toBe(editorRuntime.events);
+    editorRuntime.destroy();
     editor.destroy();
   });
 
@@ -222,8 +224,8 @@ describe("ReactEditor", () => {
         return () => calls.push(`cleanup:${id}`);
       },
     });
-    const reactEditor = createReactEditor({ editor, extensions: [extension("a"), extension("b")] });
-    reactEditor.destroy();
+    const editorView = createReactEditor({ editor, extensions: [extension("a"), extension("b")] });
+    editorView.destroy();
     editor.destroy();
     expect(calls).toEqual(["setup:a", "setup:b", "cleanup:b", "cleanup:a"]);
   });
@@ -239,20 +241,20 @@ describe("ReactEditor", () => {
 
   test("registers and disposes a model, renderer, and slash conversion atomically", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const dispose = reactEditor.blockTypes.register({
+    const editorView = createReactEditor({ editor });
+    const dispose = editorView.blockTypes.register({
       definition: { type: "test.card", title: "Card" },
       render: Empty,
       slashCommand: { title: "Card" },
     });
     expect(editor.blockRegistry.has("test.card")).toBe(true);
-    expect(reactEditor.renderers.get("test.card")).toBe(Empty);
+    expect(editorView.renderers.get("test.card")).toBe(Empty);
     const paragraphId = editor.blocks.insertBlock({ type: "paragraph" }).id;
-    expect(reactEditor.slashCommands.getAll({ blockId: paragraphId }).some(({ id }) => id === "type.test.card")).toBe(true);
+    expect(editorView.slashCommands.getAll({ blockId: paragraphId }).some(({ id }) => id === "type.test.card")).toBe(true);
     dispose();
     expect(editor.blockRegistry.has("test.card")).toBe(false);
-    expect(reactEditor.renderers.get("test.card")).toBeUndefined();
-    reactEditor.destroy();
+    expect(editorView.renderers.get("test.card")).toBeUndefined();
+    editorView.destroy();
     editor.destroy();
   });
 
@@ -262,9 +264,9 @@ describe("ReactEditor", () => {
       type: "paragraph",
       listProps: { type: "checkbox", checked: true },
     }).id;
-    const reactEditor = createReactEditor({ editor, extensions: [standardPreset()] });
+    const editorView = createReactEditor({ editor, extensions: [standardPreset()] });
 
-    expect(reactEditor.slashCommands.getAll({ blockId }).map(({ id }) => id)).toEqual(
+    expect(editorView.slashCommands.getAll({ blockId }).map(({ id }) => id)).toEqual(
       expect.arrayContaining([
         "list.list",
         "list.numbered_list",
@@ -272,11 +274,11 @@ describe("ReactEditor", () => {
         "list.continue_numbered_list",
       ]),
     );
-    reactEditor.slashCommands.execute("list.start_numbered_list", { blockId });
+    editorView.slashCommands.execute("list.start_numbered_list", { blockId });
     expect(editor.blocks.getBlockNode(blockId)).toMatchObject({
       listProps: { type: "start_numbered_list", checked: false },
     });
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
@@ -284,12 +286,12 @@ describe("ReactEditor", () => {
     const editor = await createEditor();
     editor.blockRegistry.defineBlock({ type: "test.source" });
     const blockId = editor.blocks.insertBlock({ type: "test.source" }).id;
-    const reactEditor = createReactEditor({
+    const editorView = createReactEditor({
       editor,
       extensions: [standardPreset({ writing: { slashCommand: { group: "Writing" } } })],
     });
 
-    expect(reactEditor.slashCommands.getAll({ blockId })).toEqual(
+    expect(editorView.slashCommands.getAll({ blockId })).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "type.paragraph",
@@ -299,45 +301,45 @@ describe("ReactEditor", () => {
         }),
       ]),
     );
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("rolls block registration back when its slash command conflicts", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const releaseConflict = reactEditor.slashCommands.register({ id: "type.test.conflict", title: "Conflict", execute() {} });
-    expect(() => reactEditor.blockTypes.register({
+    const editorView = createReactEditor({ editor });
+    const releaseConflict = editorView.slashCommands.register({ id: "type.test.conflict", title: "Conflict", execute() {} });
+    expect(() => editorView.blockTypes.register({
       definition: { type: "test.conflict" },
       render: Empty,
       slashCommand: { title: "Conflict" },
     })).toThrow(/already registered/);
     expect(editor.blockRegistry.has("test.conflict")).toBe(false);
-    expect(reactEditor.renderers.get("test.conflict")).toBeUndefined();
+    expect(editorView.renderers.get("test.conflict")).toBeUndefined();
     releaseConflict();
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("keeps mode-specific block wrappers in registration order", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({
+    const editorView = createReactEditor({
       editor,
       extensions: [{
         id: "wrapper",
-        setup: (reactEditor) => {
-          reactEditor.surfaces.registerBlockWrapper("block", EmptyWrapper);
-          reactEditor.surfaces.registerBlockWrapper("block", SecondWrapper);
+        setup: (editorRuntime) => {
+          editorRuntime.surfaces.registerBlockWrapper("block", EmptyWrapper);
+          editorRuntime.surfaces.registerBlockWrapper("block", SecondWrapper);
         },
       }],
     });
-    expect(reactEditor.surfaces.getBlockWrappers("block")).toEqual([
+    expect(editorView.surfaces.getBlockWrappers("block")).toEqual([
       EmptyWrapper,
       SecondWrapper,
     ]);
-    expect(reactEditor.surfaces.getBlockWrappers("edgeless")).toEqual([]);
-    reactEditor.destroy();
-    expect(reactEditor.surfaces.getBlockWrappers("block")).toEqual([]);
+    expect(editorView.surfaces.getBlockWrappers("edgeless")).toEqual([]);
+    editorView.destroy();
+    expect(editorView.surfaces.getBlockWrappers("block")).toEqual([]);
     editor.destroy();
   });
 
@@ -358,85 +360,85 @@ describe("ReactEditor", () => {
       isSelected: false,
       content: null,
     });
-    const reactEditor = createReactEditor({
+    const editorView = createReactEditor({
       editor,
       extensions: [{
         id: "ordered-wrappers",
-        setup: (reactEditor) => {
-          reactEditor.surfaces.register("block", Surface);
-          reactEditor.surfaces.registerBlockWrapper("block", Outer);
-          reactEditor.surfaces.registerBlockWrapper("block", Inner);
+        setup: (editorRuntime) => {
+          editorRuntime.surfaces.register("block", Surface);
+          editorRuntime.surfaces.registerBlockWrapper("block", Outer);
+          editorRuntime.surfaces.registerBlockWrapper("block", Inner);
         },
       }],
     });
 
-    const markup = renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(Surface)));
+    const markup = renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
     expect(markup).toContain(
       '<div data-layer="outer"><div data-layer="inner"><span data-layer="shell"></span></div></div>',
     );
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("supports dynamic public presentation registration and disposal", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const disposeComponent = reactEditor.extensions.mount(EmptyComponent);
-    const disposeEditorWrapper = reactEditor.surfaces.registerEditorWrapper(EmptyEditorWrapper, "block");
-    const disposeSurface = reactEditor.surfaces.register("block", EmptySurface);
-    const disposeBlockWrapper = reactEditor.surfaces.registerBlockWrapper("block", EmptyWrapper);
+    const editorView = createReactEditor({ editor });
+    const disposeComponent = editorView.extensions.mount(EmptyComponent);
+    const disposeEditorWrapper = editorView.surfaces.registerEditorWrapper(EmptyEditorWrapper, "block");
+    const disposeSurface = editorView.surfaces.register("block", EmptySurface);
+    const disposeBlockWrapper = editorView.surfaces.registerBlockWrapper("block", EmptyWrapper);
 
-    expect(reactEditor.extensions.getComponents()).toEqual([EmptyComponent]);
-    expect(reactEditor.surfaces.getEditorWrappers("block")).toEqual([EmptyEditorWrapper]);
-    expect(reactEditor.surfaces.get("block")).toBe(EmptySurface);
-    expect(reactEditor.surfaces.getBlockWrappers("block")).toEqual([EmptyWrapper]);
+    expect(editorView.extensions.getComponents()).toEqual([EmptyComponent]);
+    expect(editorView.surfaces.getEditorWrappers("block")).toEqual([EmptyEditorWrapper]);
+    expect(editorView.surfaces.get("block")).toBe(EmptySurface);
+    expect(editorView.surfaces.getBlockWrappers("block")).toEqual([EmptyWrapper]);
 
     disposeBlockWrapper();
     disposeSurface();
     disposeEditorWrapper();
     disposeComponent();
-    expect(reactEditor.extensions.getComponents()).toEqual([]);
-    expect(reactEditor.surfaces.getEditorWrappers("block")).toEqual([]);
-    expect(reactEditor.surfaces.get("block")).toBeUndefined();
-    expect(reactEditor.surfaces.getBlockWrappers("block")).toEqual([]);
+    expect(editorView.extensions.getComponents()).toEqual([]);
+    expect(editorView.surfaces.getEditorWrappers("block")).toEqual([]);
+    expect(editorView.surfaces.get("block")).toBeUndefined();
+    expect(editorView.surfaces.getBlockWrappers("block")).toEqual([]);
 
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("makes public presentation disposers idempotent", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const dispose = reactEditor.extensions.mount(EmptyComponent);
+    const editorView = createReactEditor({ editor });
+    const dispose = editorView.extensions.mount(EmptyComponent);
 
     dispose();
-    const revisionAfterDisposal = reactEditor.extensions.revision;
+    const revisionAfterDisposal = editorView.extensions.revision;
     dispose();
 
-    expect(reactEditor.extensions.revision).toBe(revisionAfterDisposal);
-    reactEditor.destroy();
+    expect(editorView.extensions.revision).toBe(revisionAfterDisposal);
+    editorView.destroy();
     editor.destroy();
   });
 
   test("runs extension cleanup before removing its owned registrations", async () => {
     const editor = await createEditor();
     let sawMountedComponent = false;
-    const reactEditor = createReactEditor({
+    const editorView = createReactEditor({
       editor,
       extensions: [{
         id: "owned-ui",
-        setup(reactEditor) {
-          reactEditor.extensions.mount(EmptyComponent);
+        setup(editorRuntime) {
+          editorRuntime.extensions.mount(EmptyComponent);
           return () => {
-            sawMountedComponent = reactEditor.extensions.getComponents().includes(EmptyComponent);
+            sawMountedComponent = editorRuntime.extensions.getComponents().includes(EmptyComponent);
           };
         },
       }],
     });
 
-    reactEditor.destroy();
+    editorView.destroy();
     expect(sawMountedComponent).toBe(true);
-    expect(reactEditor.extensions.getComponents()).toEqual([]);
+    expect(editorView.extensions.getComponents()).toEqual([]);
     editor.destroy();
   });
 
@@ -444,15 +446,15 @@ describe("ReactEditor", () => {
     const editor = await createEditor();
     const First: ComponentType = () => null;
     const Second: ComponentType = () => null;
-    const reactEditor = createReactEditor({ editor });
-    reactEditor.extensions.mount(First);
-    reactEditor.extensions.mount(Second);
+    const editorView = createReactEditor({ editor });
+    editorView.extensions.mount(First);
+    editorView.extensions.mount(Second);
     const snapshots: ComponentType[][] = [];
-    reactEditor.extensions.subscribe(() => {
-      snapshots.push([...reactEditor.extensions.getComponents()]);
+    editorView.extensions.subscribe(() => {
+      snapshots.push([...editorView.extensions.getComponents()]);
     });
 
-    reactEditor.destroy();
+    editorView.destroy();
 
     expect(snapshots[0]).toEqual([First]);
     expect(snapshots[1]).toEqual([]);
@@ -461,18 +463,18 @@ describe("ReactEditor", () => {
 
   test("rolls back partial extension presentation setup", async () => {
     const editor = await createEditor();
-    let failedRuntime: ReactEditor | undefined;
+    let failedRuntime: EditorRuntime | undefined;
 
     expect(() => createReactEditor({
       editor,
       extensions: [{
         id: "partial",
-        setup(reactEditor) {
-          failedRuntime = reactEditor;
-          reactEditor.extensions.mount(EmptyComponent);
-          reactEditor.surfaces.registerEditorWrapper(EmptyEditorWrapper);
-          reactEditor.surfaces.register("block", EmptySurface);
-          reactEditor.surfaces.registerBlockWrapper("block", EmptyWrapper);
+        setup(editorRuntime) {
+          failedRuntime = editorRuntime;
+          editorRuntime.extensions.mount(EmptyComponent);
+          editorRuntime.surfaces.registerEditorWrapper(EmptyEditorWrapper);
+          editorRuntime.surfaces.register("block", EmptySurface);
+          editorRuntime.surfaces.registerBlockWrapper("block", EmptyWrapper);
           throw new Error("setup failed");
         },
       }],
@@ -487,36 +489,36 @@ describe("ReactEditor", () => {
 
   test("standardPreset excludes optional edgeless and drag extensions", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({
+    const editorView = createReactEditor({
       editor,
       extensions: [standardPreset()],
     });
 
-    expect(reactEditor.blockTypes.getDefinition("paragraph")).toBeDefined();
-    expect(reactEditor.surfaces.get("edgeless")).toBeUndefined();
-    expect(reactEditor.surfaces.getEditorWrappers("block")).toHaveLength(0);
-    expect(reactEditor.surfaces.getBlockWrappers("block")).toHaveLength(0);
-    expect(reactEditor.surfaces.getBlockWrappers("edgeless")).toHaveLength(0);
+    expect(editorView.blockTypes.getDefinition("paragraph")).toBeDefined();
+    expect(editorView.surfaces.get("edgeless")).toBeUndefined();
+    expect(editorView.surfaces.getEditorWrappers("block")).toHaveLength(0);
+    expect(editorView.surfaces.getBlockWrappers("block")).toHaveLength(0);
+    expect(editorView.surfaces.getBlockWrappers("edgeless")).toHaveLength(0);
     // Slash menu and trailing block controls are the standard preset's UI.
-    expect(reactEditor.extensions.getComponents()).toHaveLength(2);
+    expect(editorView.extensions.getComponents()).toHaveLength(2);
 
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("installs optional edgeless and block drag extensions explicitly", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({
+    const editorView = createReactEditor({
       editor,
       extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset()],
     });
 
-    expect(reactEditor.extensions.getComponents().length).toBeGreaterThan(0);
-    expect(reactEditor.surfaces.getEditorWrappers("block")).toHaveLength(1);
-    expect(reactEditor.surfaces.getBlockWrappers("block")).toHaveLength(1);
-    expect(reactEditor.surfaces.getBlockWrappers("edgeless")).toHaveLength(1);
+    expect(editorView.extensions.getComponents().length).toBeGreaterThan(0);
+    expect(editorView.surfaces.getEditorWrappers("block")).toHaveLength(1);
+    expect(editorView.surfaces.getBlockWrappers("block")).toHaveLength(1);
+    expect(editorView.surfaces.getBlockWrappers("edgeless")).toHaveLength(1);
 
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
@@ -536,19 +538,19 @@ describe("ReactEditor", () => {
       children: [{ type: "paragraph", content: "child" }],
     }, rightId).id;
     const childId = editor.blocks.getBlock(parentId)!.children[0]!.id;
-    const reactEditor = createReactEditor({ editor });
+    const editorView = createReactEditor({ editor });
     let updates = 0;
-    const dispose = reactEditor.subscribe(() => { updates += 1; });
-    const initialRevision = reactEditor.revision;
+    const dispose = editorView.subscribe(() => { updates += 1; });
+    const initialRevision = editorView.revision;
 
     editor.blocks.updateBlock(leftId, { content: "changed" });
     editor.blocks.updateBlock(childId, { content: "changed child" });
     editor.blocks.moveBlock(childId, rightId, "inside");
     expect(updates).toBe(3);
-    expect(reactEditor.revision).toBe(initialRevision + 3);
+    expect(editorView.revision).toBe(initialRevision + 3);
 
     dispose();
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
@@ -559,34 +561,34 @@ describe("ReactEditor", () => {
     const secondCore = await createEditor();
     const second = { editor: secondCore, document: secondCore.getDocument(), release: () => secondCore.destroy() };
     second.editor.blocks.insertBlock({ id: "same", type: "paragraph", content: "Second" });
-    const reactEditor = createReactEditor({ editor });
+    const editorView = createReactEditor({ editor });
     const other = createReactEditor({ editor: secondCore });
-    expect(other.renderers).not.toBe(reactEditor.renderers);
+    expect(other.renderers).not.toBe(editorView.renderers);
     expect(other.getDocument()).toBe(second.document);
     let updates = 0;
-    const dispose = reactEditor.blocks.subscribeBlockNode("same", () => { updates += 1; });
+    const dispose = editorView.blocks.subscribeBlockNode("same", () => { updates += 1; });
     other.blocks.updateBlock("same", { content: "Changed second" });
-    expect(reactEditor.blocks.getBlockNode("same")?.content).toBe("First");
+    expect(editorView.blocks.getBlockNode("same")?.content).toBe("First");
     expect(other.blocks.getBlockNode("same")?.content).toBe("Changed second");
     expect(updates).toBe(0);
-    reactEditor.blocks.updateBlock("same", { content: "Changed first" });
+    editorView.blocks.updateBlock("same", { content: "Changed first" });
     expect(updates).toBe(1);
-    dispose(); reactEditor.destroy(); other.destroy(); await second.release(); await editor.destroy();
+    dispose(); editorView.destroy(); other.destroy(); await second.release(); await editor.destroy();
   });
 
   test("rolls back registrations when a duplicate surface fails setup", async () => {
     const editor = await createEditor();
-    let failedRuntime: ReactEditor | undefined;
+    let failedRuntime: EditorRuntime | undefined;
 
     expect(() => createReactEditor({
       editor,
       extensions: [{
         id: "duplicate-surface",
-        setup(reactEditor) {
-          failedRuntime = reactEditor;
-          reactEditor.extensions.mount(EmptyComponent);
-          reactEditor.surfaces.register("block", EmptySurface);
-          reactEditor.surfaces.register("block", EmptySurface);
+        setup(editorRuntime) {
+          failedRuntime = editorRuntime;
+          editorRuntime.extensions.mount(EmptyComponent);
+          editorRuntime.surfaces.register("block", EmptySurface);
+          editorRuntime.surfaces.register("block", EmptySurface);
         },
       }],
     })).toThrow(/already registered/);
@@ -598,19 +600,19 @@ describe("ReactEditor", () => {
 
   test("destroys event registrations when a duplicate binding fails setup", async () => {
     const editor = await createEditor();
-    let failedRuntime: ReactEditor | undefined;
+    let failedRuntime: EditorRuntime | undefined;
 
     expect(() => createReactEditor({
       editor,
       extensions: [{
         id: "duplicates",
-        setup(reactEditor) {
-          failedRuntime = reactEditor;
-          reactEditor.keyboard.register({
+        setup(editorRuntime) {
+          failedRuntime = editorRuntime;
+          editorRuntime.keyboard.register({
             id: "test.duplicate",
             keys: ["Primary+K"],
           }, () => false);
-          reactEditor.keyboard.register({
+          editorRuntime.keyboard.register({
             id: "test.duplicate",
             keys: ["Primary+L"],
           }, () => false);
@@ -627,17 +629,17 @@ describe("ReactEditor", () => {
 
   test("rejects presentation registration after destruction", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
-    reactEditor.destroy();
+    const editorView = createReactEditor({ editor });
+    editorView.destroy();
 
-    expect(() => reactEditor.extensions.mount(EmptyComponent)).toThrow(/destroyed/);
-    expect(() => reactEditor.blockTypes.delete("paragraph")).toThrow(/destroyed/);
-    expect(() => reactEditor.renderers.delete("paragraph")).toThrow(/destroyed/);
-    expect(() => reactEditor.surfaces.delete("block")).toThrow(/destroyed/);
-    expect(() => reactEditor.slashCommands.delete("type.paragraph")).toThrow(/destroyed/);
-    expect(() => reactEditor.surfaces.registerEditorWrapper(EmptyEditorWrapper)).toThrow(/destroyed/);
-    expect(() => reactEditor.surfaces.register("block", EmptySurface)).toThrow(/destroyed/);
-    expect(() => reactEditor.surfaces.registerBlockWrapper("block", EmptyWrapper)).toThrow(/destroyed/);
+    expect(() => editorView.extensions.mount(EmptyComponent)).toThrow(/destroyed/);
+    expect(() => editorView.blockTypes.delete("paragraph")).toThrow(/destroyed/);
+    expect(() => editorView.renderers.delete("paragraph")).toThrow(/destroyed/);
+    expect(() => editorView.surfaces.delete("block")).toThrow(/destroyed/);
+    expect(() => editorView.slashCommands.delete("type.paragraph")).toThrow(/destroyed/);
+    expect(() => editorView.surfaces.registerEditorWrapper(EmptyEditorWrapper)).toThrow(/destroyed/);
+    expect(() => editorView.surfaces.register("block", EmptySurface)).toThrow(/destroyed/);
+    expect(() => editorView.surfaces.registerBlockWrapper("block", EmptyWrapper)).toThrow(/destroyed/);
     editor.destroy();
   });
 });
@@ -740,10 +742,10 @@ describe("delegated events", () => {
 
   test("uses separate event and keyboard managers across surface realms", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const events = reactEditor.events;
-    expect(events).toBeInstanceOf(EventManager);
-    expect(reactEditor.keyboard).toBeInstanceOf(KeyboardManager);
+    const editorView = createReactEditor({ editor });
+    const events = editorView.events;
+    expect(editorView.runtime.events).toBeInstanceOf(EventManager);
+    expect(editorView.runtime.keyboard).toBeInstanceOf(KeyboardManager);
     const first = realm();
     const second = realm();
     const disposeDocument = events.register({
@@ -751,11 +753,11 @@ describe("delegated events", () => {
       type: "selectionchange",
       target: "document",
     }, () => undefined);
-    reactEditor.keyboard.register({
+    editorView.keyboard.register({
       id: "test.surface-key",
       keys: "Enter",
     }, () => false);
-    reactEditor.keyboard.register({
+    editorView.keyboard.register({
       id: "test.window-key",
       keys: "Escape",
       target: "window",
@@ -770,7 +772,7 @@ describe("delegated events", () => {
     expect(first.window.count()).toBe(0);
     expect(second.document.count()).toBe(1);
     disposeDocument();
-    reactEditor.destroy();
+    editorView.destroy();
     expect(second.root.count()).toBe(0);
     expect(second.document.count()).toBe(0);
     expect(second.window.count()).toBe(0);
@@ -779,9 +781,9 @@ describe("delegated events", () => {
 
   test("orders handlers, claims events, and falls through conditional bindings", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const events = reactEditor.events;
-    const keyboard = reactEditor.keyboard;
+    const editorView = createReactEditor({ editor });
+    const events = editorView.events;
+    const keyboard = editorView.keyboard;
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
@@ -812,21 +814,21 @@ describe("delegated events", () => {
     expect(handlerEvent?.raw).toBe(event);
     expect(handlerEvent?.phase).toBe("keydown");
     expect(event.defaultPrevented).toBe(true);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("matches primary letter shortcuts by physical key across keyboard layouts", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
+    const editorView = createReactEditor({ editor });
     const { root } = realm();
-    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    editorView.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    reactEditor.keyboard.register({ id: "test.undo", keys: ["Primary+z"] }, () => {
+    editorView.keyboard.register({ id: "test.undo", keys: ["Primary+z"] }, () => {
       calls.push("undo");
       return true;
     });
-    reactEditor.keyboard.register({
+    editorView.keyboard.register({
       id: "test.redo",
       keys: ["Primary+Shift+z", "Primary+y"],
     }, () => {
@@ -843,25 +845,25 @@ describe("delegated events", () => {
     root.emit("keydown", keyboardEvent(root, "н", { code: "KeyY", ctrlKey: true }));
 
     expect(calls).toEqual(["undo", "redo", "redo"]);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("filters keyboard targets, modes, and scopes before applying priority", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
+    const editorView = createReactEditor({ editor });
     const { document, root, window } = realm();
-    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    editorView.events.setRoot(root as unknown as HTMLElement);
     const content = new FakeElement();
     content.ownerDocument = document;
     content.parent = root;
     content.attributes.set("data-block-content", "");
     const calls: string[] = [];
-    reactEditor.keyboard.register({ id: "low", keys: ["Tab"] }, () => {
+    editorView.keyboard.register({ id: "low", keys: ["Tab"] }, () => {
       calls.push("low");
       return true;
     });
-    reactEditor.keyboard.register({
+    editorView.keyboard.register({
       id: "high",
       keys: ["Tab"],
       mode: "block",
@@ -871,7 +873,7 @@ describe("delegated events", () => {
       calls.push("high");
       return true;
     });
-    reactEditor.keyboard.register({
+    editorView.keyboard.register({
       id: "window",
       keys: ["Escape"],
       target: "window",
@@ -882,18 +884,18 @@ describe("delegated events", () => {
 
     root.emit("keydown", keyboardEvent(root, "Tab"));
     root.emit("keydown", keyboardEvent(content, "Tab"));
-    reactEditor.mode.set("edgeless");
+    editorView.mode.set("edgeless");
     root.emit("keydown", keyboardEvent(content, "Tab"));
     window.emit("keydown", keyboardEvent(root, "Escape"));
     expect(calls).toEqual(["low", "high", "low", "window"]);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("filters DOM modes and never resolves markers outside the active surface", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const events = reactEditor.events;
+    const editorView = createReactEditor({ editor });
+    const events = editorView.events;
     const { document, root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const inside = new FakeElement();
@@ -927,7 +929,7 @@ describe("delegated events", () => {
       cancelable: true,
       preventDefault() {},
     } as unknown as PointerEvent);
-    reactEditor.mode.set("edgeless");
+    editorView.mode.set("edgeless");
     document.emit("pointerdown", {
       type: "pointerdown",
       target: inside,
@@ -936,14 +938,14 @@ describe("delegated events", () => {
       preventDefault() {},
     } as unknown as PointerEvent);
     expect(seen).toEqual([[true, "inside"], [false, undefined]]);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("filters delegated events by surface, block, and content scope", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const events = reactEditor.events;
+    const editorView = createReactEditor({ editor });
+    const events = editorView.events;
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const block = new FakeElement();
@@ -974,43 +976,43 @@ describe("delegated events", () => {
       preventDefault() {},
     } as unknown as PointerEvent);
     expect(calls).toEqual(["surface", "block", "content"]);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("deletes DOM registrations and releases their stable IDs", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const register = () => reactEditor.events.register({
+    const editorView = createReactEditor({ editor });
+    const register = () => editorView.events.register({
       id: "test.delete-dom",
       type: "click",
     }, () => false);
 
     const staleDisposer = register();
     expect(() => register()).toThrow(/already registered/);
-    expect(reactEditor.events.delete("test.delete-dom")).toBe(true);
-    expect(reactEditor.events.delete("test.delete-dom")).toBe(false);
+    expect(editorView.events.delete("test.delete-dom")).toBe(true);
+    expect(editorView.events.delete("test.delete-dom")).toBe(false);
     expect(register).not.toThrow();
     staleDisposer();
     expect(() => register()).toThrow(/already registered/);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("dispatches keyboard actions before ordinary DOM key handlers", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
+    const editorView = createReactEditor({ editor });
     const { root } = realm();
-    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    editorView.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    reactEditor.keyboard.register({
+    editorView.keyboard.register({
       id: "test.keyboard-first",
       keys: ["Enter"],
     }, () => {
       calls.push("keyboard");
       return true;
     });
-    reactEditor.events.register({
+    editorView.events.register({
       id: "test.dom-second",
       type: "keydown",
     }, () => {
@@ -1020,19 +1022,19 @@ describe("delegated events", () => {
 
     root.emit("keydown", keyboardEvent(root, "Enter"));
     expect(calls).toEqual(["keyboard"]);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("orders DOM handlers, applies when, and stops after a claim", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
+    const editorView = createReactEditor({ editor });
     const { root } = realm();
-    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    editorView.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     let predicateEvent: EditorEvent | undefined;
     let handlerEvent: EditorEvent | undefined;
-    reactEditor.events.register({
+    editorView.events.register({
       id: "test.dom-skipped",
       type: "click",
       when: (event) => {
@@ -1043,7 +1045,7 @@ describe("delegated events", () => {
       calls.push("skipped");
       return true;
     });
-    reactEditor.events.register({
+    editorView.events.register({
       id: "test.dom-claimed",
       type: "click",
     }, (event) => {
@@ -1051,7 +1053,7 @@ describe("delegated events", () => {
       calls.push("claimed");
       return true;
     });
-    reactEditor.events.register({
+    editorView.events.register({
       id: "test.dom-late",
       type: "click",
     }, () => {
@@ -1073,22 +1075,22 @@ describe("delegated events", () => {
     expect(handlerEvent).toBeInstanceOf(EditorEvent);
     expect(handlerEvent?.raw).toBe(event);
     expect(nativeEvent.defaultPrevented).toBe(true);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("constructs exported editor event values directly", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
+    const editorView = createReactEditor({ editor });
     const { root } = realm();
     const surface = root as unknown as HTMLElement;
     const raw = keyboardEvent(root, "Enter");
-    const selection = reactEditor.selection.get();
+    const selection = editorView.selection.get();
     const base = {
       raw,
-      reactEditor,
+      editorView,
       root: surface,
-      mode: reactEditor.mode.get(),
+      mode: editorView.mode.get(),
       selection,
       eventTarget: "surface" as const,
       insideRoot: true,
@@ -1107,13 +1109,13 @@ describe("delegated events", () => {
     expect(event.selection).toBe(selection);
     expect(keyboardEventValue).toBeInstanceOf(EditorEvent);
     expect(keyboardEventValue.shortcut).toBe("Enter");
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("applies overrides, disabling, exact modifiers, and duplicate IDs", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({
+    const editorView = createReactEditor({
       editor,
       keymap: {
         remapped: ["Primary+ArrowRight"],
@@ -1121,8 +1123,8 @@ describe("delegated events", () => {
         unknown: ["Escape"],
       },
     });
-    const events = reactEditor.events;
-    const keyboard = reactEditor.keyboard;
+    const events = editorView.events;
+    const keyboard = editorView.keyboard;
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
@@ -1157,27 +1159,27 @@ describe("delegated events", () => {
     expect(keyboard.list().find((item) => item.id === "remapped")?.keys).toEqual(["Enter"]);
     expect(revisions.length).toBeGreaterThan(0);
     stop();
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("replaces the complete keymap and applies overrides registered later", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
+    const editorView = createReactEditor({ editor });
     const { root } = realm();
-    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    editorView.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     const defaults = ["a"];
-    reactEditor.keyboard.register({ id: "dynamic", keys: defaults }, () => {
+    editorView.keyboard.register({ id: "dynamic", keys: defaults }, () => {
       calls.push("dynamic");
       return true;
     });
 
-    reactEditor.keyboard.replaceKeymap({
+    editorView.keyboard.replaceKeymap({
       dynamic: ["b"],
       future: ["c"],
     });
-    reactEditor.keyboard.register({ id: "future", keys: ["d"] }, () => {
+    editorView.keyboard.register({ id: "future", keys: ["d"] }, () => {
       calls.push("future");
       return true;
     });
@@ -1188,29 +1190,29 @@ describe("delegated events", () => {
 
     calls.length = 0;
     defaults[0] = "x";
-    reactEditor.keyboard.replaceKeymap({});
+    editorView.keyboard.replaceKeymap({});
     root.emit("keydown", keyboardEvent(root, "b"));
     root.emit("keydown", keyboardEvent(root, "a"));
     root.emit("keydown", keyboardEvent(root, "d"));
     expect(calls).toEqual(["dynamic", "future"]);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("updates one override defensively and rejects invalid keymaps atomically", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
+    const editorView = createReactEditor({ editor });
     const { root } = realm();
-    reactEditor.events.setRoot(root as unknown as HTMLElement);
+    editorView.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    reactEditor.keyboard.register({ id: "dynamic", keys: ["a"] }, () => {
+    editorView.keyboard.register({ id: "dynamic", keys: ["a"] }, () => {
       calls.push("dynamic");
       return true;
     });
     const keys = ["b"];
-    reactEditor.keyboard.setKeymapOverride("dynamic", keys);
+    editorView.keyboard.setKeymapOverride("dynamic", keys);
     keys[0] = "c";
-    expect(() => reactEditor.keyboard.replaceKeymap({
+    expect(() => editorView.keyboard.replaceKeymap({
       dynamic: ["Unknown+b"],
     })).toThrow(/Unknown keyboard modifier/);
     root.emit("keydown", keyboardEvent(root, "b"));
@@ -1218,20 +1220,20 @@ describe("delegated events", () => {
     expect(calls).toEqual(["dynamic"]);
 
     calls.length = 0;
-    reactEditor.keyboard.setKeymapOverride("dynamic", []);
+    editorView.keyboard.setKeymapOverride("dynamic", []);
     root.emit("keydown", keyboardEvent(root, "b"));
-    reactEditor.keyboard.setKeymapOverride("dynamic", undefined);
+    editorView.keyboard.setKeymapOverride("dynamic", undefined);
     root.emit("keydown", keyboardEvent(root, "a"));
     expect(calls).toEqual(["dynamic"]);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("supports keyup and all composition policies", async () => {
     const editor = await createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const events = reactEditor.events;
-    const keyboard = reactEditor.keyboard;
+    const editorView = createReactEditor({ editor });
+    const events = editorView.events;
+    const keyboard = editorView.keyboard;
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
@@ -1251,7 +1253,7 @@ describe("delegated events", () => {
     expect(ignored.defaultPrevented).toBe(false);
     expect(handled.defaultPrevented).toBe(true);
     expect(prevented.defaultPrevented).toBe(true);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 });

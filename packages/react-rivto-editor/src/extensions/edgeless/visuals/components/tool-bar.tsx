@@ -111,12 +111,12 @@ export function ToolBar({
   }, [controller, menu]);
 
   const selectTool = () => {
-    controller.reactEditor.commands.execute("edgeless.tool.set", "select");
+    controller.editor.commands.execute("edgeless.tool.set", "select");
     close();
   };
 
   const panTool = () => {
-    controller.reactEditor.commands.execute("edgeless.tool.set", { tool: "pan" });
+    controller.editor.commands.execute("edgeless.tool.set", { tool: "pan" });
     close();
   };
 

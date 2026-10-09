@@ -48,7 +48,7 @@ changes. Selection is local runtime state and is never persisted or synchronized
 
 ## Browser gestures
 
-`reactEditor.selection` delegates state to core and adds `readDOM()` and
+`editorView.selection` delegates state to core and adds `readDOM()` and
 `restoreDOM()`. Shift+Alt-click or Shift+Alt-drag keeps partial first/last
 offsets and full text ranges between them without structural chrome. A
 contentless block such as Counter receives structural coverage while surrounding

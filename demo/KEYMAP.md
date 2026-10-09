@@ -139,12 +139,12 @@ inside a card the same way as on the page.
 
 ## Binding IDs and remapping
 
-Built-in actions are remapped once when `createReactEditor` is called. An empty
+Built-in actions are remapped once when `createEditorRuntime` is called. An empty
 array disables an action. Unknown IDs are ignored, so one preferences object
 can be shared by applications with different extension sets.
 
 ```ts
-createReactEditor({
+createEditorRuntime({
   editor,
   extensions: [standardPreset()],
   keymap: {

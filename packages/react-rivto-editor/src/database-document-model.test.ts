@@ -3,7 +3,7 @@ import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage, type BlockInput } from "@chulane/document-model";
 import { DemoDatabase, DBDocumentModel } from "../../../demo/src/database";
 import { EditorStorage } from "./editor-storage";
-import { createReactEditor } from "./react-editor";
+import { createEditorRuntime } from "./editor-runtime";
 import { standardPreset } from "./extensions/built-ins/built-ins";
 import { crossDocumentBlockTransfer } from "./extensions/built-ins/clipboard/cross-document-block-transfer";
 
@@ -12,7 +12,7 @@ const element = { type: "shape", frame: { x: 0, y: 0, width: 10, height: 10 }, z
 async function fixture(database = new DemoDatabase()) {
   const registry = new YjsDocumentRegistry(crypto.randomUUID());
   const models = new DocumentStorage({ registry, createDocumentModel: (crdt) => new DBDocumentModel(crdt, database), lookupDocumentIds: async (id) => database.findDocumentIdsWithBlock(id) });
-  const editors = new EditorStorage({ openDocument: (id) => models.openDocument(id), createEditor: (editor) => createReactEditor({ editor, extensions: [standardPreset()] }), lookupDocumentIds: (id, options) => models.findDocumentIdsWithBlock(id, options), subscribeDocumentIds: (listener) => database.subscribe(listener) });
+  const editors = new EditorStorage({ openDocument: (id) => models.openDocument(id), createEditor: (editor) => createEditorRuntime({ editor, extensions: [standardPreset()] }), lookupDocumentIds: (id, options) => models.findDocumentIdsWithBlock(id, options), subscribeDocumentIds: (listener) => database.subscribe(listener) });
   models.registerDocument("A"); models.registerDocument("B");
   const a = await editors.getSingleEditor("A"); const b = await editors.getSingleEditor("B");
   return { database, editors, models, a, b, destroy: async () => { await editors.destroy(); await models.destroy(); } };

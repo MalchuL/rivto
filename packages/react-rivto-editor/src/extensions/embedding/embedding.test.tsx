@@ -16,25 +16,25 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   const host = await storage.create("host");
   const runtime = await createTestMultiEditor([host, source], storage, { extensions: [standardPreset(), embeddingExtension()] });
   const editor = await runtime.getSingleEditor(host.id);
-  const reactEditor = runtime.getEditor(host.id)!;
-  const reference = reactEditor.blocks.insertBlock({ type: EMBEDDING_BLOCK_TYPE, props: { targetDocumentId: "source", targetBlockId: "target" } });
+  const editorRuntime = runtime.getEditor(host.id)!;
+  const reference = editorRuntime.blocks.insertBlock({ type: EMBEDDING_BLOCK_TYPE, props: { targetDocumentId: "source", targetBlockId: "target" } });
   expect(reference.content).toBe("");
-  expect(() => reactEditor.blocks.setBlockProp(reference.id, "targetBlockId", 12)).toThrow();
+  expect(() => editorRuntime.blocks.setBlockProp(reference.id, "targetBlockId", 12)).toThrow();
   editor.selection.set(createStructuralSelection([reference.id], reference.id));
   const copied = editor.clipboard.copy();
   expect(copied?.blocks[0]?.props).toEqual({ targetDocumentId: "source", targetBlockId: "target" });
   expect(copied?.blocks[0]?.children).toEqual([]);
   expect(editor.dump().blocks[0]?.props).toEqual({ targetDocumentId: "source", targetBlockId: "target" });
-  const formats = reactEditor.clipboard.format([reference]);
+  const formats = editorRuntime.clipboard.format([reference]);
   expect(formats.plain).toBe("Embedded block: source/target");
-  const standalone = renderToStaticMarkup(<EditorView reactEditor={reactEditor}><PageSurface /></EditorView>);
+  const standalone = renderToStaticMarkup(<EditorView runtime={editorRuntime}><PageSurface /></EditorView>);
   expect(standalone).toContain("Block resolution is unavailable.");
   const markup = renderToStaticMarkup(<EditorStorageContext.Provider value={runtime}>
-    <EditorView reactEditor={reactEditor}><PageSurface /></EditorView>
+    <EditorView runtime={editorRuntime}><PageSurface /></EditorView>
   </EditorStorageContext.Provider>);
   expect(markup).toContain("Loading embedded block…");
   expect(markup).not.toContain("Block resolution is unavailable.");
-  expect("editorStorage" in reactEditor).toBe(false);
+  expect("editorStorage" in editorRuntime).toBe(false);
   expect(markup).toContain('aria-label="Edit embedding"');
   expect(markup).not.toContain('aria-label="Target block ID"');
   expect(markup).not.toContain('aria-label="Target document ID"');
@@ -43,12 +43,12 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   expect(markup).not.toContain(">Embedded block<");
   expect(markup).toContain('data-block-selection-anchor=""');
   expect(markup).toContain('data-slot-position="body"');
-  expect(reactEditor.views.acceptsDrop({ kind: "between", parentId: reference.id, previousId: null, nextId: null, depth: 1 }, [source.blocks.getBlock("target")!])).toBe(true);
+  expect(editorRuntime.views.acceptsDrop({ kind: "between", parentId: reference.id, previousId: null, nextId: null, depth: 1 }, [source.blocks.getBlock("target")!])).toBe(true);
   const sourceEditor = await runtime.getSingleEditor(source.id);
   crossDocumentBlockTransfer(sourceEditor, editor, ["target"], { targetId: null, position: "after" });
   expect(source.blocks.hasBlock("target")).toBe(false);
   expect(host.blocks.hasBlock("target")).toBe(true);
-  reactEditor.destroy();
+  editorRuntime.destroy();
   expect(editor.blockRegistry.has(EMBEDDING_BLOCK_TYPE)).toBe(false);
   await runtime.destroy(); await storage.destroy();
 });

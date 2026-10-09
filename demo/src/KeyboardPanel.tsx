@@ -10,7 +10,7 @@ import {
   KEYBOARD_BINDING_IDS,
   parseShortcut,
   shortcutFromKeyboardEvent,
-  useReactEditor,
+  useEditorView,
   type KeyboardBindingSnapshot,
 } from "@chulane/rivto-react";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
@@ -167,17 +167,17 @@ function KeyboardShortcutModal({
  * @returns Collapsible shortcut table used by the journal demo and keymap e2e.
  */
 export function KeyboardPanel() {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.keyboard.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => editorView.keyboard.subscribe(listener),
+    [editorView],
   );
   const revision = useSyncExternalStore(
     subscribe,
-    () => reactEditor.keyboard.revision,
-    () => reactEditor.keyboard.revision,
+    () => editorView.keyboard.revision,
+    () => editorView.keyboard.revision,
   );
-  const bindings = reactEditor.keyboard.list();
+  const bindings = editorView.keyboard.list();
   const [recorder, setRecorder] = useState<ShortcutRecorderTarget | undefined>();
 
   /**
@@ -190,7 +190,7 @@ export function KeyboardPanel() {
     binding: KeyboardBindingSnapshot,
     shortcut: string,
   ): void => {
-    reactEditor.keyboard.setKeymapOverride(binding.id, [shortcut]);
+    editorView.keyboard.setKeymapOverride(binding.id, [shortcut]);
     setRecorder(undefined);
   };
 
@@ -251,14 +251,14 @@ export function KeyboardPanel() {
                       <button
                         type="button"
                         data-keyboard-action="disable"
-                        onClick={() => reactEditor.keyboard.setKeymapOverride(binding.id, [])}
+                        onClick={() => editorView.keyboard.setKeymapOverride(binding.id, [])}
                       >
                         Disable
                       </button>
                       <button
                         type="button"
                         data-keyboard-action="restore"
-                        onClick={() => reactEditor.keyboard.setKeymapOverride(binding.id, undefined)}
+                        onClick={() => editorView.keyboard.setKeymapOverride(binding.id, undefined)}
                       >
                         Restore
                       </button>

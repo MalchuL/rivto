@@ -12,12 +12,12 @@ interface CounterProps { count: number }
 function CounterBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode<CounterProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
-  const reactEditor = useReactEditor();
+  const editorRuntime = useEditorView();
   if (!editing.block) return null;
   return <div {...attributes}>
     <button onClick={(event) => {
       if (event.defaultPrevented) return;
-      const current = reactEditor.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+      const current = editorRuntime.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
       editing.operations.setProp("count", (current?.count ?? 0) + 1);
     }}>Count: {editing.block?.props.count ?? 0}</button>
   </div>;
@@ -77,7 +77,7 @@ Surface → BlockTree(root IDs) → wrappers → BlockView → renderer + descen
 
 ## Unknown types
 
-Persisted неизвестный type не удаляется. Registry использует `unknownBlockRenderer` или built-in `UnknownBlock`. Low-level `reactEditor.renderers.register(type, renderer)` нужен только когда core definition установлен отдельно.
+Persisted неизвестный type не удаляется. Registry использует `unknownBlockRenderer` или built-in `UnknownBlock`. Low-level `editorRuntime.renderers.register(type, renderer)` нужен только когда core definition установлен отдельно.
 
 ## Wrappers
 
@@ -86,8 +86,8 @@ Wrappers добавляют handles, overlays, contexts или measurement, не
 ```tsx
 const extension: ReactEditorExtension = {
   id: "comments",
-  setup(reactEditor) {
-    reactEditor.surfaces.registerBlockWrapper("block", CommentWrapper);
+  setup(editorRuntime) {
+    editorRuntime.surfaces.registerBlockWrapper("block", CommentWrapper);
   },
 };
 ```

@@ -13,12 +13,12 @@ import { indentBlocks, outdentBlocks } from "../../../views/ops/outline-ops";
 
 test("moves existing subtrees into, between and out of Kanban columns with undo", async () => {
   const editor = await createTestCoreEditor();
-  const reactEditor = createReactEditor({
+  const editorView = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), kanbanExtension()],
   });
   const boardId = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
-  reactEditor.slashCommands.execute("block.kanban.insert", { blockId: boardId });
+  editorView.slashCommands.execute("block.kanban.insert", { blockId: boardId });
   const board = editor.blocks.getBlock(boardId)!;
   expect(board.id).toBe(boardId);
   expect(board.content).toBe("");
@@ -37,18 +37,18 @@ test("moves existing subtrees into, between and out of Kanban columns with undo"
   expect(editor.blocks.getParentId(card)).toBeNull();
   editor.history.undo();
   expect(editor.blocks.getBlock(board.children[1]!.id)!.children).toEqual([original]);
-  outdentBlocks(reactEditor, [card]);
+  outdentBlocks(editorView, [card]);
   expect(editor.blocks.getParentId(card)).toBe(board.children[1]!.id);
   const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Nested" }, card).id;
-  indentBlocks(reactEditor, [nested]);
+  indentBlocks(editorView, [nested]);
   expect(editor.blocks.getParentId(nested)).toBe(card);
-  outdentBlocks(reactEditor, [nested]);
+  outdentBlocks(editorView, [nested]);
   expect(editor.blocks.getParentId(nested)).toBe(board.children[1]!.id);
   const copied = editor.clipboard.copy(createStructuralSelection([board.id]));
   expect(copied?.blocks[0]?.children[1]?.children[0]?.id).toBe(card);
   const snapshot = editor.dump();
   editor.load(snapshot);
   expect(editor.dump()).toEqual(snapshot);
-  reactEditor.destroy();
+  editorView.destroy();
   editor.destroy();
 });

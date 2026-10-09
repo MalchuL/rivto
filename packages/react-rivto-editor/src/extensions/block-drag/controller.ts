@@ -2,7 +2,7 @@ import type { DropLayoutOptions } from "./placement/resolver";
 import type { DragDropManager, DragEndEvent, DragStartEvent } from "@dnd-kit/react";
 import { DOMRectangle } from "@dnd-kit/dom/utilities";
 import { createStructuralSelection, type EditorMode } from "@chulane/rivto";
-import type { ReactEditor } from "../../types";
+import type { EditorViewApi } from "../../types";
 import { dropMoveTarget, excludeDropSubtrees, isCurrentDropDestination } from "./placement/utils";
 import { selectedMoveRoots, type SelectedMoveRoots } from "../built-ins/page/navigation";
 import { crossDocumentBlockTransfer, type CrossDocumentBlockTransferPlacement } from "../built-ins/clipboard/cross-document-block-transfer";
@@ -45,7 +45,7 @@ export class PageDragController {
   previewPosition: PointerCoordinates | null = null;
 
   /**
-   * @param reactEditor - Source view's document-bound API.
+   * @param editorView - Source view's document-bound API.
    * @param root - Source surface, or null before mounting.
    * @param mode - Rendered surface used to interpret zoom.
    * @param placements - Existing per-row store for feedback and sensor state.
@@ -57,7 +57,7 @@ export class PageDragController {
    * @param options.allowChildPlacement - Whether ordinary rows accept child drops.
    */
   constructor(
-    private readonly reactEditor: ReactEditor,
+    private readonly editorView: EditorViewApi,
     private readonly root: HTMLElement | null,
     private readonly mode: EditorMode,
     private readonly placements: DropPlacementStore,
@@ -70,12 +70,12 @@ export class PageDragController {
 
   /** Registers this surface for cross-document drops; cleanup also cancels its active gesture. */
   mount(): () => void {
-    const { reactEditor, root, placements } = this;
+    const { editorView, root, placements } = this;
     const { childDropIndent, gapDropZone, allowChildPlacement, outerEdgeDropZone } = this.options;
     this.disposed = false;
     if (!root) return () => this.destroy();
     const controller: CrossDocumentPageRootController = {
-      reactEditor,
+      editorView,
       root,
       setPlacement: (placement, empty = false) => {
         placements.set(placement);
@@ -83,7 +83,7 @@ export class PageDragController {
         else root.removeAttribute("data-drop-empty");
       },
       resolvePlacement: (x, y, sources, sourceDocumentId) => resolveCrossDocumentPageRootPlacement(
-        reactEditor,
+        editorView,
         root,
         x,
         y,
@@ -159,7 +159,7 @@ export class PageDragController {
   };
 
   private updateCrossDocumentTarget = (): boolean => {
-    const { reactEditor, root } = this;
+    const { editorView, root } = this;
     const { outerEdgeDropZone } = this.options;
     const pointer = this.pointerTracker?.get() ?? null;
     const controller = pointer ? findCrossDocumentPageController(root, pointer, outerEdgeDropZone) : null;
@@ -169,10 +169,10 @@ export class PageDragController {
     } else {
       if (this.crossDocumentTarget?.controller !== controller) this.clearCrossDocumentTarget();
       const sources = (this.activeMove?.ids ?? []).flatMap((id) => {
-        const block = reactEditor.blocks.getBlock(id);
+        const block = editorView.blocks.getBlock(id);
         return block ? [block] : [];
       });
-      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources, reactEditor.getDocument().id);
+      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources, editorView.getDocument().id);
       controller.setPlacement(placement?.indicator ?? null, placement?.targetId === null);
       this.crossDocumentTarget = placement ? {
         controller,
@@ -192,21 +192,21 @@ export class PageDragController {
    * @returns Accepted placement, or null when the gesture has no valid drop.
    */
   private validPlacement = (operation: PageDragOperation): DropPlacement | null => {
-    const { reactEditor, root, mode } = this;
+    const { editorView, root, mode } = this;
     const { childDropIndent, gapDropZone, outerEdgeDropZone, allowChildPlacement } = this.options;
     const zoom = mode === "edgeless"
       ? Number(root?.dataset.edgelessZoom) || 1
       : 1;
-    const blocks = excludeDropSubtrees(getDropBlocks(reactEditor), new Set(this.activeMove?.ids ?? []));
+    const blocks = excludeDropSubtrees(getDropBlocks(editorView), new Set(this.activeMove?.ids ?? []));
     const livePointer = this.pointerTracker?.get() ?? null;
     const rect = operation.shape?.current.boundingRectangle;
     const pointer = livePointer ?? (rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null);
     if (!pointer) return null;
     const sources = (this.activeMove?.ids ?? []).flatMap((id) => {
-      const block = reactEditor.blocks.getBlock(id);
+      const block = editorView.blocks.getBlock(id);
       return block ? [block] : [];
     });
-    return resolveSurfaceDrop(root, reactEditor, sources, blocks, pointer, {
+    return resolveSurfaceDrop(root, editorView, sources, blocks, pointer, {
       childDropIndent: childDropIndent * zoom, gapDropZone, allowChildPlacement,
       outerEdgeDropZone, keyboard: !livePointer,
     });
@@ -234,7 +234,7 @@ export class PageDragController {
    * @param manager - Manager whose live operation is re-read after scrolling.
    */
   handleDragStart = ({ operation, nativeEvent }: DragStartEvent, manager: DragDropManager) => {
-    const { reactEditor, root, placements, setActiveIds } = this;
+    const { editorView, root, placements, setActiveIds } = this;
     const source = operation.source;
     if (!source) return;
     this.clearCrossDocumentTarget();
@@ -265,12 +265,12 @@ export class PageDragController {
         ownerDocument.removeEventListener("selectionchange", clearSelection, true);
       };
     }
-    const blocks = getDropBlocks(reactEditor);
+    const blocks = getDropBlocks(editorView);
     const move = selectedMoveRoots(
       blocks,
-      reactEditor.selection.get(),
+      editorView.selection.get(),
       String(source.id),
-      (block) => !reactEditor.blockListProps.childrenVisible(block),
+      (block) => !editorView.blockListProps.childrenVisible(block),
     );
     this.activeMove = move;
     const KeyboardEventType = root?.ownerDocument.defaultView?.KeyboardEvent;
@@ -328,22 +328,22 @@ export class PageDragController {
    * @param event - Final operation state and cancellation flag supplied by dnd-kit.
    */
   handleDragEnd = (event: DragEndEvent) => {
-    const { reactEditor, root } = this;
+    const { editorView, root } = this;
     const move = this.activeMove;
     const crossDocument = this.crossDocumentTarget;
     const placement = event.canceled || crossDocument ? null : this.displayedPlacement;
     const sources = (move?.ids ?? []).flatMap((id) => {
-      const block = reactEditor.blocks.getBlock(id);
+      const block = editorView.blocks.getBlock(id);
       return block ? [block] : [];
     });
     const valid = placement && sources.length === move?.ids.length
-      && reactEditor.views.acceptsDrop(placement, sources)
-      && isCurrentDropDestination(excludeDropSubtrees(getDropBlocks(reactEditor), new Set(move.ids)), placement);
+      && editorView.views.acceptsDrop(placement, sources)
+      && isCurrentDropDestination(excludeDropSubtrees(getDropBlocks(editorView), new Set(move.ids)), placement);
     const validCrossDocument = crossDocument && sources.length === move?.ids.length
-      && crossDocument.controller.reactEditor.views.acceptsDrop(crossDocument.destination, sources)
+      && crossDocument.controller.editorView.views.acceptsDrop(crossDocument.destination, sources)
       && isCurrentDropDestination(excludeDropSubtrees(
-        getDropBlocks(crossDocument.controller.reactEditor),
-        new Set(crossDocument.controller.reactEditor.getDocument() === reactEditor.getDocument() ? move.ids : []),
+        getDropBlocks(crossDocument.controller.editorView),
+        new Set(crossDocument.controller.editorView.getDocument() === editorView.getDocument() ? move.ids : []),
       ), crossDocument.destination);
     this.resetGesture();
     if (event.canceled || !move) {
@@ -352,21 +352,21 @@ export class PageDragController {
       let transferred = false;
       try {
         const destination = crossDocument.controller;
-        const destinationDocument = destination.reactEditor.getDocument();
-        if (destinationDocument === reactEditor.getDocument()) {
-          reactEditor.blocks.moveBlocks(move.ids, crossDocument.placement.targetId, crossDocument.placement.position);
+        const destinationDocument = destination.editorView.getDocument();
+        if (destinationDocument === editorView.getDocument()) {
+          editorView.blocks.moveBlocks(move.ids, crossDocument.placement.targetId, crossDocument.placement.position);
         } else {
-          crossDocumentBlockTransfer(reactEditor, destination.reactEditor, move.ids, crossDocument.placement);
+          crossDocumentBlockTransfer(editorView, destination.editorView, move.ids, crossDocument.placement);
         }
         transferred = true;
       } catch {
         transferred = false;
       }
       if (transferred) {
-        reactEditor.selection.clear();
+        editorView.selection.clear();
         const firstId = move.ids[0]!;
         const lastId = move.ids.at(-1)!;
-        crossDocument.controller.reactEditor.selection.set(createStructuralSelection([...move.ids], firstId, lastId));
+        crossDocument.controller.editorView.selection.set(createStructuralSelection([...move.ids], firstId, lastId));
         requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));
       }
     } else if (placement && valid) {
@@ -374,11 +374,11 @@ export class PageDragController {
       // Persisted parent constraints can reject a structural destination.
       // Refuse the drop instead of leaving an uncaught gesture error.
       try {
-        reactEditor.blocks.moveBlocks(move.ids, targetId, position);
+        editorView.blocks.moveBlocks(move.ids, targetId, position);
         const selection = move.grouped && move.selection
           ? move.selection
           : createStructuralSelection([move.ids[0]!]);
-        reactEditor.selection.set(selection);
+        editorView.selection.set(selection);
         requestAnimationFrame(() => root?.focus({ preventScroll: true }));
       } catch {
         requestAnimationFrame(() => root?.focus({ preventScroll: true }));

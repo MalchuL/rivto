@@ -21,7 +21,7 @@ import {
 import type { EditorBlock, EditorBlockNode } from "@chulane/rivto";
 import { z } from "zod";
 import { ArrowDownIcon } from "lucide-react";
-import { useBlock, useBlockSelectionAnchor, usePreventTextEditing, useBlockNode, useReactEditor, useEditorRoot } from "../../hooks";
+import { useBlock, useBlockSelectionAnchor, usePreventTextEditing, useBlockNode, useEditorView, useEditorRoot } from "../../hooks";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
@@ -189,7 +189,7 @@ function FilterOption({ id, checked, label, onToggle }: {
 
 /** Supplies local storage state and a card boundary around the shared subtree. */
 function TodoStorageState({ block, children }: BlockWrapperProps) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const { block: tree } = useBlock(block.id);
   const childBlocks = tree?.children ?? [];
   const [query, setQuery] = useState("");
@@ -216,13 +216,13 @@ function TodoStorageState({ block, children }: BlockWrapperProps) {
     const desired = orderTodoStorageChildren(childBlocks, props.statusOrder);
     const current = childBlocks.map(({ id }) => id);
     if (desired.some((id, index) => id !== current[index])) {
-      reactEditor.history.batchUpdates(() => {
+      editorView.history.batchUpdates(() => {
         desired.forEach((id, index) => {
-          reactEditor.blocks.moveBlock(id, index ? desired[index - 1]! : null);
+          editorView.blocks.moveBlock(id, index ? desired[index - 1]! : null);
         });
       });
     }
-  }, [block.props, childBlocks, reactEditor, tree]);
+  }, [block.props, childBlocks, editorView, tree]);
 
   const value = useMemo<TodoStorageContextValue>(() => ({
     storageId: block.id,
@@ -248,7 +248,7 @@ export function TodoStorageBlockWrapper({ block, children }: BlockWrapperProps) 
 
 /** Renders search, disclosure filter menus, and persisted status-order controls. */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const { element: root } = useEditorRoot();
   const editing = useBlockNode<TodoStorageProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
@@ -285,7 +285,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    const viewContext = root ? createBlockViewContext(reactEditor, blockId, root) : undefined;
+    const viewContext = root ? createBlockViewContext(editorView, blockId, root) : undefined;
     if (viewContext) todoStorageView.insertFirstChild(viewContext);
   };
 
@@ -382,9 +382,9 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
 
 /** Hides a direct TODO child when its owning storage presentation rejects it. */
 export function TodoStorageVisibility({ block, children }: BlockWrapperProps) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const context = useContext(TodoStorageContext);
-  const directChild = context && reactEditor.blocks.getParentId(block.id) === context.storageId;
+  const directChild = context && editorView.blocks.getParentId(block.id) === context.storageId;
   if (directChild && !matchesTodoStorage(block, context.query, context.filters)) return null;
   return children;
 }

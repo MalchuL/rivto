@@ -6,8 +6,8 @@ import { listShortcutsExtension } from "../../extensions/built-ins/built-ins";
 describe("ClipboardManager", () => {
   test("keeps descendants inside composed list formats", async () => {
     const editor = await createTestCoreEditor();
-    const reactEditor = createReactEditor({ editor, extensions: [listShortcutsExtension()] });
-    const id = reactEditor.blocks.insertBlock({
+    const editorView = createReactEditor({ editor, extensions: [listShortcutsExtension()] });
+    const id = editorView.blocks.insertBlock({
       type: "paragraph",
       content: "Parent",
       listProps: { type: "checkbox" },
@@ -15,13 +15,13 @@ describe("ClipboardManager", () => {
     }).id;
     const block = editor.blocks.getBlock(id)!;
 
-    expect(reactEditor.clipboard.format([block])).toEqual({
+    expect(editorView.clipboard.format([block])).toEqual({
       plain: "- [ ] Parent\n  Child",
       markdown: "- [ ] Parent\n  Child",
       html: '<ul><li><input type="checkbox" disabled><p>Parent</p><p>Child</p></li></ul>',
     });
 
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 });

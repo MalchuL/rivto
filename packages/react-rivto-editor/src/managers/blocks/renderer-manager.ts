@@ -1,6 +1,6 @@
 import type { RenderersCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
-import type { ReactEditorImpl } from "../../react-editor";
+import type { EditorRuntime } from "../../editor-runtime";
 import type { BlockRenderer } from "./renderer-types";
 
 /**
@@ -21,11 +21,11 @@ export class RendererManager implements RenderersCapability {
   /**
    * Creates a renderer registry.
    *
-   * @param reactEditor - Owning React runtime providing extension lifecycle.
+   * @param editorRuntime - Owning React runtime providing extension lifecycle.
    * @param fallback - Optional renderer for persisted unknown block types.
    */
   constructor(
-    private readonly reactEditor: ReactEditorImpl,
+    private readonly editorRuntime: EditorRuntime,
     private readonly fallback?: BlockRenderer,
   ) {}
 
@@ -37,7 +37,7 @@ export class RendererManager implements RenderersCapability {
    * @returns Idempotent disposer removing this exact renderer.
    */
   register(type: string, renderer: BlockRenderer): () => void {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     if (!type.trim()) throw new Error("Block renderer type is required");
     if (this.renderers.has(type)) throw new Error(`Block renderer ${type} is already registered`);
     const registration: {
@@ -49,7 +49,7 @@ export class RendererManager implements RenderersCapability {
     };
     this.renderers.set(type, registration);
     this.store.changed();
-    registration.dispose = this.reactEditor.extensions.own(() => {
+    registration.dispose = this.editorRuntime.extensions.own(() => {
       if (this.renderers.get(type) !== registration) return;
       this.renderers.delete(type);
       this.store.changed();
@@ -64,7 +64,7 @@ export class RendererManager implements RenderersCapability {
    * @returns True when a renderer existed and was disposed.
    */
   delete(type: string): boolean {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     const registration = this.renderers.get(type);
     if (!registration) return false;
     registration.dispose();

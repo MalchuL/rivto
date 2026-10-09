@@ -1,7 +1,7 @@
 /** Foreign documents use the same regions and acceptance as local dragging. */
 import type { EditorBlock } from "@chulane/rivto";
 import type { CrossDocumentBlockTransferPlacement } from "../../built-ins/clipboard/cross-document-block-transfer";
-import type { ReactEditor } from "../../../types";
+import type { EditorViewApi } from "../../../types";
 import { dropMoveTarget, excludeDropSubtrees } from "../placement/utils";
 import { getDropBlocks, resolveSurfaceDrop } from "../pointer/target";
 import type { DropPlacement } from "../types";
@@ -14,7 +14,7 @@ import type { DropBlock } from "../placement/types";
  * empty document accepts a root-level append without a block indicator;
  * populated documents translate the resolved canonical placement into a target.
  *
- * @param reactEditor - Destination React runtime providing its tree and block views.
+ * @param editorView - Destination editor view providing its tree and block views.
  * @param root - Rendered destination page surface.
  * @param x - Pointer's horizontal viewport coordinate in pixels.
  * @param y - Pointer's vertical viewport coordinate in pixels.
@@ -28,7 +28,7 @@ import type { DropBlock } from "../placement/types";
  * for an empty document, or `null` when no destination is accepted.
  */
 export function resolveCrossDocumentPageRootPlacement(
-  reactEditor: ReactEditor,
+  editorView: EditorViewApi,
   root: HTMLElement,
   x: number,
   y: number,
@@ -39,16 +39,16 @@ export function resolveCrossDocumentPageRootPlacement(
   outerEdgeDropZone?: number,
   sourceDocumentId?: string,
 ): (CrossDocumentBlockTransferPlacement & { readonly indicator: DropPlacement | null }) | null {
-  let blocks: readonly DropBlock[] = getDropBlocks(reactEditor);
-  if (sourceDocumentId === reactEditor.getDocument().id) {
+  let blocks: readonly DropBlock[] = getDropBlocks(editorView);
+  if (sourceDocumentId === editorView.getDocument().id) {
     blocks = excludeDropSubtrees(blocks, new Set(sources.map(({ id }) => id)));
   }
   if (!blocks.length) {
-    if (reactEditor.rootBlockId) return null;
+    if (editorView.rootBlockId) return null;
     const destination = { kind: "between", parentId: null, previousId: null, nextId: null, depth: 0 } as const;
-    return reactEditor.views.acceptsDrop(destination, sources) ? { targetId: null, position: "after", indicator: null } : null;
+    return editorView.views.acceptsDrop(destination, sources) ? { targetId: null, position: "after", indicator: null } : null;
   }
-  const indicator = resolveSurfaceDrop(root, reactEditor, sources, blocks, { x, y }, {
+  const indicator = resolveSurfaceDrop(root, editorView, sources, blocks, { x, y }, {
     childDropIndent, gapDropZone, allowChildPlacement, outerEdgeDropZone,
   });
   return indicator ? { ...dropMoveTarget(indicator), indicator } : null;

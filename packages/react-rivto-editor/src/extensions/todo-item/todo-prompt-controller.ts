@@ -1,10 +1,11 @@
-import type { ReactEditor } from "../../types";
+import type { EditorRuntime } from "../../editor-runtime";
+import type { EditorViewApi } from "../../types";
 import { saveDOMSelection, restoreDOMSelection } from "../../managers";
 import { TODO_PROMPT_CLASS } from "./todo-item-classes";
 import { TODO_ITEM_BLOCK_TYPE, matchPrompt, createTodoItemProps, type PromptMatch, type TodoItemStatus } from "./todo-item-model";
 
 interface TodoCandidate extends PromptMatch {
-  readonly editor: ReactEditor;
+  readonly editor: EditorViewApi;
   readonly blockId: string;
   readonly contentElement: HTMLElement;
 }
@@ -41,8 +42,8 @@ const decoratePrompt = (element: HTMLElement, prompt?: string): void => {
 export class TodoPromptController {
   private candidate: TodoCandidate | undefined;
   private active = false;
-  /** @param reactEditor - Runtime receiving events. @param prompts - Validated token-to-status lookup. */
-  constructor(private readonly reactEditor: ReactEditor, private readonly prompts: ReadonlyMap<string, TodoItemStatus>) {}
+  /** @param editorRuntime - Runtime receiving events. @param prompts - Validated token-to-status lookup. */
+  constructor(private readonly editorRuntime: EditorRuntime, private readonly prompts: ReadonlyMap<string, TodoItemStatus>) {}
   /** Clears candidate markup and tracking without touching persisted text. */
   private clearCandidate = (): void => {
     if (this.candidate) decoratePrompt(this.candidate.contentElement);
@@ -78,11 +79,11 @@ export class TodoPromptController {
   setup(): () => void {
     this.active = true;
     const disposers = [
-      this.reactEditor.events.register({
+      this.editorRuntime.events.register({
         id: "todo-item.input",
         type: "input",
         scope: "content",
-      }, ({ blockId, contentElement, reactEditor: editor }) => {
+      }, ({ blockId, contentElement, editorView: editor }) => {
         if (!blockId || !contentElement) return false;
         queueMicrotask(() => {
           if (!this.active) return;
@@ -99,7 +100,7 @@ export class TodoPromptController {
         });
         return false;
       }),
-      this.reactEditor.events.register({
+      this.editorRuntime.events.register({
         id: "todo-item.focus-out",
         type: "focusout",
         scope: "content",
@@ -111,7 +112,7 @@ export class TodoPromptController {
         if (!(next instanceof Node) || !blockElement?.contains(next)) this.convertCandidate();
         return false;
       }),
-      this.reactEditor.events.register({
+      this.editorRuntime.events.register({
         id: "todo-item.pointer-down",
         type: "pointerdown",
         target: "document",
@@ -120,14 +121,14 @@ export class TodoPromptController {
         if (this.candidate && this.candidate.blockId !== blockId) this.convertCandidate();
         return false;
       }),
-      this.reactEditor.events.register({
+      this.editorRuntime.events.register({
         id: "todo-item.selection-change",
         type: "selectionchange",
         target: "document",
-      }, ({ root }) => {
+      }, ({ root, editorView }) => {
         // A lost browser range is not an editor navigation while the OS owns focus.
         if (!root.ownerDocument.hasFocus()) return false;
-        const activeBlockId = this.reactEditor.selection.readDOM()?.focusBlockId;
+        const activeBlockId = editorView.selection.readDOM()?.focusBlockId;
         if (this.candidate && activeBlockId !== this.candidate.blockId) this.convertCandidate();
         return false;
       }),

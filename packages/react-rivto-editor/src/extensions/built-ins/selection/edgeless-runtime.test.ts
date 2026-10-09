@@ -32,8 +32,8 @@ describe("EdgelessSelectionRuntime", () => {
 
   test("set does not notify when ordered membership is unchanged", async () => {
     const editor = await createTestCoreEditor({ mode: "edgeless" });
-    const reactEditor = createReactEditor({ editor });
-    const runtime = new EdgelessSelectionRuntime(reactEditor);
+    const editorView = createReactEditor({ editor });
+    const runtime = new EdgelessSelectionRuntime(editorView);
     const first = element(editor);
     const second = element(editor);
     const calls = listen(runtime);
@@ -42,14 +42,14 @@ describe("EdgelessSelectionRuntime", () => {
     runtime.set(["", first, second, first]);
     expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual({ active: true, items: [first, second] });
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("set notifies when membership or order changes", async () => {
     const editor = await createTestCoreEditor({ mode: "edgeless" });
-    const reactEditor = createReactEditor({ editor });
-    const runtime = new EdgelessSelectionRuntime(reactEditor);
+    const editorView = createReactEditor({ editor });
+    const runtime = new EdgelessSelectionRuntime(editorView);
     const first = element(editor);
     const second = element(editor);
     const calls = listen(runtime);
@@ -57,14 +57,14 @@ describe("EdgelessSelectionRuntime", () => {
     runtime.set([first, second]);
     runtime.set([second, first]);
     expect(calls.map((call) => call.items)).toEqual([[first], [first, second], [second, first]]);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("reactivates retained items and exposes active membership", async () => {
     const editor = await createTestCoreEditor({ mode: "edgeless" });
-    const reactEditor = createReactEditor({ editor });
-    const runtime = new EdgelessSelectionRuntime(reactEditor);
+    const editorView = createReactEditor({ editor });
+    const runtime = new EdgelessSelectionRuntime(editorView);
     const first = element(editor);
     const calls = listen(runtime);
     runtime.set([first]);
@@ -73,20 +73,20 @@ describe("EdgelessSelectionRuntime", () => {
     runtime.set([first]);
     expect(runtime.isSelected(first)).toBe(true);
     expect(calls).toHaveLength(3);
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
   test("clear is a no-op when selection is already active and empty", async () => {
     const editor = await createTestCoreEditor({ mode: "edgeless" });
-    const reactEditor = createReactEditor({ editor });
-    const runtime = new EdgelessSelectionRuntime(reactEditor);
+    const editorView = createReactEditor({ editor });
+    const runtime = new EdgelessSelectionRuntime(editorView);
     const calls = listen(runtime);
     runtime.clear();
     runtime.clear();
     expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual({ active: true, items: [] });
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 });

@@ -43,8 +43,8 @@ export class ContainerBlockView extends BaseBlockView {
    * @returns `"handled"` after insertion.
    */
   insertFirstChild(context: BlockViewContext): BlockViewOutcome {
-    const child = insertFirstChild(context.reactEditor, context.block.id);
-    scheduleBlockFocus(context.reactEditor, context.root, child.id, 0);
+    const child = insertFirstChild(context.editorView, context.block.id);
+    scheduleBlockFocus(context.editorView, context.root, child.id, 0);
     return "handled";
   }
 }

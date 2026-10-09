@@ -109,7 +109,7 @@ test("transfers between two source models using one editor runtime", async () =>
   source.blocks.insertBlock({ id: "moved", type: "paragraph", content: "Moved" });
   source.history.clear(); destination.history.clear();
   const { createTestMultiEditor } = await import("../../../test-utils");
-  const { createReactEditor } = await import("../../../react-editor");
+  const { createEditorRuntime } = await import("../../../editor-runtime");
   const runtime = await createTestMultiEditor([source, destination]);
   crossDocumentBlockTransfer(runtime.getEditor(source.id)!, runtime.getEditor(destination.id)!, ["moved"], { targetId: null, position: "after" });
   expect(source.blocks.hasBlock("moved")).toBe(false);

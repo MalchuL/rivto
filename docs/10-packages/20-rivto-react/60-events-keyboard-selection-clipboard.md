@@ -2,7 +2,7 @@
 
 ## DOM events
 
-`useDOMEvent()` и `reactEditor.events.register()` используют один delegated runtime. Native listener привязан к active surface, document или window и автоматически переносится при switch surface.
+`useDOMEvent()` и `editorRuntime.events.register()` используют один delegated runtime. Native listener привязан к active surface, document или window и автоматически переносится при switch surface.
 
 ### `DOMEventDefinition` properties
 
@@ -35,7 +35,7 @@ useKeyboardEvent({
 ### Keymap overrides
 
 ```ts
-createReactEditor({
+createEditorRuntime({
   editor,
   keymap: {
     [KEYBOARD_BINDING_IDS.blockIndent]: ["Primary+ArrowRight"],
@@ -56,7 +56,7 @@ core editor.selection     blockId + UTF-16 offsets, portable local state
 React DOM selection       browser nodes/ranges/highlights текущей surface
 ```
 
-`reactEditor.selection` methods:
+`editorRuntime.selection` methods:
 
 - `readDOM()` возвращает `Selection | undefined`;
 - `restoreDOM(selection?)` возвращает `boolean` success;
@@ -85,4 +85,4 @@ Core custom MIME сохраняет lossless Rivto structure; portable React for
 
 ## Slash commands
 
-`reactEditor.slashCommands.register({ id, title, group?, keywords?, isAvailable?, execute })` возвращает disposer. `getAll({ blockId })` фильтрует context; `execute(id, context)` запускает command или throws для unknown ID. `standardPreset()` монтирует searchable menu и generic list/duplicate/delete/collapse actions.
+`editorRuntime.slashCommands.register({ id, title, group?, keywords?, isAvailable?, execute })` возвращает disposer. `getAll({ blockId })` фильтрует context; `execute(id, context)` запускает command или throws для unknown ID. `standardPreset()` монтирует searchable menu и generic list/duplicate/delete/collapse actions.

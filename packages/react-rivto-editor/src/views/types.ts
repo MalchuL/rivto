@@ -11,7 +11,7 @@
  */
 import type { EditorBlock, Selection } from "@chulane/rivto";
 import type { KeyboardSelectionTarget } from "../managers";
-import type { ReactEditor } from "../types";
+import type { EditorViewApi, SharedEditorApi } from "../types";
 
 /** Result of one semantic view action. */
 export type BlockViewOutcome = "handled" | "default" | "rejected";
@@ -37,7 +37,7 @@ export interface BlockDropPlacementOptions {
  */
 export interface BlockViewContext {
   /** Complete React runtime that owns views, selection, and writing factories. */
-  readonly reactEditor: ReactEditor;
+  readonly editorView: EditorViewApi;
   /** Detached snapshot of the resolved block. */
   readonly block: EditorBlock;
   /** Structural parent, or `null` at the document root. */
@@ -63,7 +63,7 @@ export type BlockDropDestination = {
 /** Arguments for a drop-acceptance check against the destination parent. */
 export interface BlockViewDropContext {
   /** Runtime used to read live block types and parents. */
-  readonly reactEditor: ReactEditor;
+  readonly editor: SharedEditorApi;
   /** Exact destination, shared by feedback and commit. */
   readonly destination: BlockDropDestination;
   /** Source snapshots, including when they belong to another document. */

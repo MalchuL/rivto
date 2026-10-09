@@ -1,3 +1,4 @@
+import type { EditorRuntime } from "../../../../editor-runtime";
 /** Keyboard registration for resetting the first empty custom block. */
 import {
   BUILTIN_KEYMAP,
@@ -7,28 +8,27 @@ import {
   readKeyboardSelection,
   shouldDeleteSelection,
 } from "../../../../managers";
-import type { ReactEditor } from "../../../../types";
 import { createBlockViewContext } from "../../../../views/context";
 
 /**
  * Registers reset-to-writing behavior for Backspace at offset zero.
  *
- * @param reactEditor - Runtime receiving the keyboard binding.
+ * @param editorRuntime - Runtime receiving the keyboard binding.
  * @returns No value.
  */
-export function registerEmptyBlockReset(reactEditor: ReactEditor): void {
-  reactEditor.keyboard.register({
+export function registerEmptyBlockReset(editorRuntime: EditorRuntime): void {
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.emptyBlockReset,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.emptyBlockReset],
-    when: ({ reactEditor, raw: event, blockId }) =>
+    when: ({ editorView, raw: event, blockId }) =>
       isEditableKeyboardEvent(event) &&
-      !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, reactEditor, blockId)),
-  }, ({ reactEditor, root, blockId }) => {
-    const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, reactEditor, blockId));
+      !shouldDeleteSelection(readKeyboardSelection(editorView.selection, editorView.blocks, blockId)),
+  }, ({ editorView, root, blockId }) => {
+    const target = firstKeyboardTarget(readKeyboardSelection(editorView.selection, editorView.blocks, blockId));
     if (!target?.collapsed || target.offset !== 0) return false;
-    const context = createBlockViewContext(reactEditor, target.blockId, root, reactEditor.selection.get());
+    const context = createBlockViewContext(editorView, target.blockId, root, editorView.selection.get());
     if (!context) return false;
-    return reactEditor.views.dispatch(
+    return editorView.views.dispatch(
       "onResetEmpty",
       context,
       target,

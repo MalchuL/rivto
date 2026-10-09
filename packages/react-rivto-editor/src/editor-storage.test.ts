@@ -3,7 +3,7 @@ import { DocumentModelImpl } from "@chulane/document-model";
 import { YjsDoc } from "@chulane/crdt-doc";
 import { z } from "zod";
 import { EditorStorage } from "./editor-storage";
-import { createReactEditor } from "./react-editor";
+import { createEditorRuntime } from "./editor-runtime";
 import { crossDocumentBlockTransfer } from "./extensions/built-ins/clipboard/cross-document-block-transfer";
 import type { RivtoEditorApi } from "@chulane/rivto";
 import { createCaretSelection, createStructuralSelection } from "@chulane/rivto";
@@ -11,7 +11,7 @@ import { createCaretSelection, createStructuralSelection } from "@chulane/rivto"
 const model = (id: string) => new DocumentModelImpl(new YjsDoc(id));
 const configured = (editor: RivtoEditorApi) => {
   editor.blockRegistry.defineBlock({ type: "paragraph" });
-  return createReactEditor({ editor });
+  return createEditorRuntime({ editor });
 };
 
 it("creates empty documents by default and returns the same single editor for concurrent requests", async () => {
@@ -21,10 +21,10 @@ it("creates empty documents by default and returns the same single editor for co
   expect(a.blocks.getBlocks()).toEqual([]); expect(a).not.toHaveProperty("documents"); expect(a.mode.get()).toBe("block");
   const destroy = jestApi.spyOn(a.getDocument(), "destroy");
   const coreDestroy = jestApi.spyOn(a, "destroy");
-  const reactEditor = multi.getEditor("A")!;
-  const reactDestroy = jestApi.spyOn(reactEditor, "destroy");
-  expect(reactEditor.blocks).toBe(a.blocks);
-  expect(reactEditor).not.toHaveProperty("getSingleEditor");
+  const editorRuntime = multi.getEditor("A")!;
+  const reactDestroy = jestApi.spyOn(editorRuntime, "destroy");
+  expect(editorRuntime.blocks).toBe(a.blocks);
+  expect(editorRuntime).not.toHaveProperty("getSingleEditor");
   await multi.closeEditor("A");
   expect(reactDestroy).toHaveBeenCalledTimes(1); expect(coreDestroy).toHaveBeenCalledTimes(1);
   expect(reactDestroy.mock.invocationCallOrder[0]).toBeLessThan(coreDestroy.mock.invocationCallOrder[0]!);
@@ -39,7 +39,7 @@ it("runs the async loader and specific factory once, preserving per-document def
     const document = editor.getDocument();
     editor.blockRegistry.defineBlock({ type: "paragraph", defaultProps: { owner: document.id }, propSchema: z.object({ owner: z.string() }) });
     editor.commands.register("identity", () => document.id);
-    return createReactEditor({ editor });
+    return createEditorRuntime({ editor });
   } });
   const [a, same] = await Promise.all([multi.getSingleEditor("A"), multi.getSingleEditor("A")]);
   const b = await multi.getSingleEditor("B");
@@ -127,7 +127,7 @@ it("rejects destination type rules without a partial transfer", async () => {
   const multi = new EditorStorage({ createEditor: (editor) => {
     const document = editor.getDocument();
     if (document.id === "A") editor.blockRegistry.defineBlock({ type: "custom" });
-    return createReactEditor({ editor });
+    return createEditorRuntime({ editor });
   } });
   const a = await multi.getSingleEditor("A"); const b = await multi.getSingleEditor("B");
   a.blocks.insertBlock({ id: "custom", type: "custom" });

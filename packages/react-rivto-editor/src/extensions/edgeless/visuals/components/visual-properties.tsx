@@ -280,7 +280,7 @@ export function VisualProperties({
       count={visuals.length}
       ariaLabel="Visual properties"
       panelRef={panelRef}
-      onClose={() => controller.reactEditor.commands.execute("edgeless.selection.clear")}
+      onClose={() => controller.editor.commands.execute("edgeless.selection.clear")}
     >
       {body}
     </EdgelessPropertiesPanel>

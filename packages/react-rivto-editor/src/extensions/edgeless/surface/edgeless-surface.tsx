@@ -10,7 +10,7 @@ import { SurfaceBoundary } from "../../../surfaces/surface";
  */
 import {
   useDOMEvent,
-  useReactEditor,
+  useEditorView,
   useEditorRoot,
   useElements,
   useKeyboardEvent,
@@ -84,7 +84,7 @@ function gridDotFade(zoom: number): string {
  */
 /** @param props - Optional local canvas settings. @returns Explicit canvas with its extension UI. */
 export function EdgelessSurface(props: { readonly snapping?: EdgelessSnappingStore; readonly avoidBlockElementOverlap?: boolean; readonly blockElementWidth?: number } = {}) {
-  const editor = useReactEditor();
+  const editor = useEditorView();
   const configured = getEdgelessSurfaceOptions(editor);
   const suppliedSnapping = props.snapping ?? configured.snapping;
   const snapping = useMemo(() => suppliedSnapping ?? new EdgelessSnappingStore(), [suppliedSnapping]);
@@ -100,7 +100,7 @@ function EdgelessSurfaceContent({
   readonly avoidBlockElementOverlap?: boolean;
   readonly blockElementWidth?: number;
 }) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const rootIds = useRootBlockIds();
   const blockElements = useElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
   const { ref: registerRoot } = useEditorRoot();
@@ -273,26 +273,26 @@ function EdgelessSurfaceContent({
       y,
     };
     const frame = avoidBlockElementOverlap
-      ? nonOverlappingBlockFrame(preferredFrame, reactEditor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
+      ? nonOverlappingBlockFrame(preferredFrame, editorView.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
       : preferredFrame;
-    const roots = reactEditor.blocks.getBlocks();
-    const zIndex = Math.max(0, ...reactEditor.elements.getElements().map((element) => element.zIndex)) + 1;
+    const roots = editorView.blocks.getBlocks();
+    const zIndex = Math.max(0, ...editorView.elements.getElements().map((element) => element.zIndex)) + 1;
     let id = "";
-    reactEditor.history.batchUpdates(() => {
+    editorView.history.batchUpdates(() => {
       let afterId = roots.at(-1)?.id;
       const last = roots.at(-1);
-      if (last && !reactEditor.blockTypes.separatesBlockElements(last.type)) {
-        afterId = insertBlockElementSeparator(reactEditor, last.id).id;
+      if (last && !editorView.blockTypes.separatesBlockElements(last.type)) {
+        afterId = insertBlockElementSeparator(editorView, last.id).id;
       }
-      id = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock(), afterId).id;
-      reactEditor.elements.insertElement({
+      id = editorView.blocks.insertBlock(editorView.createDefaultBlock(), afterId).id;
+      editorView.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame,
         zIndex,
         props: { startBlockId: id, endBlockId: id },
       });
     });
-    reactEditor.selection.set(createCaretSelection(id, 0));
+    editorView.selection.set(createCaretSelection(id, 0));
     requestAnimationFrame(() => focusBlock(root, id, 0));
   };
 

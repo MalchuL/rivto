@@ -213,17 +213,17 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`uses registered view behavior for a custom container's handle in ${mode}`, async ({ page }) => {
     await page.goto("/");
     const id = await page.evaluate(() => {
-      const { editor, reactEditor } = (window as unknown as {
+      const { editor, editorRuntime } = (window as unknown as {
         __rivtoDemo: {
           editor: import("@chulane/rivto").RivtoEditorApi;
-          reactEditor: import("@chulane/rivto-react").ReactEditor;
+          editorRuntime: import("@chulane/rivto-react").EditorRuntime;
         };
       }).__rivtoDemo;
       // Reuse a layout view that rejects body drops, under a type unknown to CSS.
-      reactEditor.blockTypes.register({
+      editorRuntime.blockTypes.register({
         definition: { type: "test-container", title: "Custom container" },
-        render: reactEditor.renderers.get("paragraph")!,
-        view: reactEditor.views.get("columns")!,
+        render: editorRuntime.renderers.get("paragraph")!,
+        view: editorRuntime.views.get("columns")!,
       });
       const block = editor.blocks.insertBlock({
         type: "test-container", content: "Custom container",

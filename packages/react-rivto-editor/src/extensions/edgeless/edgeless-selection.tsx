@@ -12,7 +12,7 @@ import { BLOCK_CONTENT_SELECTOR, EDITOR_CONTROL_SELECTOR } from "../../constants
 import {
   useDOMEvent,
   useEditorRoot,
-  useReactEditor,
+  useEditorView,
   useKeyboardEvent,
 } from "../../hooks";
 import { useEffect, useRef } from "react";
@@ -130,8 +130,8 @@ function hideRectangle(node: HTMLElement | null): void {
  * @returns Null; the marquee rectangle is an imperative DOM node.
  */
 export function EdgelessInteractionOverlay() {
-  const reactEditor = useReactEditor();
-  const selection = getEdgelessRuntime(reactEditor);
+  const editorView = useEditorView();
+  const selection = getEdgelessRuntime(editorView);
   const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const gesture = useRef<RectangleGesture | null>(null);
@@ -220,7 +220,7 @@ export function EdgelessInteractionOverlay() {
     if (!start.moved) {
       start.moved = true;
       start.objects = snapshotObjectHits(root);
-      start.parentByChild = groupParentByChild(reactEditor.elements.getElements());
+      start.parentByChild = groupParentByChild(editorView.elements.getElements());
     }
     const next = {
       left: Math.min(start.x, event.clientX),

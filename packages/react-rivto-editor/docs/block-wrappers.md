@@ -5,8 +5,8 @@ Block wrappers are React decorators registered by functional extensions:
 ```tsx
 const commentsExtension = (): ReactEditorExtension => ({
   id: "comments",
-  setup: (reactEditor) => {
-    reactEditor.surfaces.registerBlockWrapper("block", CommentWrapper);
+  setup: (editorRuntime) => {
+    editorRuntime.surfaces.registerBlockWrapper("block", CommentWrapper);
   },
 });
 

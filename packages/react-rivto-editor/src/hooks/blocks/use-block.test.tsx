@@ -34,25 +34,25 @@ describe("useBlock", () => {
       nodeResult = useBlockNode(parentId);
       return null;
     };
-    const reactEditor = createReactEditor({ editor });
-    reactEditor.surfaces.register("block", Surface);
+    const editorView = createReactEditor({ editor });
+    editorView.surfaces.register("block", Surface);
 
-    renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(Surface)));
+    renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
     expect(blockResult?.block).toMatchObject({ id: parentId, type: "paragraph", content: "Parent" });
     expect(blockResult?.block?.children.map((child) => child.id)).toEqual([childId]);
     expect(nodeResult?.block?.childIds).toEqual([childId]);
     expect(nodeResult?.block && "children" in nodeResult.block).toBe(false);
 
     editor.blocks.updateBlock(childId, { content: "After" });
-    renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(Surface)));
+    renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
     expect(blockResult?.block?.children[0]?.content).toBe("After");
     expect(nodeResult?.block?.childIds).toEqual([childId]);
 
     const extraId = editor.blocks.insertBlock({ type: "paragraph", content: "Extra" }, childId).id;
-    renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(Surface)));
+    renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
     expect(nodeResult?.block?.childIds).toEqual([childId, extraId]);
 
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 
@@ -65,14 +65,14 @@ describe("useBlock", () => {
       const { block } = useBlockNode(parentId);
       return block ? createElement(BlockCollapseSlot, { block, mode: "block", selected: false }) : null;
     };
-    const reactEditor = createReactEditor({ editor });
-    reactEditor.surfaces.register("block", Surface);
+    const editorView = createReactEditor({ editor });
+    editorView.surfaces.register("block", Surface);
 
-    expect(renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(Surface)))).toContain("Collapse block");
+    expect(renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)))).toContain("Collapse block");
     editor.blocks.removeBlock(childId);
-    expect(renderToStaticMarkup(createElement(EditorView, { reactEditor }, createElement(Surface)))).not.toContain("Collapse block");
+    expect(renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)))).not.toContain("Collapse block");
 
-    reactEditor.destroy();
+    editorView.destroy();
     editor.destroy();
   });
 });
@@ -81,7 +81,7 @@ test("native source views reuse renderers and bind ordinary editor calls without
   const { DocumentStorage } = await import("@chulane/document-model");
   const { YjsDocumentRegistry } = await import("@chulane/crdt-doc");
   const { standardPreset } = await import("../../extensions/built-ins/built-ins");
-  const { useReactEditor } = await import("../editor/use-editor");
+  const { useEditorView } = await import("../editor/use-editor-view");
   const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
   const source = await storage.create("source", [
     { id: "source", type: "custom", content: "Source" },
@@ -91,18 +91,18 @@ test("native source views reuse renderers and bind ordinary editor calls without
   const runtime = await createTestMultiEditor([host, source], storage, { extensions: [standardPreset()] });
   const editor = await runtime.getSingleEditor(host.id);
   editor.blocks.insertBlock({ id: "host", type: "paragraph", content: "Host" });
-  const reactEditor = runtime.getEditor(source.id)!;
+  const editorRuntime = runtime.getEditor(source.id)!;
   let result: UseBlockNodeResult | undefined;
   let directWrite: (() => void) | undefined;
-  reactEditor.blockTypes.register({ definition: { type: "custom" }, render: ({ blockId }) => {
-    const view = useReactEditor();
-    expect(view.renderers).toBe(reactEditor.renderers);
+  editorRuntime.blockTypes.register({ definition: { type: "custom" }, render: ({ blockId }) => {
+    const view = useEditorView();
+    expect(view.renderers).toBe(editorRuntime.renderers);
     expect(view.getDocument()).toBe(source);
     directWrite = () => view.blocks.updateBlock(blockId, { content: "Direct renderer edit" });
     result = useBlockNode(blockId);
     return createElement("span", { "data-custom": "true" }, result.block?.content);
   } });
-  const markup = renderToStaticMarkup(createElement(EditorView, { reactEditor, rootBlockId: "source" }, createElement(PageSurface)));
+  const markup = renderToStaticMarkup(createElement(EditorView, { runtime: editorRuntime, rootBlockId: "source" }, createElement(PageSurface)));
   expect(markup).toContain('data-custom="true">Source');
   expect(markup).not.toContain("Outside displayed subtree");
   directWrite!();
@@ -123,13 +123,13 @@ test.each([
   editor.blocks.insertBlock({ id: "host", type: "paragraph", content: "Host" });
   const sourceCore = await createEditor();
   const { standardPreset } = await import("../../extensions/built-ins/built-ins");
-  const reactEditor = createReactEditor({ editor: sourceCore, extensions: [standardPreset(), extension()] });
-  reactEditor.blocks.insertBlock({ ...input(), id: "container", listProps: { collapsed: true } });
-  const markup = renderToStaticMarkup(createElement(EditorView, { reactEditor, rootBlockId: "container" }, createElement(PageSurface)));
+  const editorView = createReactEditor({ editor: sourceCore, extensions: [standardPreset(), extension()] });
+  editorView.blocks.insertBlock({ ...input(), id: "container", listProps: { collapsed: true } });
+  const markup = renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime, rootBlockId: "container" }, createElement(PageSurface)));
   expect(markup).toContain(title);
   expect(markup).toContain('data-block-id="container"');
   if (title === "Kanban") expect(markup).toContain("3 columns");
   if (title === "Table") expect(markup).toContain("3 × 3");
   expect(editor.blocks.getRootIds()).toEqual(["host"]);
-  reactEditor.destroy(); await sourceCore.destroy(); await editor.destroy();
+  editorView.destroy(); await sourceCore.destroy(); await editor.destroy();
 });

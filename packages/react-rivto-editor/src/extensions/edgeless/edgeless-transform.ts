@@ -1,3 +1,4 @@
+import type { EditorRuntime } from "../../editor-runtime";
 import type { EditorEvent } from "../../managers/events/editor-event";
 import { canvasPoint } from "./visuals/utils/canvas-point";
 import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../constants";
@@ -9,7 +10,6 @@ import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../co
  * attributes. An empty connector snapshot never mounts the live-preview overlay.
  */
 import type { EditorElementFrame } from "@chulane/rivto";
-import type { ReactEditor } from "../../types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { canvasDelta } from "./edgeless-geometry";
 import {
@@ -90,8 +90,8 @@ interface ConnectorOverlayNode {
 }
 
 /** Adds one delegated move/resize path for cards, visuals, and nested groups. */
-export function registerEdgelessTransform(reactEditor: ReactEditor): () => void {
-  return new EdgelessTransformController(reactEditor).setup();
+export function registerEdgelessTransform(editorRuntime: EditorRuntime): () => void {
+  return new EdgelessTransformController(editorRuntime).setup();
 }
 
 /** Owns transform gesture state, preview geometry, and commit for one editor runtime. */
@@ -108,12 +108,12 @@ export class EdgelessTransformController {
   private connectorHosts = new Map<string, HTMLElement | null>();
 
   private groupChildren = (id: string): string[] => {
-    const element = this.reactEditor.elements.getElement(id);
+    const element = this.editorRuntime.elements.getElement(id);
     return element?.type === "group" && Array.isArray(element.props.children) ? element.props.children.filter((child): child is string => typeof child === "string") : [];
   };
-  private parentId = (id: string): string | undefined => this.reactEditor.elements.getElements().find((element) => this.groupChildren(element.id).includes(id))?.id;
+  private parentId = (id: string): string | undefined => this.editorRuntime.elements.getElements().find((element) => this.groupChildren(element.id).includes(id))?.id;
   private rotation = (id: string): number => {
-    const element = this.reactEditor.elements.getElement(id);
+    const element = this.editorRuntime.elements.getElement(id);
     return element?.type !== "block" && element?.type !== "connector" && typeof element?.props.rotation === "number"
       ? normalizeRotation(element.props.rotation)
       : 0;
@@ -122,14 +122,14 @@ export class EdgelessTransformController {
     if (seen.has(id)) return [];
     seen.add(id);
     const children = this.groupChildren(id);
-    return children.length ? this.leaves(children, seen) : this.reactEditor.elements.hasElement(id) ? [id] : [];
+    return children.length ? this.leaves(children, seen) : this.editorRuntime.elements.hasElement(id) ? [id] : [];
   });
   private bounds = (id: string): EditorElementFrame | undefined => {
     const children = this.groupChildren(id);
-    const element = this.reactEditor.elements.getElement(id);
+    const element = this.editorRuntime.elements.getElement(id);
     return children.length ? unionFrames(children.flatMap((child) => this.bounds(child) ?? [])) : element ? rotatedFrameBounds(element.frame, this.rotation(id)) : undefined;
   };
-  private transformFrame = (id: string): EditorElementFrame | undefined => this.groupChildren(id).length ? this.bounds(id) : this.reactEditor.elements.getElement(id)?.frame;
+  private transformFrame = (id: string): EditorElementFrame | undefined => this.groupChildren(id).length ? this.bounds(id) : this.editorRuntime.elements.getElement(id)?.frame;
   private rendered = (root: HTMLElement, ids: readonly string[]): HTMLElement[] => {
     const included = new Set([...ids, ...this.leaves(ids)]);
     return [...root.querySelectorAll<HTMLElement>("[data-edgeless-root], [data-edgeless-object-id], [data-edgeless-group-bound-id]")].filter((element) => {
@@ -138,10 +138,10 @@ export class EdgelessTransformController {
       const id = element.dataset.edgelessRoot ?? element.dataset.edgelessObjectId ?? element.dataset.edgelessGroupBoundId ?? "";
       if (!included.has(id)) return false;
       // Connectors are live-previewed from attachments instead of CSS-translated.
-      return this.reactEditor.elements.getElement(id)?.type !== "connector";
+      return this.editorRuntime.elements.getElement(id)?.type !== "connector";
     });
   };
-  private minSize = (id: string) => this.reactEditor.elements.getElement(id)?.type === "block" ? { width: 180, height: 100 } : { width: 1, height: 1 };
+  private minSize = (id: string) => this.editorRuntime.elements.getElement(id)?.type === "block" ? { width: 180, height: 100 } : { width: 1, height: 1 };
   private previewFrame = (id: string, active: TransformStart, dx: number, dy: number): EditorElementFrame | undefined => {
     const base = active.frames.get(id) ?? this.transformFrame(id);
     if (!base) return undefined;
@@ -263,7 +263,7 @@ export class EdgelessTransformController {
     const defs = overlay?.querySelector<SVGDefsElement>("defs");
     if (!overlay || !plane || !defs) return;
     for (const item of pathItems) {
-      const element = this.reactEditor.elements.getElement(item.id);
+      const element = this.editorRuntime.elements.getElement(item.id);
       const source = element?.props.source;
       const target = element?.props.target;
       if (!element || !isConnectorEndpoint(source) || !isConnectorEndpoint(target)) continue;
@@ -472,23 +472,23 @@ export class EdgelessTransformController {
       return false;
     }
     if (active.kind === "rotate") {
-      this.reactEditor.elements.updateElement(active.ids[0]!, { props: { rotation: this.rotationAt(root, active, active.lastX, active.lastY, active.rotationSnapped) } });
+      this.editorRuntime.elements.updateElement(active.ids[0]!, { props: { rotation: this.rotationAt(root, active, active.lastX, active.lastY, active.rotationSnapped) } });
       return true;
     }
-    if (active.kind === "move" && this.reactEditor.commands.has("edgeless.selection.move")) { this.reactEditor.commands.execute("edgeless.selection.move", { dx: result.dx, dy: result.dy }); return true; }
-    this.reactEditor.history.batchUpdates(() => active.ids.forEach((id) => {
+    if (active.kind === "move" && this.editorRuntime.commands.has("edgeless.selection.move")) { this.editorRuntime.commands.execute("edgeless.selection.move", { dx: result.dx, dy: result.dy }); return true; }
+    this.editorRuntime.history.batchUpdates(() => active.ids.forEach((id) => {
       const frame = this.previewFrame(id, active, result.dx, result.dy);
-      if (frame) this.reactEditor.elements.updateElement(id, {
+      if (frame) this.editorRuntime.elements.updateElement(id, {
         frame,
-        props: this.reactEditor.elements.getElement(id)?.type === "block" ? { autoHeight: false } : undefined,
+        props: this.editorRuntime.elements.getElement(id)?.type === "block" ? { autoHeight: false } : undefined,
       });
     }));
     return true;
   };
 
-  /** @param reactEditor - Runtime receiving transform events and document commands. */
-  constructor(private readonly reactEditor: ReactEditor) {
-    this.selection = getEdgelessRuntime(reactEditor);
+  /** @param editorRuntime - Runtime receiving transform events and document commands. */
+  constructor(private readonly editorRuntime: EditorRuntime) {
+    this.selection = getEdgelessRuntime(editorRuntime);
   }
 
   /** Starts a permitted move, resize, or rotation gesture. */
@@ -536,7 +536,7 @@ export class EdgelessTransformController {
       } else if (selectedId === childId) {
         // Purpose: allow drag on the drilled child; non-label shapes bounce back to group on click.
         id = childId;
-        const kind = this.reactEditor.elements.getElement(childId)?.type;
+        const kind = this.editorRuntime.elements.getElement(childId)?.type;
         if (kind !== "text" && kind !== "sticker" && kind !== "rectangle" && kind !== "ellipse" && kind !== "connector") {
           returnToGroup = parent;
         }
@@ -549,14 +549,14 @@ export class EdgelessTransformController {
       }
     }
     const hitBlock = event.target.closest<HTMLElement>(BLOCK_SELECTOR);
-    const element = this.reactEditor.elements.getElement(id);
+    const element = this.editorRuntime.elements.getElement(id);
     const hitBlockId = hitBlock?.dataset.blockId ?? "";
     // Nested/indented hits must count: card ranges store roots only, and the
     // row hover strip (::before) often lands on a child block, not the root.
     const movable = !event.target.closest(CONTROL_SELECTOR) && (
       !card ||
       !hitBlock ||
-      (element?.type === "block" && elementContainsBlock(this.reactEditor, element, this.reactEditor.blocks.getRootIds(), hitBlockId))
+      (element?.type === "block" && elementContainsBlock(this.editorRuntime.blocks, element, this.editorRuntime.blocks.getRootIds(), hitBlockId))
     );
     if (!resize && !rotating && !movable) return false;
     event.stopPropagation();
@@ -581,7 +581,7 @@ export class EdgelessTransformController {
       const frame = this.transformFrame(item);
       if (frame) frames.set(item, { ...frame });
     });
-    const canvasElements = this.reactEditor.elements.getElements();
+    const canvasElements = this.editorRuntime.elements.getElements();
     const kind = rotating ? "rotate" as const : resize ? "resize" as const : "move" as const;
     const attachedConnectors = attachedConnectorsForTransform(canvasElements, moving, new Set(ids), kind);
     const snapCandidates = canvasElements
@@ -667,14 +667,14 @@ export class EdgelessTransformController {
 
   /** Installs delegated handlers; extension ownership releases registrations. */
   setup(): () => void {
-    this.reactEditor.events.register({ id: "edgeless.transform.pointer-start", type: "pointerdown", capture: true, mode: "edgeless" }, this.onPointerDown);
-    this.reactEditor.events.register({ id: "edgeless.transform.pointer-move", type: "pointermove", target: "window", mode: "edgeless", passive: false }, this.onPointerMove);
-    this.reactEditor.events.register({ id: "edgeless.transform.pointer-end", type: "pointerup", target: "window", mode: "edgeless" }, ({ raw }) => {
+    this.editorRuntime.events.register({ id: "edgeless.transform.pointer-start", type: "pointerdown", capture: true, mode: "edgeless" }, this.onPointerDown);
+    this.editorRuntime.events.register({ id: "edgeless.transform.pointer-move", type: "pointermove", target: "window", mode: "edgeless", passive: false }, this.onPointerMove);
+    this.editorRuntime.events.register({ id: "edgeless.transform.pointer-end", type: "pointerup", target: "window", mode: "edgeless" }, ({ raw }) => {
       if (this.start) { this.start.lastX = raw.clientX; this.start.lastY = raw.clientY; }
       return this.finish(true, raw.detail);
     });
-    this.reactEditor.events.register({ id: "edgeless.transform.pointer-cancel", type: "pointercancel", target: "window", mode: "edgeless" }, () => this.finish(false));
-    this.reactEditor.keyboard.register({ id: KEYBOARD_BINDING_IDS.edgelessTransformCancel, keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessTransformCancel], mode: "edgeless", when: () => Boolean(this.start) }, () => this.finish(false));
+    this.editorRuntime.events.register({ id: "edgeless.transform.pointer-cancel", type: "pointercancel", target: "window", mode: "edgeless" }, () => this.finish(false));
+    this.editorRuntime.keyboard.register({ id: KEYBOARD_BINDING_IDS.edgelessTransformCancel, keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessTransformCancel], mode: "edgeless", when: () => Boolean(this.start) }, () => this.finish(false));
     return this.clearPreview;
   }
 }

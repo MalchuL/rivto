@@ -26,11 +26,11 @@ export class EdgelessVisualsExtension implements ReactEditorExtension {
 
   constructor(private readonly options: EdgelessVisualsOptions = {}) {}
 
-  setup(reactEditor: Parameters<ReactEditorExtension["setup"]>[0]): () => void {
+  setup(editorRuntime: Parameters<ReactEditorExtension["setup"]>[0]): () => void {
     if (this.controller) throw new Error("Edgeless visuals extension is already installed");
-    const controller = new EdgelessVisualController(reactEditor, this.options);
+    const controller = new EdgelessVisualController(editorRuntime, this.options);
     this.controller = controller;
-    reactEditor.extensions.mount(() => createElement(EdgelessVisualLayer, {
+    editorRuntime.extensions.mount(() => createElement(EdgelessVisualLayer, {
       controller,
       options: this.options,
     }));

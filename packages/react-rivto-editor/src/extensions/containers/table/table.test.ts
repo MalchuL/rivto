@@ -20,12 +20,12 @@ import {
 
 test("inserts rectangular rows and columns as draggable ordinary blocks", async () => {
   const editor = await createTestCoreEditor();
-  const reactEditor = createReactEditor({
+  const editorView = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],
   });
   const before = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
-  reactEditor.slashCommands.execute("block.table.insert", { blockId: before });
+  editorView.slashCommands.execute("block.table.insert", { blockId: before });
   const table = editor.blocks.getBlock(before)!;
 
   expect(table.id).toBe(before);
@@ -38,14 +38,14 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", async 
 
   const rowId = table.children[0]!.id;
   const cellId = table.children[0]!.children[0]!.id;
-  expect(setTableColumnWidth(reactEditor, table.id, 1, 260)).toBe(true);
+  expect(setTableColumnWidth(editorView, table.id, 1, 260)).toBe(true);
   expect(editor.blocks.getBlock(table.id)?.children.every((row) => row.children[1]?.props.tableColumnWidth === 260)).toBe(true);
-  const addedRow = insertTableRow(reactEditor, rowId)!;
+  const addedRow = insertTableRow(editorView, rowId)!;
   expect(editor.blocks.getBlock(addedRow.id)?.children).toHaveLength(3);
   expect(editor.blocks.getBlock(addedRow.id)?.children[1]?.props.tableColumnWidth).toBe(260);
 
   editor.history.clear();
-  const addedCells = insertTableColumn(reactEditor, cellId);
+  const addedCells = insertTableColumn(editorView, cellId);
   expect(addedCells).toHaveLength(4);
   expect(editor.blocks.getBlock(table.id)?.children.every((row) => row.children.length === 4)).toBe(true);
   editor.history.undo();
@@ -53,7 +53,7 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", async 
 
   editor.blocks.moveBlocks([cellId], table.id, "inside");
   expect(editor.blocks.getParentId(cellId)).toBe(table.id);
-  reactEditor.destroy();
+  editorView.destroy();
   editor.destroy();
 });
 

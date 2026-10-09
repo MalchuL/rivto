@@ -16,12 +16,12 @@ import { EditorContext } from "./editor-context";
 import { EditorStorageContext } from "./editor-storage-context";
 import { EditorRootContext } from "./editor-root-context";
 import { DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN, PageVirtualizationContext } from "./page-virtualization-context";
-import type { ReactEditor } from "./types";
+import type { EditorRuntime } from "./editor-runtime";
 
 /** Properties accepted by the React editor boundary. */
 export interface EditorViewProps {
   /** React runtime created and destroyed by the host application. */
-  readonly reactEditor: ReactEditor;
+  readonly runtime: EditorRuntime;
   /** Optional block and descendants to display instead of the complete document. */
   readonly rootBlockId?: string;
   /** False suspends hidden-tab interaction while keeping its document acquired; defaults to true. */
@@ -70,7 +70,7 @@ function normalizeVirtualizationCount(value: number, fallback: number): number {
  * @returns The view's context providers and supplied surface, or a loading/error indicator before its model is available.
  */
 export function EditorView({
-  reactEditor: hostEditor,
+  runtime: hostEditor,
   rootBlockId,
   active = true,
   onReady,
@@ -89,30 +89,30 @@ export function EditorView({
   useEffect(() => {
     if (snapshot.retained && snapshot.document) onReady?.(snapshot.document);
   }, [snapshot.retained, snapshot.document, onReady]);
-  const reactEditor = snapshot.api ?? hostEditor;
+  const editorView = snapshot.api;
   const domIdPrefix = useId();
   const [root, setRoot] = useState<HTMLElement | null>(null);
 
   const subscribeSurfaces = useCallback(
-    (listener: () => void) => reactEditor.surfaces.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => hostEditor.surfaces.subscribe(listener),
+    [hostEditor],
   );
   useSyncExternalStore(
     subscribeSurfaces,
-    () => reactEditor.surfaces.revision,
-    () => reactEditor.surfaces.revision,
+    () => hostEditor.surfaces.revision,
+    () => hostEditor.surfaces.revision,
   );
   const subscribeExtensions = useCallback(
-    (listener: () => void) => reactEditor.extensions.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => hostEditor.extensions.subscribe(listener),
+    [hostEditor],
   );
   useSyncExternalStore(
     subscribeExtensions,
-    () => reactEditor.extensions.revision,
-    () => reactEditor.extensions.revision,
+    () => hostEditor.extensions.revision,
+    () => hostEditor.extensions.revision,
   );
-  const context = useMemo(() => ({ reactEditor, documentId, document: snapshot.document, rootBlockId, domIdPrefix, view: controller, enabled }),
-    [reactEditor, documentId, snapshot.document, rootBlockId, domIdPrefix, controller, enabled]);
+  const context = useMemo(() => editorView ? ({ editorView, documentId, document: snapshot.document, rootBlockId, domIdPrefix, view: controller, enabled }) : null,
+    [editorView, documentId, snapshot.document, rootBlockId, domIdPrefix, controller, enabled]);
   const virtualization = useMemo(() => {
     let threshold = virtualizePageThreshold;
     if (typeof threshold === "number") {
@@ -132,7 +132,7 @@ export function EditorView({
   }, [controller]);
   const rootContext = useMemo(() => ({ element: root, ref: rootRef }), [root, rootRef]);
 
-  if (!snapshot.api) {
+  if (!context) {
     return <div role="status">{snapshot.status === "error" ? "Unable to load document." : "Loading document…"}</div>;
   }
 

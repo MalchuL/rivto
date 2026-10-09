@@ -1,6 +1,6 @@
 # React capability reference
 
-`ReactEditor` раскрывает узкие capabilities вместо forwarding methods. Registrations, созданные внутри extension `setup`, автоматически удаляются при cleanup.
+`EditorViewApi` раскрывает узкие capabilities вместо forwarding methods. Registrations, созданные внутри extension `setup`, автоматически удаляются при cleanup.
 
 Все публичные React `subscribe(listener)` capabilities используют один stream на manager и Set-семантику: разрешено несколько distinct callbacks, новый callback не заменяет старые, одинаковая function reference имеет одну effective registration, returned unsubscribe idempotent, immediate вызова нет. После notification consumer читает соответствующий `revision`/snapshot/getter. Исключения listener не перехватываются.
 

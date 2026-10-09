@@ -13,7 +13,7 @@ import {
   tableExtension,
   columnsExtension,
   MarkdownContent,
-  useReactEditor,
+  useEditorView,
   useBlockSelectionAnchor,
   useBlockNode,
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
@@ -64,7 +64,7 @@ export {
  */
 function SliderBlock({ blockId }: { readonly blockId: string }) {
   const { block, operations: { setProp } } = useBlockNode<SliderProps>(blockId);
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const draggingRef = useRef(false);
   const [draftValue, setDraftValue] = useState<number | null>(null);
   const committedValue = block?.props.value ?? 50;
@@ -78,9 +78,9 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
    */
   const commitValue = useCallback((next: number) => {
     setDraftValue(null);
-    if (next === (reactEditor.blocks.getBlockNode(blockId)?.props.value ?? 50)) return;
+    if (next === (editorView.blocks.getBlockNode(blockId)?.props.value ?? 50)) return;
     setProp("value", next);
-  }, [reactEditor, blockId, setProp]);
+  }, [editorView, blockId, setProp]);
 
   /**
    * Marks the current pointer gesture as an in-progress drag.
@@ -157,12 +157,12 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
 function CounterBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode<CounterProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   if (!editing.block) return null;
   const count = editing.block.props.count ?? 0;
   const increment = (event: MouseEvent<HTMLButtonElement>) => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
-    const current = reactEditor.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+    const current = editorView.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
     editing.operations.setProp("count", (current?.count ?? 0) + 1);
   };
   return (
@@ -201,8 +201,8 @@ export const customBlockExtensions: readonly ReactEditorExtension[] = [
     }),
     {
       id: "clipboard.demo-counter",
-      setup: (reactEditor) => {
-        reactEditor.clipboard.registerFormatter({
+      setup: (editorRuntime) => {
+        editorRuntime.clipboard.registerFormatter({
           id: "demo.counter",
           matches: ({ block }) => block.type === COUNTER_BLOCK_TYPE,
           format: ({ block }) => {

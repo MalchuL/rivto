@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { CheckIcon, EllipsisIcon, MinusIcon } from "lucide-react";
 import { editorControlProps } from "../../constants";
-import { useBlockEditing, useReactEditor } from "../../hooks";
+import { useBlockEditing, useEditorView } from "../../hooks";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
@@ -20,9 +20,9 @@ export function TodoItem({
   blockId,
   propertiesModal: PropertiesModal = DefaultTodoItemPropertiesModal,
 }: TodoItemComponentProps) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const editing = useBlockEditing<TodoItemProps>(blockId);
-  const actions = useMemo(() => new TodoItemActions(reactEditor, blockId), [reactEditor, blockId]);
+  const actions = useMemo(() => new TodoItemActions(editorView, blockId), [editorView, blockId]);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const block = editing.block as TodoItemBlock | undefined;
   if (!block) return null;

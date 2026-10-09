@@ -11,7 +11,7 @@ import { SurfaceBoundary } from "../surface";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { defaultRangeExtractor, useWindowVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
-import { useEditorRoot, useReactEditor, useRootBlockIds } from "../../hooks";
+import { useEditorRoot, useEditorView, useRootBlockIds } from "../../hooks";
 import { useEditorContext } from "../../editor-context";
 import { BlockTree } from "../../blocks";
 import { BlockElementRefProvider } from "../../blocks/block-wrapper/block-wrapper";
@@ -63,7 +63,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
   readonly surface: HTMLElement | null;
   readonly overscan: number;
 }) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const [pageTop, setPageTop] = useState(0);
   // Focused or explicitly requested roots stay mounted even when scrolling
   // moves them outside the ordinary viewport range.
@@ -111,7 +111,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
      */
     const rootId = (blockId: string): string => {
       let id = blockId;
-      for (let parent = reactEditor.blocks.getParentId(id); parent; parent = reactEditor.blocks.getParentId(id)) id = parent;
+      for (let parent = editorView.blocks.getParentId(id); parent; parent = editorView.blocks.getParentId(id)) id = parent;
       return id;
     };
     /**
@@ -190,13 +190,13 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
          * @param blocks - Current sibling forest in canonical order.
          * @returns Visible IDs and text lengths in depth-first page order.
          */
-        const visit = (blocks: ReturnType<typeof reactEditor.blocks.getBlocks>): Array<{ id: string; length: number }> => (
+        const visit = (blocks: ReturnType<typeof editorView.blocks.getBlocks>): Array<{ id: string; length: number }> => (
           blocks.flatMap((block) => [
             { id: block.id, length: block.content.length },
-            ...(!reactEditor.blockListProps.childrenVisible(block) ? [] : visit(block.children)),
+            ...(!editorView.blockListProps.childrenVisible(block) ? [] : visit(block.children)),
           ])
         );
-        return visit(reactEditor.blocks.getBlocks());
+        return visit(editorView.blocks.getBlocks());
       },
       suspendScrollAdjustments: () => {
         if (scrollAdjustmentSuspensions === 0) {
@@ -221,7 +221,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
       surface.removeEventListener("pointerdown", onPointerDown);
       unregisterController();
     };
-  }, [blockIds, reactEditor, surface, virtualizer]);
+  }, [blockIds, editorView, surface, virtualizer]);
   const items = virtualizer.getVirtualItems();
   let previousEnd = pageTop;
   let previousIndex = -2;
@@ -232,11 +232,11 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
    * @returns Number of preceding list members, or undefined for other blocks.
    */
   const counterSeed = (index: number): number | undefined => {
-    const type = reactEditor.blocks.getBlockNode(blockIds[index]!)?.listProps.type;
+    const type = editorView.blocks.getBlockNode(blockIds[index]!)?.listProps.type;
     if (type !== "numbered_list") return undefined;
     let count = 0;
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-      const previousType = reactEditor.blocks.getBlockNode(blockIds[cursor]!)?.listProps.type;
+      const previousType = editorView.blocks.getBlockNode(blockIds[cursor]!)?.listProps.type;
       if (previousType !== "numbered_list" && previousType !== "start_numbered_list") break;
       count += 1;
       if (previousType === "start_numbered_list") break;

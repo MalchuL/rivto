@@ -5,9 +5,8 @@ import type { DocumentViewScope } from "./document-view";
 import { DocumentViewRegistry } from "./document-view-registry";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorMode } from "@chulane/rivto";
-import type { ReactEditorView, EventsCapability } from "../../capabilities";
-import type { ReactEditor } from "../../types";
-import type { ReactEditorImpl } from "../../react-editor";
+import type { EditorViewApi } from "../../types";
+import type { EditorRuntime } from "../../editor-runtime";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
@@ -55,7 +54,7 @@ interface ConnectedListener extends NativeListenerGroup {
  * Semantic keyboard actions belong to KeyboardManager, which uses this manager
  * for surface/window keydown and keyup transport.
  */
-export class EventManager implements EventsCapability {
+export class EventManager {
   private readonly registrations: DOMRegistration[] = [];
   private readonly registrationIds = new Set<string>();
   private readonly registrationDisposers = new Map<string, () => void>();
@@ -67,34 +66,15 @@ export class EventManager implements EventsCapability {
   /**
    * Creates the browser-event runtime before extensions are installed.
    *
-   * @param reactEditor - Owning React runtime for payloads and registration lifecycle.
+   * @param editorRuntime - Owning React runtime for payloads and registration lifecycle.
    */
-  constructor(private readonly reactEditor: ReactEditorImpl) {
-    this.documentViews = new DocumentViewRegistry(reactEditor, () => this.reconnect());
+  constructor(private readonly editorRuntime: EditorRuntime) {
+    this.documentViews = new DocumentViewRegistry(editorRuntime, () => this.reconnect());
   }
 
-  /**
-   * Binds event registrations and DOM operations to one mounted occurrence.
-   * Shared listener state stays on this manager; the view owns local disposers.
-   * @param reactEditor - View editor supplying a stable identity, current DOM root, and registration cleanup.
-   * @returns Event methods that retain this view even when another view gains focus.
-   */
-  createViewApi(reactEditor: ReactEditorView): EventsCapability {
-    const owner = reactEditor.view;
-    return {
-      createViewApi: (view) => this.createViewApi(view),
-      register: (definition, listener) => owner.own(this.register(definition, listener, owner)),
-      delete: (id) => this.delete(`${owner.id}:${id}`),
-      getRoot: () => owner.getRoot(),
-      setRoot: (root) => owner.setRoot(root),
-      getSurfaceType: () => this.documentViews.getSurfaceType(owner.getRoot()),
-      getDocumentView: () => {
-        const root = owner.getRoot();
-        return root ? this.documentViews.getApi(root) : undefined;
-      },
-      registerDocumentView: (...args) => this.registerDocumentView(...args),
-    };
-  }
+
+  /** Cancels view DOM work before the runtime releases extension dependencies. */
+  cancelPendingSelections(): void { this.documentViews.cancelPendingSelections(); }
 
   /**
    * Registers a typed delegated DOM event.
@@ -131,7 +111,7 @@ export class EventManager implements EventsCapability {
 
     let active = true;
     let dispose: () => void = () => undefined;
-    dispose = this.reactEditor.extensions.own(() => {
+    dispose = this.editorRuntime.extensions.own(() => {
       if (!active) return;
       active = false;
       const index = this.registrations.indexOf(registration);
@@ -159,20 +139,6 @@ export class EventManager implements EventsCapability {
     return true;
   }
 
-  /**
-   * Replaces the mounted surface root used by delegated listeners.
-   *
-   * The previous surface, document, and window listeners are detached before
-   * registrations reconnect to the new surface's browser realm.
-   *
-   * @param root - Mounted surface root element, or null during unmount.
-   */
-  setRoot(root: HTMLElement | null): void {
-    if (this.destroyed && root === null) return;
-    this.assertActive();
-    this.documentViews.setRoot(root);
-  }
-
   /** @returns The focused view occurrence, or a mounted full-document surface before interaction; falls back to the first subtree when no full document is mounted. */
   getRoot(): HTMLElement | null {
     return this.documentViews.getRoot();
@@ -184,23 +150,23 @@ export class EventManager implements EventsCapability {
    * The core mode manager belongs to the document and chooses its main presentation.
    * This method reads the receiving DOM occurrence instead: a page embedding
    * returns `block` even inside an `edgeless` document. Scoped event managers use
-   * their own view root; the shared manager uses the active or synchronous operation
+   * their own view root; the shared manager uses the active mounted
    * root. No additional mode state is stored, and the core mode remains shared.
    * Dispatch captures this value once in `event.mode`; handlers use that snapshot.
    * View-specific commands outside dispatch can call this method, while operations
-   * that depend on document mode should use `reactEditor.mode.get()`.
+   * that depend on document mode should use `editorRuntime.mode.get()`.
    * @returns Current DOM occurrence's surface kind, or core mode before mounting
    * or when the root has no recognized surface type.
    */
-  getSurfaceType(): EditorMode {
-    return this.documentViews.getSurfaceType();
+  getSurfaceType(root?: HTMLElement | null): EditorMode {
+    return this.documentViews.getSurfaceType(root);
   }
 
   /**
    * Reads the API belonging to the current DOM occurrence without retaining a document.
    * @returns Mounted view's document-bound API, or undefined when no registered view supplies one.
    */
-  getDocumentView(): ReactEditor | undefined {
+  getDocumentView(): EditorViewApi | undefined {
     return this.documentViews.getDocumentView();
   }
 
@@ -209,13 +175,13 @@ export class EventManager implements EventsCapability {
    * @param root - Mounted surface displaying the full document or source subtree.
    * @param document - Source model used for commands within this region.
    * @param rootBlockId - Displayed source root bounding selection and navigation.
-   * @param api - View-bound API supplied to handlers; omitted to use the host API.
+   * @param api - View-bound API supplied to handlers; omitted only for a region that must not dispatch editing handlers.
    * @param deactivate - Closes this view's transient UI when it loses focus or is removed.
    * @returns Idempotent cleanup that clears selection when a focused subtree is removed
    * and returns keyboard focus to an enclosing mounted surface, retaining source undo.
    * Full-document surface changes preserve selection when switching presentation modes.
    */
-  registerDocumentView(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: ReactEditor, deactivate?: () => void): () => void {
+  registerDocumentView(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: EditorViewApi, deactivate?: () => void): () => void {
     this.assertActive();
     return this.documentViews.registerDocumentView(root, document, rootBlockId, api, deactivate);
   }
@@ -239,7 +205,7 @@ export class EventManager implements EventsCapability {
   /** Throws when a registration is attempted after runtime destruction. */
   assertActive(): void {
     if (this.destroyed) throw new Error("Editor event runtime is destroyed");
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
   }
 
   private createDOMRegistration(
@@ -317,6 +283,7 @@ export class EventManager implements EventsCapability {
 
   private dispatchRegistrations(group: NativeListenerGroup, raw: globalThis.Event, root: HTMLElement): void {
     const event = this.createEditorEvent(group.target, raw, root);
+    if (!event) return;
     // Iterate in place: pointermove fires hundreds of times per gesture and
     // these handlers do not splice `registrations` while dispatch is running.
     for (const registration of this.registrations) {
@@ -342,7 +309,7 @@ export class EventManager implements EventsCapability {
     eventTarget: DOMEventTarget,
     raw: globalThis.Event,
     root: HTMLElement,
-  ): AnyEditorEvent {
+  ): AnyEditorEvent | undefined {
     const nativeTarget = raw.target;
     const ElementConstructor = root.ownerDocument.defaultView?.Element;
     const element = ElementConstructor && nativeTarget instanceof ElementConstructor
@@ -363,15 +330,16 @@ export class EventManager implements EventsCapability {
     const contentElement = closestContent && root.contains(closestContent)
       ? closestContent
       : null;
-    const reactEditor = this.documentViews.getApi(root) ?? this.reactEditor;
+    const editorView = this.documentViews.getApi(root);
+    if (!editorView) return;
     return new EditorEvent({
       raw: raw as never,
-      reactEditor,
+      editorView,
       root,
       // Route handlers by the receiving surface: core mode may be edgeless
       // while this event belongs to a page embedding of the same document.
       mode: this.documentViews.getSurfaceType(root),
-      selection: reactEditor.selection.get(),
+      selection: editorView.selection.get(),
       eventTarget,
       insideRoot,
       blockElement,

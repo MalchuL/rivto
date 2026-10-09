@@ -1,5 +1,3 @@
-import type { DocumentViewScope } from "./managers/events/document-view";
-import type { ReactEditor } from "./types";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
@@ -20,7 +18,6 @@ import type {
   PasteStrategyRegistry,
   Selection,
 } from "@chulane/rivto";
-import type { DocumentModel } from "@chulane/document-model";
 import type { ComponentType, ReactNode } from "react";
 import type { BlockWrapperComponent } from "./blocks";
 import type {
@@ -43,7 +40,6 @@ import type {
   ClipboardFormatter,
   ClipboardParser,
   SlashCommand,
-  SlashCommandContext,
   SurfaceComponent,
   ResolvedSlot,
   BlockSlotPosition,
@@ -54,22 +50,6 @@ import type {
   SlotPosition,
 } from "./managers";
 import type { BlockViewAction, BlockViewBehavior, BlockViewContext } from "./views/types";
-
-/** Editor API for one occurrence, with its registration lifecycle and DOM root. */
-export interface ReactEditorView extends ReactEditor {
-  /** Owns local registrations and supplies the current root, including null after unmount. */
-  readonly view: DocumentViewScope;
-}
-
-/** Creates an API for one occurrence while retaining the manager's shared state. */
-export interface ViewApiFactory<T> {
-  /**
-   * Creates methods bound to the supplied occurrence without acquiring a document.
-   * @param reactEditor - View editor supplying local APIs, identity, root, and cleanup.
-   * @returns API that retains this occurrence when focus moves to another view.
-   */
-  createViewApi(reactEditor: ReactEditorView): T;
-}
 
 export interface BlocksCapability {
   /**
@@ -347,7 +327,7 @@ export interface BlockListPropsCapability extends Omit<BlockListPropsManagerApi,
 }
 
 /** React-owned registry for portable clipboard formatting and parsing. */
-export interface ClipboardCapability extends ViewApiFactory<ClipboardCapability> {
+export interface ClipboardCapability {
   /** Core paste-strategy registry shared with React clipboard extensions. */
   readonly pasteStrategies: PasteStrategyRegistry;
   /** @param selection - Optional selection override. @returns Structured copy data, when available. */
@@ -401,7 +381,7 @@ export interface ViewsCapability {
   readonly fallback: BlockViewBehavior;
 }
 
-export interface EventsCapability extends ViewApiFactory<EventsCapability> {
+export interface EventsCapability {
   register<
     Target extends DOMEventTarget = "surface",
     Type extends DOMEventName<Target> = DOMEventName<Target>,
@@ -411,11 +391,11 @@ export interface EventsCapability extends ViewApiFactory<EventsCapability> {
   ): () => void;
   delete(id: string): boolean;
   setRoot(root: HTMLElement | null): void;
-  /** @returns The active document-view root, or the first mounted surface before interaction. */
+  /** @returns This occurrence’s DOM root, or null before mounting and after cleanup. */
   getRoot(): HTMLElement | null;
   /**
-   * Reads the rendered surface of this view, or the active view on the shared runtime.
-   * Unlike `reactEditor.mode.get()`, which is shared by a document's views, this
+   * Reads the rendered surface of this occurrence without changing shared document mode.
+   * Unlike `editorRuntime.mode.get()`, which is shared by a document's views, this
    * describes the receiving DOM surface: a page embedding returns `block` even
    * when its document's core mode is `edgeless`. No additional mode is stored.
    * Event dispatch captures this value in `event.mode`; handlers should use that
@@ -424,19 +404,10 @@ export interface EventsCapability extends ViewApiFactory<EventsCapability> {
    * @returns Mounted view's surface type, or core mode when no recognized surface is mounted.
    */
   getSurfaceType(): EditorMode;
-  /** @returns API of the current DOM occurrence, or undefined without a registered view API; never acquires content. */
-  getDocumentView(): ReactEditor | undefined;
-  /**
-   * Registers an embedded document occurrence without installing another editor runtime.
-   * @param root - Mounted region displaying source blocks through the existing BlockTree.
-   * @param document - Model owning commands dispatched inside the region.
-   * @param rootBlockId - Source subtree boundary for selection and navigation.
-   * @returns Idempotent cleanup; a removed active view clears its local selection.
-   */
-  registerDocumentView(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: ReactEditor, deactivate?: () => void): () => void;
+
 }
 
-export interface KeyboardCapability extends ViewApiFactory<KeyboardCapability> {
+export interface KeyboardCapability {
   /** Registers one stable semantic action and returns its idempotent disposer. */
   register(
     definition: KeyboardEventDefinition,
@@ -492,7 +463,7 @@ export interface SurfacesCapability {
   subscribe(listener: () => void): () => void;
 }
 
-export interface SelectionCapability extends ViewApiFactory<SelectionCapability> {
+export interface SelectionCapability {
   get(): Selection | undefined;
   set(selection: Selection): void;
   clear(): void;
@@ -527,12 +498,14 @@ export interface RestoreDOMSelectionOptions {
   readonly scroll?: boolean;
 }
 
-export interface SlashCommandsCapability extends ViewApiFactory<SlashCommandsCapability> {
+export interface SlashCommandsCapability {
   readonly revision: number;
   register(command: SlashCommand): () => void;
   delete(id: string): boolean;
-  getAll(context: Pick<SlashCommandContext, "blockId">): SlashCommand[];
-  execute(id: string, context: Pick<SlashCommandContext, "blockId">): void;
+  /** Lists available commands for the block using this manager's bound editor view. */
+  getAll(context: { blockId: string }): SlashCommand[];
+  /** Executes the command for the block using this manager's bound editor view. */
+  execute(id: string, context: { blockId: string }): void;
   subscribe(listener: () => void): () => void;
 }
 

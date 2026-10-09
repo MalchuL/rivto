@@ -1,3 +1,4 @@
+import type { EditorRuntime } from "../../editor-runtime";
 /**
  * Runtime registration for the built-in edgeless surface.
  *
@@ -13,34 +14,34 @@ import {
 import {
   EDGELESS_CARD_DEFAULT_FRAME,
 } from "../../elements/block-element-projection";
-import type { ReactEditor } from "../../types";
+import type { EditorViewApi } from "../../types";
 
 const surfaceOptions = new WeakMap<object, EdgelessSurfaceOptions>();
 
 /** @param editor - View or host sharing the surface manager. @returns Configured canvas defaults, or empty options. */
-export function getEdgelessSurfaceOptions(editor: ReactEditor): EdgelessSurfaceOptions {
+export function getEdgelessSurfaceOptions(editor: EditorViewApi): EdgelessSurfaceOptions {
   return surfaceOptions.get(editor.surfaces) ?? {};
 }
 
 /**
  * Registers the configured positioned-card surface.
  *
- * @param reactEditor - Runtime receiving the edgeless surface.
+ * @param editorRuntime - Runtime receiving the edgeless surface.
  * @param options - Snapping, overlap, and card-width configuration.
  * @returns Cleanup restoring the previous surface defaults.
  */
 export function registerEdgelessSurface(
-  reactEditor: ReactEditor,
+  editorRuntime: EditorRuntime,
   options: EdgelessSurfaceOptions,
 ): () => void {
-  const previous = surfaceOptions.get(reactEditor.surfaces);
-  surfaceOptions.set(reactEditor.surfaces, options);
-  reactEditor.blockElements.setOverlapAvoidance(options.avoidBlockElementOverlap !== false,
+  const previous = surfaceOptions.get(editorRuntime.surfaces);
+  surfaceOptions.set(editorRuntime.surfaces, options);
+  editorRuntime.blockElements.setOverlapAvoidance(options.avoidBlockElementOverlap !== false,
   );
-  reactEditor.blockElements.setDefaultWidth(options.blockElementWidth ?? EDGELESS_CARD_DEFAULT_FRAME.width,
+  editorRuntime.blockElements.setDefaultWidth(options.blockElementWidth ?? EDGELESS_CARD_DEFAULT_FRAME.width,
   );
   return () => {
-    if (previous) surfaceOptions.set(reactEditor.surfaces, previous);
-    else surfaceOptions.delete(reactEditor.surfaces);
+    if (previous) surfaceOptions.set(editorRuntime.surfaces, previous);
+    else surfaceOptions.delete(editorRuntime.surfaces);
   };
 }

@@ -11,7 +11,7 @@ async function createAppEditor() {
   const document = await storage.openDocument("document-id");
   const core = createRivtoEditor({ document });
   const visuals = edgelessVisualsExtension(appVisualOptions);
-  const reactEditor = createReactEditor({
+  const editorRuntime = createEditorRuntime({
     editor: core,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleLink } }),
@@ -20,7 +20,7 @@ async function createAppEditor() {
       ...customBlockExtensions,
     ],
   });
-  return { storage, core, editor: core, reactEditor, visuals };
+  return { storage, core, editor: core, editorRuntime, visuals };
 }
 ```
 
@@ -34,7 +34,7 @@ Core definitions находятся отдельно от React renderers. Эт�
 
 ## Application toolbar
 
-Demo toolbar получает core editor от host для persistence/lifecycle и использует `useReactEditor()` для focused operations. Host React state выбирает `<PageSurface />` либо `<EdgelessSurface />`. UI state вроде видимости block IDs остаётся React state, а не pluginData документа.
+Demo toolbar получает core editor от host для persistence/lifecycle и использует `useEditorView()` для focused operations. Host React state выбирает `<PageSurface />` либо `<EdgelessSurface />`. UI state вроде видимости block IDs остаётся React state, а не pluginData документа.
 
 ## Decorator без duplicate block DOM
 
@@ -42,13 +42,13 @@ Demo block-ID extension регистрирует `BlockWrapper` и исполь�
 
 ## Несколько независимых editors
 
-Один user получает EditorStorage с фабрикой отдельных ReactEditor для документов.
+Один user получает EditorStorage с фабрикой отдельных EditorViewApi для документов.
 Два документа используют разные document-bound runtimes; два views одного
-документа получают один cached ReactEditor:
+документа получают один cached EditorViewApi:
 
 ```tsx
-<EditorView reactEditor={leftAcquisition.editor}><PageSurface /></EditorView>
-<EditorView reactEditor={rightAcquisition.editor}><PageSurface /></EditorView>
+<EditorView runtime={leftAcquisition.editor}><PageSurface /></EditorView>
+<EditorView runtime={rightAcquisition.editor}><PageSurface /></EditorView>
 ```
 
 View автоматически удерживает consumer, включая nesting. Cross-document transfer
@@ -63,7 +63,7 @@ Registry metadata синхронизируется постоянно; content p
 ```tsx
 const editors = new EditorStorage({
   openDocument: (id) => storage.openDocument(id),
-  createEditor: (editor) => createReactEditor({
+  createEditor: (editor) => createEditorRuntime({
     editor,
     extensions: [standardPreset(), embeddingExtension()],
   }),
@@ -71,7 +71,7 @@ const editors = new EditorStorage({
 const acquisition = await editors.acquireEditor("document-id");
 // Views retain the document through the nearest provider before releasing the initial consumer.
 <EditorStorageContext.Provider value={editors}>
-  <EditorView reactEditor={acquisition.editor} onReady={acquisition.release}>
+  <EditorView runtime={acquisition.editor} onReady={acquisition.release}>
     <PageSurface />
   </EditorView>
 </EditorStorageContext.Provider>;

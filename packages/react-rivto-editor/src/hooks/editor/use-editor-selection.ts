@@ -8,7 +8,7 @@
  */
 import { useCallback, useSyncExternalStore } from "react";
 import type { Selection } from "@chulane/rivto";
-import { useReactEditor } from "./use-editor";
+import { useEditorView } from "./use-editor-view";
 
 /**
  * Returns the current detached local selection.
@@ -17,14 +17,14 @@ import { useReactEditor } from "./use-editor";
  * @throws If called outside an EditorView subtree.
  */
 export function useEditorSelection(): Selection | undefined {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.selection.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => editorView.selection.subscribe(listener),
+    [editorView],
   );
   return useSyncExternalStore(
     subscribe,
-    () => reactEditor.selection.snapshot(),
-    () => reactEditor.selection.snapshot(),
+    () => editorView.selection.snapshot(),
+    () => editorView.selection.snapshot(),
   );
 }

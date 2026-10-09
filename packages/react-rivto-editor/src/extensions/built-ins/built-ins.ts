@@ -56,7 +56,7 @@ export function defaultWritingBlockExtension(
 ): ReactEditorExtension {
   return {
     id: "block.default-writing",
-    setup: (reactEditor) => registerDefaultWritingBlock(reactEditor, options),
+    setup: (editorRuntime) => registerDefaultWritingBlock(editorRuntime, options),
   };
 }
 
@@ -68,7 +68,7 @@ export function defaultWritingBlockExtension(
  * @returns A mode-independent history extension.
  */
 export const historyExtension = (options: HistoryExtensionOptions = {}): ReactEditorExtension => {
-  return { id: "history", setup: (reactEditor) => registerHistory(reactEditor, options) };
+  return { id: "history", setup: (editorRuntime) => registerHistory(editorRuntime, options) };
 };
 
 /** @returns DOM-to-editor text and cross-block selection synchronization. */
@@ -84,7 +84,7 @@ export const textSelectionExtension = (): ReactEditorExtension => ({
  * @returns A mode-independent clipboard extension.
  */
 export const clipboardExtension = (options: ClipboardExtensionOptions = {}): ReactEditorExtension => {
-  return { id: "clipboard", setup: (reactEditor) => registerClipboard(reactEditor, options) };
+  return { id: "clipboard", setup: (editorRuntime) => registerClipboard(editorRuntime, options) };
 };
 
 /** @returns Pointer and modifier-based whole-block selection for every surface. */
@@ -139,7 +139,7 @@ export const trailingBlockExtension = (count: number): ReactEditorExtension => {
   }
   return {
     id: "block.trailing-create",
-    setup: (reactEditor) => registerTrailingBlock(reactEditor, count),
+    setup: (editorRuntime) => registerTrailingBlock(editorRuntime, count),
   };
 };
 
@@ -172,7 +172,7 @@ export type { IndentExtensionOptions } from "./page/indent";
 export const indentExtension = (options: IndentExtensionOptions = {}): ReactEditorExtension => {
   return {
     id: "block.indent",
-    setup: (reactEditor) => registerIndent(reactEditor, options),
+    setup: (editorRuntime) => registerIndent(editorRuntime, options),
   };
 };
 
@@ -193,54 +193,54 @@ export const collapseExtension = (): ReactEditorExtension => ({
  */
 export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): ReactEditorExtension => ({
   id: "slash.commands",
-  setup: (reactEditor) => {
-    reactEditor.extensions.mount(() => createElement(SlashMenu, { options }));
+  setup: (editorRuntime) => {
+    editorRuntime.extensions.mount(() => createElement(SlashMenu, { options }));
     const disposers = [
       // Clone the complete subtree while leaving persisted IDs for the store to generate.
-      reactEditor.slashCommands.register({
+      editorRuntime.slashCommands.register({
         id: "block.duplicate",
         title: "Duplicate block",
         group: "Actions",
         keywords: ["copy", "clone"],
-        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId),
-        execute: ({ blockId, reactEditor }) => {
-          const block = reactEditor.blocks.getBlock(blockId);
+        isAvailable: ({ blockId }) => editorRuntime.blocks.hasBlock(blockId),
+        execute: ({ blockId, editorView }) => {
+          const block = editorView.blocks.getBlock(blockId);
           if (!block) return;
           const input = duplicateBlockInput(block);
           // Use the receiving view: a page embedding can share an edgeless core.
           // Duplicating there should insert a sibling, not create a canvas card.
-          const isEdgelessRoot = reactEditor.events.getSurfaceType() === "edgeless" && reactEditor.blocks.isRootBlock(blockId);
+          const isEdgelessRoot = editorView.events.getSurfaceType() === "edgeless" && editorView.blocks.isRootBlock(blockId);
           const sourceElement = isEdgelessRoot
-            ? reactEditor.elements.getElements().find((element) => element.type === "block" && blockIdsOf(element, reactEditor.blocks.getRootIds()).includes(blockId))
+            ? editorView.elements.getElements().find((element) => element.type === "block" && blockIdsOf(element, editorView.blocks.getRootIds()).includes(blockId))
             : undefined;
           let duplicateId = "";
-          reactEditor.history.batchUpdates(() => {
+          editorView.history.batchUpdates(() => {
             const afterId = isEdgelessRoot
-              ? insertBlockElementSeparator(reactEditor, reactEditor.blocks.getRootIds().at(-1)!).id
+              ? insertBlockElementSeparator(editorView, editorView.blocks.getRootIds().at(-1)!).id
               : block.id;
-            duplicateId = reactEditor.blocks.insertBlock(input, afterId).id;
-            if (isEdgelessRoot) reactEditor.elements.insertElement({
+            duplicateId = editorView.blocks.insertBlock(input, afterId).id;
+            if (isEdgelessRoot) editorView.elements.insertElement({
               type: "block",
               frame: sourceElement
                 ? { ...sourceElement.frame, x: sourceElement.frame.x + 24, y: sourceElement.frame.y + 24 }
                 : { x: 84, y: 84, width: 320, height: 120 },
-              zIndex: Math.max(0, ...reactEditor.elements.getElements().map((element) => element.zIndex)) + 1,
+              zIndex: Math.max(0, ...editorView.elements.getElements().map((element) => element.zIndex)) + 1,
               props: { startBlockId: duplicateId, endBlockId: duplicateId },
             });
           });
-          reactEditor.selection.set(createStructuralSelection([duplicateId]));
+          editorView.selection.set(createStructuralSelection([duplicateId]));
         },
       }),
       // Route deletion through structural selection so descendants are atomic.
-      reactEditor.slashCommands.register({
+      editorRuntime.slashCommands.register({
         id: "block.delete",
         title: "Delete block",
         group: "Actions",
         keywords: ["remove"],
-        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId),
-        execute: ({ blockId, reactEditor }) => {
-          reactEditor.selection.set(createStructuralSelection([blockId]));
-          reactEditor.selection.delete();
+        isAvailable: ({ blockId }) => editorRuntime.blocks.hasBlock(blockId),
+        execute: ({ blockId, editorView }) => {
+          editorView.selection.set(createStructuralSelection([blockId]));
+          editorView.selection.delete();
         },
       }),
     ];
@@ -274,8 +274,8 @@ export const blockExtension = (
   registration: ReactBlockRegistration,
 ): ReactEditorExtension => ({
   id: `block.${registration.definition.type}`,
-  setup: (reactEditor) => {
-    reactEditor.blockTypes.register(registration);
+  setup: (editorRuntime) => {
+    editorRuntime.blockTypes.register(registration);
   },
 });
 
@@ -326,11 +326,11 @@ export const standardPreset = (
   ];
   return {
     id: "rivto.standard",
-    setup: (reactEditor) => {
+    setup: (editorRuntime) => {
       const cleanups: Array<() => void> = [];
       try {
         for (const extension of extensions) {
-          const cleanup = extension.setup(reactEditor);
+          const cleanup = extension.setup(editorRuntime);
           if (cleanup) cleanups.push(cleanup);
         }
       } catch (error) {

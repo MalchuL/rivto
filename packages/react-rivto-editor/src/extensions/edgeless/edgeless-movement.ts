@@ -1,27 +1,27 @@
-import type { ReactEditor } from "../../types";
+import type { EditorRuntime } from "../../editor-runtime";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 
 /** Moves selected canvas roots through eight exact arrow-key bindings. */
-export function registerEdgelessMovement(reactEditor: ReactEditor): void {
-  const selection = getEdgelessRuntime(reactEditor);
+export function registerEdgelessMovement(editorRuntime: EditorRuntime): void {
+  const selection = getEdgelessRuntime(editorRuntime);
 
   const move = (dx: number, dy: number): boolean => {
     const items = selection.get().items;
     if (!items.length) return false;
-    if (reactEditor.commands.has("edgeless.selection.move")) {
-      reactEditor.commands.execute("edgeless.selection.move", { dx, dy });
+    if (editorRuntime.commands.has("edgeless.selection.move")) {
+      editorRuntime.commands.execute("edgeless.selection.move", { dx, dy });
     } else {
       const updates = items.flatMap((id) => {
-        const element = reactEditor.elements.getElement(id);
+        const element = editorRuntime.elements.getElement(id);
         return element ? [{ id, patch: { frame: { x: element.frame.x + dx, y: element.frame.y + dy } } }] : [];
       });
-      if (updates.length) reactEditor.elements.updateElements(updates);
+      if (updates.length) editorRuntime.elements.updateElements(updates);
     }
     return true;
   };
 
-  const bind = (id: string, dx: number, dy: number) => reactEditor.keyboard.register({
+  const bind = (id: string, dx: number, dy: number) => editorRuntime.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
     mode: "edgeless",

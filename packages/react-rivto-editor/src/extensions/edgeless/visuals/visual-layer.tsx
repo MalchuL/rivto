@@ -11,7 +11,7 @@ import { SurfaceContext } from "../../../surfaces/surface";
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { useReactEditor, useEditorRoot } from "../../../hooks";
+import { useEditorView, useEditorRoot } from "../../../hooks";
 import { useEdgelessSelected, useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
 import { ElementSlots } from "../../../blocks";
 import { DrawingCapture } from "./components/drawing-capture";
@@ -56,7 +56,7 @@ function GroupSelectionChrome({
   const selected = useEdgelessSelected(groupId);
   const bounds = controller.getBounds(groupId);
   if (!selected || !bounds) return null;
-  const element = controller.reactEditor.elements.getElement(groupId);
+  const element = controller.editor.elements.getElement(groupId);
   const geometry = {
     left: bounds.x,
     top: bounds.y,
@@ -118,7 +118,7 @@ function EdgelessSelectionChrome({
     ? sameType
     : [];
   const propertyBlocks = selection.items.flatMap((id) => {
-    const element = controller.reactEditor.elements.getElement(id);
+    const element = controller.editor.elements.getElement(id);
     return element?.type === "block" ? [element] : [];
   });
   return (
@@ -151,8 +151,8 @@ export function EdgelessVisualLayer({
   readonly controller: EdgelessVisualController;
   readonly options: EdgelessVisualsOptions;
 }) {
-  const reactEditor = useReactEditor();
-  const controller = useMemo(() => sharedController.getDocumentView(reactEditor), [sharedController, reactEditor]);
+  const editorView = useEditorView();
+  const controller = useMemo(() => sharedController.getDocumentView(editorView), [sharedController, editorView]);
   const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const tool = useVisualTool(controller);
@@ -209,7 +209,7 @@ export function EdgelessVisualLayer({
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.reactEditor.commands.execute("edgeless.tool.set", "select");
+      controller.editor.commands.execute("edgeless.tool.set", "select");
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 2) return;
@@ -217,7 +217,7 @@ export function EdgelessVisualLayer({
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.reactEditor.commands.execute("edgeless.tool.set", "select");
+      controller.editor.commands.execute("edgeless.tool.set", "select");
     };
     root.addEventListener("contextmenu", onContextMenu);
     root.addEventListener("pointerdown", onPointerDown, true);

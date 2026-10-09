@@ -1,33 +1,17 @@
-import type { ReactEditorView, SlashCommandsCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
-import type { ReactEditor } from "../../types";
-import type { ReactEditorImpl } from "../../react-editor";
+import type { EditorRuntime } from "../../editor-runtime";
 import type { SlashCommand, SlashCommandContext, SlashCommandRevisionListener } from "./types";
 
 /** Owns ordered slash commands for the React runtime. */
-export class ReactSlashCommandManager implements SlashCommandsCapability {
+export class ReactSlashCommandManager {
   private readonly commands = new Map<string, SlashCommand>();
   private readonly registrations = new Map<string, () => void>();
   private readonly store = new RevisionStore();
 
   /**
-   * @param reactEditor - Owning React runtime providing extension lifecycle.
+   * @param editorRuntime - Owning React runtime providing extension lifecycle.
    */
-  constructor(private readonly reactEditor: ReactEditorImpl) {}
-
-  /** Binds execution to a view while keeping a single document-wide registry. */
-  createViewApi(reactEditor: ReactEditorView): SlashCommandsCapability {
-    const { store } = this;
-    return {
-      createViewApi: (view) => this.createViewApi(view),
-      register: (command) => this.register(command),
-      delete: (id) => this.delete(id),
-      subscribe: (listener) => this.subscribe(listener),
-      get revision() { return store.revision; },
-      getAll: (context) => this.getAll(context, reactEditor),
-      execute: (id, context) => this.execute(id, context, reactEditor),
-    };
-  }
+  constructor(private readonly editorRuntime: EditorRuntime) {}
 
   /** Monotonic command-registry revision. */
   get revision(): number {
@@ -41,7 +25,7 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
    * @returns Idempotent lifecycle-owned command disposer.
    */
   register(command: SlashCommand): () => void {
-    const { extensions } = this.reactEditor;
+    const { extensions } = this.editorRuntime;
     extensions.assertActive();
     if (!command.id.trim()) throw new Error("Slash command ID is required");
     if (!command.title.trim()) throw new Error("Slash command title is required");
@@ -68,7 +52,7 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
    * @returns True when a React-owned command existed and was disposed.
    */
   delete(id: string): boolean {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     const dispose = this.registrations.get(id);
     if (!dispose) return false;
     dispose();
@@ -80,8 +64,8 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
    *
    * @param context - Active block context evaluated by availability predicates.
    */
-  getAll(context: Pick<SlashCommandContext, "blockId">, reactEditor: ReactEditor = this.reactEditor.events.getDocumentView() ?? this.reactEditor): SlashCommand[] {
-    return [...this.commands.values()].filter((command) => command.isAvailable?.({ ...context, reactEditor }) !== false);
+  getAll(context: SlashCommandContext): SlashCommand[] {
+    return [...this.commands.values()].filter((command) => command.isAvailable?.(context) !== false);
   }
 
   /**
@@ -90,11 +74,11 @@ export class ReactSlashCommandManager implements SlashCommandsCapability {
    * @param id - Stable command identity.
    * @param context - Active block context revalidated before execution.
    */
-  execute(id: string, context: Pick<SlashCommandContext, "blockId">, reactEditor: ReactEditor = this.reactEditor.events.getDocumentView() ?? this.reactEditor): void {
+  execute(id: string, context: SlashCommandContext): void {
     const command = this.commands.get(id);
     if (!command) throw new Error(`Unknown slash command ${id}`);
-    if (command.isAvailable?.({ ...context, reactEditor }) === false) throw new Error(`Slash command ${id} is unavailable`);
-    command.execute({ ...context, reactEditor });
+    if (command.isAvailable?.(context) === false) throw new Error(`Slash command ${id} is unavailable`);
+    command.execute(context);
   }
 
   /**

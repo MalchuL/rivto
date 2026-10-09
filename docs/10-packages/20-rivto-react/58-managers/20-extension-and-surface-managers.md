@@ -2,7 +2,7 @@
 
 ## `ExtensionManager`
 
-`reactEditor.extensions` владеет setup order, rollback, cleanup и components, mounted рядом с active surface.
+`editorRuntime.extensions` владеет setup order, rollback, cleanup и components, mounted рядом с active surface.
 
 ### Properties
 
@@ -19,7 +19,7 @@
 
 ### Runtime methods класса
 
-`initialize(extensions)` вызывается `ReactEditorImpl` один раз; repeated call или duplicate/empty extension ID throws. `own(release)` создаёт idempotent owned disposer. `assertActive()` throws `React editor is destroyed` после teardown. `destroy()` повторно безопасен и очищает custom cleanup/registrations в reverse order.
+`initialize(extensions)` вызывается `EditorRuntime` один раз; repeated call или duplicate/empty extension ID throws. `own(release)` создаёт idempotent owned disposer. `assertActive()` throws `React editor is destroyed` после teardown. `destroy()` повторно безопасен и очищает custom cleanup/registrations в reverse order.
 
 ### Modes
 
@@ -27,7 +27,7 @@ Mounted components mode-independent и остаются в tree при surface s
 
 ## `SurfaceManager`
 
-`reactEditor.surfaces` владеет root component на каждый `EditorMode`, block wrappers и editor wrappers.
+`editorRuntime.surfaces` владеет root component на каждый `EditorMode`, block wrappers и editor wrappers.
 
 ### Properties
 

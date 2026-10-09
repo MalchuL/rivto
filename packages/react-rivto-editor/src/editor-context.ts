@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorViewController } from "./managers/events/editor-view-controller";
-import type { ReactEditor } from "./types";
+import type { EditorViewApi } from "./types";
 
 /**
  * Reactive value shared by one EditorView subtree.
@@ -11,8 +11,8 @@ import type { ReactEditor } from "./types";
  * to the resolved model until the target moves to another document.
  */
 export interface EditorContextValue {
-  /** React rendering and extension runtime. */
-  readonly reactEditor: ReactEditor;
+  /** Editor for this occurrence, with shared runtime available through its runtime field. */
+  readonly editorView: EditorViewApi;
   /** Model acquired by this view; absent while its document is loading. */
   readonly document?: DocumentModel;
   /** Identity used to route mutations to the single editor acquired by this view. */
@@ -39,7 +39,7 @@ export const EditorContext = createContext<EditorContextValue | null>(null);
  * Reads the complete internal EditorView context.
  *
  * Public hooks use this helper so the provider requirement and error message
- * stay consistent. Consumers should normally use `useReactEditor`, `useBlock`, or
+ * stay consistent. Consumers should normally use `useEditorView`, `useBlock`, or
  * another focused hook rather than depending on the revision implementation.
  *
  * @returns The nearest EditorView's stable editor references.

@@ -10,14 +10,14 @@ import type {
   EditorElement,
   RivtoEditorApi,
 } from "@chulane/rivto";
-import type { ReactEditor } from "../../../../../types";
+import type { EditorViewApi } from "../../../../../types";
 import { findRenderedBlock } from "../../../../../managers";
 import { blockIdsOf } from "../../../../../elements/block-element-projection";
 
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 
 /** Walks to the document root that owns `blockId`. */
-export function owningRootId(editor: ReactEditor | RivtoEditorApi, blockId: string): string {
+export function owningRootId(editor: EditorViewApi | RivtoEditorApi, blockId: string): string {
   let rootId = blockId;
   for (
     let parentId = editor.blocks.getParentId(rootId);
@@ -31,7 +31,7 @@ export function owningRootId(editor: ReactEditor | RivtoEditorApi, blockId: stri
 
 /** Finds the edgeless card element whose root range includes `blockId`. */
 export function owningBlockElement(
-  editor: ReactEditor | RivtoEditorApi,
+  editor: EditorViewApi | RivtoEditorApi,
   blockId: string,
 ): EditorElement | undefined {
   const rootId = owningRootId(editor, blockId);
@@ -49,7 +49,7 @@ export function owningBlockElement(
  * React callers use their rendered view's surface; core-only callers use the
  * document mode because they have no DOM occurrence.
  */
-export function navigationOutlineBlocks(editor: ReactEditor | RivtoEditorApi, blockId: string): EditorBlock[] {
+export function navigationOutlineBlocks(editor: EditorViewApi | RivtoEditorApi, blockId: string): EditorBlock[] {
   const sourceRootId = "rootBlockId" in editor ? editor.rootBlockId : undefined;
   if (sourceRootId) {
     const root = editor.blocks.getBlock(sourceRootId);

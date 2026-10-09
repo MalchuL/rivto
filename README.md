@@ -92,27 +92,27 @@ import { useEffect, useState } from "react";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
 import {
-  createReactEditor, EditorStorage, EditorStorageContext, EditorView, PageSurface, standardPreset,
-  type ReactEditor,
+  createEditorRuntime, EditorStorage, EditorStorageContext, EditorView, PageSurface, standardPreset,
+  type EditorRuntime,
 } from "@chulane/rivto-react";
 import "@chulane/rivto-react/styles.css";
 
 export function DocumentEditor() {
-  const [view, setView] = useState<{ reactEditor: ReactEditor; editors: EditorStorage; releaseInitial: () => Promise<void> } | null>(null);
+  const [view, setView] = useState<{ editorRuntime: EditorRuntime; editors: EditorStorage; releaseInitial: () => Promise<void> } | null>(null);
   useEffect(() => {
     let active = true;
     const documents = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
     documents.registerDocument("document-id");
     const editors = new EditorStorage({
       openDocument: (id) => documents.openDocument(id),
-      createEditor: (editor) => createReactEditor({
+      createEditor: (editor) => createEditorRuntime({
         editor,
         extensions: [standardPreset()],
       }),
     });
     void editors.acquireEditor("document-id").then((acquisition) => {
       acquisition.editor.blocks.insertBlock({ type: "paragraph", content: "Hello **Rivto**!" });
-      if (active) setView({ reactEditor: acquisition.editor, editors, releaseInitial: acquisition.release });
+      if (active) setView({ editorRuntime: acquisition.editor, editors, releaseInitial: acquisition.release });
       else void acquisition.release();
     }).catch(console.error);
     return () => {
@@ -121,20 +121,21 @@ export function DocumentEditor() {
     };
   }, []);
   return view ? <EditorStorageContext.Provider value={view.editors}>
-    <EditorView reactEditor={view.reactEditor} onReady={view.releaseInitial}><PageSurface /></EditorView>
+    <EditorView runtime={view.editorRuntime} onReady={view.releaseInitial}><PageSurface /></EditorView>
   </EditorStorageContext.Provider> : null;
 }
 ```
 
-Each core and ReactEditor permanently edits one model. `EditorStorage` loads and
+Each core and EditorRuntime permanently belongs to one model. `EditorStorage` loads and
 caches both layers, with a host factory supplying fresh extensions per document.
-Each `EditorView` receives that document's ReactEditor. Inside an
+Each `EditorView` receives that document's runtime and constructs its own
+`EditorViewApi` for DOM operations. Inside an
 `EditorStorageContext.Provider`, it automatically retains its document while
-mounted, including nested embedding views; ReactEditor itself has no storage reference.
+mounted, including nested embedding views; the runtime itself has no storage reference.
 
 Use `await editors.getSingleEditor(documentId)` to explicitly retain a core until
 `editors.closeEditor(documentId)`. Storage creates the core and passes it to the
-React factory; ReactEditor exposes its managers for ordinary editing commands.
+React factory; EditorViewApi exposes its managers for ordinary editing commands.
 Ordinary commands require no document routing. Clipboard ID
 allocation belongs to document managers; application subclasses can enforce a
 shared database namespace even for closed documents. Transfers preserve IDs and

@@ -3,7 +3,7 @@ import type { ComponentType } from "react";
 import type { BlockWrapperComponent } from "../../blocks/block-wrapper/block-wrapper";
 import type { SurfacesCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
-import type { ReactEditorImpl } from "../../react-editor";
+import type { EditorRuntime } from "../../editor-runtime";
 import type {
   ResolvedSlot,
   BlockWrapperRegistration,
@@ -50,9 +50,9 @@ export class SurfaceManager implements SurfacesCapability {
   /**
    * Creates empty presentation registries.
    *
-   * @param reactEditor - Owning React runtime providing extension lifecycle.
+   * @param editorRuntime - Owning React runtime providing extension lifecycle.
    */
-  constructor(private readonly reactEditor: ReactEditorImpl) {}
+  constructor(private readonly editorRuntime: EditorRuntime) {}
 
   /**
    * Registers the single root renderer for one editor mode.
@@ -62,7 +62,7 @@ export class SurfaceManager implements SurfacesCapability {
    * @returns Idempotent disposer removing only this registration.
    */
   register(mode: EditorMode, surface: SurfaceComponent): () => void {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     if (this.surfaces.has(mode)) throw new Error(`Surface ${mode} is already registered`);
     const registration: {
       readonly surface: SurfaceComponent;
@@ -73,7 +73,7 @@ export class SurfaceManager implements SurfacesCapability {
     };
     this.surfaces.set(mode, registration);
     this.store.changed();
-    registration.dispose = this.reactEditor.extensions.own(() => {
+    registration.dispose = this.editorRuntime.extensions.own(() => {
       if (this.surfaces.get(mode) !== registration) return;
       this.surfaces.delete(mode);
       this.store.changed();
@@ -88,7 +88,7 @@ export class SurfaceManager implements SurfacesCapability {
    * @returns True when a surface existed and was disposed.
    */
   delete(mode: EditorMode): boolean {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     const registration = this.surfaces.get(mode);
     if (!registration) return false;
     registration.dispose();
@@ -114,13 +114,13 @@ export class SurfaceManager implements SurfacesCapability {
     mode: EditorMode,
     wrapper: BlockWrapperComponent,
   ): () => void {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     const wrappers = this.blockWrappers.get(mode) ?? [];
     const registration = { wrapper };
     wrappers.push(registration);
     this.blockWrappers.set(mode, wrappers);
     this.store.changed();
-    return this.reactEditor.extensions.own(() => {
+    return this.editorRuntime.extensions.own(() => {
       const current = this.blockWrappers.get(mode);
       if (!current) return;
       const index = current.indexOf(registration);
@@ -157,7 +157,7 @@ export class SurfaceManager implements SurfacesCapability {
     this.blockSlots.push(entry);
     this.blockSlots.sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
     this.store.changed();
-    return this.reactEditor.extensions.own(() => {
+    return this.editorRuntime.extensions.own(() => {
       const index = this.blockSlots.indexOf(entry);
       if (index < 0) return;
       this.blockSlots.splice(index, 1);
@@ -195,7 +195,7 @@ export class SurfaceManager implements SurfacesCapability {
     this.elementSlots.push(entry);
     this.elementSlots.sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
     this.store.changed();
-    return this.reactEditor.extensions.own(() => {
+    return this.editorRuntime.extensions.own(() => {
       const index = this.elementSlots.indexOf(entry);
       if (index < 0) return;
       this.elementSlots.splice(index, 1);
@@ -243,7 +243,7 @@ export class SurfaceManager implements SurfacesCapability {
     priority: number | undefined,
     positions: ReadonlySet<Position>,
   ): void {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     if (!positions.has(position)) throw new Error(`Unsupported slot position ${position}`);
     if (priority !== undefined && !Number.isFinite(priority)) {
       throw new Error("Slot priority must be finite");
@@ -284,11 +284,11 @@ export class SurfaceManager implements SurfacesCapability {
     wrapper: EditorWrapper,
     mode?: EditorMode | readonly EditorMode[],
   ): () => void {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     const registration = { wrapper, mode };
     this.editorWrappers.push(registration);
     this.store.changed();
-    return this.reactEditor.extensions.own(() => {
+    return this.editorRuntime.extensions.own(() => {
       const index = this.editorWrappers.indexOf(registration);
       if (index < 0) return;
       this.editorWrappers.splice(index, 1);

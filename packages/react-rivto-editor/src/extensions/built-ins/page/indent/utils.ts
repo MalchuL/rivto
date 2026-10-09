@@ -17,7 +17,7 @@ import {
   isEditableKeyboardEvent,
   type KeyboardSelectionTarget,
 } from "../../../../managers";
-import type { ReactEditor } from "../../../../types";
+import type { EditorViewApi } from "../../../../types";
 import { createBlockViewContext } from "../../../../views";
 import { getPageVirtualizationControllerForElement } from "../../../../surfaces/page/page-virtualization-controller";
 
@@ -153,7 +153,7 @@ function restoreBlockViewportTop(
  * @param root - Active page surface or edgeless card.
  * @param event - Native keyboard event that matched the binding.
  * @param outdent - Whether this invocation lifts rather than nests.
- * @param reactEditor - Runtime used to resolve the target block view.
+ * @param editorView - Editor view used to resolve the target block view.
  * @returns `true` when the shortcut was claimed.
  */
 export function applyIndentShortcut(
@@ -161,7 +161,7 @@ export function applyIndentShortcut(
   root: HTMLElement,
   event: KeyboardEvent,
   outdent: boolean,
-  reactEditor: ReactEditor,
+  editorView: EditorViewApi,
 ): boolean {
   const editable = isEditableKeyboardEvent(event);
   const nativeSelection = editable ? selectionManager.readDOM() : undefined;
@@ -172,7 +172,7 @@ export function applyIndentShortcut(
   const blockSelectionAtRoot = event.target === root && isStructuralSelection(target.item);
   if (!editable && !blockSelectionAtRoot) return false;
 
-  const context = createBlockViewContext(reactEditor, target.blockId, root, selection);
+  const context = createBlockViewContext(editorView, target.blockId, root, selection);
   if (!context) return false;
   const targetIds = indentTargetIds(target);
   // Reparenting a virtualized root block partially above the viewport changes
@@ -218,7 +218,7 @@ export function applyIndentShortcut(
   };
   viewportSettlements.set(root, settlement);
   view?.addEventListener("wheel", onWheel, { passive: true });
-  const claimed = reactEditor.views.dispatch(
+  const claimed = editorView.views.dispatch(
     outdent ? "onOutdent" : "onIndent",
     context,
     targetIds,

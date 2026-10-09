@@ -1,8 +1,8 @@
+import type { EditorRuntime } from "../../../editor-runtime";
 import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../../constants";
-import type { ReactEditor } from "../../../types";
 import { toggleBlockSelection } from "../page/navigation";
 import { isStructuralSelection } from "@chulane/rivto";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
@@ -16,7 +16,7 @@ import { findEdgelessRuntime } from "./edgeless-runtime";
  * state is also reflected on the root so CSS can replace the text cursor while
  * the next click means "select this block".
  */
-export function registerBlockSelection(reactEditor: ReactEditor): () => void {
+export function registerBlockSelection(editorRuntime: EditorRuntime): () => void {
   const markedRoots = new Set<HTMLElement>();
   const setModifierDown = (root: HTMLElement, value: boolean) => {
     if (!root) return;
@@ -24,7 +24,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     else { delete root.dataset.blockSelecting; markedRoots.delete(root); }
   };
 
-  reactEditor.keyboard.register({
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockSelectionModifierDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierDown]!,
     target: "window",
@@ -35,7 +35,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     setModifierDown(root, true);
     return false;
   });
-  reactEditor.keyboard.register({
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockSelectionModifierUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierUp]!,
     phase: "keyup",
@@ -45,7 +45,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     setModifierDown(root, false);
     return false;
   });
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "block-selection.modifier-blur",
     type: "blur",
     target: "window",
@@ -53,7 +53,7 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     setModifierDown(root, false);
     return false;
   });
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "block-selection.modifier-focus-owner",
     type: "focusin",
     target: "document",
@@ -65,12 +65,12 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     return false;
   });
 
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "block-selection.pointer-toggle",
     type: "pointerdown",
     capture: true,
     scope: "block",
-  }, ({ reactEditor, raw: event, root, mode }) => {
+  }, ({ editorView, raw: event, root, mode }) => {
     if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) return false;
     if (
       !(event.target instanceof Element) ||
@@ -80,21 +80,21 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     const blockId = block?.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!block || !blockId || !root.contains(block)) return false;
 
-    const selection = reactEditor.selection.get();
+    const selection = editorView.selection.get();
     // A caret starts a new block selection; carrying its partial range forward
     // creates a mixed selection that the next native selectionchange clears.
     const current = isStructuralSelection(selection) ? selection : undefined;
     const next = toggleBlockSelection(
-      reactEditor.blocks.getBlocks(),
+      editorView.blocks.getBlocks(),
       current,
       blockId,
       mode === "edgeless",
-      (candidate) => !reactEditor.blockListProps.childrenVisible(candidate),
+      (candidate) => !editorView.blockListProps.childrenVisible(candidate),
     );
-    const canvas = mode === "edgeless" ? findEdgelessRuntime(reactEditor) : undefined;
+    const canvas = mode === "edgeless" ? findEdgelessRuntime(editorView) : undefined;
     if (next && canvas) canvas.setBlocks(next);
-    else if (next) reactEditor.selection.set(next);
-    else reactEditor.selection.clear();
+    else if (next) editorView.selection.set(next);
+    else editorView.selection.clear();
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });
     return true;

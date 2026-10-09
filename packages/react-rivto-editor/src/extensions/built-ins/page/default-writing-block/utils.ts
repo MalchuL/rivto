@@ -1,6 +1,6 @@
 /**
  * Host-configurable contracts for creating and recognizing empty writing
- * blocks. Page keyboard extensions consume this policy through ReactEditor
+ * blocks. Page keyboard extensions consume this policy through EditorViewApi
  * instead of hardcoding a native writing type.
  *
  * @module

@@ -12,7 +12,7 @@
 - **Значение:** local presentation mode, `get()`, `set(mode)` и `subscribe(listener)`.
 - **Исключения при чтении:** отсутствуют.
 
-Manager принадлежит single-document editor; `reactEditor.mode` ссылается на тот же
+Manager принадлежит single-document editor; `editorRuntime.mode` ссылается на тот же
 объект. EditorStorage не хранит общий mode для всех документов.
 
 ### `blocks`
@@ -111,7 +111,7 @@ Constructor создаёт managers, постоянно связанные с su
 
 ### `getDocument()` и `getSingleEditor(documentId)`
 
-`getDocument()` всегда возвращает единственную модель, переданную в `createRivtoEditor({ document })`. Managers, retained callbacks, subscriptions, clipboard и history постоянно связаны с ней; смены document context нет. Single editor освобождает свои registrations и subscriptions, но не уничтожает caller-owned модель. Для нескольких документов `EditorStorage` принимает async `openDocument(documentId)` и optional `createEditor(editor)` returning ReactEditor; по умолчанию создаёт пустой Yjs-backed документ. `getSingleEditor(documentId)` открывает и кеширует отдельный core, сохраняя explicit ownership до `closeEditor(documentId)`. Loader передаёт EditorStorage владение моделью, а storage создаёт core перед вызовом React-фабрики: последний view consumer или shutdown закрывает сначала ReactEditor, затем core и модель. Views одного документа делят core, разные документы имеют собственные selection, clipboard policy и undo history.
+`getDocument()` всегда возвращает единственную модель, переданную в `createRivtoEditor({ document })`. Managers, retained callbacks, subscriptions, clipboard и history постоянно связаны с ней; смены document context нет. Single editor освобождает свои registrations и subscriptions, но не уничтожает caller-owned модель. Для нескольких документов `EditorStorage` принимает async `openDocument(documentId)` и optional `createEditor(editor)` returning EditorViewApi; по умолчанию создаёт пустой Yjs-backed документ. `getSingleEditor(documentId)` открывает и кеширует отдельный core, сохраняя explicit ownership до `closeEditor(documentId)`. Loader передаёт EditorStorage владение моделью, а storage создаёт core перед вызовом React-фабрики: последний view consumer или shutdown закрывает сначала EditorViewApi, затем core и модель. Views одного документа делят core, разные документы имеют собственные selection, clipboard policy и undo history.
 
 ### `subscribe(listener)`
 
@@ -204,15 +204,15 @@ Caller владеет runtime lifecycle.
 
 Каждый core принимает одну модель: `createRivtoEditor({ document })`.
 Для embedding, нескольких tabs и пользователей React-пакет предоставляет
-`EditorStorage`. Он кеширует отдельный ReactEditor и core для каждого документа;
+`EditorStorage`. Он кеширует отдельный EditorViewApi и core для каждого документа;
 обычные команды по-прежнему выполняются напрямую в соответствующем core.
 Definitions, defaults, processors, selection, clipboard и undo остаются в нём.
 
 ```ts
-import { EditorStorage, createReactEditor, standardPreset } from "@chulane/rivto-react";
+import { EditorStorage, createEditorRuntime, standardPreset } from "@chulane/rivto-react";
 const editors = new EditorStorage({
   openDocument: (id) => storage.openDocument(id),
-  createEditor: (editor) => createReactEditor({
+  createEditor: (editor) => createEditorRuntime({
     editor,
     extensions: [standardPreset()],
   }),
