@@ -2,13 +2,6 @@ import type { ConnectorEndpoint, VisualFrame } from "../types";
 import type { Point } from "./geometry-core";
 import { segmentIntersectsFrame } from "./geometry-core";
 
-export type { Point } from "./geometry-core";
-export {
-  anchorNormal,
-  inflateFrame,
-  pointInFrame,
-  segmentIntersectsFrame,
-} from "./geometry-core";
 export {
   connectorFrame,
   connectorLabelCssDegrees,
@@ -21,8 +14,15 @@ export {
   normalizeUprightLabelAngle,
   pathLength,
   pointAlongPolyline,
-  polylineCutsNodes,
+  polylineCutsNodes
 } from "./connector-path";
+export {
+  anchorNormal,
+  inflateFrame,
+  pointInFrame,
+  segmentIntersectsFrame
+} from "./geometry-core";
+export type { Point } from "./geometry-core";
 
 export interface SnapGuide { readonly axis: "x" | "y"; readonly position: number; readonly from: number; readonly to: number; readonly kind: "align" | "spacing" }
 export interface SnapResult { readonly dx: number; readonly dy: number; readonly guides: readonly SnapGuide[] }

@@ -23,7 +23,7 @@ Hierarchy остаётся core state. Surface только рекурсивно
 
 ```tsx
 <EditorView
-  reactEditor={reactEditor}
+  runtime={editorRuntime}
   virtualizePageThreshold={1_000}
   virtualizePageOverscan={8}
 />

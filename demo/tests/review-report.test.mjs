@@ -20,9 +20,14 @@ function createEditor({ roots, parents = {}, elements = [] }) {
   roots.forEach(collect);
   return {
     blocks: {
+      hasBlock: (id) => blocks.has(id),
       getRootIds: () => roots.map(({ id }) => id),
       getParentId: (id) => parents[id] ?? null,
       getBlock: (id) => structuredClone(blocks.get(id)),
+      getBlockNode: (id) => {
+        const block = blocks.get(id);
+        return block && { ...structuredClone(block), childIds: block.children.map(({ id }) => id) };
+      },
     },
     elements: {
       getElements: () => structuredClone(elements),

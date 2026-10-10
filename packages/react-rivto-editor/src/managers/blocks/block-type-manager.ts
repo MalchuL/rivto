@@ -2,61 +2,55 @@
  * Owns atomic React block-type registration and presentation metadata.
  *
  * Definitions remain stored in the core registry; this manager coordinates
- * their renderer, optional view, slash conversion, and separator metadata.
+ * their renderer, optional behavior, slash conversion, and separator metadata.
  */
 import type { BlockRegistryManager, RivtoEditorApi } from "@chulane/rivto";
-import type { BlockTypesCapability } from "../../capabilities";
-import type { ReactEditorImpl } from "../../react-editor";
+import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { BlockTypesApi } from "./block-types-api";
 import { getBlockContainment, type ReactBlockRegistration } from "./types";
 
 /** Coordinates one block type's core definition and React presentation. */
-export class BlockTypeManager implements BlockTypesCapability {
+export class BlockTypeManager implements BlockTypesApi {
   private readonly registrations = new Map<string, () => void>();
   private readonly blockElementSeparatorTypes = new Set<string>();
 
   /**
    * Creates the block-type registration manager.
-   * @param reactEditor - Owning React runtime providing presentation managers.
+   * @param editorRuntime - Owning React runtime providing presentation managers.
    * @param editor - Core runtime providing definitions and block mutations.
    */
   constructor(
-    private readonly reactEditor: ReactEditorImpl,
+    private readonly editorRuntime: EditorRuntime,
     private readonly editor: RivtoEditorApi,
   ) {}
 
   /**
-   * Registers definition, renderer, optional view, and type conversion atomically.
+   * Registers definition, renderer, optional behavior, and type conversion atomically.
    * @param registration - Complete custom block integration.
    * @returns Idempotent disposer releasing every installed part in reverse.
-   * @throws On definition, renderer, view, or slash-command conflicts.
+   * @throws On definition, renderer, behavior, or slash-command conflicts.
    */
   register(registration: ReactBlockRegistration): () => void {
-    const { blocks: core, blockRegistry: registry } = this.editor;
-    const { extensions, renderers, slashCommands, views } = this.reactEditor;
+    const core = this.editor.blocks;
+    const { extensions, renderers, slashCommands, blockBehaviors } = this.editorRuntime;
     extensions.assertActive();
-    const { definition, render, slashCommand, view } = registration;
+    const { definition, render, slashCommand, behavior } = registration;
     if (renderers.has(definition.type)) {
       throw new Error(`Block renderer ${definition.type} is already registered`);
     }
 
     const disposers: Array<() => void> = [];
     try {
-      const existing = registry.get(definition.type);
+      const existing = this.editor.blockRegistry.get(definition.type);
       if (existing) {
         const containment = getBlockContainment(definition);
-        const existingContainment = getBlockContainment(existing);
-        if (containment && (
-          existingContainment?.childOutline !== containment.childOutline
-          || existingContainment?.outlineFloor !== containment.outlineFloor
-        )) {
+        const previous = getBlockContainment(existing);
+        if (containment && (previous?.childOutline !== containment.childOutline || previous?.outlineFloor !== containment.outlineFloor)) {
           throw new Error(`Block containment ${definition.type} does not match its existing definition`);
         }
-      } else {
-        disposers.push(extensions.own(registry.defineBlock(definition)));
-      }
-
+      } else disposers.push(this.editor.blockRegistry.defineBlock(definition));
       disposers.push(renderers.register(definition.type, render));
-      if (view) disposers.push(views.register(definition.type, view));
+      if (behavior) disposers.push(blockBehaviors.register(definition.type, behavior));
       if (registration.separatesBlockElements) {
         this.blockElementSeparatorTypes.add(definition.type);
         disposers.push(() => this.blockElementSeparatorTypes.delete(definition.type));
@@ -98,7 +92,7 @@ export class BlockTypeManager implements BlockTypesCapability {
    * @returns Whether a complete registration existed and was disposed.
    */
   delete(type: string): boolean {
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
     const dispose = this.registrations.get(type);
     if (!dispose) return false;
     dispose();

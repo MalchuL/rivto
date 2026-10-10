@@ -1,12 +1,6 @@
 /** Public entry point for page block drag behavior and placement calculations. */
 export { pageDragExtension, type PageDragOptions } from "./extension";
 export {
-  PageDragProvider,
-  type PageDragExtensionOptions,
-} from "./provider";
-export { registerPageDrag } from "./register";
-export { PageDragBlockSlot, PageDragBlockWrapper } from "./surface";
-export {
   dropMoveTarget,
   excludeDropSubtrees,
   resolveAfterDropPlacement,
@@ -17,6 +11,12 @@ export {
   type CanonicalDropPlacement,
   type DropBlock,
   type DropMoveTarget,
-  type ResolvedDropPlacementOptions,
+  type ResolvedDropPlacementOptions
 } from "./placement";
 export { resolveDropPlacement, type DropLayoutBlock, type DropLayoutOptions, type DropRect } from "./placement/resolver";
+export {
+  PageDragProvider,
+  type PageDragExtensionOptions
+} from "./provider";
+export { registerPageDrag } from "./register";
+export { PageDragBlockSlot, PageDragBlockWrapper } from "./surface";

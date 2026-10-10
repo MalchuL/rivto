@@ -7,8 +7,8 @@
  */
 import type { Selection } from "@chulane/rivto";
 import { createCaretSelection, isCaretSelection } from "@chulane/rivto";
-import type { SelectionCapability } from "../../capabilities";
-import type { ReactEditor } from "../../types";
+import type { ViewSelectionApi } from "../selection/api";
+import type { BlocksApi } from "../blocks/blocks-api";
 import {
   findBlockFromEvent,
   focusBlock,
@@ -64,17 +64,17 @@ export function shouldDeleteSelection(
  * selection when no native range exists.
  *
  * @param selectionManager - React selection bridge that reads the active DOM range.
- * @param reactEditor - React editor whose portable selection is synchronized when needed.
+ * @param blocks - Block manager used to resolve an empty editable event target.
  * @param emptyBlockId - Editable event target used when an empty host has no DOM range.
  * @returns Current selection suitable for a keyboard command.
  */
 export function readKeyboardSelection(
-  selectionManager: SelectionCapability,
-  reactEditor: Pick<ReactEditor, "blocks">,
+  selectionManager: ViewSelectionApi,
+  blocks: BlocksApi,
   emptyBlockId?: string,
 ): Selection | undefined {
   const nativeSelection = selectionManager.readDOM();
-  const emptyBlock = emptyBlockId ? reactEditor.blocks.getBlockNode(emptyBlockId) : undefined;
+  const emptyBlock = emptyBlockId ? blocks.getBlockNode(emptyBlockId) : undefined;
   const focusedEmptySelection: Selection | undefined = !nativeSelection && emptyBlock?.content === ""
     ? createCaretSelection(emptyBlock.id, 0)
     : undefined;
@@ -90,7 +90,7 @@ export function isEditableKeyboardEvent(event: Event): boolean {
 /** Restores the native caret represented by current editor selection state. */
 export function focusSelectionCaret(
   root: HTMLElement,
-  selectionManager: SelectionCapability,
+  selectionManager: ViewSelectionApi,
 ): boolean {
   const target = firstKeyboardTarget(selectionManager.get());
   return Boolean(target?.collapsed && focusBlock(root, target.blockId, target.offset ?? 0));

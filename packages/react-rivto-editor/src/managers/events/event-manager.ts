@@ -1,14 +1,16 @@
+import { DOMEventListeners, type NativeListenerGroup } from "./dom-event-listeners";
 /**
- * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ * Browser event registration and dispatch. Event payloads identify the receiving
+ * view and its selection; document mutations still go through core managers.
  */
 import type { EditorMode } from "@chulane/rivto";
-import type { EventsCapability } from "../../capabilities";
-import type { ReactEditorImpl } from "../../react-editor";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../constants";
+import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { DocumentViewScope } from "./document-view";
 import type {
   DOMEventDefinition,
   DOMEventName,
@@ -16,12 +18,14 @@ import type {
   DOMEventTarget,
 } from "./dom-types";
 import { EditorEvent } from "./editor-event";
+import type { EditorViewRegistry } from "./editor-view-registry";
 import type { EditorEventHandler } from "./types";
 
 type AnyEditorEvent = EditorEvent<DOMEventTarget, never>;
 
 interface DOMRegistration {
   readonly id: string;
+  readonly owner?: DocumentViewScope;
   readonly type: string;
   readonly target: DOMEventTarget;
   readonly scope?: DOMEventScope;
@@ -32,46 +36,48 @@ interface DOMRegistration {
   readonly when?: (event: AnyEditorEvent) => boolean;
 }
 
-interface NativeListenerGroup {
-  readonly target: DOMEventTarget;
-  readonly type: string;
-  readonly capture: boolean;
-  readonly passive: boolean;
-}
-
-interface ConnectedListener extends NativeListenerGroup {
-  readonly nativeTarget: EventTarget;
-  readonly listener: EventListener;
-}
-
 /**
- * Owns every delegated native browser event for one React editor.
+ * Registers and dispatches browser events for all views of one document.
  *
- * Semantic keyboard actions belong to KeyboardManager, which uses this manager
- * for surface/window keydown and keyup transport.
+ * DOMEventListeners attaches the native listeners. EditorViewRegistry chooses the
+ * receiving view; this manager creates its EditorEvent and runs matching handlers
+ * in registration order. A handled event is not offered to later registrations.
+ * KeyboardManager defines keyboard actions and registers its keydown and keyup
+ * handlers here, on the editor surface or window.
  */
-export class EventManager implements EventsCapability {
+export class EventManager {
   private readonly registrations: DOMRegistration[] = [];
   private readonly registrationIds = new Set<string>();
   private readonly registrationDisposers = new Map<string, () => void>();
-  private readonly connected: ConnectedListener[] = [];
+  private readonly listeners = new DOMEventListeners((group, event, root) => this.dispatch(group, event, root));
+  private readonly unsubscribeRoots: () => void;
   private readonly claimedEvents = new WeakSet<globalThis.Event>();
-  private root: HTMLElement | null = null;
+  private readonly editorViews: EditorViewRegistry;
   private destroyed = false;
 
   /**
    * Creates the browser-event runtime before extensions are installed.
    *
-   * @param reactEditor - Owning React runtime for payloads and registration lifecycle.
+   * @param editorRuntime - Owning React runtime for payloads and registration lifecycle.
    */
-  constructor(private readonly reactEditor: ReactEditorImpl) {}
+  constructor(private readonly editorRuntime: EditorRuntime) {
+    this.editorViews = editorRuntime.editorViews;
+    this.unsubscribeRoots = this.editorViews.subscribeRoots(() => this.reconnectListeners());
+  }
+
 
   /**
    * Registers a typed delegated DOM event.
    *
-   * @param definition - Native event, attachment realm, scope, and stable ID.
-   * @param listener - Handler returning true only when it handled the event.
-   * @returns Idempotent disposer for this registration.
+   * @param definition - Stable ID, native event type, target, and optional filters.
+   * The target defaults to the surface; capture and passive default to false.
+   * @param listener - Handler returning true when it handled the event. This stops
+   * later editor handlers and prevents the browser default when cancellation is allowed.
+   * DOM propagation is not stopped. Passive listeners cannot cancel browser defaults.
+   * @param owner - Optional view restricting dispatch to its root and prefixing the ID.
+   * The caller must also retain the disposer for view cleanup.
+   * @returns Idempotent disposer, also owned by the registering extension.
+   * @throws If the ID is empty, already registered in its scope, or the runtime is destroyed.
    */
   register<
     Target extends DOMEventTarget = "surface",
@@ -79,27 +85,29 @@ export class EventManager implements EventsCapability {
   >(
     definition: DOMEventDefinition<Target, Type>,
     listener: EditorEventHandler<EditorEvent<Target, Type>>,
+    owner?: DocumentViewScope,
   ): () => void;
 
   register(
     definition: DOMEventDefinition,
     listener: EditorEventHandler<AnyEditorEvent>,
+    owner?: DocumentViewScope,
   ): () => void {
     this.assertActive();
-    const id = definition.id.trim();
-    if (!id) throw new Error("Event registration ID is required");
+    const id = owner ? `${owner.id}:${definition.id.trim()}` : definition.id.trim();
+    if (!definition.id.trim()) throw new Error("Event registration ID is required");
     if (this.registrationIds.has(id)) {
       throw new Error(`Event registration ${id} is already registered`);
     }
 
-    const registration = this.createDOMRegistration({ ...definition, id }, listener);
+    const registration = { ...this.createRegistration({ ...definition, id }, listener), owner };
     this.registrationIds.add(id);
     this.registrations.push(registration);
-    this.reconnect();
+    this.reconnectListeners();
 
     let active = true;
     let dispose: () => void = () => undefined;
-    dispose = this.reactEditor.extensions.own(() => {
+    dispose = this.editorRuntime.extensions.own(() => {
       if (!active) return;
       active = false;
       const index = this.registrations.indexOf(registration);
@@ -108,7 +116,7 @@ export class EventManager implements EventsCapability {
       if (this.registrationDisposers.get(id) === dispose) {
         this.registrationDisposers.delete(id);
       }
-      this.reconnect();
+      this.reconnectListeners();
     });
     this.registrationDisposers.set(id, dispose);
     return dispose;
@@ -117,7 +125,7 @@ export class EventManager implements EventsCapability {
   /**
    * Deletes one DOM registration by its stable ID.
    *
-   * @param id - Identity supplied to register().
+   * @param id - Registered ID, including the view prefix for a view-owned registration.
    * @returns True when a registration existed and was disposed.
    */
   delete(id: string): boolean {
@@ -127,49 +135,26 @@ export class EventManager implements EventsCapability {
     return true;
   }
 
-  /**
-   * Replaces the mounted surface root used by delegated listeners.
-   *
-   * The previous surface, document, and window listeners are detached before
-   * registrations reconnect to the new surface's browser realm.
-   *
-   * @param root - Mounted surface root element, or null during unmount.
-   */
-  setRoot(root: HTMLElement | null): void {
-    if (this.destroyed && root === null) {
-      this.root = null;
-      return;
-    }
-    this.assertActive();
-    if (root === this.root) return;
-    this.root = root;
-    this.reconnect();
-  }
-
-  /** @returns The currently mounted surface root, if React committed one. */
-  getRoot(): HTMLElement | null {
-    return this.root;
-  }
-
-  /** Releases every registration and native listener in reverse order. */
+  /** Disconnects native listeners and root notifications, then disposes registrations
+   * in reverse order. Repeated calls do nothing. */
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.disconnect();
+    this.listeners.disconnect();
+    this.unsubscribeRoots();
     [...this.registrationDisposers.values()].reverse().forEach((dispose) => dispose());
     this.registrationDisposers.clear();
     this.registrationIds.clear();
     this.registrations.length = 0;
-    this.root = null;
   }
 
   /** Throws when a registration is attempted after runtime destruction. */
   assertActive(): void {
     if (this.destroyed) throw new Error("Editor event runtime is destroyed");
-    this.reactEditor.extensions.assertActive();
+    this.editorRuntime.extensions.assertActive();
   }
 
-  private createDOMRegistration(
+  private createRegistration(
     definition: DOMEventDefinition,
     listener: EditorEventHandler<AnyEditorEvent>,
   ): DOMRegistration {
@@ -186,39 +171,9 @@ export class EventManager implements EventsCapability {
     };
   }
 
-  private reconnect(): void {
-    this.disconnect();
-    if (!this.root) return;
-    const groups = new Map<string, NativeListenerGroup>();
-    for (const registration of this.registrations) {
-      const group: NativeListenerGroup = registration;
-      const key = [group.target, group.type, group.capture, group.passive].join(":");
-      if (!groups.has(key)) groups.set(key, group);
-    }
-    for (const group of groups.values()) {
-      const nativeTarget = this.nativeTarget(group.target);
-      if (!nativeTarget) continue;
-      const listener: EventListener = (event) => this.dispatch(group, event);
-      nativeTarget.addEventListener(group.type, listener, {
-        capture: group.capture,
-        passive: group.passive,
-      });
-      this.connected.push({ ...group, nativeTarget, listener });
-    }
-  }
-
-  private disconnect(): void {
-    for (const { nativeTarget, type, listener, capture } of this.connected) {
-      nativeTarget.removeEventListener(type, listener, capture);
-    }
-    this.connected.length = 0;
-  }
-
-  private nativeTarget(target: DOMEventTarget): EventTarget | null {
-    if (!this.root) return null;
-    if (target === "document") return this.root.ownerDocument;
-    if (target === "window") return this.root.ownerDocument.defaultView;
-    return this.root;
+  private reconnectListeners(): void {
+    if (this.destroyed) this.listeners.disconnect();
+    else this.listeners.connect(this.registrations, this.editorViews.getRoots());
   }
 
   /**
@@ -226,18 +181,24 @@ export class EventManager implements EventsCapability {
    *
    * @param group - Capture/passive/target identity of the native listener.
    * @param raw - Browser event dispatched to that listener.
+   * @param attachedRoot - Surface listener root; omitted for document/window listeners.
    * @returns Nothing.
    */
-  private dispatch(group: NativeListenerGroup, raw: globalThis.Event): void {
-    const root = this.root;
-    if (!root || raw.defaultPrevented || this.claimedEvents.has(raw)) return;
+  private dispatch(group: NativeListenerGroup, raw: globalThis.Event, attachedRoot?: HTMLElement): void {
+    if (raw.defaultPrevented || this.claimedEvents.has(raw)) return;
+    const root = this.editorViews.resolveEventRoot(raw, attachedRoot);
+    if (root) this.dispatchRegistrations(group, raw, root);
+  }
 
+  private dispatchRegistrations(group: NativeListenerGroup, raw: globalThis.Event, root: HTMLElement): void {
     const event = this.createEditorEvent(group.target, raw, root);
+    if (!event) return;
     // Iterate in place: pointermove fires hundreds of times per gesture and
     // these handlers do not splice `registrations` while dispatch is running.
     for (const registration of this.registrations) {
       if (raw.defaultPrevented || this.claimedEvents.has(raw)) return;
       if (
+        registration.owner && registration.owner.getRoot() !== root ||
         registration.type !== group.type ||
         registration.target !== group.target ||
         registration.capture !== group.capture ||
@@ -247,7 +208,7 @@ export class EventManager implements EventsCapability {
         (registration.when && !registration.when(event))
       ) continue;
       if (registration.listener(event)) {
-        this.claim(raw);
+        this.markHandled(raw);
         return;
       }
     }
@@ -257,7 +218,7 @@ export class EventManager implements EventsCapability {
     eventTarget: DOMEventTarget,
     raw: globalThis.Event,
     root: HTMLElement,
-  ): AnyEditorEvent {
+  ): AnyEditorEvent | undefined {
     const nativeTarget = raw.target;
     const ElementConstructor = root.ownerDocument.defaultView?.Element;
     const element = ElementConstructor && nativeTarget instanceof ElementConstructor
@@ -278,12 +239,16 @@ export class EventManager implements EventsCapability {
     const contentElement = closestContent && root.contains(closestContent)
       ? closestContent
       : null;
+    const editorView = this.editorViews.getApi(root);
+    if (!editorView) return;
     return new EditorEvent({
       raw: raw as never,
-      reactEditor: this.reactEditor,
+      editorView,
       root,
-      mode: this.reactEditor.mode.get(),
-      selection: this.reactEditor.selection.get(),
+      // Route handlers by the receiving surface: core mode may be edgeless
+      // while this event belongs to a page embedding of the same document.
+      mode: this.editorViews.getSurfaceType(root),
+      selection: editorView.selection.get(),
       eventTarget,
       insideRoot,
       blockElement,
@@ -292,7 +257,7 @@ export class EventManager implements EventsCapability {
     });
   }
 
-  private claim(raw: globalThis.Event): void {
+  private markHandled(raw: globalThis.Event): void {
     if (raw.cancelable) raw.preventDefault();
     this.claimedEvents.add(raw);
   }

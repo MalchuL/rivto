@@ -5,9 +5,28 @@
  */
 import { createTestEditor, createStructuralSelection } from "../../editor/test-utils";
 
-describe.each(["block", "edgeless"] as const)("block feature ownership in %s mode", (mode) => {
-  it("returns the complete block assembled during insertion", () => {
-    const editor = createTestEditor({ mode });
+describe("block feature ownership independent of presentation", () => {
+  it("orders selected IDs through their ancestors and follows moves and undo", async () => {
+    const editor = await createTestEditor();
+    editor.blocks.importForest([
+      { id: "a", type: "paragraph", children: [{ id: "child", type: "paragraph" }] },
+      { id: "b", type: "paragraph" },
+      { id: "c", type: "paragraph" },
+    ]);
+    const forest = jest.spyOn(editor.runtime.blocks, "getBlocks");
+    expect(editor.blocks.getOrderedIds(["b", "child", "a", "child", "missing"]))
+      .toEqual(["a", "child", "b"]);
+    editor.history.clear();
+    editor.blocks.moveBlock("b", "a", "before");
+    expect(editor.blocks.getOrderedIds(["child", "b", "a"])).toEqual(["b", "a", "child"]);
+    editor.history.undo();
+    expect(editor.blocks.getOrderedIds(["child", "b", "a"])).toEqual(["a", "child", "b"]);
+    expect(forest).not.toHaveBeenCalled();
+    editor.destroy();
+  });
+
+  it("returns the complete block assembled during insertion", async () => {
+    const editor = await createTestEditor();
 
     const inserted = editor.blocks.insertBlock({
       type: "paragraph",
@@ -23,15 +42,15 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     editor.destroy();
   });
 
-  it("returns lightweight identities after single and batch updates", () => {
-    const editor = createTestEditor({ mode });
+  it("returns lightweight identities after single and batch updates", async () => {
+    const editor = await createTestEditor();
     const first = editor.blocks.insertBlock({
       type: "paragraph",
       content: "First",
       children: [{ type: "paragraph", content: "Child" }],
     });
     const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first.id);
-    const getBlock = jest.spyOn(editor.blocks, "getBlock");
+    const getBlock = jest.spyOn(editor.runtime.blocks, "getBlock");
 
     const updated = editor.blocks.updateBlock(first.id, { content: "Updated" });
     const batch = editor.blocks.updateBlocks([
@@ -55,8 +74,8 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     editor.destroy();
   });
 
-  it("owns recursive list-property preparation and validation in core", () => {
-    const editor = createTestEditor({ mode });
+  it("owns recursive list-property preparation and validation in core", async () => {
+    const editor = await createTestEditor();
     editor.blockListProps.register({
       id: "outline",
       defaults: { collapsed: false },
@@ -86,8 +105,8 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     editor.destroy();
   });
 
-  it("prepares definitions and processors recursively through one public pipeline", () => {
-    const editor = createTestEditor({ mode });
+  it("prepares definitions and processors recursively through one public pipeline", async () => {
+    const editor = await createTestEditor();
     let sequence = 0;
     editor.blockRegistry.defineBlock({
       type: "prepared",
@@ -112,8 +131,8 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     editor.destroy();
   });
 
-  it("rejects a cycle introduced by a creation processor before recursion overflows", () => {
-    const editor = createTestEditor({ mode });
+  it("rejects a cycle introduced by a creation processor before recursion overflows", async () => {
+    const editor = await createTestEditor();
     editor.blocks.registerProcessor({
       id: "test.cyclic-children",
       priority: 0,
@@ -130,8 +149,8 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     editor.destroy();
   });
 
-  it("retries one failed block through the preparation error handler", () => {
-    const editor = createTestEditor({ mode });
+  it("retries one failed block through the preparation error handler", async () => {
+    const editor = await createTestEditor();
     const failures: string[] = [];
     const prepared = editor.blocks.prepareInput([{
       type: "paragraph",
@@ -146,12 +165,12 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     expect(() => editor.blocks.prepareInput(
       [{ type: "missing" }],
       () => ({ type: "still-missing" }),
-    )).toThrow("Block type still-missing is unavailable");
+    )).toThrow("Block type still-missing is not registered");
     editor.destroy();
   });
 
-  it("prepares and validates a complete import before writing its first root", () => {
-    const editor = createTestEditor({ mode });
+  it("prepares and validates a complete import before writing its first root", async () => {
+    const editor = await createTestEditor();
     const complete = (id: string, type: string) => ({
       id,
       type,
@@ -165,13 +184,13 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     expect(() => editor.blocks.importForest([
       complete("valid", "paragraph"),
       complete("invalid", "missing"),
-    ])).toThrow("Block type missing is unavailable");
+    ])).toThrow("Block type missing is not registered");
     expect(editor.blocks.getBlocks()).toEqual([]);
     editor.destroy();
   });
 
-  it("keeps feature commands off document storage and merges through the editor", () => {
-    const editor = createTestEditor({ mode });
+  it("keeps feature commands off document storage and merges through the editor", async () => {
+    const editor = await createTestEditor();
     const target = editor.blocks.insertBlock({ type: "paragraph", content: "Hello " }).id;
     const source = editor.blocks.insertBlock({
       type: "paragraph",
@@ -190,8 +209,8 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     editor.destroy();
   });
 
-  it("indents only the supplied ids even when other blocks are selected", () => {
-    const editor = createTestEditor({ mode });
+  it("indents only the supplied ids even when other blocks are selected", async () => {
+    const editor = await createTestEditor();
     const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" }).id;
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId).id;
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
@@ -204,14 +223,14 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     editor.destroy();
   });
 
-  it("indents one block without reading unrelated siblings", () => {
-    const editor = createTestEditor({ mode });
+  it("indents one block without reading unrelated siblings", async () => {
+    const editor = await createTestEditor();
     editor.blocks.insertBlock({
       id: "parent",
       type: "paragraph",
       children: Array.from({ length: 128 }, (_, index) => ({ id: `child-${index}`, type: "paragraph" })),
     });
-    const getBlockNode = jest.spyOn(editor.blocks, "getBlockNode");
+    const getBlockNode = jest.spyOn(editor.runtime.blocks, "getBlockNode");
 
     editor.blocks.indentBlock("child-1");
 
@@ -220,8 +239,8 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     editor.destroy();
   });
 
-  it("imports forests and reports stable source-to-destination identities", () => {
-    const editor = createTestEditor({ mode });
+  it("imports forests and reports stable source-to-destination identities", async () => {
+    const editor = await createTestEditor();
     const root = editor.blocks.insertBlock({
       id: "source-root",
       type: "paragraph",
@@ -246,9 +265,9 @@ describe.each(["block", "edgeless"] as const)("block feature ownership in %s mod
     editor.destroy();
   });
 
-  it("imports ID-less inputs and returns complete persisted roots", () => {
-    const editor = createTestEditor({ mode });
-    const getBlock = jest.spyOn(editor.blocks, "getBlock");
+  it("imports ID-less inputs and returns complete persisted roots", async () => {
+    const editor = await createTestEditor();
+    const getBlock = jest.spyOn(editor.runtime.blocks, "getBlock");
 
     const imported = editor.blocks.importForest([{
       type: "paragraph",

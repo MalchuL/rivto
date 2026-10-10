@@ -29,12 +29,6 @@ import type { BlockManagerApi, ImportedBlockForest } from "../types";
 import type { BlockPrepareErrorHandler } from "./types";
 import { Pipe } from "../../utils/pipe";
 
-interface BlockSubscription {
-  readonly bind: (document: DocumentModel) => () => void;
-  readonly listener: () => void;
-  dispose: () => void;
-}
-
 interface BlockProcessorRegistration {
   readonly processor: BlockProcessor;
   dispose: () => void;
@@ -52,14 +46,12 @@ export class BlockManager implements BlockManagerApi {
   /**
    * Editor-owned block processing pipeline.
    *
-   * It remains stable when the active document changes, so extension
-   * processors follow this editor without becoming shared document state.
+   * It remains stable across operations on its permanently bound document, so
+   * processors stay local to this editor without becoming shared document state.
    */
   private readonly pipe = new Pipe<BlockInput>();
   private readonly processors = new Set<BlockProcessorRegistration>();
-  private readonly subscriptions = new Set<BlockSubscription>();
-  /** Document currently attached to the owning editor. */
-  private currentDocument?: DocumentModel;
+  private readonly subscriptions = new Set<() => void>();
 
   /**
    * Creates the public block manager and installs its built-in processors.
@@ -137,14 +129,60 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
+   * Orders unique placed IDs without materializing unrelated subtrees.
+   *
+   * Each block's path contains its root position followed by child positions.
+   * Comparing these paths puts siblings in order and parents before descendants.
+   * Only selected blocks, their ancestors, and sibling ID lists are read.
+   * Paths are cached within this call, so moves and undo need no invalidation.
+   *
+   * @param ids - Block identifiers; missing or detached records are omitted.
+   * @returns IDs in depth-first document order, with ancestors before children.
+   */
+  getOrderedIds(ids: Iterable<string>): string[] {
+    // A stored record may be detached from the tree, so check placement too.
+    const placed = [...new Set(ids)].filter((id) => this.getBlockNode(id) !== undefined);
+    if (placed.length < 2) return placed;
+    const paths = new Map<string, number[]>();
+    const siblings = new Map<string | null, Map<string, number>>();
+    const pathOf = (id: string): number[] => {
+      const cached = paths.get(id);
+      if (cached) return cached;
+      const parent = this.getParentId(id) ?? null;
+      let positions = siblings.get(parent);
+      if (!positions) {
+        // Index each sibling list once, even when several selected blocks share it.
+        const children = parent === null ? this.getRootIds() : this.getBlockNode(parent)!.childIds;
+        positions = new Map(children.map((child, index) => [child, index]));
+        siblings.set(parent, positions);
+      }
+      // For example, [2, 0] is the first child of the third root.
+      const path = [...(parent === null ? [] : pathOf(parent)), positions.get(id)!];
+      paths.set(id, path);
+      return path;
+    };
+    return placed.sort((left, right) => {
+      const a = pathOf(left);
+      const b = pathOf(right);
+      // The first differing position determines which branch comes first.
+      for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
+        if (a[index] !== b[index]) return a[index]! - b[index]!;
+      }
+      // A shared prefix puts the shorter path (the ancestor) first.
+      return a.length - b.length;
+    });
+  }
+
+  /**
    * Subscribes to changes affecting one recursive block snapshot.
    *
    * @param id - Block identifier to observe.
    * @param listener - Callback invoked when the snapshot changes.
+   * Registrations stay bound to their source model when another view receives focus.
    * @returns Function that removes this exact listener.
    */
   subscribeBlock(id: string, listener: () => void): () => void {
-    return this.subscribe(listener, (document) => document.blocks.subscribeBlock(id, listener));
+    return this.retainSubscription(this.document.blocks.subscribeBlock(id, listener));
   }
 
   /**
@@ -154,45 +192,29 @@ export class BlockManager implements BlockManagerApi {
    * @returns Function that removes the subscription.
    */
   subscribeBlockNode(id: string, listener: () => void): () => void {
-    return this.subscribe(listener, (document) => document.blocks.subscribeBlockNode(id, listener));
+    return this.retainSubscription(this.document.blocks.subscribeBlockNode(id, listener));
   }
 
   /**
    * Subscribes to ordered root identifier changes.
    *
    * @param listener - Callback invoked after root insertion, removal, or reorder.
+   * Registrations stay bound to their source model when another view receives focus.
    * @returns Function that removes this exact listener.
    */
   subscribeRootIds(listener: () => void): () => void {
-    return this.subscribe(listener, (document) => document.blocks.subscribeRootIds(listener));
+    return this.retainSubscription(this.document.blocks.subscribeRootIds(listener));
   }
 
   /**
    * Subscribes to any root or child hierarchy change.
    *
    * @param listener - Callback invoked after structure changes.
+   * Registrations stay bound to their source model when another view receives focus.
    * @returns Function that removes this exact listener.
    */
   subscribeStructure(listener: () => void): () => void {
-    return this.subscribe(listener, (document) => document.blocks.subscribeStructure(listener));
-  }
-
-  /**
-   * Rebinds document subscriptions while retaining editor-owned processors.
-   * @param document - New active document.
-   * @returns No value.
-   */
-  setDocument(document: DocumentModel): void {
-    this.subscriptions.forEach((subscription) => subscription.dispose());
-    this.currentDocument = document;
-    this.subscriptions.forEach((subscription) => {
-      subscription.dispose = subscription.bind(document);
-    });
-  }
-
-  /** @returns No value after publishing the active document to retained block subscribers. */
-  refreshSubscriptions(): void {
-    [...this.subscriptions].forEach(({ listener }) => listener());
+    return this.retainSubscription(this.document.blocks.subscribeStructure(listener));
   }
 
   /**
@@ -226,7 +248,7 @@ export class BlockManager implements BlockManagerApi {
       try {
         try {
           if (!this.editor.blockRegistry.has(block.type)) {
-            throw new Error(`Block type ${block.type} is unavailable in ${this.editor.mode.get()} mode`);
+            throw new Error(`Block type ${block.type} is not registered`);
           }
           processed = this.runProcessors(this.editor.blockRegistry.prepare({
             ...block,
@@ -316,10 +338,12 @@ export class BlockManager implements BlockManagerApi {
 
   /**
    * Imports a detached forest while preserving every source identity that is
-   * free in the destination.
+   * free under the destination document's identity allocation policy. Other documents
+   * have independent namespaces and do not prevent reuse of these identities.
    *
    * Existing IDs indicate copy-and-paste and receive destination-generated
-   * replacements. IDs removed by cut remain free and are restored. The result
+   * replacements. IDs removed by cut are restored when the application's identity
+   * policy leaves them available; a database may retain their reservations. The result
    * exposes the complete mapping so clipboard extensions can update references
    * without inferring insertion results from selection state.
    *
@@ -333,6 +357,7 @@ export class BlockManager implements BlockManagerApi {
     afterId?: string | null,
     onError?: BlockPrepareErrorHandler,
   ): ImportedBlockForest {
+    validateBlockForest(blocks);
     const sourceIds: string[] = [];
     /** Collects stable source identities before destination remapping. */
     const collectIds = (block: EditorBlock | EditorBlockInput): void => {
@@ -579,35 +604,30 @@ export class BlockManager implements BlockManagerApi {
    * @returns No value.
    */
   destroy(): void {
-    this.subscriptions.forEach((subscription) => subscription.dispose());
+    this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
     this.processors.forEach((registration) => registration.dispose());
     this.processors.clear();
   }
 
   /**
-   * Retains one subscription across document replacements.
-   * @param listener - Callback refreshed after a replacement or matching mutation.
-   * @param bind - Document-specific subscription factory.
+   * Retains an existing document subscription until explicitly removed or destroyed.
+   * Its listener remains bound to the model where the subscription was created.
+   * @param unsubscribe - Function that removes the existing document subscription.
    * @returns Function that permanently removes the retained subscription.
    */
-  private subscribe(listener: () => void, bind: BlockSubscription["bind"]): () => void {
-    const subscription: BlockSubscription = {
-      listener,
-      bind,
-      dispose: this.currentDocument ? bind(this.currentDocument) : () => undefined,
-    };
-    this.subscriptions.add(subscription);
+  private retainSubscription(unsubscribe: () => void): () => void {
+    this.subscriptions.add(unsubscribe);
     return () => {
-      if (!this.subscriptions.delete(subscription)) return;
-      subscription.dispose();
+      if (!this.subscriptions.delete(unsubscribe)) return;
+      unsubscribe();
     };
   }
 
-  /** @returns The active document or throws while the editor is unbound. */
+  /** @returns The explicit document or throws outside a document context. */
   private get document(): DocumentModel {
-    if (!this.currentDocument) throw new Error("Document is not set");
-    return this.currentDocument;
+    const document = this.editor.getDocument();
+    return document;
   }
 
   /**

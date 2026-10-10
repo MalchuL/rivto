@@ -2,17 +2,18 @@
  * Demo-only document-order numbers drawn to the left of each page block.
  *
  * The ordinal is the block's depth-first position in the full outline, starting
- * at 1. Hierarchy changes rebuild that map once per editor; text edits do not.
+ * at 1. Hierarchy changes rebuild that map once per document; text edits do not.
  * Nested blocks keep the same left column as their ancestors. Edgeless cards omit the
  * numbers because their frames are not a vertical outline.
  */
+import type { DocumentModel } from "@chulane/document-model";
 import {
-  useReactEditor,
+  useEditorView,
   type BlockSlotProps,
-  type ReactEditor,
+  type EditorViewApi,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
-import { useCallback, useSyncExternalStore, type CSSProperties } from "react";
+import { useCallback, useRef, useSyncExternalStore, type CSSProperties } from "react";
 
 const DEMO_BLOCK_NUMBER_CLASS = "demo-block-number";
 
@@ -37,7 +38,7 @@ interface BlockOrderCache {
   map: ReadonlyMap<string, BlockOrdinal>;
 }
 
-const blockOrders = new WeakMap<ReactEditor, BlockOrderCache>();
+const blockOrders = new WeakMap<DocumentModel, BlockOrderCache>();
 
 /**
  * Assigns a depth-first ordinal to every block in one detached forest.
@@ -46,7 +47,7 @@ const blockOrders = new WeakMap<ReactEditor, BlockOrderCache>();
  * @returns Ordinals keyed by block id.
  */
 function buildOrdinals(
-  blocks: ReturnType<ReactEditor["blocks"]["getBlocks"]>,
+  blocks: ReturnType<EditorViewApi["runtime"]["blocks"]["getBlocks"]>,
 ): ReadonlyMap<string, BlockOrdinal> {
   const map = new Map<string, BlockOrdinal>();
   let number = 1;
@@ -69,16 +70,18 @@ function buildOrdinals(
 }
 
 /**
- * Returns the editor's ordinal map, building it on first read.
+ * Returns the displayed document's ordinal map, building it on first read.
  *
- * @param reactEditor - Editor whose outline supplies the numbers.
- * @returns The current ordinal map for that editor.
+ * @param editorView - Editor whose outline supplies the numbers.
+ * @returns The shared ordinal map for that document.
  */
-function blockOrderSnapshot(reactEditor: ReactEditor): ReadonlyMap<string, BlockOrdinal> {
-  let cache = blockOrders.get(reactEditor);
+function blockOrderSnapshot(editorView: EditorViewApi): ReadonlyMap<string, BlockOrdinal> {
+  const document = editorView.runtime.getDocument();
+  if (!document) throw new Error("Document context is required for gutter numbering");
+  let cache = blockOrders.get(document);
   if (!cache) {
-    cache = { map: buildOrdinals(reactEditor.blocks.getBlocks()) };
-    blockOrders.set(reactEditor, cache);
+    cache = { map: buildOrdinals(editorView.runtime.blocks.getBlocks()) };
+    blockOrders.set(document, cache);
   }
   return cache.map;
 }
@@ -86,11 +89,11 @@ function blockOrderSnapshot(reactEditor: ReactEditor): ReadonlyMap<string, Block
 /**
  * Drops a cached ordinal map so the next read follows the new hierarchy.
  *
- * @param reactEditor - Editor whose outline changed.
+ * @param document - Loaded model whose outline changed.
  * @returns Nothing.
  */
-function invalidateBlockOrder(reactEditor: ReactEditor): void {
-  blockOrders.delete(reactEditor);
+function invalidateBlockOrder(document: DocumentModel): void {
+  blockOrders.delete(document);
 }
 
 /**
@@ -100,12 +103,20 @@ function invalidateBlockOrder(reactEditor: ReactEditor): void {
  * @returns Its ordinal, or undefined when the block is no longer in the outline.
  */
 function useBlockOrdinal(block: BlockSlotProps["block"]): BlockOrdinal | undefined {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   // Read after document publication: undo can notify structure observers
   // before every affected root/child snapshot has been invalidated.
-  const subscribe = useCallback((listener: () => void) => reactEditor.subscribe(listener), [reactEditor]);
-  const getBlockOrderSnapshot = useCallback(() => blockOrderSnapshot(reactEditor), [reactEditor]);
-  return useSyncExternalStore(subscribe, getBlockOrderSnapshot, getBlockOrderSnapshot).get(block.id);
+  const subscribe = useCallback((listener: () => void) => editorView.runtime.subscribe(listener), [editorView]);
+  const previous = useRef<BlockOrdinal | undefined>(undefined);
+  const getBlockOrderSnapshot = useCallback(() => {
+    const current = blockOrderSnapshot(editorView).get(block.id);
+    // Unchanged labels keep their snapshot and skip a render.
+    if (current?.number !== previous.current?.number || current?.depth !== previous.current?.depth) {
+      previous.current = current;
+    }
+    return previous.current;
+  }, [editorView, block.id]);
+  return useSyncExternalStore(subscribe, getBlockOrderSnapshot, getBlockOrderSnapshot);
 }
 
 /** Draws the block's document-order number in the page's left gutter. */
@@ -126,21 +137,22 @@ export function blockNumberExtension(): ReactEditorExtension {
     id: "demo.block-number",
     /**
      * Invalidates shared numbering before mounted rows read the new outline.
-     * @param reactEditor - Runtime owning the structure subscription and labels.
+     * @param editorRuntime - Runtime owning the structure subscription and labels.
      * @returns Cleanup for the subscription and cached outline.
      */
-    setup(reactEditor) {
+    setup(editorRuntime) {
       // Invalidate once during structure observation. Rows read on document
       // publication, sharing one rebuild after all storage observers finish.
-      const unsubscribe = reactEditor.blocks.subscribeStructure(() => invalidateBlockOrder(reactEditor));
-      reactEditor.surfaces.registerBlockSlot({
+      const document = editorRuntime.getDocument();
+      const unsubscribe = document.blocks.subscribeStructure(() => invalidateBlockOrder(document));
+      editorRuntime.surfaces.registerBlockSlot({
         position: "left",
         mode: "block",
         component: BlockNumberSlot,
       });
       return () => {
         unsubscribe();
-        invalidateBlockOrder(reactEditor);
+        invalidateBlockOrder(document);
       };
     },
   };

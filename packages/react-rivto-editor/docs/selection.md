@@ -48,7 +48,7 @@ changes. Selection is local runtime state and is never persisted or synchronized
 
 ## Browser gestures
 
-`reactEditor.selection` delegates state to core and adds `readDOM()` and
+`editorView.selection` delegates state to core and adds `readDOM()` and
 `restoreDOM()`. Shift+Alt-click or Shift+Alt-drag keeps partial first/last
 offsets and full text ranges between them without structural chrome. A
 contentless block such as Counter receives structural coverage while surrounding
@@ -67,7 +67,7 @@ runs every registered `PasteStrategy` whose `matches(context, placement)` is tru
 - `PreserveNewlinesPasteStrategy` inserts plain text as one block when
   `placement.preserveNewlines` is set (Ctrl/Cmd+Shift+V).
 - `BlockPasteStrategy` inserts complete remapped block forests. `placement.mergeText: false` keeps a partial-text bundle structural.
-- React registers `ElementPasteStrategy` on `editor.clipboard.pasteStrategies`
+- React registers `ElementPasteStrategy` on `runtime.pasteStrategies`
   so canvas geometry stays in the presentation layer without a second manager
   dispatch.
 

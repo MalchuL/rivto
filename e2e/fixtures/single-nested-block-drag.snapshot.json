@@ -70,7 +70,7 @@
   ],
   "elements": [
     {
-      "id": "a7666f59-e2f6-4b4e-8103-dc7225fdc94c",
+      "id": "single-nested-block-card",
       "type": "block",
       "frame": { "x": 60, "y": 60, "width": 500, "height": 360 },
       "zIndex": 0,

@@ -19,8 +19,8 @@ import { CreationPanel } from "./creation-panel";
 import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
 
 /** Floating bar chrome; `edgeless-tool-bar` is a stable hook for hosts. */
-const TOOL_BAR_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-bar absolute bottom-3.5 left-1/2 z-21 flex w-max max-w-[calc(100%-160px)] -translate-x-1/2 flex-row items-center gap-[3px] rounded-xl border border-border bg-background/95 p-[5px] shadow-(--rivto-edgeless-chrome-shadow) data-[menu-open]:z-24`;
-const DIVIDER_CLASS = "mx-0.5 self-center data-[orientation=vertical]:h-[22px]";
+const TOOL_BAR_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-bar`;
+const DIVIDER_CLASS = "edgeless-tool-bar-divider";
 
 /**
  * Renders the thin vertical rule that separates groups of toolbar buttons.
@@ -111,12 +111,12 @@ export function ToolBar({
   }, [controller, menu]);
 
   const selectTool = () => {
-    controller.reactEditor.commands.execute("edgeless.tool.set", "select");
+    controller.runtime.commands.execute("edgeless.tool.set", "select");
     close();
   };
 
   const panTool = () => {
-    controller.reactEditor.commands.execute("edgeless.tool.set", { tool: "pan" });
+    controller.runtime.commands.execute("edgeless.tool.set", { tool: "pan" });
     close();
   };
 

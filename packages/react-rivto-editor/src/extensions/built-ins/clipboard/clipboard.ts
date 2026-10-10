@@ -1,19 +1,21 @@
+import type { EditorRuntime } from "../../../editor/editor-runtime";
 /**
  * Clipboard operations and portable format contracts. Whole-block selection is structural; text editing uses explicit single-block ranges.
  */
 import {
-  isStructuralSelection,
-  hasBlockRanges,
-  getSelectedBlockIds,
   createStructuralSelection,
+  getSelectedBlockIds,
+  hasBlockRanges,
+  isStructuralSelection,
   RIVTO_CLIPBOARD_MIME,
   validateClipboardBundle,
   type BlockPrepareErrorHandler,
-  type EditorBlockInput,
   type ClipboardBundle,
+  type EditorBlockInput,
   type Selection,
 } from "@chulane/rivto";
-import type { ReactEditor } from "../../../types";
+import type { EditorViewApi } from "../../../editor-view/types";
+import { blockIdsOf } from "../../../elements/block-element-projection";
 import {
   KEYBOARD_BINDING_IDS,
   matchesShortcut,
@@ -22,7 +24,6 @@ import {
 } from "../../../managers";
 import { findEdgelessRuntime } from "../selection/edgeless-runtime";
 import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
-import { blockIdsOf } from "../../../elements/block-element-projection";
 import { ElementPasteStrategy } from "./element-paste-strategy";
 
 const ELEMENT_PASTE_STRATEGY_ID = "paste.elements";
@@ -32,7 +33,7 @@ export interface ClipboardExtensionOptions {
   /**
    * Block type used when plain text creates additional blocks.
    *
-   * When omitted, uses `reactEditor.createDefaultBlock().type` at paste time.
+   * When omitted, uses `editorView.createDefaultBlock().type` at paste time.
    */
   readonly defaultBlockType?: string;
   /**
@@ -64,20 +65,17 @@ export interface ClipboardExtensionOptions {
  * Event listeners are delegated to the active surface root and are removed by
  * the keyboard and DOM event runtimes when this component unmounts.
  *
- * @param reactEditor - React editor whose DOM events and clipboard managers are connected.
+ * @param editorRuntime - React editor whose DOM events and clipboard managers are connected.
  * @param options - Plain-text fallback and invalid-block handling configuration.
  * @returns Disposer that unregisters the canvas paste strategy.
  */
 export function registerClipboard(
-  reactEditor: ReactEditor,
+  editorRuntime: EditorRuntime,
   options: ClipboardExtensionOptions = {},
 ): () => void {
-  const unregisterElementPaste = reactEditor.clipboard.pasteStrategies.register(
-    ELEMENT_PASTE_STRATEGY_ID,
-    new ElementPasteStrategy(reactEditor),
-  );
+  const unregisterElementPaste = editorRuntime.pasteStrategies.register(ELEMENT_PASTE_STRATEGY_ID, new ElementPasteStrategy(editorRuntime));
   const resolveDefaultBlockType = (): string =>
-    options.defaultBlockType ?? reactEditor.createDefaultBlock().type;
+    options.defaultBlockType ?? editorRuntime.createDefaultBlock().type;
   // ClipboardEvent does not expose keyboard modifiers. Remember only the
   // immediately preceding paste shortcut, then consume it in `paste` below.
   let pasteAsPlainText = false;
@@ -86,30 +84,32 @@ export function registerClipboard(
   // as a fallback, but only use it when the browser's plain text still matches.
   let copiedClipboard: { structured: string; text: string } | null = null;
 
-  const selectedCanvasElementIds = (): readonly string[] => {
-    const snapshot = findEdgelessRuntime(reactEditor)?.get();
+  const selectedCanvasElementIds = (editorView: EditorViewApi): readonly string[] => {
+    const snapshot = findEdgelessRuntime(editorView)?.get();
     return snapshot?.active ? snapshot.items : [];
   };
 
   /** Returns a core-compatible block selection for active canvas root objects. */
-  const canvasSelection = (): Selection | undefined => {
-    if (reactEditor.mode.get() !== "edgeless") return undefined;
-    const snapshot = findEdgelessRuntime(reactEditor)?.get();
+  const canvasSelection = (editorView: EditorViewApi): Selection | undefined => {
+    // Core mode may be edgeless while the active view is a page embedding.
+    // Its clipboard actions must use the page selection, not canvas objects.
+    if (editorView.events.getSurfaceType() !== "edgeless") return undefined;
+    const snapshot = findEdgelessRuntime(editorView)?.get();
     const blockIds = snapshot?.active ? snapshot.items.flatMap((id) => {
-      const element = reactEditor.elements.getElement(id);
-      return element?.type === "block" ? blockIdsOf(element, reactEditor.blocks.getRootIds()) : [];
+      const element = editorView.runtime.elements.getElement(id);
+      return element?.type === "block" ? blockIdsOf(element, editorView.runtime.blocks.getRootIds()) : [];
     }) : [];
     return blockIds.length ? createStructuralSelection(blockIds) : undefined;
   };
 
   /** Writes the core-produced flavors into a native clipboard event. */
-  const writeClipboard = (event: ClipboardEvent, bundle: ClipboardBundle): void => {
-    const elementIds = selectedCanvasElementIds();
+  const writeClipboard = (editorView: EditorViewApi, event: ClipboardEvent, bundle: ClipboardBundle): void => {
+    const elementIds = selectedCanvasElementIds(editorView);
     if (elementIds.length) {
-      bundle.elements = elementIds.flatMap((id) => reactEditor.elements.getElement(id) ?? []);
+      bundle.elements = elementIds.flatMap((id) => editorView.runtime.elements.getElement(id) ?? []);
       bundle.selectedElementIds = [...elementIds];
     }
-    const portable = reactEditor.clipboard.format(bundle.blocks);
+    const portable = editorView.runtime.clipboardFormats.format(bundle.blocks);
     const structured = JSON.stringify(bundle);
     event.clipboardData?.setData(RIVTO_CLIPBOARD_MIME, structured);
     event.clipboardData?.setData("text/html", portable.html);
@@ -130,14 +130,14 @@ export function registerClipboard(
   };
 
   /** Publishes the exact native endpoints before an asynchronous event can lag. */
-  const synchronizeSelection = (): void => {
-    if (canvasSelection()) return;
-    const selection = reactEditor.selection.readDOM();
-    if (selection) reactEditor.selection.set(selection);
+  const synchronizeSelection = (editorView: EditorViewApi): void => {
+    if (canvasSelection(editorView)) return;
+    const selection = editorView.selection.readDOM();
+    if (selection) editorView.selection.set(selection);
   };
 
   /** Pastes either the richest clipboard flavor or one unbroken plain-text value. */
-  const pasteClipboard = (event: ClipboardEvent): void => {
+  const pasteClipboard = (editorView: EditorViewApi, event: ClipboardEvent): void => {
     const plainText = pasteAsPlainText;
     pasteAsPlainText = false;
     let structured: string | undefined;
@@ -145,7 +145,7 @@ export function registerClipboard(
       structured = event.clipboardData?.getData(RIVTO_CLIPBOARD_MIME)
         || fallbackStructuredClipboard(event);
     }
-    const canvas = canvasSelection();
+    const canvas = canvasSelection(editorView);
     // Paste has only two outcomes:
     // 1. Text is written into the current text selection.
     // 2. Complete blocks are inserted beside or inside the current block.
@@ -163,7 +163,7 @@ export function registerClipboard(
     if (!sourceBundle && !plainText) {
       // HTML and Markdown parsers return complete blocks. They do not describe
       // a text selection, so their blocks are inserted as new blocks.
-      const parsed = reactEditor.clipboard.parse({
+      const parsed = editorView.runtime.clipboardFormats.parse({
         html: event.clipboardData?.getData("text/html") ?? "",
         text: event.clipboardData?.getData("text/plain") ?? "",
       });
@@ -171,41 +171,41 @@ export function registerClipboard(
     }
     // Use the canvas selection while calculating where pasted content belongs.
     // The completed paste replaces it with the newly selected content.
-    if (canvas) reactEditor.selection.set(canvas);
-    const active = reactEditor.selection.get();
-    const lengthOf = (id: string) => reactEditor.blocks.getBlockNode(id)?.content.length ?? 0;
+    if (canvas) editorView.selection.set(canvas);
+    const active = editorView.selection.get();
+    const lengthOf = (id: string) => editorView.runtime.blocks.getBlockNode(id)?.content.length ?? 0;
     const ends = active ? resolveSelectionEndpoints(active, lengthOf) : undefined;
     const activeId = ends?.head.blockId ?? active?.focusBlockId;
-    const activeBlock = activeId ? reactEditor.blocks.getBlockNode(activeId) : undefined;
-    const expanded = reactEditor.blockListProps.has("collapse") && activeBlock?.listProps.collapsed !== true;
+    const activeBlock = activeId ? editorView.runtime.blocks.getBlockNode(activeId) : undefined;
+    const expanded = editorView.runtime.blockListProps.has("collapse") && activeBlock?.listProps.collapsed !== true;
     // Only whole-block paste needs a parent and sibling insertion position.
     // A native bundle marked `fromTextSelection` is pasted into text instead.
     const structuralSource = Boolean(parsedBlocks?.length)
       || Boolean(sourceBundle?.blocks.length && sourceBundle.fromTextSelection !== true);
     const placement = activeBlock && structuralSource
-      ? expanded && reactEditor.blocks.hasChildren(activeBlock.id)
+      ? expanded && editorView.runtime.blocks.hasChildren(activeBlock.id)
         ? { parentId: activeBlock.id, afterId: null }
-        : { parentId: reactEditor.blocks.getParentId(activeBlock.id) ?? null, afterId: activeBlock.id }
+        : { parentId: editorView.runtime.blocks.getParentId(activeBlock.id) ?? null, afterId: activeBlock.id }
       : undefined;
     if (parsedBlocks?.length) {
       // Parsed blocks do not need IDs. importForest validates them, assigns IDs,
       // inserts them, and returns the complete inserted roots.
-      reactEditor.history.batchUpdates(() => {
-        const imported = reactEditor.blocks.importForest(
+      editorView.runtime.history.batchUpdates(() => {
+        const imported = editorView.runtime.blocks.importForest(
           parsedBlocks,
           placement?.afterId ?? undefined,
           options.onPrepareError,
         );
         const insertedIds = imported.roots.map(({ id }) => id);
         if (placement?.parentId && placement.afterId === null && insertedIds.length) {
-          reactEditor.blocks.moveBlocks(insertedIds, placement.parentId, "inside");
+          editorView.runtime.blocks.moveBlocks(insertedIds, placement.parentId, "inside");
         }
-        if (insertedIds.length) reactEditor.selection.set(createStructuralSelection(insertedIds));
+        if (insertedIds.length) editorView.selection.set(createStructuralSelection(insertedIds));
       });
     } else {
       // Plain text and native Rivto clipboard data share this path. Text updates
       // the current text selection; a bundle of whole blocks inserts new blocks.
-      reactEditor.clipboard.paste({
+      editorView.clipboard.paste({
         textTarget: !canvas && active && hasBlockRanges(active)
           && !isStructuralSelection(active) ? active : undefined,
         defaultBlockType: resolveDefaultBlockType(),
@@ -220,8 +220,8 @@ export function registerClipboard(
         },
       });
     }
-    if (!canvas && isStructuralSelection(reactEditor.selection.get())) {
-      const root = reactEditor.events.getRoot();
+    if (!canvas && isStructuralSelection(editorView.selection.get())) {
+      const root = editorView.events.getRoot();
       // The paste event started in the old contenteditable, whose native caret
       // would override the newly selected blocks on the next keyboard event.
       // Move keyboard ownership to the surface, as pointer block selection does.
@@ -229,96 +229,98 @@ export function registerClipboard(
       root?.focus({ preventScroll: true });
     }
     // Only restore DOM selection after paste; content insertion must stay outside this callback.
-    reactEditor.selection.scheduleIfSelectionUnchanged(() => reactEditor.selection.restoreDOM());
+    const selectionManager = editorView.selection;
+    selectionManager.scheduleIfSelectionUnchanged(() => selectionManager.restoreDOM());
   };
 
   /**
    * Copies selected canvas elements, whole blocks, or an exact text range.
    * @returns Portable payload, or undefined for an empty range.
    */
-  const copyCurrent = (): ClipboardBundle | undefined => {
-    const canvas = canvasSelection();
-    const canvasElementIds = selectedCanvasElementIds();
-    return canvas ? reactEditor.clipboard.copy(canvas)
+  const copyCurrent = (editorView: EditorViewApi): ClipboardBundle | undefined => {
+    const canvas = canvasSelection(editorView);
+    const canvasElementIds = selectedCanvasElementIds(editorView);
+    return canvas ? editorView.clipboard.copy(canvas)
       : canvasElementIds.length ? { version: 4, blocks: [] }
-      : reactEditor.clipboard.copy();
+      : editorView.clipboard.copy();
   };
 
   /**
    * Deletes copied content and restores the resulting block-local caret.
    * @returns No value.
    */
-  const deleteCopiedSelection = (): void => {
-    reactEditor.selection.delete();
+  const deleteCopiedSelection = (editorView: EditorViewApi): void => {
+    editorView.selection.delete();
     // Capture before a delayed native selectionchange can report old DOM offsets.
-    const selection = reactEditor.selection.get();
+    const selection = editorView.selection.get();
     // Only restore the post-cut caret/selection; cutting content has already completed.
-    reactEditor.selection.scheduleIfSelectionUnchanged(() => reactEditor.selection.restoreDOM(selection));
+    const selectionManager = editorView.selection;
+    selectionManager.scheduleIfSelectionUnchanged(() => selectionManager.restoreDOM(selection));
   };
 
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "clipboard.copy",
     type: "copy",
     scope: "surface",
     when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
-  }, ({ raw: event }) => {
-    synchronizeSelection();
-    const payload = copyCurrent();
+  }, ({ editorView, raw: event }) => {
+    synchronizeSelection(editorView);
+    const payload = copyCurrent(editorView);
     if (!payload) return false;
-    writeClipboard(event, payload);
+    writeClipboard(editorView, event, payload);
     return true;
   });
 
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "clipboard.cut",
     type: "cut",
     scope: "surface",
     when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
-  }, ({ raw: event }) => {
-    synchronizeSelection();
-    const canvas = canvasSelection();
-    const canvasElementIds = selectedCanvasElementIds();
-    const payload = copyCurrent();
+  }, ({ editorView, raw: event }) => {
+    synchronizeSelection(editorView);
+    const canvas = canvasSelection(editorView);
+    const canvasElementIds = selectedCanvasElementIds(editorView);
+    const payload = copyCurrent(editorView);
     if (!payload) return false;
-    writeClipboard(event, payload);
-    if (!canvasElementIds.length) deleteCopiedSelection();
+    writeClipboard(editorView, event, payload);
+    if (!canvasElementIds.length) deleteCopiedSelection(editorView);
     if (canvasElementIds.length) {
-      reactEditor.history.batchUpdates(() => {
-        if (canvas) getSelectedBlockIds(canvas).forEach((id) => reactEditor.blocks.removeBlock(id));
-        reactEditor.elements.removeElements(canvasElementIds);
+      editorView.runtime.history.batchUpdates(() => {
+        if (canvas) getSelectedBlockIds(canvas).forEach((id) => editorView.runtime.blocks.removeBlock(id));
+        editorView.runtime.elements.removeElements(canvasElementIds);
       });
-      findEdgelessRuntime(reactEditor)?.clear();
+      findEdgelessRuntime(editorView)?.clear();
     }
     return true;
   });
 
   /** Handles Firefox clipboard events dispatched to body for block selection. */
-  const handleDocumentClipboard = (root: HTMLElement, event: ClipboardEvent, insideRoot: boolean): boolean => {
+  const handleDocumentClipboard = (editorView: EditorViewApi, root: HTMLElement, event: ClipboardEvent, insideRoot: boolean): boolean => {
     if (insideRoot || isNonBlockEditableClipboardEvent(event)) return false;
     const activeElement = root.ownerDocument.activeElement;
     const editorHasFocus = activeElement === root ||
       (activeElement !== null && root.contains(activeElement));
-    const current = reactEditor.selection.get();
-    const canvas = canvasSelection();
-    const canvasElementIds = selectedCanvasElementIds();
+    const current = editorView.selection.get();
+    const canvas = canvasSelection(editorView);
+    const canvasElementIds = selectedCanvasElementIds(editorView);
     if (!editorHasFocus || (!canvasElementIds.length && !isStructuralSelection(current))) return false;
     let handled = false;
     if (event.type === "paste") {
-      pasteClipboard(event);
+      pasteClipboard(editorView, event);
       handled = true;
     } else {
       const payload = canvas
-        ? reactEditor.clipboard.copy(canvas)
-        : copyCurrent();
+        ? editorView.clipboard.copy(canvas)
+        : copyCurrent(editorView);
       if (payload) {
-        writeClipboard(event, payload);
-        if (!canvasElementIds.length && event.type === "cut") deleteCopiedSelection();
+        writeClipboard(editorView, event, payload);
+        if (!canvasElementIds.length && event.type === "cut") deleteCopiedSelection(editorView);
         if (canvasElementIds.length && event.type === "cut") {
-          reactEditor.history.batchUpdates(() => {
-            if (canvas) getSelectedBlockIds(canvas).forEach((id) => reactEditor.blocks.removeBlock(id));
-            reactEditor.elements.removeElements(canvasElementIds);
+          editorView.runtime.history.batchUpdates(() => {
+            if (canvas) getSelectedBlockIds(canvas).forEach((id) => editorView.runtime.blocks.removeBlock(id));
+            editorView.runtime.elements.removeElements(canvasElementIds);
           });
-          findEdgelessRuntime(reactEditor)?.clear();
+          findEdgelessRuntime(editorView)?.clear();
         }
         handled = true;
       }
@@ -326,30 +328,30 @@ export function registerClipboard(
     return handled;
   };
 
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "clipboard.document-copy",
     type: "copy",
     target: "document",
-  }, ({ raw: event, insideRoot, root }) => (
-    handleDocumentClipboard(root, event, insideRoot)
+  }, ({ editorView, raw: event, insideRoot, root }) => (
+    handleDocumentClipboard(editorView, root, event, insideRoot)
   ));
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "clipboard.document-cut",
     type: "cut",
     target: "document",
-  }, ({ raw: event, insideRoot, root }) => (
-    handleDocumentClipboard(root, event, insideRoot)
+  }, ({ editorView, raw: event, insideRoot, root }) => (
+    handleDocumentClipboard(editorView, root, event, insideRoot)
   ));
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "clipboard.document-paste",
     type: "paste",
     target: "document",
-  }, ({ raw: event, insideRoot, root }) => (
-    handleDocumentClipboard(root, event, insideRoot)
+  }, ({ editorView, raw: event, insideRoot, root }) => (
+    handleDocumentClipboard(editorView, root, event, insideRoot)
   ));
 
   const pasteAsPlainTextKeys = ["Primary+Shift+v"] as const;
-  reactEditor.keyboard.register({
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.clipboardPasteAsPlainText,
     keys: pasteAsPlainTextKeys,
   }, () => {
@@ -361,12 +363,12 @@ export function registerClipboard(
     pasteAsPlainText = false;
     return false;
   };
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "clipboard.paste-as-plain-text-release",
     type: "keyup",
     target: "window",
-  }, ({ raw }) => {
-    const binding = reactEditor.keyboard.list().find((item) => (
+  }, ({ editorView, raw }) => {
+    const binding = editorView.keyboard.list().find((item) => (
       item.id === KEYBOARD_BINDING_IDS.clipboardPasteAsPlainText
     ));
     const keys = binding?.keys ?? pasteAsPlainTextKeys;
@@ -375,20 +377,20 @@ export function registerClipboard(
     }
     return false;
   });
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "clipboard.paste-as-plain-text-blur",
     type: "blur",
     target: "window",
   }, clearPasteAsPlainText);
 
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "clipboard.paste",
     type: "paste",
     scope: "surface",
     when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
-  }, ({ raw: event }) => {
-    synchronizeSelection();
-    pasteClipboard(event);
+  }, ({ editorView, raw: event }) => {
+    synchronizeSelection(editorView);
+    pasteClipboard(editorView, event);
     return true;
   });
   return unregisterElementPaste;

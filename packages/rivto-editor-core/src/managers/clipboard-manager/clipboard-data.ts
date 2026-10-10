@@ -23,6 +23,8 @@ export interface ClipboardBundle {
   version: typeof CLIPBOARD_BUNDLE_VERSION;
   /** Whether copied content originates from text/caret selection; omission denotes structural blocks. */
   fromTextSelection?: boolean;
+  /** Source document for qualifying internal block references during a structural paste. */
+  sourceDocumentId?: string;
   /** Selected block subtrees preserving native types, props, and plugin data. */
   blocks: Block[];
   /** Optional first-class canvas elements contributed by an edgeless host. */

@@ -1,5 +1,9 @@
+import type { EditorViewApi } from "../../editor-view/types";
+
 /** Block-local context supplied when listing or executing a slash command. */
 export interface SlashCommandContext {
+  /** API of the occurrence invoking the command, retained across deferred work. */
+  readonly editorView: EditorViewApi;
   /** Stable ID of the block containing the command trigger. */
   readonly blockId: string;
 }

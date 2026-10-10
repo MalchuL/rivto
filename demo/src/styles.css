@@ -80,11 +80,21 @@ body { margin: 0; }
 
 .journal-document .page-surface {
   width: 100%;
-  min-height: 160px;
   margin: 0;
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+/* Full document pages keep writing space; embedded subtrees fit their content. */
+.journal-document > .page-surface {
+  min-height: 160px;
+}
+
+/* Embedded views share the journal theme but need compact padding inside a card.
+   Leave a left gutter for the native collapse toggle and drag handle. */
+.journal-document .rivto-embedded-surface {
+  --rivto-block-surface-padding: 12px 12px 12px 48px;
 }
 
 .journal-document:first-child .demo-header {
@@ -152,7 +162,7 @@ body { margin: 0; }
 
 .multi-editor-pane .demo-toolbar-controls { gap: 6px; }
 .multi-editor-pane .demo-block-id-toggle { display: none; }
-.multi-editor-pane .page-surface { min-height: 360px; }
+.multi-editor-pane > .page-surface { min-height: 360px; }
 
 @media (max-width: 900px) {
   .multi-editor-page { grid-template-columns: 1fr; }

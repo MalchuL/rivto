@@ -2,7 +2,7 @@
 
 ## `BlockTypeManager`
 
-`reactEditor.blockTypes` соединяет core block definition, React renderer, optional view, slash conversion и separator metadata. Сам block content хранится только в core.
+`editorRuntime.blockTypes` соединяет core block definition, React renderer, optional view, slash conversion и separator metadata. Сам block content хранится только в core.
 
 ### Properties
 
@@ -28,7 +28,7 @@ Public mutable properties отсутствуют. Manager хранит type regi
 
 ## `blockListProps` lifecycle adapter
 
-`reactEditor.blockListProps` делегирует core `BlockListPropsManager`; React владеет только cleanup registrations extension lifecycle.
+`editorRuntime.blockListProps` делегирует core `BlockListPropsManager`; React владеет только cleanup registrations extension lifecycle.
 
 ### `register(registration)`
 
@@ -46,7 +46,7 @@ Defaults объединяются shallowly в registration order. Ошибка 
 
 ## `BlockManager` operations
 
-`reactEditor.blocks` владеет guarded mutations и делегирует core block reads/structure operations.
+`editorRuntime.blocks` — тот же core block manager. React не создаёт дополнительную forwarding facade; validation и mutations остаются в core.
 
 `prepareInput(input)` делегирует recursive preparation core `BlockManager`.
 
@@ -61,7 +61,7 @@ Defaults объединяются shallowly в registration order. Ошибка 
 
 ## `RendererManager`
 
-`reactEditor.renderers` — lower-level lookup, когда definition установлен отдельно или persisted unknown type нужно отобразить без регистрации model rule.
+`editorRuntime.renderers` — lower-level lookup, когда definition установлен отдельно или persisted unknown type нужно отобразить без регистрации model rule.
 
 ### Properties
 

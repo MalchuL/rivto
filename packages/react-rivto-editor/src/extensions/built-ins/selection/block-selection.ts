@@ -1,11 +1,11 @@
+import { isStructuralSelection } from "@chulane/rivto";
 import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../../constants";
-import type { ReactEditor } from "../../../types";
-import { toggleBlockSelection } from "../page/navigation";
-import { isStructuralSelection } from "@chulane/rivto";
+import type { EditorRuntime } from "../../../editor/editor-runtime";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
+import { toggleBlockSelection } from "../page/navigation";
 import { findEdgelessRuntime } from "./edgeless-runtime";
 
 /**
@@ -16,61 +16,61 @@ import { findEdgelessRuntime } from "./edgeless-runtime";
  * state is also reflected on the root so CSS can replace the text cursor while
  * the next click means "select this block".
  */
-export function registerBlockSelection(reactEditor: ReactEditor): () => void {
-  const setModifierDown = (value: boolean) => {
-    const root = reactEditor.events.getRoot();
+export function registerBlockSelection(editorRuntime: EditorRuntime): () => void {
+  const markedRoots = new Set<HTMLElement>();
+  const setModifierDown = (root: HTMLElement, value: boolean) => {
     if (!root) return;
-    if (value) root.dataset.blockSelecting = "true";
-    else delete root.dataset.blockSelecting;
+    if (value) { root.dataset.blockSelecting = "true"; markedRoots.add(root); }
+    else { delete root.dataset.blockSelecting; markedRoots.delete(root); }
   };
 
-  reactEditor.keyboard.register({
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockSelectionModifierDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierDown]!,
     target: "window",
     // Every editor in a realm observes the same window keyboard event. Only
     // the surface containing its native target may expose modifier UI.
     when: ({ insideRoot }) => insideRoot,
-  }, () => {
-    setModifierDown(true);
+  }, ({ root }) => {
+    setModifierDown(root, true);
     return false;
   });
-  reactEditor.keyboard.register({
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockSelectionModifierUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierUp]!,
     phase: "keyup",
     target: "window",
     when: ({ insideRoot }) => insideRoot,
-  }, () => {
-    setModifierDown(false);
+  }, ({ root }) => {
+    setModifierDown(root, false);
     return false;
   });
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "block-selection.modifier-blur",
     type: "blur",
     target: "window",
-  }, () => {
-    setModifierDown(false);
+  }, ({ root }) => {
+    setModifierDown(root, false);
     return false;
   });
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "block-selection.modifier-focus-owner",
     type: "focusin",
     target: "document",
-  }, ({ insideRoot }) => {
+  }, ({ root, insideRoot }) => {
     // Keyup is delivered to the newly focused editor when focus changes while
     // Ctrl/Meta is held. Clear the old root at focus time so it cannot retain
     // stale modifier styling indefinitely.
-    if (!insideRoot) setModifierDown(false);
+    if (!insideRoot) setModifierDown(root, false);
     return false;
   });
 
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "block-selection.pointer-toggle",
     type: "pointerdown",
     capture: true,
     scope: "block",
-  }, ({ raw: event, root }) => {
+  }, ({ editorView, raw: event, root, mode }) => {
     if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) return false;
     if (
       !(event.target instanceof Element) ||
@@ -80,28 +80,28 @@ export function registerBlockSelection(reactEditor: ReactEditor): () => void {
     const blockId = block?.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!block || !blockId || !root.contains(block)) return false;
 
-    const selection = reactEditor.selection.get();
+    const selection = editorView.selection.get();
     // A caret starts a new block selection; carrying its partial range forward
     // creates a mixed selection that the next native selectionchange clears.
     const current = isStructuralSelection(selection) ? selection : undefined;
     const next = toggleBlockSelection(
-      reactEditor.blocks.getBlocks(),
+      editorView.runtime.blocks.getBlocks(),
       current,
       blockId,
-      reactEditor.mode.get() === "edgeless",
-      (candidate) => reactEditor.blockListProps.has("collapse") && candidate.listProps.collapsed === true,
+      mode === "edgeless",
+      (candidate) => !editorView.runtime.blockListProps.childrenVisible(candidate),
     );
-    const canvas = reactEditor.mode.get() === "edgeless" ? findEdgelessRuntime(reactEditor) : undefined;
+    const canvas = mode === "edgeless" ? findEdgelessRuntime(editorView) : undefined;
     if (next && canvas) canvas.setBlocks(next);
-    else if (next) reactEditor.selection.set(next);
-    else reactEditor.selection.clear();
+    else if (next) editorView.selection.set(next);
+    else editorView.selection.clear();
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });
     return true;
   });
 
   return () => {
-    const root = reactEditor.events.getRoot();
-    if (root) delete root.dataset.blockSelecting;
+    markedRoots.forEach((root) => { delete root.dataset.blockSelecting; });
+    markedRoots.clear();
   };
 }

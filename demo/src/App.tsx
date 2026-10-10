@@ -1,26 +1,30 @@
+import { BroadcastChannelProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
+import { DocumentStorage } from "@chulane/document-model";
 import {
   createRivtoEditor,
   type RivtoEditorApi,
 } from "@chulane/rivto";
-import { BroadcastChannelProvider, YjsDoc } from "@chulane/crdt-doc";
-import { DocumentModelImpl } from "@chulane/document-model";
 import {
-  createReactEditor,
-  createKanbanBlockInput,
-  createBentoBlockInput,
-  createTableBlockInput,
-  createColumnsBlockInput,
   BENTO_BLOCK_TYPE,
+  bulletThreadingExtension,
   COLUMNS_BLOCK_TYPE,
+  createBentoBlockInput,
+  createColumnsBlockInput,
+  createEditorRuntime,
+  createKanbanBlockInput,
+  createTableBlockInput,
   DEFAULT_WRITING_BLOCK_TYPE,
-  type MarkdownLinkClick,
   edgelessPreset,
   edgelessVisualsExtension,
+  EditorStorage,
+  EditorStorageContext,
   EditorView,
-  KEYBOARD_BINDING_IDS,
+  EMBEDDING_BLOCK_TYPE,
+  embeddingExtension,
   KANBAN_BLOCK_TYPE,
+  KEYBOARD_BINDING_IDS,
   pageDragExtension,
-  bulletThreadingExtension,
+  PageSurface,
   SEPARATOR_BLOCK_TYPE,
   standardPreset,
   TABLE_BLOCK_TYPE,
@@ -28,15 +32,18 @@ import {
   TODO_STORAGE_BLOCK_TYPE,
   todoItemExtension,
   useEditorMode,
+  type EditorRuntime,
+  type MarkdownLinkClick,
 } from "@chulane/rivto-react";
-import { KeyboardPanel } from "./KeyboardPanel";
-import { RevisionsPanel } from "./RevisionsPanel";
 import { useEffect, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import {
   COUNTER_BLOCK_TYPE,
   customBlockExtensions,
   SLIDER_BLOCK_TYPE,
 } from "./blocks/custom-blocks";
+import { DBDocumentModel, DemoDatabase } from "./database";
+import { DocumentsDemo } from "./DocumentsDemo";
+import { DemoEditorSurface } from "./editor-surface";
 import {
   blockIdExtension,
   BlockIdsVisibleProvider,
@@ -47,6 +54,8 @@ import {
   reviewReportExtensions,
   type ReviewReport,
 } from "./extensions/reports/review-report";
+import { KeyboardPanel } from "./KeyboardPanel";
+import { RevisionsPanel } from "./RevisionsPanel";
 
 const DEMO_BLOCK_ID_TOGGLE_CLASS = "demo-block-id-toggle";
 const DEMO_BLOCK_IDS_TOOLTIP = "Shows a shortened block id at the end of each row. Hover that label to see the full id.";
@@ -141,16 +150,18 @@ function demoThreadAnchor(block: Element): Element | null {
  * layer-order practice — without the visitor having to create them first.
  */
 function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtension>): void {
+  // Cards grow with their content, including embeddings. Keep the heading
+  // above their initial frames so collapsing an outline cannot put it over a row.
   visuals.createText({
     text: "Edgeless showcase",
-    frame: { x: 60, y: 450, width: 280, height: 32 },
+    frame: { x: 60, y: 0, width: 280, height: 32 },
     fontSize: 22,
     fontFamily: "Georgia, Cambria, serif",
     color: "#212529",
   });
   visuals.createText({
     text: "Shapes · sticky · pencil · connector · nested group · align/distribute extras",
-    frame: { x: 60, y: 482, width: 560, height: 28 },
+    frame: { x: 60, y: 32, width: 560, height: 28 },
     fontSize: 13,
     color: "#495057",
   });
@@ -249,18 +260,53 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
 }
 
 /**
+ * Opens one demo database model before creating its core API and seeding.
+ * @returns Host-owned document storage and its database model; the caller or editor cache creates the core.
+ */
+async function createDemoDocument() {
+  const database = new DemoDatabase();
+  const storage = new DocumentStorage({
+    registry: new YjsDocumentRegistry(`rivto-demo-${crypto.randomUUID()}`),
+    createDocumentModel: (crdt) => new DBDocumentModel(crdt, database),
+  });
+  storage.registerDocument("journal");
+  const document = await storage.openDocument("journal");
+  return { storage, document };
+}
+
+/**
+ * Releases runtime registrations before closing all document connections.
+ * @param runtime - Resources created by a demo factory.
+ * @returns Nothing after the host storage has closed its registry and documents.
+ */
+async function destroyDemoEditor(runtime: {
+  readonly storage: DocumentStorage;
+  readonly editor: RivtoEditorApi;
+  readonly editorRuntime: EditorRuntime;
+  readonly editorStorage?: EditorStorage;
+}): Promise<void> {
+  if (runtime.editorStorage) {
+    await runtime.editorStorage.destroy();
+  } else {
+    runtime.editorRuntime.destroy();
+    runtime.editor.destroy();
+    await runtime.editor.getDocument().destroy();
+  }
+  await runtime.storage.destroy();
+}
+
+/**
  * Builds today's journal editor with rich seed content.
  *
  * Needed as the main playground document: Markdown, nested lists, checkboxes,
- * numbered lists, custom blocks, separators, block elements, and edgeless
+ * numbered lists, custom blocks, separators, block elements, embeddings, and edgeless
  * showcase — so selection, slash commands, and extensions are immediately
  * testable. Optional `?keymap=alternate` remaps indent for keymap demos.
  * Optional `?repeat=N` clones the second edgeless card N extra times, each
  * preceded by a separator so reconciliation mounts N additional cards.
  */
-function createDemoEditor() {
-  const editor = createRivtoEditor();
-  editor.setDocument(new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)));
+async function createDemoEditor() {
+  const resources = await createDemoDocument();
   const edgelessVisuals = edgelessVisualsExtension(edgelessOptions);
   // Used by e2e / KEYMAP demos: `?keymap=alternate` remaps indent without test-only APIs.
   const alternateKeymap = new URLSearchParams(window.location.search).get("keymap") === "alternate"
@@ -269,36 +315,50 @@ function createDemoEditor() {
         [KEYBOARD_BINDING_IDS.blockOutdent]: [],
       }
     : undefined;
-  const reactEditor = createReactEditor({
-    editor,
-    keymap: alternateKeymap,
-    extensions: [
-      standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
-      todoItemExtension({ prompts: { todo: ["task"] } }),
-      pageDragExtension(),
-      bulletThreadingExtension({
-        anchor: demoThreadAnchor,
-        excludeBlockTypes: [
-          BENTO_BLOCK_TYPE,
-          COLUMNS_BLOCK_TYPE,
-          KANBAN_BLOCK_TYPE,
-          TABLE_BLOCK_TYPE,
-          TODO_STORAGE_BLOCK_TYPE,
+  // Hand the already-open journal model to the editor cache exactly once.
+  const prepared = new Map([[resources.document.id, resources.document]]);
+  const editorStorage = new EditorStorage({
+    openDocument: async (id) => {
+      const document = prepared.get(id);
+      prepared.delete(id);
+      return document ?? resources.storage.openDocument(id);
+    },
+    createEditor: (documentEditor) => {
+      return createEditorRuntime({
+        editor: documentEditor,
+        keymap: alternateKeymap,
+        extensions: [
+          standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+          todoItemExtension({ prompts: { todo: ["task"] } }),
+          pageDragExtension(),
+          bulletThreadingExtension({
+            anchor: demoThreadAnchor,
+            excludeBlockTypes: [
+              BENTO_BLOCK_TYPE,
+              COLUMNS_BLOCK_TYPE,
+              KANBAN_BLOCK_TYPE,
+              TABLE_BLOCK_TYPE,
+              TODO_STORAGE_BLOCK_TYPE,
+            ],
+          }),
+          ...edgelessPreset(),
+          documentEditor.getDocument() === resources.document ? edgelessVisuals : edgelessVisualsExtension(edgelessOptions),
+          blockIdExtension(),
+          blockNumberExtension(),
+          ...customBlockExtensions,
+          embeddingExtension(),
+          ...demoReviewReports(documentEditor),
         ],
-      }),
-      ...edgelessPreset(),
-      edgelessVisuals,
-      blockIdExtension(),
-      blockNumberExtension(),
-      ...customBlockExtensions,
-      ...demoReviewReports(editor),
-    ],
+      });
+    },
   });
+  const editor = await editorStorage.openCoreEditor(resources.document.id);
+  const editorRuntime = editorStorage.getRuntime(editor.getDocument().id)!;
   // Playwright and host scripts locate this demo instance through window, not React refs.
   // The token changes on each create so a stale handle cannot be mistaken for a remount.
   const demoToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   Object.assign(window, {
-    __rivtoDemo: { token: demoToken, editor, reactEditor },
+    __rivtoDemo: { token: demoToken, editor, editorRuntime },
   });
   const introId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
@@ -415,14 +475,12 @@ function createDemoEditor() {
   // because its React block plugin declares `separatesBlockElements`.
   editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, reverseSelectionId);
   editor.elements.insertElement({
-    id: listId,
     type: "block",
     frame: { x: 60, y: 60, width: 500, height: 360 },
     zIndex: 0,
     props: { startBlockId: introId, endBlockId: reverseSelectionId },
   });
   editor.elements.insertElement({
-    id: secondBranchId,
     type: "block",
     frame: { x: 600, y: 60, width: 500, height: 360 },
     zIndex: 1,
@@ -512,9 +570,13 @@ function createDemoEditor() {
     zIndex: Math.max(0, ...editor.elements.getElements().map(({ zIndex }) => zIndex)) + 1,
     problem: "Ошибка структуры на холсте",
   }));
+  editor.blocks.insertBlock({
+    type: EMBEDDING_BLOCK_TYPE,
+    props: { targetDocumentId: editor.getDocument().id, targetBlockId: listId },
+  }, paragraphId);
   editor.history.clear();
 
-  return { editor, reactEditor };
+  return { ...resources, editor, editorRuntime, editorStorage };
 }
 
 /**
@@ -523,10 +585,10 @@ function createDemoEditor() {
  * Needed to show two independent editor instances on one page (journal stack)
  * and to contrast a populated document with an empty one.
  */
-function createEmptyDemoEditor() {
-  const editor = createRivtoEditor();
-  editor.setDocument(new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)));
-  const reactEditor = createReactEditor({
+async function createEmptyDemoEditor() {
+  const resources = await createDemoDocument();
+  const editor = createRivtoEditor({ document: resources.document });
+  const editorRuntime = createEditorRuntime({
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
@@ -539,7 +601,7 @@ function createEmptyDemoEditor() {
       ...demoReviewReports(editor),
     ],
   });
-  return { editor, reactEditor };
+  return { ...resources, editor, editorRuntime };
 }
 
 /**
@@ -698,8 +760,8 @@ function DemoToolbar({
  * patterns, and lifecycle cleanup when the page unmounts.
  */
 function JournalDemoApp() {
-  const [todayEditor] = useState(createDemoEditor);
-  const [yesterdayEditor] = useState(createEmptyDemoEditor);
+  const [runtime, setRuntime] = useState<{ today: Awaited<ReturnType<typeof createDemoEditor>>; yesterday: Awaited<ReturnType<typeof createEmptyDemoEditor>> }>();
+  const [error, setError] = useState<string>();
   const [showBlockIds, setShowBlockIds] = useState(true);
   const [virtualizePageThreshold, setVirtualizePageThreshold] = useState<boolean | number>(false);
   const [virtualizePageOverscan, setVirtualizePageOverscan] = useState(8);
@@ -710,42 +772,55 @@ function JournalDemoApp() {
     return { today, yesterday };
   });
 
-  // EditorView consumes but does not own the runtime, so the application that
-  // created it also releases its subscriptions and command registrations.
-  // This useEffect returns a cleanup function that destroys the editor.
-  useEffect(() => () => {
-    todayEditor.reactEditor.destroy();
-    void todayEditor.editor.destroy();
-    void todayEditor.editor.getDocument()?.destroy();
-    yesterdayEditor.reactEditor.destroy();
-    void yesterdayEditor.editor.destroy();
-    void yesterdayEditor.editor.getDocument()?.destroy();
-  }, [todayEditor, yesterdayEditor]);
+  // EditorView acquires its model but does not own the shared runtime. The
+  // application releases runtime subscriptions, commands, and host storage.
+  // Cleanup also closes factories that finish after this component unmounts.
+  useEffect(() => {
+    let active = true;
+    const created: Parameters<typeof destroyDemoEditor>[0][] = [];
+    const retain = async <Runtime extends Parameters<typeof destroyDemoEditor>[0],>(factory: Promise<Runtime>): Promise<Runtime> => {
+      const resource = await factory;
+      if (active) created.push(resource);
+      else await destroyDemoEditor(resource);
+      return resource;
+    };
+    void Promise.all([retain(createDemoEditor()), retain(createEmptyDemoEditor())]).then(([today, yesterday]) => {
+      if (active) setRuntime({ today, yesterday });
+    }).catch((failure) => { if (active) setError(String(failure)); });
+    return () => { active = false; created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error)); };
+  }, []);
+  if (error) return <p role="alert">{error}</p>;
+  if (!runtime) return <p>Loading documents…</p>;
+  const { today: todayEditor, yesterday: yesterdayEditor } = runtime;
 
   return (
     <BlockIdsVisibleProvider visible={showBlockIds}>
       <div className="journal-stack">
         {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
         <section className="journal-document" data-journal-document="today">
-          <EditorView reactEditor={todayEditor.reactEditor}
-            virtualizePageThreshold={virtualizePageThreshold} virtualizePageOverscan={virtualizePageOverscan}>
-            <DemoToolbar
-              editor={todayEditor.editor}
-              showBlockIds={showBlockIds}
-              onShowBlockIdsChange={setShowBlockIds}
-              virtualizePageThreshold={virtualizePageThreshold}
-              onVirtualizePageThresholdChange={setVirtualizePageThreshold}
-              virtualizePageOverscan={virtualizePageOverscan}
-              onVirtualizePageOverscanChange={setVirtualizePageOverscan}
-            />
-            <RevisionsPanel />
-            <KeyboardPanel />
-            <JournalDate date={dates.today} />
-          </EditorView>
+          <EditorStorageContext.Provider value={todayEditor.editorStorage}>
+            <EditorView runtime={todayEditor.editorRuntime}
+              virtualizePageThreshold={virtualizePageThreshold} virtualizePageOverscan={virtualizePageOverscan}>
+              <DemoToolbar
+                editor={todayEditor.editor}
+                showBlockIds={showBlockIds}
+                onShowBlockIdsChange={setShowBlockIds}
+                virtualizePageThreshold={virtualizePageThreshold}
+                onVirtualizePageThresholdChange={setVirtualizePageThreshold}
+                virtualizePageOverscan={virtualizePageOverscan}
+                onVirtualizePageOverscanChange={setVirtualizePageOverscan}
+              />
+              <RevisionsPanel />
+              <KeyboardPanel />
+              <JournalDate date={dates.today} />
+              <DemoEditorSurface />
+            </EditorView>
+          </EditorStorageContext.Provider>
         </section>
         <section className="journal-document" data-journal-document="yesterday">
-          <EditorView reactEditor={yesterdayEditor.reactEditor}>
+          <EditorView runtime={yesterdayEditor.editorRuntime}>
             <JournalDate date={dates.yesterday} />
+            <PageSurface />
           </EditorView>
         </section>
       </div>
@@ -761,13 +836,13 @@ function JournalDemoApp() {
  * target rows. Optional `empty` / `conflict` flags cover edge cases (also used
  * by Playwright via query params).
  */
-function createMultiEditor(
+async function createMultiEditor(
   side: "left" | "right",
   options: { readonly empty?: boolean; readonly conflict?: "block" } = {},
 ) {
-  const editor = createRivtoEditor();
-  editor.setDocument(new DocumentModelImpl(new YjsDoc(`rivto-demo-${crypto.randomUUID()}`)));
-  const reactEditor = createReactEditor({
+  const resources = await createDemoDocument();
+  const editor = createRivtoEditor({ document: resources.document });
+  const editorRuntime = createEditorRuntime({
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
@@ -793,7 +868,6 @@ function createMultiEditor(
       }],
     }).id;
     editor.elements.insertElement({
-      id: parentId,
       type: "block",
       frame: { x: 41, y: 52, width: 310, height: 170 },
       zIndex: 3,
@@ -821,7 +895,7 @@ function createMultiEditor(
     editor.blocks.insertBlock({ id: "right-counter", type: COUNTER_BLOCK_TYPE, props: { count: 20 } });
   }
   editor.history.clear();
-  return { editor, reactEditor };
+  return { ...resources, editor, editorRuntime };
 }
 
 /** Used by e2e: hidden `editor.dump()` for asserting structure not shown in the UI. */
@@ -840,17 +914,18 @@ function MultiEditorPane({
   runtime,
 }: {
   readonly side: "left" | "right";
-  readonly runtime: ReturnType<typeof createMultiEditor>;
+  readonly runtime: Awaited<ReturnType<typeof createMultiEditor>>;
 }) {
   const [showBlockIds, setShowBlockIds] = useState(true);
   return (
     // `data-multi-editor` is used by e2e to scope left/right locators.
     <section className="multi-editor-pane" data-multi-editor={side}>
       <BlockIdsVisibleProvider visible={showBlockIds}>
-        <EditorView reactEditor={runtime.reactEditor}>
+        <EditorView runtime={runtime.editorRuntime}>
           <DemoToolbar editor={runtime.editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
           <RevisionsPanel />
           <DocumentStateDump editor={runtime.editor} />
+          <DemoEditorSurface />
         </EditorView>
       </BlockIdsVisibleProvider>
     </section>
@@ -867,16 +942,24 @@ function MultiEditorApp() {
   const emptyDestination = params.get("emptyDestination") === "1";
   const conflictParam = params.get("conflict");
   const conflict = conflictParam === "block" ? conflictParam : undefined;
-  const [left] = useState(() => createMultiEditor("left"));
-  const [right] = useState(() => createMultiEditor("right", { empty: emptyDestination, conflict }));
-  useEffect(() => () => {
-    left.reactEditor.destroy();
-    void left.editor.destroy();
-    void left.editor.getDocument()?.destroy();
-    right.reactEditor.destroy();
-    void right.editor.destroy();
-    void right.editor.getDocument()?.destroy();
-  }, [left, right]);
+  const [runtime, setRuntime] = useState<{ left: Awaited<ReturnType<typeof createMultiEditor>>; right: Awaited<ReturnType<typeof createMultiEditor>> }>();
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    let active = true;
+    const created: Awaited<ReturnType<typeof createMultiEditor>>[] = [];
+    void Promise.all([createMultiEditor("left"), createMultiEditor("right", { empty: emptyDestination, conflict })].map(async (factory) => {
+      const resource = await factory;
+      if (active) created.push(resource);
+      else await destroyDemoEditor(resource);
+      return resource;
+    })).then(([left, right]) => { if (active) setRuntime({ left, right }); })
+      .catch((failure) => { if (active) setError(String(failure)); });
+    return () => { active = false; created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error)); };
+  }, [emptyDestination, conflict]);
+  if (error) return <p role="alert">{error}</p>;
+  if (!runtime) return <p>Loading documents…</p>;
+  const { left, right } = runtime;
+
   return (
     <div className="multi-editor-page">
       <MultiEditorPane side="left" runtime={left} />
@@ -895,13 +978,45 @@ function MultiEditorApp() {
  * @param side - Stable peer identity used for seeding and document IDs.
  * @param roomId - Broadcast channel shared by every peer.
  * @param repeatCount - Additional writing blocks seeded on the left peer.
+ * @param signal - Cancels pending registry discovery and document acquisition when the demo unmounts.
  * @returns Editor runtime and provider resources for one peer.
  */
-function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: number) {
-  const yjsDoc = new YjsDoc(`${roomId}:${side}`);
-  const editor = createRivtoEditor();
-  editor.setDocument(new DocumentModelImpl(yjsDoc));
-  const reactEditor = createReactEditor({
+async function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: number, signal: AbortSignal) {
+  const database = new DemoDatabase();
+  const storage = new DocumentStorage({
+    registry: new YjsDocumentRegistry(roomId),
+    createDocumentModel: (crdt) => new DBDocumentModel(crdt, database),
+    createProviders: (channel) => [new BroadcastChannelProvider(channel)],
+    onError: console.error,
+  });
+  let document;
+  try {
+    await storage.ready;
+    signal.throwIfAborted();
+    if (side === "right" && !storage.getDocumentIds().includes("shared")) {
+      await new Promise<void>((resolve, reject) => {
+        const finish = () => { unsubscribe(); signal.removeEventListener("abort", abort); };
+        const refresh = () => {
+          if (!storage.getDocumentIds().includes("shared")) return;
+          finish(); resolve();
+        };
+        const abort = () => { finish(); reject(signal.reason); };
+        const unsubscribe = storage.subscribe(refresh);
+        signal.addEventListener("abort", abort, { once: true });
+        if (signal.aborted) abort();
+        else refresh();
+      });
+    }
+    if (!storage.getDocumentIds().includes("shared")) storage.registerDocument("shared");
+    document = await storage.openDocument("shared");
+    signal.throwIfAborted();
+  } catch (failure) {
+    await document?.destroy();
+    await storage.destroy();
+    throw failure;
+  }
+  const editor = createRivtoEditor({ document: document! });
+  const editorRuntime = createEditorRuntime({
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
@@ -914,7 +1029,7 @@ function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: n
       ...demoReviewReports(editor),
     ],
   });
-  if (side === "left") {
+  if (side === "left" && !editor.blocks.getRootIds().length) {
     const introId = editor.blocks.insertBlock({
       type: DEFAULT_WRITING_BLOCK_TYPE,
       content: "**Synced demo** — edit here or in the other pane.",
@@ -934,7 +1049,7 @@ function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: n
     });
     editor.history.clear();
   }
-  return { yjsDoc, editor, reactEditor, provider: new BroadcastChannelProvider(roomId) };
+  return { storage, editor, editorRuntime };
 }
 
 /**
@@ -946,32 +1061,26 @@ function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: n
 function SyncEditorsApp() {
   const roomId = new URLSearchParams(window.location.search).get("room") ?? "rivto-demo-sync";
   const repeatCount = demoRepeatCount();
-  const [peers] = useState(() => ({
-    left: createSyncedPeer("left", roomId, repeatCount),
-    right: createSyncedPeer("right", roomId, repeatCount),
-  }));
+  const [peers, setPeers] = useState<{ left: Awaited<ReturnType<typeof createSyncedPeer>>; right: Awaited<ReturnType<typeof createSyncedPeer>> }>();
+  const [error, setError] = useState<string>();
   const [showBlockIds, setShowBlockIds] = useState(true);
-
   useEffect(() => {
-    let cancelled = false;
+    let active = true;
+    const request = new AbortController();
+    const created: Awaited<ReturnType<typeof createSyncedPeer>>[] = [];
     void (async () => {
-      await peers.left.yjsDoc.attachProvider(peers.left.provider);
-      await peers.right.yjsDoc.attachProvider(peers.right.provider);
-      if (cancelled) {
-        await peers.left.yjsDoc.detachProvider().catch(() => undefined);
-        await peers.right.yjsDoc.detachProvider().catch(() => undefined);
-      }
-    })();
-    return () => {
-      cancelled = true;
-      peers.left.reactEditor.destroy();
-      void peers.left.editor.destroy().catch(() => undefined);
-      void peers.left.editor.getDocument()?.destroy().catch(() => undefined);
-      peers.right.reactEditor.destroy();
-      void peers.right.editor.destroy().catch(() => undefined);
-      void peers.right.editor.getDocument()?.destroy().catch(() => undefined);
-    };
-  }, [peers]);
+      const left = await createSyncedPeer("left", roomId, repeatCount, request.signal);
+      if (!active) { await destroyDemoEditor(left); return; }
+      created.push(left);
+      const right = await createSyncedPeer("right", roomId, repeatCount, request.signal);
+      if (!active) { await destroyDemoEditor(right); return; }
+      created.push(right);
+      setPeers({ left, right });
+    })().catch((failure) => { if (active) setError(String(failure)); });
+    return () => { active = false; request.abort(); created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error)); };
+  }, [roomId, repeatCount]);
+  if (error) return <p role="alert">{error}</p>;
+  if (!peers) return <p>Loading synchronized documents…</p>;
 
   return (
     <div className="sync-editor-page">
@@ -985,9 +1094,10 @@ function SyncEditorsApp() {
           // `data-editor-sync` is used by e2e to scope sync panes.
           <section key={side} className="multi-editor-pane" data-editor-sync={side}>
             <BlockIdsVisibleProvider visible={showBlockIds}>
-              <EditorView reactEditor={peers[side].reactEditor}>
+              <EditorView runtime={peers[side].editorRuntime}>
                 <DemoToolbar editor={peers[side].editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
                 <RevisionsPanel />
+                <DemoEditorSurface />
               </EditorView>
             </BlockIdsVisibleProvider>
           </section>
@@ -1002,6 +1112,7 @@ function SyncEditorsApp() {
  *
  * - default → journal stack (`JournalDemoApp`)
  * - `?editors=2` → dual editors (`MultiEditorApp`)
+ * - `?embeddings=1` → shared document storage and live source subtree embeds
  * - `?sync=1` → BroadcastChannel peers (`SyncEditorsApp`); `repeat=N` adds N synced blocks
  * - `?repeat=N` → N extra copies of the second journal card (with separators)
  *
@@ -1010,6 +1121,7 @@ function SyncEditorsApp() {
  */
 export function App() {
   const params = new URLSearchParams(window.location.search);
+  if (params.get("embeddings") === "1") return <DocumentsDemo />;
   if (params.get("editors") === "2") return <MultiEditorApp />;
   if (params.get("sync") === "1") return <SyncEditorsApp />;
   return <JournalDemoApp />;

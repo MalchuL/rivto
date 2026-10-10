@@ -3,7 +3,7 @@
 React clipboard состоит из двух частей:
 
 - core `editor.clipboard` создаёт/вставляет lossless `ClipboardBundle`;
-- React `reactEditor.clipboard` форматирует blocks для external applications и парсит external HTML/text.
+- React `editorRuntime.clipboard` форматирует blocks для external applications и парсит external HTML/text.
 
 Browser events соединяет `clipboardExtension()`.
 

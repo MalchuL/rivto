@@ -5,6 +5,7 @@
  * (block card, visual, or group bound) so transform preview moves it with
  * the parent and nothing else has to reconcile its position.
  */
+import { editorControlProps } from "../../constants";
 import { GripVerticalIcon } from "lucide-react";
 import type { ElementSlotProps } from "../../managers";
 
@@ -20,7 +21,7 @@ const EDGELESS_DRAG_HANDLE_ICON_CLASS = "pointer-events-none size-3.5";
  */
 export function EdgelessDragHandle({ label }: { readonly label: string }) {
   return (
-    <button
+    <button {...editorControlProps}
       type="button"
       className={EDGELESS_DRAG_HANDLE_CLASS}
       data-edgeless-drag-handle="true"

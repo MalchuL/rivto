@@ -105,9 +105,9 @@ document.loadSnapshot({
 Host создаёт модель и передаёт её в editor так:
 
 ```ts
-const document = new DocumentModelImpl(new YjsDoc("document-id"));
-const editor = createRivtoEditor();
-editor.setDocument(document);
+const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
+const document = await storage.create("document-id");
+const editor = createRivtoEditor({ document });
 ```
 
 Затем public editor managers делегируют focused operations в document managers. `EditorRuntime` повторно использует `document.history`, а persistence API вызывает `getSnapshot()` и `loadSnapshot()`.

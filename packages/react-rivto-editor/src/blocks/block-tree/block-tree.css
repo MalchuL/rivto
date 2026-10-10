@@ -90,7 +90,7 @@
   margin-left: 24px;
 }
 
-.page-block:has(> .page-block-row .page-list-checkbox[data-state="checked"]) > .page-block-row .page-block-content {
+.page-block:has(> .page-block-row > .rivto-slot > .page-list-checkbox[data-state="checked"]) > .page-block-row .page-block-content {
   color: var(--rivto-muted-foreground);
   text-decoration: line-through;
 }

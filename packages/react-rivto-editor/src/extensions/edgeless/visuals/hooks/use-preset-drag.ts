@@ -48,7 +48,7 @@ export function usePresetDrag({
 
   const snappedFrame = (event: ReactPointerEvent<HTMLButtonElement>) => {
     const point = canvasPoint(event.nativeEvent, root, zoom);
-    const candidates = controller.reactEditor.elements.getElements()
+    const candidates = controller.runtime.elements.getElements()
       .filter((element) => element.type !== "connector" && element.type !== "group")
       .map((element) => element.frame);
     return snapPlacedFrame(

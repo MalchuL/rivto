@@ -5,11 +5,12 @@
  * does not re-render this node or recreate its label editor.
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { ElementSlots } from "../../../../blocks";
 import {
   EditableLabel,
   type EditableLabelFocusPoint,
 } from "../../../../components";
-import { ElementSlots } from "../../../../blocks";
+import { editorControlProps } from "../../../../constants";
 import { useEdgelessSelected } from "../../../built-ins/selection/edgeless-runtime";
 import type { EdgelessVisualController } from "../controller";
 import type { ConnectorEndpoint, EdgelessVisual } from "../types";
@@ -52,7 +53,7 @@ export function VisualElement({
   readonly onReconnect: (key: "source" | "target", endpoint: ConnectorEndpoint) => void;
 }) {
   const selected = useEdgelessSelected(visual.id);
-  const element = controller.reactEditor.elements.getElement(visual.id);
+  const element = controller.runtime.elements.getElement(visual.id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<{ key: "source" | "target"; endpoint: ConnectorEndpoint } | null>(null);
   const focusPointRef = useRef<EditableLabelFocusPoint | null>(null);
@@ -284,7 +285,7 @@ export function VisualElement({
       {content}
       {element && <ElementSlots element={element} selected={selected} />}
       {selected && visual.kind !== "connector" && RESIZE_HANDLES.map((corner) => (
-        <button
+        <button {...editorControlProps}
           key={corner}
           className={VISUAL_RESIZE_CLASS}
           data-edgeless-resize-handle={corner}
@@ -293,7 +294,7 @@ export function VisualElement({
         />
       ))}
       {selected && visual.kind !== "connector" && (
-        <button
+        <button {...editorControlProps}
           className={VISUAL_ROTATION_CLASS}
           data-edgeless-rotation-handle="true"
           type="button"
@@ -303,7 +304,7 @@ export function VisualElement({
       {selected && visual.kind === "connector" && source && target && (["source", "target"] as const).map((key) => {
         const point = (key === "source" ? source : target).position;
         return (
-          <button
+          <button {...editorControlProps}
             key={key}
             className="edgeless-connector-endpoint"
             data-edgeless-connector-endpoint={key}

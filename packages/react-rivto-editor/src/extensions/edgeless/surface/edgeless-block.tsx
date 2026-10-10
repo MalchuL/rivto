@@ -9,9 +9,10 @@
  */
 import type { EditorElement } from "@chulane/rivto";
 import { memo, useLayoutEffect, useRef, type CSSProperties } from "react";
-import { useEdgelessSelected } from "../../built-ins/selection/edgeless-runtime";
 import { BlockTree, ElementSlots } from "../../../blocks";
-import { useReactEditor } from "../../../hooks";
+import { editorControlProps } from "../../../constants";
+import { useEditorView } from "../../../hooks";
+import { useEdgelessSelected } from "../../built-ins/selection/edgeless-runtime";
 
 const CARD_CLASS = "edgeless-card";
 const CARD_CONTENT_CLASS = "edgeless-card-content";
@@ -39,7 +40,7 @@ function EdgelessBlockElementView({
   readonly blockIds: readonly string[];
 }) {
   const selected = useEdgelessSelected(element.id);
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const hostRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const autoHeight = element.props.autoHeight !== false;
@@ -81,8 +82,8 @@ function EdgelessBlockElementView({
       host.style.height = previousHeight;
       if (Math.abs(element.frame.height - height) < 1) return;
       // Undoing a recorded height change would remeasure and record it again, trapping undo.
-      reactEditor.history.batchUpdatesWithoutHistory(() => {
-        reactEditor.elements.updateElement(element.id, { frame: { height } });
+      editorView.runtime.history.batchUpdatesWithoutHistory(() => {
+        editorView.runtime.elements.updateElement(element.id, { frame: { height } });
       });
     };
     measure();
@@ -93,7 +94,7 @@ function EdgelessBlockElementView({
     // Selection is intentionally omitted from deps: chrome-only
     // `data-block-selected` must not remount ResizeObserver or force scrollHeight.
     return () => observer.disconnect();
-  }, [autoHeight, contentKey, element.frame.height, element.frame.width, element.id, reactEditor]);
+  }, [autoHeight, contentKey, element.frame.height, element.frame.width, element.id, editorView]);
 
   if (!blockIds.length) return null;
 
@@ -114,7 +115,7 @@ function EdgelessBlockElementView({
       </div>
       <ElementSlots element={element} selected={selected} />
       {RESIZE_HANDLES.map((corner) => (
-        <button
+        <button {...editorControlProps}
           key={corner}
           type="button"
           className={RESIZE_HANDLE_CLASS}

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFile, readdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { blockIdSelector, BLOCK_ID_ATTRIBUTE } from "./dom-markers";
+import { BLOCK_ID_ATTRIBUTE, blockIdSelector } from "./dom-markers";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
 
@@ -18,15 +18,15 @@ test("saves a slash-created Review report and reproduces it with native load", a
     const blockId = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!blockId) throw new Error("Expected slash target block ID");
     const runtimeState = await page.evaluate((id) => {
-      const reactEditor = (
+      const editorRuntime = (
         window as unknown as {
-        __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditor };
+        __rivtoDemo: { editorRuntime: import("@chulane/rivto-react").EditorRuntime };
       }
-      ).__rivtoDemo.reactEditor;
+      ).__rivtoDemo.editorRuntime;
       return {
-        commands: reactEditor.slashCommands.getAll({ blockId: id }).map(({ id: commandId }) => commandId),
-        definition: reactEditor.blockTypes.getDefinition("demo.review")?.type,
-        element: reactEditor.elements.getElement("demo-review-element")?.type,
+        commands: (editorRuntime.editorViews.getActive() ?? editorRuntime.editorViews.getDefault())!.slashCommands.getAll({ blockId: id }).map(({ id: commandId }) => commandId),
+        definition: editorRuntime.blockTypes.getDefinition("demo.review")?.type,
+        element: editorRuntime.elements.getElement("demo-review-element")?.type,
       };
     }, blockId);
     expect(runtimeState).toMatchObject({
@@ -83,13 +83,12 @@ test("saves a slash-created Review report and reproduces it with native load", a
     }, blockId);
 
     await page.getByLabel("Restore Review report").setInputFiles(reportPath);
-    const reproduced = await page.evaluate(() => {
+    await expect.poll(() => page.evaluate(() => {
       const core = (window as unknown as {
         __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
       return core.dump();
-    });
-    expect(reproduced).toEqual(report.snapshot);
+    })).toEqual(report.snapshot);
   } finally {
     const generated = (await readdir(reportDirectory).catch(() => [])).filter(
       (name) => name.includes(slug) && name.endsWith(".json"),

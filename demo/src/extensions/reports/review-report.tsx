@@ -7,22 +7,23 @@
  *
  * @module
  */
+import type { EditorElement, RivtoEditorApi } from "@chulane/rivto";
 import {
   ElementSlots,
+  SurfaceContext,
   blockExtension,
   useBlockEditing,
-  useEditorMode,
   useEditorRoot,
   useEditorSelection,
   useElements,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
-import type { EditorElement, RivtoEditorApi } from "@chulane/rivto";
-import { createPortal } from "react-dom";
 import {
+  useContext,
   useState,
   type ChangeEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   REVIEW_REPORT_TYPE,
   captureBlockReview,
@@ -207,10 +208,10 @@ function ReviewBlock({
           saving={saving}
           error={error}
           includeReportBlock={props.includeReportBlock}
-          onAboveChange={(blocksAbove) => editing.setProp("blocksAbove", blocksAbove)}
-          onBelowChange={(blocksBelow) => editing.setProp("blocksBelow", blocksBelow)}
+          onAboveChange={(blocksAbove) => editing.operations.setProp("blocksAbove", blocksAbove)}
+          onBelowChange={(blocksBelow) => editing.operations.setProp("blocksBelow", blocksBelow)}
           onIncludeReportBlockChange={(includeReportBlock) => (
-            editing.setProp("includeReportBlock", includeReportBlock)
+            editing.operations.setProp("includeReportBlock", includeReportBlock)
           )}
           onSave={() => void save()}
           onRestore={() => editor.load(props.snapshot!)}
@@ -326,7 +327,7 @@ function ReviewElementLayer({ editor, saveReport }: {
   readonly editor: RivtoEditorApi;
   readonly saveReport: SaveReviewReport;
 }) {
-  const { mode } = useEditorMode();
+  const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const elements = useElements();
   const selection = useEditorSelection();
@@ -373,11 +374,11 @@ export function reviewReportExtensions(options: {
     }),
     {
       id: "demo.review-report.elements",
-      setup: (reactEditor) => {
-        reactEditor.extensions.mount(() => (
+      setup: (editorRuntime) => {
+        editorRuntime.extensions.mount(() => (
           <ReviewElementLayer editor={options.editor} saveReport={options.saveReport} />
         ));
-        return reactEditor.elements.registerProcessor({
+        return editorRuntime.elements.registerProcessor({
           id: "demo.review-report.props",
           priority: 0,
           processor: (element) => element.type === REVIEW_REPORT_TYPE
@@ -393,11 +394,11 @@ export {
   REVIEW_REPORT_TYPE,
   createReviewBlockInput,
   createReviewElementInput,
-  reviewBlockDefinition,
+  reviewBlockDefinition
 } from "./review-report-model";
 export type {
   ReviewBlockProps,
   ReviewElementProps,
   ReviewReport,
-  SaveReviewReport,
+  SaveReviewReport
 } from "./review-report-model";

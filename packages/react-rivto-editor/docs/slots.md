@@ -27,8 +27,8 @@ Register slot content from an extension:
 ```tsx
 const commentsExtension = (): ReactEditorExtension => ({
   id: "comments",
-  setup(reactEditor) {
-    reactEditor.surfaces.registerBlockSlot({
+  setup(editorRuntime) {
+    editorRuntime.surfaces.registerBlockSlot({
       position: "right",
       priority: 50,
       mode: ["block", "edgeless"],

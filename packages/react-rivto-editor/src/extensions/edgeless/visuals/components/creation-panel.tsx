@@ -8,6 +8,7 @@
  */
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
+import { editorControlProps } from "../../../../constants";
 import type { EdgelessVisualController } from "../controller";
 import type {
   ConnectorLineStyle,
@@ -25,9 +26,9 @@ import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
 import { ToolPopover } from "./tool-popover";
 
 /** Sticker presets are square thumbnails rather than icon-plus-label buttons. */
-const STICKER_PRESET_CLASS = "w-10 min-w-10 p-1.5";
-const STICKER_SWATCH_CLASS = "block size-[22px] rounded-[4px_4px_10px_4px] border border-black/12 shadow-[0_2px_6px_rgb(35_30_20/12%)]";
-const SELECT_CLASS = "text-xs";
+const STICKER_PRESET_CLASS = "edgeless-creation-panel-sticker-preset";
+const STICKER_SWATCH_CLASS = "edgeless-creation-panel-sticker-swatch";
+const SELECT_CLASS = "edgeless-creation-panel-select";
 
 /**
  * Renders the Tools / Defaults popover content for one create-tool category.
@@ -116,7 +117,7 @@ export function CreationPanel({
               label="Eraser"
               icon="eraser"
               pressed={tool.tool === "eraser"}
-              onClick={() => { controller.reactEditor.commands.execute("edgeless.tool.set", { tool: "eraser" }); }}
+              onClick={() => { controller.runtime.commands.execute("edgeless.tool.set", { tool: "eraser" }); }}
             />
           </>
         }
@@ -137,7 +138,7 @@ export function CreationPanel({
         tools={preset("Text", { kind: "text" }, "text")}
         defaults={
           <>
-            <NativeSelect
+            <NativeSelect {...editorControlProps}
               size="sm"
               className={SELECT_CLASS}
               aria-label="Default font"
@@ -178,7 +179,7 @@ export function CreationPanel({
               pressed={tool.tool === "connector" && tool.route === route}
               onClick={() => {
                 controller.setCreationDefaults("connector", { route });
-                controller.reactEditor.commands.execute("edgeless.tool.set", { tool: "connector", route });
+                controller.runtime.commands.execute("edgeless.tool.set", { tool: "connector", route });
               }}
             />
           ))}
@@ -188,7 +189,7 @@ export function CreationPanel({
         <>
           <ColorControl label="Default connector color" value={defaults.connector.stroke} onChange={(stroke) => controller.setCreationDefaults("connector", { stroke })} />
           <SizeControl label="Default connector width" preview="dot" value={defaults.connector.strokeWidth} max={24} onChange={(strokeWidth) => controller.setCreationDefaults("connector", { strokeWidth })} />
-          <NativeSelect
+          <NativeSelect {...editorControlProps}
             size="sm"
             className={SELECT_CLASS}
             aria-label="Default connector line style"

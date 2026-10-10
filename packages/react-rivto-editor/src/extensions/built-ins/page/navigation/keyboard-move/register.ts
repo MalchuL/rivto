@@ -1,61 +1,62 @@
+import type { EditorRuntime } from "../../../../../editor/editor-runtime";
 /**
  * Keyboard registration for structural movement of blocks and sibling groups.
  *
  * @module
  */
 import { isStructuralSelection, type EditorBlock } from "@chulane/rivto";
+import type { EditorViewApi } from "../../../../../editor-view/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../../managers";
-import type { ReactEditor } from "../../../../../types";
-import { navigationOutlineBlocks } from "../utils/scope";
 import { blockSelection } from "../utils/block-selection";
 import { keyboardMovePlacement } from "../utils/move-placement";
+import { selectedMoveRoots } from "../utils/move-roots";
+import { navigationOutlineBlocks } from "../utils/scope";
 import {
   currentNavigationSelection,
   focusBlockSelection,
   type VerticalDirection,
 } from "../utils/selection";
-import { selectedMoveRoots } from "../utils/move-roots";
 
 /**
  * Registers keyboard movement of the active block or sibling selection.
  *
- * @param reactEditor - Runtime receiving the keyboard bindings.
+ * @param editorRuntime - Runtime receiving the keyboard bindings.
  * @returns No value.
  */
-export function registerKeyboardBlockMove(reactEditor: ReactEditor): void {
+export function registerKeyboardBlockMove(editorRuntime: EditorRuntime): void {
   const isCollapsed = (block: EditorBlock) => (
-    reactEditor.blockListProps.has("collapse") && block.listProps.collapsed === true
+    !editorRuntime.blockListProps.childrenVisible(block)
   );
-  const move = (root: HTMLElement, direction: VerticalDirection): boolean => {
-    const selection = currentNavigationSelection(reactEditor.selection);
+  const move = (editorView: EditorViewApi, root: HTMLElement, direction: VerticalDirection): boolean => {
+    const selection = currentNavigationSelection(editorView.selection);
     const blocks = selection;
     const textLike = blocks && !isStructuralSelection(selection);
     const activeId = selection?.focusBlockId;
     if (!activeId) return false;
-    const outline = navigationOutlineBlocks(reactEditor, activeId);
+    const outline = navigationOutlineBlocks(editorView, activeId);
     const roots = selectedMoveRoots(outline, selection, activeId, isCollapsed);
     const placement = keyboardMovePlacement(outline, roots.ids, direction, isCollapsed);
     if (!placement) return false;
-    reactEditor.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
+    editorView.runtime.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
     if (roots.grouped && roots.selection) {
-      reactEditor.selection.set(roots.selection);
+      editorView.selection.set(roots.selection);
     } else if (blocks) {
-      reactEditor.selection.set(blockSelection(outline, activeId, activeId, isCollapsed));
+      editorView.selection.set(blockSelection(outline, activeId, activeId, isCollapsed));
     }
     // Only restore selection and its focus after the move; block mutations remain synchronous.
-    reactEditor.selection.scheduleIfSelectionUnchanged(() => {
-      if (textLike) reactEditor.selection.restoreDOM(selection);
+    editorView.selection.scheduleIfSelectionUnchanged(() => {
+      if (textLike) editorView.selection.restoreDOM(selection);
       else focusBlockSelection(root, activeId);
     });
     return true;
   };
 
-  reactEditor.keyboard.register({
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMoveUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveUp],
-  }, ({ root }) => move(root, "up"));
-  reactEditor.keyboard.register({
+  }, ({ editorView, root }) => move(editorView, root, "up"));
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMoveDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveDown],
-  }, ({ root }) => move(root, "down"));
+  }, ({ editorView, root }) => move(editorView, root, "down"));
 }

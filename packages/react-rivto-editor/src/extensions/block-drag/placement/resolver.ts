@@ -1,5 +1,5 @@
 /** Resolves measured layout regions directly to stable destinations. */
-import type { BlockDropPlacementOptions, DropAxis } from "../../../views/types";
+import type { BlockDropPlacementOptions, DropAxis } from "../../../block-behaviors/types";
 import type { DropPlacement, PointerCoordinates } from "../types";
 import type { CanonicalDropPlacement, DropBlock, ResolvedDropPlacementOptions } from "./types";
 import { resolveAfterDropPlacement, resolveBlockDropPlacementOptions } from "./utils";
@@ -103,7 +103,9 @@ export function resolveDropPlacement(
       previousId: previous?.id ?? null, nextId: next?.id ?? null,
       depth: parent ? (depths.get(parent.id) ?? 0) + 1 : 0,
     };
-    if (outline && previous && !previous.acceptsBody && !previous.fixed && !next?.acceptsBody && !next?.fixed && !parent?.fixed) {
+    // The gap's indentation belongs to the preceding outline, regardless of
+    // whether the following sibling is a container or an embedded view.
+    if (outline && previous && !previous.acceptsBody && !previous.fixed && !parent?.fixed) {
       let last = previous;
       while (children.get(last.id)?.length && !last.fixed && !last.acceptsBody) {
         last = children.get(last.id)!.at(-1)!;
@@ -117,7 +119,9 @@ export function resolveDropPlacement(
       }
       const floor = boundary ? (depths.get(boundary.id) ?? 0) + 1 : 0;
       const mayNest = options(parent).allowChildPlacement && options(last).allowChildPlacement;
-      if (projected && projected.depth >= floor && (mayNest || projected.depth <= (depths.get(last.id) ?? 0))) {
+      // Indentation may suggest nesting under a block that rejects children,
+      // such as a constrained structural shell. Keep the original sibling gap in that case.
+      if (projected && projected.depth >= floor && (mayNest || projected.depth <= (depths.get(last.id) ?? 0)) && accepts(projected)) {
         destination = projected;
       }
     }
@@ -220,7 +224,7 @@ export function resolveDropPlacement(
     const before = coordinate <= start(item) + edge;
     const after = coordinate >= end(item) - edge;
     if (before || after) {
-      const boundary = gap(parent, index + (after ? 1 : 0), !item.acceptsBody && !item.fixed && axis === "vertical");
+      const boundary = gap(parent, index + (after ? 1 : 0), axis === "vertical");
       if (boundary) return boundary;
     }
     if (axis === "grid") {
@@ -253,6 +257,13 @@ export function resolveDropPlacement(
         return gap(parent, index + (pointer.y >= item.row.top + item.row.height / 2 ? 1 : 0));
       }
       return inside(item);
+    }
+    // A leaf shell may display another view instead of owning rendered children.
+    // Its exposed padding still offers an outline gap after the shell, with
+    // horizontal movement choosing sibling or child placement. Use the complete
+    // shell boundary so padding cannot target the source subtree's last row.
+    if (axis === "vertical" && !item.acceptsBody && !item.fixed && !children.get(item.id)?.length) {
+      return gap(parent, index + 1, true);
     }
     // Beyond the row, enter the item's own child layout. An empty grid item
     // can instead expose its body directly as an inside destination.

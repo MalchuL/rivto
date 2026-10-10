@@ -1,18 +1,19 @@
 import type { EditorMode } from "@chulane/rivto";
 import type { ComponentType } from "react";
 import type { BlockWrapperComponent } from "../../blocks/block-wrapper/block-wrapper";
-import type { SurfacesCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
-import type { ReactEditorImpl } from "../../react-editor";
+import type { RegistrationOwner } from "../extensions/types";
+import type { SurfacesApi } from "./api";
 import type {
-  BlockWrapperRegistration,
   BlockSlotPosition,
   BlockSlotProps,
   BlockSlotRegistration,
+  BlockWrapperRegistration,
   EditorWrapper,
   EditorWrapperRegistration,
   ElementSlotProps,
   ElementSlotRegistration,
+  ResolvedSlot,
   SlotPosition,
   SurfaceComponent,
 } from "./types";
@@ -22,6 +23,8 @@ const SLOT_POSITION_SET = new Set<SlotPosition>(SLOT_POSITIONS);
 const BLOCK_SLOT_POSITION_SET = new Set<BlockSlotPosition>([
   ...SLOT_POSITIONS,
   ...BLOCK_FLOW_SLOT_POSITIONS,
+  // Below the block's main row, before its own children; used for the embedded source view.
+  "body",
 ]);
 
 /**
@@ -32,7 +35,7 @@ const BLOCK_SLOT_POSITION_SET = new Set<BlockSlotPosition>([
  * remain independent: they call this public manager but ExtensionManager never
  * imports or queries it.
  */
-export class SurfaceManager implements SurfacesCapability {
+export class SurfaceManager implements SurfacesApi {
   private readonly store = new RevisionStore();
   private readonly surfaces = new Map<EditorMode, {
     readonly surface: SurfaceComponent;
@@ -40,15 +43,16 @@ export class SurfaceManager implements SurfacesCapability {
   }>();
   private readonly blockWrappers = new Map<EditorMode, BlockWrapperRegistration[]>();
   private readonly editorWrappers: EditorWrapperRegistration[] = [];
-  private readonly blockSlots: BlockSlotRegistration[] = [];
-  private readonly elementSlots: ElementSlotRegistration[] = [];
+  private readonly blockSlots: Array<BlockSlotRegistration & { readonly id: number }> = [];
+  private readonly elementSlots: Array<ElementSlotRegistration & { readonly id: number }> = [];
+  private nextSlotId = 0;
 
   /**
    * Creates empty presentation registries.
    *
-   * @param reactEditor - Owning React runtime providing extension lifecycle.
+   * @param registrations - Extension lifecycle owning registered contributions.
    */
-  constructor(private readonly reactEditor: ReactEditorImpl) {}
+  constructor(private readonly registrations: RegistrationOwner) {}
 
   /**
    * Registers the single root renderer for one editor mode.
@@ -58,7 +62,7 @@ export class SurfaceManager implements SurfacesCapability {
    * @returns Idempotent disposer removing only this registration.
    */
   register(mode: EditorMode, surface: SurfaceComponent): () => void {
-    this.reactEditor.extensions.assertActive();
+    this.registrations.assertActive();
     if (this.surfaces.has(mode)) throw new Error(`Surface ${mode} is already registered`);
     const registration: {
       readonly surface: SurfaceComponent;
@@ -69,7 +73,7 @@ export class SurfaceManager implements SurfacesCapability {
     };
     this.surfaces.set(mode, registration);
     this.store.changed();
-    registration.dispose = this.reactEditor.extensions.own(() => {
+    registration.dispose = this.registrations.own(() => {
       if (this.surfaces.get(mode) !== registration) return;
       this.surfaces.delete(mode);
       this.store.changed();
@@ -84,7 +88,7 @@ export class SurfaceManager implements SurfacesCapability {
    * @returns True when a surface existed and was disposed.
    */
   delete(mode: EditorMode): boolean {
-    this.reactEditor.extensions.assertActive();
+    this.registrations.assertActive();
     const registration = this.surfaces.get(mode);
     if (!registration) return false;
     registration.dispose();
@@ -110,13 +114,13 @@ export class SurfaceManager implements SurfacesCapability {
     mode: EditorMode,
     wrapper: BlockWrapperComponent,
   ): () => void {
-    this.reactEditor.extensions.assertActive();
+    this.registrations.assertActive();
     const wrappers = this.blockWrappers.get(mode) ?? [];
     const registration = { wrapper };
     wrappers.push(registration);
     this.blockWrappers.set(mode, wrappers);
     this.store.changed();
-    return this.reactEditor.extensions.own(() => {
+    return this.registrations.own(() => {
       const current = this.blockWrappers.get(mode);
       if (!current) return;
       const index = current.indexOf(registration);
@@ -138,7 +142,7 @@ export class SurfaceManager implements SurfacesCapability {
   }
 
   /**
-   * Registers one priority-ordered component at a block-row anchor.
+   * Registers one priority-ordered component at a block-row or body anchor.
    *
    * @param registration - Component, anchor, ordering, and optional filters.
    * @returns Idempotent disposer removing this exact contribution.
@@ -149,10 +153,12 @@ export class SurfaceManager implements SurfacesCapability {
       registration.priority,
       BLOCK_SLOT_POSITION_SET,
     );
-    this.blockSlots.push(registration);
+    const entry = { ...registration, id: this.nextSlotId++ };
+    this.blockSlots.push(entry);
+    this.blockSlots.sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
     this.store.changed();
-    return this.reactEditor.extensions.own(() => {
-      const index = this.blockSlots.indexOf(registration);
+    return this.registrations.own(() => {
+      const index = this.blockSlots.indexOf(entry);
       if (index < 0) return;
       this.blockSlots.splice(index, 1);
       this.store.changed();
@@ -162,7 +168,7 @@ export class SurfaceManager implements SurfacesCapability {
   /**
    * Resolves matching block-slot components from nearest to farthest.
    *
-   * @param position - Perimeter or in-flow anchor being rendered.
+   * @param position - Perimeter, row-flow, or below-row body anchor being rendered.
    * @param props - Current block presentation context.
    * @returns Defensive ordered component list.
    */
@@ -170,7 +176,7 @@ export class SurfaceManager implements SurfacesCapability {
     position: BlockSlotPosition,
     props: BlockSlotProps,
   ): readonly ComponentType<BlockSlotProps>[] {
-    return this.resolveSlots(this.blockSlots, position, props).map(({ component }) => component);
+    return this.getBlockSlotEntries(position, props).map(({ component }) => component);
   }
 
   /**
@@ -185,10 +191,12 @@ export class SurfaceManager implements SurfacesCapability {
       registration.priority,
       SLOT_POSITION_SET,
     );
-    this.elementSlots.push(registration);
+    const entry = { ...registration, id: this.nextSlotId++ };
+    this.elementSlots.push(entry);
+    this.elementSlots.sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
     this.store.changed();
-    return this.reactEditor.extensions.own(() => {
-      const index = this.elementSlots.indexOf(registration);
+    return this.registrations.own(() => {
+      const index = this.elementSlots.indexOf(entry);
       if (index < 0) return;
       this.elementSlots.splice(index, 1);
       this.store.changed();
@@ -206,7 +214,27 @@ export class SurfaceManager implements SurfacesCapability {
     position: SlotPosition,
     props: ElementSlotProps,
   ): readonly ComponentType<ElementSlotProps>[] {
-    return this.resolveSlots(this.elementSlots, position, props).map(({ component }) => component);
+    return this.getElementSlotEntries(position, props).map(({ component }) => component);
+  }
+
+  /**
+   * Resolves ordered block slots while preserving each registration's React identity.
+   * @param position - Anchor being rendered.
+   * @param props - Current owner context, evaluated against each dynamic filter.
+   * @returns Matching entries with IDs unchanged by neighboring registrations.
+   */
+  getBlockSlotEntries(position: BlockSlotPosition, props: BlockSlotProps): readonly ResolvedSlot<BlockSlotProps>[] {
+    return this.resolveSlots(this.blockSlots, position, props);
+  }
+
+  /**
+   * Resolves ordered element slots while preserving each registration's React identity.
+   * @param position - Anchor being rendered.
+   * @param props - Current owner context, evaluated against each dynamic filter.
+   * @returns Matching entries with IDs unchanged by neighboring registrations.
+   */
+  getElementSlotEntries(position: SlotPosition, props: ElementSlotProps): readonly ResolvedSlot<ElementSlotProps>[] {
+    return this.resolveSlots(this.elementSlots, position, props);
   }
 
   /** Validates the shared public fields of a slot registration. */
@@ -215,14 +243,14 @@ export class SurfaceManager implements SurfacesCapability {
     priority: number | undefined,
     positions: ReadonlySet<Position>,
   ): void {
-    this.reactEditor.extensions.assertActive();
+    this.registrations.assertActive();
     if (!positions.has(position)) throw new Error(`Unsupported slot position ${position}`);
     if (priority !== undefined && !Number.isFinite(priority)) {
       throw new Error("Slot priority must be finite");
     }
   }
 
-  /** Filters and stably orders one owner-kind registration list. */
+  /** Filters one owner-kind list whose stable priority order is maintained during registration. */
   private resolveSlots<
     Props extends { readonly mode: EditorMode },
     Position extends string,
@@ -240,8 +268,7 @@ export class SurfaceManager implements SurfacesCapability {
     return registrations
       .filter((registration) => registration.position === position &&
         matchesMode(registration.mode, props.mode) &&
-        (!registration.when || registration.when(props)))
-      .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
+        (!registration.when || registration.when(props)));
   }
 
   /**
@@ -257,11 +284,11 @@ export class SurfaceManager implements SurfacesCapability {
     wrapper: EditorWrapper,
     mode?: EditorMode | readonly EditorMode[],
   ): () => void {
-    this.reactEditor.extensions.assertActive();
+    this.registrations.assertActive();
     const registration = { wrapper, mode };
     this.editorWrappers.push(registration);
     this.store.changed();
-    return this.reactEditor.extensions.own(() => {
+    return this.registrations.own(() => {
       const index = this.editorWrappers.indexOf(registration);
       if (index < 0) return;
       this.editorWrappers.splice(index, 1);

@@ -1,30 +1,31 @@
+import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 /**
  * Verifies the table extension creates rows and cells in the ordinary block tree,
  * inserts complete row and column boundaries, and participates in undo.
  * @module
  */
 import { createTestCoreEditor } from "../../../test-utils";
-import { createReactEditor } from "../../../react-editor";
+
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import {
   createTableBlockInput,
   insertTableColumn,
   insertTableRow,
   setTableColumnWidth,
-  tableExtension,
   TABLE_BLOCK_TYPE,
   TABLE_CELL_BLOCK_TYPE,
   TABLE_ROW_BLOCK_TYPE,
+  tableExtension,
 } from "./table";
 
-test("inserts rectangular rows and columns as draggable ordinary blocks", () => {
-  const editor = createTestCoreEditor();
-  const reactEditor = createReactEditor({
+test("inserts rectangular rows and columns as draggable ordinary blocks", async () => {
+  const editor = await createTestCoreEditor();
+  const editorView = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],
   });
   const before = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
-  reactEditor.slashCommands.execute("block.table.insert", { blockId: before });
+  editorView.slashCommands.execute("block.table.insert", { blockId: before });
   const table = editor.blocks.getBlock(before)!;
 
   expect(table.id).toBe(before);
@@ -37,14 +38,14 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", () => 
 
   const rowId = table.children[0]!.id;
   const cellId = table.children[0]!.children[0]!.id;
-  expect(setTableColumnWidth(reactEditor, table.id, 1, 260)).toBe(true);
+  expect(setTableColumnWidth(editorView, table.id, 1, 260)).toBe(true);
   expect(editor.blocks.getBlock(table.id)?.children.every((row) => row.children[1]?.props.tableColumnWidth === 260)).toBe(true);
-  const addedRow = insertTableRow(reactEditor, rowId)!;
+  const addedRow = insertTableRow(editorView, rowId)!;
   expect(editor.blocks.getBlock(addedRow.id)?.children).toHaveLength(3);
   expect(editor.blocks.getBlock(addedRow.id)?.children[1]?.props.tableColumnWidth).toBe(260);
 
   editor.history.clear();
-  const addedCells = insertTableColumn(reactEditor, cellId);
+  const addedCells = insertTableColumn(editorView, cellId);
   expect(addedCells).toHaveLength(4);
   expect(editor.blocks.getBlock(table.id)?.children.every((row) => row.children.length === 4)).toBe(true);
   editor.history.undo();
@@ -52,7 +53,7 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", () => 
 
   editor.blocks.moveBlocks([cellId], table.id, "inside");
   expect(editor.blocks.getParentId(cellId)).toBe(table.id);
-  reactEditor.destroy();
+  editorView.runtime.destroy();
   editor.destroy();
 });
 

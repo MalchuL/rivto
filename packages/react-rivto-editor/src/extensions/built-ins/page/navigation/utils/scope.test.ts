@@ -1,6 +1,8 @@
+import { createTestReactEditor as createReactEditor } from "../../../../../test-utils";
 /** Regression coverage for block and edgeless outline navigation boundaries. */
 import { createTestCoreEditor as createRivtoEditor } from "../../../../../test-utils";
-import { createReactEditor } from "../../../../../react-editor";
+
+import { createStructuralSelection, type EditorBlock, type Selection } from "@chulane/rivto";
 import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../../../separator/separator-block";
 import {
   adjacentBlockSelection,
@@ -12,7 +14,6 @@ import { reconcileCollapsedSelection } from "./collapsed-selection";
 import { keyboardMovePlacement } from "./move-placement";
 import { selectedMoveRoots } from "./move-roots";
 import { pageEntries } from "./outline";
-import { createStructuralSelection, type EditorBlock, type Selection } from "@chulane/rivto";
 import {
   navigationOutlineBlocks,
   owningBlockElement,
@@ -43,9 +44,9 @@ function outlineBlock(
 }
 
 describe("edgeless outline scope", () => {
-  const twoCards = () => {
-    const editor = createRivtoEditor({ mode: "edgeless" });
-    const reactEditor = createReactEditor({
+  const twoCards = async () => {
+    const editor = await createRivtoEditor({ mode: "edgeless" });
+    const editorView = createReactEditor({
       editor,
       extensions: [separatorBlockExtension()],
     });
@@ -68,54 +69,57 @@ describe("edgeless outline scope", () => {
       zIndex: 1,
       props: { startBlockId: rightA, endBlockId: rightB },
     });
-    return { editor, reactEditor, leftA, leftB, rightA, rightB };
+    return { editor, editorView, leftA, leftB, rightA, rightB };
   };
 
-  test("navigationOutlineBlocks keeps page mode as the full document", () => {
-    const editor = createRivtoEditor({ mode: "block" });
+  test("navigationOutlineBlocks keeps page mode as the full document", async () => {
+    const editor = await createRivtoEditor({ mode: "block" });
+    const editorView = createReactEditor({ editor });
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "A" }).id;
     const second = editor.blocks.insertBlock({ type: "paragraph", content: "B" }, first).id;
-    expect(navigationOutlineBlocks(editor, first).map((block) => block.id)).toEqual([first, second]);
+    expect(navigationOutlineBlocks(editorView, first).map((block) => block.id)).toEqual([first, second]);
     editor.destroy();
   });
 
-  test("navigationOutlineBlocks stays inside the owning card", () => {
-    const { editor, reactEditor, leftA, leftB, rightA, rightB } = twoCards();
+  test("navigationOutlineBlocks stays inside the owning card", async () => {
+    const { editor, editorView, leftA, leftB, rightA, rightB } = await twoCards();
     expect(owningBlockElement(editor, leftB)?.id).toBe("left");
     expect(navigationOutlineBlocks(editor, leftB).map((block) => block.id)).toEqual([leftA, leftB]);
+    expect(navigationOutlineBlocks(editorView, leftB).map((block) => block.id)).toEqual([leftA, leftB]);
+    expect(navigationOutlineBlocks(editorView, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
     expect(navigationOutlineBlocks(editor, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
-    reactEditor.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
-  test("adjacent block selection does not leave the card", () => {
-    const { editor, reactEditor, leftA, leftB } = twoCards();
-    const outline = navigationOutlineBlocks(editor, leftB);
+  test("adjacent block selection does not leave the card", async () => {
+    const { editor, editorView, leftA, leftB } = await twoCards();
+    const outline = navigationOutlineBlocks(editorView, leftB);
     const current = createStructuralSelection([leftB], leftB, leftB);
     expect(adjacentBlockSelection(outline, current, "down")).toEqual(current);
     expect(adjacentBlockSelection(outline, current, "up").focusBlockId).toBe(leftA);
-    reactEditor.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
-  test("keyboard move placement refuses to cross into another card", () => {
-    const { editor, reactEditor, leftA, leftB } = twoCards();
-    const outline = navigationOutlineBlocks(editor, leftB);
+  test("keyboard move placement refuses to cross into another card", async () => {
+    const { editor, editorView, leftA, leftB } = await twoCards();
+    const outline = navigationOutlineBlocks(editorView, leftB);
     expect(keyboardMovePlacement(outline, [leftB], "down")).toBeUndefined();
     expect(keyboardMovePlacement(outline, [leftA], "up")).toBeUndefined();
     expect(keyboardMovePlacement(outline, [leftB], "up")).toEqual({
       targetId: leftA,
       position: "before",
     });
-    reactEditor.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
-  test("pageEntries on a card outline excludes other cards", () => {
-    const { editor, reactEditor, leftA, leftB } = twoCards();
-    const ids = pageEntries(navigationOutlineBlocks(editor, leftA)).map(({ block }) => block.id);
+  test("pageEntries on a card outline excludes other cards", async () => {
+    const { editor, editorView, leftA, leftB } = await twoCards();
+    const ids = pageEntries(navigationOutlineBlocks(editorView, leftA)).map(({ block }) => block.id);
     expect(ids).toEqual([leftA, leftB]);
-    reactEditor.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 });
@@ -137,6 +141,18 @@ describe("portable outline selection", () => {
 
   test("collapse reconciliation maps hidden selections to their visible ancestor", () => {
     const blocks = [outlineBlock("a", [outlineBlock("hidden"), outlineBlock("also-hidden")], true), outlineBlock("b")];
+    const nodes = blocks.flatMap((block) => [block, ...block.children]);
+    const lookup = {
+      getBlockNode: (id: string) => {
+        const block = nodes.find((node) => node.id === id);
+        return block && { ...block, childIds: block.children.map((child) => child.id) };
+      },
+      getParentId: (id: string) => blocks.find((block) => block.children.some((child) => child.id === id))?.id,
+      getOrderedIds: (ids: Iterable<string>) => {
+        const selected = new Set(ids);
+        return nodes.filter((node) => selected.has(node.id)).map((node) => node.id);
+      },
+    };
     const hiddenCaret: Selection = {
       type: "selection",
       blocks: [{ id: "hidden", start: 2, end: 2 }],
@@ -144,9 +160,10 @@ describe("portable outline selection", () => {
       focusBlockId: "hidden",
     };
 
-    expect(reconcileCollapsedSelection(blocks, hiddenCaret)).toEqual(createStructuralSelection(["a"]));
+    expect(reconcileCollapsedSelection(lookup, hiddenCaret)).toEqual(createStructuralSelection(["a"]));
+    expect(reconcileCollapsedSelection(lookup, hiddenCaret, "hidden")).toBe(hiddenCaret);
     expect(reconcileCollapsedSelection(
-      blocks,
+      lookup,
       createStructuralSelection(["hidden", "b", "also-hidden"], "hidden", "b"),
     )).toEqual(createStructuralSelection(["a", "b"], "a", "b"));
   });

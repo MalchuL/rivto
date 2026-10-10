@@ -1,4 +1,4 @@
-export * from "./selection-manager";
+export * from "./view-selection-manager";
 export * from "./dom-text-selection";
 export * from "./editor-dom-selection";
 export * from "./selection-endpoints";

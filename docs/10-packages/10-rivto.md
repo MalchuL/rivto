@@ -6,20 +6,22 @@
 
 - CRDT storage through `@chulane/crdt-doc` (`CRDTDoc` and its Yjs implementation), re-exported from this package.
 - Document blocks, hierarchy, links, elements, snapshots, and validation.
-- Focused managers for blocks, links, elements, selection, mode, clipboard, commands, and undo history.
+- Focused managers for blocks, links, elements, selection, clipboard, commands, and undo history.
 - Transactional mutations and portable snapshot loading and dumping.
 - Local and remote update subscriptions without coupling consumers to React.
 
 ## Main API
 
-Create a document model, then pass it to the editor runtime:
+Create host-owned storage, then use an explicit API for an acquired model:
 
 ```ts
-import { createRivtoEditor, DocumentModelImpl, YjsDoc } from "@chulane/rivto";
+import { createRivtoEditor } from "@chulane/rivto";
+import { DocumentStorage } from "@chulane/document-model";
+import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 
-const document = new DocumentModelImpl(new YjsDoc("document-id"));
-const editor = createRivtoEditor();
-editor.setDocument(document);
+const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
+const document = await storage.create("document-id");
+const editor = createRivtoEditor({ document });
 editor.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
 const blockId = editor.blocks.insertBlock({
   type: "paragraph",
@@ -39,13 +41,12 @@ The runtime exposes focused owners rather than forwarding every operation throug
 - `editor.elements`
 - `editor.commands`
 - `editor.selection`
-- `editor.mode`
 - `editor.clipboard`
 - `editor.history`
 
 ## Persistence and collaboration
 
-Hosts choose a CRDT adapter, construct `DocumentModelImpl`, then attach it with `editor.setDocument(document)`. Snapshots are the portable persistence boundary; local selection and presentation mode are runtime state rather than document content.
+Hosts choose a registry and provider factory and pass an async document loader to `EditorStorage`. Views acquire only their required documents. Snapshots are the portable persistence boundary; local selection and presentation mode are runtime state rather than document content.
 
 ## Package commands
 

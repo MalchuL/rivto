@@ -7,17 +7,8 @@ import type { HistoryManagerApi } from "../types";
 
 /** Core-facing proxy for one document's history and batching operations. */
 export class HistoryManager implements HistoryManagerApi {
-  /** Document history currently attached to the editor. */
-  private manager?: DocumentHistoryManagerApi;
-
-  /**
-   * Switches every history operation to the active document's history.
-   * @param manager - History manager owned by the new active document.
-   * @returns No value.
-   */
-  setDocument(manager: DocumentHistoryManagerApi): void {
-    this.manager = manager;
-  }
+  /** @param documents - The fixed document’s history and transaction batching implementation. */
+  constructor(private readonly manager: DocumentHistoryManagerApi) {}
 
   /**
    * Groups synchronous mutations into one transaction and undo item.
@@ -28,7 +19,7 @@ export class HistoryManager implements HistoryManagerApi {
    * @returns Value returned by the operation.
    */
   batchUpdates<Result>(operation: () => Result): Result {
-    return this.getManager().batchUpdates(operation);
+    return this.manager.batchUpdates(operation);
   }
 
   /**
@@ -38,32 +29,27 @@ export class HistoryManager implements HistoryManagerApi {
    * @returns Value returned by the operation.
    */
   batchUpdatesWithoutHistory<Result>(operation: () => Result): Result {
-    return this.getManager().batchUpdatesWithoutHistory(operation);
+    return this.manager.batchUpdatesWithoutHistory(operation);
   }
 
   /** @returns No value after reverting the latest local document operation. */
   undo(): void {
-    this.getManager().undo();
+    this.manager.undo();
   }
 
   /** @returns No value after reapplying the latest reverted operation. */
   redo(): void {
-    this.getManager().redo();
+    this.manager.redo();
   }
 
   /** @returns No value after dropping all undo and redo entries. */
   clear(): void {
-    this.getManager().clear();
+    this.manager.clear();
   }
 
   /** @returns No value after ending the current capture group. */
   stopCapturing(): void {
-    this.getManager().stopCapturing();
+    this.manager.stopCapturing();
   }
 
-  /** @returns The attached document history manager. */
-  private getManager(): DocumentHistoryManagerApi {
-    if (!this.manager) throw new Error("Document is not set");
-    return this.manager;
-  }
 }

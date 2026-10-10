@@ -10,13 +10,14 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Checkbox } from "../../../../components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
+import { editorControlProps } from "../../../../constants";
 import { isNodeLike } from "../../../../managers/events/dom-nodes";
 import type { EdgelessVisualController } from "../controller";
 import type { EdgelessFontOption, EdgelessVisual, TextHorizontalAlign, TextVerticalAlign } from "../types";
 import { ColorControl } from "./color-control";
-import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
-import { SizeControl } from "./size-control";
 import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "./properties-panel";
+import { SizeControl } from "./size-control";
+import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
 
 /* Segmented control for text alignment; buttons keep `aria-pressed` for the active value. */
 const ALIGN_TOGGLES_CLASS = "inline-flex gap-0.5 rounded-lg border border-border bg-secondary p-0.5 [&_button]:size-7 [&_button]:min-w-7";
@@ -42,7 +43,7 @@ function PropertySelect({
   readonly children: ReactNode;
 }) {
   return (
-    <NativeSelect size="sm" className={SELECT_CLASS} aria-label={label} value={String(value ?? "")} onChange={(event) => onChange(event.currentTarget.value)}>
+    <NativeSelect {...editorControlProps} size="sm" className={SELECT_CLASS} aria-label={label} value={String(value ?? "")} onChange={(event) => onChange(event.currentTarget.value)}>
       <NativeSelectOption value="" disabled>Mixed</NativeSelectOption>
       {children}
     </NativeSelect>
@@ -114,7 +115,7 @@ export function VisualProperties({
     );
   const paintToggle = (label: string, key: "filled" | "stroked", enabled: boolean) => (
     <span className={PAINT_TOGGLE_CLASS} title={enabled ? `Disable ${label.toLowerCase()}` : `Enable ${label.toLowerCase()}`}>
-      <Checkbox
+      <Checkbox {...editorControlProps}
         aria-label={`Enable ${label.toLowerCase()}`}
         checked={enabled}
         onCheckedChange={(checked) => preview({ [key]: checked === true })}
@@ -279,7 +280,7 @@ export function VisualProperties({
       count={visuals.length}
       ariaLabel="Visual properties"
       panelRef={panelRef}
-      onClose={() => controller.reactEditor.commands.execute("edgeless.selection.clear")}
+      onClose={() => controller.runtime.commands.execute("edgeless.selection.clear")}
     >
       {body}
     </EdgelessPropertiesPanel>

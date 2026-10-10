@@ -9,8 +9,8 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../../../constants";
-import { findRenderedBlock } from "../../../../managers";
-import type { ReactEditor } from "../../../../types";
+import type { EditorViewApi } from "../../../../editor-view/types";
+import { findRenderedBlock } from "../../../../managers/events/block-dom";
 
 /** Returns true when a BlockView directly owns an editable content host. */
 function hasOwnedEditableContent(block: HTMLElement): boolean {
@@ -33,33 +33,33 @@ function previousSiblingBlock(
 /**
  * Removes a root empty writing block after a non-text-editable sibling.
  *
- * @param reactEditor - Runtime owning host emptiness policy and block rendering.
+ * @param editorView - Editor view owning host emptiness policy and block rendering.
  * @param root - Active page surface or edgeless card DOM scope.
  * @param blockId - Collapsed editable block addressed by the key event.
  * @returns True when the empty block was removed and the key was claimed.
  */
 export function removeEmptyBlockAfterStructuralPredecessor(
-  reactEditor: ReactEditor,
+  editorView: EditorViewApi,
   root: HTMLElement,
   blockId: string,
 ): boolean {
-  const { isEmptyBlock } = reactEditor;
-  const block = reactEditor.blocks.getBlockNode(blockId);
+  const { isEmptyBlock } = editorView.runtime;
+  const block = editorView.runtime.blocks.getBlockNode(blockId);
   if (
     !block ||
     !isEmptyBlock(block) ||
     block.listProps.collapsed === true ||
-    !reactEditor.blocks.isRootBlock(block.id)
+    !editorView.runtime.blocks.isRootBlock(block.id)
   ) return false;
 
   const previous = previousSiblingBlock(root, block.id);
   if (!previous || hasOwnedEditableContent(previous.element)) return false;
 
-  reactEditor.history.batchUpdates(() => {
-    const firstChildId = reactEditor.blocks.getBlockNode(block.id)?.childIds[0];
-    if (firstChildId) reactEditor.blocks.outdentBlock(firstChildId);
-    reactEditor.blocks.removeBlock(block.id);
-    reactEditor.selection.set(createStructuralSelection([previous.id]));
+  editorView.runtime.history.batchUpdates(() => {
+    const firstChildId = editorView.runtime.blocks.getBlockNode(block.id)?.childIds[0];
+    if (firstChildId) editorView.runtime.blocks.outdentBlock(firstChildId);
+    editorView.runtime.blocks.removeBlock(block.id);
+    editorView.selection.set(createStructuralSelection([previous.id]));
   });
   root.ownerDocument.getSelection()?.removeAllRanges();
   root.focus({ preventScroll: true });

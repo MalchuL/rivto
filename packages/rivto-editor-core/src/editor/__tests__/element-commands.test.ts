@@ -9,8 +9,8 @@ describe("EditorRuntime element commands", () => {
     props: { fill: "red", nested: { retained: true } },
   } as const;
 
-  it("creates, patches, snapshots, and removes generic elements", () => {
-    const editor = createRivtoEditor();
+  it("creates, patches, snapshots, and removes generic elements", async () => {
+    const editor = await createRivtoEditor();
     expect(editor.elements.insertElement(input)).toEqual(input);
     const updated = editor.elements.updateElement("shape", { frame: { x: 30 }, props: { stroke: "blue" } });
     expect(updated).toEqual({
@@ -29,8 +29,8 @@ describe("EditorRuntime element commands", () => {
     editor.destroy();
   });
 
-  it("prevalidates atomic updates and tracks element undo and redo", () => {
-    const editor = createRivtoEditor();
+  it("prevalidates atomic updates and tracks element undo and redo", async () => {
+    const editor = await createRivtoEditor();
     editor.elements.insertElement(input);
     editor.history.clear();
     expect(() => editor.elements.updateElements([
@@ -47,8 +47,8 @@ describe("EditorRuntime element commands", () => {
     editor.destroy();
   });
 
-  it("rejects invalid geometry and unsupported snapshot versions", () => {
-    const editor = createRivtoEditor();
+  it("rejects invalid geometry and unsupported snapshot versions", async () => {
+    const editor = await createRivtoEditor();
     expect(() => editor.elements.insertElement({ ...input, frame: { ...input.frame, width: 0 } })).toThrow();
     editor.elements.insertElement(input);
     expect(() => editor.load({ version: 4, blocks: [] } as never)).toThrow(
@@ -58,8 +58,8 @@ describe("EditorRuntime element commands", () => {
     editor.destroy();
   });
 
-  it("runs registered element processors before insert and update", () => {
-    const editor = createRivtoEditor();
+  it("runs registered element processors before insert and update", async () => {
+    const editor = await createRivtoEditor();
     const dispose = editor.elements.registerProcessor({
       id: "test.element.tag",
       priority: 30,
@@ -76,8 +76,8 @@ describe("EditorRuntime element commands", () => {
     editor.destroy();
   });
 
-  it("does not cascade core element deletion into blocks or opaque references", () => {
-    const editor = createRivtoEditor();
+  it("does not cascade core element deletion into blocks or opaque references", async () => {
+    const editor = await createRivtoEditor();
     editor.blocks.insertBlock({ id: "from", type: "paragraph" });
     editor.blocks.insertBlock({ id: "to", type: "paragraph" });
     editor.elements.insertElement(input);

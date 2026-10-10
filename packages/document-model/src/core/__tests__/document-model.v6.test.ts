@@ -4,9 +4,10 @@
  * public managers so document tests do not depend on outline commands.
  */
 import * as Y from "yjs";
-import { YjsDoc } from "@chulane/crdt-doc";
+import { YjsDoc, type CRDTDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl } from "../document-model";
-import type { BlockInput, BlockPatch } from "../types";
+import { DocumentBlockManager, DocumentElementManager } from "../managers";
+import type { BlockInput, BlockPatch, ElementInput } from "../types";
 
 const exchangeUpdates = (left: YjsDoc, right: YjsDoc): void => {
   const leftState = Y.encodeStateAsUpdate(left.doc);
@@ -16,6 +17,40 @@ const exchangeUpdates = (left: YjsDoc, right: YjsDoc): void => {
 };
 
 describe("DocumentModelImpl schema v6 Markdown storage", () => {
+  it("includes subclass-created block and element managers in snapshots and undo history", async () => {
+    class ApplicationBlocks extends DocumentBlockManager {
+      protected override generateId(): string { return "application-block"; }
+      protected override prepareBlock(block: BlockInput): BlockInput {
+        return { ...block, props: { prepared: true } };
+      }
+    }
+    class ApplicationElements extends DocumentElementManager {
+      protected override generateId(): string { return "application-element"; }
+      protected override prepareElement(input: ElementInput): ElementInput {
+        return { ...input, props: { prepared: true } };
+      }
+    }
+    class ApplicationDocument extends DocumentModelImpl {
+      protected override createBlockManager(crdt: CRDTDoc): DocumentBlockManager { return new ApplicationBlocks(crdt); }
+      protected override createElementManager(crdt: CRDTDoc): DocumentElementManager { return new ApplicationElements(crdt); }
+    }
+    const model = new ApplicationDocument(new YjsDoc("application-managers"));
+    model.history.batchUpdates(() => {
+      model.blocks.insertBlock({ type: "paragraph", content: "Created by application" });
+      model.elements.insertElement({ type: "shape", frame: { x: 0, y: 0, width: 10, height: 10 }, zIndex: 0 });
+    });
+    const snapshot = model.getSnapshot();
+    expect(snapshot.blocks[0]?.id).toBe("application-block");
+    expect(snapshot.elements[0]?.id).toBe("application-element");
+    expect(snapshot.blocks[0]?.props).toEqual({ prepared: true });
+    expect(snapshot.elements[0]?.props).toEqual({ prepared: true });
+    model.history.undo();
+    expect(model.getSnapshot()).toMatchObject({ blocks: [], elements: [] });
+    model.history.redo();
+    expect(model.getSnapshot()).toEqual(snapshot);
+    await model.destroy();
+  });
+
   it("rejects unsupported snapshot versions before mutating the document", () => {
     const doc = new YjsDoc("unsupported-version");
     const model = new DocumentModelImpl(doc);

@@ -5,7 +5,7 @@ import { DocumentModelImpl } from "@chulane/document-model";
 import { createTestEditor as createRivtoEditor } from "../test-utils";
 
 describe("EditorRuntime block manager", () => {
-  const expectOneUpdate = (editor: ReturnType<typeof createRivtoEditor>, action: () => void): void => {
+  const expectOneUpdate = (editor: Awaited<ReturnType<typeof createRivtoEditor>>, action: () => void): void => {
     const calls: number[] = [];
     const unsubscribe = editor.subscribe(() => calls.push(editor.revision));
     const before = editor.revision;
@@ -18,8 +18,8 @@ describe("EditorRuntime block manager", () => {
     unsubscribe();
   };
 
-  it("mutates blocks through registered commands", () => {
-    const editor = createRivtoEditor();
+  it("mutates blocks through registered commands", async () => {
+    const editor = await createRivtoEditor();
 
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
@@ -41,8 +41,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("registers and removes runtime commands through the editor api", () => {
-    const editor = createRivtoEditor();
+  it("registers and removes runtime commands through the editor api", async () => {
+    const editor = await createRivtoEditor();
 
     editor.commands.register("test.echo", (payload) => payload);
 
@@ -54,8 +54,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("converts a block without losing identity or nested data", () => {
-    const editor = createRivtoEditor();
+  it("converts a block without losing identity or nested data", async () => {
+    const editor = await createRivtoEditor();
     editor.blockRegistry.defineBlock({ type: "heading2" });
     const id = editor.blocks.insertBlock({
       type: "paragraph",
@@ -81,8 +81,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("merges and repairs destination properties when changing type", () => {
-    const editor = createRivtoEditor();
+  it("merges and repairs destination properties when changing type", async () => {
+    const editor = await createRivtoEditor();
     editor.blockRegistry.defineBlock({
       type: "card",
       defaultProps: {
@@ -131,8 +131,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("evaluates dynamic defaults once per creation and conversion", () => {
-    const editor = createRivtoEditor();
+  it("evaluates dynamic defaults once per creation and conversion", async () => {
+    const editor = await createRivtoEditor();
     let sequence = 0;
     editor.blockRegistry.defineBlock({
       type: "dynamic",
@@ -152,8 +152,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("clears block content and descendants without losing block-owned data", () => {
-    const editor = createRivtoEditor();
+  it("clears block content and descendants without losing block-owned data", async () => {
+    const editor = await createRivtoEditor();
     const id = editor.blocks.insertBlock({
       type: "paragraph",
       listProps: { collapsed: true },
@@ -194,8 +194,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("batches several block clears into one update and undo step", () => {
-    const editor = createRivtoEditor();
+  it("batches several block clears into one update and undo step", async () => {
+    const editor = await createRivtoEditor();
     const first = editor.blocks.insertBlock({
       type: "paragraph",
       content: "First",
@@ -229,8 +229,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("preserves opaque list properties across block types", () => {
-    const editor = createRivtoEditor();
+  it("preserves opaque list properties across block types", async () => {
+    const editor = await createRivtoEditor();
     editor.blockRegistry.defineBlock({ type: "heading2" });
     editor.blockRegistry.defineBlock({
       type: "strict",
@@ -265,8 +265,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("merges, portability-checks, and undoes opaque list state atomically", () => {
-    const editor = createRivtoEditor();
+  it("merges, portability-checks, and undoes opaque list state atomically", async () => {
+    const editor = await createRivtoEditor();
     const first = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const second = editor.blocks.insertBlock({
       type: "paragraph",
@@ -298,8 +298,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("updates several blocks atomically in supplied order and undoes once", () => {
-    const editor = createRivtoEditor();
+  it("updates several blocks atomically in supplied order and undoes once", async () => {
+    const editor = await createRivtoEditor();
     const first = editor.blocks.insertBlock({
       type: "paragraph",
       content: "First",
@@ -340,13 +340,13 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("synchronizes collapse state through the CRDT document", () => {
+  it("synchronizes collapse state through the CRDT document", async () => {
     const leftDocument = new YjsDoc("collapse-left");
     const rightDocument = new YjsDoc("collapse-right");
-    const left = createRivtoEditor();
-    const right = createRivtoEditor();
-    left.setDocument(new DocumentModelImpl(leftDocument));
-    right.setDocument(new DocumentModelImpl(rightDocument));
+    const leftFixture = await createRivtoEditor({ document: new DocumentModelImpl(leftDocument) });
+    const left = leftFixture;
+    const rightFixture = await createRivtoEditor({ document: new DocumentModelImpl(rightDocument) });
+    const right = rightFixture;
     const parent = left.blocks.insertBlock({
       type: "paragraph",
       content: "Parent",
@@ -358,12 +358,12 @@ describe("EditorRuntime block manager", () => {
     Y.applyUpdate(rightDocument.doc, Y.encodeStateAsUpdate(leftDocument.doc));
 
     expect(right.blocks.getBlockNode(parent)?.listProps.collapsed).toBe(true);
-    left.destroy();
-    right.destroy();
+    leftFixture.destroy(); void leftDocument.destroy();
+    rightFixture.destroy(); void rightDocument.destroy();
   });
 
-  it("notifies subscribers once for every successful block command", () => {
-    const editor = createRivtoEditor();
+  it("notifies subscribers once for every successful block command", async () => {
+    const editor = await createRivtoEditor();
     let firstId = "";
     let secondId = "";
 
@@ -398,8 +398,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("outdents once and adopts every following sibling after existing children", () => {
-    const editor = createRivtoEditor();
+  it("outdents once and adopts every following sibling after existing children", async () => {
+    const editor = await createRivtoEditor();
     const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
     const beforeId = editor.blocks.insertBlock({ type: "paragraph", content: "Before" }, parentId).id;
     editor.blocks.indentBlock(beforeId);
@@ -436,8 +436,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("indents consecutive selected roots as one group without moving descendants twice", () => {
-    const editor = createRivtoEditor();
+  it("indents consecutive selected roots as one group without moving descendants twice", async () => {
+    const editor = await createRivtoEditor();
     const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" }).id;
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId).id;
     const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, firstId).id;
@@ -466,8 +466,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("does not partially indent a non-consecutive selection", () => {
-    const editor = createRivtoEditor();
+  it("does not partially indent a non-consecutive selection", async () => {
+    const editor = await createRivtoEditor();
     const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" }).id;
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId).id;
     const gapId = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, firstId).id;
@@ -483,8 +483,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("rejects moving a block into its own subtree", () => {
-    const editor = createRivtoEditor();
+  it("rejects moving a block into its own subtree", async () => {
+    const editor = await createRivtoEditor();
     const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
     const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, parentId).id;
     editor.blocks.indentBlock(childId);
@@ -497,8 +497,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("moves one block with its nested subtree in one undoable update", () => {
-    const editor = createRivtoEditor();
+  it("moves one block with its nested subtree in one undoable update", async () => {
+    const editor = await createRivtoEditor();
     const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
     const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, parentId).id;
     editor.blocks.indentBlock(childId);
@@ -522,8 +522,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("moves sibling roots in source order as one undoable update", () => {
-    const editor = createRivtoEditor();
+  it("moves sibling roots in source order as one undoable update", async () => {
+    const editor = await createRivtoEditor();
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const gapId = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, firstId).id;
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, gapId).id;
@@ -544,8 +544,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("keeps a long same-parent move adjacent to its target and undoable", () => {
-    const editor = createRivtoEditor();
+  it("keeps a long same-parent move adjacent to its target and undoable", async () => {
+    const editor = await createRivtoEditor();
     const ids = Array.from({ length: 16 }, (_, index) => editor.blocks.insertBlock({
       type: "paragraph", content: `Block ${index}`,
     }).id);
@@ -561,8 +561,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("rejects grouped moves whose roots have different parents", () => {
-    const editor = createRivtoEditor();
+  it("rejects grouped moves whose roots have different parents", async () => {
+    const editor = await createRivtoEditor();
     const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
     const childId = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, parentId).id;
     editor.blocks.indentBlock(childId);
@@ -576,8 +576,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("moves a block before a nested sibling", () => {
-    const editor = createRivtoEditor();
+  it("moves a block before a nested sibling", async () => {
+    const editor = await createRivtoEditor();
     const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, parentId).id;
     editor.blocks.indentBlock(firstId);
@@ -593,8 +593,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("moves a block inside another block as its last child", () => {
-    const editor = createRivtoEditor();
+  it("moves a block inside another block as its last child", async () => {
+    const editor = await createRivtoEditor();
     const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
     const existingChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Existing" }, parentId).id;
     editor.blocks.indentBlock(existingChildId);
@@ -609,8 +609,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("outdents consecutive selected roots as one group and adopts their following siblings", () => {
-    const editor = createRivtoEditor();
+  it("outdents consecutive selected roots as one group and adopts their following siblings", async () => {
+    const editor = await createRivtoEditor();
     const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
     const beforeId = editor.blocks.insertBlock({ type: "paragraph", content: "Before" }, parentId).id;
     editor.blocks.indentBlock(beforeId);
@@ -644,8 +644,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("merges text and descendants in one undoable update", () => {
-    const editor = createRivtoEditor();
+  it("merges text and descendants in one undoable update", async () => {
+    const editor = await createRivtoEditor();
     const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Before" }).id;
     const targetChildId = editor.blocks.insertBlock({ type: "paragraph", content: "Target child" }, targetId).id;
     editor.blocks.indentBlock(targetChildId);
@@ -674,8 +674,8 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("stops notifying after unsubscribe", () => {
-    const editor = createRivtoEditor();
+  it("stops notifying after unsubscribe", async () => {
+    const editor = await createRivtoEditor();
     const listener = jest.fn();
     const unsubscribe = editor.subscribe(listener);
 
@@ -686,21 +686,21 @@ describe("EditorRuntime block manager", () => {
     editor.destroy();
   });
 
-  it("does not notify when a command fails", () => {
-    const editor = createRivtoEditor();
+  it("does not notify when a command fails", async () => {
+    const editor = await createRivtoEditor();
     const listener = jest.fn();
     editor.subscribe(listener);
     const before = editor.revision;
 
-    expect(() => editor.blocks.insertBlock({ type: "missing" })).toThrow("unavailable");
+    expect(() => editor.blocks.insertBlock({ type: "missing" })).toThrow("not registered");
 
     expect(listener).not.toHaveBeenCalled();
     expect(editor.revision).toBe(before);
     editor.destroy();
   });
 
-  it("loads and dumps snapshots through editor methods", () => {
-    const editor = createRivtoEditor();
+  it("loads and dumps snapshots through editor methods", async () => {
+    const editor = await createRivtoEditor();
     const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Source" }).id;
     const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, sourceId).id;
 

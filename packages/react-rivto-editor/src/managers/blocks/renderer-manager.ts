@@ -1,17 +1,17 @@
-import type { RenderersCapability } from "../../capabilities";
 import { RevisionStore } from "../../internal-store";
-import type { ReactEditorImpl } from "../../react-editor";
+import type { RegistrationOwner } from "../extensions/types";
 import type { BlockRenderer } from "./renderer-types";
+import type { RenderersApi } from "./renderers-api";
 
 /**
  * Owns React content renderers indexed by persisted block type.
  *
  * Renderer storage is independent from core block definitions so hosts may
  * render a losslessly loaded unknown type. Normal custom blocks should still
- * use BlockManager to install definition, renderer, and slash conversion
+ * use BlockTypeManager to install definition, renderer, and slash conversion
  * atomically.
  */
-export class RendererManager implements RenderersCapability {
+export class RendererManager implements RenderersApi {
   private readonly store = new RevisionStore();
   private readonly renderers = new Map<string, {
     readonly renderer: BlockRenderer;
@@ -21,11 +21,11 @@ export class RendererManager implements RenderersCapability {
   /**
    * Creates a renderer registry.
    *
-   * @param reactEditor - Owning React runtime providing extension lifecycle.
+   * @param registrations - Extension lifecycle owning registered contributions.
    * @param fallback - Optional renderer for persisted unknown block types.
    */
   constructor(
-    private readonly reactEditor: ReactEditorImpl,
+    private readonly registrations: RegistrationOwner,
     private readonly fallback?: BlockRenderer,
   ) {}
 
@@ -37,7 +37,7 @@ export class RendererManager implements RenderersCapability {
    * @returns Idempotent disposer removing this exact renderer.
    */
   register(type: string, renderer: BlockRenderer): () => void {
-    this.reactEditor.extensions.assertActive();
+    this.registrations.assertActive();
     if (!type.trim()) throw new Error("Block renderer type is required");
     if (this.renderers.has(type)) throw new Error(`Block renderer ${type} is already registered`);
     const registration: {
@@ -49,7 +49,7 @@ export class RendererManager implements RenderersCapability {
     };
     this.renderers.set(type, registration);
     this.store.changed();
-    registration.dispose = this.reactEditor.extensions.own(() => {
+    registration.dispose = this.registrations.own(() => {
       if (this.renderers.get(type) !== registration) return;
       this.renderers.delete(type);
       this.store.changed();
@@ -64,7 +64,7 @@ export class RendererManager implements RenderersCapability {
    * @returns True when a renderer existed and was disposed.
    */
   delete(type: string): boolean {
-    this.reactEditor.extensions.assertActive();
+    this.registrations.assertActive();
     const registration = this.renderers.get(type);
     if (!registration) return false;
     registration.dispose();

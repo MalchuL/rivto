@@ -1,8 +1,8 @@
 # Selection reconciliation и revision
 
-Selection является local runtime state. Remote updates, undo, direct document calls и mode changes могут сделать её endpoints недействительными, поэтому `EditorRuntime` reconciles selection с актуальным block tree.
+Selection является local runtime state. Remote updates, undo, direct document calls  могут сделать её endpoints недействительными, поэтому `EditorRuntime` reconciles selection с актуальным block tree.
 
-## Приватный `reconcileSelection()`
+## Приватный `reconcileDocumentSelection()`
 
 - **Аргументы:** отсутствуют.
 - **Возвращает:** `void`.
@@ -37,13 +37,13 @@ Core selection использует один generic item для block ranges, e
 - **Изменение:** `notifyChanges()` сначала increment, затем вызывает listeners.
 - **Исключения при чтении:** отсутствуют.
 
-Revision является snapshot token для UI subscriptions, а не persisted document version. Он может измениться из-за local-only mode/registry state без CRDT update.
+Revision является snapshot token для UI subscriptions, а не persisted document version. Он может измениться из-за registry state без CRDT update.
 
 ## Источники runtime notification
 
 ### Document update
 
-Constructor подписывается на `document.subscribe()`. Callback сначала вызывает `reconcileSelection()`, затем `notifyChanges()`. Сюда входят local commands, direct document mutations, remote provider updates и undo/redo.
+Constructor подписывается на `document.subscribe()`. Callback сначала вызывает `reconcileDocumentSelection()`, затем `notifyChanges()`. Сюда входят local commands, direct document mutations, remote provider updates и undo/redo.
 
 ### Selection update
 
@@ -51,11 +51,13 @@ Selection changes уведомляют только `selection.subscribe()`; `ed
 
 `SelectionManager` поддерживает несколько distinct listeners одновременно и не хранит «текущий единственный callback». Повторная подписка другой function добавляет observer; одинаковая function reference deduplicate-ится. Каждый returned unsubscribe удаляет эту function и безопасен при повторном вызове. Подписка не сообщает initial selection автоматически.
 
-### Mode update
+### Presentation
 
-`mode.subscribe()` закрывает history capture, reconciles selection, уведомляет runtime и снова закрывает capture. Mode сам не persisted.
-
-`ModeManager` использует ту же Set-семантику: несколько distinct listeners, без override; одна effective registration для одинаковой function reference; idempotent unsubscribe; никакого immediate callback. Повторная установка текущего mode не создаёт notification.
+Single editor хранит локальный mode в `editor.mode`; EditorStorage не имеет общего mode.
+Изменение mode увеличивает revision и разделяет history captures без document mutation.
+React host подписывается через `useEditorMode()` и выбирает surface через JSX.
+Selection принадлежит core документа; отображаемую subtree boundary и DOM
+occurrence проверяет view. Разные документы имеют независимые selections.
 
 ### Block registry update
 
@@ -77,7 +79,7 @@ const unsubscribe = editor.subscribe(() => {
 
 ## Что не вызывает revision само по себе
 
-Successful arbitrary command execution обновляет state `CommandRegistry`, но `EditorRuntime` не подписан на registry command-executed events. Revision изменится только если command также изменил document, mode или block registry.
+Successful arbitrary command execution обновляет state `CommandRegistry`, но `EditorRuntime` не подписан на registry command-executed events. Revision изменится только если command также изменил document или block registry.
 
 ## Direction examples
 

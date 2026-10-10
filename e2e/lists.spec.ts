@@ -114,6 +114,7 @@ test("empty nested checkbox clears its marker before Enter outdents it", async (
   await page.keyboard.press("Tab");
   const nested = first.locator(`:scope > .page-block-children > ${blockIdSelector(childId)}`);
   await expect(nested).toHaveCount(1);
+  await expect(nested.locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
 
   await page.keyboard.press("Enter");
   await expect(nested).toHaveCount(1);

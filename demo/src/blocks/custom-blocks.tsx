@@ -6,13 +6,17 @@
  * @module
  */
 import {
-  blockExtension,
-  kanbanExtension,
   bentoExtension,
-  tableExtension,
+  BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
+  blockExtension,
   columnsExtension,
+  editorControlProps,
+  kanbanExtension,
   MarkdownContent,
-  useBlockEditing,
+  tableExtension,
+  useBlockNode,
+  useBlockSelectionAnchor,
+  useEditorView,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import {
@@ -38,12 +42,14 @@ interface CounterProps {
   count: number;
 }
 
+const COUNTER_SELECTION_ATTRIBUTES = { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
+
 export { duplicateBlockInput } from "./block-utils";
 export {
   COUNTER_BLOCK_TYPE,
   counterBlockDefinition,
   SLIDER_BLOCK_TYPE,
-  sliderBlockDefinition,
+  sliderBlockDefinition
 } from "./custom-block-definitions";
 
 /**
@@ -57,10 +63,11 @@ export {
  * @returns The markdown body and range control, or null after deletion.
  */
 function SliderBlock({ blockId }: { readonly blockId: string }) {
-  const { block, getProp, setProp } = useBlockEditing<SliderProps>(blockId);
+  const { block, operations: { setProp } } = useBlockNode<SliderProps>(blockId);
+  const editorView = useEditorView();
   const draggingRef = useRef(false);
   const [draftValue, setDraftValue] = useState<number | null>(null);
-  const committedValue = getProp("value") ?? 50;
+  const committedValue = block?.props.value ?? 50;
   const value = draftValue ?? committedValue;
 
   /**
@@ -71,9 +78,9 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
    */
   const commitValue = useCallback((next: number) => {
     setDraftValue(null);
-    if (next === (getProp("value") ?? 50)) return;
+    if (next === (editorView.runtime.blocks.getBlockNode(blockId)?.props.value ?? 50)) return;
     setProp("value", next);
-  }, [getProp, setProp]);
+  }, [editorView, blockId, setProp]);
 
   /**
    * Marks the current pointer gesture as an in-progress drag.
@@ -129,6 +136,7 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
       <label>
         <span>Value: {value}</span>
         <input
+          {...editorControlProps}
           type="range"
           min="0"
           max="100"
@@ -147,19 +155,24 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
 
 /** Demo contentless block proving controls can participate in structural selection. */
 function CounterBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<CounterProps>(blockId, { textEdit: false });
+  const editing = useBlockNode<CounterProps>(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
+  const editorView = useEditorView();
   if (!editing.block) return null;
-  const count = editing.getProp("count") ?? 0;
+  const count = editing.block.props.count ?? 0;
   const increment = (event: MouseEvent<HTMLButtonElement>) => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
-    editing.setProp("count", (editing.getProp("count") ?? 0) + 1);
+    const current = editorView.runtime.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+    editing.operations.setProp("count", (current?.count ?? 0) + 1);
   };
   return (
     // The renderer region fills the block row, making its otherwise empty
     // right-hand side a valid structural-selection anchor. The actual Counter
     // button remains compact and retains its normal click behavior.
-    <div {...editing.attributes} className="custom-counter-selection-region">
+    <div {...attributes} className="custom-counter-selection-region">
       <button
+        {...COUNTER_SELECTION_ATTRIBUTES}
+        {...editorControlProps}
         type="button"
         className="custom-counter-block"
         onClick={increment}
@@ -188,8 +201,8 @@ export const customBlockExtensions: readonly ReactEditorExtension[] = [
     }),
     {
       id: "clipboard.demo-counter",
-      setup: (reactEditor) => {
-        reactEditor.clipboard.registerFormatter({
+      setup: (editorRuntime) => {
+        editorRuntime.clipboardFormats.registerFormatter({
           id: "demo.counter",
           matches: ({ block }) => block.type === COUNTER_BLOCK_TYPE,
           format: ({ block }) => {

@@ -9,6 +9,7 @@
  * `data-edgeless-ui` so canvas pointer handlers can ignore chrome hits, and an
  * accessible label that doubles as the native tooltip.
  */
+import { editorControlProps } from "../../../../constants";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "cn";
 import {
@@ -109,11 +110,10 @@ const iconProps: LucideProps = {
 
 /**
  * Shared appearance for every tool button. The `edgeless-tool-button` hook is
- * kept for hosts and tests; the utilities give the 36px square, the accent
+ * kept for hosts and tests; controls.css defines the 36px square, the accent
  * hover/pressed tint, and the 22px icon or thumbnail size shared by toolbars.
  */
-const TOOL_BUTTON_CLASS =
-  "edgeless-tool-button size-9 min-w-9 shrink-0 rounded-lg p-0 text-xs font-semibold text-secondary-foreground hover:bg-accent hover:text-accent-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-40 [&_svg:not([class*='size-'])]:size-[22px] [&_img]:size-[22px] [&_img]:rounded-sm [&_img]:object-contain";
+const TOOL_BUTTON_CLASS = "edgeless-tool-button";
 
 /** Props accepted by {@link EdgelessToolButton}. */
 export type EdgelessToolButtonProps = Omit<ComponentProps<"button">, "children"> & {
@@ -162,11 +162,11 @@ export function EdgelessToolButton({
     "data-edgeless-ui": "true",
   };
   return pressed === undefined ? (
-    <Button variant="ghost" size="icon" {...shared}>
+    <Button {...editorControlProps} variant="ghost" size="icon" {...shared}>
       {content}
     </Button>
   ) : (
-    <Toggle pressed={pressed} {...shared}>
+    <Toggle {...editorControlProps} pressed={pressed} {...shared}>
       {content}
     </Toggle>
   );

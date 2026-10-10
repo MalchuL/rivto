@@ -9,6 +9,7 @@
  * the dialog element live in the colocated `block-modal.css`.
  * @module
  */
+import { editorControlProps } from "../../constants";
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { Maximize2Icon, Minimize2Icon } from "lucide-react";
 import { Button } from "../../components/ui/button";
@@ -58,7 +59,7 @@ export function BlockModalButton() {
   const state = useContext(ExpandContext);
   if (!state) return null;
   return (
-    <Button variant="outline" size="icon-sm" className={`${EXPAND_CLASS} ml-2`} type="button" onClick={state.toggle}
+    <Button {...editorControlProps} variant="outline" size="icon-sm" className={`${EXPAND_CLASS} ml-2`} type="button" onClick={state.toggle}
       aria-label={state.expanded ? `Collapse ${state.label}` : `Expand ${state.label}`} aria-expanded={state.expanded}>
       {state.expanded ? <Minimize2Icon /> : <Maximize2Icon />}
     </Button>

@@ -1,8 +1,8 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  blockIdSelector,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
+  blockIdSelector,
 } from "./dom-markers";
 
 interface ClipboardBlock {
@@ -11,10 +11,11 @@ interface ClipboardBlock {
 
 /** Returns a stable ID-based locator that still resolves after children unmount. */
 async function collapsibleRoot(page: Page, index = 0): Promise<Locator> {
-  const candidate = page.locator(".page-surface > .page-block:has(> .page-block-children)").nth(index);
+  const surface = '[data-journal-document="today"] > .page-surface';
+  const candidate = page.locator(`${surface} > .page-block:has(> .page-block-children)`).nth(index);
   const id = await candidate.getAttribute(BLOCK_ID_ATTRIBUTE);
   if (!id) throw new Error("Expected collapsible root ID");
-  return page.locator(blockIdSelector(id));
+  return page.locator(`${surface} > ${blockIdSelector(id)}`);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -96,8 +97,8 @@ test("treats a collapsed parent as a visible leaf for Enter and Delete", async (
   await content.click();
   await page.keyboard.press("End");
   await page.keyboard.press("Delete");
-  await expect(page.locator(blockIdSelector(parentId!))).toBeVisible();
-  await expect(page.locator(`${blockIdSelector(nextId!)} [data-block-content]`)).toHaveText(nextText ?? "");
+  await expect(parent).toBeVisible();
+  await expect(next.locator(":scope > .page-block-row [data-block-content]")).toHaveText(nextText ?? "");
 
   await content.click();
   await page.keyboard.press("End");

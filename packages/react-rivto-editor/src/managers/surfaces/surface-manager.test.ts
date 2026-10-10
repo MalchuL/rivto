@@ -1,6 +1,6 @@
-import { createTestCoreEditor as createEditor } from "../../test-utils";
 import type { ComponentType, ReactNode } from "react";
 import type { BlockWrapperProps } from "../../blocks";
+import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
 import {
   BLOCK_FLOW_SLOT_POSITIONS,
   SLOT_POSITIONS,
@@ -9,7 +9,7 @@ import {
   type ElementSlotProps,
   type SlotPosition,
 } from "./types";
-import { createReactEditor } from "../../react-editor";
+
 
 const Surface: ComponentType = () => null;
 const Wrapper: ComponentType<BlockWrapperProps> = () => null;
@@ -20,10 +20,10 @@ const EqualBlockSlot: ComponentType<BlockSlotProps> = () => null;
 const ElementSlot: ComponentType<ElementSlotProps> = () => null;
 
 describe("SurfaceManager", () => {
-  test("keeps surfaces unique and filters defensive wrapper reads by mode", () => {
-    const editor = createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const manager = reactEditor.surfaces;
+  test("keeps surfaces unique and filters defensive wrapper reads by mode", async () => {
+    const editor = await createEditor();
+    const editorView = createReactEditor({ editor });
+    const manager = editorView.runtime.surfaces;
     manager.register("block", Surface);
     manager.registerBlockWrapper("block", Wrapper);
     manager.registerEditorWrapper(EditorWrapper, "edgeless");
@@ -38,14 +38,14 @@ describe("SurfaceManager", () => {
     expect(manager.delete("block")).toBe(true);
     expect(manager.delete("block")).toBe(false);
     expect(manager.get("block")).toBeUndefined();
-    reactEditor.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
-  test("orders and filters block and element slot registrations", () => {
-    const editor = createEditor();
-    const reactEditor = createReactEditor({ editor });
-    const manager = reactEditor.surfaces;
+  test("orders and filters block and element slot registrations", async () => {
+    const editor = await createEditor();
+    const editorView = createReactEditor({ editor });
+    const manager = editorView.runtime.surfaces;
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Slot owner" }).id;
     const block = editor.blocks.getBlockNode(blockId)!;
     const elementResult = editor.elements.insertElement({
@@ -60,6 +60,7 @@ describe("SurfaceManager", () => {
     expect(BLOCK_FLOW_SLOT_POSITIONS).toEqual(["start", "end"]);
 
     manager.registerBlockSlot({ position: "start", component: LowBlockSlot });
+    const disposeBody = manager.registerBlockSlot({ position: "body", component: HighBlockSlot });
     manager.registerBlockSlot({ position: "left", priority: 10, component: LowBlockSlot });
     manager.registerBlockSlot({ position: "left", priority: 20, component: HighBlockSlot });
     manager.registerBlockSlot({ position: "left", priority: 20, component: EqualBlockSlot });
@@ -80,6 +81,9 @@ describe("SurfaceManager", () => {
     ]);
     expect(manager.getBlockSlots("right", blockProps)).toEqual([]);
     expect(manager.getBlockSlots("start", blockProps)).toEqual([LowBlockSlot]);
+    expect(manager.getBlockSlots("body", blockProps)).toEqual([HighBlockSlot]);
+    disposeBody();
+    expect(manager.getBlockSlots("body", blockProps)).toEqual([]);
     expect(manager.getElementSlots("top-left", { element, mode: "edgeless", selected: true }))
       .toEqual([ElementSlot]);
     expect(manager.getElementSlots("top-left", { element, mode: "edgeless", selected: false }))
@@ -101,7 +105,24 @@ describe("SurfaceManager", () => {
       priority: Number.POSITIVE_INFINITY,
       component: ElementSlot,
     })).toThrow(/priority must be finite/);
-    reactEditor.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
+});
+
+test("slot identities survive priority insertions and distinguish repeated components", async () => {
+  const editor = await createEditor();
+  const editorView = createReactEditor({ editor });
+  const block = editor.blocks.insertBlock({ type: "paragraph" });
+  const props: BlockSlotProps = { block: editor.blocks.getBlockNode(block.id)!, mode: "block", selected: false };
+  const manager = editorView.runtime.surfaces;
+  manager.registerBlockSlot({ position: "left", component: LowBlockSlot });
+  manager.registerBlockSlot({ position: "left", component: LowBlockSlot });
+  const original = manager.getBlockSlotEntries("left", props);
+  expect(original[0]!.id).not.toBe(original[1]!.id);
+  const remove = manager.registerBlockSlot({ position: "left", component: HighBlockSlot, priority: 10 });
+  expect(manager.getBlockSlotEntries("left", props).slice(1)).toEqual(original);
+  remove();
+  expect(manager.getBlockSlotEntries("left", props)).toEqual(original);
+  editorView.runtime.destroy(); editor.destroy();
 });

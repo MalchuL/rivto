@@ -7,15 +7,15 @@
  * @module
  */
 import { useCallback, useSyncExternalStore } from "react";
-import { useEditorContext } from "../../editor-context";
+import { useEditorView } from "../../editor-view/use-editor-view";
 
 /** @returns Stable detached elements refreshed only after element mutations. */
 export function useElements() {
-  const { reactEditor } = useEditorContext();
+  const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.elements.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => editorView.runtime.elements.subscribe(listener),
+    [editorView],
   );
-  const getSnapshot = useCallback(() => reactEditor.elements.getElements(), [reactEditor]);
+  const getSnapshot = useCallback(() => editorView.runtime.elements.getElements(), [editorView]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

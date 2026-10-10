@@ -7,7 +7,7 @@
  *
  * @module
  */
-import type { BlockDropPlacementOptions } from "../../../views/types";
+import type { BlockDropPlacementOptions } from "../../../block-behaviors/types";
 import type {
   BetweenDropPlacement,
   CanonicalDropPlacement,
@@ -25,7 +25,7 @@ export type {
   DropBlockLocation,
   DropMoveTarget,
   InsideDropPlacement,
-  ResolvedDropPlacementOptions,
+  ResolvedDropPlacementOptions
 } from "./types";
 
 /**

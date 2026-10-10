@@ -3,7 +3,7 @@
  * The manager validates portable records, observes changes, delegates snapshot
  * caching, and exposes the element scopes tracked by history.
  */
-import type { CRDTDoc, CRDTType, CRDTMap, CRDTUndoScope } from "@chulane/crdt-doc";
+import type { CRDTDoc, CRDTType, CRDTMap, CRDTUndoScope, CRDTObserveEvent } from "@chulane/crdt-doc";
 import type {
   DocumentElement,
   DocumentElementManagerApi,
@@ -31,7 +31,7 @@ const ELEMENTS_KEY = "rivto.editor.elements";
  */
 export class DocumentElementManager implements DocumentElementManagerApi {
   /** Creates element identities without exposing generator configuration. */
-  private readonly generateId = (): string => crypto.randomUUID();
+  protected generateId(): string { return crypto.randomUUID(); }
   private readonly storage: CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>;
   /** Adapter roots tracked by document-owned history. */
   readonly historyScopes: readonly CRDTUndoScope[];
@@ -52,22 +52,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
   constructor(private readonly crdt: CRDTDoc) {
     this.storage = crdt.getMap<Record<IDElement, CRDTMap<ElementStorage>>>(ELEMENTS_KEY);
     this.historyScopes = [this.storage];
-    this.storage.observe((events) => {
-      const changedIds = new Set<string>();
-      let membershipChanged = false;
-      events.forEach(({ path, keys }) => {
-        const id = path[0];
-        if (typeof id === "string") changedIds.add(id);
-        if (path.length === 0 && keys.length) {
-          membershipChanged = true;
-          keys.forEach((key) => changedIds.add(key));
-        }
-      });
-      this.cache.invalidate(changedIds);
-      changedIds.forEach((id) => this.emit(this.elementListeners.get(id)));
-      this.emit(this.listeners);
-      if (membershipChanged) this.emit(this.membershipListeners);
-    });
+    this.storage.observe((events, transaction) => this.onRecordsChanged(events, transaction));
   }
 
   /**
@@ -184,14 +169,66 @@ export class DocumentElementManager implements DocumentElementManagerApi {
   /**
    * Inserts one element after portable invariant validation.
    *
-   * @param input - Complete type, geometry, layer, and optional props.
+   * Supplied stable IDs are preserved for transfers and deterministic derived records.
+   * Portable data and local collisions are checked before shared writes; application
+   * managers can register missing identities or reuse an allocated database record.
+   *
+   * @param input - Complete type, geometry, layer, optional props, and optional stable ID.
    * @returns Complete normalized inserted element.
-   * @throws {Error} When the ID exists, the type is empty, or the record is invalid.
+   * @throws {Error} When the ID exists in this document, the type is empty, the record is invalid, or application identity checks fail.
    */
   insertElement(input: ElementInput): DocumentElement {
     const id = requireNonemptyId(input.id ?? this.generateId(), "Element");
     if (this.storage.has(id)) throw new Error(`Element ${id} already exists`);
     const validated = this.processElement({ ...input, id });
+    const prepared = this.prepareElement(validated);
+    return this.insertInto(prepared);
+  }
+
+  /**
+   * Prepares insertion after validation and before the first shared write.
+   * Supplied identities can be reused; missing IDs have already been allocated.
+   * Both fresh and known records pass through this preparation step, including
+   * deterministic derived records restored after deletion or document transfers.
+   * Default storage needs no external identity check and leaves the input unchanged.
+   *
+   * @param input - Validated element with its supplied or generated ID.
+   * @returns Prepared insertion data with an allocated or reused ID, or the unchanged default input.
+   * @throws If application creation constraints fail or an identity cannot be reused.
+   */
+  protected prepareElement(input: ElementInput): ElementInput { return input; }
+
+  /**
+   * Processes nested record changes, including remote and undo writes.
+   * Invalidates cached elements before notifying record, collection, and membership subscribers.
+   * Subclasses call super first, then use the returned IDs for their added work;
+   * record readers see current transaction state without a collection scan.
+   * @param events - Changes relative to the element storage map, including deleted keys.
+   * @param _transaction - Opaque commit identity available for subclass coordination; unused by default.
+   * @returns Changed or deleted element IDs; the default manager performs no external persistence.
+   */
+  protected onRecordsChanged(events: readonly CRDTObserveEvent[], _transaction: unknown): ReadonlySet<string> {
+    const changedIds = new Set<string>();
+    let membershipChanged = false;
+    events.forEach(({ path, keys }) => {
+      const id = path[0];
+      if (typeof id === "string") changedIds.add(id);
+      if (path.length === 0 && keys.length) {
+        membershipChanged = true;
+        keys.forEach((key) => changedIds.add(key));
+      }
+    });
+    this.cache.invalidate(changedIds);
+    changedIds.forEach((id) => this.emit(this.elementListeners.get(id)));
+    this.emit(this.listeners);
+    if (membershipChanged) this.emit(this.membershipListeners);
+    return changedIds;
+  }
+
+  /** Writes prepared or restored element data without running application preparation again. */
+  private insertInto(validated: ElementInput): DocumentElement {
+    const id = requireNonemptyId(validated.id ?? this.generateId(), "Element");
+    if (this.storage.has(id)) throw new Error(`Element ${id} already exists`);
     this.crdt.transact(() => {
       const model = this.crdt.createDetachedMap<ElementStorage>();
       const frameMap = this.crdt.createDetachedMap<ElementFrameStorage>();
@@ -298,7 +335,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
   loadElements(elements: readonly DocumentElement[]): void {
     this.validateElements(elements);
     this.storage.clear();
-    elements.forEach((element) => this.insertElement(element));
+    elements.forEach((element) => this.insertInto(this.processElement(element)));
   }
 
   /**

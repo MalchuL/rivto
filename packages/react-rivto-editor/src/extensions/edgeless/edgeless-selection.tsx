@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { SurfaceContext } from "../../surfaces/surface";
 /**
  * Pointer gestures for whole-object edgeless selection, including marquee.
  *
@@ -6,16 +8,19 @@
  * gesture crosses slop so later moves only intersect and call `selection.set`,
  * which no-ops when membership is unchanged.
  */
-import { BLOCK_CONTENT_SELECTOR } from "../../constants";
+import { useEffect, useRef } from "react";
+import { BLOCK_CONTENT_SELECTOR, EDITOR_CONTROL_SELECTOR } from "../../constants";
 import {
   useDOMEvent,
-  useEditorMode,
   useEditorRoot,
-  useReactEditor,
+  useEditorView,
   useKeyboardEvent,
 } from "../../hooks";
-import { useEffect, useRef } from "react";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
+import {
+  getEdgelessRuntime,
+  type EdgelessSelectionRef,
+} from "../built-ins/selection/edgeless-runtime";
 import {
   groupParentByChild,
   outermostGroupId,
@@ -23,10 +28,6 @@ import {
   type EdgelessObjectHit,
   type EdgelessRect,
 } from "./edgeless-geometry";
-import {
-  getEdgelessRuntime,
-  type EdgelessSelectionRef,
-} from "../built-ins/selection/edgeless-runtime";
 
 interface RectangleGesture {
   readonly x: number;
@@ -47,10 +48,10 @@ const MARQUEE_SLOP_PX = 3;
  * Returns true for controls that retain their normal interaction without Primary.
  *
  * @param target - Event target under the pointer.
- * @returns True when the target is editable content or a native control.
+ * @returns True when the target is editable content or a marked control.
  */
 function isInteractive(target: Element): boolean {
-  return Boolean(target.closest(`${BLOCK_CONTENT_SELECTOR}, input, textarea, select, button, a`));
+  return Boolean(target.closest(`${BLOCK_CONTENT_SELECTOR}, ${EDITOR_CONTROL_SELECTOR}`));
 }
 
 /**
@@ -129,9 +130,9 @@ function hideRectangle(node: HTMLElement | null): void {
  * @returns Null; the marquee rectangle is an imperative DOM node.
  */
 export function EdgelessInteractionOverlay() {
-  const reactEditor = useReactEditor();
-  const selection = getEdgelessRuntime(reactEditor);
-  const { mode } = useEditorMode();
+  const editorView = useEditorView();
+  const selection = getEdgelessRuntime(editorView);
+  const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const gesture = useRef<RectangleGesture | null>(null);
   const rectangleRef = useRef<HTMLElement | null>(null);
@@ -219,7 +220,7 @@ export function EdgelessInteractionOverlay() {
     if (!start.moved) {
       start.moved = true;
       start.objects = snapshotObjectHits(root);
-      start.parentByChild = groupParentByChild(reactEditor.elements.getElements());
+      start.parentByChild = groupParentByChild(editorView.runtime.elements.getElements());
     }
     const next = {
       left: Math.min(start.x, event.clientX),

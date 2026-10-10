@@ -1,3 +1,4 @@
+import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
 /**
  * Generic recursive block rendering shared by every document surface.
  *
@@ -9,16 +10,16 @@
  */
 import { memo, useCallback, useSyncExternalStore, type ComponentType } from "react";
 import { BLOCK_ROW_CLASS } from "../../constants";
-import { useBlockNode, useBlockSelected, useReactEditor } from "../../hooks";
+import { useBlockNode, useBlockSelected, useEditorView } from "../../hooks";
+import { BlockView } from "../block-view/block-view";
 import {
   BlockElementRefBoundary,
   BlockWrapper,
   useBlockElementRef,
   type BlockShellProps,
 } from "../block-wrapper/block-wrapper";
-import { BlockView } from "../block-view/block-view";
+import { BlockBodySlot, BlockSlots } from "../owner-slots/owner-slots";
 import { UnknownBlock } from "../unknown-block/unknown-block";
-import { BlockSlots } from "../owner-slots/owner-slots";
 
 const BLOCK_CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 
@@ -44,7 +45,10 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
           <div className={BLOCK_CONTENT_FLOW_CLASS}>{content}</div>
         </BlockSlots>
       </div>
-      <BlockElementRefBoundary>{children}</BlockElementRefBoundary>
+      <BlockElementRefBoundary>
+        <BlockBodySlot block={block} selected={isSelected} />
+        {children}
+      </BlockElementRefBoundary>
     </BlockView>
   );
 }
@@ -61,23 +65,22 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
  */
 function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   const { block } = useBlockNode(blockId);
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const selected = useBlockSelected(blockId);
+  const childrenId = useBlockChildrenId(blockId);
   const subscribeRenderers = useCallback(
-    (listener: () => void) => reactEditor.renderers.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => editorView.runtime.renderers.subscribe(listener),
+    [editorView],
   );
   useSyncExternalStore(
     subscribeRenderers,
-    () => reactEditor.renderers.revision,
-    () => reactEditor.renderers.revision,
+    () => editorView.runtime.renderers.revision,
+    () => editorView.runtime.renderers.revision,
   );
 
   if (!block) return null;
   const childIds = block.childIds;
-  const Content = reactEditor.renderers.get(block.type) ?? UnknownBlock;
-  const childrenId = `block-children-${block.id}`;
-  const collapseActive = reactEditor.blockListProps.has("collapse");
+  const Content = editorView.runtime.renderers.get(block.type) ?? UnknownBlock;
 
   return (
     <BlockWrapper
@@ -86,7 +89,7 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
       isSelected={selected}
       content={<BlockContent renderer={Content} blockId={block.id} />}
     >
-      {childIds.length > 0 && (!collapseActive || block.listProps.collapsed !== true) && (
+      {childIds.length > 0 && editorView.runtime.blockListProps.childrenVisible(block) && (
         <div id={childrenId} className="page-block-children">
           {childIds.map((childId) => (
             <MemoBlockTreeNode key={childId} blockId={childId} />

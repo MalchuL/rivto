@@ -11,7 +11,7 @@ import type { EdgelessVisualController } from "../controller";
 import { EdgelessToolButton } from "./tool-button";
 
 /** Bottom-centered bar; `edgeless-selection-toolbar` is a stable hook. */
-const SELECTION_TOOLBAR_CLASS = `${UI_SCOPE_CLASS} edgeless-selection-toolbar absolute bottom-[62px] left-1/2 z-21 flex max-w-[calc(100%-48px)] -translate-x-1/2 gap-[3px] overflow-x-auto rounded-xl border border-border bg-background/95 p-[5px] shadow-(--rivto-edgeless-chrome-shadow)`;
+const SELECTION_TOOLBAR_CLASS = `${UI_SCOPE_CLASS} edgeless-selection-toolbar`;
 
 const alignments = [
   ["left", "Align left", "align-left"],
@@ -35,11 +35,11 @@ export function SelectionToolbar({
   readonly controller: EdgelessVisualController;
   readonly items: readonly string[];
 }) {
-  const execute = (name: string, payload?: unknown) => controller.reactEditor.commands.execute(name, payload);
+  const execute = (name: string, payload?: unknown) => controller.runtime.commands.execute(name, payload);
   return (
     <div className={SELECTION_TOOLBAR_CLASS} data-edgeless-ui="true" role="toolbar" aria-label="Selected objects">
       {items.length > 1 && <EdgelessToolButton label="Group" icon="group" onClick={() => execute("edgeless.selection.group")} />}
-      {items.some((id) => controller.reactEditor.elements.getElement(id)?.type === "group") && (
+      {items.some((id) => controller.runtime.elements.getElement(id)?.type === "group") && (
         <EdgelessToolButton label="Ungroup" icon="ungroup" onClick={() => execute("edgeless.selection.ungroup")} />
       )}
       {items.length > 1 && alignments.map(([alignment, label, icon]) => (

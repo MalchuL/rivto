@@ -54,8 +54,8 @@ export class DocumentModelImpl implements DocumentModel {
   constructor(crdt: CRDTDoc) {
     this.crdt = crdt;
     this.id = crdt.id;
-    const blocks = new DocumentBlockManager(crdt);
-    const elements = new DocumentElementManager(crdt);
+    const blocks = this.createBlockManager(crdt);
+    const elements = this.createElementManager(crdt);
     const pluginData = new DocumentPluginDataManager(crdt);
     blocks.normalize();
     const undoScopes: CRDTUndoScope[] = [
@@ -77,6 +77,30 @@ export class DocumentModelImpl implements DocumentModel {
       if (this.crdt.isLocalOrigin(updateOrigin)) return;
       blocks.normalize();
     });
+  }
+
+  /**
+   * Creates block storage before initial normalization and history-scope collection.
+   * Override to use an application manager; the default retains native document behavior.
+   * Called during base construction, before subclass fields are initialized, so managers
+   * must defer reading those fields until their operations run.
+   * @param crdt - This document's collaborative adapter, already assigned with its ID.
+   * @returns Block manager whose scopes are included in document history.
+   */
+  protected createBlockManager(crdt: CRDTDoc): DocumentBlockManager {
+    return new DocumentBlockManager(crdt);
+  }
+
+  /**
+   * Creates element storage before history-scope collection.
+   * Override to use an application manager; the default retains native document behavior.
+   * Called during base construction, before subclass fields are initialized, so managers
+   * must defer reading those fields until their operations run.
+   * @param crdt - This document's collaborative adapter, already assigned with its ID.
+   * @returns Element manager whose scopes are included in document history.
+   */
+  protected createElementManager(crdt: CRDTDoc): DocumentElementManager {
+    return new DocumentElementManager(crdt);
   }
 
   /**

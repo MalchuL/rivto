@@ -141,7 +141,13 @@ export interface DocumentBlockManagerApi {
    * @returns Destination ID for every source ID.
    */
   createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string>;
-  /** @param block - Block to insert. @param afterId - Optional sibling anchor. @returns Complete inserted block. */
+  /**
+   * Inserts portable data with new or reused stable identities; local collisions still throw.
+   * @param block - Block to insert, including optional existing subtree IDs.
+   * @param afterId - Optional sibling anchor, null for first, or omitted for last.
+   * @returns Complete inserted block with supplied IDs preserved and missing IDs allocated.
+   * @throws If malformed, an ID exists in this document, the sibling is missing, or application identity checks fail.
+   */
   insertBlock(block: BlockInput, afterId?: string | null): Block;
   /** @param id - Block identifier. @param patch - Fields to update. @returns Updated non-recursive block fields. */
   updateBlock(id: string, patch: BlockPatch): BlockNode;
@@ -211,7 +217,12 @@ export interface DocumentElementManagerApi {
    * @returns Destination ID for every source ID.
    */
   createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string>;
-  /** @param input - Element to insert. @returns Complete inserted element. */
+  /**
+   * Inserts validated data with a new or reused stable identity; local collisions still throw.
+   * @param input - Element to insert with an optional existing ID.
+   * @returns Complete inserted element with a supplied ID preserved or a missing ID allocated.
+   * @throws If invalid, an ID exists in this document, or application identity checks fail.
+   */
   insertElement(input: ElementInput): DocumentElement;
   /** @param id - Element identifier. @param patch - Fields to update. @returns Complete updated element. */
   updateElement(id: string, patch: ElementPatch): DocumentElement;

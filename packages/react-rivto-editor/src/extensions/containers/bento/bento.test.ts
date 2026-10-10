@@ -1,3 +1,4 @@
+import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 /**
  * Verifies Bento uses ordinary persisted hierarchy and props, including undo,
  * clipboard and snapshot round trips rather than a separate tile store.
@@ -5,24 +6,24 @@
  */
 import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../../test-utils";
-import { createReactEditor } from "../../../react-editor";
+
+import { indentBlocks } from "../../../block-behaviors/ops/outline-ops";
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import { bentoExtension, createBentoBlockInput } from "./bento";
-import { indentBlocks } from "../../../views/ops/outline-ops";
 
-test("slash converts the current block to Bento in place", () => {
-  const editor = createTestCoreEditor();
-  const reactEditor = createReactEditor({ editor, extensions: [defaultWritingBlockExtension(), bentoExtension()] });
+test("slash converts the current block to Bento in place", async () => {
+  const editor = await createTestCoreEditor();
+  const editorView = createReactEditor({ editor, extensions: [defaultWritingBlockExtension(), bentoExtension()] });
   const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
-  reactEditor.slashCommands.execute("block.bento.insert", { blockId });
+  editorView.slashCommands.execute("block.bento.insert", { blockId });
   expect(editor.blocks.getBlockNode(blockId)).toMatchObject({ id: blockId, type: "bento", content: "" });
-  reactEditor.destroy();
+  editorView.runtime.destroy();
   editor.destroy();
 });
 
-test("Bento preserves tile identity and width through moves, undo and serialization", () => {
-  const editor = createTestCoreEditor();
-  const reactEditor = createReactEditor({ editor, extensions: [defaultWritingBlockExtension(), bentoExtension()] });
+test("Bento preserves tile identity and width through moves, undo and serialization", async () => {
+  const editor = await createTestCoreEditor();
+  const editorView = createReactEditor({ editor, extensions: [defaultWritingBlockExtension(), bentoExtension()] });
   const board = editor.blocks.insertBlock(createBentoBlockInput()).id;
   expect(editor.blocks.getBlockNode(board)?.content).toBe("");
   const tile = editor.blocks.insertBlock({ type: "paragraph", content: "Tile", props: { bentoWidth: 440 } }).id;
@@ -43,10 +44,10 @@ test("Bento preserves tile identity and width through moves, undo and serializat
   expect(editor.blocks.getParentId(tile)).toBe(board);
   const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Other" }).id;
   editor.blocks.moveBlocks([nested], board, "inside");
-  indentBlocks(reactEditor, [nested]);
+  indentBlocks(editorView, [nested]);
   expect(editor.blocks.getParentId(nested)).toBe(board);
   editor.blocks.indentBlock(nested);
   expect(editor.blocks.getParentId(nested)).toBe(tile);
-  reactEditor.destroy();
+  editorView.runtime.destroy();
   editor.destroy();
 });

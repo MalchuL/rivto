@@ -1,3 +1,6 @@
+import { EDITOR_CONTROL_SELECTOR } from "../../../constants";
+import { SurfaceBoundary } from "../../../surfaces/surface";
+import { getEdgelessSurfaceOptions } from "../register";
 /**
  * React surface for the zoomable edgeless canvas.
  *
@@ -5,18 +8,11 @@
  * canonical block elements onto the canvas. Persisted document mutations stay
  * in core managers while transient pan, zoom, and pointer visuals remain here.
  */
-import {
-  useDOMEvent,
-  useReactEditor,
-  useEditorRoot,
-  useElements,
-  useKeyboardEvent,
-  useRootBlockIds,
-} from "../../../hooks";
-import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
+import { createCaretSelection } from "@chulane/rivto";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -24,12 +20,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { createCaretSelection } from "@chulane/rivto";
 import { UI_SCOPE_CLASS } from "../../../components/ui-scope";
-import { ToolBarDivider } from "../visuals/components/tool-bar";
-import { EdgelessToolButton } from "../visuals/components/tool-button";
-import { EDGELESS_GRID_SIZE } from "../visuals/utils/geometry";
-import { EdgelessBlockElement } from "./edgeless-block";
 import {
   blockIdsOf,
   EDGELESS_BLOCK_ELEMENT_TYPE,
@@ -37,6 +28,19 @@ import {
   insertBlockElementSeparator,
   nonOverlappingBlockFrame,
 } from "../../../elements/block-element-projection";
+import {
+  useDOMEvent,
+  useEditorRoot,
+  useEditorView,
+  useElements,
+  useKeyboardEvent,
+  useRootBlockIds,
+} from "../../../hooks";
+import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
+import { ToolBarDivider } from "../visuals/components/tool-bar";
+import { EdgelessToolButton } from "../visuals/components/tool-button";
+import { EDGELESS_GRID_SIZE } from "../visuals/utils/geometry";
+import { EdgelessBlockElement } from "./edgeless-block";
 import { EdgelessSnappingStore } from "./snapping-store";
 
 const MIN_ZOOM = 0.5;
@@ -78,7 +82,16 @@ function gridDotFade(zoom: number): string {
  * important when a surface is replaced: its root, document, and window
  * listeners move together instead of leaving global listeners behind.
  */
-export function EdgelessSurface({
+/** @param props - Optional local canvas settings. @returns Explicit canvas with its extension UI. */
+export function EdgelessSurface(props: { readonly snapping?: EdgelessSnappingStore; readonly avoidBlockElementOverlap?: boolean; readonly blockElementWidth?: number } = {}) {
+  const editor = useEditorView();
+  const configured = getEdgelessSurfaceOptions(editor);
+  const suppliedSnapping = props.snapping ?? configured.snapping;
+  const snapping = useMemo(() => suppliedSnapping ?? new EdgelessSnappingStore(), [suppliedSnapping]);
+  return <SurfaceBoundary type="edgeless"><EdgelessSurfaceContent {...configured} {...props} snapping={snapping} /></SurfaceBoundary>;
+}
+
+function EdgelessSurfaceContent({
   snapping,
   avoidBlockElementOverlap = true,
   blockElementWidth = EDGELESS_CARD_DEFAULT_FRAME.width,
@@ -87,7 +100,7 @@ export function EdgelessSurface({
   readonly avoidBlockElementOverlap?: boolean;
   readonly blockElementWidth?: number;
 }) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const rootIds = useRootBlockIds();
   const blockElements = useElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
   const { ref: registerRoot } = useEditorRoot();
@@ -248,7 +261,7 @@ export function EdgelessSurface({
     const target = event.target;
     if (!root || !(target instanceof Element) || event.button !== 0) return;
     if (root.dataset.edgelessTool === "pan" || root.dataset.edgelessTool === "place") return;
-    if (target.closest("[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], button, input, textarea, select, a") ||
+    if (target.closest(`[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}`) ||
       target.closest(".edgeless-drawing-capture[data-active]")) return;
     const rect = root.getBoundingClientRect();
     const x = (event.clientX - rect.left - pan.x) / zoom;
@@ -260,26 +273,26 @@ export function EdgelessSurface({
       y,
     };
     const frame = avoidBlockElementOverlap
-      ? nonOverlappingBlockFrame(preferredFrame, reactEditor.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
+      ? nonOverlappingBlockFrame(preferredFrame, editorView.runtime.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
       : preferredFrame;
-    const roots = reactEditor.blocks.getBlocks();
-    const zIndex = Math.max(0, ...reactEditor.elements.getElements().map((element) => element.zIndex)) + 1;
+    const roots = editorView.runtime.blocks.getBlocks();
+    const zIndex = Math.max(0, ...editorView.runtime.elements.getElements().map((element) => element.zIndex)) + 1;
     let id = "";
-    reactEditor.history.batchUpdates(() => {
+    editorView.runtime.history.batchUpdates(() => {
       let afterId = roots.at(-1)?.id;
       const last = roots.at(-1);
-      if (last && !reactEditor.blockTypes.separatesBlockElements(last.type)) {
-        afterId = insertBlockElementSeparator(reactEditor, last.id).id;
+      if (last && !editorView.runtime.blockTypes.separatesBlockElements(last.type)) {
+        afterId = insertBlockElementSeparator(editorView.runtime, last.id).id;
       }
-      id = reactEditor.blocks.insertBlock(reactEditor.createDefaultBlock(), afterId).id;
-      reactEditor.elements.insertElement({
+      id = editorView.runtime.blocks.insertBlock(editorView.runtime.createDefaultBlock(), afterId).id;
+      editorView.runtime.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame,
         zIndex,
         props: { startBlockId: id, endBlockId: id },
       });
     });
-    reactEditor.selection.set(createCaretSelection(id, 0));
+    editorView.selection.set(createCaretSelection(id, 0));
     requestAnimationFrame(() => focusBlock(root, id, 0));
   };
 
@@ -349,7 +362,7 @@ export function EdgelessSurface({
   return (
     <main
       ref={rootRef}
-      className="edgeless-viewport"
+      data-rivto-surface="edgeless" className="edgeless-viewport"
       data-edgeless-zoom={zoom}
       data-edgeless-pan-x={pan.x}
       data-edgeless-pan-y={pan.y}

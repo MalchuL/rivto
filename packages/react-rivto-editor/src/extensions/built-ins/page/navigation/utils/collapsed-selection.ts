@@ -4,55 +4,62 @@
  * @module
  */
 import {
+  createStructuralSelection,
   hasBlockRanges,
   isStructuralSelection,
-  type EditorBlock as Block,
+  type BlockManagerApi,
   type Selection,
 } from "@chulane/rivto";
-import { blockSelection } from "./block-selection";
-import { pageEntries } from "./outline";
 
 /**
  * Replaces selection endpoints hidden by a collapsed ancestor with that ancestor.
  *
- * @param blocks - Complete page outline.
+ * @param blocks - Block lookups for the displayed document.
  * @param selection - Current portable selection.
+ * @param boundary - Subtree root; ancestors outside this view do not hide its blocks.
  * @returns Reconciled selection, the unchanged selection, or undefined.
  */
 export function reconcileCollapsedSelection(
-  blocks: Block[],
+  blocks: Pick<BlockManagerApi, "getBlockNode" | "getParentId" | "getOrderedIds">,
   selection: Selection | undefined,
+  boundary?: string,
 ): Selection | undefined {
   if (!selection) return undefined;
-  const isCollapsed = (block: Block) => block.listProps.collapsed === true;
-  const visible = pageEntries(blocks, null, false, isCollapsed).map(({ block }) => block.id);
-  const visibleSet = new Set(visible);
-  const hiddenBy = new Map<string, string>();
-
-  const indexHidden = (items: Block[], collapsedAncestor?: string): void => {
-    items.forEach((block) => {
-      if (collapsedAncestor) hiddenBy.set(block.id, collapsedAncestor);
-      const ancestor = collapsedAncestor ?? (block.listProps.collapsed === true ? block.id : undefined);
-      indexHidden(block.children, ancestor);
-    });
+  const visibleIds = new Map<string, string | undefined>();
+  const visibleId = (id: string): string | undefined => {
+    if (visibleIds.has(id)) return visibleIds.get(id);
+    if (!blocks.getBlockNode(id)) return undefined;
+    let visible = id;
+    let ancestor = id;
+    while (ancestor !== boundary) {
+      const parent = blocks.getParentId(ancestor);
+      if (!parent) break;
+      if (blocks.getBlockNode(parent)?.listProps.collapsed === true) visible = parent;
+      ancestor = parent;
+    }
+    visibleIds.set(id, visible);
+    return visible;
   };
-  indexHidden(blocks);
+  const hiddenBy = (id: string): string | undefined => {
+    const visible = visibleId(id);
+    return visible === id ? undefined : visible;
+  };
 
   const partial = hasBlockRanges(selection) && !isStructuralSelection(selection) ? selection : undefined;
   if (partial) {
-    const ancestor = hiddenBy.get(partial.blocks[0]?.id ?? "")
-      ?? hiddenBy.get(partial.focusBlockId);
-    return ancestor ? blockSelection(blocks, ancestor) : selection;
+    const ancestor = hiddenBy(partial.blocks[0]?.id ?? "")
+      ?? hiddenBy(partial.focusBlockId);
+    return ancestor ? createStructuralSelection([ancestor]) : selection;
   }
   if (!hasBlockRanges(selection)) return selection;
-  const selected = new Map(selection.blocks.map((block) => [hiddenBy.get(block.id) ?? block.id, block]));
-  const nextBlocks = visible.flatMap((id) => {
-    const source = selected.get(id);
-    return source ? [{ id, start: source.start, end: source.end }] : [];
-  });
-  const anchorBlockId = hiddenBy.get(selection.anchorBlockId) ?? selection.anchorBlockId;
-  const focusBlockId = hiddenBy.get(selection.focusBlockId) ?? selection.focusBlockId;
-  if (!nextBlocks.length || !visibleSet.has(anchorBlockId) || !visibleSet.has(focusBlockId)) return undefined;
+  const selected = new Map(selection.blocks.flatMap((block) => {
+    const id = visibleId(block.id);
+    return id ? [[id, block] as const] : [];
+  }));
+  const nextBlocks = blocks.getOrderedIds(selected.keys()).map((id) => ({ ...selected.get(id)!, id }));
+  const anchorBlockId = hiddenBy(selection.anchorBlockId) ?? selection.anchorBlockId;
+  const focusBlockId = hiddenBy(selection.focusBlockId) ?? selection.focusBlockId;
+  if (!nextBlocks.length || !selected.has(anchorBlockId) || !selected.has(focusBlockId)) return undefined;
   const changed = nextBlocks.length !== selection.blocks.length
     || nextBlocks.some((block, index) => block.id !== selection.blocks[index]?.id)
     || anchorBlockId !== selection.anchorBlockId
