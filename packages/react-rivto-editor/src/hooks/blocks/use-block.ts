@@ -6,13 +6,13 @@
  *
  * @module
  */
-import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type {
   EditorBlock as Block,
   EditorBlockNode as BlockNode,
   EditorBlockPatch as BlockPatch,
 } from "@chulane/rivto";
-import { useEditorView } from "../editor/use-editor-view";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useEditorView } from "../../editor-view/use-editor-view";
 
 /** Commands bound to one stable block ID. */
 export interface BlockOperations<Props extends object = Record<string, unknown>> {
@@ -74,19 +74,19 @@ export interface UseBlockNodeResult<Props extends object = Record<string, unknow
 export function useBlockOperations<Props extends object = Record<string, unknown>>(blockId: string): BlockOperations<Props> {
   const editorView = useEditorView();
   return useMemo<BlockOperations<Props>>(() => ({
-    update: (patch) => editorView.blocks.updateBlock(blockId, patch),
-    setContent: (content) => editorView.blocks.updateBlock(blockId, { content }),
-    setType: (type) => editorView.blocks.setBlockType(blockId, type),
-    setProps: (props) => editorView.blocks.updateBlock(blockId, { props: props as Record<string, unknown> }),
-    setProp: (key, value) => editorView.blocks.setBlockProp(blockId, String(key), value),
-    setPluginData: (pluginId, value) => editorView.blocks.setBlockPluginData(blockId, pluginId, value),
-    remove: () => editorView.blocks.removeBlock(blockId),
-    mergeInto: (targetId) => editorView.blocks.mergeBlocks(targetId, blockId),
-    moveAfter: (afterId) => editorView.blocks.moveBlock(blockId, afterId),
-    moveBefore: (beforeId) => editorView.blocks.moveBlock(blockId, beforeId, "before"),
-    moveInside: (parentId) => editorView.blocks.moveBlock(blockId, parentId, "inside"),
-    indent: () => editorView.blocks.indentBlock(blockId),
-    outdent: () => editorView.blocks.outdentBlock(blockId),
+    update: (patch) => editorView.runtime.blocks.updateBlock(blockId, patch),
+    setContent: (content) => editorView.runtime.blocks.updateBlock(blockId, { content }),
+    setType: (type) => editorView.runtime.blocks.setBlockType(blockId, type),
+    setProps: (props) => editorView.runtime.blocks.updateBlock(blockId, { props: props as Record<string, unknown> }),
+    setProp: (key, value) => editorView.runtime.blocks.setBlockProp(blockId, String(key), value),
+    setPluginData: (pluginId, value) => editorView.runtime.blocks.setBlockPluginData(blockId, pluginId, value),
+    remove: () => editorView.runtime.blocks.removeBlock(blockId),
+    mergeInto: (targetId) => editorView.runtime.blocks.mergeBlocks(targetId, blockId),
+    moveAfter: (afterId) => editorView.runtime.blocks.moveBlock(blockId, afterId),
+    moveBefore: (beforeId) => editorView.runtime.blocks.moveBlock(blockId, beforeId, "before"),
+    moveInside: (parentId) => editorView.runtime.blocks.moveBlock(blockId, parentId, "inside"),
+    indent: () => editorView.runtime.blocks.indentBlock(blockId),
+    outdent: () => editorView.runtime.blocks.outdentBlock(blockId),
   }), [blockId, editorView]);
 }
 
@@ -100,11 +100,11 @@ export function useBlockOperations<Props extends object = Record<string, unknown
 export function useBlock(blockId: string): UseBlockResult {
   const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => editorView.blocks.subscribeBlock(blockId, listener),
+    (listener: () => void) => editorView.runtime.blocks.subscribeBlock(blockId, listener),
     [blockId, editorView],
   );
   const getSnapshot = useCallback(
-    () => editorView.blocks.getBlock(blockId),
+    () => editorView.runtime.blocks.getBlock(blockId),
     [blockId, editorView],
   );
   const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -120,11 +120,11 @@ export function useBlock(blockId: string): UseBlockResult {
 export function useBlockNode<Props extends object = Record<string, unknown>>(blockId: string): UseBlockNodeResult<Props> {
   const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => editorView.blocks.subscribeBlockNode(blockId, listener),
+    (listener: () => void) => editorView.runtime.blocks.subscribeBlockNode(blockId, listener),
     [blockId, editorView],
   );
   const getSnapshot = useCallback(
-    () => editorView.blocks.getBlockNode(blockId),
+    () => editorView.runtime.blocks.getBlockNode(blockId),
     [blockId, editorView],
   );
   const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);

@@ -5,7 +5,7 @@
  *
  * @module
  */
-import { DocumentViewDOM, DOCUMENT_VIEW_SELECTOR } from "../../managers/events/document-view";
+import { DOCUMENT_VIEW_SELECTOR, DocumentViewDOM } from "../../managers/events/document-view";
 
 const ROOT_LEAD_RADIUS = 6;
 

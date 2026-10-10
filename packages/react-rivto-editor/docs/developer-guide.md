@@ -13,20 +13,21 @@ The React package never owns or duplicates document data. It presents a core
 ## Runtime and rendered editors
 
 `createEditorRuntime` creates shared document infrastructure and installs extensions
-once. Pass it to `<EditorView runtime={runtime}>`. Each occurrence constructs its own
-`EditorViewApi`; `useEditorView()` and event payloads return that occurrence editor.
-Blocks, history, rendering definitions, and extension registrations remain shared.
+once. Pass it to `<EditorView runtime={runtime}>`. Each occurrence constructs an `EditorViewController` implementing
+the `EditorViewApi` interface; `useEditorView()` and event payloads return that occurrence editor.
+Blocks, history, rendering definitions, and extension registrations remain shared
+and are accessed explicitly through `editorView.runtime`.
 DOM selection, local event registrations, and clipboard/slash execution belong to
 the receiving occurrence. Closing one view does not destroy its shared runtime.
 
 An extension's `setup(runtime)` registers behavior. Its event handlers use
 `event.editorView`, and slash callbacks use `context.editorView`, for operations
 that depend on a rendered surface. A global toolbar must explicitly choose a
-mounted editor through `runtime.events.getDocumentView()` before restoring DOM
+mounted editor through `runtime.editorViews.getActive() ?? runtime.editorViews.getDefault()` before restoring DOM
 selection or executing a view command; absence means there is no mounted target.
 
 `createViewApi` and `ViewApiFactory` are removed. View managers are constructed
-inside `EditorViewApi`, with their shared registries supplied as dependencies.
+inside `EditorViewController`, with their shared registries supplied as dependencies.
 Hosts replace `createReactEditor` with `createEditorRuntime` and the `EditorView`
 prop `reactEditor` with `runtime`. The core editor and persisted document formats
 are unchanged.
@@ -305,17 +306,17 @@ src/
   surfaces/
     page/
     edgeless/
-  capabilities.ts         public capability interfaces
-  react-editor.tsx        small runtime coordinator
-  editor-view.tsx         stable provider + active surface
+  capabilities.ts         public contract re-exports
+  editor/                 shared runtime, storage and creation options
+  editor-view/            view controller, interface, context, component and hook
 ```
 
 Recommended reading order:
 
 1. `demo/src/App.tsx`
-2. `src/editor-view-api.ts`
+2. `src/editor/editor-runtime.ts` and `src/editor-view/types.ts`
 3. `src/extensions/built-ins/built-ins.ts`
-4. `src/editor-view.tsx`
+4. `src/editor-view/editor-view.tsx`
 5. `src/hooks/blocks/use-block.ts`
 6. `src/surfaces/page/page-block.tsx`
 7. `src/managers/events/event-manager.ts`
@@ -360,9 +361,30 @@ The minimum regression coverage for subscription work is:
 
 ## Shared document operations
 
-Use the exported `SharedEditorApi` type when an operation accepts either
-`EditorRuntime` or `EditorViewApi` and only needs their shared document managers
-and registrations. It excludes DOM events, selection, clipboard/slash execution,
-and destruction because those contracts differ between runtime and view.
+Use `EditorRuntime` for operations on shared document managers and registrations.
+A rendered occurrence supplies it explicitly as `editorView.runtime`; the view
+itself no longer repeats the document API. The broad SharedEditorApi alias is
+removed. Cross-document transfer retains one local Pick of blocks, history, and
+getDocument because that algorithm also accepts a framework-neutral core editor.
 Use `EditorViewApi` for occurrence-specific interaction, `EditorRuntime` for
-runtime ownership, or an existing manager capability when only that manager is needed.
+runtime ownership, or an existing manager contract when only that manager is needed.
+
+## Block behavior and manager contracts
+
+A rendered `EditorView` is different from the behavior of a block type.
+Use `runtime.blockBehaviors` to register or resolve `BlockBehavior` implementations;
+`DefaultBlockBehavior` supplies ordinary outline actions and
+`ContainerBlockBehavior` supplies the shared container behavior. A complete block
+registration uses `behavior`, alongside `definition` and `render`.
+The `BlockView` React component still renders the block shell.
+
+Public manager contracts use the `Api` suffix and live next to their owning
+manager: for example, `BlocksApi`, `BlockBehaviorsApi`, `ViewEventsApi`,
+`ViewSelectionApi`, and `ViewClipboardApi`. They remain available from the main
+package entry point. Internal code imports them directly from their owner;
+`capabilities.ts` only collects type re-exports.
+
+The agreed sequence and implementation status are recorded in
+[`react-api-architecture-ru.md`](../../../dev_notes/react-api-architecture-ru.md).
+The first stage changes names and module ownership; merging the view implementation
+with its controller and separating registration from execution are subsequent stages.

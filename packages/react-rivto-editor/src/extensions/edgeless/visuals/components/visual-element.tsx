@@ -4,13 +4,13 @@
  * Selection handles subscribe per visual ID so marquee growth over a neighbor
  * does not re-render this node or recreate its label editor.
  */
-import { editorControlProps } from "../../../../constants";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { ElementSlots } from "../../../../blocks";
 import {
   EditableLabel,
   type EditableLabelFocusPoint,
 } from "../../../../components";
-import { ElementSlots } from "../../../../blocks";
+import { editorControlProps } from "../../../../constants";
 import { useEdgelessSelected } from "../../../built-ins/selection/edgeless-runtime";
 import type { EdgelessVisualController } from "../controller";
 import type { ConnectorEndpoint, EdgelessVisual } from "../types";
@@ -53,7 +53,7 @@ export function VisualElement({
   readonly onReconnect: (key: "source" | "target", endpoint: ConnectorEndpoint) => void;
 }) {
   const selected = useEdgelessSelected(visual.id);
-  const element = controller.editor.elements.getElement(visual.id);
+  const element = controller.runtime.elements.getElement(visual.id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<{ key: "source" | "target"; endpoint: ConnectorEndpoint } | null>(null);
   const focusPointRef = useRef<EditableLabelFocusPoint | null>(null);

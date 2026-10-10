@@ -1,4 +1,4 @@
-import type { EditorViewApi } from "../../types";
+import type { EditorViewApi } from "../../editor-view/types";
 
 /** Block-local context supplied when listing or executing a slash command. */
 export interface SlashCommandContext {

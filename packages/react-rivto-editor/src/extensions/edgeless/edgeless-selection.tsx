@@ -8,6 +8,7 @@ import { SurfaceContext } from "../../surfaces/surface";
  * gesture crosses slop so later moves only intersect and call `selection.set`,
  * which no-ops when membership is unchanged.
  */
+import { useEffect, useRef } from "react";
 import { BLOCK_CONTENT_SELECTOR, EDITOR_CONTROL_SELECTOR } from "../../constants";
 import {
   useDOMEvent,
@@ -15,8 +16,11 @@ import {
   useEditorView,
   useKeyboardEvent,
 } from "../../hooks";
-import { useEffect, useRef } from "react";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
+import {
+  getEdgelessRuntime,
+  type EdgelessSelectionRef,
+} from "../built-ins/selection/edgeless-runtime";
 import {
   groupParentByChild,
   outermostGroupId,
@@ -24,10 +28,6 @@ import {
   type EdgelessObjectHit,
   type EdgelessRect,
 } from "./edgeless-geometry";
-import {
-  getEdgelessRuntime,
-  type EdgelessSelectionRef,
-} from "../built-ins/selection/edgeless-runtime";
 
 interface RectangleGesture {
   readonly x: number;
@@ -220,7 +220,7 @@ export function EdgelessInteractionOverlay() {
     if (!start.moved) {
       start.moved = true;
       start.objects = snapshotObjectHits(root);
-      start.parentByChild = groupParentByChild(editorView.elements.getElements());
+      start.parentByChild = groupParentByChild(editorView.runtime.elements.getElements());
     }
     const next = {
       left: Math.min(start.x, event.clientX),

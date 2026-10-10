@@ -7,17 +7,17 @@
  * picks a value. Controls are shadcn primitives (`NativeSelect`, `Checkbox`)
  * plus the shared edgeless size and color controls.
  */
-import { editorControlProps } from "../../../../constants";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Checkbox } from "../../../../components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
+import { editorControlProps } from "../../../../constants";
 import { isNodeLike } from "../../../../managers/events/dom-nodes";
 import type { EdgelessVisualController } from "../controller";
 import type { EdgelessFontOption, EdgelessVisual, TextHorizontalAlign, TextVerticalAlign } from "../types";
 import { ColorControl } from "./color-control";
-import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
-import { SizeControl } from "./size-control";
 import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "./properties-panel";
+import { SizeControl } from "./size-control";
+import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
 
 /* Segmented control for text alignment; buttons keep `aria-pressed` for the active value. */
 const ALIGN_TOGGLES_CLASS = "inline-flex gap-0.5 rounded-lg border border-border bg-secondary p-0.5 [&_button]:size-7 [&_button]:min-w-7";
@@ -280,7 +280,7 @@ export function VisualProperties({
       count={visuals.length}
       ariaLabel="Visual properties"
       panelRef={panelRef}
-      onClose={() => controller.editor.commands.execute("edgeless.selection.clear")}
+      onClose={() => controller.runtime.commands.execute("edgeless.selection.clear")}
     >
       {body}
     </EdgelessPropertiesPanel>

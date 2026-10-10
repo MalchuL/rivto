@@ -1,6 +1,6 @@
 import type { EditorMode } from "@chulane/rivto";
 import { useCallback, useSyncExternalStore } from "react";
-import { useEditorContext } from "../../editor-context";
+import { useEditorContext } from "../../editor-view/editor-context";
 
 /**
  * Value and mutation API returned by {@link useEditorMode}.
@@ -36,12 +36,12 @@ export interface UseEditorModeResult {
 export function useEditorMode(): UseEditorModeResult {
   const { editorView } = useEditorContext();
   const subscribe = useCallback(
-    (listener: () => void) => editorView.mode.subscribe(listener),
+    (listener: () => void) => editorView.runtime.mode.subscribe(listener),
     [editorView],
   );
-  const mode = useSyncExternalStore(subscribe, () => editorView.mode.get(), () => editorView.mode.get());
+  const mode = useSyncExternalStore(subscribe, () => editorView.runtime.mode.get(), () => editorView.runtime.mode.get());
   const setMode = useCallback(
-    (mode: EditorMode) => editorView.mode.set(mode),
+    (mode: EditorMode) => editorView.runtime.mode.set(mode),
     [editorView],
   );
 

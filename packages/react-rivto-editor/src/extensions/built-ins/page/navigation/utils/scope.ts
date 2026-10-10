@@ -10,19 +10,20 @@ import type {
   EditorElement,
   RivtoEditorApi,
 } from "@chulane/rivto";
-import type { EditorViewApi } from "../../../../../types";
-import { findRenderedBlock } from "../../../../../managers";
+import type { EditorViewApi } from "../../../../../editor-view/types";
 import { blockIdsOf } from "../../../../../elements/block-element-projection";
+import { findRenderedBlock } from "../../../../../managers/events/block-dom";
 
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 
 /** Walks to the document root that owns `blockId`. */
 export function owningRootId(editor: EditorViewApi | RivtoEditorApi, blockId: string): string {
+  const documentEditor = "runtime" in editor ? editor.runtime : editor;
   let rootId = blockId;
   for (
-    let parentId = editor.blocks.getParentId(rootId);
+    let parentId = documentEditor.blocks.getParentId(rootId);
     parentId;
-    parentId = editor.blocks.getParentId(rootId)
+    parentId = documentEditor.blocks.getParentId(rootId)
   ) {
     rootId = parentId;
   }
@@ -34,9 +35,10 @@ export function owningBlockElement(
   editor: EditorViewApi | RivtoEditorApi,
   blockId: string,
 ): EditorElement | undefined {
+  const documentEditor = "runtime" in editor ? editor.runtime : editor;
   const rootId = owningRootId(editor, blockId);
-  const rootOrder = editor.blocks.getRootIds();
-  return editor.elements.getElements().find(
+  const rootOrder = documentEditor.blocks.getRootIds();
+  return documentEditor.elements.getElements().find(
     (element) => element.type === "block" && blockIdsOf(element, rootOrder).includes(rootId),
   );
 }
@@ -50,12 +52,13 @@ export function owningBlockElement(
  * document mode because they have no DOM occurrence.
  */
 export function navigationOutlineBlocks(editor: EditorViewApi | RivtoEditorApi, blockId: string): EditorBlock[] {
+  const documentEditor = "runtime" in editor ? editor.runtime : editor;
   const sourceRootId = "rootBlockId" in editor ? editor.rootBlockId : undefined;
   if (sourceRootId) {
-    const root = editor.blocks.getBlock(sourceRootId);
+    const root = documentEditor.blocks.getBlock(sourceRootId);
     return root ? [root] : [];
   }
-  const roots = editor.blocks.getBlocks();
+  const roots = documentEditor.blocks.getBlocks();
   let outline = roots;
   // Navigation follows the rendered view, which can be a page in an edgeless document.
   // Core-only callers have no view, so their document mode is the appropriate fallback.
@@ -66,7 +69,7 @@ export function navigationOutlineBlocks(editor: EditorViewApi | RivtoEditorApi, 
       const root = roots.find((block) => block.id === owningRootId(editor, blockId));
       outline = root ? [root] : [];
     } else {
-      const allowed = new Set(blockIdsOf(element, editor.blocks.getRootIds()));
+      const allowed = new Set(blockIdsOf(element, documentEditor.blocks.getRootIds()));
       outline = roots.filter((block) => allowed.has(block.id));
     }
   }

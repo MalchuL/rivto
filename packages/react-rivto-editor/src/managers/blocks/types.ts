@@ -6,7 +6,7 @@ import type {
 } from "@chulane/rivto";
 import type { SlashCommandContext } from "../slash";
 import type { BlockRenderer } from "./renderer-types";
-import type { BlockViewBehavior } from "../../views/types";
+import type { BlockBehavior } from "../../block-behaviors/types";
 
 /** React-owned outline policy stored as opaque core definition metadata. */
 export interface BlockContainment {
@@ -58,9 +58,14 @@ export interface ReactBlockRegistration {
   /** React content renderer selected by all registered surfaces. */
   readonly render: BlockRenderer;
   /**
-   * Optional interaction view registered with the type.
+   * Keyboard and drag operations for blocks with definition.type.
+   *
+   * The same instance is used for every block of this type in the document.
+   * BlockTypeManager registers it with runtime.blockBehaviors and removes it with
+   * this registration. Omit it to use DefaultBlockBehavior; methods returning
+   * "default" also delegate to that implementation through the behavior dispatcher.
    */
-  readonly view?: BlockViewBehavior;
+  readonly behavior?: BlockBehavior;
   /** Optional in-place conversion entry added to the shared slash manager. */
   readonly slashCommand?: ReactBlockSlashCommand;
   /** Whether root blocks of this type partition React's edgeless block elements. */

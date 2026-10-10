@@ -6,17 +6,17 @@
  * @module
  */
 import {
+  bentoExtension,
+  BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
   blockExtension,
+  columnsExtension,
   editorControlProps,
   kanbanExtension,
-  bentoExtension,
-  tableExtension,
-  columnsExtension,
   MarkdownContent,
-  useEditorView,
-  useBlockSelectionAnchor,
+  tableExtension,
   useBlockNode,
-  BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
+  useBlockSelectionAnchor,
+  useEditorView,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import {
@@ -49,7 +49,7 @@ export {
   COUNTER_BLOCK_TYPE,
   counterBlockDefinition,
   SLIDER_BLOCK_TYPE,
-  sliderBlockDefinition,
+  sliderBlockDefinition
 } from "./custom-block-definitions";
 
 /**
@@ -78,7 +78,7 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
    */
   const commitValue = useCallback((next: number) => {
     setDraftValue(null);
-    if (next === (editorView.blocks.getBlockNode(blockId)?.props.value ?? 50)) return;
+    if (next === (editorView.runtime.blocks.getBlockNode(blockId)?.props.value ?? 50)) return;
     setProp("value", next);
   }, [editorView, blockId, setProp]);
 
@@ -162,7 +162,7 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
   const count = editing.block.props.count ?? 0;
   const increment = (event: MouseEvent<HTMLButtonElement>) => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
-    const current = editorView.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+    const current = editorView.runtime.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
     editing.operations.setProp("count", (current?.count ?? 0) + 1);
   };
   return (
@@ -202,7 +202,7 @@ export const customBlockExtensions: readonly ReactEditorExtension[] = [
     {
       id: "clipboard.demo-counter",
       setup: (editorRuntime) => {
-        editorRuntime.clipboard.registerFormatter({
+        editorRuntime.clipboardFormats.registerFormatter({
           id: "demo.counter",
           matches: ({ block }) => block.type === COUNTER_BLOCK_TYPE,
           format: ({ block }) => {

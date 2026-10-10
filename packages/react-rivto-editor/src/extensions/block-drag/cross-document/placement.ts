@@ -1,11 +1,11 @@
 /** Foreign documents use the same regions and acceptance as local dragging. */
 import type { EditorBlock } from "@chulane/rivto";
+import type { EditorViewApi } from "../../../editor-view/types";
 import type { CrossDocumentBlockTransferPlacement } from "../../built-ins/clipboard/cross-document-block-transfer";
-import type { EditorViewApi } from "../../../types";
+import type { DropBlock } from "../placement/types";
 import { dropMoveTarget, excludeDropSubtrees } from "../placement/utils";
 import { getDropBlocks, resolveSurfaceDrop } from "../pointer/target";
 import type { DropPlacement } from "../types";
-import type { DropBlock } from "../placement/types";
 
 /**
  * Resolves a foreign-document drop into a destination page's move target.
@@ -40,13 +40,13 @@ export function resolveCrossDocumentPageRootPlacement(
   sourceDocumentId?: string,
 ): (CrossDocumentBlockTransferPlacement & { readonly indicator: DropPlacement | null }) | null {
   let blocks: readonly DropBlock[] = getDropBlocks(editorView);
-  if (sourceDocumentId === editorView.getDocument().id) {
+  if (sourceDocumentId === editorView.runtime.getDocument().id) {
     blocks = excludeDropSubtrees(blocks, new Set(sources.map(({ id }) => id)));
   }
   if (!blocks.length) {
     if (editorView.rootBlockId) return null;
     const destination = { kind: "between", parentId: null, previousId: null, nextId: null, depth: 0 } as const;
-    return editorView.views.acceptsDrop(destination, sources) ? { targetId: null, position: "after", indicator: null } : null;
+    return editorView.runtime.blockBehaviors.acceptsDrop(destination, sources) ? { targetId: null, position: "after", indicator: null } : null;
   }
   const indicator = resolveSurfaceDrop(root, editorView, sources, blocks, { x, y }, {
     childDropIndent, gapDropZone, allowChildPlacement, outerEdgeDropZone,

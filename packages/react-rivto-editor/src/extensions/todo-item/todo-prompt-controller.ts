@@ -1,8 +1,8 @@
-import type { EditorRuntime } from "../../editor-runtime";
-import type { EditorViewApi } from "../../types";
-import { saveDOMSelection, restoreDOMSelection } from "../../managers";
+import type { EditorViewApi } from "../../editor-view/types";
+import type { EditorRuntime } from "../../editor/editor-runtime";
+import { restoreDOMSelection, saveDOMSelection } from "../../managers";
 import { TODO_PROMPT_CLASS } from "./todo-item-classes";
-import { TODO_ITEM_BLOCK_TYPE, matchPrompt, createTodoItemProps, type PromptMatch, type TodoItemStatus } from "./todo-item-model";
+import { TODO_ITEM_BLOCK_TYPE, createTodoItemProps, matchPrompt, type PromptMatch, type TodoItemStatus } from "./todo-item-model";
 
 interface TodoCandidate extends PromptMatch {
   readonly editor: EditorViewApi;
@@ -58,16 +58,16 @@ export class TodoPromptController {
     if (!current.contentElement.isConnected) return;
     const editor = current.editor;
 
-    const block = editor.blocks.getBlockNode(current.blockId);
+    const block = editor.runtime.blocks.getBlockNode(current.blockId);
     const match = block ? matchPrompt(block.content, this.prompts) : undefined;
     if (!block || block.type === TODO_ITEM_BLOCK_TYPE || !match) {
       decoratePrompt(current.contentElement);
       return;
     }
     const owned = createTodoItemProps();
-    editor.history.batchUpdates(() => {
-      editor.blocks.setBlockType(current.blockId, TODO_ITEM_BLOCK_TYPE);
-      editor.blocks.updateBlock(current.blockId, {
+    editor.runtime.history.batchUpdates(() => {
+      editor.runtime.blocks.setBlockType(current.blockId, TODO_ITEM_BLOCK_TYPE);
+      editor.runtime.blocks.updateBlock(current.blockId, {
         content: block.content.slice(match.prompt.length).replace(/^\s+/, ""),
         props: { ...owned, status: match.status },
       });
@@ -87,7 +87,7 @@ export class TodoPromptController {
         if (!blockId || !contentElement) return false;
         queueMicrotask(() => {
           if (!this.active) return;
-          const block = editor.blocks.getBlockNode(blockId);
+          const block = editor.runtime.blocks.getBlockNode(blockId);
           if (!block || block.type === TODO_ITEM_BLOCK_TYPE) return;
           const match = matchPrompt(contentElement.textContent ?? "", this.prompts);
           if (!match) {

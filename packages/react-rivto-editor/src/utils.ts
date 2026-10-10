@@ -1,11 +1,11 @@
-import type { EditorRuntime } from "./editor-runtime";
+import type { EditorRuntime } from "./editor/editor-runtime";
 /**
  * Distinguishes view editors and framework-neutral editors from shared React runtimes.
  * The guards use public capability discriminants and expose no coordinator or
  * document internals.
  */
 import type { RivtoEditorApi } from "@chulane/rivto";
-import type { EditorViewApi } from "./types";
+import type { EditorViewApi } from "./editor-view/types";
 
 /**
  * Determines whether an editor belongs to one rendered React occurrence.
@@ -14,7 +14,7 @@ import type { EditorViewApi } from "./types";
  * @returns Whether `editor` has an explicit occurrence and shared runtime.
  */
 export function isEditorViewApi(editor: EditorViewApi | EditorRuntime | RivtoEditorApi): editor is EditorViewApi {
-  return "runtime" in editor && "view" in editor;
+  return "runtime" in editor;
 }
 
 /**

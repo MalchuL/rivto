@@ -1,8 +1,8 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  blockIdSelector,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
+  blockIdSelector,
 } from "./dom-markers";
 
 /** Selects root blocks through the same Ctrl+click gesture used by the demo. */

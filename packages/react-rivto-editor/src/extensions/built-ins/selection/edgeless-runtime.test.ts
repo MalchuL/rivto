@@ -42,7 +42,7 @@ describe("EdgelessSelectionRuntime", () => {
     runtime.set(["", first, second, first]);
     expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual({ active: true, items: [first, second] });
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -57,7 +57,7 @@ describe("EdgelessSelectionRuntime", () => {
     runtime.set([first, second]);
     runtime.set([second, first]);
     expect(calls.map((call) => call.items)).toEqual([[first], [first, second], [second, first]]);
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -73,7 +73,7 @@ describe("EdgelessSelectionRuntime", () => {
     runtime.set([first]);
     expect(runtime.isSelected(first)).toBe(true);
     expect(calls).toHaveLength(3);
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -86,7 +86,7 @@ describe("EdgelessSelectionRuntime", () => {
     runtime.clear();
     expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual({ active: true, items: [] });
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 });

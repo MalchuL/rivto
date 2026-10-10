@@ -61,6 +61,6 @@ const snapshot = document.getSnapshot();
 document.loadSnapshot(snapshot);
 ```
 
-Приложение создаёт `DocumentStorage` над CRDT registry и передаёт callback `openDocument` в `EditorStorage`. Editor cache владеет открытыми моделями и создаёт отдельный core для каждой; `getSingleEditor(documentId)` возвращает этот core. DocumentModel хранит generic persisted data и hierarchy invariants. Type definitions, defaults, semantic validation и property processors принадлежат single editor.
+Приложение создаёт `DocumentStorage` над CRDT registry и передаёт callback `openDocument` в `EditorStorage`. Editor cache владеет открытыми моделями и создаёт отдельный core для каждой; `openCoreEditor(documentId)` возвращает этот core. DocumentModel хранит generic persisted data и hierarchy invariants. Type definitions, defaults, semantic validation и property processors принадлежат single editor.
 
 Вложенные страницы описывают все классы, свойства, методы, аргументы, результаты, исключения, persisted-типы, utilities и реальные consumers модели документа.

@@ -19,10 +19,10 @@ import { Fragment, type ReactNode } from "react";
 import { useEditorView } from "../../hooks";
 import {
   SLOT_POSITIONS,
-  type ResolvedSlot,
   type BlockSlotPosition,
   type BlockSlotProps,
   type ElementSlotProps,
+  type ResolvedSlot,
 } from "../../managers";
 
 const SLOT_CLASS = "rivto-slot";
@@ -90,14 +90,14 @@ export function BlockSlots({
     <SlotHost
       owner="block"
       position="start"
-      components={editorView.surfaces.getBlockSlotEntries("start", slotProps)}
+      components={editorView.runtime.surfaces.getBlockSlotEntries("start", slotProps)}
       props={slotProps}
     />
     {children}
     <SlotHost
       owner="block"
       position="end"
-      components={editorView.surfaces.getBlockSlotEntries("end", slotProps)}
+      components={editorView.runtime.surfaces.getBlockSlotEntries("end", slotProps)}
       props={slotProps}
     />
     {SLOT_POSITIONS.map((position) => (
@@ -105,7 +105,7 @@ export function BlockSlots({
         key={position}
         owner="block"
         position={position}
-        components={editorView.surfaces.getBlockSlotEntries(position, slotProps)}
+        components={editorView.runtime.surfaces.getBlockSlotEntries(position, slotProps)}
         props={slotProps}
       />
     ))}
@@ -138,7 +138,7 @@ export function BlockBodySlot({ block, selected }: Omit<BlockSlotProps, "mode">)
   return <SlotHost
     owner="block"
     position="body"
-    components={editorView.surfaces.getBlockSlotEntries("body", props)}
+    components={editorView.runtime.surfaces.getBlockSlotEntries("body", props)}
     props={props}
   />;
 }
@@ -164,7 +164,7 @@ export function ElementSlots({
       key={position}
       owner="element"
       position={position}
-      components={editorView.surfaces.getElementSlotEntries(position, slotProps)}
+      components={editorView.runtime.surfaces.getElementSlotEntries(position, slotProps)}
       props={slotProps}
     />
   ))}</>;

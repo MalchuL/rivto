@@ -1,18 +1,18 @@
-import { editorControlProps } from "../../constants";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { EditorBlock } from "@chulane/rivto";
-import type { BlockResolution } from "../../editor-storage";
-import { useAcquiredEditor } from "../../hooks/editor/use-acquired-editor";
-import { z } from "zod";
 import { Link2Icon } from "lucide-react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { z } from "zod";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
-import { PageSurface } from "../../surfaces/page";
-import { EditorView } from "../../editor-view";
-import { EditorStorageContext } from "../../editor-storage-context";
-import { useBlockSelectionAnchor, useBlockNode, useEditorView } from "../../hooks";
+import { editorControlProps } from "../../constants";
+import { EditorView } from "../../editor-view/editor-view";
+import type { BlockResolution } from "../../editor/editor-storage";
+import { EditorStorageContext } from "../../editor/editor-storage-context";
+import { useBlockNode, useBlockSelectionAnchor, useEditorView } from "../../hooks";
+import { useAcquiredEditor } from "../../hooks/editor/use-acquired-editor";
 import type { BlockSlotProps, ReactEditorExtension } from "../../managers";
+import { PageSurface } from "../../surfaces/page";
 
 /** Persisted block type for a live reference to another workspace block. */
 export const EMBEDDING_BLOCK_TYPE = "embedding";
@@ -52,7 +52,7 @@ function EmbeddingControls({ block }: BlockSlotProps) {
         <form className="flex flex-col gap-3" onSubmit={(event) => {
           event.preventDefault();
           const fields = new FormData(event.currentTarget);
-          editorView.blocks.updateBlock(block.id, { props: {
+          editorView.runtime.blocks.updateBlock(block.id, { props: {
             targetDocumentId: String(fields.get("targetDocumentId") ?? "").trim(),
             targetBlockId: String(fields.get("targetBlockId") ?? "").trim(),
           } });
@@ -84,7 +84,7 @@ function EmbeddingBody({ block }: BlockSlotProps) {
   const ancestors = useContext(ancestryContext);
   const { targetDocumentId, targetBlockId } = block.props as EmbeddingProps;
   const targetAddress = JSON.stringify([targetDocumentId, targetBlockId]);
-  const ownAddress = JSON.stringify([editorView.getDocument().id, blockId]);
+  const ownAddress = JSON.stringify([editorView.runtime.getDocument().id, blockId]);
   const references = useContext(EditorStorageContext);
   const [location, setLocation] = useState<BlockResolution & { targetAddress: string; error?: unknown }>({ targetAddress: "", ambiguous: false });
   const resolvedAddress = JSON.stringify([location.documentId, targetBlockId]);
@@ -94,7 +94,7 @@ function EmbeddingBody({ block }: BlockSlotProps) {
   useEffect(() => {
     setLocation({ targetAddress, ambiguous: false });
     if (!targetDocumentId || !targetBlockId || !references) return;
-    return references.subscribeBlockLocation({ documentId: targetDocumentId, blockId: targetBlockId }, (resolution, error) => {
+    return references.blockReferences.subscribeBlockLocation({ documentId: targetDocumentId, blockId: targetBlockId }, (resolution, error) => {
       setLocation((previous) => {
         if (previous.targetAddress === targetAddress
           && previous.documentId === resolution.documentId
@@ -157,12 +157,12 @@ export function embeddingExtension(): ReactEditorExtension {
         component: EmbeddingControls,
         when: ({ block }) => block.type === EMBEDDING_BLOCK_TYPE,
       });
-      const formatter = editorRuntime.clipboard.registerFormatter({
+      const formatter = editorRuntime.clipboardFormats.registerFormatter({
         id: "embedding.reference",
         matches: ({ block }) => block.type === EMBEDDING_BLOCK_TYPE,
         format: ({ block }, current) => ({ ...current, plain: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}`, markdown: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}` }),
       });
-      const paste = editorRuntime.clipboard.pasteStrategies.register("paste.embedding-references", {
+      const paste = editorRuntime.pasteStrategies.register("paste.embedding-references", {
         matches: (context) => Boolean(context.bundle?.sourceDocumentId && context.blockIdMap),
         paste: (context) => {
           const map = context.blockIdMap!;

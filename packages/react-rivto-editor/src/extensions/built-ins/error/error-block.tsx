@@ -51,7 +51,7 @@ export const errorBlockExtension = (): ReactEditorExtension => ({
       definition: { type: ERROR_BLOCK_TYPE, title: "Invalid block" },
       render: ErrorBlock,
     });
-    editorRuntime.clipboard.registerFormatter({
+    editorRuntime.clipboardFormats.registerFormatter({
       id: "error",
       matches: ({ block }) => block.type === ERROR_BLOCK_TYPE,
       format: ({ block }) => {

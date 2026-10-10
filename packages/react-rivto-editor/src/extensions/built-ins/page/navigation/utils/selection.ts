@@ -11,19 +11,19 @@ import {
   type RivtoEditorApi,
   type Selection,
 } from "@chulane/rivto";
-import type { SelectionCapability } from "../../../../../capabilities";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
   PAGE_EDITOR_ROOT_SELECTOR,
 } from "../../../../../constants";
+import type { EditorViewApi } from "../../../../../editor-view/types";
 import { focusBlock, resolveSelectionEndpoints } from "../../../../../managers";
-import type { EditorViewApi } from "../../../../../types";
-import { navigationOutlineBlocks } from "./scope";
-import { pageEntries } from "./outline";
-import type { VerticalDirection } from "./types";
+import type { ViewSelectionApi } from "../../../../../managers/selection/api";
 import { getPageVirtualizationControllerForElement } from "../../../../../surfaces/page/page-virtualization-controller";
+import { pageEntries } from "./outline";
+import { navigationOutlineBlocks } from "./scope";
+import type { VerticalDirection } from "./types";
 
 export type { VerticalDirection } from "./types";
 
@@ -34,7 +34,7 @@ export type { VerticalDirection } from "./types";
  * @returns Current selection when present.
  */
 export function currentNavigationSelection(
-  selectionManager: SelectionCapability,
+  selectionManager: ViewSelectionApi,
 ): Selection | undefined {
   return selectionManager.readDOM() ?? selectionManager.get();
 }
@@ -71,15 +71,16 @@ export function textSelectionEdge(
   selection: Selection,
   edge: "start" | "end",
 ): EditorPosition {
+  const documentEditor = "runtime" in editor ? editor.runtime : editor;
   assertBlockRangeEndpoints(selection);
-  const lengthOf = (id: string) => editor.blocks.getBlockNode(id)?.content.length ?? 0;
+  const lengthOf = (id: string) => documentEditor.blocks.getBlockNode(id)?.content.length ?? 0;
   const ends = resolveSelectionEndpoints(selection, lengthOf);
   if (!ends) return { blockId: selection.focusBlockId, offset: 0 };
   const ids = pageEntries(
     navigationOutlineBlocks(editor, selection.focusBlockId),
     null,
     false,
-    (block) => !editorView.blockListProps.childrenVisible(block),
+    (block) => !editorView.runtime.blockListProps.childrenVisible(block),
   ).map(({ block }) => block.id);
   const anchorIndex = ids.indexOf(ends.anchor.blockId);
   const headIndex = ids.indexOf(ends.head.blockId);

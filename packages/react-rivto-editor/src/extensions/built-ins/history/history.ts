@@ -1,5 +1,5 @@
-import type { EditorRuntime } from "../../../editor-runtime";
-import type { EditorViewApi } from "../../../types";
+import type { EditorViewApi } from "../../../editor-view/types";
+import type { EditorRuntime } from "../../../editor/editor-runtime";
 import { KEYBOARD_BINDING_IDS } from "../../../managers";
 
 /** One document-history action recognized from a browser editing event. */
@@ -62,7 +62,7 @@ export function registerHistory(
   /** Executes one history step and restores focus after React renders it. */
   const run = (editorView: EditorViewApi, root: HTMLElement, action: HistoryAction): void => {
     if (!root) return;
-    editorView.history[action]();
+    editorView.runtime.history[action]();
     // Only restore selection and its focus here; undo/redo has already changed the document.
     editorView.selection.scheduleIfSelectionUnchanged(() => {
       if (editorView.selection.restoreDOM()) return;

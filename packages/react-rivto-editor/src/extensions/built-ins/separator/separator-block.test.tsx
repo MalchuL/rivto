@@ -1,7 +1,6 @@
-import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 import { createCaretSelection } from "@chulane/rivto";
-import { createTestCoreEditor as createRivtoEditor } from "../../../test-utils";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createTestReactEditor as createReactEditor, createTestCoreEditor as createRivtoEditor } from "../../../test-utils";
 
 import { defaultWritingBlockExtension } from "../built-ins";
 import {
@@ -19,12 +18,12 @@ describe("separator block extension", () => {
     });
 
     expect(editor.blockRegistry.has(SEPARATOR_BLOCK_TYPE)).toBe(true);
-    expect(editorView.blockTypes.separatesBlockElements(SEPARATOR_BLOCK_TYPE)).toBe(true);
+    expect(editorView.runtime.blockTypes.separatesBlockElements(SEPARATOR_BLOCK_TYPE)).toBe(true);
     expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('role="separator"');
     expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('data-separator-block="true"');
     expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('data-block-selection-anchor=""');
 
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -46,7 +45,7 @@ describe("separator block extension", () => {
     expect(editor.blocks.getBlockNode(roots[2]!)?.type).toBe("paragraph");
     expect(editor.blocks.getBlockNode(roots[2]!)?.content).toBe("");
 
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -66,7 +65,7 @@ describe("separator block extension", () => {
     expect(roots[0]).toBe(empty);
     expect(editor.blocks.getBlockNode(roots[1]!)?.type).toBe("paragraph");
 
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 });

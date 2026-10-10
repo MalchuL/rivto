@@ -1,4 +1,4 @@
-import { BLOCK_ID_ATTRIBUTE, BLOCK_CONTENT_SELECTOR, BLOCK_ID_SELECTOR, BLOCK_ROW_CLASS } from "../../constants";
+import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR, BLOCK_ROW_CLASS } from "../../constants";
 /** DOM boundary for a document view, including full-document and embedded subtree surfaces. */
 export const DOCUMENT_VIEW_ATTRIBUTE = "data-rivto-document-view";
 /** Selector used to distinguish repeated render occurrences and source documents. */

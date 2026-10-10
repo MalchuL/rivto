@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { createRequire } from "node:module";
 import { mkdtemp, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { resolve, join } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 let output: string;

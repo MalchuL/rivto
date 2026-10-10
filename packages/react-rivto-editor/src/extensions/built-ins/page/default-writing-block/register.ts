@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../../editor-runtime";
+import type { EditorRuntime } from "../../../../editor/editor-runtime";
 /**
  * Runtime registration for the host-provided default writing block.
  *

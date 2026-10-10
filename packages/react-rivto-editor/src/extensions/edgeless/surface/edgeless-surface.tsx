@@ -1,6 +1,6 @@
 import { EDITOR_CONTROL_SELECTOR } from "../../../constants";
-import { getEdgelessSurfaceOptions } from "../register";
 import { SurfaceBoundary } from "../../../surfaces/surface";
+import { getEdgelessSurfaceOptions } from "../register";
 /**
  * React surface for the zoomable edgeless canvas.
  *
@@ -8,19 +8,11 @@ import { SurfaceBoundary } from "../../../surfaces/surface";
  * canonical block elements onto the canvas. Persisted document mutations stay
  * in core managers while transient pan, zoom, and pointer visuals remain here.
  */
-import {
-  useDOMEvent,
-  useEditorView,
-  useEditorRoot,
-  useElements,
-  useKeyboardEvent,
-  useRootBlockIds,
-} from "../../../hooks";
-import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
+import { createCaretSelection } from "@chulane/rivto";
 import {
   useCallback,
-  useMemo,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -28,12 +20,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { createCaretSelection } from "@chulane/rivto";
 import { UI_SCOPE_CLASS } from "../../../components/ui-scope";
-import { ToolBarDivider } from "../visuals/components/tool-bar";
-import { EdgelessToolButton } from "../visuals/components/tool-button";
-import { EDGELESS_GRID_SIZE } from "../visuals/utils/geometry";
-import { EdgelessBlockElement } from "./edgeless-block";
 import {
   blockIdsOf,
   EDGELESS_BLOCK_ELEMENT_TYPE,
@@ -41,6 +28,19 @@ import {
   insertBlockElementSeparator,
   nonOverlappingBlockFrame,
 } from "../../../elements/block-element-projection";
+import {
+  useDOMEvent,
+  useEditorRoot,
+  useEditorView,
+  useElements,
+  useKeyboardEvent,
+  useRootBlockIds,
+} from "../../../hooks";
+import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
+import { ToolBarDivider } from "../visuals/components/tool-bar";
+import { EdgelessToolButton } from "../visuals/components/tool-button";
+import { EDGELESS_GRID_SIZE } from "../visuals/utils/geometry";
+import { EdgelessBlockElement } from "./edgeless-block";
 import { EdgelessSnappingStore } from "./snapping-store";
 
 const MIN_ZOOM = 0.5;
@@ -273,19 +273,19 @@ function EdgelessSurfaceContent({
       y,
     };
     const frame = avoidBlockElementOverlap
-      ? nonOverlappingBlockFrame(preferredFrame, editorView.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
+      ? nonOverlappingBlockFrame(preferredFrame, editorView.runtime.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
       : preferredFrame;
-    const roots = editorView.blocks.getBlocks();
-    const zIndex = Math.max(0, ...editorView.elements.getElements().map((element) => element.zIndex)) + 1;
+    const roots = editorView.runtime.blocks.getBlocks();
+    const zIndex = Math.max(0, ...editorView.runtime.elements.getElements().map((element) => element.zIndex)) + 1;
     let id = "";
-    editorView.history.batchUpdates(() => {
+    editorView.runtime.history.batchUpdates(() => {
       let afterId = roots.at(-1)?.id;
       const last = roots.at(-1);
-      if (last && !editorView.blockTypes.separatesBlockElements(last.type)) {
-        afterId = insertBlockElementSeparator(editorView, last.id).id;
+      if (last && !editorView.runtime.blockTypes.separatesBlockElements(last.type)) {
+        afterId = insertBlockElementSeparator(editorView.runtime, last.id).id;
       }
-      id = editorView.blocks.insertBlock(editorView.createDefaultBlock(), afterId).id;
-      editorView.elements.insertElement({
+      id = editorView.runtime.blocks.insertBlock(editorView.runtime.createDefaultBlock(), afterId).id;
+      editorView.runtime.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame,
         zIndex,

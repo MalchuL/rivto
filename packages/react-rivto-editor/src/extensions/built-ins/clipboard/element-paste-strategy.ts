@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../editor-runtime";
+import type { EditorRuntime } from "../../../editor/editor-runtime";
 /**
  * Recreates first-class canvas elements after core has pasted referenced blocks.
  *
@@ -10,12 +10,15 @@ import type { PasteContext, PastePlacement, PasteResult, PasteStrategy, Selectio
 import {
   createStructuralSelection,
 } from "@chulane/rivto";
-import type { EditorViewApi } from "../../../types";
-import { createEdgelessSelection, findEdgelessRuntime } from "../selection/edgeless-runtime";
+import type { EditorViewApi } from "../../../editor-view/types";
 import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../elements/block-element-projection";
+import { createEdgelessSelection, findEdgelessRuntime } from "../selection/edgeless-runtime";
 
 /** Canvas-specific clipboard paste strategy. */
 export class ElementPasteStrategy implements PasteStrategy {
+  /** Document managers used by both the installed controller and its view-bound operations. */
+  get runtime(): EditorRuntime { return "runtime" in this.editor ? this.editor.runtime : this.editor; }
+
   /**
    * Creates a strategy for one React runtime.
    * @param editor - Runtime receiving canvas elements.
@@ -34,7 +37,7 @@ export class ElementPasteStrategy implements PasteStrategy {
   matches(context: PasteContext, _placement: PastePlacement): boolean {
     // Core mode can be edgeless even when paste targets a page embedding.
     // Use the receiving surface so page paste does not create canvas elements.
-    if (this.editor.events.getSurfaceType() !== "edgeless") return false;
+    if (("runtime" in this.editor ? this.editor.events.getSurfaceType() : this.runtime.editorViews.getSurfaceType()) !== "edgeless") return false;
     if (!context.bundle) return false;
     if (context.bundle.elements?.length) return true;
     return Boolean(this.canvasBlockSelection());
@@ -51,16 +54,16 @@ export class ElementPasteStrategy implements PasteStrategy {
     if (!bundle) return undefined;
     const selected = new Set(bundle.selectedElementIds ?? bundle.elements?.map((element) => element.id));
     const sources = (bundle.elements ?? []).filter((element) => selected.has(element.id));
-    const elementIdMap = this.editor.elements.createImportIdMap(sources.map((element) => element.id));
+    const elementIdMap = this.runtime.elements.createImportIdMap(sources.map((element) => element.id));
     const pastedRootIds = bundle.blocks.flatMap((block) => context.blockIdMap?.get(block.id) ?? []);
     if (!sources.length && !pastedRootIds.length) return undefined;
     const sourceRootIds = bundle.blocks.map((block) => block.id);
     const created: string[] = [];
     const importedElementIds = new Map<string, string>();
-    const topLayer = Math.max(0, ...this.editor.elements.getElements().map((element) => element.zIndex));
-    this.editor.history.batchUpdates(() => {
+    const topLayer = Math.max(0, ...this.runtime.elements.getElements().map((element) => element.zIndex));
+    this.runtime.history.batchUpdates(() => {
       if (!sources.length && pastedRootIds.length) {
-        created.push(this.editor.elements.insertElement({
+        created.push(this.runtime.elements.insertElement({
           type: "block",
           frame: { x: 60, y: 60, width: 320, height: 120 },
           zIndex: topLayer + 1,
@@ -73,10 +76,10 @@ export class ElementPasteStrategy implements PasteStrategy {
           const blockIds = blockIdsOf(source, sourceRootIds).flatMap((id) => context.blockIdMap?.get(id) ?? []);
           if (!blockIds.length) return;
           const first = blockIds[0];
-          const roots = this.editor.blocks.getRootIds();
+          const roots = this.runtime.blocks.getRootIds();
           const before = first ? roots[roots.indexOf(first) - 1] : undefined;
-          if (before) insertBlockElementSeparator(this.editor, before);
-          const createdElement = this.editor.elements.insertElement({
+          if (before) insertBlockElementSeparator(this.runtime, before);
+          const createdElement = this.runtime.elements.insertElement({
             id,
             type: "block",
             frame: { ...source.frame, x: source.frame.x + 24, y: source.frame.y + 24 },
@@ -86,7 +89,7 @@ export class ElementPasteStrategy implements PasteStrategy {
           created.push(createdElement.id);
           importedElementIds.set(source.id, createdElement.id);
         } else {
-          const createdElement = this.editor.elements.insertElement({
+          const createdElement = this.runtime.elements.insertElement({
             id,
             type: source.type,
             frame: { ...source.frame, x: source.frame.x + 24, y: source.frame.y + 24 },
@@ -111,8 +114,8 @@ export class ElementPasteStrategy implements PasteStrategy {
   private canvasBlockSelection(): Selection | undefined {
     const snapshot = findEdgelessRuntime(this.editor)?.get();
     const blockIds = snapshot?.active ? snapshot.items.flatMap((id) => {
-      const element = this.editor.elements.getElement(id);
-      return element?.type === "block" ? blockIdsOf(element, this.editor.blocks.getRootIds()) : [];
+      const element = this.runtime.elements.getElement(id);
+      return element?.type === "block" ? blockIdsOf(element, this.runtime.blocks.getRootIds()) : [];
     }) : [];
     return blockIds.length ? createStructuralSelection(blockIds) : undefined;
   }

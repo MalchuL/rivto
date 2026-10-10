@@ -5,33 +5,33 @@
  * deleting them. Drag, clipboard, snapshots, and undo remain owned by core.
  * @module
  */
-import { editorControlProps } from "../../../constants";
-import { type KeyboardEvent, type MouseEvent } from "react";
+import { type EditorBlockInput } from "@chulane/rivto";
 import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
+import { type KeyboardEvent, type MouseEvent } from "react";
+import { createBlockBehaviorContext } from "../../../block-behaviors/context";
+import { convertLeafToContainer } from "../../../block-behaviors/ops/outline-ops";
 import { Button } from "../../../components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
-import { type EditorBlockInput } from "@chulane/rivto";
-import { useBlockSelectionAnchor, useBlockNode, useEditorView, useEditorRoot } from "../../../hooks";
+import { editorControlProps } from "../../../constants";
+import type { EditorViewApi } from "../../../editor-view/types";
+import { useBlockNode, useBlockSelectionAnchor, useEditorRoot, useEditorView } from "../../../hooks";
 import {
   type BlockSlotProps,
   type ReactEditorExtension,
 } from "../../../managers";
-import type { EditorViewApi } from "../../../types";
-import { createBlockViewContext } from "../../../views/context";
 import {
   COLUMNS_BLOCK_TYPE,
   COLUMNS_COLUMN_BLOCK_TYPE,
-  columnsColumnView,
-  columnsView,
+  columnsBehavior,
+  columnsColumnBehavior,
   relocateColumnContents,
-} from "./columns-view";
-import { convertLeafToContainer } from "../../../views/ops/outline-ops";
+} from "./columns-behavior";
 
 export {
   COLUMNS_BLOCK_TYPE,
   COLUMNS_COLUMN_BLOCK_TYPE,
-  relocateColumnContents,
-} from "./columns-view";
+  relocateColumnContents
+} from "./columns-behavior";
 export const COLUMNS_DEFAULT_COUNT = 2;
 export const COLUMNS_MIN_COUNT = 1;
 export const COLUMNS_MAX_COUNT = 6;
@@ -96,22 +96,22 @@ export function createColumnsBlockInput(
  * @returns Whether the board existed and the count could be applied.
  */
 export function setColumnsCount(editorView: EditorViewApi, blockId: string, count: number): boolean {
-  const board = editorView.blocks.getBlock(blockId);
+  const board = editorView.runtime.blocks.getBlock(blockId);
   if (board?.type !== COLUMNS_BLOCK_TYPE || !Number.isFinite(count)) return false;
   const next = Math.max(COLUMNS_MIN_COUNT, Math.min(COLUMNS_MAX_COUNT, Math.round(count)));
   const columns = board.children.filter((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE);
   if (next === columns.length) return true;
-  editorView.history.batchUpdates(() => {
-    editorView.blocks.updateBlock(board.id, { listProps: { collapsed: false } });
+  editorView.runtime.history.batchUpdates(() => {
+    editorView.runtime.blocks.updateBlock(board.id, { listProps: { collapsed: false } });
     if (next > columns.length) {
       let afterId = columns.at(-1)?.id ?? board.id;
       for (let index = columns.length; index < next; index += 1) {
-        const insertedId = editorView.blocks.insertBlock({
+        const insertedId = editorView.runtime.blocks.insertBlock({
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           content: "",
         }, afterId === board.id ? undefined : afterId).id;
         if (afterId === board.id) {
-          editorView.blocks.moveBlocks([insertedId], board.id, "inside");
+          editorView.runtime.blocks.moveBlocks([insertedId], board.id, "inside");
         }
         afterId = insertedId;
       }
@@ -119,7 +119,7 @@ export function setColumnsCount(editorView: EditorViewApi, blockId: string, coun
     }
     const removed = columns.slice(next);
     relocateColumnContents(editorView, removed.map((column) => column.id));
-    editorView.blocks.removeBlocks(removed.map((column) => column.id));
+    editorView.runtime.blocks.removeBlocks(removed.map((column) => column.id));
   });
   return true;
 }
@@ -163,8 +163,8 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    const context = root ? createBlockViewContext(editorView, blockId, root) : undefined;
-    if (context) columnsColumnView.insertFirstChild(context);
+    const context = root ? createBlockBehaviorContext(editorView, blockId, root) : undefined;
+    if (context) columnsColumnBehavior.appendWritingBlock(context);
   };
   return (
     <div
@@ -186,7 +186,7 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
 function ColumnsControls({ block }: BlockSlotProps) {
   const editorView = useEditorView();
   const count = block.childIds.filter((childId) => (
-    editorView.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE
+    editorView.runtime.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE
   )).length;
   return (
     <div className={SETTINGS_CLASS}>
@@ -226,7 +226,7 @@ export function columnsExtension(): ReactEditorExtension {
           metadata: { containment: { childOutline: "fixed" } },
         },
         render: Columns,
-        view: columnsView,
+        behavior: columnsBehavior,
       });
       editorRuntime.blockTypes.register({
         definition: {
@@ -235,7 +235,7 @@ export function columnsExtension(): ReactEditorExtension {
           metadata: { containment: { childOutline: "free", outlineFloor: true } },
         },
         render: ColumnsColumn,
-        view: columnsColumnView,
+        behavior: columnsColumnBehavior,
       });
       editorRuntime.surfaces.registerBlockSlot({
         position: "right",

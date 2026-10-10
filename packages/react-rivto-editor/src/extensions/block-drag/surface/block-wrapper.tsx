@@ -10,10 +10,6 @@
  */
 import { closestCenter } from "@dnd-kit/collision";
 import { useDraggable, useDroppable } from "@dnd-kit/react";
-import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks";
-import { findParentBlock } from "../../../managers/events/block-dom";
-import { useEditorView } from "../../../hooks";
-import type { DropAxis } from "../../../views/types";
 import {
   useCallback,
   useContext,
@@ -25,9 +21,13 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import type { DropAxis } from "../../../block-behaviors/types";
+import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks";
+import { useEditorView } from "../../../hooks";
+import { findParentBlock } from "../../../managers/events/block-dom";
 import { PageDropIndicator } from "../placement/indicator";
-import type { DropPlacementStore, PageDragHandle } from "../types";
 import { PageDragItemContext, PageDragStateContext } from "../state";
+import type { DropPlacementStore, PageDragHandle } from "../types";
 import { blockContainment } from "../utils/containment";
 
 const PAGE_BLOCK_ROW_CLASS = "page-block-row";
@@ -57,9 +57,9 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
   const [blockElement, setBlockElement] = useState<HTMLDivElement | null>(null);
   const row = blockElement?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`) ?? null;
   const parentId = blockElement ? findParentBlock(blockElement)?.dataset.blockId : undefined;
-  const targetView = editorView.views.resolve(block.id);
+  const targetView = editorView.runtime.blockBehaviors.resolve(block.id);
   const isLayoutRoot = targetView.dropAxis !== undefined && targetView.dropParentTypes === undefined;
-  const parentView = parentId ? editorView.views.resolve(parentId) : undefined;
+  const parentView = parentId ? editorView.runtime.blockBehaviors.resolve(parentId) : undefined;
   const parentOutline = parentId ? blockContainment(editorView, parentId)?.childOutline : undefined;
   const axis = parentOutline === "fixed" ? parentView?.dropAxis : undefined;
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";

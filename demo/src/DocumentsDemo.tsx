@@ -1,12 +1,18 @@
-import { useEffect, useState } from "react";
 import { BroadcastChannelProvider, WebRTCProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage, type DocumentModel } from "@chulane/document-model";
-import { DemoDatabase, DBDocumentModel } from "./database";
-import { DemoEditorSurface } from "./editor-surface";
 import {
-  EditorStorage, EditorStorageContext, type EditorAcquisition, createEditorRuntime, EditorView, embeddingExtension, EMBEDDING_BLOCK_TYPE,
-  edgelessPreset, pageDragExtension, standardPreset, type EditorRuntime,
+  createEditorRuntime,
+  edgelessPreset,
+  EditorStorage, EditorStorageContext,
+  EditorView,
+  EMBEDDING_BLOCK_TYPE,
+  embeddingExtension,
+  pageDragExtension, standardPreset, type EditorRuntime,
+  type RuntimeAcquisition,
 } from "@chulane/rivto-react";
+import { useEffect, useState } from "react";
+import { DBDocumentModel, DemoDatabase } from "./database";
+import { DemoEditorSurface } from "./editor-surface";
 
 interface Pane {
   id: string;
@@ -17,7 +23,7 @@ interface Pane {
 interface Runtime {
   storage: DocumentStorage;
   editor: EditorStorage;
-  seeded: Map<string, EditorAcquisition>;
+  seeded: Map<string, RuntimeAcquisition>;
 }
 
 /** Session-only demo: document views acquire models and all tabs share one runtime. */
@@ -65,7 +71,7 @@ export function DocumentsDemo() {
         standardPreset(), pageDragExtension(), ...edgelessPreset(), embeddingExtension(),
       ] }),
     });
-    const seeded = new Map<string, EditorAcquisition>();
+    const seeded = new Map<string, RuntimeAcquisition>();
     setRuntime({ storage, editor, seeded });
     const refresh = () => { if (active) setIds(storage.getDocumentIds()); };
     const unsubscribe = storage.subscribe(() => {
@@ -74,11 +80,11 @@ export function DocumentsDemo() {
     });
     const open = async (id: string) => {
       if (!active) return;
-      const acquisition = await editor.acquireEditor(id);
+      const acquisition = await editor.acquireRuntime(id);
       if (!active) { await acquisition.release(); return; }
       const pane: Pane = {
         id, instanceId: crypto.randomUUID(),
-        editorRuntime: acquisition.editor, release: acquisition.release,
+        editorRuntime: acquisition.runtime, release: acquisition.release,
       };
       livePanes.add(pane);
       setPanes((current) => [...current, pane]);
@@ -88,7 +94,7 @@ export function DocumentsDemo() {
       const model = await storage.create(id, blocks);
       if (!active) { await model.destroy(); return; }
       prepared.set(id, model);
-      seeded.set(id, await editor.acquireEditor(id));
+      seeded.set(id, await editor.acquireRuntime(id));
     };
     const seed = async () => {
       await storage.ready;

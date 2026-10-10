@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../../../editor-runtime";
+import type { EditorRuntime } from "../../../../../editor/editor-runtime";
 /**
  * Forward Delete dispatch at editable block boundaries.
  *
@@ -7,6 +7,7 @@ import type { EditorRuntime } from "../../../../../editor-runtime";
  *
  * @module
  */
+import { createBlockBehaviorContext } from "../../../../../block-behaviors/index";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -15,7 +16,6 @@ import {
   readKeyboardSelection,
   shouldDeleteSelection,
 } from "../../../../../managers";
-import { createBlockViewContext } from "../../../../../views";
 
 /**
  * Registers forward merging at a collapsed block-end caret.
@@ -29,14 +29,14 @@ export function registerForwardBlockMerge(editorRuntime: EditorRuntime): void {
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
     when: ({ editorView, raw: event, blockId }) =>
       isEditableKeyboardEvent(event) &&
-      !shouldDeleteSelection(readKeyboardSelection(editorView.selection, editorView.blocks, blockId)),
+      !shouldDeleteSelection(readKeyboardSelection(editorView.selection, editorView.runtime.blocks, blockId)),
   }, ({ editorView, root, blockId }) => {
-    const target = firstKeyboardTarget(readKeyboardSelection(editorView.selection, editorView.blocks, blockId));
-    const block = target?.collapsed ? editorView.blocks.getBlockNode(target.blockId) : undefined;
+    const target = firstKeyboardTarget(readKeyboardSelection(editorView.selection, editorView.runtime.blocks, blockId));
+    const block = target?.collapsed ? editorView.runtime.blocks.getBlockNode(target.blockId) : undefined;
     if (!target?.collapsed || !block || target.offset !== block.content.length) return false;
-    const context = createBlockViewContext(editorView, target.blockId, root, editorView.selection.get());
+    const context = createBlockBehaviorContext(editorView, target.blockId, root, editorView.selection.get());
     if (!context) return false;
-    return editorView.views.dispatch(
+    return editorView.runtime.blockBehaviors.dispatch(
       "onMergeForward",
       context,
       target,

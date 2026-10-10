@@ -1,22 +1,22 @@
-import { renderToStaticMarkup } from "react-dom/server";
-import { createStructuralSelection } from "@chulane/rivto";
-import { DocumentStorage } from "@chulane/document-model";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
-import { createTestMultiEditor } from "../../test-utils";
+import { DocumentStorage } from "@chulane/document-model";
+import { createStructuralSelection } from "@chulane/rivto";
+import { renderToStaticMarkup } from "react-dom/server";
+import { EditorView } from "../../editor-view/editor-view";
+import { EditorStorageContext } from "../../editor/editor-storage-context";
 import { PageSurface } from "../../surfaces/page/page-surface";
-import { EditorView } from "../../editor-view";
-import { EditorStorageContext } from "../../editor-storage-context";
+import { createTestMultiEditor } from "../../test-utils";
 import { standardPreset } from "../built-ins/built-ins";
-import { embeddingExtension, EMBEDDING_BLOCK_TYPE } from "./embedding";
 import { crossDocumentBlockTransfer } from "../built-ins/clipboard/cross-document-block-transfer";
+import { EMBEDDING_BLOCK_TYPE, embeddingExtension } from "./embedding";
 
 test("embedding props validate, snapshots and structured clipboard retain references, and cleanup removes registration", async () => {
   const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
   const source = await storage.create("source", [{ id: "target", type: "paragraph", content: "source" }]);
   const host = await storage.create("host");
   const runtime = await createTestMultiEditor([host, source], storage, { extensions: [standardPreset(), embeddingExtension()] });
-  const editor = await runtime.getSingleEditor(host.id);
-  const editorRuntime = runtime.getEditor(host.id)!;
+  const editor = await runtime.openCoreEditor(host.id);
+  const editorRuntime = runtime.getRuntime(host.id)!;
   const reference = editorRuntime.blocks.insertBlock({ type: EMBEDDING_BLOCK_TYPE, props: { targetDocumentId: "source", targetBlockId: "target" } });
   expect(reference.content).toBe("");
   expect(() => editorRuntime.blocks.setBlockProp(reference.id, "targetBlockId", 12)).toThrow();
@@ -25,7 +25,7 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   expect(copied?.blocks[0]?.props).toEqual({ targetDocumentId: "source", targetBlockId: "target" });
   expect(copied?.blocks[0]?.children).toEqual([]);
   expect(editor.dump().blocks[0]?.props).toEqual({ targetDocumentId: "source", targetBlockId: "target" });
-  const formats = editorRuntime.clipboard.format([reference]);
+  const formats = editorRuntime.clipboardFormats.format([reference]);
   expect(formats.plain).toBe("Embedded block: source/target");
   const standalone = renderToStaticMarkup(<EditorView runtime={editorRuntime}><PageSurface /></EditorView>);
   expect(standalone).toContain("Block resolution is unavailable.");
@@ -43,8 +43,8 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   expect(markup).not.toContain(">Embedded block<");
   expect(markup).toContain('data-block-selection-anchor=""');
   expect(markup).toContain('data-slot-position="body"');
-  expect(editorRuntime.views.acceptsDrop({ kind: "between", parentId: reference.id, previousId: null, nextId: null, depth: 1 }, [source.blocks.getBlock("target")!])).toBe(true);
-  const sourceEditor = await runtime.getSingleEditor(source.id);
+  expect(editorRuntime.blockBehaviors.acceptsDrop({ kind: "between", parentId: reference.id, previousId: null, nextId: null, depth: 1 }, [source.blocks.getBlock("target")!])).toBe(true);
+  const sourceEditor = await runtime.openCoreEditor(source.id);
   crossDocumentBlockTransfer(sourceEditor, editor, ["target"], { targetId: null, position: "after" });
   expect(source.blocks.hasBlock("target")).toBe(false);
   expect(host.blocks.hasBlock("target")).toBe(true);
@@ -57,7 +57,7 @@ test("clipboard retargets copied internal references and preserves qualified ext
   const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
   const source = await storage.create("A"); const target = await storage.create("B");
   const runtime = await createTestMultiEditor([source, target], storage, { extensions: [standardPreset(), embeddingExtension()] });
-  const a = await runtime.getSingleEditor("A"); const b = await runtime.getSingleEditor("B");
+  const a = await runtime.openCoreEditor("A"); const b = await runtime.openCoreEditor("B");
   a.blocks.insertBlock({ id: "branch", type: "paragraph", children: [
     { id: "target", type: "paragraph", content: "Copied target" },
     { id: "internal", type: EMBEDDING_BLOCK_TYPE, props: { targetDocumentId: "A", targetBlockId: "target" } },

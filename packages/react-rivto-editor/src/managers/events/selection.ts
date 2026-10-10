@@ -7,7 +7,8 @@
  */
 import type { Selection } from "@chulane/rivto";
 import { createCaretSelection, isCaretSelection } from "@chulane/rivto";
-import type { SelectionCapability, BlocksCapability } from "../../capabilities";
+import type { ViewSelectionApi } from "../selection/api";
+import type { BlocksApi } from "../blocks/blocks-api";
 import {
   findBlockFromEvent,
   focusBlock,
@@ -68,8 +69,8 @@ export function shouldDeleteSelection(
  * @returns Current selection suitable for a keyboard command.
  */
 export function readKeyboardSelection(
-  selectionManager: SelectionCapability,
-  blocks: BlocksCapability,
+  selectionManager: ViewSelectionApi,
+  blocks: BlocksApi,
   emptyBlockId?: string,
 ): Selection | undefined {
   const nativeSelection = selectionManager.readDOM();
@@ -89,7 +90,7 @@ export function isEditableKeyboardEvent(event: Event): boolean {
 /** Restores the native caret represented by current editor selection state. */
 export function focusSelectionCaret(
   root: HTMLElement,
-  selectionManager: SelectionCapability,
+  selectionManager: ViewSelectionApi,
 ): boolean {
   const target = firstKeyboardTarget(selectionManager.get());
   return Boolean(target?.collapsed && focusBlock(root, target.blockId, target.offset ?? 0));

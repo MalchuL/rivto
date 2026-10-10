@@ -1,21 +1,8 @@
-import { useEditorContext } from "../../../editor-context";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import type { DocumentModel } from "@chulane/document-model";
-import type { SlashCommand } from "../../../managers/slash";
 import { createCaretSelection } from "@chulane/rivto";
-import {
-  BLOCK_CONTENT_SELECTOR,
-  BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
-} from "../../../constants";
-import {
-  useDOMEvent,
-  useEditorView,
-  useEditorRoot,
-  useKeyboardEvent,
-} from "../../../hooks";
 import {
   useCallback,
   useEffect,
@@ -25,13 +12,25 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "../../../components/ui/command";
+import {
+  BLOCK_CONTENT_SELECTOR,
+  BLOCK_ID_ATTRIBUTE,
+  BLOCK_ID_SELECTOR,
+} from "../../../constants";
+import {
+  useDOMEvent,
+  useEditorRoot,
+  useEditorView,
+  useKeyboardEvent,
+} from "../../../hooks";
 import {
   BUILTIN_KEYMAP,
   findRenderedBlock,
   KEYBOARD_BINDING_IDS,
 } from "../../../managers";
+import type { SlashCommand } from "../../../managers/slash";
 import { keepNoResultMenuOpen, rankSlashCommands } from "./slash-search";
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "../../../components/ui/command";
 
 /**
  * Floating menu chrome. The root is the scroll container so long command lists
@@ -150,8 +149,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   const gap = Math.max(0, options.gap ?? DEFAULT_POSITION.gap);
   const viewportPadding = Math.max(0, options.viewportPadding ?? DEFAULT_POSITION.viewportPadding);
   const editorView = useEditorView();
-  const { view } = useEditorContext();
-  const roots = editorView.blocks.getBlocks();
+  const roots = editorView.runtime.blocks.getBlocks();
   const slashCommands = editorView.slashCommands;
   const { element: root } = useEditorRoot();
   const [session, setSession] = useState<SlashSession | null>(null);
@@ -179,7 +177,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
     setSession(null);
   }, []);
 
-  useEffect(() => view?.subscribeDeactivation(close), [view, close]);
+  useEffect(() => editorView.subscribeDeactivation(close), [editorView, close]);
 
   /** Validates the current caret and optionally discovers a freshly typed slash. */
   const refresh = useCallback((content: HTMLElement, blockId: string, discover: boolean) => {
@@ -215,7 +213,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
         const viewRoot = editorView.events.getRoot();
         if (!viewRoot) return;
         setSession({
-          document: editorView.getDocument(),
+          document: editorView.runtime.getDocument(),
           rootBlockId: editorView.rootBlockId,
           viewRoot,
           blockId,
@@ -251,7 +249,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   });
 
   useEffect(() => {
-    if (session && (!session.viewRoot.isConnected || !editorView.blocks.hasBlock(session.blockId))) close();
+    if (session && (!session.viewRoot.isConnected || !editorView.runtime.blocks.hasBlock(session.blockId))) close();
   }, [close, editorView, roots, session]);
 
   useDOMEvent({
@@ -272,14 +270,14 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
     const current = sessionRef.current;
     if (!current || !root) return;
 
-    const block = editorView.blocks.getBlockNode(current.blockId);
+    const block = editorView.runtime.blocks.getBlockNode(current.blockId);
     if (!block) return close();
     const caret = current.slashOffset + current.query.length + 1;
     if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
 
-    editorView.history.batchUpdates(() => {
+    editorView.runtime.history.batchUpdates(() => {
       const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
-      editorView.blocks.updateBlock(current.blockId, { content: next });
+      editorView.runtime.blocks.updateBlock(current.blockId, { content: next });
       editorView.selection.set(createCaretSelection(current.blockId, current.slashOffset));
       slashCommands.execute(command.id, { blockId: current.blockId });
     });

@@ -1,9 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  hostBlockIdSelector as blockIdSelector,
-  blockTypeSelector,
   BLOCK_ID_ATTRIBUTE,
   HOST_BLOCK_ID_SELECTOR as BLOCK_ID_SELECTOR,
+  hostBlockIdSelector as blockIdSelector,
+  blockTypeSelector,
 } from "./dom-markers";
 
 const switchMode = async (page: Page, mode: "block" | "edgeless") => {

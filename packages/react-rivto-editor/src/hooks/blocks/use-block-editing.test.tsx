@@ -1,14 +1,13 @@
-import { createTestReactEditor as createReactEditor } from "../../test-utils";
-import { createTestCoreEditor as createEditor } from "../../test-utils";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   BLOCK_CONTENT_ATTRIBUTE,
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
 } from "../../constants";
+import { EditorView } from "../../editor-view/editor-view";
+import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
 import { useBlockNode, type UseBlockNodeResult } from "./use-block";
 import { useBlockSelectionAnchor } from "./use-block-selection-anchor";
-import { EditorView } from "../../editor-view";
 
 import {
   useBlockEditing,
@@ -55,7 +54,7 @@ describe("useBlockEditing", () => {
       );
     };
     const editorView = createReactEditor({ editor });
-    editorView.surfaces.register("block", Surface);
+    editorView.runtime.surfaces.register("block", Surface);
 
     renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
 
@@ -93,7 +92,7 @@ describe("useBlockEditing", () => {
     expect(editor.blocks.getBlockNode(blockId)?.props.count).toBeUndefined();
     expect(() => structural?.operations.setProp("count", 4)).toThrow(/not found/);
 
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 });

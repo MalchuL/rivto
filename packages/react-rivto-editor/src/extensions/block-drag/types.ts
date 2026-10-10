@@ -9,8 +9,8 @@
  */
 import type { EditorBlock as Block } from "@chulane/rivto";
 import type { ReactNode } from "react";
+import type { EditorViewApi } from "../../editor-view/types";
 import type { CrossDocumentBlockTransferPlacement } from "../built-ins/clipboard/cross-document-block-transfer";
-import type { EditorViewApi } from "../../types";
 import type { CanonicalDropPlacement } from "./placement/types";
 
 /** Viewport pointer coordinates for a drag gesture. */

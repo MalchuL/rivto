@@ -5,7 +5,7 @@ import type {
   EditorMode,
   Selection,
 } from "@chulane/rivto";
-import type { EditorViewApi } from "../../types";
+import type { EditorViewApi } from "../../editor-view/types";
 import type {
   DOMEventMap,
   DOMEventName,

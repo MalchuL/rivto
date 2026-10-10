@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useEditorView } from "../../editor-view/use-editor-view";
 import type {
   DOMEventDefinition,
   DOMEventName,
@@ -6,7 +7,6 @@ import type {
   EditorEvent,
   EditorEventHandler,
 } from "../../managers";
-import { useEditorView } from "./use-editor-view";
 
 /**
  * Registers one typed native event through the editor's unified DOM runtime.

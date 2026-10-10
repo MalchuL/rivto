@@ -5,21 +5,21 @@
  * The shared block tree and drag extension render and move every card in both modes.
  * @module
  */
-import { editorControlProps } from "../../../constants";
-import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
-import type { BlockWrapperProps } from "../../../blocks";
 import type { EditorBlockInput } from "@chulane/rivto";
 import { createCaretSelection } from "@chulane/rivto";
-import { useBlockEditing, useBlockSelectionAnchor, useBlockNode, useEditorView } from "../../../hooks";
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { convertLeafToContainer } from "../../../block-behaviors/ops/outline-ops";
+import type { BlockWrapperProps } from "../../../blocks";
+import { editorControlProps } from "../../../constants";
+import { useBlockEditing, useBlockNode, useBlockSelectionAnchor, useEditorView } from "../../../hooks";
 import { focusBlock, type ReactEditorExtension } from "../../../managers";
-import { KANBAN_BLOCK_TYPE, KANBAN_COLUMN_BLOCK_TYPE, kanbanColumnView, kanbanView } from "./kanban-view";
-import { convertLeafToContainer } from "../../../views/ops/outline-ops";
+import { KANBAN_BLOCK_TYPE, KANBAN_COLUMN_BLOCK_TYPE, kanbanBehavior, kanbanColumnBehavior } from "./kanban-behavior";
 
-export { KANBAN_BLOCK_TYPE, KANBAN_COLUMN_BLOCK_TYPE } from "./kanban-view";
+export { KANBAN_BLOCK_TYPE, KANBAN_COLUMN_BLOCK_TYPE } from "./kanban-behavior";
 
-import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { PlusIcon } from "lucide-react";
+import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { Button } from "../../../components/ui/button";
 
 const COLUMN_HEADER_CLASS = "rivto-kanban-column-header flex min-h-8 items-center gap-2 text-(--rivto-kanban-card-foreground)";
@@ -56,14 +56,14 @@ export function createKanbanBlockInput(): EditorBlockInput {
 function useKanbanCounts(boardId: string): { readonly columnCount: number; readonly cardCount: number } {
   const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => editorView.blocks.subscribeStructure(listener),
+    (listener: () => void) => editorView.runtime.blocks.subscribeStructure(listener),
     [editorView],
   );
   const getSnapshot = useCallback(() => {
-    const columnIds = editorView.blocks.getBlockNode(boardId)?.childIds ?? [];
+    const columnIds = editorView.runtime.blocks.getBlockNode(boardId)?.childIds ?? [];
     let cardCount = 0;
     columnIds.forEach((columnId) => {
-      cardCount += (editorView.blocks.getBlockNode(columnId)?.childIds.length ?? 0);
+      cardCount += (editorView.runtime.blocks.getBlockNode(columnId)?.childIds.length ?? 0);
     });
     return `${columnIds.length}:${cardCount}`;
   }, [boardId, editorView]);
@@ -105,10 +105,10 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
    */
   const addColumn = () => {
     let columnId = "";
-    editorView.history.batchUpdates(() => {
-      editorView.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
-      columnId = editorView.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" }).id;
-      editorView.blocks.moveBlocks([columnId], blockId, "inside");
+    editorView.runtime.history.batchUpdates(() => {
+      editorView.runtime.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
+      columnId = editorView.runtime.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" }).id;
+      editorView.runtime.blocks.moveBlocks([columnId], blockId, "inside");
     });
     requestAnimationFrame(() => {
       const root = editorView.events.getRoot();
@@ -158,9 +158,9 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
    */
   const addCard = () => {
     let cardId = "";
-    editorView.history.batchUpdates(() => {
-      cardId = editorView.blocks.insertBlock(editorView.createDefaultBlock()).id;
-      editorView.blocks.moveBlocks([cardId], blockId, "inside");
+    editorView.runtime.history.batchUpdates(() => {
+      cardId = editorView.runtime.blocks.insertBlock(editorView.runtime.createDefaultBlock()).id;
+      editorView.runtime.blocks.moveBlocks([cardId], blockId, "inside");
       editorView.selection.set(createCaretSelection(cardId, 0));
     });
     requestAnimationFrame(() => {
@@ -213,7 +213,7 @@ export function kanbanExtension(): ReactEditorExtension {
             metadata: { containment: { childOutline: "fixed" } },
           },
           render: Kanban,
-          view: kanbanView,
+          behavior: kanbanBehavior,
         }),
         editorRuntime.blockTypes.register({
           definition: {
@@ -222,7 +222,7 @@ export function kanbanExtension(): ReactEditorExtension {
             metadata: { containment: { childOutline: "free", outlineFloor: true } },
           },
           render: KanbanColumn,
-          view: kanbanColumnView,
+          behavior: kanbanColumnBehavior,
         }),
         editorRuntime.slashCommands.register({
           id: "block.kanban.insert",

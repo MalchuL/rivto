@@ -1,10 +1,10 @@
 import type { BlockListPropsManagerApi, EditorBlock, EditorBlockNode } from "@chulane/rivto";
-import type { BlockListPropsCapability, BlockListPropsRegistration } from "../../capabilities";
-import type { EditorRuntime } from "../../editor-runtime";
-import type { BlockViewContext } from "../../views/types";
+import type { BlockBehaviorContext } from "../../block-behaviors/types";
+import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { BlockListPropsApi, BlockListPropsRegistration } from "./block-list-props-api";
 
 /** Owns React list behavior while the core manager validates persisted properties. */
-export class BlockListPropsManager implements BlockListPropsCapability {
+export class BlockListPropsManager implements BlockListPropsApi {
   private readonly registrations = new Set<BlockListPropsRegistration>();
 
   /** @param editor - Extension lifecycle owner. @param core - Existing property validation manager. */
@@ -47,7 +47,7 @@ export class BlockListPropsManager implements BlockListPropsCapability {
   }
 
   /** @param context - Current block and view. @returns True when an extension handled the split. */
-  onSplit(context: BlockViewContext): boolean {
+  onSplit(context: BlockBehaviorContext): boolean {
     for (const registration of this.registrations) {
       if (registration.onSplit?.(context)) return true;
     }

@@ -1,11 +1,11 @@
-import type { EditorRuntime } from "../../editor-runtime";
-import type { ExtensionsCapability } from "../../capabilities";
+import type { EditorRuntime } from "../../editor/editor-runtime";
 import { RevisionStore } from "../../internal-store";
+import type { ExtensionsApi } from "./api";
 import type {
   ExtensionComponent,
   ExtensionMountPosition,
-  RegistrationDisposer,
   ReactEditorExtension,
+  RegistrationDisposer,
 } from "./types";
 
 /**
@@ -15,7 +15,7 @@ import type {
  * event conditions, while surface renderers and wrappers belong exclusively to
  * SurfaceManager.
  */
-export class ExtensionManager implements ExtensionsCapability {
+export class ExtensionManager implements ExtensionsApi {
   private readonly store = new RevisionStore();
   private readonly extensionIds = new Set<string>();
   private readonly extensionDisposers: RegistrationDisposer[] = [];

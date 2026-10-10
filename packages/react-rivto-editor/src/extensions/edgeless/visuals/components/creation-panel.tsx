@@ -6,9 +6,9 @@
  * line-style controls that new objects of that category inherit. Defaults are
  * persisted through the visual controller so they survive tool switches.
  */
-import { editorControlProps } from "../../../../constants";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
+import { editorControlProps } from "../../../../constants";
 import type { EdgelessVisualController } from "../controller";
 import type {
   ConnectorLineStyle,
@@ -117,7 +117,7 @@ export function CreationPanel({
               label="Eraser"
               icon="eraser"
               pressed={tool.tool === "eraser"}
-              onClick={() => { controller.editor.commands.execute("edgeless.tool.set", { tool: "eraser" }); }}
+              onClick={() => { controller.runtime.commands.execute("edgeless.tool.set", { tool: "eraser" }); }}
             />
           </>
         }
@@ -179,7 +179,7 @@ export function CreationPanel({
               pressed={tool.tool === "connector" && tool.route === route}
               onClick={() => {
                 controller.setCreationDefaults("connector", { route });
-                controller.editor.commands.execute("edgeless.tool.set", { tool: "connector", route });
+                controller.runtime.commands.execute("edgeless.tool.set", { tool: "connector", route });
               }}
             />
           ))}

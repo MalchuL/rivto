@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
 import type { RivtoEditorApi } from "@chulane/rivto";
 import type { EditorRuntime } from "@chulane/rivto-react";
+import { expect, test } from "@playwright/test";
 
 interface DemoInspection {
   __rivtoDemo: { editor: RivtoEditorApi; editorRuntime: EditorRuntime };
@@ -23,7 +23,7 @@ test("core mode changes render the surface while embeddings keep their page view
   await content.focus();
   await expect.poll(() => page.evaluate(() => {
     const { editor, editorRuntime } = (window as unknown as DemoInspection).__rivtoDemo;
-    return { core: editor.mode.get(), surface: editorRuntime.events.getSurfaceType() };
+    return { core: editor.mode.get(), surface: editorRuntime.editorViews.getSurfaceType() };
   })).toEqual({ core: "edgeless", surface: "block" });
   await today.getByRole("button", { name: "Page", exact: true }).click();
   await expect(today.locator('[data-rivto-surface]').first()).toHaveAttribute("data-rivto-surface", "block");

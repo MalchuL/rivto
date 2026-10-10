@@ -7,16 +7,16 @@
  * @module
  */
 import type { ReactEditorExtension } from "../../managers";
-import { TodoItem } from "./todo-item-renderer";
+import { TODO_ITEM_BLOCK_TYPE, createPromptMap, createTodoItemProps, todoItemPropsSchema, type TodoItemExtensionOptions } from "./todo-item-model";
 import { DefaultTodoItemPropertiesModal } from "./todo-item-properties";
+import { TodoItem } from "./todo-item-renderer";
 import { TodoPromptController } from "./todo-prompt-controller";
-import { TODO_ITEM_BLOCK_TYPE, createTodoItemProps, createPromptMap, todoItemPropsSchema, type TodoItemExtensionOptions } from "./todo-item-model";
-import { TODO_STORAGE_BLOCK_TYPE, TodoStorage, TodoStorageBlockWrapper, TodoStorageVisibility, createTodoStorageProps, todoStorageView, todoStoragePropsSchema } from "./todo-storage";
+import { TODO_STORAGE_BLOCK_TYPE, TodoStorage, TodoStorageBlockWrapper, TodoStorageVisibility, createTodoStorageProps, todoStorageBehavior, todoStoragePropsSchema } from "./todo-storage";
 
 export { TODO_ITEM_BLOCK_TYPE } from "./todo-item-model";
-export type { TodoItemStatus, TodoItemProps, TodoItemBlock, TodoItemPropertiesPatch, TodoItemPropertiesModalProps, TodoItemExtensionOptions, TodoItemComponentProps } from "./todo-item-model";
-export { TodoItem } from "./todo-item-renderer";
+export type { TodoItemBlock, TodoItemComponentProps, TodoItemExtensionOptions, TodoItemPropertiesModalProps, TodoItemPropertiesPatch, TodoItemProps, TodoItemStatus } from "./todo-item-model";
 export { DefaultTodoItemPropertiesModal } from "./todo-item-properties";
+export { TodoItem } from "./todo-item-renderer";
 export { TODO_STORAGE_BLOCK_TYPE, TodoStorage } from "./todo-storage";
 export type { TodoStorageComponentProps, TodoStorageOrderMode, TodoStorageProps } from "./todo-storage";
 
@@ -44,7 +44,7 @@ export function todoItemExtension(
             metadata: { containment: { childOutline: "free", outlineFloor: true } },
           },
           render: TodoStorage,
-          view: todoStorageView,
+          behavior: todoStorageBehavior,
           slashCommand: {
             id: "type.todo-storage",
             title: "TODO storage",

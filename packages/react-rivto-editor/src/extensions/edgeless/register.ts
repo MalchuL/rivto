@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../editor-runtime";
+import type { EditorRuntime } from "../../editor/editor-runtime";
 /**
  * Runtime registration for the built-in edgeless surface.
  *
@@ -8,19 +8,19 @@ import type { EditorRuntime } from "../../editor-runtime";
  *
  * @module
  */
-import {
-  type EdgelessSurfaceOptions,
-} from "./surface";
+import type { EditorViewApi } from "../../editor-view/types";
 import {
   EDGELESS_CARD_DEFAULT_FRAME,
 } from "../../elements/block-element-projection";
-import type { EditorViewApi } from "../../types";
+import {
+  type EdgelessSurfaceOptions,
+} from "./surface";
 
 const surfaceOptions = new WeakMap<object, EdgelessSurfaceOptions>();
 
 /** @param editor - View or host sharing the surface manager. @returns Configured canvas defaults, or empty options. */
 export function getEdgelessSurfaceOptions(editor: EditorViewApi): EdgelessSurfaceOptions {
-  return surfaceOptions.get(editor.surfaces) ?? {};
+  return surfaceOptions.get(editor.runtime.surfaces) ?? {};
 }
 
 /**

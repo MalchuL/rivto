@@ -1,51 +1,49 @@
-import { DemoDatabase, DBDocumentModel } from "./database";
-import { DocumentsDemo } from "./DocumentsDemo";
-import { DemoEditorSurface } from "./editor-surface";
+import { BroadcastChannelProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
+import { DocumentStorage } from "@chulane/document-model";
 import {
   createRivtoEditor,
   type RivtoEditorApi,
 } from "@chulane/rivto";
-import { BroadcastChannelProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
-import { DocumentStorage } from "@chulane/document-model";
 import {
+  BENTO_BLOCK_TYPE,
+  bulletThreadingExtension,
+  COLUMNS_BLOCK_TYPE,
+  createBentoBlockInput,
+  createColumnsBlockInput,
   createEditorRuntime,
   createKanbanBlockInput,
-  createBentoBlockInput,
   createTableBlockInput,
-  createColumnsBlockInput,
-  BENTO_BLOCK_TYPE,
-  COLUMNS_BLOCK_TYPE,
   DEFAULT_WRITING_BLOCK_TYPE,
-  type MarkdownLinkClick,
   edgelessPreset,
   edgelessVisualsExtension,
-  EditorView,
   EditorStorage,
   EditorStorageContext,
-  type EditorRuntime,
-  embeddingExtension,
+  EditorView,
   EMBEDDING_BLOCK_TYPE,
-  KEYBOARD_BINDING_IDS,
+  embeddingExtension,
   KANBAN_BLOCK_TYPE,
+  KEYBOARD_BINDING_IDS,
   pageDragExtension,
-  bulletThreadingExtension,
+  PageSurface,
   SEPARATOR_BLOCK_TYPE,
   standardPreset,
   TABLE_BLOCK_TYPE,
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
   todoItemExtension,
-  PageSurface,
   useEditorMode,
+  type EditorRuntime,
+  type MarkdownLinkClick,
 } from "@chulane/rivto-react";
-import { KeyboardPanel } from "./KeyboardPanel";
-import { RevisionsPanel } from "./RevisionsPanel";
 import { useEffect, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import {
   COUNTER_BLOCK_TYPE,
   customBlockExtensions,
   SLIDER_BLOCK_TYPE,
 } from "./blocks/custom-blocks";
+import { DBDocumentModel, DemoDatabase } from "./database";
+import { DocumentsDemo } from "./DocumentsDemo";
+import { DemoEditorSurface } from "./editor-surface";
 import {
   blockIdExtension,
   BlockIdsVisibleProvider,
@@ -56,6 +54,8 @@ import {
   reviewReportExtensions,
   type ReviewReport,
 } from "./extensions/reports/review-report";
+import { KeyboardPanel } from "./KeyboardPanel";
+import { RevisionsPanel } from "./RevisionsPanel";
 
 const DEMO_BLOCK_ID_TOGGLE_CLASS = "demo-block-id-toggle";
 const DEMO_BLOCK_IDS_TOOLTIP = "Shows a shortened block id at the end of each row. Hover that label to see the full id.";
@@ -352,8 +352,8 @@ async function createDemoEditor() {
       });
     },
   });
-  const editor = await editorStorage.getSingleEditor(resources.document.id);
-  const editorRuntime = editorStorage.getEditor(editor.getDocument().id)!;
+  const editor = await editorStorage.openCoreEditor(resources.document.id);
+  const editorRuntime = editorStorage.getRuntime(editor.getDocument().id)!;
   // Playwright and host scripts locate this demo instance through window, not React refs.
   // The token changes on each create so a stale handle cannot be mistaken for a remount.
   const demoToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;

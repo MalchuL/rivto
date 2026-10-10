@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFile, readdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { blockIdSelector, BLOCK_ID_ATTRIBUTE } from "./dom-markers";
+import { BLOCK_ID_ATTRIBUTE, blockIdSelector } from "./dom-markers";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
 
@@ -24,7 +24,7 @@ test("saves a slash-created Review report and reproduces it with native load", a
       }
       ).__rivtoDemo.editorRuntime;
       return {
-        commands: editorRuntime.slashCommands.getAll({ blockId: id, editorView: editorRuntime.events.getDocumentView()! }).map(({ id: commandId }) => commandId),
+        commands: (editorRuntime.editorViews.getActive() ?? editorRuntime.editorViews.getDefault())!.slashCommands.getAll({ blockId: id }).map(({ id: commandId }) => commandId),
         definition: editorRuntime.blockTypes.getDefinition("demo.review")?.type,
         element: editorRuntime.elements.getElement("demo-review-element")?.type,
       };

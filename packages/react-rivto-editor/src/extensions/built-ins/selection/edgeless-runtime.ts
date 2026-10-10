@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../editor-runtime";
+import type { EditorRuntime } from "../../../editor/editor-runtime";
 /**
  * Projects the core generic selection into the edgeless selection API.
  *
@@ -8,8 +8,8 @@ import type { EditorRuntime } from "../../../editor-runtime";
  */
 import { isStructuralSelection, type Selection } from "@chulane/rivto";
 import { useSyncExternalStore } from "react";
-import { useEditorContext } from "../../../editor-context";
-import type { EditorViewApi } from "../../../types";
+import { useEditorContext } from "../../../editor-view/editor-context";
+import type { EditorViewApi } from "../../../editor-view/types";
 
 /** Stable first-class element ID stored in local edgeless selection. */
 export type EdgelessSelectionRef = string;
@@ -170,7 +170,7 @@ export class EdgelessSelectionRuntime {
 
 // Installation belongs to the shared editor; adapters read through each view's
 // bound selection API so identical element IDs in other views stay unselected.
-const runtimes = new WeakMap<EditorViewApi["extensions"], WeakMap<EditorViewApi | EditorRuntime, EdgelessSelectionRuntime>>();
+const runtimes = new WeakMap<EditorRuntime["extensions"], WeakMap<EditorViewApi | EditorRuntime, EdgelessSelectionRuntime>>();
 
 /**
  * Installs the core-backed canvas selection adapter for one React editor.
@@ -178,14 +178,15 @@ const runtimes = new WeakMap<EditorViewApi["extensions"], WeakMap<EditorViewApi 
  * @returns Disposer that removes the adapter.
  */
 export function installEdgelessRuntime(editor: EditorViewApi | EditorRuntime): () => void {
-  if (runtimes.has(editor.extensions)) throw new Error("Edgeless selection runtime is already installed");
+  const documentEditor = "runtime" in editor ? editor.runtime : editor;
+  if (runtimes.has(documentEditor.extensions)) throw new Error("Edgeless selection runtime is already installed");
   const runtime = new EdgelessSelectionRuntime(editor);
   const adapters = new WeakMap<EditorViewApi | EditorRuntime, EdgelessSelectionRuntime>();
   adapters.set(editor, runtime);
-  runtimes.set(editor.extensions, adapters);
+  runtimes.set(documentEditor.extensions, adapters);
   return () => {
-    if (runtimes.get(editor.extensions) !== adapters) return;
-    runtimes.delete(editor.extensions);
+    if (runtimes.get(documentEditor.extensions) !== adapters) return;
+    runtimes.delete(documentEditor.extensions);
     runtime.destroy();
   };
 }
@@ -210,7 +211,8 @@ export function getEdgelessRuntime(editor: EditorViewApi | EditorRuntime): Edgel
  * @returns Installed adapter, or undefined.
  */
 export function findEdgelessRuntime(editor: EditorViewApi | EditorRuntime): EdgelessSelectionRuntime | undefined {
-  const adapters = runtimes.get(editor.extensions);
+  const documentEditor = "runtime" in editor ? editor.runtime : editor;
+  const adapters = runtimes.get(documentEditor.extensions);
   if (!adapters) return undefined;
   let runtime = adapters.get(editor);
   if (!runtime) {

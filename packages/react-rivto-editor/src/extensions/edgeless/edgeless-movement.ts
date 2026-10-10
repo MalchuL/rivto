@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../editor-runtime";
+import type { EditorRuntime } from "../../editor/editor-runtime";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 

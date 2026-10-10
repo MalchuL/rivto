@@ -1,7 +1,6 @@
-import { DocumentStorage } from "@chulane/document-model";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
+import { DocumentStorage } from "@chulane/document-model";
 import { createCaretSelection } from "@chulane/rivto";
-import { createEditorRuntime } from "../../../../editor-runtime";
 import { createTestMultiEditor } from "../../../../test-utils";
 import { registerCollapse } from "./register";
 
@@ -16,9 +15,9 @@ test.each([
   const first = await storage.create("A", blocks);
   const second = await storage.create("B", blocks);
   const core = await createTestMultiEditor([first, second], storage, { extensions: [{ id: "collapse", setup: registerCollapse }] });
-  const a = core.getEditor(first.id)!;
+  const a = core.getRuntime(first.id)!;
   a.mode.set(mode);
-  const b = core.getEditor(second.id)!;
+  const b = core.getRuntime(second.id)!;
   await Promise.resolve(); // Finish initial block-element projection before measuring commands.
   const reads = { first: 0, second: 0 };
   const readA = first.blocks.getBlocks.bind(first.blocks);
@@ -26,7 +25,7 @@ test.each([
   first.blocks.getBlocks = () => { reads.first += 1; return readA(); };
   second.blocks.getBlocks = () => { reads.second += 1; return readB(); };
   const changes: string[] = [];
-  const stops = core.getEditors().map((editor) => editor.subscribe(() => changes.push(editor.getDocument().id)));
+  const stops = core.getRuntimes().map((editor) => editor.subscribe(() => changes.push(editor.getDocument().id)));
   const unsubscribe = () => stops.forEach((stop) => stop());
 
   b.blocks.updateBlock("child", { content: "Edited without selection" });

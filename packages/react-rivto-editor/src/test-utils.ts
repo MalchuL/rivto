@@ -1,9 +1,9 @@
-import { EditorViewApi } from "./editor-view-api";
-import { createEditorRuntime, type CreateEditorRuntimeOptions } from "./editor-runtime";
-import { createRivtoEditor, type CreateRivtoEditorOptions, type RivtoEditorApi } from "@chulane/rivto";
-import { DocumentModelImpl, type DocumentModel, type DocumentStorage } from "@chulane/document-model";
 import { YjsDoc } from "@chulane/crdt-doc";
-import { EditorStorage } from "./editor-storage";
+import { DocumentModelImpl, type DocumentModel, type DocumentStorage } from "@chulane/document-model";
+import { createRivtoEditor, type CreateRivtoEditorOptions, type RivtoEditorApi } from "@chulane/rivto";
+import { EditorViewController } from "./editor-view/editor-view-controller";
+import { createEditorRuntime, type CreateEditorRuntimeOptions } from "./editor/editor-runtime";
+import { EditorStorage } from "./editor/editor-storage";
 import { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-writing-block";
 
 /**
@@ -28,29 +28,12 @@ export async function createTestCoreEditor(options: Partial<CreateRivtoEditorOpt
 /** Creates a React runtime bound directly to the fixture's document. */
 export function createTestReactEditor(options: Omit<CreateEditorRuntimeOptions, "editor"> & { readonly editor: RivtoEditorApi }): import("./types").EditorViewApi {
   const runtime = createEditorRuntime(options);
-  let root: HTMLElement | null = null;
-  let unregister: (() => void) | undefined;
-  const disposers = new Set<() => void>();
-  const editor = new EditorViewApi(runtime, {
-    id: crypto.randomUUID(),
-    getRoot: () => root,
-    setRoot: (next) => {
-      unregister?.();
-      root = next;
-      unregister = next ? runtime.events.registerDocumentView(next, runtime.getDocument(), undefined, editor) : undefined;
-    },
-    own: (dispose) => { disposers.add(dispose); return () => { disposers.delete(dispose); dispose(); }; },
-  });
-  const destroy = editor.destroy.bind(editor);
-  runtime.extensions.own(destroy);
-  editor.destroy = () => {
-    const errors: unknown[] = [];
-    for (const cleanup of [destroy, () => unregister?.(), ...disposers, () => runtime.destroy()]) {
-      try { cleanup(); } catch (error) { errors.push(error); }
-    }
-    disposers.clear();
-    if (errors.length === 1) throw errors[0];
-    if (errors.length) throw new AggregateError(errors, "Test editor cleanup failed");
+  const editor = new EditorViewController(runtime);
+  // Headless fixtures have no registered root; cancel their view before shared cleanup.
+  const destroyRuntime = runtime.destroy.bind(runtime);
+  runtime.destroy = () => {
+    try { editor.cancelPendingSelection(); }
+    finally { destroyRuntime(); }
   };
   return editor;
 }
@@ -73,6 +56,6 @@ export async function createTestMultiEditor(models: readonly DocumentModel[], st
     lookupDocumentIds: storage ? (id, lookupOptions) => storage.findDocumentIdsWithBlock(id, lookupOptions) : undefined,
     subscribeDocumentIds: storage ? (listener) => storage.subscribe(listener) : undefined,
   });
-  await Promise.all(models.map((model) => runtime.getSingleEditor(model.id)));
+  await Promise.all(models.map((model) => runtime.openCoreEditor(model.id)));
   return runtime;
 }

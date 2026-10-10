@@ -1,17 +1,16 @@
+import { DOMEventListeners, type NativeListenerGroup } from "./dom-event-listeners";
 /**
- * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
+ * Browser event registration and dispatch. Event payloads identify the receiving
+ * view and its selection; document mutations still go through core managers.
  */
-import type { DocumentViewScope } from "./document-view";
-import { DocumentViewRegistry } from "./document-view-registry";
-import type { DocumentModel } from "@chulane/document-model";
 import type { EditorMode } from "@chulane/rivto";
-import type { EditorViewApi } from "../../types";
-import type { EditorRuntime } from "../../editor-runtime";
 import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../constants";
+import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { DocumentViewScope } from "./document-view";
 import type {
   DOMEventDefinition,
   DOMEventName,
@@ -19,6 +18,7 @@ import type {
   DOMEventTarget,
 } from "./dom-types";
 import { EditorEvent } from "./editor-event";
+import type { EditorViewRegistry } from "./editor-view-registry";
 import type { EditorEventHandler } from "./types";
 
 type AnyEditorEvent = EditorEvent<DOMEventTarget, never>;
@@ -36,31 +36,23 @@ interface DOMRegistration {
   readonly when?: (event: AnyEditorEvent) => boolean;
 }
 
-interface NativeListenerGroup {
-  readonly target: DOMEventTarget;
-  readonly type: string;
-  readonly capture: boolean;
-  readonly passive: boolean;
-}
-
-interface ConnectedListener extends NativeListenerGroup {
-  readonly nativeTarget: EventTarget;
-  readonly listener: EventListener;
-}
-
 /**
- * Owns every delegated native browser event for one React editor.
+ * Registers and dispatches browser events for all views of one document.
  *
- * Semantic keyboard actions belong to KeyboardManager, which uses this manager
- * for surface/window keydown and keyup transport.
+ * DOMEventListeners attaches the native listeners. EditorViewRegistry chooses the
+ * receiving view; this manager creates its EditorEvent and runs matching handlers
+ * in registration order. A handled event is not offered to later registrations.
+ * KeyboardManager defines keyboard actions and registers its keydown and keyup
+ * handlers here, on the editor surface or window.
  */
 export class EventManager {
   private readonly registrations: DOMRegistration[] = [];
   private readonly registrationIds = new Set<string>();
   private readonly registrationDisposers = new Map<string, () => void>();
-  private readonly connected: ConnectedListener[] = [];
+  private readonly listeners = new DOMEventListeners((group, event, root) => this.dispatch(group, event, root));
+  private readonly unsubscribeRoots: () => void;
   private readonly claimedEvents = new WeakSet<globalThis.Event>();
-  private readonly documentViews: DocumentViewRegistry;
+  private readonly editorViews: EditorViewRegistry;
   private destroyed = false;
 
   /**
@@ -69,19 +61,23 @@ export class EventManager {
    * @param editorRuntime - Owning React runtime for payloads and registration lifecycle.
    */
   constructor(private readonly editorRuntime: EditorRuntime) {
-    this.documentViews = new DocumentViewRegistry(editorRuntime, () => this.reconnect());
+    this.editorViews = editorRuntime.editorViews;
+    this.unsubscribeRoots = this.editorViews.subscribeRoots(() => this.reconnectListeners());
   }
 
-
-  /** Cancels view DOM work before the runtime releases extension dependencies. */
-  cancelPendingSelections(): void { this.documentViews.cancelPendingSelections(); }
 
   /**
    * Registers a typed delegated DOM event.
    *
-   * @param definition - Native event, attachment realm, scope, and stable ID.
-   * @param listener - Handler returning true only when it handled the event.
-   * @returns Idempotent disposer for this registration.
+   * @param definition - Stable ID, native event type, target, and optional filters.
+   * The target defaults to the surface; capture and passive default to false.
+   * @param listener - Handler returning true when it handled the event. This stops
+   * later editor handlers and prevents the browser default when cancellation is allowed.
+   * DOM propagation is not stopped. Passive listeners cannot cancel browser defaults.
+   * @param owner - Optional view restricting dispatch to its root and prefixing the ID.
+   * The caller must also retain the disposer for view cleanup.
+   * @returns Idempotent disposer, also owned by the registering extension.
+   * @throws If the ID is empty, already registered in its scope, or the runtime is destroyed.
    */
   register<
     Target extends DOMEventTarget = "surface",
@@ -104,10 +100,10 @@ export class EventManager {
       throw new Error(`Event registration ${id} is already registered`);
     }
 
-    const registration = { ...this.createDOMRegistration({ ...definition, id }, listener), owner };
+    const registration = { ...this.createRegistration({ ...definition, id }, listener), owner };
     this.registrationIds.add(id);
     this.registrations.push(registration);
-    this.reconnect();
+    this.reconnectListeners();
 
     let active = true;
     let dispose: () => void = () => undefined;
@@ -120,7 +116,7 @@ export class EventManager {
       if (this.registrationDisposers.get(id) === dispose) {
         this.registrationDisposers.delete(id);
       }
-      this.reconnect();
+      this.reconnectListeners();
     });
     this.registrationDisposers.set(id, dispose);
     return dispose;
@@ -129,7 +125,7 @@ export class EventManager {
   /**
    * Deletes one DOM registration by its stable ID.
    *
-   * @param id - Identity supplied to register().
+   * @param id - Registered ID, including the view prefix for a view-owned registration.
    * @returns True when a registration existed and was disposed.
    */
   delete(id: string): boolean {
@@ -139,67 +135,17 @@ export class EventManager {
     return true;
   }
 
-  /** @returns The focused view occurrence, or a mounted full-document surface before interaction; falls back to the first subtree when no full document is mounted. */
-  getRoot(): HTMLElement | null {
-    return this.documentViews.getRoot();
-  }
-
-  /**
-   * Reads the current view's rendered surface without changing the core mode.
-   *
-   * The core mode manager belongs to the document and chooses its main presentation.
-   * This method reads the receiving DOM occurrence instead: a page embedding
-   * returns `block` even inside an `edgeless` document. Scoped event managers use
-   * their own view root; the shared manager uses the active mounted
-   * root. No additional mode state is stored, and the core mode remains shared.
-   * Dispatch captures this value once in `event.mode`; handlers use that snapshot.
-   * View-specific commands outside dispatch can call this method, while operations
-   * that depend on document mode should use `editorRuntime.mode.get()`.
-   * @returns Current DOM occurrence's surface kind, or core mode before mounting
-   * or when the root has no recognized surface type.
-   */
-  getSurfaceType(root?: HTMLElement | null): EditorMode {
-    return this.documentViews.getSurfaceType(root);
-  }
-
-  /**
-   * Reads the API belonging to the current DOM occurrence without retaining a document.
-   * @returns Mounted view's document-bound API, or undefined when no registered view supplies one.
-   */
-  getDocumentView(): EditorViewApi | undefined {
-    return this.documentViews.getDocumentView();
-  }
-
-  /**
-   * Registers one document occurrence and connects shared delegated listeners to its root.
-   * @param root - Mounted surface displaying the full document or source subtree.
-   * @param document - Source model used for commands within this region.
-   * @param rootBlockId - Displayed source root bounding selection and navigation.
-   * @param api - View-bound API supplied to handlers; omitted only for a region that must not dispatch editing handlers.
-   * @param deactivate - Closes this view's transient UI when it loses focus or is removed.
-   * @returns Idempotent cleanup that clears selection when a focused subtree is removed
-   * and returns keyboard focus to an enclosing mounted surface, retaining source undo.
-   * Full-document surface changes preserve selection when switching presentation modes.
-   */
-  registerDocumentView(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: EditorViewApi, deactivate?: () => void): () => void {
-    this.assertActive();
-    return this.documentViews.registerDocumentView(root, document, rootBlockId, api, deactivate);
-  }
-
-
-
-
-
-  /** Releases every registration and native listener in reverse order. */
+  /** Disconnects native listeners and root notifications, then disposes registrations
+   * in reverse order. Repeated calls do nothing. */
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.disconnect();
+    this.listeners.disconnect();
+    this.unsubscribeRoots();
     [...this.registrationDisposers.values()].reverse().forEach((dispose) => dispose());
     this.registrationDisposers.clear();
     this.registrationIds.clear();
     this.registrations.length = 0;
-    this.documentViews.destroy();
   }
 
   /** Throws when a registration is attempted after runtime destruction. */
@@ -208,7 +154,7 @@ export class EventManager {
     this.editorRuntime.extensions.assertActive();
   }
 
-  private createDOMRegistration(
+  private createRegistration(
     definition: DOMEventDefinition,
     listener: EditorEventHandler<AnyEditorEvent>,
   ): DOMRegistration {
@@ -225,47 +171,9 @@ export class EventManager {
     };
   }
 
-  private reconnect(): void {
-    this.disconnect();
-    if (this.destroyed) return;
-    const roots = this.documentViews.getRoots();
-    if (!roots.size) return;
-    const groups = new Map<string, NativeListenerGroup>();
-    for (const registration of this.registrations) {
-      const group: NativeListenerGroup = registration;
-      const key = [group.target, group.type, group.capture, group.passive].join(":");
-      if (!groups.has(key)) groups.set(key, group);
-    }
-    if (this.documentViews.hasDocumentViews) {
-      // Activation and gesture lifetime belong to views even without interaction extensions.
-      const lifecycle: NativeListenerGroup[] = [
-        { target: "surface", type: "focusin", capture: false, passive: false },
-        { target: "surface", type: "pointerdown", capture: false, passive: false },
-        { target: "window", type: "pointerup", capture: false, passive: false },
-        { target: "window", type: "pointercancel", capture: false, passive: false },
-      ];
-      lifecycle.forEach((group) => groups.set([group.target, group.type, group.capture, group.passive].join(":"), group));
-    }
-    for (const group of groups.values()) {
-      const targets = new Set<EventTarget>();
-      for (const root of roots) {
-        let nativeTarget: EventTarget | null = root;
-        if (group.target === "document") nativeTarget = root.ownerDocument;
-        else if (group.target === "window") nativeTarget = root.ownerDocument.defaultView;
-        if (!nativeTarget || targets.has(nativeTarget)) continue;
-        targets.add(nativeTarget);
-        const listener: EventListener = (event) => this.dispatch(group, event, group.target === "surface" ? root : undefined);
-        nativeTarget.addEventListener(group.type, listener, { capture: group.capture, passive: group.passive });
-        this.connected.push({ ...group, nativeTarget, listener });
-      }
-    }
-  }
-
-  private disconnect(): void {
-    for (const { nativeTarget, type, listener, capture } of this.connected) {
-      nativeTarget.removeEventListener(type, listener, capture);
-    }
-    this.connected.length = 0;
+  private reconnectListeners(): void {
+    if (this.destroyed) this.listeners.disconnect();
+    else this.listeners.connect(this.registrations, this.editorViews.getRoots());
   }
 
   /**
@@ -273,11 +181,12 @@ export class EventManager {
    *
    * @param group - Capture/passive/target identity of the native listener.
    * @param raw - Browser event dispatched to that listener.
+   * @param attachedRoot - Surface listener root; omitted for document/window listeners.
    * @returns Nothing.
    */
   private dispatch(group: NativeListenerGroup, raw: globalThis.Event, attachedRoot?: HTMLElement): void {
     if (raw.defaultPrevented || this.claimedEvents.has(raw)) return;
-    const root = this.documentViews.resolveEventRoot(raw, attachedRoot);
+    const root = this.editorViews.resolveEventRoot(raw, attachedRoot);
     if (root) this.dispatchRegistrations(group, raw, root);
   }
 
@@ -299,7 +208,7 @@ export class EventManager {
         (registration.when && !registration.when(event))
       ) continue;
       if (registration.listener(event)) {
-        this.claim(raw);
+        this.markHandled(raw);
         return;
       }
     }
@@ -330,7 +239,7 @@ export class EventManager {
     const contentElement = closestContent && root.contains(closestContent)
       ? closestContent
       : null;
-    const editorView = this.documentViews.getApi(root);
+    const editorView = this.editorViews.getApi(root);
     if (!editorView) return;
     return new EditorEvent({
       raw: raw as never,
@@ -338,7 +247,7 @@ export class EventManager {
       root,
       // Route handlers by the receiving surface: core mode may be edgeless
       // while this event belongs to a page embedding of the same document.
-      mode: this.documentViews.getSurfaceType(root),
+      mode: this.editorViews.getSurfaceType(root),
       selection: editorView.selection.get(),
       eventTarget,
       insideRoot,
@@ -348,7 +257,7 @@ export class EventManager {
     });
   }
 
-  private claim(raw: globalThis.Event): void {
+  private markHandled(raw: globalThis.Event): void {
     if (raw.cancelable) raw.preventDefault();
     this.claimedEvents.add(raw);
   }

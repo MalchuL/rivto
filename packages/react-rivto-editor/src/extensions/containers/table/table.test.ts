@@ -12,10 +12,10 @@ import {
   insertTableColumn,
   insertTableRow,
   setTableColumnWidth,
-  tableExtension,
   TABLE_BLOCK_TYPE,
   TABLE_CELL_BLOCK_TYPE,
   TABLE_ROW_BLOCK_TYPE,
+  tableExtension,
 } from "./table";
 
 test("inserts rectangular rows and columns as draggable ordinary blocks", async () => {
@@ -53,7 +53,7 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", async 
 
   editor.blocks.moveBlocks([cellId], table.id, "inside");
   expect(editor.blocks.getParentId(cellId)).toBe(table.id);
-  editorView.destroy();
+  editorView.runtime.destroy();
   editor.destroy();
 });
 

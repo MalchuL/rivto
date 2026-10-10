@@ -13,11 +13,11 @@
  *
  * @module
  */
-import { useContext, useLayoutEffect, useMemo, useState } from "react";
-import { DragDropProvider } from "@dnd-kit/react";
 import { Accessibility, AutoScroller, KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
-import { SurfaceContext } from "../../surfaces/surface";
+import { DragDropProvider } from "@dnd-kit/react";
+import { useContext, useLayoutEffect, useMemo, useState } from "react";
 import { useEditorRoot, useEditorView } from "../../hooks";
+import { SurfaceContext } from "../../surfaces/surface";
 import { PageDragController } from "./controller";
 import { PageDragOverlay } from "./preview/overlay";
 import { createDropPlacementStore, PageDragStateContext } from "./state";
@@ -78,7 +78,7 @@ export function PageDragProvider({
     KeyboardSensor.configure({ offset: KEYBOARD_STEP }),
   ], [activationDistance]);
   const activeBlocks = activeIds.flatMap((id) => {
-    const block = editorView.blocks.getBlock(id);
+    const block = editorView.runtime.blocks.getBlock(id);
     return block ? [block] : [];
   });
 
@@ -96,7 +96,7 @@ export function PageDragProvider({
         <PageDragAutoScrollPolicy getPointer={controller.getDragPointer} />
         {children}
         <PageDragOverlay root={root} controller={controller} blocks={activeBlocks}
-          childrenVisible={(block) => editorView.blockListProps.childrenVisible(block)} />
+          childrenVisible={(block) => editorView.runtime.blockListProps.childrenVisible(block)} />
       </DragDropProvider>
     </PageDragStateContext.Provider>
   );

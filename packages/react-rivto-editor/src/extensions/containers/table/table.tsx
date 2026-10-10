@@ -5,11 +5,8 @@
  * snapshots, and undo behavior remain owned by the existing editor managers.
  * @module
  */
-import { editorControlProps } from "../../../constants";
 import { type EditorBlock, type EditorBlockInput } from "@chulane/rivto";
-import { createPortal } from "react-dom";
 import { PlusIcon } from "lucide-react";
-import { Button } from "../../../components/ui/button";
 import {
   useCallback,
   useLayoutEffect,
@@ -20,16 +17,19 @@ import {
   type PointerEvent,
   type RefObject,
 } from "react";
-import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
+import { createPortal } from "react-dom";
+import { convertLeafToContainer } from "../../../block-behaviors/ops/outline-ops";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
+import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
 import { MarkdownContent } from "../../../blocks/markdown/markdown";
-import { useBlockSelectionAnchor, useBlockNode, useEditorView, useEditorRoot } from "../../../hooks";
+import { Button } from "../../../components/ui/button";
+import { editorControlProps } from "../../../constants";
+import type { EditorViewApi } from "../../../editor-view/types";
+import { useBlockNode, useBlockSelectionAnchor, useEditorRoot, useEditorView } from "../../../hooks";
 import { findRenderedBlock, type ReactEditorExtension } from "../../../managers";
-import type { EditorViewApi } from "../../../types";
-import { TABLE_BLOCK_TYPE, TABLE_ROW_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE, tableCellView, tableRowView, tableView } from "./table-view";
-import { convertLeafToContainer } from "../../../views/ops/outline-ops";
+import { TABLE_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE, TABLE_ROW_BLOCK_TYPE, tableBehavior, tableCellBehavior, tableRowBehavior } from "./table-behavior";
 
-export { TABLE_BLOCK_TYPE, TABLE_ROW_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE } from "./table-view";
+export { TABLE_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE, TABLE_ROW_BLOCK_TYPE } from "./table-behavior";
 
 export const TABLE_DEFAULT_COLUMN_WIDTH = 180;
 
@@ -141,17 +141,17 @@ function useBlockHost(): { readonly marker: RefObject<HTMLDivElement | null>; re
  * @returns The complete new row, or undefined outside a table.
  */
 export function insertTableRow(editorView: EditorViewApi, rowId: string): EditorBlock | undefined {
-  const tableId = editorView.blocks.getParentId(rowId);
-  const table = tableId ? editorView.blocks.getBlock(tableId) : undefined;
+  const tableId = editorView.runtime.blocks.getParentId(rowId);
+  const table = tableId ? editorView.runtime.blocks.getBlock(tableId) : undefined;
   if (table?.type !== TABLE_BLOCK_TYPE) return undefined;
   const columns = Math.max(1, ...table.children.map((row) => row.children.length));
   const widths = Array.from({ length: columns }, (_, column) => columnWidth(
     table.children.find((row) => row.children[column])?.children[column]?.props.tableColumnWidth,
   ));
   let inserted: EditorBlock | undefined;
-  editorView.history.batchUpdates(() => {
-    editorView.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
-    inserted = editorView.blocks.insertBlock(createTableRowInput(widths), rowId);
+  editorView.runtime.history.batchUpdates(() => {
+    editorView.runtime.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
+    inserted = editorView.runtime.blocks.insertBlock(createTableRowInput(widths), rowId);
   });
   return inserted;
 }
@@ -163,21 +163,21 @@ export function insertTableRow(editorView: EditorViewApi, rowId: string): Editor
  * @returns Complete inserted cells, or an empty list outside a table.
  */
 export function insertTableColumn(editorView: EditorViewApi, cellId: string): readonly EditorBlock[] {
-  const rowId = editorView.blocks.getParentId(cellId);
-  const tableId = rowId ? editorView.blocks.getParentId(rowId) : undefined;
-  const row = rowId ? editorView.blocks.getBlock(rowId) : undefined;
-  const table = tableId ? editorView.blocks.getBlock(tableId) : undefined;
+  const rowId = editorView.runtime.blocks.getParentId(cellId);
+  const tableId = rowId ? editorView.runtime.blocks.getParentId(rowId) : undefined;
+  const row = rowId ? editorView.runtime.blocks.getBlock(rowId) : undefined;
+  const table = tableId ? editorView.runtime.blocks.getBlock(tableId) : undefined;
   const column = row?.children.findIndex((cell) => cell.id === cellId) ?? -1;
   if (row?.type !== TABLE_ROW_BLOCK_TYPE || table?.type !== TABLE_BLOCK_TYPE || column < 0) return [];
   const width = columnWidth(row.children[column]?.props.tableColumnWidth);
   const inserted: EditorBlock[] = [];
-  editorView.history.batchUpdates(() => {
-    editorView.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
+  editorView.runtime.history.batchUpdates(() => {
+    editorView.runtime.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
     table.children.forEach((tableRow) => {
-      editorView.blocks.updateBlock(tableRow.id, { listProps: { collapsed: false } });
+      editorView.runtime.blocks.updateBlock(tableRow.id, { listProps: { collapsed: false } });
       const anchor = tableRow.children[column] ?? tableRow.children.at(-1);
-      const cell = editorView.blocks.insertBlock(createTableCellInput(width), anchor?.id);
-      if (!anchor) editorView.blocks.moveBlocks([cell.id], tableRow.id, "inside");
+      const cell = editorView.runtime.blocks.insertBlock(createTableCellInput(width), anchor?.id);
+      if (!anchor) editorView.runtime.blocks.moveBlocks([cell.id], tableRow.id, "inside");
       inserted.push(cell);
     });
   });
@@ -192,10 +192,10 @@ export function insertTableColumn(editorView: EditorViewApi, cellId: string): re
  * @returns Current cell IDs in row order, or an empty list for invalid input.
  */
 function tableColumnCells(editorView: EditorViewApi, tableId: string, column: number): string[] {
-  const table = editorView.blocks.getBlockNode(tableId);
+  const table = editorView.runtime.blocks.getBlockNode(tableId);
   return table?.type === TABLE_BLOCK_TYPE && Number.isInteger(column) && column >= 0
     ? table.childIds.flatMap((rowId) => {
-      const cellId = editorView.blocks.getBlockNode(rowId)?.childIds[column];
+      const cellId = editorView.runtime.blocks.getBlockNode(rowId)?.childIds[column];
       return cellId ? [cellId] : [];
     })
     : [];
@@ -235,7 +235,7 @@ export function setTableColumnWidth(
   const cells = tableColumnCells(editorView, tableId, column);
   if (cells.length === 0 || !Number.isFinite(width)) return false;
   const tableColumnWidth = columnWidth(width);
-  editorView.blocks.updateBlocks(cells.map((id) => ({
+  editorView.runtime.blocks.updateBlocks(cells.map((id) => ({
     id,
     patch: { props: { tableColumnWidth } },
   })));
@@ -280,14 +280,14 @@ function TableDialog({ block, children }: BlockWrapperProps) {
 function useTableDimensions(tableId: string): { readonly rows: number; readonly columns: number } {
   const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => editorView.blocks.subscribeStructure(listener),
+    (listener: () => void) => editorView.runtime.blocks.subscribeStructure(listener),
     [editorView],
   );
   const getSnapshot = useCallback(() => {
-    const rowIds = editorView.blocks.getBlockNode(tableId)?.childIds ?? [];
+    const rowIds = editorView.runtime.blocks.getBlockNode(tableId)?.childIds ?? [];
     let columns = 0;
     rowIds.forEach((rowId) => {
-      columns = Math.max(columns, (editorView.blocks.getBlockNode(rowId)?.childIds.length ?? 0));
+      columns = Math.max(columns, (editorView.runtime.blocks.getBlockNode(rowId)?.childIds.length ?? 0));
     });
     return `${rowIds.length}:${columns}`;
   }, [tableId, editorView]);
@@ -353,13 +353,13 @@ function resolveCellColumn(
   editorView: EditorViewApi,
   cellId: string,
 ): { readonly tableId: string; readonly column: number; readonly width: number } | undefined {
-  const rowId = editorView.blocks.getParentId(cellId);
-  const tableId = rowId ? editorView.blocks.getParentId(rowId) : undefined;
-  const row = rowId ? editorView.blocks.getBlockNode(rowId) : undefined;
-  const table = tableId ? editorView.blocks.getBlockNode(tableId) : undefined;
+  const rowId = editorView.runtime.blocks.getParentId(cellId);
+  const tableId = rowId ? editorView.runtime.blocks.getParentId(rowId) : undefined;
+  const row = rowId ? editorView.runtime.blocks.getBlockNode(rowId) : undefined;
+  const table = tableId ? editorView.runtime.blocks.getBlockNode(tableId) : undefined;
   const column = row?.childIds.indexOf(cellId) ?? -1;
   return row?.type === TABLE_ROW_BLOCK_TYPE && table?.type === TABLE_BLOCK_TYPE && column >= 0
-    ? { tableId: table.id, column, width: columnWidth(editorView.blocks.getBlockNode(cellId)?.props.tableColumnWidth) }
+    ? { tableId: table.id, column, width: columnWidth(editorView.runtime.blocks.getBlockNode(cellId)?.props.tableColumnWidth) }
     : undefined;
 }
 
@@ -375,7 +375,7 @@ function TableCell({ blockId }: { readonly blockId: string }) {
   const { element: root } = useEditorRoot();
   const { marker, host } = useBlockHost();
   const resize = useRef<ColumnResizeGesture | null>(null);
-  const currentWidth = columnWidth(editorView.blocks.getBlockNode(blockId)?.props.tableColumnWidth);
+  const currentWidth = columnWidth(editorView.runtime.blocks.getBlockNode(blockId)?.props.tableColumnWidth);
   /**
    * Starts a column resize from the hovered vertical boundary.
    * @param event - Primary pointer press on the resize separator.
@@ -474,7 +474,7 @@ export function tableExtension(): ReactEditorExtension {
           metadata: { containment: { childOutline: "fixed" } },
         },
         render: Table,
-        view: tableView,
+        behavior: tableBehavior,
       });
       editorRuntime.blockTypes.register({
         definition: {
@@ -483,7 +483,7 @@ export function tableExtension(): ReactEditorExtension {
           metadata: { containment: { childOutline: "fixed" } },
         },
         render: TableRow,
-        view: tableRowView,
+        behavior: tableRowBehavior,
       });
       editorRuntime.blockTypes.register({
         definition: {
@@ -492,7 +492,7 @@ export function tableExtension(): ReactEditorExtension {
           metadata: { containment: { childOutline: "free", outlineFloor: true } },
         },
         render: TableCell,
-        view: tableCellView,
+        behavior: tableCellBehavior,
       });
       editorRuntime.surfaces.registerBlockWrapper("block", TableCellWidthWrapper);
       editorRuntime.surfaces.registerBlockWrapper("edgeless", TableCellWidthWrapper);

@@ -1,6 +1,5 @@
-import { createTestReactEditor as createReactEditor } from "../../test-utils";
-import { createTestCoreEditor as createEditor } from "../../test-utils";
 import type { ComponentType } from "react";
+import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
 
 
 const Mounted: ComponentType = () => null;
@@ -22,11 +21,11 @@ describe("ExtensionManager", () => {
     editorView.selection.scheduleIfSelectionUnchanged(() => {}, () => {
       throw new Error("restoration cleanup failed");
     });
-    expect(() => editorView.destroy()).toThrow("restoration cleanup failed");
+    expect(() => editorView.runtime.destroy()).toThrow("restoration cleanup failed");
     expect(released).toBe(true);
     expect(editorView.selection.hasPendingSelectionCallback).toBe(false);
-    expect(() => editorView.extensions.mount(Mounted)).toThrow(/destroyed/);
-    expect(() => editorView.destroy()).not.toThrow();
+    expect(() => editorView.runtime.extensions.mount(Mounted)).toThrow(/destroyed/);
+    expect(() => editorView.runtime.destroy()).not.toThrow();
     editor.destroy();
   });
 
@@ -34,7 +33,7 @@ describe("ExtensionManager", () => {
     const editor = await createEditor();
     const editorView = createReactEditor({ editor });
     const released: string[] = [];
-    expect(() => editorView.extensions.install({
+    expect(() => editorView.runtime.extensions.install({
       id: "failing.setup",
       setup: (editorRuntime) => {
         editorRuntime.extensions.mount(Mounted);
@@ -42,32 +41,32 @@ describe("ExtensionManager", () => {
         throw new Error("setup failed");
       },
     })).toThrow("setup failed");
-    expect(editorView.extensions.getComponents()).toEqual([]);
+    expect(editorView.runtime.extensions.getComponents()).toEqual([]);
 
-    const dispose = editorView.extensions.install({
+    const dispose = editorView.runtime.extensions.install({
       id: "throwing.cleanup",
       setup: () => () => {
         throw new Error("cleanup failed");
       },
     });
-    editorView.extensions.install({
+    editorView.runtime.extensions.install({
       id: "later",
       setup: (editorRuntime) => {
         editorRuntime.extensions.mount(Mounted, "afterSurface");
       },
     });
-    expect(editorView.extensions.getComponents("afterSurface")).toEqual([Mounted]);
+    expect(editorView.runtime.extensions.getComponents("afterSurface")).toEqual([Mounted]);
     expect(() => dispose()).toThrow("cleanup failed");
-    expect(editorView.extensions.getComponents("afterSurface")).toEqual([Mounted]);
-    editorView.destroy();
-    expect(editorView.extensions.getComponents()).toEqual([]);
+    expect(editorView.runtime.extensions.getComponents("afterSurface")).toEqual([Mounted]);
+    editorView.runtime.destroy();
+    expect(editorView.runtime.extensions.getComponents()).toEqual([]);
     editor.destroy();
   });
 
   test("owns repeated component registrations by registration identity", async () => {
     const editor = await createEditor();
     const editorView = createReactEditor({ editor });
-    const manager = editorView.extensions;
+    const manager = editorView.runtime.extensions;
     const first = manager.mount(Mounted);
     manager.mount(Mounted);
 
@@ -75,7 +74,7 @@ describe("ExtensionManager", () => {
     first();
     expect(manager.getComponents()).toEqual([Mounted]);
 
-    editorView.destroy();
+    editorView.runtime.destroy();
     expect(manager.getComponents()).toEqual([]);
     expect(() => manager.mount(Mounted)).toThrow(/destroyed/);
     editor.destroy();

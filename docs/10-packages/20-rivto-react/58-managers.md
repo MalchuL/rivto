@@ -1,15 +1,23 @@
 # React managers
 
-Managers — public extension boundary `EditorViewApi`. Они не дублируют document state: каждый владеет только одной React/browser responsibility.
+Менеджеры регистрации принадлежат `EditorRuntime`; операции одного отображения доступны через `EditorViewApi`. Они не дублируют document state: каждый владеет только одной React/browser responsibility.
 
 ```text
-EditorViewApi
+EditorRuntime
   ├─ blockTypes + renderers   model/presentation registration
   ├─ extensions + surfaces   lifecycle/composition
   ├─ events + keyboard       browser input
-  ├─ selection               DOM bridge
-  ├─ clipboard               portable external formats
-  └─ slashCommands           contextual UI actions
+  ├─ selection               portable document selection
+  ├─ clipboardFormats        portable external formats
+  ├─ pasteStrategies         shared paste algorithms
+  └─ slashCommands           command definitions
+
+EditorViewApi (implemented by EditorViewController)
+  ├─ runtime                 explicit shared document managers
+  ├─ events + keyboard       local registrations
+  ├─ selection               local DOM bridge
+  ├─ clipboard               copy/cut/paste in this view
+  └─ slashCommands           availability and execution in this view
 ```
 
 ## Общие правила

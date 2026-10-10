@@ -12,12 +12,12 @@ interface CounterProps { count: number }
 function CounterBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode<CounterProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
-  const editorRuntime = useEditorView();
+  const editorView = useEditorView();
   if (!editing.block) return null;
   return <div {...attributes}>
     <button onClick={(event) => {
       if (event.defaultPrevented) return;
-      const current = editorRuntime.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+      const current = editorView.runtime.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
       editing.operations.setProp("count", (current?.count ?? 0) + 1);
     }}>Count: {editing.block?.props.count ?? 0}</button>
   </div>;

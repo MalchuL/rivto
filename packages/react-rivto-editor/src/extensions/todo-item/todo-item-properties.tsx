@@ -1,14 +1,14 @@
-import { useCallback, useId, useRef, useState } from "react";
 import { XIcon } from "lucide-react";
-import { editorControlProps } from "../../constants";
+import { useCallback, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
 import { Textarea } from "../../components/ui/textarea";
-import { TODO_STATUSES, type TodoItemPropertiesModalProps, type TodoItemPropertiesPatch, type TodoItemStatus, type TodoItemProps } from "./todo-item-model";
-import { TODO_MODAL_CLASS, TODO_MODAL_HEADER_CLASS, TODO_MODAL_CLOSE_CLASS, TODO_MODAL_FIELDS_CLASS, TODO_MODAL_FIELD_CLASS, TODO_MODAL_TIMESTAMPS_CLASS } from "./todo-item-classes";
+import { editorControlProps } from "../../constants";
+import { TODO_MODAL_CLASS, TODO_MODAL_CLOSE_CLASS, TODO_MODAL_FIELDS_CLASS, TODO_MODAL_FIELD_CLASS, TODO_MODAL_HEADER_CLASS, TODO_MODAL_TIMESTAMPS_CLASS } from "./todo-item-classes";
+import { TODO_STATUSES, type TodoItemPropertiesModalProps, type TodoItemPropertiesPatch, type TodoItemProps, type TodoItemStatus } from "./todo-item-model";
 
 /**
  * Renders the default auto-committing TODO properties dialog.

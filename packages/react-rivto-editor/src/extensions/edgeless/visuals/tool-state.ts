@@ -1,5 +1,5 @@
-import type { EdgelessVisual, EdgelessVisualTool, EdgelessPlaceKind, PresetPayload, ToolCategory, VisualFrame } from "./types";
 import { DEFAULT_STICKERS } from "./presets";
+import type { EdgelessPlaceKind, EdgelessVisual, EdgelessVisualTool, PresetPayload, ToolCategory, VisualFrame } from "./types";
 import { DEFAULT_PLACE_SIZE } from "./utils/creation-geometry";
 const copy = <Value>(value: Value): Value => structuredClone(value);
 const DEFAULT_FONT = "Inter, ui-sans-serif, system-ui, sans-serif";

@@ -2,15 +2,15 @@
  * Owns atomic React block-type registration and presentation metadata.
  *
  * Definitions remain stored in the core registry; this manager coordinates
- * their renderer, optional view, slash conversion, and separator metadata.
+ * their renderer, optional behavior, slash conversion, and separator metadata.
  */
 import type { BlockRegistryManager, RivtoEditorApi } from "@chulane/rivto";
-import type { BlockTypesCapability } from "../../capabilities";
-import type { EditorRuntime } from "../../editor-runtime";
+import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { BlockTypesApi } from "./block-types-api";
 import { getBlockContainment, type ReactBlockRegistration } from "./types";
 
 /** Coordinates one block type's core definition and React presentation. */
-export class BlockTypeManager implements BlockTypesCapability {
+export class BlockTypeManager implements BlockTypesApi {
   private readonly registrations = new Map<string, () => void>();
   private readonly blockElementSeparatorTypes = new Set<string>();
 
@@ -25,16 +25,16 @@ export class BlockTypeManager implements BlockTypesCapability {
   ) {}
 
   /**
-   * Registers definition, renderer, optional view, and type conversion atomically.
+   * Registers definition, renderer, optional behavior, and type conversion atomically.
    * @param registration - Complete custom block integration.
    * @returns Idempotent disposer releasing every installed part in reverse.
-   * @throws On definition, renderer, view, or slash-command conflicts.
+   * @throws On definition, renderer, behavior, or slash-command conflicts.
    */
   register(registration: ReactBlockRegistration): () => void {
     const core = this.editor.blocks;
-    const { extensions, renderers, slashCommands, views } = this.editorRuntime;
+    const { extensions, renderers, slashCommands, blockBehaviors } = this.editorRuntime;
     extensions.assertActive();
-    const { definition, render, slashCommand, view } = registration;
+    const { definition, render, slashCommand, behavior } = registration;
     if (renderers.has(definition.type)) {
       throw new Error(`Block renderer ${definition.type} is already registered`);
     }
@@ -50,7 +50,7 @@ export class BlockTypeManager implements BlockTypesCapability {
         }
       } else disposers.push(this.editor.blockRegistry.defineBlock(definition));
       disposers.push(renderers.register(definition.type, render));
-      if (view) disposers.push(views.register(definition.type, view));
+      if (behavior) disposers.push(blockBehaviors.register(definition.type, behavior));
       if (registration.separatesBlockElements) {
         this.blockElementSeparatorTypes.add(definition.type);
         disposers.push(() => this.blockElementSeparatorTypes.delete(definition.type));

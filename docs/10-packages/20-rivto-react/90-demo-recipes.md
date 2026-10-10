@@ -42,13 +42,13 @@ Demo block-ID extension регистрирует `BlockWrapper` и исполь�
 
 ## Несколько независимых editors
 
-Один user получает EditorStorage с фабрикой отдельных EditorViewApi для документов.
+Один user получает EditorStorage с фабрикой отдельных EditorRuntime для документов.
 Два документа используют разные document-bound runtimes; два views одного
-документа получают один cached EditorViewApi:
+документа получают один cached EditorRuntime и независимые EditorViewApi:
 
 ```tsx
-<EditorView runtime={leftAcquisition.editor}><PageSurface /></EditorView>
-<EditorView runtime={rightAcquisition.editor}><PageSurface /></EditorView>
+<EditorView runtime={leftAcquisition.runtime}><PageSurface /></EditorView>
+<EditorView runtime={rightAcquisition.runtime}><PageSurface /></EditorView>
 ```
 
 View автоматически удерживает consumer, включая nesting. Cross-document transfer
@@ -68,10 +68,10 @@ const editors = new EditorStorage({
     extensions: [standardPreset(), embeddingExtension()],
   }),
 });
-const acquisition = await editors.acquireEditor("document-id");
+const acquisition = await editors.acquireRuntime("document-id");
 // Views retain the document through the nearest provider before releasing the initial consumer.
 <EditorStorageContext.Provider value={editors}>
-  <EditorView runtime={acquisition.editor} onReady={acquisition.release}>
+  <EditorView runtime={acquisition.runtime} onReady={acquisition.release}>
     <PageSurface />
   </EditorView>
 </EditorStorageContext.Provider>;

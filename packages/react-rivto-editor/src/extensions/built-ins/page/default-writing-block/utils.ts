@@ -10,7 +10,7 @@ import type { IsEmptyBlock } from "./types";
 export type {
   CreateDefaultBlock,
   EmptyBlockCandidate,
-  IsEmptyBlock,
+  IsEmptyBlock
 } from "./types";
 
 /**

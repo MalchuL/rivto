@@ -47,7 +47,7 @@ const blockOrders = new WeakMap<DocumentModel, BlockOrderCache>();
  * @returns Ordinals keyed by block id.
  */
 function buildOrdinals(
-  blocks: ReturnType<EditorViewApi["blocks"]["getBlocks"]>,
+  blocks: ReturnType<EditorViewApi["runtime"]["blocks"]["getBlocks"]>,
 ): ReadonlyMap<string, BlockOrdinal> {
   const map = new Map<string, BlockOrdinal>();
   let number = 1;
@@ -76,11 +76,11 @@ function buildOrdinals(
  * @returns The shared ordinal map for that document.
  */
 function blockOrderSnapshot(editorView: EditorViewApi): ReadonlyMap<string, BlockOrdinal> {
-  const document = editorView.getDocument();
+  const document = editorView.runtime.getDocument();
   if (!document) throw new Error("Document context is required for gutter numbering");
   let cache = blockOrders.get(document);
   if (!cache) {
-    cache = { map: buildOrdinals(editorView.blocks.getBlocks()) };
+    cache = { map: buildOrdinals(editorView.runtime.blocks.getBlocks()) };
     blockOrders.set(document, cache);
   }
   return cache.map;
@@ -106,7 +106,7 @@ function useBlockOrdinal(block: BlockSlotProps["block"]): BlockOrdinal | undefin
   const editorView = useEditorView();
   // Read after document publication: undo can notify structure observers
   // before every affected root/child snapshot has been invalidated.
-  const subscribe = useCallback((listener: () => void) => editorView.subscribe(listener), [editorView]);
+  const subscribe = useCallback((listener: () => void) => editorView.runtime.subscribe(listener), [editorView]);
   const previous = useRef<BlockOrdinal | undefined>(undefined);
   const getBlockOrderSnapshot = useCallback(() => {
     const current = blockOrderSnapshot(editorView).get(block.id);

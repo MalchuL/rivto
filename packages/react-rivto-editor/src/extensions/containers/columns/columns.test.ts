@@ -10,12 +10,12 @@ import { createTestCoreEditor } from "../../../test-utils";
 
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import {
+  COLUMNS_BLOCK_TYPE,
+  COLUMNS_COLUMN_BLOCK_TYPE,
   columnsExtension,
   createColumnsBlockInput,
   relocateColumnContents,
   setColumnsCount,
-  COLUMNS_BLOCK_TYPE,
-  COLUMNS_COLUMN_BLOCK_TYPE,
 } from "./columns";
 
 async function createColumnsRuntime() {
@@ -38,7 +38,7 @@ test("slash insert creates empty columns", async () => {
   expect(board.children).toHaveLength(2);
   expect(board.children.every((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE)).toBe(true);
   expect(board.children.every((column) => column.children.length === 0)).toBe(true);
-  editorView.destroy();
+  editorView.runtime.destroy();
   editor.destroy();
 });
 
@@ -82,7 +82,7 @@ test("inserts equally sized columns and relocates nested blocks when a column is
   const copied = editor.clipboard.copy(createStructuralSelection([board.id]));
   expect(copied?.blocks[0]?.children).toHaveLength(3);
 
-  editorView.destroy();
+  editorView.runtime.destroy();
   editor.destroy();
 });
 
@@ -98,7 +98,7 @@ test("structural column deletion moves nested blocks instead of removing them", 
   expect(editor.blocks.getBlock(left!.id)?.children.map((child) => child.id)).toEqual([nested]);
   expect(editor.blocks.getBlockNode(nested)?.content).toBe("Survive");
 
-  editorView.destroy();
+  editorView.runtime.destroy();
   editor.destroy();
 });
 

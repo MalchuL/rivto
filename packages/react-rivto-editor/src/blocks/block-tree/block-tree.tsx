@@ -11,15 +11,15 @@ import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
 import { memo, useCallback, useSyncExternalStore, type ComponentType } from "react";
 import { BLOCK_ROW_CLASS } from "../../constants";
 import { useBlockNode, useBlockSelected, useEditorView } from "../../hooks";
+import { BlockView } from "../block-view/block-view";
 import {
   BlockElementRefBoundary,
   BlockWrapper,
   useBlockElementRef,
   type BlockShellProps,
 } from "../block-wrapper/block-wrapper";
-import { BlockView } from "../block-view/block-view";
-import { UnknownBlock } from "../unknown-block/unknown-block";
 import { BlockBodySlot, BlockSlots } from "../owner-slots/owner-slots";
+import { UnknownBlock } from "../unknown-block/unknown-block";
 
 const BLOCK_CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 
@@ -69,18 +69,18 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   const selected = useBlockSelected(blockId);
   const childrenId = useBlockChildrenId(blockId);
   const subscribeRenderers = useCallback(
-    (listener: () => void) => editorView.renderers.subscribe(listener),
+    (listener: () => void) => editorView.runtime.renderers.subscribe(listener),
     [editorView],
   );
   useSyncExternalStore(
     subscribeRenderers,
-    () => editorView.renderers.revision,
-    () => editorView.renderers.revision,
+    () => editorView.runtime.renderers.revision,
+    () => editorView.runtime.renderers.revision,
   );
 
   if (!block) return null;
   const childIds = block.childIds;
-  const Content = editorView.renderers.get(block.type) ?? UnknownBlock;
+  const Content = editorView.runtime.renderers.get(block.type) ?? UnknownBlock;
 
   return (
     <BlockWrapper
@@ -89,7 +89,7 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
       isSelected={selected}
       content={<BlockContent renderer={Content} blockId={block.id} />}
     >
-      {childIds.length > 0 && editorView.blockListProps.childrenVisible(block) && (
+      {childIds.length > 0 && editorView.runtime.blockListProps.childrenVisible(block) && (
         <div id={childrenId} className="page-block-children">
           {childIds.map((childId) => (
             <MemoBlockTreeNode key={childId} blockId={childId} />

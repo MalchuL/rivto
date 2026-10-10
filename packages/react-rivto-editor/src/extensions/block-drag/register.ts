@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../editor-runtime";
+import type { EditorRuntime } from "../../editor/editor-runtime";
 /** Runtime registration for page block drag wrappers and handles. */
 import { createElement, type ReactNode } from "react";
 import { PageDragProvider } from "./provider";

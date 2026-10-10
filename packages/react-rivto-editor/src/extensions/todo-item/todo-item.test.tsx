@@ -8,8 +8,8 @@ import { createTestReactEditor as createReactEditor } from "../../test-utils";
  */
 import type { ReactElement } from "react";
 
+import { indentBlocks } from "../../block-behaviors/index";
 import { createTestCoreEditor as createRivtoEditor } from "../../test-utils";
-import { indentBlocks } from "../../views";
 import {
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
@@ -39,7 +39,7 @@ describe("todoItemExtension", () => {
     expect(() => editor.blocks.updateBlock(first, { props: { priority: 5 } })).toThrow();
     expect(() => editor.blocks.updateBlock(first, { props: { updatedAt: "2026-01-01" } })).toThrow();
 
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -73,7 +73,7 @@ describe("todoItemExtension", () => {
       TODO_STORAGE_BLOCK_TYPE,
       "paragraph",
     ]);
-    expect(editorView.views.resolve(empty).dropAxis).toBe("vertical");
+    expect(editorView.runtime.blockBehaviors.resolve(empty).dropAxis).toBe("vertical");
     expect(editor.blockRegistry.get(TODO_STORAGE_BLOCK_TYPE)?.metadata).toEqual({
       containment: { childOutline: "free", outlineFloor: true },
     });
@@ -84,7 +84,7 @@ describe("todoItemExtension", () => {
     indentBlocks(editorView, [nestedTodo]);
     expect(editor.blocks.getParentId(nestedTodo)).toBe(firstTodo);
 
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -95,13 +95,13 @@ describe("todoItemExtension", () => {
       editor,
       extensions: [todoItemExtension({ propertiesModal: CustomModal })],
     });
-    const Renderer = editorView.renderers.get(TODO_ITEM_BLOCK_TYPE) as (
+    const Renderer = editorView.runtime.renderers.get(TODO_ITEM_BLOCK_TYPE) as (
       props: { readonly blockId: string },
     ) => ReactElement<{ readonly propertiesModal: unknown }>;
 
     expect(Renderer({ blockId: "todo" }).props.propertiesModal).toBe(CustomModal);
 
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 });

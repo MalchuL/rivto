@@ -1,6 +1,6 @@
-import { createContext, type ReactNode } from "react";
 import type { EditorMode } from "@chulane/rivto";
-import { useEditorView } from "../hooks/editor/use-editor-view";
+import { createContext, type ReactNode } from "react";
+import { useEditorView } from "../editor-view/use-editor-view";
 
 /** Presentation kind supplied by an explicit surface, never stored on an editor. */
 export const SurfaceContext = createContext<EditorMode>("block");
@@ -12,8 +12,8 @@ export const SurfaceContext = createContext<EditorMode>("block");
  */
 export function SurfaceBoundary({ type, children }: { readonly type: EditorMode; readonly children: ReactNode }) {
   const editor = useEditorView();
-  let content = <>{editor.extensions.getComponents("beforeSurface").map((Component, index) => <Component key={`before-${index}`} />)}{children}{editor.extensions.getComponents("afterSurface").map((Component, index) => <Component key={`after-${index}`} />)}</>;
-  const wrappers = editor.surfaces.getEditorWrappers(type);
+  let content = <>{editor.runtime.extensions.getComponents("beforeSurface").map((Component, index) => <Component key={`before-${index}`} />)}{children}{editor.runtime.extensions.getComponents("afterSurface").map((Component, index) => <Component key={`after-${index}`} />)}</>;
+  const wrappers = editor.runtime.surfaces.getEditorWrappers(type);
   for (let index = wrappers.length - 1; index >= 0; index -= 1) {
     const Wrapper = wrappers[index]!;
     content = <Wrapper>{content}</Wrapper>;

@@ -2,11 +2,11 @@
 
 ## `EventManager`
 
-`runtime.events` владеет общим delegated transport и маршрутизирует события к зарегистрированным отображениям. `editor.events` — локальный ViewEventManager: он использует root и cleanup своего отображения.
+`runtime.events` владеет общим delegated transport и маршрутизирует события к зарегистрированным отображениям. `editorView.events` — локальный ViewEventManager: он использует root и cleanup своего отображения.
 
 ### Properties
 
-Public properties отсутствуют. Private state: ordered registrations, connected native listener groups, реестр корней отображений и claimed native events.
+Public properties отсутствуют. Private state: ordered registrations и claimed native events. DOMEventListeners группирует и подключает native listeners; runtime.editorViews хранит корни, active/default отображения и начало pointer-жеста.
 
 ### `register(definition, listener)`
 
@@ -16,13 +16,15 @@ Public properties отсутствуют. Private state: ordered registrations, 
 
 Definition задаёт `id`, `type`, optional `target`, `scope`, `mode`, `capture`, `passive`, `when`. Default target — `surface`.
 
-Handler получает `EditorEvent` со properties `raw`, `editor`, `root`, `mode`, `selection`, `eventTarget`, `insideRoot`, `blockElement`, `blockId`, `contentElement`. Return `true` claims event, прекращает дальнейший Rivto dispatch и вызывает `preventDefault()` для cancelable native event.
+Handler получает `EditorEvent` со properties `raw`, `editorView`, `root`, `mode`, `selection`, `eventTarget`, `insideRoot`, `blockElement`, `blockId`, `contentElement`. Return `true` claims event, прекращает дальнейший Rivto dispatch и вызывает `preventDefault()` для cancelable native event.
 
 ### Остальные methods
 
 - `delete(id)` принимает registration ID, возвращает `boolean`, не throws для missing ID.
 - `editor.events.setRoot(root)` принимает `HTMLElement | null` и обновляет root конкретного отображения через его контроллер; общие surface/document/window listeners переподключаются через реестр. У `runtime.events` этого метода нет.
-- `getRoot()` возвращает current element или `null`.
+- `editorView.events.getRoot()` возвращает root этого отображения или `null`.
+- `runtime.editorViews.getActive()` возвращает последнее активированное отображение либо undefined до первого взаимодействия.
+- `runtime.editorViews.getDefault()` выбирает full-document view, затем первое subtree. Fallback явно записывается вызывающим кодом: `getActive() ?? getDefault()`.
 - `destroy()` возвращает `void`, повторно безопасен.
 
 ### Modes

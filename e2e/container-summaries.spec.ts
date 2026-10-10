@@ -223,7 +223,7 @@ for (const mode of ["block", "edgeless"] as const) {
       editorRuntime.blockTypes.register({
         definition: { type: "test-container", title: "Custom container" },
         render: editorRuntime.renderers.get("paragraph")!,
-        view: editorRuntime.views.get("columns")!,
+        behavior: editorRuntime.blockBehaviors.get("columns")!,
       });
       const block = editor.blocks.insertBlock({
         type: "test-container", content: "Custom container",

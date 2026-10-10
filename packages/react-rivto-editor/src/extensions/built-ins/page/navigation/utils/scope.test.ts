@@ -2,6 +2,7 @@ import { createTestReactEditor as createReactEditor } from "../../../../../test-
 /** Regression coverage for block and edgeless outline navigation boundaries. */
 import { createTestCoreEditor as createRivtoEditor } from "../../../../../test-utils";
 
+import { createStructuralSelection, type EditorBlock, type Selection } from "@chulane/rivto";
 import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../../../separator/separator-block";
 import {
   adjacentBlockSelection,
@@ -13,7 +14,6 @@ import { reconcileCollapsedSelection } from "./collapsed-selection";
 import { keyboardMovePlacement } from "./move-placement";
 import { selectedMoveRoots } from "./move-roots";
 import { pageEntries } from "./outline";
-import { createStructuralSelection, type EditorBlock, type Selection } from "@chulane/rivto";
 import {
   navigationOutlineBlocks,
   owningBlockElement,
@@ -88,7 +88,7 @@ describe("edgeless outline scope", () => {
     expect(navigationOutlineBlocks(editorView, leftB).map((block) => block.id)).toEqual([leftA, leftB]);
     expect(navigationOutlineBlocks(editorView, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
     expect(navigationOutlineBlocks(editor, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -98,7 +98,7 @@ describe("edgeless outline scope", () => {
     const current = createStructuralSelection([leftB], leftB, leftB);
     expect(adjacentBlockSelection(outline, current, "down")).toEqual(current);
     expect(adjacentBlockSelection(outline, current, "up").focusBlockId).toBe(leftA);
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -111,7 +111,7 @@ describe("edgeless outline scope", () => {
       targetId: leftA,
       position: "before",
     });
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -119,7 +119,7 @@ describe("edgeless outline scope", () => {
     const { editor, editorView, leftA, leftB } = await twoCards();
     const ids = pageEntries(navigationOutlineBlocks(editorView, leftA)).map(({ block }) => block.id);
     expect(ids).toEqual([leftA, leftB]);
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 });

@@ -3,3 +3,4 @@ export * from "./block-type-manager";
 export * from "./types";
 export * from "./renderer-manager";
 export * from "./renderer-types";
+export * from "./block-behavior-registry";

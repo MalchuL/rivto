@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../../editor-runtime";
+import type { EditorRuntime } from "../../../../editor/editor-runtime";
 /** Runtime registration for backward and forward block boundary merging. */
 import { registerBackwardBlockMerge } from "./backward";
 import { registerForwardBlockMerge } from "./forward";

@@ -1,4 +1,4 @@
-# `ReactSlashCommandManager`
+# `SlashCommandRegistry`
 
 `editorRuntime.slashCommands` хранит ordered contextual actions. Он React-owned: commands не persist и не входят в core `CommandRegistry`.
 
@@ -18,8 +18,8 @@ Command properties:
 - `id: string` stable identity;
 - `title: string` display label;
 - optional `group`, `keywords`;
-- optional `isAvailable({ blockId })`;
-- `execute({ blockId }): void`.
+- optional `isAvailable({ blockId, editorView })`;
+- `execute({ blockId, editorView }): void`.
 
 ## Остальные methods
 
@@ -29,17 +29,17 @@ Command properties:
 - **Возвращает:** `boolean`.
 - **Исключения:** throws после destroyed runtime; missing ID возвращает false.
 
-### `getAll(context)`
+### `editorView.slashCommands.getAll(context)`
 
-- **Аргументы:** `{ blockId: string, editorView: EditorViewApi }` для общего registry;
-  `editorView.slashCommands.getAll({ blockId })` подставляет своё отображение.
+- **Аргументы:** `{ blockId: string }`; локальный менеджер подставляет своё отображение.
+- Registry `runtime.slashCommands.getAll()` не принимает контекст и возвращает все определения; `get(id)` возвращает определение либо undefined.
 - **Возвращает:** available commands в declaration order.
 - **Исключения:** errors `isAvailable` predicate.
 
-### `execute(id, context)`
+### `editorView.slashCommands.execute(id, context)`
 
-- **Аргументы:** ID и block context с `editorView` для общего registry;
-  `editorView.slashCommands.execute(id, { blockId })` подставляет своё отображение.
+- **Аргументы:** ID и `{ blockId }`; локальный менеджер подставляет своё отображение.
+- У общего registry метода execute нет. Register/delete доступны только через runtime.
 - **Возвращает:** `void`.
 - **Исключения:** unknown command, unavailable command или errors user execute callback.
 

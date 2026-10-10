@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../../editor-runtime";
+import type { EditorRuntime } from "../../../../editor/editor-runtime";
 /** Runtime registration for the trailing page insertion control. */
 import { createElement } from "react";
 import { TrailingBlock } from "./component";

@@ -1,13 +1,13 @@
-import type { EditorRuntime } from "../../../../../editor-runtime";
-import { focusCaret, scheduleBlockFocus } from "../../../../../views/ops/focus-ops";
-import { convertEmptyToList } from "../../../../../views/ops/text-ops";
+import { focusCaret, scheduleBlockFocus } from "../../../../../block-behaviors/ops/focus-ops";
+import { convertEmptyToList } from "../../../../../block-behaviors/ops/text-ops";
+import type { EditorRuntime } from "../../../../../editor/editor-runtime";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import { createCaretSelection } from "@chulane/rivto";
 import { BlockListSlot } from "../../../../../blocks/block-slot-controls/block-slot-controls";
+import type { EditorViewApi } from "../../../../../editor-view/types";
 import { focusBlock } from "../../../../../managers";
-import type { EditorViewApi } from "../../../../../types";
 import type { BlockListType, ListShortcutPatch } from "../types";
 import { BLOCK_LIST_TYPES, isNumberedListType, resolveBlockListNumbers } from "../utils";
 import { listShortcutPatch } from "./utils";
@@ -48,15 +48,15 @@ export function registerListShortcuts(editorRuntime: EditorRuntime): void {
       return { type, checked: false };
     },
     onSplit: ({ editorView, block, root }) => {
-      if (editorView.isEmptyBlock(block) &&
+      if (editorView.runtime.isEmptyBlock(block) &&
         (block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type))) {
         // The first Enter removes only the visible list state; the block keeps
         // its outline position and unrelated properties for the next press.
-        editorView.blocks.deleteListProps(block.id, ["type", "checked"]);
+        editorView.runtime.blocks.deleteListProps(block.id, ["type", "checked"]);
         focusCaret(editorView, root, block.id, 0);
         return true;
       }
-      if (!editorView.blocks.getParentId(block.id) && editorView.isEmptyBlock(block) && block.listProps.type !== "list") {
+      if (!editorView.runtime.blocks.getParentId(block.id) && editorView.runtime.isEmptyBlock(block) && block.listProps.type !== "list") {
         convertEmptyToList(editorView, block.id);
         scheduleBlockFocus(editorView, root, block.id, 0);
         return true;
@@ -75,7 +75,7 @@ export function registerListShortcuts(editorRuntime: EditorRuntime): void {
     when: ({ block }) =>
       block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type),
   });
-  editorRuntime.clipboard.registerFormatter({
+  editorRuntime.clipboardFormats.registerFormatter({
     id: "list",
     matches: ({ block }) =>
       block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type),
@@ -99,8 +99,8 @@ export function registerListShortcuts(editorRuntime: EditorRuntime): void {
     root: HTMLElement,
     shortcut: ListShortcutPatch,
   ): void => {
-    editorView.history.batchUpdates(() => {
-      editorView.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
+    editorView.runtime.history.batchUpdates(() => {
+      editorView.runtime.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
       editorView.selection.set(createCaretSelection(blockId, 0));
     });
     // Only place the caret and its editing focus; list conversion is already committed.
@@ -130,7 +130,7 @@ export function registerListShortcuts(editorRuntime: EditorRuntime): void {
       return false;
     }
     queueMicrotask(() => {
-      const block = editorView.blocks.getBlockNode(blockId);
+      const block = editorView.runtime.blocks.getBlockNode(blockId);
       const shortcut = block ? listShortcutPatch(block.content.replaceAll("\u00a0", " ")) : undefined;
       if (!shortcut) return;
       convert(editorView, blockId, root, shortcut);

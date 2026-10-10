@@ -11,11 +11,11 @@ import { SurfaceContext } from "../../../surfaces/surface";
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { useEditorView, useEditorRoot } from "../../../hooks";
-import { useEdgelessSelected, useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
 import { ElementSlots } from "../../../blocks";
-import { DrawingCapture } from "./components/drawing-capture";
+import { useEditorRoot, useEditorView } from "../../../hooks";
+import { useEdgelessSelected, useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
 import { BlockProperties } from "./components/block-properties";
+import { DrawingCapture } from "./components/drawing-capture";
 import { SelectionToolbar } from "./components/selection-toolbar";
 import { ToolBar } from "./components/tool-bar";
 import { VisualElement } from "./components/visual-element";
@@ -56,7 +56,7 @@ function GroupSelectionChrome({
   const selected = useEdgelessSelected(groupId);
   const bounds = controller.getBounds(groupId);
   if (!selected || !bounds) return null;
-  const element = controller.editor.elements.getElement(groupId);
+  const element = controller.runtime.elements.getElement(groupId);
   const geometry = {
     left: bounds.x,
     top: bounds.y,
@@ -118,7 +118,7 @@ function EdgelessSelectionChrome({
     ? sameType
     : [];
   const propertyBlocks = selection.items.flatMap((id) => {
-    const element = controller.editor.elements.getElement(id);
+    const element = controller.runtime.elements.getElement(id);
     return element?.type === "block" ? [element] : [];
   });
   return (
@@ -209,7 +209,7 @@ export function EdgelessVisualLayer({
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.editor.commands.execute("edgeless.tool.set", "select");
+      controller.runtime.commands.execute("edgeless.tool.set", "select");
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 2) return;
@@ -217,7 +217,7 @@ export function EdgelessVisualLayer({
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.editor.commands.execute("edgeless.tool.set", "select");
+      controller.runtime.commands.execute("edgeless.tool.set", "select");
     };
     root.addEventListener("contextmenu", onContextMenu);
     root.addEventListener("pointerdown", onPointerDown, true);

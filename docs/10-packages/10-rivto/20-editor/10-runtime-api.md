@@ -109,9 +109,9 @@ Constructor создаёт managers, постоянно связанные с su
 
 ## Публичные методы
 
-### `getDocument()` и `getSingleEditor(documentId)`
+### `getDocument()` и `openCoreEditor(documentId)`
 
-`getDocument()` всегда возвращает единственную модель, переданную в `createRivtoEditor({ document })`. Managers, retained callbacks, subscriptions, clipboard и history постоянно связаны с ней; смены document context нет. Single editor освобождает свои registrations и subscriptions, но не уничтожает caller-owned модель. Для нескольких документов `EditorStorage` принимает async `openDocument(documentId)` и optional `createEditor(editor)` returning EditorViewApi; по умолчанию создаёт пустой Yjs-backed документ. `getSingleEditor(documentId)` открывает и кеширует отдельный core, сохраняя explicit ownership до `closeEditor(documentId)`. Loader передаёт EditorStorage владение моделью, а storage создаёт core перед вызовом React-фабрики: последний view consumer или shutdown закрывает сначала EditorViewApi, затем core и модель. Views одного документа делят core, разные документы имеют собственные selection, clipboard policy и undo history.
+`getDocument()` всегда возвращает единственную модель, переданную в `createRivtoEditor({ document })`. Managers, retained callbacks, subscriptions, clipboard и history постоянно связаны с ней; смены document context нет. Single editor освобождает свои registrations и subscriptions, но не уничтожает caller-owned модель. Для нескольких документов `EditorStorage` принимает async `openDocument(documentId)` и optional `createEditor(editor)` returning EditorRuntime; по умолчанию создаёт пустой Yjs-backed документ. `openCoreEditor(documentId)` открывает и кеширует отдельный core, сохраняя explicit ownership до `releaseCoreEditor(documentId)`. Loader передаёт EditorStorage владение моделью, а storage создаёт core перед вызовом React-фабрики: последний view consumer или shutdown закрывает сначала EditorRuntime, затем core и модель. Views одного документа делят core, разные документы имеют собственные selection, clipboard policy и undo history.
 
 ### `subscribe(listener)`
 
@@ -218,18 +218,18 @@ const editors = new EditorStorage({
   }),
   lookupDocumentIds: (id, options) => storage.findDocumentIdsWithBlock(id, options),
 });
-const source = await editors.getSingleEditor("source");
+const source = await editors.openCoreEditor("source");
 source.blocks.updateBlock("existing-block", { content: "Changed" });
-const destination = await editors.getSingleEditor("destination");
+const destination = await editors.openCoreEditor("destination");
 destination.blocks.insertBlock({ type: "paragraph" });
-await editors.closeEditor("source");
+await editors.releaseCoreEditor("source");
 await editors.destroy();
 ```
 
-`getSingleEditor(id)` удерживает explicit ownership до `closeEditor(id)`.
-Views используют независимые `acquireEditor/release`; concurrent opens делят
+`openCoreEditor(id)` удерживает explicit ownership до `releaseCoreEditor(id)`.
+Views используют независимые `acquireRuntime/release`; concurrent opens делят
 pending promise, отмена одного consumer не отменяет другого. Последний release
-закрывает React registrations, core, затем модель. `getEditor(id)` и
+закрывает React registrations, core, затем модель. `getRuntime(id)` и
 `getDocument(id)` читают уже открытые instances без загрузки.
 `findDocumentWithBlock(id)` возвращает первую открытую модель по сортировке ID.
 Embedding хранит `targetDocumentId` и `targetBlockId`; `resolveBlock({ documentId, blockId })`

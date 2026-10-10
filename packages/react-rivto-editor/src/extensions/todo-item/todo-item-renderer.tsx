@@ -1,14 +1,14 @@
-import { useMemo, useState } from "react";
 import { CheckIcon, EllipsisIcon, MinusIcon } from "lucide-react";
-import { editorControlProps } from "../../constants";
-import { useBlockEditing, useEditorView } from "../../hooks";
+import { useMemo, useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
-import { DefaultTodoItemPropertiesModal } from "./todo-item-properties";
+import { editorControlProps } from "../../constants";
+import { useBlockEditing, useEditorView } from "../../hooks";
 import { TodoItemActions } from "./todo-item-actions";
-import type { TodoItemProps, TodoItemBlock, TodoItemComponentProps, TodoItemPropertiesPatch } from "./todo-item-model";
-import { TODO_ITEM_CLASS, TODO_BODY_CLASS, TODO_NAME_CLASS, TODO_DESCRIPTION_CLASS, TODO_META_CLASS, TODO_PRIORITY_CLASS, TODO_PROJECT_CLASS, TODO_PROPERTIES_BUTTON_CLASS, TODO_STATUS_CLASS, TODO_STATUS_TODO_CLASS, TODO_STATUS_DOING_CLASS, TODO_STATUS_DONE_CLASS } from "./todo-item-classes";
+import { TODO_BODY_CLASS, TODO_DESCRIPTION_CLASS, TODO_ITEM_CLASS, TODO_META_CLASS, TODO_NAME_CLASS, TODO_PRIORITY_CLASS, TODO_PROJECT_CLASS, TODO_PROPERTIES_BUTTON_CLASS, TODO_STATUS_CLASS, TODO_STATUS_DOING_CLASS, TODO_STATUS_DONE_CLASS, TODO_STATUS_TODO_CLASS } from "./todo-item-classes";
+import type { TodoItemBlock, TodoItemComponentProps, TodoItemPropertiesPatch, TodoItemProps } from "./todo-item-model";
+import { DefaultTodoItemPropertiesModal } from "./todo-item-properties";
 
 /**
  * Renders one compact, editable TODO row and its selected properties modal.

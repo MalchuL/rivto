@@ -7,9 +7,9 @@ import { createTestReactEditor as createReactEditor } from "../../../test-utils"
 import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../../test-utils";
 
+import { indentBlocks } from "../../../block-behaviors/ops/outline-ops";
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import { bentoExtension, createBentoBlockInput } from "./bento";
-import { indentBlocks } from "../../../views/ops/outline-ops";
 
 test("slash converts the current block to Bento in place", async () => {
   const editor = await createTestCoreEditor();
@@ -17,7 +17,7 @@ test("slash converts the current block to Bento in place", async () => {
   const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
   editorView.slashCommands.execute("block.bento.insert", { blockId });
   expect(editor.blocks.getBlockNode(blockId)).toMatchObject({ id: blockId, type: "bento", content: "" });
-  editorView.destroy();
+  editorView.runtime.destroy();
   editor.destroy();
 });
 
@@ -48,6 +48,6 @@ test("Bento preserves tile identity and width through moves, undo and serializat
   expect(editor.blocks.getParentId(nested)).toBe(board);
   editor.blocks.indentBlock(nested);
   expect(editor.blocks.getParentId(nested)).toBe(tile);
-  editorView.destroy();
+  editorView.runtime.destroy();
   editor.destroy();
 });

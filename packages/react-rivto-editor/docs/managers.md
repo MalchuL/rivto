@@ -19,7 +19,7 @@ Mutable maps and arrays remain private. Every registration validates that the
 runtime is active, preserves declaration order, returns an idempotent disposer,
 and is automatically released by `EditorRuntime.destroy()`.
 
-Each rendered occurrence has a `EditorViewApi` with local event, keyboard,
+Each rendered occurrence has an `EditorViewApi` with local event, keyboard,
 selection, clipboard, and slash managers. Their constructors receive the shared
 registrations and the occurrence dependencies they need. Core blocks, history,
 and rendering definitions are reused directly. Keyboard keymap overrides and
@@ -50,15 +50,18 @@ component registrations are valid.
 | Property | Owns |
 | --- | --- |
 | `blocks` | Guarded mutations and delegated core block operations |
-| `blockTypes` | Atomic core definition + renderer/view + optional slash conversion |
+| `blockTypes` | Atomic core definition + renderer/behavior + optional slash conversion |
 | `blockListProps` | React lifecycle adapter for the core list-property policy registry |
 | `renderers` | Renderer lookup, duplicate checks, and unknown fallback |
 | `mode` | Core editor presentation state: `get`, `set`, and `subscribe`; never persisted |
 | `surfaces` | One root per mode plus ordered block/editor wrappers |
 | `extensions` | Extension setup/rollback, reverse cleanup, and mounted visual UI |
-| `events` | Active-surface ownership and delegated native DOM events |
+| `events` | Delegated event registrations, filtering, and dispatch |
+| `editorViews` | Mounted roots, explicit active/default lookup, and pointer ownership |
+| `clipboardFormats` | Portable formatters and parsers |
+| `pasteStrategies` | Shared ordered paste algorithms |
 | `keyboard` | Semantic bindings, shortcut matching, and dynamic keymaps |
-| `selection` | Core selection delegation and active-root DOM synchronization |
+| `selection` | Shared portable document selection; DOM synchronization belongs to editorView.selection |
 | `slashCommands` | React-owned slash-command registry and lifecycle |
 
 `extensions.mount` has no mode argument. A mounted component is present beside
@@ -69,7 +72,7 @@ effect with surface-specific behavior checks `useContext(SurfaceContext)`.
 not extension lifecycle. The first registered block or editor wrapper is
 outermost. Defensive read methods return new arrays.
 
-`selection` adds DOM behavior to core selection state. `slashCommands` is owned
+`editorView.selection` adds DOM behavior to core selection state. `slashCommands` is owned
 entirely by the React runtime.
 
 Presentation registries publish focused revisions. Document, tree, mode,
@@ -100,5 +103,6 @@ loaded persisted type.
 
 Extension custom cleanup runs before registrations created by that extension.
 Manager-owned registrations then unwind in reverse order. The event manager
-disconnects native listeners after extension teardown. Destroying `EditorViewApi`
-does not destroy its core editor.
+disconnects native listeners through DOMEventListeners after extension teardown.
+EditorViewController cancels local DOM work and releases its acquisition on unmount;
+the public EditorViewApi has no destroy method and never destroys its core editor.

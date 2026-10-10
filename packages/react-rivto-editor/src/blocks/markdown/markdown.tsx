@@ -5,21 +5,21 @@
  *
  * @module
  */
-import { editorControlProps } from "../../constants";
 import {
-  useCallback,
   memo,
+  useCallback,
   useMemo,
   useState,
 } from "react";
-import type { MarkdownLinkClick } from "../../types";
+import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform } from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
+import remarkGfm from "remark-gfm";
+import { editorControlProps } from "../../constants";
 import {
   useBlockEditing,
   useEditorView,
 } from "../../hooks";
-import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform } from "react-markdown";
-import rehypeHighlight from "rehype-highlight";
-import remarkGfm from "remark-gfm";
+import type { MarkdownLinkClick } from "../../types";
 import {
   MarkdownCodeBlock,
   rehypeCodeFenceMetadata,
@@ -99,7 +99,7 @@ export function MarkdownContent({
   const updateCode = useCallback((node: PositionedNode, value: string) => {
     // An external write can precede this old render's input handler in the
     // same turn. Preserve its current surrounding text rather than the snapshot.
-    const current = editorView.blocks.getBlockNode(blockId)?.content;
+    const current = editorView.runtime.blocks.getBlockNode(blockId)?.content;
     if (current !== undefined) operations.setContent(replaceMarkdownCode(current, node, value));
   }, [editorView, blockId, operations]);
   const transformUrl = useCallback<UrlTransform>((url) => {

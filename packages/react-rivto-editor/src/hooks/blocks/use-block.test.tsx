@@ -6,19 +6,18 @@ import { createTestReactEditor as createReactEditor } from "../../test-utils";
  *
  * @module
  */
-import { createTestCoreEditor as createEditor } from "../../test-utils";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createTestMultiEditor } from "../../test-utils";
+import { EditorView } from "../../editor-view/editor-view";
 import { PageSurface } from "../../surfaces/page/page-surface";
-import { EditorView } from "../../editor-view";
+import { createTestCoreEditor as createEditor, createTestMultiEditor } from "../../test-utils";
 
 import { BlockCollapseSlot } from "../../blocks/block-slot-controls/block-slot-controls";
 import { bentoExtension, createBentoBlockInput } from "../../extensions/containers/bento/bento";
 import { columnsExtension, createColumnsBlockInput } from "../../extensions/containers/columns/columns";
-import { kanbanExtension, createKanbanBlockInput } from "../../extensions/containers/kanban/kanban";
-import { tableExtension, createTableBlockInput } from "../../extensions/containers/table/table";
-import { useBlock, useBlockNode, type UseBlockResult, type UseBlockNodeResult } from "./use-block";
+import { createKanbanBlockInput, kanbanExtension } from "../../extensions/containers/kanban/kanban";
+import { createTableBlockInput, tableExtension } from "../../extensions/containers/table/table";
+import { useBlock, useBlockNode, type UseBlockNodeResult, type UseBlockResult } from "./use-block";
 
 describe("useBlock", () => {
   test("returns full blocks and node child IDs", async () => {
@@ -35,7 +34,7 @@ describe("useBlock", () => {
       return null;
     };
     const editorView = createReactEditor({ editor });
-    editorView.surfaces.register("block", Surface);
+    editorView.runtime.surfaces.register("block", Surface);
 
     renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
     expect(blockResult?.block).toMatchObject({ id: parentId, type: "paragraph", content: "Parent" });
@@ -52,7 +51,7 @@ describe("useBlock", () => {
     renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
     expect(nodeResult?.block?.childIds).toEqual([childId, extraId]);
 
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -66,13 +65,13 @@ describe("useBlock", () => {
       return block ? createElement(BlockCollapseSlot, { block, mode: "block", selected: false }) : null;
     };
     const editorView = createReactEditor({ editor });
-    editorView.surfaces.register("block", Surface);
+    editorView.runtime.surfaces.register("block", Surface);
 
     expect(renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)))).toContain("Collapse block");
     editor.blocks.removeBlock(childId);
     expect(renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)))).not.toContain("Collapse block");
 
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 });
@@ -81,7 +80,7 @@ test("native source views reuse renderers and bind ordinary editor calls without
   const { DocumentStorage } = await import("@chulane/document-model");
   const { YjsDocumentRegistry } = await import("@chulane/crdt-doc");
   const { standardPreset } = await import("../../extensions/built-ins/built-ins");
-  const { useEditorView } = await import("../editor/use-editor-view");
+  const { useEditorView } = await import("../../editor-view/use-editor-view");
   const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
   const source = await storage.create("source", [
     { id: "source", type: "custom", content: "Source" },
@@ -89,16 +88,16 @@ test("native source views reuse renderers and bind ordinary editor calls without
   ]);
   const host = await storage.create("host");
   const runtime = await createTestMultiEditor([host, source], storage, { extensions: [standardPreset()] });
-  const editor = await runtime.getSingleEditor(host.id);
+  const editor = await runtime.openCoreEditor(host.id);
   editor.blocks.insertBlock({ id: "host", type: "paragraph", content: "Host" });
-  const editorRuntime = runtime.getEditor(source.id)!;
+  const editorRuntime = runtime.getRuntime(source.id)!;
   let result: UseBlockNodeResult | undefined;
   let directWrite: (() => void) | undefined;
   editorRuntime.blockTypes.register({ definition: { type: "custom" }, render: ({ blockId }) => {
     const view = useEditorView();
-    expect(view.renderers).toBe(editorRuntime.renderers);
-    expect(view.getDocument()).toBe(source);
-    directWrite = () => view.blocks.updateBlock(blockId, { content: "Direct renderer edit" });
+    expect(view.runtime.renderers).toBe(editorRuntime.renderers);
+    expect(view.runtime.getDocument()).toBe(source);
+    directWrite = () => view.runtime.blocks.updateBlock(blockId, { content: "Direct renderer edit" });
     result = useBlockNode(blockId);
     return createElement("span", { "data-custom": "true" }, result.block?.content);
   } });
@@ -124,12 +123,12 @@ test.each([
   const sourceCore = await createEditor();
   const { standardPreset } = await import("../../extensions/built-ins/built-ins");
   const editorView = createReactEditor({ editor: sourceCore, extensions: [standardPreset(), extension()] });
-  editorView.blocks.insertBlock({ ...input(), id: "container", listProps: { collapsed: true } });
+  editorView.runtime.blocks.insertBlock({ ...input(), id: "container", listProps: { collapsed: true } });
   const markup = renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime, rootBlockId: "container" }, createElement(PageSurface)));
   expect(markup).toContain(title);
   expect(markup).toContain('data-block-id="container"');
   if (title === "Kanban") expect(markup).toContain("3 columns");
   if (title === "Table") expect(markup).toContain("3 × 3");
   expect(editor.blocks.getRootIds()).toEqual(["host"]);
-  editorView.destroy(); await sourceCore.destroy(); await editor.destroy();
+  editorView.runtime.destroy(); await sourceCore.destroy(); await editor.destroy();
 });

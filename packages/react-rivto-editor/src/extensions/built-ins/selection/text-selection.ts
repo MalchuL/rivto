@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../editor-runtime";
+import type { EditorRuntime } from "../../../editor/editor-runtime";
 import type { EditorEvent } from "../../../managers/events/editor-event";
 /**
  * Synchronizes native text gestures with Rivto's portable text and whole-block
@@ -15,26 +15,26 @@ import type {
 import { isStructuralSelection } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
-  EDITOR_CONTROL_SELECTOR,
   BLOCK_SELECTION_ANCHOR_SELECTOR,
+  EDITOR_CONTROL_SELECTOR,
   PREVENT_TEXT_EDITING_SELECTOR,
 } from "../../../constants";
-import type { EditorViewApi } from "../../../types";
-import { isElementNode } from "../../../managers/events/dom-nodes";
-import { findEdgelessRuntime } from "./edgeless-runtime";
-import { getPageVirtualizationControllerForElement } from "../../../surfaces/page/page-virtualization-controller";
+import type { EditorViewApi } from "../../../editor-view/types";
 import {
-  createVisibleStructuralSelection,
   createDOMSelection,
+  createVisibleStructuralSelection,
   orderedBlockIds,
   readBlockIdAtPoint,
   readDOMPointPosition,
   readDOMSelectionPoint,
-  resolveSelectionEndpoints,
   resolveDOMSelectionPoint,
+  resolveSelectionEndpoints,
   setNativeSelection,
   type DOMSelectionPoint,
 } from "../../../managers";
+import { isElementNode } from "../../../managers/events/dom-nodes";
+import { getPageVirtualizationControllerForElement } from "../../../surfaces/page/page-virtualization-controller";
+import { findEdgelessRuntime } from "./edgeless-runtime";
 
 /**
  * Matches targets that must be excluded from whole-block structural selection.
@@ -394,7 +394,7 @@ class TextSelectionController {
         // Shift extends the existing selection instead of replacing its anchor.
         if (event.shiftKey && clickedPosition) {
           const item = current;
-          const lengthOf = (id: string) => editorView.blocks.getBlockNode(id)?.content.length ?? 0;
+          const lengthOf = (id: string) => editorView.runtime.blocks.getBlockNode(id)?.content.length ?? 0;
           const ends = item ? resolveSelectionEndpoints(item, lengthOf) : undefined;
           const originId = ends?.anchor.blockId ?? item?.anchorBlockId;
           const wholeBlocks = originId
@@ -415,7 +415,7 @@ class TextSelectionController {
             const originIndex = originFromBlock ? ids.indexOf(originFromBlock) : -1;
             const clickIndex = originFromBlock ? ids.indexOf(clickedPosition.blockId) : -1;
             const originContentLength = originFromBlock
-              ? (editorView.blocks.getBlockNode(originFromBlock)?.content.length ?? 0)
+              ? (editorView.runtime.blocks.getBlockNode(originFromBlock)?.content.length ?? 0)
               : 0;
             const anchorPosition = ends?.anchor ?? (originFromBlock
               ? {

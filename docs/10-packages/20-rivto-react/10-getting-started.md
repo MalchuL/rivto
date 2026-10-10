@@ -22,12 +22,12 @@ import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
 import {
   createEditorRuntime, EditorStorage, EditorStorageContext, EditorView, PageSurface, standardPreset,
-  type EditorViewApi,
+  type EditorRuntime,
 } from "@chulane/rivto-react";
 import "@chulane/rivto-react/styles.css";
 
 export function DocumentEditor() {
-  const [view, setView] = useState<{ editorRuntime: EditorViewApi; editors: EditorStorage; releaseInitial: () => Promise<void> } | null>(null);
+  const [view, setView] = useState<{ editorRuntime: EditorRuntime; editors: EditorStorage; releaseInitial: () => Promise<void> } | null>(null);
   useEffect(() => {
     let active = true;
     const documents = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
@@ -39,9 +39,9 @@ export function DocumentEditor() {
         extensions: [standardPreset()],
       }),
     });
-    void editors.acquireEditor("document-id").then((acquisition) => {
-      acquisition.editor.blocks.insertBlock({ type: "paragraph", content: "Hello **Rivto**!" });
-      if (active) setView({ editorRuntime: acquisition.editor, editors, releaseInitial: acquisition.release });
+    void editors.acquireRuntime("document-id").then((acquisition) => {
+      acquisition.runtime.blocks.insertBlock({ type: "paragraph", content: "Hello **Rivto**!" });
+      if (active) setView({ editorRuntime: acquisition.runtime, editors, releaseInitial: acquisition.release });
       else void acquisition.release();
     }).catch(console.error);
     return () => {
@@ -75,10 +75,10 @@ Children `EditorView` находятся в том же context перед activ
 
 ```tsx
 function Toolbar() {
-  const editorRuntime = useEditorView();
+  const editorView = useEditorView();
   return <header>
-    <button onClick={() => editorRuntime.history.undo()}>Undo</button>
-    <button onClick={() => editorRuntime.history.redo()}>Redo</button>
+    <button data-editor-control="" onClick={() => editorView.runtime.history.undo()}>Undo</button>
+    <button data-editor-control="" onClick={() => editorView.runtime.history.redo()}>Redo</button>
   </header>;
 }
 
@@ -91,5 +91,5 @@ function Toolbar() {
 - `standardPreset()` устанавливает writing behavior. Surface задаётся явно; canvas interaction требует `...edgelessPreset()`.
 - Без `standardPreset()` нужно самостоятельно зарегистрировать surface и writing behavior.
 - Без styles layout, selection и overlays отображаются неверно.
-- Prop `EditorView.editorRuntime` принимает `EditorViewApi`, а не core editor.
+- Prop `EditorView.runtime` принимает `EditorRuntime`, а не core editor.
 - Cleanup идёт в порядке React runtime → core runtime → providers/CRDT.

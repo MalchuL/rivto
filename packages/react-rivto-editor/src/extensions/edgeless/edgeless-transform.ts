@@ -1,7 +1,7 @@
-import type { EditorRuntime } from "../../editor-runtime";
+import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../constants";
+import type { EditorRuntime } from "../../editor/editor-runtime";
 import type { EditorEvent } from "../../managers/events/editor-event";
 import { canvasPoint } from "./visuals/utils/canvas-point";
-import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../constants";
 /**
  * Delegated move, resize, and rotate for edgeless cards, visuals, and groups.
  *
@@ -10,15 +10,16 @@ import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../co
  * attributes. An empty connector snapshot never mounts the live-preview overlay.
  */
 import type { EditorElementFrame } from "@chulane/rivto";
+import { elementContainsBlock } from "../../elements/block-element-projection";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
+import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 import { canvasDelta } from "./edgeless-geometry";
 import {
   attachedConnectorsForTransform,
   isConnectorEndpoint,
   type ConnectorPreviewTarget,
 } from "./edgeless-transform-connectors";
-import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
-import { elementContainsBlock } from "../../elements/block-element-projection";
+import type { ConnectorRoute, ConnectorTextRotation } from "./visuals/types";
 import {
   applyRotatedResize,
   connectorLabelCssDegrees,
@@ -38,7 +39,6 @@ import {
   type SnapGuide,
 } from "./visuals/utils/geometry";
 import { showSnapGuides } from "./visuals/utils/snap-guides";
-import type { ConnectorRoute, ConnectorTextRotation } from "./visuals/types";
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
 const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";

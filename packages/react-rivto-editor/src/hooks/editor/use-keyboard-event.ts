@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
+import { useEditorView } from "../../editor-view/use-editor-view";
 import type {
-  KeyboardEventDefinition,
-  KeyboardEditorEvent,
   EditorEventHandler,
+  KeyboardEditorEvent,
+  KeyboardEventDefinition,
 } from "../../managers";
-import { useEditorView } from "./use-editor-view";
 
 /**
  * Registers one declarative shortcut while keeping React state closures fresh.

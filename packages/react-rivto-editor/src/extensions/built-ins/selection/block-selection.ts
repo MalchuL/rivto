@@ -1,11 +1,11 @@
-import type { EditorRuntime } from "../../../editor-runtime";
+import { isStructuralSelection } from "@chulane/rivto";
 import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../../constants";
-import { toggleBlockSelection } from "../page/navigation";
-import { isStructuralSelection } from "@chulane/rivto";
+import type { EditorRuntime } from "../../../editor/editor-runtime";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
+import { toggleBlockSelection } from "../page/navigation";
 import { findEdgelessRuntime } from "./edgeless-runtime";
 
 /**
@@ -85,11 +85,11 @@ export function registerBlockSelection(editorRuntime: EditorRuntime): () => void
     // creates a mixed selection that the next native selectionchange clears.
     const current = isStructuralSelection(selection) ? selection : undefined;
     const next = toggleBlockSelection(
-      editorView.blocks.getBlocks(),
+      editorView.runtime.blocks.getBlocks(),
       current,
       blockId,
       mode === "edgeless",
-      (candidate) => !editorView.blockListProps.childrenVisible(candidate),
+      (candidate) => !editorView.runtime.blockListProps.childrenVisible(candidate),
     );
     const canvas = mode === "edgeless" ? findEdgelessRuntime(editorView) : undefined;
     if (next && canvas) canvas.setBlocks(next);

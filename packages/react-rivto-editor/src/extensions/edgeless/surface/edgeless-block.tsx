@@ -7,12 +7,12 @@
  * measure is scoped to geometry and content, never to selection, so reading
  * `scrollHeight` cannot hitch pointermove.
  */
-import { editorControlProps } from "../../../constants";
 import type { EditorElement } from "@chulane/rivto";
 import { memo, useLayoutEffect, useRef, type CSSProperties } from "react";
-import { useEdgelessSelected } from "../../built-ins/selection/edgeless-runtime";
 import { BlockTree, ElementSlots } from "../../../blocks";
+import { editorControlProps } from "../../../constants";
 import { useEditorView } from "../../../hooks";
+import { useEdgelessSelected } from "../../built-ins/selection/edgeless-runtime";
 
 const CARD_CLASS = "edgeless-card";
 const CARD_CONTENT_CLASS = "edgeless-card-content";
@@ -82,8 +82,8 @@ function EdgelessBlockElementView({
       host.style.height = previousHeight;
       if (Math.abs(element.frame.height - height) < 1) return;
       // Undoing a recorded height change would remeasure and record it again, trapping undo.
-      editorView.history.batchUpdatesWithoutHistory(() => {
-        editorView.elements.updateElement(element.id, { frame: { height } });
+      editorView.runtime.history.batchUpdatesWithoutHistory(() => {
+        editorView.runtime.elements.updateElement(element.id, { frame: { height } });
       });
     };
     measure();

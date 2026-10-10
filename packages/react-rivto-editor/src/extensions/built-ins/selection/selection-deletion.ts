@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../editor-runtime";
+import type { EditorRuntime } from "../../../editor/editor-runtime";
 /**
  * Routes Backspace and Delete for expanded text and whole-block selections.
  * The extension reconciles an immediately clicked native caret before deciding
@@ -6,16 +6,14 @@ import type { EditorRuntime } from "../../../editor-runtime";
  *
  * @module
  */
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
-import {
-  focusSelectionCaret,
-  isEditableKeyboardEvent,
-  readKeyboardSelection,
-  shouldDeleteSelection,
-} from "../../../managers";
 import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
-import { createBlockViewContext } from "../../../views/context";
-import type { BlockViewBehavior } from "../../../views/types";
+import { createBlockBehaviorContext } from "../../../block-behaviors/context";
+import type { BlockBehavior } from "../../../block-behaviors/types";
+import {
+  BUILTIN_KEYMAP, focusSelectionCaret,
+  isEditableKeyboardEvent, KEYBOARD_BINDING_IDS, readKeyboardSelection,
+  shouldDeleteSelection
+} from "../../../managers";
 
 /**
  * Deletes expanded text and whole-block page selections atomically.
@@ -34,7 +32,7 @@ export function registerSelectionDeletion(editorRuntime: EditorRuntime): void {
       if (!root) return false;
       const editableEvent = isEditableKeyboardEvent(event);
       const current = editableEvent
-        ? readKeyboardSelection(editorView.selection, editorView.blocks, blockId)
+        ? readKeyboardSelection(editorView.selection, editorView.runtime.blocks, blockId)
         : selection;
       if (!shouldDeleteSelection(current)) return false;
       const rootBlockSelection = root.ownerDocument.activeElement === root &&
@@ -43,18 +41,18 @@ export function registerSelectionDeletion(editorRuntime: EditorRuntime): void {
     },
   }, ({ editorView, root }) => {
     const current = editorView.selection.get();
-    editorView.history.batchUpdates(() => {
+    editorView.runtime.history.batchUpdates(() => {
       if (current && isStructuralSelection(current)) {
         const ids = getSelectedBlockIds(current);
-        const seen = new Set<BlockViewBehavior>();
+        const seen = new Set<BlockBehavior>();
         // A non-default outcome claims the whole selection and skips generic deletion.
         let claimed = false;
         for (const id of ids) {
-          const view = editorView.views.resolve(id);
-          if (seen.has(view)) continue;
-          seen.add(view);
-          const context = createBlockViewContext(editorView, id, root, current);
-          if (context && view.onStructuralDelete(context, ids) !== "default") {
+          const behavior = editorView.runtime.blockBehaviors.resolve(id);
+          if (seen.has(behavior)) continue;
+          seen.add(behavior);
+          const context = createBlockBehaviorContext(editorView, id, root, current);
+          if (context && behavior.onStructuralDelete(context, ids) !== "default") {
             claimed = true;
             break;
           }

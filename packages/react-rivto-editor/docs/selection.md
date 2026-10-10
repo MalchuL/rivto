@@ -67,7 +67,7 @@ runs every registered `PasteStrategy` whose `matches(context, placement)` is tru
 - `PreserveNewlinesPasteStrategy` inserts plain text as one block when
   `placement.preserveNewlines` is set (Ctrl/Cmd+Shift+V).
 - `BlockPasteStrategy` inserts complete remapped block forests. `placement.mergeText: false` keeps a partial-text bundle structural.
-- React registers `ElementPasteStrategy` on `editor.clipboard.pasteStrategies`
+- React registers `ElementPasteStrategy` on `runtime.pasteStrategies`
   so canvas geometry stays in the presentation layer without a second manager
   dispatch.
 

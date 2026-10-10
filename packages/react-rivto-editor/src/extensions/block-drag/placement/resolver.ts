@@ -1,5 +1,5 @@
 /** Resolves measured layout regions directly to stable destinations. */
-import type { BlockDropPlacementOptions, DropAxis } from "../../../views/types";
+import type { BlockDropPlacementOptions, DropAxis } from "../../../block-behaviors/types";
 import type { DropPlacement, PointerCoordinates } from "../types";
 import type { CanonicalDropPlacement, DropBlock, ResolvedDropPlacementOptions } from "./types";
 import { resolveAfterDropPlacement, resolveBlockDropPlacementOptions } from "./utils";

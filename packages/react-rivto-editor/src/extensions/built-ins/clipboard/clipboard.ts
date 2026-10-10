@@ -1,20 +1,21 @@
-import type { EditorRuntime } from "../../../editor-runtime";
+import type { EditorRuntime } from "../../../editor/editor-runtime";
 /**
  * Clipboard operations and portable format contracts. Whole-block selection is structural; text editing uses explicit single-block ranges.
  */
 import {
-  isStructuralSelection,
-  hasBlockRanges,
-  getSelectedBlockIds,
   createStructuralSelection,
+  getSelectedBlockIds,
+  hasBlockRanges,
+  isStructuralSelection,
   RIVTO_CLIPBOARD_MIME,
   validateClipboardBundle,
   type BlockPrepareErrorHandler,
-  type EditorBlockInput,
   type ClipboardBundle,
+  type EditorBlockInput,
   type Selection,
 } from "@chulane/rivto";
-import type { EditorViewApi } from "../../../types";
+import type { EditorViewApi } from "../../../editor-view/types";
+import { blockIdsOf } from "../../../elements/block-element-projection";
 import {
   KEYBOARD_BINDING_IDS,
   matchesShortcut,
@@ -23,7 +24,6 @@ import {
 } from "../../../managers";
 import { findEdgelessRuntime } from "../selection/edgeless-runtime";
 import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
-import { blockIdsOf } from "../../../elements/block-element-projection";
 import { ElementPasteStrategy } from "./element-paste-strategy";
 
 const ELEMENT_PASTE_STRATEGY_ID = "paste.elements";
@@ -73,7 +73,7 @@ export function registerClipboard(
   editorRuntime: EditorRuntime,
   options: ClipboardExtensionOptions = {},
 ): () => void {
-  const unregisterElementPaste = editorRuntime.clipboard.pasteStrategies.register(ELEMENT_PASTE_STRATEGY_ID, new ElementPasteStrategy(editorRuntime));
+  const unregisterElementPaste = editorRuntime.pasteStrategies.register(ELEMENT_PASTE_STRATEGY_ID, new ElementPasteStrategy(editorRuntime));
   const resolveDefaultBlockType = (): string =>
     options.defaultBlockType ?? editorRuntime.createDefaultBlock().type;
   // ClipboardEvent does not expose keyboard modifiers. Remember only the
@@ -96,8 +96,8 @@ export function registerClipboard(
     if (editorView.events.getSurfaceType() !== "edgeless") return undefined;
     const snapshot = findEdgelessRuntime(editorView)?.get();
     const blockIds = snapshot?.active ? snapshot.items.flatMap((id) => {
-      const element = editorView.elements.getElement(id);
-      return element?.type === "block" ? blockIdsOf(element, editorView.blocks.getRootIds()) : [];
+      const element = editorView.runtime.elements.getElement(id);
+      return element?.type === "block" ? blockIdsOf(element, editorView.runtime.blocks.getRootIds()) : [];
     }) : [];
     return blockIds.length ? createStructuralSelection(blockIds) : undefined;
   };
@@ -106,10 +106,10 @@ export function registerClipboard(
   const writeClipboard = (editorView: EditorViewApi, event: ClipboardEvent, bundle: ClipboardBundle): void => {
     const elementIds = selectedCanvasElementIds(editorView);
     if (elementIds.length) {
-      bundle.elements = elementIds.flatMap((id) => editorView.elements.getElement(id) ?? []);
+      bundle.elements = elementIds.flatMap((id) => editorView.runtime.elements.getElement(id) ?? []);
       bundle.selectedElementIds = [...elementIds];
     }
-    const portable = editorView.clipboard.format(bundle.blocks);
+    const portable = editorView.runtime.clipboardFormats.format(bundle.blocks);
     const structured = JSON.stringify(bundle);
     event.clipboardData?.setData(RIVTO_CLIPBOARD_MIME, structured);
     event.clipboardData?.setData("text/html", portable.html);
@@ -163,7 +163,7 @@ export function registerClipboard(
     if (!sourceBundle && !plainText) {
       // HTML and Markdown parsers return complete blocks. They do not describe
       // a text selection, so their blocks are inserted as new blocks.
-      const parsed = editorView.clipboard.parse({
+      const parsed = editorView.runtime.clipboardFormats.parse({
         html: event.clipboardData?.getData("text/html") ?? "",
         text: event.clipboardData?.getData("text/plain") ?? "",
       });
@@ -173,32 +173,32 @@ export function registerClipboard(
     // The completed paste replaces it with the newly selected content.
     if (canvas) editorView.selection.set(canvas);
     const active = editorView.selection.get();
-    const lengthOf = (id: string) => editorView.blocks.getBlockNode(id)?.content.length ?? 0;
+    const lengthOf = (id: string) => editorView.runtime.blocks.getBlockNode(id)?.content.length ?? 0;
     const ends = active ? resolveSelectionEndpoints(active, lengthOf) : undefined;
     const activeId = ends?.head.blockId ?? active?.focusBlockId;
-    const activeBlock = activeId ? editorView.blocks.getBlockNode(activeId) : undefined;
-    const expanded = editorView.blockListProps.has("collapse") && activeBlock?.listProps.collapsed !== true;
+    const activeBlock = activeId ? editorView.runtime.blocks.getBlockNode(activeId) : undefined;
+    const expanded = editorView.runtime.blockListProps.has("collapse") && activeBlock?.listProps.collapsed !== true;
     // Only whole-block paste needs a parent and sibling insertion position.
     // A native bundle marked `fromTextSelection` is pasted into text instead.
     const structuralSource = Boolean(parsedBlocks?.length)
       || Boolean(sourceBundle?.blocks.length && sourceBundle.fromTextSelection !== true);
     const placement = activeBlock && structuralSource
-      ? expanded && editorView.blocks.hasChildren(activeBlock.id)
+      ? expanded && editorView.runtime.blocks.hasChildren(activeBlock.id)
         ? { parentId: activeBlock.id, afterId: null }
-        : { parentId: editorView.blocks.getParentId(activeBlock.id) ?? null, afterId: activeBlock.id }
+        : { parentId: editorView.runtime.blocks.getParentId(activeBlock.id) ?? null, afterId: activeBlock.id }
       : undefined;
     if (parsedBlocks?.length) {
       // Parsed blocks do not need IDs. importForest validates them, assigns IDs,
       // inserts them, and returns the complete inserted roots.
-      editorView.history.batchUpdates(() => {
-        const imported = editorView.blocks.importForest(
+      editorView.runtime.history.batchUpdates(() => {
+        const imported = editorView.runtime.blocks.importForest(
           parsedBlocks,
           placement?.afterId ?? undefined,
           options.onPrepareError,
         );
         const insertedIds = imported.roots.map(({ id }) => id);
         if (placement?.parentId && placement.afterId === null && insertedIds.length) {
-          editorView.blocks.moveBlocks(insertedIds, placement.parentId, "inside");
+          editorView.runtime.blocks.moveBlocks(insertedIds, placement.parentId, "inside");
         }
         if (insertedIds.length) editorView.selection.set(createStructuralSelection(insertedIds));
       });
@@ -285,9 +285,9 @@ export function registerClipboard(
     writeClipboard(editorView, event, payload);
     if (!canvasElementIds.length) deleteCopiedSelection(editorView);
     if (canvasElementIds.length) {
-      editorView.history.batchUpdates(() => {
-        if (canvas) getSelectedBlockIds(canvas).forEach((id) => editorView.blocks.removeBlock(id));
-        editorView.elements.removeElements(canvasElementIds);
+      editorView.runtime.history.batchUpdates(() => {
+        if (canvas) getSelectedBlockIds(canvas).forEach((id) => editorView.runtime.blocks.removeBlock(id));
+        editorView.runtime.elements.removeElements(canvasElementIds);
       });
       findEdgelessRuntime(editorView)?.clear();
     }
@@ -316,9 +316,9 @@ export function registerClipboard(
         writeClipboard(editorView, event, payload);
         if (!canvasElementIds.length && event.type === "cut") deleteCopiedSelection(editorView);
         if (canvasElementIds.length && event.type === "cut") {
-          editorView.history.batchUpdates(() => {
-            if (canvas) getSelectedBlockIds(canvas).forEach((id) => editorView.blocks.removeBlock(id));
-            editorView.elements.removeElements(canvasElementIds);
+          editorView.runtime.history.batchUpdates(() => {
+            if (canvas) getSelectedBlockIds(canvas).forEach((id) => editorView.runtime.blocks.removeBlock(id));
+            editorView.runtime.elements.removeElements(canvasElementIds);
           });
           findEdgelessRuntime(editorView)?.clear();
         }

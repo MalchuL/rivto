@@ -171,7 +171,7 @@ function Counter({ blockId }: { readonly blockId: string }) {
         className={COUNTER_BUTTON_CLASS}
         onClick={(event) => {
           if (event.defaultPrevented) return;
-          const current = editorView.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+          const current = editorView.runtime.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
           editing.operations.setProp("count", (current?.count ?? 0) + 1);
         }}
       >
@@ -236,7 +236,7 @@ const attributes = useBlockSelectionAnchor(blockId);
 return <div {...attributes} className={BOARD_BODY_CLASS} />;
 ```
 
-Container behavior is declared separately with `ContainerBlockView`:
+Container behavior is declared separately with `ContainerBlockBehavior`:
 
 - `dropAxis` describes direct-child layout;
 - `acceptsDropContainer` enables drops on the full body, including empty fields;
@@ -281,7 +281,7 @@ blockExtension({
 
 Use one stable type constant. Put creation defaults and validation in the core
 definition. Read current property values again inside callbacks. Mutate through
-`editing.operations.setProp`, `editing.operations.setProps`, or `editorView.blocks`; never mutate the
+`editing.operations.setProp`, `editing.operations.setProps`, or `editorView.runtime.blocks`; never mutate the
 detached render snapshot.
 
 Use a dedicated extension only when the feature also owns formatters, wrappers,

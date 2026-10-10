@@ -1,7 +1,6 @@
-import { createTestReactEditor as createReactEditor } from "../../test-utils";
-import { createTestCoreEditor as createEditor } from "../../test-utils";
 import type { ComponentType, ReactNode } from "react";
 import type { BlockWrapperProps } from "../../blocks";
+import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
 import {
   BLOCK_FLOW_SLOT_POSITIONS,
   SLOT_POSITIONS,
@@ -24,7 +23,7 @@ describe("SurfaceManager", () => {
   test("keeps surfaces unique and filters defensive wrapper reads by mode", async () => {
     const editor = await createEditor();
     const editorView = createReactEditor({ editor });
-    const manager = editorView.surfaces;
+    const manager = editorView.runtime.surfaces;
     manager.register("block", Surface);
     manager.registerBlockWrapper("block", Wrapper);
     manager.registerEditorWrapper(EditorWrapper, "edgeless");
@@ -39,14 +38,14 @@ describe("SurfaceManager", () => {
     expect(manager.delete("block")).toBe(true);
     expect(manager.delete("block")).toBe(false);
     expect(manager.get("block")).toBeUndefined();
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
   test("orders and filters block and element slot registrations", async () => {
     const editor = await createEditor();
     const editorView = createReactEditor({ editor });
-    const manager = editorView.surfaces;
+    const manager = editorView.runtime.surfaces;
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Slot owner" }).id;
     const block = editor.blocks.getBlockNode(blockId)!;
     const elementResult = editor.elements.insertElement({
@@ -106,7 +105,7 @@ describe("SurfaceManager", () => {
       priority: Number.POSITIVE_INFINITY,
       component: ElementSlot,
     })).toThrow(/priority must be finite/);
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 });
@@ -116,7 +115,7 @@ test("slot identities survive priority insertions and distinguish repeated compo
   const editorView = createReactEditor({ editor });
   const block = editor.blocks.insertBlock({ type: "paragraph" });
   const props: BlockSlotProps = { block: editor.blocks.getBlockNode(block.id)!, mode: "block", selected: false };
-  const manager = editorView.surfaces;
+  const manager = editorView.runtime.surfaces;
   manager.registerBlockSlot({ position: "left", component: LowBlockSlot });
   manager.registerBlockSlot({ position: "left", component: LowBlockSlot });
   const original = manager.getBlockSlotEntries("left", props);
@@ -125,5 +124,5 @@ test("slot identities survive priority insertions and distinguish repeated compo
   expect(manager.getBlockSlotEntries("left", props).slice(1)).toEqual(original);
   remove();
   expect(manager.getBlockSlotEntries("left", props)).toEqual(original);
-  editorView.destroy(); editor.destroy();
+  editorView.runtime.destroy(); editor.destroy();
 });

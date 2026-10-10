@@ -7,6 +7,8 @@
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
+import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../../constants";
+import type { EditorViewApi } from "../../../editor-view/types";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -15,9 +17,7 @@ import {
   KEYBOARD_BINDING_IDS,
   type ReactEditorExtension,
 } from "../../../managers";
-import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../../constants";
 import type { CreateDefaultBlock } from "../page/default-writing-block";
-import type { EditorViewApi } from "../../../types";
 
 /** Persisted native type installed by the built-in separator extension. */
 export const SEPARATOR_BLOCK_TYPE = "separator";
@@ -68,25 +68,25 @@ function insertSeparator(
   separatorType: string,
   createDefaultBlock: CreateDefaultBlock,
 ): EditorBlock | undefined {
-  const block = editorView.blocks.getBlockNode(blockId);
+  const block = editorView.runtime.blocks.getBlockNode(blockId);
   if (!block) return undefined;
   let separatorId = "";
   let writing: EditorBlock | undefined;
-  editorView.history.batchUpdates(() => {
-    if (!block.content && !editorView.blocks.hasChildren(blockId)) {
+  editorView.runtime.history.batchUpdates(() => {
+    if (!block.content && !editorView.runtime.blocks.hasChildren(blockId)) {
       separatorId = block.id;
-      editorView.blocks.setBlockType(separatorId, separatorType);
-      editorView.blocks.updateBlock(separatorId, {
+      editorView.runtime.blocks.setBlockType(separatorId, separatorType);
+      editorView.runtime.blocks.updateBlock(separatorId, {
         listProps: { collapsed: false, type: "list", checked: false },
       });
     } else {
-      separatorId = editorView.blocks.insertBlock({
+      separatorId = editorView.runtime.blocks.insertBlock({
         type: separatorType,
         content: "",
         listProps: { type: "list", checked: false },
       }, block.id).id;
     }
-    writing = editorView.blocks.insertBlock(createDefaultBlock(), separatorId);
+    writing = editorView.runtime.blocks.insertBlock(createDefaultBlock(), separatorId);
     editorView.selection.set(createCaretSelection(writing.id, 0));
   });
   return writing;
@@ -121,7 +121,7 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         render: SeparatorBlock,
         separatesBlockElements: true,
       }),
-      editorRuntime.clipboard.registerFormatter({
+      editorRuntime.clipboardFormats.registerFormatter({
         id: "separator",
         matches: ({ block }) => block.type === SEPARATOR_BLOCK_TYPE,
         format: () => ({ plain: "---", markdown: "---", html: "<hr>" }),

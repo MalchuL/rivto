@@ -1,21 +1,21 @@
-import type { EditorRuntime } from "../../../../../editor-runtime";
+import type { EditorRuntime } from "../../../../../editor/editor-runtime";
 /**
  * Keyboard registration for structural movement of blocks and sibling groups.
  *
  * @module
  */
 import { isStructuralSelection, type EditorBlock } from "@chulane/rivto";
+import type { EditorViewApi } from "../../../../../editor-view/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../../managers";
-import type { EditorViewApi } from "../../../../../types";
-import { navigationOutlineBlocks } from "../utils/scope";
 import { blockSelection } from "../utils/block-selection";
 import { keyboardMovePlacement } from "../utils/move-placement";
+import { selectedMoveRoots } from "../utils/move-roots";
+import { navigationOutlineBlocks } from "../utils/scope";
 import {
   currentNavigationSelection,
   focusBlockSelection,
   type VerticalDirection,
 } from "../utils/selection";
-import { selectedMoveRoots } from "../utils/move-roots";
 
 /**
  * Registers keyboard movement of the active block or sibling selection.
@@ -37,7 +37,7 @@ export function registerKeyboardBlockMove(editorRuntime: EditorRuntime): void {
     const roots = selectedMoveRoots(outline, selection, activeId, isCollapsed);
     const placement = keyboardMovePlacement(outline, roots.ids, direction, isCollapsed);
     if (!placement) return false;
-    editorView.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
+    editorView.runtime.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
     if (roots.grouped && roots.selection) {
       editorView.selection.set(roots.selection);
     } else if (blocks) {

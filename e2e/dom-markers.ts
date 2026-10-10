@@ -5,7 +5,7 @@ import {
 
 export {
   BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
+  BLOCK_ID_SELECTOR
 };
 
 export const blockIdSelector = (id: string): string => `[${BLOCK_ID_ATTRIBUTE}="${id}"]`;

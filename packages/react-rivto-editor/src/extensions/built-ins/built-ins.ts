@@ -7,43 +7,43 @@
  * @module
  */
 import {
+  createStructuralSelection,
   type EditorBlock as Block,
   type EditorBlockInput as BlockInput,
-  createStructuralSelection,
 } from "@chulane/rivto";
+import { createElement } from "react";
+import {
+  blockIdsOf,
+  insertBlockElementSeparator,
+} from "../../elements/block-element-projection";
+import {
+  type ReactBlockRegistration,
+  type ReactEditorExtension,
+} from "../../managers";
 import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard/clipboard";
+import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
 import { registerHistory, type HistoryExtensionOptions } from "./history/history";
-import { registerTextSelection } from "./selection/text-selection";
+import { registerBlockCreation } from "./page/block-creation";
+import { registerBlockMerge } from "./page/block-merge";
+import { registerBlockOutdent } from "./page/block-outdent";
+import { registerCollapse } from "./page/collapse";
+import { registerDefaultWritingBlock } from "./page/default-writing-block/register";
+import type { DefaultWritingBlockOptions } from "./page/default-writing-block/types";
+import { registerEmptyBlockReset } from "./page/empty-block-reset";
+import { registerIndent, type IndentExtensionOptions } from "./page/indent";
+import { registerListShortcuts } from "./page/list";
 import {
   registerBlockSelectionNavigation,
   registerCaretNavigation,
   registerKeyboardBlockMove,
 } from "./page/navigation";
-import { registerBlockMerge } from "./page/block-merge";
-import { registerBlockOutdent } from "./page/block-outdent";
-import { registerEmptyBlockReset } from "./page/empty-block-reset";
+import { registerTrailingBlock } from "./page/trailing-block";
 import { registerBlockSelection } from "./selection/block-selection";
-import { registerCollapse } from "./page/collapse";
-import { registerBlockCreation } from "./page/block-creation";
-import { createElement } from "react";
+import { registerSelectionDeletion } from "./selection/selection-deletion";
+import { registerTextSelection } from "./selection/text-selection";
+import { separatorBlockExtension } from "./separator/separator-block";
 import { SlashMenu, type SlashMenuPositionOptions } from "./slash/slash-menu";
 export type { SlashMenuPositionOptions } from "./slash/slash-menu";
-import { registerSelectionDeletion } from "./selection/selection-deletion";
-import { registerTrailingBlock } from "./page/trailing-block";
-import { registerIndent, type IndentExtensionOptions } from "./page/indent";
-import { registerListShortcuts } from "./page/list";
-import { separatorBlockExtension } from "./separator/separator-block";
-import { registerDefaultWritingBlock } from "./page/default-writing-block/register";
-import type { DefaultWritingBlockOptions } from "./page/default-writing-block/types";
-import {
-  blockIdsOf,
-  insertBlockElementSeparator,
-} from "../../elements/block-element-projection";
-import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
-import {
-  type ReactBlockRegistration,
-  type ReactEditorExtension,
-} from "../../managers";
 
 /**
  * Registers the host writing block, its renderer, and shared writing policy.
@@ -204,27 +204,27 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
         keywords: ["copy", "clone"],
         isAvailable: ({ blockId }) => editorRuntime.blocks.hasBlock(blockId),
         execute: ({ blockId, editorView }) => {
-          const block = editorView.blocks.getBlock(blockId);
+          const block = editorView.runtime.blocks.getBlock(blockId);
           if (!block) return;
           const input = duplicateBlockInput(block);
           // Use the receiving view: a page embedding can share an edgeless core.
           // Duplicating there should insert a sibling, not create a canvas card.
-          const isEdgelessRoot = editorView.events.getSurfaceType() === "edgeless" && editorView.blocks.isRootBlock(blockId);
+          const isEdgelessRoot = editorView.events.getSurfaceType() === "edgeless" && editorView.runtime.blocks.isRootBlock(blockId);
           const sourceElement = isEdgelessRoot
-            ? editorView.elements.getElements().find((element) => element.type === "block" && blockIdsOf(element, editorView.blocks.getRootIds()).includes(blockId))
+            ? editorView.runtime.elements.getElements().find((element) => element.type === "block" && blockIdsOf(element, editorView.runtime.blocks.getRootIds()).includes(blockId))
             : undefined;
           let duplicateId = "";
-          editorView.history.batchUpdates(() => {
+          editorView.runtime.history.batchUpdates(() => {
             const afterId = isEdgelessRoot
-              ? insertBlockElementSeparator(editorView, editorView.blocks.getRootIds().at(-1)!).id
+              ? insertBlockElementSeparator(editorView.runtime, editorView.runtime.blocks.getRootIds().at(-1)!).id
               : block.id;
-            duplicateId = editorView.blocks.insertBlock(input, afterId).id;
-            if (isEdgelessRoot) editorView.elements.insertElement({
+            duplicateId = editorView.runtime.blocks.insertBlock(input, afterId).id;
+            if (isEdgelessRoot) editorView.runtime.elements.insertElement({
               type: "block",
               frame: sourceElement
                 ? { ...sourceElement.frame, x: sourceElement.frame.x + 24, y: sourceElement.frame.y + 24 }
                 : { x: 84, y: 84, width: 320, height: 120 },
-              zIndex: Math.max(0, ...editorView.elements.getElements().map((element) => element.zIndex)) + 1,
+              zIndex: Math.max(0, ...editorView.runtime.elements.getElements().map((element) => element.zIndex)) + 1,
               props: { startBlockId: duplicateId, endBlockId: duplicateId },
             });
           });

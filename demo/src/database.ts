@@ -1,6 +1,7 @@
 import type { CRDTDoc, CRDTMap, CRDTObserveEvent } from "@chulane/crdt-doc";
 import {
-  DocumentModelImpl, DocumentBlockManager, DocumentElementManager,
+  DocumentBlockManager, DocumentElementManager,
+  DocumentModelImpl,
   type BlockInput, type BlockNode, type DocumentElement, type ElementInput,
 } from "@chulane/document-model";
 

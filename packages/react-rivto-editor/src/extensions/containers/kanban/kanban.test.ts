@@ -7,9 +7,9 @@ import { createTestReactEditor as createReactEditor } from "../../../test-utils"
 import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../../test-utils";
 
+import { indentBlocks, outdentBlocks } from "../../../block-behaviors/ops/outline-ops";
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
-import { kanbanExtension, KANBAN_BLOCK_TYPE } from "./kanban";
-import { indentBlocks, outdentBlocks } from "../../../views/ops/outline-ops";
+import { kanbanExtension } from "./kanban";
 
 test("moves existing subtrees into, between and out of Kanban columns with undo", async () => {
   const editor = await createTestCoreEditor();
@@ -49,6 +49,6 @@ test("moves existing subtrees into, between and out of Kanban columns with undo"
   const snapshot = editor.dump();
   editor.load(snapshot);
   expect(editor.dump()).toEqual(snapshot);
-  editorView.destroy();
+  editorView.runtime.destroy();
   editor.destroy();
 });

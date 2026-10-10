@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { EditorRuntime } from "../../editor-runtime";
+import type { EditorRuntime } from "../../editor/editor-runtime";
 
 /** Idempotent ownership handle returned by every manager registration. */
 export type RegistrationDisposer = () => void;
@@ -21,4 +21,12 @@ export interface ReactEditorExtension {
    * @returns Optional cleanup for resources not owned by a React manager.
    */
   setup(editorRuntime: EditorRuntime): void | (() => void);
+}
+
+/** Owns registrations and rejects new work after extension teardown begins. */
+export interface RegistrationOwner {
+  /** Retains cleanup and returns an idempotent disposer. */
+  own(release: RegistrationDisposer): RegistrationDisposer;
+  /** Throws when the owner has started destruction. */
+  assertActive(): void;
 }

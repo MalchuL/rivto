@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../../editor-runtime";
+import type { EditorRuntime } from "../../../../editor/editor-runtime";
 /** Runtime registration for page indentation keyboard behavior. */
 import { KEYBOARD_BINDING_IDS } from "../../../../managers";
 import type { IndentExtensionOptions } from "./types";

@@ -39,12 +39,12 @@ const snapshots = new WeakMap<EditorViewApi, RevisionSnapshot>();
  */
 function readManagerRevisions(editorView: EditorViewApi): RevisionSnapshot {
   const rows: readonly ManagerRevision[] = [
-    { manager: "editor", revision: editorView.revision },
-    { manager: "blocks", revision: editorView.blocks.revision },
-    { manager: "renderers", revision: editorView.renderers.revision },
+    { manager: "editor", revision: editorView.runtime.revision },
+    { manager: "blocks", revision: editorView.runtime.blocks.revision },
+    { manager: "renderers", revision: editorView.runtime.renderers.revision },
     { manager: "keyboard", revision: editorView.keyboard.revision },
-    { manager: "surfaces", revision: editorView.surfaces.revision },
-    { manager: "extensions", revision: editorView.extensions.revision },
+    { manager: "surfaces", revision: editorView.runtime.surfaces.revision },
+    { manager: "extensions", revision: editorView.runtime.extensions.revision },
     { manager: "slashCommands", revision: editorView.slashCommands.revision },
   ];
   const key = rows.map((row) => `${row.manager}:${row.revision}`).join("|");
@@ -64,11 +64,11 @@ function readManagerRevisions(editorView: EditorViewApi): RevisionSnapshot {
  */
 function subscribeManagerRevisions(editorView: EditorViewApi, listener: () => void): () => void {
   const stop = [
-    editorView.subscribe(listener),
-    editorView.renderers.subscribe(listener),
+    editorView.runtime.subscribe(listener),
+    editorView.runtime.renderers.subscribe(listener),
     editorView.keyboard.subscribe(listener),
-    editorView.surfaces.subscribe(listener),
-    editorView.extensions.subscribe(listener),
+    editorView.runtime.surfaces.subscribe(listener),
+    editorView.runtime.extensions.subscribe(listener),
     editorView.slashCommands.subscribe(listener),
   ];
   return () => stop.forEach((unsubscribe) => unsubscribe());

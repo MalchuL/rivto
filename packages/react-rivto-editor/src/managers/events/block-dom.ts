@@ -1,4 +1,3 @@
-import { DOCUMENT_VIEW_SELECTOR, isInDocumentView, findViewElements } from "./document-view";
 import type { EditorPosition } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
@@ -6,6 +5,7 @@ import {
   BLOCK_ID_SELECTOR,
 } from "../../constants";
 import { getPageVirtualizationControllerForElement } from "../../surfaces/page/page-virtualization-controller";
+import { DOCUMENT_VIEW_SELECTOR, findViewElements, isInDocumentView } from "./document-view";
 
 /** DOM elements and persisted identity resolved from a delegated event target. */
 export interface EventBlock {

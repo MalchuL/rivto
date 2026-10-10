@@ -1,6 +1,6 @@
 /** React block containment lookup used by page drop resolvers. */
+import type { EditorViewApi } from "../../../editor-view/types";
 import { getBlockContainment } from "../../../managers/blocks/types";
-import type { EditorViewApi } from "../../../types";
 
 /**
  * Reads React containment metadata for one placed block.
@@ -10,6 +10,6 @@ import type { EditorViewApi } from "../../../types";
  * @returns Registered containment, or `undefined` when unconstrained.
  */
 export function blockContainment(editorView: EditorViewApi, blockId: string) {
-  const type = editorView.blocks.getBlockNode(blockId)?.type;
-  return type ? getBlockContainment(editorView.blockTypes.getDefinition(type)) : undefined;
+  const type = editorView.runtime.blocks.getBlockNode(blockId)?.type;
+  return type ? getBlockContainment(editorView.runtime.blockTypes.getDefinition(type)) : undefined;
 }

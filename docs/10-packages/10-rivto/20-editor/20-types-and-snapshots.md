@@ -12,7 +12,7 @@ Union `"block" | "edgeless"`. Mode локален, не сохраняется �
 
 - **`document: DocumentModel`:** required model permanently bound to this core; its lifetime remains caller-owned.
 
-Для нескольких документов `EditorStorageOptions` принимает optional async `openDocument(documentId)` и optional `createEditor(editor)` returning EditorViewApi. Первый callback передаёт editor cache владение моделью. Второй получает уже созданный storage-owned core, настраивает его registrations, defaults и property processors и возвращает связанный с ним EditorViewApi. Presentation выбирает React surface и не входит в constructor options.
+Для нескольких документов `EditorStorageOptions` принимает optional async `openDocument(documentId)` и optional `createEditor(editor)` returning EditorRuntime. Первый callback передаёт editor cache владение моделью. Второй получает уже созданный storage-owned core, настраивает его registrations, defaults и property processors и возвращает связанный с ним EditorViewApi. Presentation выбирает React surface и не входит в constructor options.
 
 ## Selection types
 

@@ -1,5 +1,4 @@
-import { DocumentViewDOM } from "../events/document-view";
-import { DOCUMENT_VIEW_SELECTOR, isInDocumentView } from "../events/document-view";
+import { DOCUMENT_VIEW_SELECTOR, DocumentViewDOM, isInDocumentView } from "../events/document-view";
 /**
  * DOM ↔ editor selection bridge for Rivto's multi-contenteditable surfaces.
  *
@@ -55,9 +54,9 @@ import type {
   Selection,
 } from "@chulane/rivto";
 import {
-  isStructuralSelection,
-  createTextSelection,
   createStructuralSelection,
+  createTextSelection,
+  isStructuralSelection,
 } from "@chulane/rivto";
 import {
   BLOCK_CONTENT_SELECTOR,
@@ -65,10 +64,10 @@ import {
   BLOCK_ID_SELECTOR,
   BLOCK_ROW_CLASS,
 } from "../../constants";
-import { isElementNode } from "../events/dom-nodes";
-import { resolveSelectionEndpoints } from "./selection-endpoints";
 import { getPageVirtualizationControllerForElement } from "../../surfaces/page/page-virtualization-controller";
-import type { RestoreDOMSelectionOptions } from "../../capabilities";
+import { isElementNode } from "../events/dom-nodes";
+import type { RestoreDOMSelectionOptions } from "./api";
+import { resolveSelectionEndpoints } from "./selection-endpoints";
 
 /**
  * One live browser caret/selection endpoint inside a block's editable content.

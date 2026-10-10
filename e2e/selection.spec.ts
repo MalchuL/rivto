@@ -614,7 +614,7 @@ for (const mode of ["block", "edgeless"] as const) {
       }).__rivtoDemo;
       const id = editor.blocks.getRootIds()[1]!;
       editor.selection.set({ type: "selection", blocks: [{ id, start: 1, end: 1 }], anchorBlockId: id, focusBlockId: id });
-      const view = editorRuntime.events.getDocumentView();
+      const view = (editorRuntime.editorViews.getActive() ?? editorRuntime.editorViews.getDefault());
       if (!view) throw new Error("Expected mounted editor view");
       view.selection.restoreDOM();
       const content = document.querySelector<HTMLElement>(`[data-block-id="${id}"] [contenteditable]`)!;

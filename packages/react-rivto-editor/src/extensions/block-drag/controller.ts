@@ -1,17 +1,17 @@
-import type { DropLayoutOptions } from "./placement/resolver";
-import type { DragDropManager, DragEndEvent, DragStartEvent } from "@dnd-kit/react";
-import { DOMRectangle } from "@dnd-kit/dom/utilities";
 import { createStructuralSelection, type EditorMode } from "@chulane/rivto";
-import type { EditorViewApi } from "../../types";
-import { dropMoveTarget, excludeDropSubtrees, isCurrentDropDestination } from "./placement/utils";
-import { selectedMoveRoots, type SelectedMoveRoots } from "../built-ins/page/navigation";
+import { DOMRectangle } from "@dnd-kit/dom/utilities";
+import type { DragDropManager, DragEndEvent, DragStartEvent } from "@dnd-kit/react";
+import type { EditorViewApi } from "../../editor-view/types";
 import { crossDocumentBlockTransfer, type CrossDocumentBlockTransferPlacement } from "../built-ins/clipboard/cross-document-block-transfer";
+import { selectedMoveRoots, type SelectedMoveRoots } from "../built-ins/page/navigation";
 import { resolveCrossDocumentPageRootPlacement } from "./cross-document/placement";
-import { getDropBlocks, resolveSurfaceDrop } from "./pointer/target";
-import type { CanonicalDropPlacement } from "./placement/types";
-import type { DropPlacement, DropPlacementStore, CrossDocumentPageRootController, PointerCoordinates, PointerTracker } from "./types";
 import { CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE, crossDocumentPageRootControllers, findCrossDocumentPageController } from "./cross-document/target";
+import type { DropLayoutOptions } from "./placement/resolver";
+import type { CanonicalDropPlacement } from "./placement/types";
+import { dropMoveTarget, excludeDropSubtrees, isCurrentDropDestination } from "./placement/utils";
+import { getDropBlocks, resolveSurfaceDrop } from "./pointer/target";
 import { trackGesturePointer } from "./pointer/tracker";
+import type { CrossDocumentPageRootController, DropPlacement, DropPlacementStore, PointerCoordinates, PointerTracker } from "./types";
 
 /**
  * Stops native text selection while a block handle owns a drag gesture.
@@ -169,10 +169,10 @@ export class PageDragController {
     } else {
       if (this.crossDocumentTarget?.controller !== controller) this.clearCrossDocumentTarget();
       const sources = (this.activeMove?.ids ?? []).flatMap((id) => {
-        const block = editorView.blocks.getBlock(id);
+        const block = editorView.runtime.blocks.getBlock(id);
         return block ? [block] : [];
       });
-      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources, editorView.getDocument().id);
+      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources, editorView.runtime.getDocument().id);
       controller.setPlacement(placement?.indicator ?? null, placement?.targetId === null);
       this.crossDocumentTarget = placement ? {
         controller,
@@ -203,7 +203,7 @@ export class PageDragController {
     const pointer = livePointer ?? (rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null);
     if (!pointer) return null;
     const sources = (this.activeMove?.ids ?? []).flatMap((id) => {
-      const block = editorView.blocks.getBlock(id);
+      const block = editorView.runtime.blocks.getBlock(id);
       return block ? [block] : [];
     });
     return resolveSurfaceDrop(root, editorView, sources, blocks, pointer, {
@@ -270,7 +270,7 @@ export class PageDragController {
       blocks,
       editorView.selection.get(),
       String(source.id),
-      (block) => !editorView.blockListProps.childrenVisible(block),
+      (block) => !editorView.runtime.blockListProps.childrenVisible(block),
     );
     this.activeMove = move;
     const KeyboardEventType = root?.ownerDocument.defaultView?.KeyboardEvent;
@@ -333,17 +333,17 @@ export class PageDragController {
     const crossDocument = this.crossDocumentTarget;
     const placement = event.canceled || crossDocument ? null : this.displayedPlacement;
     const sources = (move?.ids ?? []).flatMap((id) => {
-      const block = editorView.blocks.getBlock(id);
+      const block = editorView.runtime.blocks.getBlock(id);
       return block ? [block] : [];
     });
     const valid = placement && sources.length === move?.ids.length
-      && editorView.views.acceptsDrop(placement, sources)
+      && editorView.runtime.blockBehaviors.acceptsDrop(placement, sources)
       && isCurrentDropDestination(excludeDropSubtrees(getDropBlocks(editorView), new Set(move.ids)), placement);
     const validCrossDocument = crossDocument && sources.length === move?.ids.length
-      && crossDocument.controller.editorView.views.acceptsDrop(crossDocument.destination, sources)
+      && crossDocument.controller.editorView.runtime.blockBehaviors.acceptsDrop(crossDocument.destination, sources)
       && isCurrentDropDestination(excludeDropSubtrees(
         getDropBlocks(crossDocument.controller.editorView),
-        new Set(crossDocument.controller.editorView.getDocument() === editorView.getDocument() ? move.ids : []),
+        new Set(crossDocument.controller.editorView.runtime.getDocument() === editorView.runtime.getDocument() ? move.ids : []),
       ), crossDocument.destination);
     this.resetGesture();
     if (event.canceled || !move) {
@@ -352,11 +352,11 @@ export class PageDragController {
       let transferred = false;
       try {
         const destination = crossDocument.controller;
-        const destinationDocument = destination.editorView.getDocument();
-        if (destinationDocument === editorView.getDocument()) {
-          editorView.blocks.moveBlocks(move.ids, crossDocument.placement.targetId, crossDocument.placement.position);
+        const destinationDocument = destination.editorView.runtime.getDocument();
+        if (destinationDocument === editorView.runtime.getDocument()) {
+          editorView.runtime.blocks.moveBlocks(move.ids, crossDocument.placement.targetId, crossDocument.placement.position);
         } else {
-          crossDocumentBlockTransfer(editorView, destination.editorView, move.ids, crossDocument.placement);
+          crossDocumentBlockTransfer(editorView.runtime, destination.editorView.runtime, move.ids, crossDocument.placement);
         }
         transferred = true;
       } catch {
@@ -374,7 +374,7 @@ export class PageDragController {
       // Persisted parent constraints can reject a structural destination.
       // Refuse the drop instead of leaving an uncaught gesture error.
       try {
-        editorView.blocks.moveBlocks(move.ids, targetId, position);
+        editorView.runtime.blocks.moveBlocks(move.ids, targetId, position);
         const selection = move.grouped && move.selection
           ? move.selection
           : createStructuralSelection([move.ids[0]!]);

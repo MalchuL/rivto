@@ -8,9 +8,8 @@
  * @module
  */
 import type { EditorBlock, EditorBlockNode, EditorElement } from "@chulane/rivto";
-import type { BlocksCapability } from "../capabilities";
-import type { SharedEditorApi } from "../types";
-import type { EditorRuntime } from "../editor-runtime";
+import type { EditorRuntime } from "../editor/editor-runtime";
+import type { BlocksApi } from "../managers/blocks/blocks-api";
 
 export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
 export const EDGELESS_BLOCK_ELEMENT_ID_PREFIX = "rivto:block-element:";
@@ -211,7 +210,7 @@ export function blockIdsOf(element: EditorElement, rootIds: readonly string[]): 
  * @returns Whether the block is a card root or one of its descendants.
  */
 export function elementContainsBlock(
-  blocks: BlocksCapability,
+  blocks: BlocksApi,
   element: EditorElement,
   rootIds: readonly string[],
   blockId: string,
@@ -244,7 +243,7 @@ export function blockRangeProps(blockIds: readonly string[]): BlockElementProps 
  * @returns Complete inserted separator block.
  * @throws When the active preset provides no separator block plugin.
  */
-export function insertBlockElementSeparator(editor: SharedEditorApi, afterId: string): EditorBlock {
+export function insertBlockElementSeparator(editor: EditorRuntime, afterId: string): EditorBlock {
   const type = editor.blockTypes.getDefaultBlockElementSeparatorType();
   if (!type) throw new Error("No block element separator type is registered");
   return editor.blocks.insertBlock({ type, content: "" }, afterId);

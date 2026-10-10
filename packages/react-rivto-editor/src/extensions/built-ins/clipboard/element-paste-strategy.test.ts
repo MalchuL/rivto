@@ -50,7 +50,7 @@ describe("ElementPasteStrategy", () => {
     });
     expect(findEdgelessRuntime(editorView)?.get().items).toEqual([]);
     uninstall();
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -77,7 +77,7 @@ describe("ElementPasteStrategy", () => {
     expect([...(created?.elementIdMap ?? [])]).toEqual([[source.id, source.id]]);
     expect(editor.elements.getElement(source.id)?.props).toEqual({ text: "Cut" });
     uninstall();
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -117,7 +117,7 @@ describe("ElementPasteStrategy", () => {
       endBlockId: destinationId,
     });
     uninstall();
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 });
@@ -129,9 +129,9 @@ it("pastes cards into an explicit second document and remaps their block referen
   const { createTestReactEditor: createRuntime } = await import("../../../test-utils");
   const { standardPreset } = await import("../built-ins");
   const multi = await createTestMultiEditor([new DocumentModelImpl(new YjsDoc("A")), new DocumentModelImpl(new YjsDoc("B"))], undefined, { extensions: [standardPreset()] });
-  const runtime = multi.getEditor("B")!;
+  const runtime = multi.getRuntime("B")!;
   runtime.mode.set("edgeless");
-  const a = await multi.getSingleEditor("A"); const b = await multi.getSingleEditor("B");
+  const a = await multi.openCoreEditor("A"); const b = await multi.openCoreEditor("B");
   const block = a.blocks.insertBlock({ id: "source-block", type: "paragraph", content: "Copied card" });
   const card = a.elements.insertElement({ id: "source-card", type: "block", frame: { x: 10, y: 20, width: 100, height: 40 }, zIndex: 0, props: { startBlockId: block.id, endBlockId: block.id } });
   await b.clipboard.paste( { bundle: { version: 4, blocks: [block], elements: [card] }, placement: { mergeText: false } });

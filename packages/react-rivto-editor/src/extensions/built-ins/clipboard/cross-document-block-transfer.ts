@@ -2,10 +2,10 @@ import type {
   EditorBlock,
   EditorBlockInput,
 } from "@chulane/rivto";
-import type { SharedEditorApi } from "../../../types";
+import type { EditorRuntime } from "../../../editor/editor-runtime";
 
 /** Document operations required by transfer; accepts core, runtime, and view editors. */
-type BlockTransferEditor = Pick<SharedEditorApi, "blocks" | "history" | "getDocument">;
+type BlockTransferEditor = Pick<EditorRuntime, "blocks" | "history" | "getDocument">;
 
 /** Destination used by a cross-document page drag. */
 export interface CrossDocumentBlockTransferPlacement {

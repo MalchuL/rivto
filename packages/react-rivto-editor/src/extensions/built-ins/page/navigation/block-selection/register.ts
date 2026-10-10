@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../../../editor-runtime";
+import type { EditorRuntime } from "../../../../../editor/editor-runtime";
 /**
  * Keyboard registration for movement and growth of whole-block selections.
  *
@@ -10,14 +10,14 @@ import {
   isStructuralSelection,
   type EditorBlock,
 } from "@chulane/rivto";
+import type { EditorViewApi } from "../../../../../editor-view/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../../managers";
-import type { EditorViewApi } from "../../../../../types";
-import { navigationOutlineBlocks } from "../utils/scope";
 import {
   adjacentBlockSelection,
   blockSelection,
   extendBlockSelection,
 } from "../utils/block-selection";
+import { navigationOutlineBlocks } from "../utils/scope";
 import {
   currentNavigationSelection,
   focusBlockSelection,

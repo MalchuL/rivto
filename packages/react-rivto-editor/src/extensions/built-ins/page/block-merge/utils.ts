@@ -9,8 +9,8 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../../../constants";
-import { findRenderedBlock } from "../../../../managers";
-import type { EditorViewApi } from "../../../../types";
+import type { EditorViewApi } from "../../../../editor-view/types";
+import { findRenderedBlock } from "../../../../managers/events/block-dom";
 
 /** Returns true when a BlockView directly owns an editable content host. */
 function hasOwnedEditableContent(block: HTMLElement): boolean {
@@ -43,22 +43,22 @@ export function removeEmptyBlockAfterStructuralPredecessor(
   root: HTMLElement,
   blockId: string,
 ): boolean {
-  const { isEmptyBlock } = editorView;
-  const block = editorView.blocks.getBlockNode(blockId);
+  const { isEmptyBlock } = editorView.runtime;
+  const block = editorView.runtime.blocks.getBlockNode(blockId);
   if (
     !block ||
     !isEmptyBlock(block) ||
     block.listProps.collapsed === true ||
-    !editorView.blocks.isRootBlock(block.id)
+    !editorView.runtime.blocks.isRootBlock(block.id)
   ) return false;
 
   const previous = previousSiblingBlock(root, block.id);
   if (!previous || hasOwnedEditableContent(previous.element)) return false;
 
-  editorView.history.batchUpdates(() => {
-    const firstChildId = editorView.blocks.getBlockNode(block.id)?.childIds[0];
-    if (firstChildId) editorView.blocks.outdentBlock(firstChildId);
-    editorView.blocks.removeBlock(block.id);
+  editorView.runtime.history.batchUpdates(() => {
+    const firstChildId = editorView.runtime.blocks.getBlockNode(block.id)?.childIds[0];
+    if (firstChildId) editorView.runtime.blocks.outdentBlock(firstChildId);
+    editorView.runtime.blocks.removeBlock(block.id);
     editorView.selection.set(createStructuralSelection([previous.id]));
   });
   root.ownerDocument.getSelection()?.removeAllRanges();

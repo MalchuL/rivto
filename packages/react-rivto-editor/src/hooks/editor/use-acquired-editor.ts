@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { EditorStorage } from "../../editor-storage";
-import type { EditorRuntime } from "../../editor-runtime";
+import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { EditorStorage } from "../../editor/editor-storage";
 
 /** Result of retaining a source editor for a mounted React consumer. */
 interface AcquiredEditor {
@@ -26,10 +26,10 @@ export function useAcquiredEditor(storage: EditorStorage | undefined, documentId
     if (!storage || !documentId) return;
     const controller = new AbortController();
     let release: (() => Promise<void>) | undefined;
-    void storage.acquireEditor(documentId, { signal: controller.signal }).then((acquisition) => {
+    void storage.acquireRuntime(documentId, { signal: controller.signal }).then((acquisition) => {
       release = acquisition.release;
       if (controller.signal.aborted) void release().catch(console.error);
-      else setResult({ editor: acquisition.editor });
+      else setResult({ editor: acquisition.runtime });
     }).catch((error) => {
       if (!controller.signal.aborted) setResult({ error });
     });

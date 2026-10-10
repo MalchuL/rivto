@@ -1,5 +1,5 @@
+import { createCaretSelection, createStructuralSelection, createTextSelection } from "@chulane/rivto";
 import { createTestReactEditor as createReactEditor } from "../../test-utils";
-import { createCaretSelection, createTextSelection, createStructuralSelection } from "@chulane/rivto";
 /**
  * Regression tests for per-block selection snapshots used by React chrome.
  *
@@ -21,7 +21,7 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     const snapshot = editor.selection.snapshot();
     editorView.selection.set(caret);
     expect(editor.selection.snapshot()).toBe(snapshot);
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -35,7 +35,7 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
       type: "selection",
       blocks: [{ id, start: 1, end: 1 }],
     });
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -48,7 +48,7 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     expect(editor.selection.isBlockSelected(firstId)).toBe(true);
     expect(editor.selection.isBlockSelected(secondId)).toBe(false);
     expect(editor.selection.snapshot()?.blocks).toHaveLength(1);
-    editorView.destroy();
+    editorView.runtime.destroy();
     editor.destroy();
   });
 
@@ -56,12 +56,12 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     const editor = await createEditor();
     const editorView = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" }).id;
-    const before = editorView.revision;
+    const before = editorView.runtime.revision;
     editorView.selection.set(
       createTextSelection([{ id, length: 4 }], { blockId: id, offset: 0 }, { blockId: id, offset: 2 })!,
     );
-    expect(editorView.revision).toBe(before);
-    editorView.destroy();
+    expect(editorView.runtime.revision).toBe(before);
+    editorView.runtime.destroy();
     editor.destroy();
   });
 });

@@ -6,7 +6,7 @@
  *
  * @module
  */
-import type { BlockDropDestination } from "../../../views/types";
+import type { BlockDropDestination } from "../../../block-behaviors/types";
 
 /** Minimal recursive shape needed to resolve outline drop positions. */
 export interface DropBlock {

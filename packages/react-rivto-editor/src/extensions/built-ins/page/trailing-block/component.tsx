@@ -2,10 +2,10 @@
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import { createCaretSelection } from "@chulane/rivto";
-import { createPortal } from "react-dom";
 import { PlusIcon } from "lucide-react";
-import { useEditorRoot, useEditorView } from "../../../../hooks";
+import { createPortal } from "react-dom";
 import { editorControlProps, PAGE_END_SLOT_SELECTOR } from "../../../../constants";
+import { useEditorRoot, useEditorView } from "../../../../hooks";
 import { focusBlock } from "../../../../managers";
 import type { TrailingBlockProps } from "./types";
 
@@ -31,10 +31,10 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
           aria-label={amount === 1 ? "Add block" : `Add ${amount} blocks`}
           onClick={() => {
             let id = "";
-            editorView.history.batchUpdates(() => {
+            editorView.runtime.history.batchUpdates(() => {
               for (let current = 0; current < amount; current += 1) {
-                id = editorView.blocks.insertBlock(
-                  editorView.createDefaultBlock(),
+                id = editorView.runtime.blocks.insertBlock(
+                  editorView.runtime.createDefaultBlock(),
                   id || undefined,
                 ).id;
               }

@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../../editor-runtime";
+import type { EditorRuntime } from "../../../../editor/editor-runtime";
 /**
  * Enter dispatch for outline block splitting and creation.
  *
@@ -9,9 +9,8 @@ import type { EditorRuntime } from "../../../../editor-runtime";
  *
  * @module
  */
-import { firstKeyboardTarget, isEditableKeyboardEvent, shouldDeleteSelection } from "../../../../managers";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../managers";
-import { createBlockViewContext } from "../../../../views";
+import { createBlockBehaviorContext } from "../../../../block-behaviors/index";
+import { BUILTIN_KEYMAP, firstKeyboardTarget, isEditableKeyboardEvent, KEYBOARD_BINDING_IDS, shouldDeleteSelection } from "../../../../managers";
 
 /**
  * Installs outline block splitting for Page and Edgeless surfaces.
@@ -40,7 +39,7 @@ export function registerBlockCreation(editorRuntime: EditorRuntime): void {
     let claimed = false;
     // Selection deletion, text splitting, insertion, and nesting share one CRDT
     // transaction, so Enter is one collaborative update and one undo step.
-    editorView.history.batchUpdates(() => {
+    editorView.runtime.history.batchUpdates(() => {
       let target = initialTarget;
       if (shouldDeleteSelection(selection)) {
         editorView.selection.delete();
@@ -48,9 +47,9 @@ export function registerBlockCreation(editorRuntime: EditorRuntime): void {
         if (!collapsed?.collapsed) return;
         target = collapsed;
       }
-      const context = createBlockViewContext(editorView, target.blockId, root, editorView.selection.get());
+      const context = createBlockBehaviorContext(editorView, target.blockId, root, editorView.selection.get());
       if (!context) return;
-      claimed = editorView.views.dispatch(
+      claimed = editorView.runtime.blockBehaviors.dispatch(
         "onSplit",
         context,
         target,

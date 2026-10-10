@@ -4,9 +4,9 @@
  * @module
  */
 import {
+  createStructuralSelection,
   hasBlockRanges,
   isStructuralSelection,
-  createStructuralSelection,
   type BlockManagerApi,
   type Selection,
 } from "@chulane/rivto";

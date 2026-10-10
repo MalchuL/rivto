@@ -8,10 +8,10 @@
  */
 import { expect, test } from "@playwright/test";
 import {
-  blockIdSelector,
-  blockTypeSelector,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
+  blockIdSelector,
+  blockTypeSelector,
 } from "./dom-markers";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;

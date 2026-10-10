@@ -1,11 +1,11 @@
-import type { EditorRuntime } from "../../../../editor-runtime";
+import type { EditorRuntime } from "../../../../editor/editor-runtime";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import { BlockCollapseSlot } from "../../../../blocks/block-slot-controls/block-slot-controls";
-import type { EditorViewApi } from "../../../../types";
-import { reconcileCollapsedSelection } from "../navigation";
+import type { EditorViewApi } from "../../../../editor-view/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../managers";
+import { reconcileCollapsedSelection } from "../navigation";
 import { collapseTargets } from "./utils";
 
 /**
@@ -61,7 +61,7 @@ export function registerCollapse(editorRuntime: EditorRuntime): () => void {
   const reconcile = () => {
     const current = editorRuntime.selection.get();
     if (!current) return;
-    const view = editorRuntime.events.getDocumentView();
+    const view = (editorRuntime.editorViews.getActive() ?? editorRuntime.editorViews.getDefault());
     const api = view ?? editorRuntime;
     if (!api.selection.get()) {
       // A remote move can put selected blocks outside the active subtree.
@@ -69,9 +69,10 @@ export function registerCollapse(editorRuntime: EditorRuntime): () => void {
       return;
     }
     const reconcileView = () => {
+  const apiDocument = "runtime" in api ? api.runtime : api;
       const root = view?.events.getRoot();
       const boundary = view?.rootBlockId;
-      const next = reconcileCollapsedSelection(api.blocks, current, boundary);
+      const next = reconcileCollapsedSelection(apiDocument.blocks, current, boundary);
       if (next !== current) {
         if (next) api.selection.set(next);
         else api.selection.clear();
@@ -96,17 +97,17 @@ export function registerCollapse(editorRuntime: EditorRuntime): () => void {
     const ids = collapseTargets(selection);
     if (!ids.length) return false;
     const uniqueIds = [...new Set(ids)];
-    if (uniqueIds.some((id) => !editorView.blocks.hasBlock(id))) return false;
-    const first = editorView.blocks.getBlockNode(uniqueIds[0]!);
+    if (uniqueIds.some((id) => !editorView.runtime.blocks.hasBlock(id))) return false;
+    const first = editorView.runtime.blocks.getBlockNode(uniqueIds[0]!);
     if (!first) return false;
     const collapsed = value === "toggle" ? first.listProps.collapsed !== true : value;
     const updates = uniqueIds.flatMap((id) => {
-      const block = editorView.blocks.getBlockNode(id);
+      const block = editorView.runtime.blocks.getBlockNode(id);
       return block && (!collapsed || block.childIds.length > 0) && block.listProps.collapsed !== collapsed
         ? [{ id, patch: { listProps: { collapsed } } }]
         : [];
     });
-    if (updates.length) editorView.blocks.updateBlocks(updates);
+    if (updates.length) editorView.runtime.blocks.updateBlocks(updates);
     return true;
   };
 

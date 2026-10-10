@@ -1,8 +1,8 @@
-import { useLayoutEffect, type RefObject } from "react";
 import { isCaretSelection, resolveBlockRange } from "@chulane/rivto";
+import { useLayoutEffect, type RefObject } from "react";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../constants";
+import { useEditorView } from "../../editor-view/use-editor-view";
 import { restoreDOMSelection } from "../../managers";
-import { useEditorView } from "../editor/use-editor-view";
 
 /** Props spread onto any renderer region from which selection may begin. */
 export interface BlockSelectionAnchorAttributes {

@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../../../editor-runtime";
+import type { EditorRuntime } from "../../../../../editor/editor-runtime";
 /**
  * Keyboard registration for native-looking horizontal and vertical caret movement.
  *
@@ -11,6 +11,7 @@ import {
   isCaretSelection,
   isStructuralSelection,
 } from "@chulane/rivto";
+import type { EditorViewApi } from "../../../../../editor-view/types";
 import {
   BUILTIN_KEYMAP,
   findNextEditableBlock,
@@ -19,7 +20,7 @@ import {
   resolveSelectionEndpoints,
   verticalCaretPosition,
 } from "../../../../../managers";
-import type { EditorViewApi } from "../../../../../types";
+import { pageEntries } from "../utils/outline";
 import { navigationDomRoot, navigationOutlineBlocks } from "../utils/scope";
 import {
   currentNavigationSelection,
@@ -28,7 +29,6 @@ import {
   textSelectionEdge,
   type VerticalDirection,
 } from "../utils/selection";
-import { pageEntries } from "../utils/outline";
 
 /** Native controls own arrow keys even when the editor retains a text selection. */
 function isNativeControl(target: EventTarget | null): boolean {
@@ -61,7 +61,7 @@ export function registerCaretNavigation(editorRuntime: EditorRuntime): void {
       ));
       handled = true;
     } else if (direction === "left" || direction === "right") {
-      const block = editorView.blocks.getBlockNode(ends.head.blockId);
+      const block = editorView.runtime.blocks.getBlockNode(ends.head.blockId);
       const adjacent = direction === "left" && ends.head.offset === 0
         ? findPreviousEditableBlock(scope, ends.head.blockId)
         : direction === "right" && ends.head.offset === (block?.content.length ?? -1)

@@ -1,6 +1,5 @@
-import { createTestReactEditor as createReactEditor } from "../../test-utils";
-import { createTestCoreEditor as createEditor } from "../../test-utils";
 import type { ComponentType } from "react";
+import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
 
 
 const renderer: ComponentType<{ blockId: string }> = () => null;
@@ -13,8 +12,8 @@ describe("RendererManager", () => {
       editor,
       unknownBlockRenderer: fallback,
     });
-    const manager = editorView.renderers;
-    const revision = editorView.renderers.revision;
+    const manager = editorView.runtime.renderers;
+    const revision = editorView.runtime.renderers.revision;
     const dispose = manager.register("card", renderer);
 
     expect(manager.get("card")).toBe(renderer);
@@ -26,8 +25,8 @@ describe("RendererManager", () => {
     expect(manager.delete("card")).toBe(false);
     dispose();
     expect(manager.get("card")).toBe(fallback);
-    expect(editorView.renderers.revision).toBe(revision + 2);
-    editorView.destroy();
+    expect(editorView.runtime.renderers.revision).toBe(revision + 2);
+    editorView.runtime.destroy();
     editor.destroy();
   });
 });
