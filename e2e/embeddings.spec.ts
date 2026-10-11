@@ -146,7 +146,7 @@ for (const [repeat, canvas] of [[0, false], [0, true], [200, false], [200, true]
         element.closest<HTMLElement>("[data-edgeless-object-id]")!.dataset.edgelessObjectId!);
       await page.evaluate((id) => {
         const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-        editor.elements.updateElement(id, { zIndex: Math.max(...editor.elements.getElements().map((element) => element.zIndex)) + 1 });
+        editor.elements.updateElement(id, { zIndex: Math.max(...editor.elements.getElementNodes().map((element) => element.zIndex)) + 1 });
       }, cardId);
     }
     const embedding = today.locator(`[data-block-id="${ids.embed}"]`).first();
@@ -402,7 +402,7 @@ for (const [repeat, canvas] of [[0, false], [0, true], [200, false], [200, true]
         element.closest<HTMLElement>("[data-edgeless-object-id]")!.dataset.edgelessObjectId!);
       await page.evaluate((id) => {
         const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-        editor.elements.updateElement(id, { zIndex: Math.max(...editor.elements.getElements().map((element) => element.zIndex)) + 1 });
+        editor.elements.updateElement(id, { zIndex: Math.max(...editor.elements.getElementNodes().map((element) => element.zIndex)) + 1 });
         editor.history.clear();
       }, cardId);
     }
@@ -482,7 +482,7 @@ for (const [repeat, canvas] of [[0, false], [0, true], [200, false], [200, true]
         element.closest<HTMLElement>("[data-edgeless-object-id]")!.dataset.edgelessObjectId!);
       await page.evaluate((id) => {
         const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-        editor.elements.updateElement(id, { zIndex: Math.max(...editor.elements.getElements().map((element) => element.zIndex)) + 1 });
+        editor.elements.updateElement(id, { zIndex: Math.max(...editor.elements.getElementNodes().map((element) => element.zIndex)) + 1 });
         editor.history.clear();
       }, cardId);
     }

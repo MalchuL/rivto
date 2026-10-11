@@ -37,7 +37,7 @@ export function registerEdgelessDeletion(editorRuntime: EditorRuntime): void {
     const canvas = selection.get();
     let handled = false;
     if (canvas.active && canvas.items.length && editorView.runtime.commands.has("edgeless.visual.delete")) {
-      editorView.runtime.commands.execute("edgeless.visual.delete", { selection: true });
+      editorView.runtime.commands.execute("edgeless.visual.delete", { editorView, payload: { selection: true } });
       root.focus({ preventScroll: true });
       handled = true;
     } else {
@@ -45,8 +45,8 @@ export function registerEdgelessDeletion(editorRuntime: EditorRuntime): void {
       const core = isStructuralSelection(current) ? current : undefined;
       const blockIds = canvas.active && canvas.items.length
         ? canvas.items.flatMap((id) => {
-          const element = editorView.runtime.elements.getElement(id);
-          return element?.type === "block" ? blockIdsOf(element, editorView.runtime.blocks.getRootIds()) : [];
+          const element = editorView.elements.getElementNode(id);
+          return element?.type === "block" ? blockIdsOf(element, editorView.getRootBlockIds()) : [];
         })
         : core?.blocks.map((block) => block.id) ?? [];
       const targets = topLevelSelection(editorView, blockIds);
@@ -54,7 +54,7 @@ export function registerEdgelessDeletion(editorRuntime: EditorRuntime): void {
         if (canvas.active && canvas.items.length) {
           editorView.runtime.history.batchUpdates(() => {
             targets.forEach((id) => editorView.runtime.blocks.removeBlock(id));
-            editorView.runtime.elements.removeElements(canvas.items);
+            editorView.elements.removeElements(canvas.items);
           });
           selection.clear();
         } else {

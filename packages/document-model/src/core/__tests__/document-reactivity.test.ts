@@ -203,22 +203,21 @@ describe("document reactivity", () => {
     const doc = new YjsDoc("element-reactivity");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "block", type: "paragraph" });
-    model.elements.insertElement({
-      id: "card",
+    model.elements.insertElement({ id: "card",
       type: "block",
       frame: { x: 0, y: 0, width: 100, height: 100 },
       zIndex: 0,
     });
-    const elements = model.elements.getElements();
+    const elements = model.elements.getElementNodes();
     let changes = 0;
     model.elements.subscribe(() => { changes += 1; });
 
     model.blocks.updateBlock("block", { content: "changed" });
-    expect(model.elements.getElements()).toBe(elements);
+    expect(model.elements.getElementNodes()).toBe(elements);
     expect(changes).toBe(0);
 
     model.elements.updateElement("card", { frame: { width: 120 } });
-    expect(model.elements.getElements()).not.toBe(elements);
+    expect(model.elements.getElementNodes()).not.toBe(elements);
     expect(changes).toBe(1);
     void doc.destroy();
   });

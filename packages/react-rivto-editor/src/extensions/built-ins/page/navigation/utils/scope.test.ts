@@ -55,15 +55,13 @@ describe("edgeless outline scope", () => {
     const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, leftB).id;
     const rightA = editor.blocks.insertBlock({ type: "paragraph", content: "Right A" }, separator).id;
     const rightB = editor.blocks.insertBlock({ type: "paragraph", content: "Right B" }, rightA).id;
-    editor.elements.insertElement({
-      id: "left",
+    editor.elements.insertElement({ id: "left",
       type: "block",
       frame: { x: 0, y: 0, width: 200, height: 120 },
       zIndex: 0,
       props: { startBlockId: leftA, endBlockId: leftB },
     });
-    editor.elements.insertElement({
-      id: "right",
+    editor.elements.insertElement({ id: "right",
       type: "block",
       frame: { x: 300, y: 0, width: 200, height: 120 },
       zIndex: 1,

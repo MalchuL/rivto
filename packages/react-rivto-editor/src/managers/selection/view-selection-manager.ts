@@ -38,9 +38,11 @@ export class ViewSelectionManager implements ViewSelectionApi {
   private contained = false;
 
   private containsSelection(selection: Selection): boolean {
+    if (selection.elements?.some((id) => !this.editorView.elements.hasElement(id))) return false;
     const rootId = this.editorView.rootBlockId;
     if (!rootId) return true;
     return selection.blocks.every(({ id }) => {
+      if (this.editorView.panel && id === rootId) return false;
       let current: string | null | undefined = id;
       while (current) {
         if (current === rootId) return true;
@@ -55,7 +57,7 @@ export class ViewSelectionManager implements ViewSelectionApi {
     if ((this.editorView.runtime.editorViews.getActiveRoot() ?? this.editorView.runtime.editorViews.getDefaultRoot()) !== root) return false;
     const value = this.coreSelection.snapshot();
     if (!value) return false;
-    if (!this.editorView.rootBlockId) return true;
+    if (!this.editorView.rootBlockId) return this.containsSelection(value);
     const revision = this.editorView.runtime.getDocument().blocks.revision;
     // Rows reuse the immutable snapshot; check subtree membership once per revision.
     if (value !== this.checkedSelection || revision !== this.checkedRevision) {

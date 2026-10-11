@@ -1,3 +1,5 @@
+import type { Panel, OpenPanelBlock } from "./panel";
+import type { ModeManagerApi } from "@chulane/rivto";
 import type { DocumentModel } from "@chulane/document-model";
 import {
   useCallback,
@@ -22,6 +24,12 @@ import { DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN, PageVirtualizationContext } from 
 export interface EditorViewProps {
   /** React runtime created and destroyed by the host application. */
   readonly runtime: EditorRuntime;
+  /** Optional application Panel; EditorPanel validates it before mounting. */
+  readonly panel?: Panel;
+  /** Host navigation handler for a specific block. */
+  readonly openBlock?: OpenPanelBlock;
+  /** Optional Panel-local presentation mode retained by the host. */
+  readonly mode?: ModeManagerApi;
   /** Optional block and descendants to display instead of the complete document. */
   readonly rootBlockId?: string;
   /** False suspends hidden-tab interaction while keeping its document acquired; defaults to true. */
@@ -71,6 +79,9 @@ function normalizeVirtualizationCount(value: number, fallback: number): number {
  */
 export function EditorView({
   runtime: hostEditor,
+  panel,
+  openBlock,
+  mode,
   rootBlockId,
   active = true,
   onReady,
@@ -82,7 +93,7 @@ export function EditorView({
   const parent = useContext(EditorContext);
   const storage = useContext(EditorStorageContext);
   const enabled = active && parent?.enabled !== false;
-  const controller = useMemo(() => new EditorViewController(hostEditor, rootBlockId, storage), [hostEditor, rootBlockId, storage]);
+  const controller = useMemo(() => new EditorViewController(hostEditor, rootBlockId, storage, { panel, openBlock, mode }), [hostEditor, rootBlockId, storage, panel, openBlock, mode]);
   useEffect(() => controller.mount(), [controller]);
   useLayoutEffect(() => controller.setEnabled(enabled), [controller, enabled]);
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
@@ -136,7 +147,7 @@ export function EditorView({
     return <div role="status">{snapshot.status === "error" ? "Unable to load document." : "Loading document…"}</div>;
   }
 
-  const content = <>{children}{snapshot.status === "missing" && <div role="status">Referenced block was deleted.</div>}</>;
+  const content = <>{snapshot.status === "missing" && panel ? null : children}{snapshot.status === "missing" && <div role="status">Referenced block was deleted.</div>}</>;
 
   return (
     <EditorContext.Provider value={context}>

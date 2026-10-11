@@ -1,5 +1,5 @@
 /**
- * Verifies schema-v6 storage, atomic writes, collaboration, and path-cache repair.
+ * Verifies schema-v8 storage, atomic writes, collaboration, and path-cache repair.
  * Uses generic storage primitives; editor feature policies are tested with their
  * public managers so document tests do not depend on outline commands.
  */
@@ -16,7 +16,7 @@ const exchangeUpdates = (left: YjsDoc, right: YjsDoc): void => {
   Y.applyUpdate(right.doc, leftState);
 };
 
-describe("DocumentModelImpl schema v6 Markdown storage", () => {
+describe("DocumentModelImpl schema v9 Markdown storage", () => {
   it("includes subclass-created block and element managers in snapshots and undo history", async () => {
     class ApplicationBlocks extends DocumentBlockManager {
       protected override generateId(): string { return "application-block"; }
@@ -72,22 +72,22 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     expect(model.blocks.getBlocks()).toEqual([]);
     expect(model.blocks.getRootIds()).toEqual([]);
 
-    model.loadSnapshot({ version: 6, blocks: [] });
+    model.loadSnapshot({ version: 9, blocks: [] });
     const block = model.blocks.insertBlock({ id: "only", type: "paragraph", content: "Only" });
     model.blocks.removeBlock(block.id);
 
     expect(model.blocks.getBlocks()).toEqual([]);
     expect(model.blocks.getRootIds()).toEqual([]);
-    expect(model.getSnapshot()).toMatchObject({ version: 6, blocks: [] });
+    expect(model.getSnapshot()).toMatchObject({ version: 9, blocks: [] });
     expect(model.blocks.insertBlock({ id: "later", type: "paragraph" }).id).toBe("later");
     doc.destroy();
   });
 
-  it("round-trips opaque list state in schema v6", () => {
+  it("round-trips opaque list state in schema v9", () => {
     const sourceDoc = new YjsDoc("list-snapshot-source");
     const source = new DocumentModelImpl(sourceDoc);
     source.loadSnapshot({
-      version: 6,
+      version: 9,
       blocks: [{
         id: "listed",
         type: "paragraph",
@@ -112,15 +112,14 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     const sourceDoc = new YjsDoc("element-snapshot-source");
     const source = new DocumentModelImpl(sourceDoc);
     source.blocks.insertBlock({ id: "content", type: "paragraph", content: "Card" });
-    source.elements.insertElement({
-      id: "card",
+    source.elements.insertElement({ id: "card",
       type: "block",
       frame: { x: -20, y: 30, width: 320, height: 140 },
       zIndex: 2,
       props: { startBlockId: "content", endBlockId: "content" },
     });
     const snapshot = source.getSnapshot();
-    expect(snapshot.version).toBe(6);
+    expect(snapshot.version).toBe(9);
     expect(snapshot.elements).toEqual([expect.objectContaining({ id: "card", type: "block" })]);
     expect(snapshot.blocks[0]).not.toHaveProperty("layout");
 
@@ -135,8 +134,8 @@ describe("DocumentModelImpl schema v6 Markdown storage", () => {
     Y.applyUpdate(peerDoc.doc, Y.encodeStateAsUpdate(sourceDoc.doc));
     peer.elements.updateElement("card", { frame: { x: 80 }, props: { title: "Shared" } });
     Y.applyUpdate(sourceDoc.doc, Y.encodeStateAsUpdate(peerDoc.doc));
-    expect(source.elements.getElement("card")).toEqual(peer.elements.getElement("card"));
-    expect(source.elements.getElement("card")).toMatchObject({
+    expect(source.elements.getElementNode("card")).toEqual(peer.elements.getElementNode("card"));
+    expect(source.elements.getElementNode("card")).toMatchObject({
       frame: { x: 80 },
       props: { startBlockId: "content", endBlockId: "content", title: "Shared" },
     });

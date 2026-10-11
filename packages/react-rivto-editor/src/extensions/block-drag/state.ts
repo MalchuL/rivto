@@ -40,6 +40,7 @@ function sameDropPlacement(left: DropPlacement | null, right: DropPlacement | nu
 export function createDropPlacementStore(): DropPlacementStore {
   let current: DropPlacement | null = null;
   let dragged = new Set<string>();
+  let dragSequence = 0;
   let armedId: string | undefined;
   let keyboardDragging = false;
   const draggables = new Map<string, PageDragHandle>();
@@ -62,6 +63,7 @@ export function createDropPlacementStore(): DropPlacementStore {
       };
     },
     isDragged: (id) => dragged.has(id),
+    getDragSequence: () => dragSequence,
     isArmed: (id) => armedId === id,
     arm: (id) => {
       if (dragged.size || armedId === id) return;
@@ -84,6 +86,7 @@ export function createDropPlacementStore(): DropPlacementStore {
       emit(new Set(listeners.keys()));
     },
     setDragged: (ids) => {
+      if (ids.length && !dragged.size) dragSequence++;
       const next = new Set(ids);
       const changed = new Set<string>([...dragged, ...next].filter((id) => dragged.has(id) !== next.has(id)));
       dragged = next;

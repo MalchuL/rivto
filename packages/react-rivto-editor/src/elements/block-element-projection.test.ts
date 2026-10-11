@@ -17,7 +17,7 @@ describe("edgeless block element reconciliation", () => {
   });
   const ranges = (editor: Awaited<ReturnType<typeof createRivtoEditor>>) => {
     const rootIds = editor.blocks.getRootIds();
-    return editor.elements.getElements().map((element) => blockIdsOf(element, rootIds));
+    return editor.elements.getElementNodes().map((element) => blockIdsOf(element, rootIds));
   };
 
   test("finds deterministic free block frames while allowing touching edges", () => {
@@ -36,7 +36,7 @@ describe("edgeless block element reconciliation", () => {
     editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, separator);
     editor.elements.insertElement({ type: "rectangle", frame: { x: 60, y: 60, width: 1000, height: 1000 }, zIndex: 0 });
     editorView.runtime.blockElements.reconcile();
-    const cards = editor.elements.getElements().filter((element) => element.type === "block");
+    const cards = editor.elements.getElementNodes().filter((element) => element.type === "block");
     expect(cards).toHaveLength(2);
     expect(blockFramesOverlap(cards[0]!.frame, cards[1]!.frame)).toBe(false);
     expect(cards[0]!.frame).toMatchObject({ x: 60, y: 60 });
@@ -50,7 +50,7 @@ describe("edgeless block element reconciliation", () => {
     overlapEditor.blocks.insertBlock({ type: "paragraph" }, split);
     overlapRuntime.runtime.blockElements.setOverlapAvoidance(false);
     overlapRuntime.runtime.blockElements.reconcile();
-    const overlapping = overlapEditor.elements.getElements();
+    const overlapping = overlapEditor.elements.getElementNodes();
     expect(blockFramesOverlap(overlapping[0]!.frame, overlapping[1]!.frame)).toBe(true);
     overlapRuntime.runtime.destroy();
     overlapEditor.destroy();
@@ -65,7 +65,7 @@ describe("edgeless block element reconciliation", () => {
     editorView.runtime.blockElements.reconcile();
 
     expect(EDGELESS_CARD_DEFAULT_FRAME.width).toBe(720);
-    expect(editor.elements.getElements()[0]!.frame.width).toBe(640);
+    expect(editor.elements.getElementNodes()[0]!.frame.width).toBe(640);
     editorView.runtime.destroy();
     editor.destroy();
   });
@@ -101,7 +101,7 @@ describe("edgeless block element reconciliation", () => {
 
     editorView.runtime.blockElements.reconcile();
 
-    const elements = editor.elements.getElements();
+    const elements = editor.elements.getElementNodes();
     expect(ranges(editor)).toEqual([[first, empty, secondEmpty, last]]);
     expect(elements.map((element) => element.id)).toEqual([`${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${first}`]);
     editorView.runtime.destroy();
@@ -118,8 +118,8 @@ describe("edgeless block element reconciliation", () => {
 
     editorView.runtime.blockElements.reconcile();
 
-    expect(editor.elements.getElements()).toHaveLength(1);
-    expect(blockIdsOf(editor.elements.getElement("card")!, editor.blocks.getRootIds())).toEqual([root]);
+    expect(editor.elements.getElementNodes()).toHaveLength(1);
+    expect(blockIdsOf(editor.elements.getElementNode("card")!, editor.blocks.getRootIds())).toEqual([root]);
     editorView.runtime.destroy();
     editor.destroy();
   });
@@ -130,8 +130,7 @@ describe("edgeless block element reconciliation", () => {
     const child = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, root).id;
     editor.blocks.indentBlock(child);
     const outsider = editor.blocks.insertBlock({ type: "paragraph", content: "Other" }, root).id;
-    const card = {
-      id: "card",
+    const card = { childIds: [], id: "card",
       type: "block" as const,
       frame: { x: 0, y: 0, width: 300, height: 120 },
       zIndex: 0,
@@ -158,10 +157,10 @@ describe("edgeless block element reconciliation", () => {
 
     editorView.runtime.blockElements.reconcile();
 
-    expect(editor.elements.getElements()).toHaveLength(1);
+    expect(editor.elements.getElementNodes()).toHaveLength(1);
     expect(ranges(editor)).toEqual([[first, firstEmpty, secondEmpty, last]]);
-    expect(editor.elements.getElement("card")?.props).toEqual({ startBlockId: first, endBlockId: last });
-    expect(editor.elements.getElement("card")?.frame).toMatchObject({ x: 10, y: 20 });
+    expect(editor.elements.getElementNode("card")?.props).toEqual({ startBlockId: first, endBlockId: last });
+    expect(editor.elements.getElementNode("card")?.frame).toMatchObject({ x: 10, y: 20 });
     editorView.runtime.destroy();
     editor.destroy();
   });
@@ -179,16 +178,16 @@ describe("edgeless block element reconciliation", () => {
     const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, first).id;
     await Promise.resolve();
 
-    expect(blockIdsOf(editor.elements.getElement("original-card")!, editor.blocks.getRootIds())).toEqual([first]);
-    expect(editor.elements.getElement("original-card")?.frame).toMatchObject({ x: 410, y: 220 });
-    expect(editor.elements.getElements()).toHaveLength(2);
+    expect(blockIdsOf(editor.elements.getElementNode("original-card")!, editor.blocks.getRootIds())).toEqual([first]);
+    expect(editor.elements.getElementNode("original-card")?.frame).toMatchObject({ x: 410, y: 220 });
+    expect(editor.elements.getElementNodes()).toHaveLength(2);
 
     editor.blocks.removeBlock(separator);
     await Promise.resolve();
 
-    expect(editor.elements.getElements()).toHaveLength(1);
-    expect(blockIdsOf(editor.elements.getElement("original-card")!, editor.blocks.getRootIds())).toEqual([first, middle, last]);
-    expect(editor.elements.getElement("original-card")?.frame).toMatchObject({ x: 410, y: 220 });
+    expect(editor.elements.getElementNodes()).toHaveLength(1);
+    expect(blockIdsOf(editor.elements.getElementNode("original-card")!, editor.blocks.getRootIds())).toEqual([first, middle, last]);
+    expect(editor.elements.getElementNode("original-card")?.frame).toMatchObject({ x: 410, y: 220 });
     editorView.runtime.destroy();
     editor.destroy();
   });
@@ -209,11 +208,11 @@ describe("edgeless block element reconciliation", () => {
     editor.blocks.moveBlock(first, rightFirst, "after");
     await Promise.resolve();
 
-    expect(editor.elements.getElements()).toHaveLength(2);
-    expect(blockIdsOf(editor.elements.getElement("left-card")!, editor.blocks.getRootIds())).toEqual([middle, last]);
-    expect(blockIdsOf(editor.elements.getElement("right-card")!, editor.blocks.getRootIds())).toEqual([rightFirst, first, rightLast]);
-    expect(editor.elements.getElement("left-card")?.frame).toMatchObject({ x: 10, y: 20 });
-    expect(editor.elements.getElement("right-card")?.frame).toMatchObject({ x: 500, y: 200 });
+    expect(editor.elements.getElementNodes()).toHaveLength(2);
+    expect(blockIdsOf(editor.elements.getElementNode("left-card")!, editor.blocks.getRootIds())).toEqual([middle, last]);
+    expect(blockIdsOf(editor.elements.getElementNode("right-card")!, editor.blocks.getRootIds())).toEqual([rightFirst, first, rightLast]);
+    expect(editor.elements.getElementNode("left-card")?.frame).toMatchObject({ x: 10, y: 20 });
+    expect(editor.elements.getElementNode("right-card")?.frame).toMatchObject({ x: 500, y: 200 });
     editorView.runtime.destroy();
     editor.destroy();
   });
@@ -234,11 +233,11 @@ describe("edgeless block element reconciliation", () => {
     editor.blocks.moveBlock(last, rightFirst, "after");
     await Promise.resolve();
 
-    expect(editor.elements.getElements()).toHaveLength(2);
-    expect(blockIdsOf(editor.elements.getElement("left-card")!, editor.blocks.getRootIds())).toEqual([first, middle]);
-    expect(blockIdsOf(editor.elements.getElement("right-card")!, editor.blocks.getRootIds())).toEqual([rightFirst, last, rightLast]);
-    expect(editor.elements.getElement("left-card")?.frame).toMatchObject({ x: 10, y: 20 });
-    expect(editor.elements.getElement("right-card")?.frame).toMatchObject({ x: 500, y: 200 });
+    expect(editor.elements.getElementNodes()).toHaveLength(2);
+    expect(blockIdsOf(editor.elements.getElementNode("left-card")!, editor.blocks.getRootIds())).toEqual([first, middle]);
+    expect(blockIdsOf(editor.elements.getElementNode("right-card")!, editor.blocks.getRootIds())).toEqual([rightFirst, last, rightLast]);
+    expect(editor.elements.getElementNode("left-card")?.frame).toMatchObject({ x: 10, y: 20 });
+    expect(editor.elements.getElementNode("right-card")?.frame).toMatchObject({ x: 500, y: 200 });
     editorView.runtime.destroy();
     editor.destroy();
   });
@@ -261,11 +260,11 @@ describe("edgeless block element reconciliation", () => {
     });
     await Promise.resolve();
 
-    expect(editor.elements.getElements().map((element) => element.id).sort()).toEqual(["left-card", "right-card"]);
-    expect(blockIdsOf(editor.elements.getElement("right-card")!, editor.blocks.getRootIds())).toEqual(["a", "b", "c", "f", "g"]);
-    expect(blockIdsOf(editor.elements.getElement("left-card")!, editor.blocks.getRootIds())).toEqual(["d", "e"]);
-    expect(editor.elements.getElement("left-card")?.frame).toMatchObject({ x: 10, y: 20 });
-    expect(editor.elements.getElement("right-card")?.frame).toMatchObject({ x: 500, y: 200 });
+    expect(editor.elements.getElementNodes().map((element) => element.id).sort()).toEqual(["left-card", "right-card"]);
+    expect(blockIdsOf(editor.elements.getElementNode("right-card")!, editor.blocks.getRootIds())).toEqual(["a", "b", "c", "f", "g"]);
+    expect(blockIdsOf(editor.elements.getElementNode("left-card")!, editor.blocks.getRootIds())).toEqual(["d", "e"]);
+    expect(editor.elements.getElementNode("left-card")?.frame).toMatchObject({ x: 10, y: 20 });
+    expect(editor.elements.getElementNode("right-card")?.frame).toMatchObject({ x: 500, y: 200 });
     editorView.runtime.destroy();
     editor.destroy();
   });
@@ -275,12 +274,11 @@ describe("edgeless block element reconciliation", () => {
     const editorView = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const last = editor.blocks.insertBlock({ type: "paragraph" }, first).id;
-    editor.elements.insertElement({
-      id: "card", type: "block", frame: { x: 300, y: 200, width: 400, height: 150 }, zIndex: 4,
+    editor.elements.insertElement({ id: "card", type: "block", frame: { x: 300, y: 200, width: 400, height: 150 }, zIndex: 4,
       props: { startBlockId: first, endBlockId: "missing" },
     });
     editorView.runtime.blockElements.reconcile();
-    expect(editor.elements.getElements()).toEqual([expect.objectContaining({
+    expect(editor.elements.getElementNodes()).toEqual([expect.objectContaining({
       id: "card", frame: { x: 300, y: 200, width: 400, height: 150 }, zIndex: 4,
       props: { startBlockId: first, endBlockId: last },
     })]);
@@ -340,6 +338,6 @@ test("queued projection work cannot mutate the document after runtime destructio
   editorView.runtime.blockElements.schedule();
   editorView.runtime.destroy();
   await Promise.resolve();
-  expect(core.elements.getElements()).toHaveLength(0);
+  expect(core.elements.getElementNodes()).toHaveLength(0);
   core.destroy();
 });

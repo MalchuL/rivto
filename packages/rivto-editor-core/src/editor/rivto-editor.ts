@@ -104,7 +104,7 @@ export class EditorRuntime implements RivtoEditorApi {
   getDocument(): DocumentModel { return this.document; }
 
   /**
-   * Replaces supplied document sections from a snapshot v6 update.
+   * Replaces supplied document sections from a snapshot v7 update.
    *
    * Loading establishes a new history baseline, so earlier local changes
    * cannot be restored with undo.
@@ -121,7 +121,7 @@ export class EditorRuntime implements RivtoEditorApi {
   /**
    * Materializes the complete portable document state.
    *
-   * @returns Detached snapshot v6 suitable for persistence or transfer.
+   * @returns Detached snapshot v7 suitable for persistence or transfer.
    */
   dump(): EditorSnapshot {
     return this.document.getSnapshot();

@@ -49,7 +49,7 @@ export function removeEmptyBlockAfterStructuralPredecessor(
     !block ||
     !isEmptyBlock(block) ||
     block.listProps.collapsed === true ||
-    !editorView.runtime.blocks.isRootBlock(block.id)
+    !editorView.getRootBlockIds().includes(block.id)
   ) return false;
 
   const previous = previousSiblingBlock(root, block.id);

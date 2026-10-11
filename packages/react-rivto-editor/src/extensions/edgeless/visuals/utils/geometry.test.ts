@@ -1,6 +1,5 @@
 import {
   applyCornerResize,
-  applyRotatedResize,
   connectorFrame,
   connectorLabelCssDegrees,
   connectorLabelPoint,
@@ -125,13 +124,7 @@ describe("edgeless visual geometry", () => {
     expect(applyCornerResize(frame, 20, 10, "s", 1, 1)).toEqual({ x: 40, y: 40, width: 100, height: 90 });
   });
 
-  test("resizes rotated frames in local axes and normalizes angles", () => {
-    const frame = { x: 40, y: 40, width: 100, height: 80 };
-    const resized = applyRotatedResize(frame, 0, 20, "e", 1, 1, 90);
-    expect(resized.width).toBeCloseTo(120);
-    expect(resized.height).toBe(80);
-    expect(resized.x).toBeCloseTo(30);
-    expect(resized.y).toBeCloseTo(50);
+  test("normalizes angles", () => {
     expect(normalizeRotation(-15)).toBe(345);
     expect(normalizeRotation(375)).toBe(15);
   });

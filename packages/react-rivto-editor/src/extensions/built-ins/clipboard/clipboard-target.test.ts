@@ -1,9 +1,10 @@
-import { BLOCK_CONTENT_SELECTOR } from "../../../constants";
+import { BLOCK_CONTENT_SELECTOR, EDITOR_CONTROL_SELECTOR } from "../../../constants";
 import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
 
 interface ClosestHost {
   closest: (selector: string) => ClosestHost | null;
   isContentEditable?: boolean;
+  selectionStart?: number | null;
   ownerDocument?: { activeElement: ClosestHost | null };
   parentElement?: ClosestHost | null;
 }
@@ -62,4 +63,19 @@ describe("isNonBlockEditableClipboardEvent", () => {
     };
     expect(isNonBlockEditableClipboardEvent(clipboardEvent(surface, label))).toBe(true);
   });
+});
+
+for (const redirected of [false, true]) {
+  test(`leaves marked text inputs to native clipboard handling, redirected=${redirected}`, () => {
+    const control: ClosestHost = { closest: () => null };
+    const child: ClosestHost = { selectionStart: 0, closest: (selector) => selector === EDITOR_CONTROL_SELECTOR ? control : null };
+    const surface: ClosestHost = { closest: () => null };
+    const event = redirected ? clipboardEvent(surface, child) : clipboardEvent(child);
+    expect(isNonBlockEditableClipboardEvent(event)).toBe(true);
+  });
+}
+
+test("keeps canvas clipboard commands available when a toolbar button holds focus", () => {
+  const button: ClosestHost = { closest: (selector) => selector === EDITOR_CONTROL_SELECTOR ? button : null };
+  expect(isNonBlockEditableClipboardEvent(clipboardEvent(button))).toBe(false);
 });

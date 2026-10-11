@@ -7,7 +7,7 @@
  *
  * @module
  */
-import type { EditorBlock, EditorBlockNode, EditorElement } from "@chulane/rivto";
+import type { EditorBlock, EditorBlockNode, EditorElementNode } from "@chulane/rivto";
 import type { EditorRuntime } from "../editor/editor-runtime";
 import type { BlocksApi } from "../managers/blocks/blocks-api";
 
@@ -22,7 +22,7 @@ export const EDGELESS_BLOCK_PLACEMENT_STEP = 20;
  * @param right - Second candidate frame.
  * @returns Whether their intersection has positive width and height.
  */
-export function blockFramesOverlap(left: EditorElement["frame"], right: EditorElement["frame"]): boolean {
+export function blockFramesOverlap(left: EditorElementNode["frame"], right: EditorElementNode["frame"]): boolean {
   return left.x < right.x + right.width
     && left.x + left.width > right.x
     && left.y < right.y + right.height
@@ -38,10 +38,10 @@ export function blockFramesOverlap(left: EditorElement["frame"], right: EditorEl
  * @returns The preferred frame or the first deterministic free candidate.
  */
 export function nonOverlappingBlockFrame(
-  preferred: EditorElement["frame"],
-  occupied: readonly EditorElement["frame"][],
+  preferred: EditorElementNode["frame"],
+  occupied: readonly EditorElementNode["frame"][],
   step = EDGELESS_BLOCK_PLACEMENT_STEP,
-): EditorElement["frame"] {
+): EditorElementNode["frame"] {
   const offset = Math.max(1, step);
   for (let shell = 0; ; shell += 1) {
     for (let xStep = shell; xStep >= 0; xStep -= 1) {
@@ -181,6 +181,8 @@ export interface BlockElementProps {
   readonly endBlockId: string;
   /** Missing/true fits the card height to all rendered blocks; false keeps a fixed frame. */
   readonly autoHeight?: boolean;
+  /** Clockwise canvas rotation in degrees; omitted values render without rotation. */
+  readonly rotation?: number;
 }
 
 /**
@@ -190,12 +192,27 @@ export interface BlockElementProps {
  * @param rootIds - Current root IDs in document order.
  * @returns Every root between valid start/end boundaries, or an empty array.
  */
-export function blockIdsOf(element: EditorElement, rootIds: readonly string[]): string[] {
+export function blockIdsOf(element: EditorElementNode, rootIds: readonly string[]): string[] {
   const start = typeof element.props.startBlockId === "string" ? rootIds.indexOf(element.props.startBlockId) : -1;
   const end = typeof element.props.endBlockId === "string" ? rootIds.indexOf(element.props.endBlockId) : -1;
   return start >= 0 && end >= 0
     ? rootIds.slice(Math.min(start, end), Math.max(start, end) + 1)
     : [];
+}
+
+/**
+ * Resolves the block parent from the surviving boundaries of an element.
+ * No Panel identity or root is stored in element props. A surviving boundary
+ * keeps a partially deleted range in its block scope until reconciliation repairs
+ * it; if both survive under different parents, the start determines the scope.
+ * @param element - Block element with start/end block references.
+ * @param blocks - Current document hierarchy used to locate the boundaries.
+ * @returns Parent ID, null for document roots, or undefined when neither boundary exists.
+ */
+export function blockElementRoot(element: EditorElementNode, blocks: BlocksApi): string | null | undefined {
+  const start = typeof element.props.startBlockId === "string" ? blocks.getParentId(element.props.startBlockId) : undefined;
+  if (start !== undefined) return start;
+  return typeof element.props.endBlockId === "string" ? blocks.getParentId(element.props.endBlockId) : undefined;
 }
 
 /**
@@ -211,7 +228,7 @@ export function blockIdsOf(element: EditorElement, rootIds: readonly string[]): 
  */
 export function elementContainsBlock(
   blocks: BlocksApi,
-  element: EditorElement,
+  element: EditorElementNode,
   rootIds: readonly string[],
   blockId: string,
 ): boolean {
@@ -260,8 +277,37 @@ export class BlockElementProjection {
   private queued = false;
   private destroyed = false;
 
-  /** @param editorRuntime - Document runtime whose roots and cards stay consistent. */
-  constructor(private readonly editorRuntime: EditorRuntime) {}
+  /**
+   * Creates a projection for one pair of block and element roots without writing storage.
+   * @param editorRuntime - Shared runtime whose block ranges and cards stay consistent.
+   * @param rootBlockId - Parent whose children form card ranges; null means document roots.
+   * @param rootElementId - Container for projected cards; null means document element roots.
+   */
+  constructor(private readonly editorRuntime: EditorRuntime, readonly rootBlockId: string | null = null, readonly rootElementId: string | null = null) {}
+
+  /**
+   * Creates a separately reconciled pair of roots using this projection's layout defaults.
+   * @param rootBlockId - Block parent to display, or null for document block roots.
+   * @param rootElementId - Element container for cards, or null for document element roots.
+   * @returns Unsubscribed projection; its owner must reconcile, subscribe, and destroy it.
+   */
+  createPanelProjection(rootBlockId: string | null, rootElementId: string | null): BlockElementProjection {
+    const projection = new BlockElementProjection(this.editorRuntime, rootBlockId, rootElementId);
+    projection.setDefaultWidth(this.defaultWidth);
+    projection.setOverlapAvoidance(this.avoidOverlap);
+    return projection;
+  }
+
+  /**
+   * Keeps the ordinary document-card ID deterministic while avoiding collisions
+   * when another element subtree already displays the same block. Existing cards
+   * are matched before this method, so their identities and geometry remain stable.
+   */
+  private availableElementId(blockId: string): string {
+    const base = `${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${this.rootElementId === null ? "" : `${this.rootElementId}:`}${blockId}`;
+    if (!this.editorRuntime.elements.hasElement(base)) return base;
+    return crypto.randomUUID();
+  }
 
   /**
    * Configures whether future reconciled block cards avoid existing cards.
@@ -315,13 +361,27 @@ export class BlockElementProjection {
 
     // Build the two sides of the projection: current document roots and the
     // persisted canvas elements that render ranges of those roots as cards.
-    const roots = editorRuntime.blocks.getRootIds().flatMap((id) => {
+    // A deleted root is not an instruction to use document roots. Keep the
+    // projection inactive until undo or a remote update restores its container.
+    if (this.rootBlockId !== null && !editorRuntime.blocks.hasBlock(this.rootBlockId)) return;
+    if (this.rootElementId !== null && !editorRuntime.elements.hasElement(this.rootElementId)) return;
+    const elements = editorRuntime.elements.forRoot(this.rootElementId);
+    const rootIds = this.rootBlockId !== null
+      ? editorRuntime.blocks.getBlockNode(this.rootBlockId)!.childIds
+      : editorRuntime.blocks.getRootIds();
+    const roots = rootIds.flatMap((id) => {
       const node = editorRuntime.blocks.getBlockNode(id);
       return node ? [node] : [];
     });
     const rootOrder = roots.map((block) => block.id);
     const rootSet = new Set(rootOrder);
-    const existing = editorRuntime.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
+    // Element roots limit the search; surviving block boundaries identify which
+    // block scope can update the element. Fully deleted ranges can be removed.
+    const existing = elements.getElementNodes().filter((element) => {
+      if (element.type !== EDGELESS_BLOCK_ELEMENT_TYPE) return false;
+      const parent = blockElementRoot(element, editorRuntime.blocks);
+      return parent === undefined || parent === this.rootBlockId;
+    });
     const currentRanges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
 
     // A moved range endpoint can temporarily make its persisted start/end pair
@@ -392,13 +452,14 @@ export class BlockElementProjection {
 
     // Produce the canonical element for each segment. Matched cards retain all
     // presentation state; only new cards receive default placement and sizing.
-    const desired = segments.map((blocks, index): EditorElement => {
+    const desired = segments.map((blocks, index): EditorElementNode => {
       const existingElement = existing[matches[index] ?? -1];
       const preferred = { ...EDGELESS_CARD_DEFAULT_FRAME, width: defaultWidth, x: 60 + index * 24, y: 60 + index * 24 };
       const frame = existingElement?.frame ?? (avoidOverlap ? nonOverlappingBlockFrame(preferred, occupied) : preferred);
       if (!existingElement) occupied.push(frame);
       return {
-        id: existingElement?.id ?? `${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${blocks[0]!.id}`,
+        id: existingElement?.id ?? this.availableElementId(blocks[0]!.id),
+        childIds: existingElement?.childIds ?? [],
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame,
         zIndex: existingElement?.zIndex ?? index,
@@ -409,10 +470,15 @@ export class BlockElementProjection {
     // Diff the desired projection against persisted elements. Updates are
     // limited to range boundaries so reconciliation never resets card geometry.
     const desiredIds = new Set(desired.map((element) => element.id));
-    const remove = existing.filter((element) => !desiredIds.has(element.id)).map((element) => element.id);
-    const insert = desired.filter((element) => !editorRuntime.elements.hasElement(element.id));
+    const validRanges = new Map(desired.map((element) => [element.props.startBlockId, element.props.endBlockId]));
+    // Overlapping areas can contain more than one valid presentation of a range.
+    // Removing one would make its narrower Panel recreate it and lose its geometry.
+    const remove = existing.filter((element) => !desiredIds.has(element.id)
+      && (!validRanges.has(element.props.startBlockId) || validRanges.get(element.props.startBlockId) !== element.props.endBlockId))
+      .map((element) => element.id);
+    const insert = desired.filter((element) => !elements.hasElement(element.id));
     const update = desired.flatMap((element) => {
-      const current = editorRuntime.elements.getElement(element.id);
+      const current = elements.getElementNode(element.id);
       return current && (current.props.startBlockId !== element.props.startBlockId || current.props.endBlockId !== element.props.endBlockId)
         ? [{ id: element.id, patch: { props: element.props } }]
         : [];
@@ -428,9 +494,9 @@ export class BlockElementProjection {
     if (!remove.length && !insert.length && !update.length) return;
 
     editorRuntime.history.batchUpdatesWithoutHistory(() => {
-      if (remove.length) editorRuntime.elements.removeElements(remove);
-      insert.forEach((element) => editorRuntime.elements.insertElement(element));
-      if (update.length) editorRuntime.elements.updateElements(update);
+      remove.forEach((id) => elements.removeElementAndPromoteChildren(id));
+      insert.forEach((element) => elements.insertElement(element));
+      if (update.length) elements.updateElements(update);
     });
   }
 }

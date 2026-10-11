@@ -274,7 +274,7 @@ export function PageSurface() { return <SurfaceBoundary type="block"><PageSurfac
 
 function PageSurfaceContent() {
   const rootIds = useRootBlockIds();
-  const { rootBlockId } = useEditorContext();
+  const { rootBlockId, editorView } = useEditorContext();
   const { ref } = useEditorRoot();
   const pageVirtualization = usePageVirtualization();
   const [surface, setSurface] = useState<HTMLElement | null>(null);
@@ -314,7 +314,7 @@ function PageSurfaceContent() {
       {/* PAGE_END_SLOT_ATTRIBUTE in constants.ts marks the TrailingBlock portal target. 
       * Uses to add "Add block" buttons at the end of the page.
       */}
-      {rootBlockId === undefined && <div data-page-end-slot="true" />}
+      {(rootBlockId === undefined || editorView.panel) && <div data-page-end-slot="true" />}
     </main>
   );
 }

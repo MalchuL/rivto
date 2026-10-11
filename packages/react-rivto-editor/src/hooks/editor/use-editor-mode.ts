@@ -24,8 +24,10 @@ export interface UseEditorModeResult {
 /**
  * Returns the editor's active presentation mode and a stable mode setter.
  *
- * Mode is editor-local runtime state shared by its views and never persisted in the collaborative
- * document. This hook subscribes directly to ModeManager.
+ * Mode is local presentation state, never persisted in the collaborative document.
+ * Ordinary views share the runtime ModeManager. Panels have their own manager,
+ * unless the host supplies one to retain the mode across navigation. This hook
+ * subscribes directly to the manager of the surrounding view.
  *
  * The returned `setMode` function keeps the same identity while the surrounding
  * component rerenders. Calling it with the active mode is a no-op.
@@ -36,12 +38,12 @@ export interface UseEditorModeResult {
 export function useEditorMode(): UseEditorModeResult {
   const { editorView } = useEditorContext();
   const subscribe = useCallback(
-    (listener: () => void) => editorView.runtime.mode.subscribe(listener),
+    (listener: () => void) => editorView.mode.subscribe(listener),
     [editorView],
   );
-  const mode = useSyncExternalStore(subscribe, () => editorView.runtime.mode.get(), () => editorView.runtime.mode.get());
+  const mode = useSyncExternalStore(subscribe, () => editorView.mode.get(), () => editorView.mode.get());
   const setMode = useCallback(
-    (mode: EditorMode) => editorView.runtime.mode.set(mode),
+    (mode: EditorMode) => editorView.mode.set(mode),
     [editorView],
   );
 

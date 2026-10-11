@@ -70,7 +70,7 @@ export interface RivtoEditorApi {
   /**
    * Replaces supplied sections in the fixed document and clears its previous local history.
    *
-   * @param snapshot - Snapshot-v6 sections to validate and load.
+   * @param snapshot - Snapshot-v7 sections to validate and load.
    * @returns No value.
    */
   load(snapshot: EditorSnapshotUpdate): void;
@@ -78,7 +78,7 @@ export interface RivtoEditorApi {
   /**
    * Materializes complete portable state from the fixed document.
    *
-   * @returns Detached snapshot-v6 value.
+   * @returns Detached snapshot-v7 value.
    */
   dump(): EditorSnapshot;
 

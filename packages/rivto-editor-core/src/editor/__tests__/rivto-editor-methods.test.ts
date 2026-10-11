@@ -46,7 +46,7 @@ describe("EditorRuntime methods", () => {
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.blocks.getRootIds()).toEqual([]);
     expect(editor.selection.get()).toBeUndefined();
-    expect(editor.dump()).toMatchObject({ version: 6, blocks: [] });
+    expect(editor.dump()).toMatchObject({ version: 9, blocks: [] });
 
     editor.selection.delete();
     editor.history.undo();
@@ -127,20 +127,20 @@ describe("EditorRuntime methods", () => {
 
     const whileBoth = first.blocks.insertBlock({ type: "paragraph" }).id;
     expect(document.blocks.getBlockNode(whileBoth)?.props).toMatchObject({ owner: "first" });
-    second.elements.insertElement({
-      id: "while-both",
+    second.elements.insertElement({ id: "while-both",
       type: "shape",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
     });
-    expect(document.elements.getElement("while-both")?.props).toMatchObject({ owner: "second" });
+    expect(document.elements.getElementNode("while-both")?.props).toMatchObject({ owner: "second" });
     second.blocks.updateBlock(whileBoth, { props: { owner: "input", updated: true } });
     expect(document.blocks.getBlockNode(whileBoth)?.props).toMatchObject({ owner: "second", updated: true });
     first.elements.updateElement("while-both", { props: { owner: "input", updated: true } });
-    expect(document.elements.getElement("while-both")?.props).toMatchObject({ owner: "first", updated: true });
+    expect(document.elements.getElementNode("while-both")?.props).toMatchObject({ owner: "first", updated: true });
 
     first.load({
-      version: 6,
+      version: 9,
+      rootElementIds: ["loaded-element"],
       blocks: [{
         id: "loaded",
         type: "paragraph",
@@ -150,7 +150,7 @@ describe("EditorRuntime methods", () => {
         content: "Loaded",
         children: [],
       }],
-      elements: [{
+      elements: [{ childIds: [],
         id: "loaded-element",
         type: "shape",
         frame: { x: 0, y: 0, width: 10, height: 10 },
@@ -159,19 +159,18 @@ describe("EditorRuntime methods", () => {
       }],
     });
     expect(document.blocks.getBlockNode("loaded")?.props).toEqual({});
-    expect(document.elements.getElement("loaded-element")?.props).toEqual({});
+    expect(document.elements.getElementNode("loaded-element")?.props).toEqual({});
 
     await second.destroy();
 
     const afterSecondDestroy = first.blocks.insertBlock({ type: "paragraph" }).id;
     expect(document.blocks.getBlockNode(afterSecondDestroy)?.props).toMatchObject({ owner: "first" });
-    first.elements.insertElement({
-      id: "after-second-destroy",
+    first.elements.insertElement({ id: "after-second-destroy",
       type: "shape",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 1,
     });
-    expect(document.elements.getElement("after-second-destroy")?.props).toMatchObject({ owner: "first" });
+    expect(document.elements.getElementNode("after-second-destroy")?.props).toMatchObject({ owner: "first" });
 
     disposeFirstBlock();
     disposeSecondBlock();
@@ -210,60 +209,55 @@ describe("EditorRuntime methods", () => {
     });
 
     document.blocks.insertBlock({ id: "direct-while-registered", type: "paragraph" });
-    document.elements.insertElement({
-      id: "direct-element-while-registered",
+    document.elements.insertElement({ id: "direct-element-while-registered",
       type: "shape",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
     });
     expect(document.blocks.getBlockNode("direct-while-registered")?.props).not.toHaveProperty("owner");
-    expect(document.elements.getElement("direct-element-while-registered")?.props).not.toHaveProperty("owner");
+    expect(document.elements.getElementNode("direct-element-while-registered")?.props).not.toHaveProperty("owner");
 
     const firstBlock = first.blocks.insertBlock({ type: "paragraph" }).id;
     const secondBlock = second.blocks.insertBlock({ type: "paragraph" }).id;
-    first.elements.insertElement({
-      id: "first-element",
+    first.elements.insertElement({ id: "first-element",
       type: "shape",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
     });
-    second.elements.insertElement({
-      id: "second-element",
+    second.elements.insertElement({ id: "second-element",
       type: "shape",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 1,
     });
     expect(document.blocks.getBlockNode(firstBlock)?.props).toMatchObject({ owner: "first" });
     expect(document.blocks.getBlockNode(secondBlock)?.props).toMatchObject({ owner: "second" });
-    expect(document.elements.getElement("first-element")?.props).toMatchObject({ owner: "first" });
-    expect(document.elements.getElement("second-element")?.props).toMatchObject({ owner: "second" });
+    expect(document.elements.getElementNode("first-element")?.props).toMatchObject({ owner: "first" });
+    expect(document.elements.getElementNode("second-element")?.props).toMatchObject({ owner: "second" });
 
     disposeFirstBlock();
     disposeFirstElement();
     const firstUnregistered = first.blocks.insertBlock({ type: "paragraph" }).id;
     const secondStillRegistered = second.blocks.insertBlock({ type: "paragraph" }).id;
-    first.elements.insertElement({
-      id: "first-unregistered-element",
+    first.elements.insertElement({ id: "first-unregistered-element",
       type: "shape",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 2,
     });
     expect(document.blocks.getBlockNode(firstUnregistered)?.props).not.toHaveProperty("owner");
     expect(document.blocks.getBlockNode(secondStillRegistered)?.props).toMatchObject({ owner: "second" });
-    expect(document.elements.getElement("first-unregistered-element")?.props).not.toHaveProperty("owner");
+    expect(document.elements.getElementNode("first-unregistered-element")?.props).not.toHaveProperty("owner");
 
     disposeSecondBlock();
     disposeSecondElement();
     const secondUnregistered = second.blocks.insertBlock({ type: "paragraph" }).id;
-    second.elements.insertElement({
-      id: "unowned-element",
+    second.elements.insertElement({ id: "unowned-element",
       type: "shape",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 3,
     });
     document.blocks.insertBlock({ id: "direct-document-block", type: "paragraph" });
     expect(document.blocks.getBlockNode(secondUnregistered)?.props).not.toHaveProperty("owner");
-    expect(document.elements.getElement("unowned-element")?.props).not.toHaveProperty("owner");
+    expect(document.elements.getElementNode("unowned-element")?.props).not.toHaveProperty("owner");
     expect(document.blocks.getBlockNode("direct-document-block")?.props).not.toHaveProperty("owner");
 
     await first.destroy();
@@ -349,7 +343,7 @@ describe("EditorRuntime methods", () => {
     const editor = await createRivtoEditor();
 
     editor.load({
-      version: 6,
+      version: 9,
       blocks: [{
         id: "loaded",
         type: "paragraph",
@@ -363,7 +357,7 @@ describe("EditorRuntime methods", () => {
     });
 
     expect(editor.dump()).toMatchObject({
-      version: 6,
+      version: 9,
       blocks: [{
         id: "loaded",
         content: "Loaded",
@@ -373,9 +367,9 @@ describe("EditorRuntime methods", () => {
       pluginData: { app: { theme: "dark" } },
     });
 
-    editor.load({ version: 6, blocks: [] });
+    editor.load({ version: 9, blocks: [] });
     expect(editor.blocks.getBlocks()).toEqual([]);
-    expect(editor.dump()).toMatchObject({ version: 6, blocks: [] });
+    expect(editor.dump()).toMatchObject({ version: 9, blocks: [] });
     editor.destroy();
   });
 });

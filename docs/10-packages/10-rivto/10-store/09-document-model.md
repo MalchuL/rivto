@@ -26,7 +26,7 @@ Host создаёт модель и передаёт её в `EditorRuntime`, к
 - выполнять семантические изменения в CRDT-транзакциях;
 - агрегировать undo scopes и единый локальный origin;
 - проверять входные данные до destructive snapshot replacement;
-- преобразовывать shared storage в detached schema-v6 snapshots;
+- преобразовывать shared storage в detached schema-v9 snapshots;
 - нормализовать дерево после конкурентных изменений.
 
 ## Корневые CRDT-контейнеры

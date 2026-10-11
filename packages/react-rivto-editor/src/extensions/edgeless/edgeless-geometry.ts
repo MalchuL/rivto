@@ -17,7 +17,7 @@ export interface EdgelessRect {
 export interface GroupParentRecord {
   readonly id: string;
   readonly type: string;
-  readonly props: { readonly children?: unknown };
+  readonly childIds: readonly string[];
 }
 
 /** One canvas object and its viewport rectangle for marquee intersection. */
@@ -57,8 +57,8 @@ export function rootsInRect(
 export function groupParentByChild(elements: readonly GroupParentRecord[]): Map<string, string> {
   const parentByChild = new Map<string, string>();
   for (const element of elements) {
-    if (element.type !== "group" || !Array.isArray(element.props.children)) continue;
-    for (const child of element.props.children) {
+    if (element.type !== "group" || !Array.isArray(element.childIds)) continue;
+    for (const child of element.childIds) {
       if (typeof child !== "string" || !child || parentByChild.has(child)) continue;
       parentByChild.set(child, element.id);
     }

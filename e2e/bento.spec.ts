@@ -34,7 +34,7 @@ for (const mode of ["block", "edgeless"]) {
     await page.evaluate((mode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
-      editor.load({ ...editor.dump(), blocks: [board], elements: [] });
+      editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
       if (mode === "edgeless") editor.elements.insertElement({ type: "block", zIndex: 0,
         frame: { x: 20, y: 20, width: 800, height: 600 }, props: { startBlockId: board.id, endBlockId: board.id } });
     }, mode);
@@ -91,7 +91,7 @@ test("Bento edge resize freezes siblings until pointer release", async ({ page }
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
-    editor.load({ ...editor.dump(), blocks: [board], elements: [] });
+    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
   });
   const board = page.locator('[data-block-type="bento"]');
   await board.getByRole("button", { name: "Expand Bento", exact: true }).click();
@@ -138,7 +138,7 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     await page.evaluate(() => {
       const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
-      editor.load({ ...editor.dump(), blocks: [board], elements: [] });
+      editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
     });
     const board = page.locator('[data-block-type="bento"]');
     await board.getByRole("button", { name: "Expand Bento", exact: true }).click();
@@ -227,7 +227,7 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
     }).id;
     const outsideId = editor.blocks.insertBlock({ type: "paragraph", content: "From page" }).id;
     editor.load({
-      ...editor.dump(),
+      ...editor.dump(), rootElementIds: [],
       blocks: [editor.blocks.getBlock(boardId)!, editor.blocks.getBlock(outsideId)!],
       elements: [],
     });
@@ -272,7 +272,7 @@ test("drops a page block into an empty Bento grid", async ({ page }) => {
     const boardId = editor.blocks.insertBlock({ type: "bento", content: "" }).id;
     const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Drop me" }).id;
     editor.load({
-      ...editor.dump(),
+      ...editor.dump(), rootElementIds: [],
       blocks: [editor.blocks.getBlock(boardId)!, editor.blocks.getBlock(sourceId)!],
       elements: [],
     });

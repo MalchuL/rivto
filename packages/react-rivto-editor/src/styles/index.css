@@ -40,6 +40,7 @@
 
 /* Edgeless canvas and visual objects. */
 @import "../extensions/edgeless/edgeless.css" layer(components);
+@import "../extensions/edgeless/moveable.css";
 @import "../extensions/edgeless/visuals/visuals.css" layer(components);
 
 /* Layout containers built from the shared block tree. */

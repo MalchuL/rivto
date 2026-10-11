@@ -48,8 +48,7 @@
 .rivto-slot > .page-drag-handle,
 .rivto-slot > .page-collapse-toggle,
 .rivto-slot > .page-list-marker,
-.rivto-slot > .page-list-checkbox,
-.rivto-slot > .edgeless-drag-handle {
+.rivto-slot > .page-list-checkbox {
   position: relative;
   inset: auto;
   margin: 0;

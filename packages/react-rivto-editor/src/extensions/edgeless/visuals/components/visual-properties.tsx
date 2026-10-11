@@ -280,7 +280,7 @@ export function VisualProperties({
       count={visuals.length}
       ariaLabel="Visual properties"
       panelRef={panelRef}
-      onClose={() => controller.runtime.commands.execute("edgeless.selection.clear")}
+      onClose={() => controller.execute("edgeless.selection.clear")}
     >
       {body}
     </EdgelessPropertiesPanel>

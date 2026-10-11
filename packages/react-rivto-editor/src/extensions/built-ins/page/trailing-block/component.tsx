@@ -37,6 +37,9 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
                   editorView.runtime.createDefaultBlock(),
                   id || undefined,
                 ).id;
+                if (editorView.panel?.rootBlockId && editorView.runtime.blocks.getParentId(id) === null) {
+                  editorView.runtime.blocks.moveBlocks([id], editorView.panel.rootBlockId, "inside");
+                }
               }
             });
             if (!id) return;

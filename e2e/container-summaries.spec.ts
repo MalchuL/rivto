@@ -229,7 +229,7 @@ for (const mode of ["block", "edgeless"] as const) {
         type: "test-container", content: "Custom container",
         children: [{ type: "columns-column", children: [{ type: "paragraph", content: "Child" }] }],
       });
-      editor.load({ ...editor.dump(), blocks: [block], elements: [] });
+      editor.load({ ...editor.dump(), rootElementIds: [], blocks: [block], elements: [] });
       return block.id;
     });
     const today = page.locator('[data-journal-document="today"]');

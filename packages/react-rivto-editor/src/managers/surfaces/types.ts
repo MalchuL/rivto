@@ -1,4 +1,4 @@
-import type { EditorBlockNode, EditorElement, EditorMode } from "@chulane/rivto";
+import type { EditorBlockNode, EditorElementNode, EditorMode } from "@chulane/rivto";
 import type { ComponentType, ReactNode } from "react";
 import type { BlockWrapperComponent } from "../../blocks/block-wrapper/block-wrapper";
 
@@ -77,7 +77,7 @@ export interface BlockSlotProps {
 /** Render context supplied to a registered element-slot component or predicate. */
 export interface ElementSlotProps {
   /** Latest detached first-class canvas element. */
-  readonly element: EditorElement;
+  readonly element: EditorElementNode;
   /** Active presentation mode containing the element. */
   readonly mode: EditorMode;
   /** Whether the canvas element participates in the current edgeless selection. */

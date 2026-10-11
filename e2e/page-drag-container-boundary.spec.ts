@@ -20,10 +20,9 @@ for (const mode of ["block", "edgeless"] as const) {
           const source = editor.blocks.insertBlock({ type: "paragraph", content: "Source" }).id;
           const upper = editor.blocks.insertBlock({ type: "paragraph", content: "Upper" }).id;
           const lower = editor.blocks.insertBlock(input).id;
-          editor.load({ ...editor.dump(), blocks: [source, upper, lower].map((id) => editor.blocks.getBlock(id)!), elements: [] });
+          editor.load({ ...editor.dump(), rootElementIds: [], blocks: [source, upper, lower].map((id) => editor.blocks.getBlock(id)!), elements: [] });
           if (nextMode === "edgeless") {
-            editor.elements.insertElement({
-              type: "block", zIndex: 0,
+            editor.elements.insertElement({               type: "block", zIndex: 0,
               frame: { x: 20, y: 20, width: 900, height: 800 },
               props: { startBlockId: source, endBlockId: lower },
             });
@@ -74,7 +73,7 @@ for (const mode of ["block", "edgeless"] as const) {
         { type: "kanban", children: [{ type: "kanban-column", content: "Second" }] },
         { type: "columns", children: [{ type: "columns-column" }] },
       ] }).id;
-      editor.load({ ...editor.dump(), blocks: [source, parent].map((id) => editor.blocks.getBlock(id)!), elements: [] });
+      editor.load({ ...editor.dump(), rootElementIds: [], blocks: [source, parent].map((id) => editor.blocks.getBlock(id)!), elements: [] });
       if (nextMode === "edgeless") editor.elements.insertElement({ type: "block", zIndex: 0,
         frame: { x: 20, y: 20, width: 950, height: 850 }, props: { startBlockId: source, endBlockId: parent } });
       return { source, parent, siblings: editor.blocks.getBlock(parent)!.children.map(({ id }) => id) };
@@ -121,7 +120,7 @@ for (const mode of ["block", "edgeless"] as const) {
           { type: type === "kanban" ? "kanban-column" : "columns-column", content: "Left" },
           { type: type === "kanban" ? "kanban-column" : "columns-column", content: "Right" },
         ] }).id;
-        editor.load({ ...editor.dump(), blocks: [source, board].map((id) => editor.blocks.getBlock(id)!), elements: [] });
+        editor.load({ ...editor.dump(), rootElementIds: [], blocks: [source, board].map((id) => editor.blocks.getBlock(id)!), elements: [] });
         if (mode === "edgeless") editor.elements.insertElement({ type: "block", zIndex: 0,
           frame: { x: 20, y: 20, width: 950, height: 700 }, props: { startBlockId: source, endBlockId: board } });
         return { source, board, lanes: editor.blocks.getBlock(board)!.children.map(({ id }) => id) };

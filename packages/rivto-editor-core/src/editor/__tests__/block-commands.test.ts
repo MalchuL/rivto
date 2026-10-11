@@ -705,12 +705,12 @@ describe("EditorRuntime block manager", () => {
     const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, sourceId).id;
 
     expect(editor.dump()).toMatchObject({
-      version: 6,
+      version: 9,
       blocks: [{ id: sourceId }, { id: targetId }],
     });
 
     editor.load({
-      version: 6,
+      version: 9,
       blocks: [{
         id: "loaded",
         type: "paragraph",
@@ -727,7 +727,7 @@ describe("EditorRuntime block manager", () => {
       .toThrow("Unsupported Rivto document snapshot version: 3");
     expect(editor.blocks.getBlocks()).toMatchObject([{ id: "loaded", content: "Loaded" }]);
     expect(() => editor.load({
-      version: 6,
+      version: 9,
       blocks: [{
         id: "invalid",
         type: "paragraph",

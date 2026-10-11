@@ -1,3 +1,4 @@
+import { DemoEditorPanels } from "./editor-panels";
 import { BroadcastChannelProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
 import {
@@ -567,7 +568,7 @@ async function createDemoEditor() {
   editor.elements.insertElement(createReviewElementInput({
     id: "demo-review-element",
     frame: { x: 920, y: 730, width: 420, height: 260 },
-    zIndex: Math.max(0, ...editor.elements.getElements().map(({ zIndex }) => zIndex)) + 1,
+    zIndex: Math.max(0, ...editor.elements.getElementNodes().map(({ zIndex }) => zIndex)) + 1,
     problem: "Ошибка структуры на холсте",
   }));
   editor.blocks.insertBlock({
@@ -676,7 +677,7 @@ function DemoToolbar({
     setReportError(null);
     try {
       const report = JSON.parse(await file.text()) as Partial<ReviewReport>;
-      if (!report.snapshot || report.snapshot.version !== 6) {
+      if (!report.snapshot || report.snapshot.version !== 9) {
         throw new Error("Selected file is not a Review report");
       }
       editor.load(report.snapshot);
@@ -799,7 +800,7 @@ function JournalDemoApp() {
         {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
         <section className="journal-document" data-journal-document="today">
           <EditorStorageContext.Provider value={todayEditor.editorStorage}>
-            <EditorView runtime={todayEditor.editorRuntime}
+            <DemoEditorPanels runtime={todayEditor.editorRuntime}
               virtualizePageThreshold={virtualizePageThreshold} virtualizePageOverscan={virtualizePageOverscan}>
               <DemoToolbar
                 editor={todayEditor.editor}
@@ -814,7 +815,7 @@ function JournalDemoApp() {
               <KeyboardPanel />
               <JournalDate date={dates.today} />
               <DemoEditorSurface />
-            </EditorView>
+            </DemoEditorPanels>
           </EditorStorageContext.Provider>
         </section>
         <section className="journal-document" data-journal-document="yesterday">

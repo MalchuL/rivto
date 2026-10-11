@@ -301,8 +301,7 @@ describe("EditorRuntime selection", () => {
 
   it("stores element IDs and plugin data in the generic selection", async () => {
     const editor = await createRivtoEditor();
-    const element = editor.elements.insertElement({
-      type: "rectangle",
+    const element = editor.elements.insertElement({ type: "rectangle",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
       props: {},
@@ -326,7 +325,7 @@ describe("EditorRuntime selection", () => {
     expect(editor.selection.get()?.elements).toEqual([element.id]);
 
     editor.selection.delete();
-    expect(editor.elements.getElement(element.id)).toBeUndefined();
+    expect(editor.elements.getElementNode(element.id)).toBeUndefined();
     expect(editor.selection.get()).toBeUndefined();
     editor.destroy();
   });

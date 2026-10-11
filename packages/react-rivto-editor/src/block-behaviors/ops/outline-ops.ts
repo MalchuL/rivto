@@ -47,6 +47,8 @@ export function indentBlocks(editorView: EditorViewApi, ids: readonly string[]):
  */
 export function outdentBlocks(editorView: EditorViewApi, ids: readonly string[]): void {
   if (!ids.length) return;
+  if (editorView.rootBlockId && ids.some((id) => id === editorView.rootBlockId
+    || editorView.runtime.blocks.getParentId(id) === editorView.rootBlockId)) return;
   const containment = parentContainment(editorView, ids[0]!);
   if (containment?.childOutline === "fixed" || containment?.outlineFloor) return;
   editorView.runtime.blocks.outdentBlocks([...ids]);

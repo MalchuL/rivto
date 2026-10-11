@@ -2,7 +2,7 @@ import type { CRDTDoc, CRDTMap, CRDTObserveEvent } from "@chulane/crdt-doc";
 import {
   DocumentBlockManager, DocumentElementManager,
   DocumentModelImpl,
-  type BlockInput, type BlockNode, type DocumentElement, type ElementInput,
+  type BlockInput, type BlockNode, type ElementNode, type ElementInput,
 } from "@chulane/document-model";
 
 type EntityKind = "block" | "element";
@@ -17,7 +17,7 @@ interface IndexedRecord { kind: EntityKind; documentId: string; id: string; pres
 export class DemoDatabase {
   readonly documents = new Map<string, { updates: Uint8Array[] }>();
   readonly blocks = new Map<string, Map<string, BlockNode>>();
-  readonly elements = new Map<string, Map<string, DocumentElement>>();
+  readonly elements = new Map<string, Map<string, ElementNode>>();
   private readonly identities = new Map<string, EntityKind>();
   private readonly listeners = new Set<() => void>();
   private readonly index?: CRDTMap<Record<string, IndexedRecord>>;
@@ -67,7 +67,7 @@ export class DemoDatabase {
   }
 
   /** @param documentId - Document whose row changed. @param id - Stable element ID. @param element - Current element, or undefined on deletion. @returns Nothing after updating this one row. */
-  saveElement(documentId: string, id: string, element?: DocumentElement): void {
+  saveElement(documentId: string, id: string, element?: ElementNode): void {
     this.saveRecord(this.elements, "element", documentId, id, element);
   }
 
@@ -177,7 +177,7 @@ class DBElementManager extends DocumentElementManager {
   }
   protected override onRecordsChanged(events: readonly CRDTObserveEvent[], transaction: unknown): ReadonlySet<string> {
     const ids = super.onRecordsChanged(events, transaction);
-    ids.forEach((id) => this.getDatabase().saveElement(this.documentId, id, this.getElement(id)));
+    ids.forEach((id) => this.getDatabase().saveElement(this.documentId, id, this.getElementNode(id)));
     return ids;
   }
 }
@@ -193,6 +193,8 @@ export class DBDocumentModel extends DocumentModelImpl {
   constructor(crdt: CRDTDoc, private readonly database: DemoDatabase) {
     database.restore(crdt);
     super(crdt);
+    // Persist initialization too: later incremental updates depend on its CRDT clock.
+    database.saveUpdate(this.id, crdt.getSnapshot());
     this.unsubscribeDatabase = crdt.on("update", (update: Uint8Array) => {
       (this.blocks as DBBlockManager).flushChanges();
       database.saveUpdate(this.id, update);

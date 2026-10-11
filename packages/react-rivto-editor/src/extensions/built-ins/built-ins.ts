@@ -209,22 +209,22 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
           const input = duplicateBlockInput(block);
           // Use the receiving view: a page embedding can share an edgeless core.
           // Duplicating there should insert a sibling, not create a canvas card.
-          const isEdgelessRoot = editorView.events.getSurfaceType() === "edgeless" && editorView.runtime.blocks.isRootBlock(blockId);
+          const isEdgelessRoot = editorView.events.getSurfaceType() === "edgeless" && editorView.getRootBlockIds().includes(blockId);
           const sourceElement = isEdgelessRoot
-            ? editorView.runtime.elements.getElements().find((element) => element.type === "block" && blockIdsOf(element, editorView.runtime.blocks.getRootIds()).includes(blockId))
+            ? editorView.elements.getElementNodes().find((element) => element.type === "block" && blockIdsOf(element, editorView.getRootBlockIds()).includes(blockId))
             : undefined;
           let duplicateId = "";
           editorView.runtime.history.batchUpdates(() => {
             const afterId = isEdgelessRoot
-              ? insertBlockElementSeparator(editorView.runtime, editorView.runtime.blocks.getRootIds().at(-1)!).id
+              ? insertBlockElementSeparator(editorView.runtime, editorView.getRootBlockIds().at(-1)!).id
               : block.id;
             duplicateId = editorView.runtime.blocks.insertBlock(input, afterId).id;
-            if (isEdgelessRoot) editorView.runtime.elements.insertElement({
+            if (isEdgelessRoot) editorView.elements.insertElement({
               type: "block",
               frame: sourceElement
                 ? { ...sourceElement.frame, x: sourceElement.frame.x + 24, y: sourceElement.frame.y + 24 }
                 : { x: 84, y: 84, width: 320, height: 120 },
-              zIndex: Math.max(0, ...editorView.runtime.elements.getElements().map((element) => element.zIndex)) + 1,
+              zIndex: Math.max(0, ...editorView.elements.getElementNodes().map((element) => element.zIndex)) + 1,
               props: { startBlockId: duplicateId, endBlockId: duplicateId },
             });
           });

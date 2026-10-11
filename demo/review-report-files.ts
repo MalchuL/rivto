@@ -142,7 +142,7 @@ function validateReport(value: unknown): ReviewReport {
     typeof report.reportId !== "string" || !report.reportId ||
     typeof report.problem !== "string" ||
     typeof report.savedAt !== "string" ||
-    !report.snapshot || report.snapshot.version !== 6 ||
+    !report.snapshot || report.snapshot.version !== 9 ||
     !Array.isArray(report.snapshot.blocks) || !Array.isArray(report.snapshot.elements)) {
     throw new Error("Invalid Review report envelope");
   }

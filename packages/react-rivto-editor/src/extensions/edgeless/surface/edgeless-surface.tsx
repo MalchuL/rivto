@@ -23,6 +23,7 @@ import {
 import { UI_SCOPE_CLASS } from "../../../components/ui-scope";
 import {
   blockIdsOf,
+  blockElementRoot,
   EDGELESS_BLOCK_ELEMENT_TYPE,
   EDGELESS_CARD_DEFAULT_FRAME,
   insertBlockElementSeparator,
@@ -102,7 +103,8 @@ function EdgelessSurfaceContent({
 }) {
   const editorView = useEditorView();
   const rootIds = useRootBlockIds();
-  const blockElements = useElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
+  const blockElements = useElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE
+    && blockElementRoot(element, editorView.runtime.blocks) === (editorView.panel?.rootBlockId ?? null));
   const { ref: registerRoot } = useEditorRoot();
   const viewport = useRef<HTMLElement | null>(null);
   const spotlightOverlay = useRef<HTMLDivElement | null>(null);
@@ -273,10 +275,10 @@ function EdgelessSurfaceContent({
       y,
     };
     const frame = avoidBlockElementOverlap
-      ? nonOverlappingBlockFrame(preferredFrame, editorView.runtime.elements.getElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
+      ? nonOverlappingBlockFrame(preferredFrame, editorView.elements.getElementNodes().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
       : preferredFrame;
-    const roots = editorView.runtime.blocks.getBlocks();
-    const zIndex = Math.max(0, ...editorView.runtime.elements.getElements().map((element) => element.zIndex)) + 1;
+    const roots = editorView.getRootBlockIds().flatMap((id) => editorView.runtime.blocks.getBlockNode(id) ?? []);
+    const zIndex = Math.max(0, ...editorView.elements.getElementNodes().map((element) => element.zIndex)) + 1;
     let id = "";
     editorView.runtime.history.batchUpdates(() => {
       let afterId = roots.at(-1)?.id;
@@ -285,7 +287,10 @@ function EdgelessSurfaceContent({
         afterId = insertBlockElementSeparator(editorView.runtime, last.id).id;
       }
       id = editorView.runtime.blocks.insertBlock(editorView.runtime.createDefaultBlock(), afterId).id;
-      editorView.runtime.elements.insertElement({
+      if (editorView.panel?.rootBlockId && editorView.runtime.blocks.getParentId(id) === null) {
+        editorView.runtime.blocks.moveBlocks([id], editorView.panel.rootBlockId, "inside");
+      }
+      editorView.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame,
         zIndex,

@@ -46,7 +46,13 @@ export class ClipboardManager {
     });
     // An inactive view has no caret; undefined would make core borrow another view's selection.
     const selection = input.textTarget ?? editorView.selection.get() ?? { type: "selection" as const, blocks: [], elements: [] };
-    return clipboard.paste({ ...input, textTarget: selection });
+    const root = editorView.panel?.rootBlockId;
+    const placement = { ...input.placement };
+    if (root && !selection.blocks.length && placement.afterId === undefined && placement.parentId === undefined) {
+      placement.parentId = root;
+      placement.afterId = editorView.getRootBlockIds().at(-1) ?? null;
+    }
+    return clipboard.paste({ ...input, placement, textTarget: selection });
   }
 
 }

@@ -7,7 +7,7 @@ import { EditorStorage } from "./editor/editor-storage";
 import { standardPreset } from "./extensions/built-ins/built-ins";
 import { crossDocumentBlockTransfer } from "./extensions/built-ins/clipboard/cross-document-block-transfer";
 
-const element = { type: "shape", frame: { x: 0, y: 0, width: 10, height: 10 }, zIndex: 0 };
+const element = { childIds: [], type: "shape", frame: { x: 0, y: 0, width: 10, height: 10 }, zIndex: 0 };
 
 async function fixture(database = new DemoDatabase()) {
   const registry = new YjsDocumentRegistry(crypto.randomUUID());
@@ -70,6 +70,7 @@ test("ordinary insertion reuses allocated subtree IDs and overwrites rows when r
 test("ordinary element insertion reuses allocated IDs and persists replacement geometry through undo and reopen", async () => {
   const f = await fixture();
   const source = f.a.elements.insertElement({ ...element, props: { label: "Original" } });
+  const sourceNode = f.a.elements.getElementNode(source.id)!;
   await f.editors.releaseCoreEditor("A");
   const allocate = jestApi.spyOn(f.database, "createId");
   expect(f.b.elements.insertElement(source)).toEqual(source);
@@ -83,10 +84,10 @@ test("ordinary element insertion reuses allocated IDs and persists replacement g
   expect(f.database.elements.get(source.id)?.get("B")).toMatchObject({ frame: { x: 30 }, props: { label: "Replacement" } });
   f.b.history.undo();
   expect(f.b.elements.getElement(source.id)).toEqual(source);
-  expect(f.database.elements.get(source.id)?.get("B")).toEqual(source);
+  expect(f.database.elements.get(source.id)?.get("B")).toEqual(sourceNode);
   f.b.history.redo();
   await f.editors.releaseCoreEditor("B");
-  expect((await f.editors.openCoreEditor("B")).elements.getElement(source.id)).toMatchObject({ frame: { x: 30 }, props: { label: "Replacement" } });
+  expect((await f.editors.openCoreEditor("B")).elements.getElementNode(source.id)).toMatchObject({ frame: { x: 30 }, props: { label: "Replacement" } });
   expect((await f.editors.openCoreEditor("A")).elements.getElement(source.id)).toEqual(source);
   await f.destroy();
 });
@@ -161,7 +162,7 @@ test("database element observers preserve cached reads and notifications through
   const shape = elements.insertElement(element);
   expect(elements.getElement(shape.id)).toEqual(shape);
   const observed: Array<number | undefined> = [];
-  const stop = elements.subscribeElement(shape.id, () => { observed.push(elements.getElement(shape.id)?.frame.x); });
+  const stop = elements.subscribeElementNode(shape.id, () => { observed.push(elements.getElementNode(shape.id)?.frame.x); });
   f.a.history.clear();
   f.a.history.batchUpdates(() => elements.updateElement(shape.id, { frame: { ...shape.frame, x: 40 } }));
   expect(observed).toEqual([40]);

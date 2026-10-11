@@ -7,7 +7,7 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
-    editor.load({ ...editor.dump(), blocks: [board], elements: [] });
+    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
   });
   const board = page.locator('[data-block-type="columns"]').first();
   await board.scrollIntoViewIfNeeded();
@@ -41,7 +41,7 @@ test("creates a writing block on empty-column click and then wraps its content",
     const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
     editor.blocks.removeBlocks(board.children.flatMap((column) => column.children.map((child) => child.id)));
-    editor.load({ ...editor.dump(), blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
+    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
   });
   const columns = page.locator('[data-block-type="columns-column"]');
   const first = columns.first();
@@ -59,7 +59,7 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
     editor.blocks.removeBlocks(board.children[0]!.children.map((child) => child.id));
     // Measure column feedback in one layout, away from outer-page scroll edges.
-    editor.load({ ...editor.dump(), blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
+    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
   });
 
   const board = page.locator('[data-block-type="columns"]').first();
@@ -106,7 +106,7 @@ test("aligns sibling drag handles when only one block has a collapse toggle", as
     const sibling = editor.blocks.insertBlock({ type: "paragraph", content: "Sibling" }).id;
     editor.blocks.moveBlocks([parent, sibling], column.id, "inside");
     editor.blocks.updateBlock(parent, { listProps: { collapsed: true } });
-    editor.load({ ...editor.dump(), blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
+    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
   });
 
   const column = page.locator('[data-block-type="columns-column"]').first();

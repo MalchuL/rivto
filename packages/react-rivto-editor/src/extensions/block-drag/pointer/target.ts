@@ -18,7 +18,7 @@ import { blockContainment } from "../utils/containment";
 export function getDropBlocks(editorView: EditorViewApi): EditorBlock[] {
   if (!editorView.rootBlockId) return editorView.runtime.blocks.getBlocks();
   const root = editorView.runtime.blocks.getBlock(editorView.rootBlockId);
-  return root ? [root] : [];
+  return root ? (editorView.panel ? root.children : [root]) : [];
 }
 
 /**
@@ -88,9 +88,10 @@ export function resolveSurfaceDrop(
   if (!options.keyboard && root.getAttribute?.("data-rivto-surface") === "edgeless" && !card) return null;
   const layoutRoot = card && root.contains(card) && isInDocumentView(root, card) ? card : root;
   const measured = collectDropLayout(layoutRoot, editorView);
+  const panelRoot = editorView.panel?.rootBlockId;
   const placement = resolveDropPlacement(measured, blocks, pointer, options,
-    (destination) => (!editorView.rootBlockId || destination.parentId !== null)
-      && editorView.runtime.blockBehaviors.acceptsDrop(destination, sources));
+    (destination) => (!editorView.rootBlockId || Boolean(panelRoot) || destination.parentId !== null)
+      && editorView.runtime.blockBehaviors.acceptsDrop(panelRoot && destination.parentId === null ? { ...destination, parentId: panelRoot } : destination, sources));
   if (placement?.kind !== "between") return placement;
   // A card boundary is a document gap, not necessarily the document's edge.
   // Keep the visible indicator, but include hidden separators or other cards
@@ -99,5 +100,6 @@ export function resolveSurfaceDrop(
   let destination;
   if (placement.nextId) destination = resolveBeforeDropPlacement(blocks, placement.nextId);
   else if (placement.previousId) destination = resolveSiblingAfterDropPlacement(blocks, placement.previousId);
-  return destination ? { ...placement, ...destination } : placement;
+  const resolved = destination ? { ...placement, ...destination } : placement;
+  return panelRoot && resolved.parentId === null ? { ...resolved, parentId: panelRoot } : resolved;
 }

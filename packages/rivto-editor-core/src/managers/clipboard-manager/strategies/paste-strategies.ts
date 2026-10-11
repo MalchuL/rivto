@@ -128,6 +128,7 @@ export class TextPasteStrategy implements PasteStrategy {
       true,
       range,
       textAfterId(context, placement, range),
+      placement.parentId,
     );
   }
 }
@@ -167,6 +168,7 @@ export class PreserveNewlinesPasteStrategy implements PasteStrategy {
       false,
       range,
       textAfterId(context, placement, range),
+      placement.parentId,
     );
     return caret ? { proposedSelection: createCaretSelection(caret.blockId, caret.offset) } : undefined;
   }

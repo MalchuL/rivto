@@ -7,15 +7,17 @@
  *
  * @module
  */
-import type { EditorElement, RivtoEditorApi } from "@chulane/rivto";
+import type { EditorElementNode, RivtoEditorApi } from "@chulane/rivto";
 import {
   ElementSlots,
   SurfaceContext,
   blockExtension,
+  editorControlProps,
   useBlockEditing,
   useEditorRoot,
   useEditorSelection,
   useElements,
+  useEdgelessElementStyle,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import {
@@ -78,7 +80,7 @@ function ReviewControls(props: ReviewControlsProps) {
   };
 
   return (
-    <div className={REVIEW_CONTROLS_CLASS}>
+    <div {...editorControlProps} className={REVIEW_CONTROLS_CLASS}>
       <label>
         Above
         <input
@@ -234,10 +236,11 @@ function ReviewElement({
   saveReport,
 }: {
   readonly editor: RivtoEditorApi;
-  readonly element: EditorElement;
+  readonly element: EditorElementNode;
   readonly selected: boolean;
   readonly saveReport: SaveReviewReport;
 }) {
+  const { ref, style } = useEdgelessElementStyle(element);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const props = reviewElementPropsSchema.parse(element.props);
@@ -253,7 +256,7 @@ function ReviewElement({
     setSaving(true);
     setError(null);
     try {
-      const live = editor.elements.getElement(element.id);
+      const live = editor.elements.getElementNode(element.id);
       if (!live) throw new Error("Review element no longer exists");
       const liveProps = reviewElementPropsSchema.parse(live.props);
       const snapshot = captureElementReviewSnapshot(
@@ -280,20 +283,16 @@ function ReviewElement({
 
   return (
     <section
+      ref={ref}
       className={REVIEW_ELEMENT_CLASS}
       data-edgeless-object-kind="review"
       data-edgeless-object-id={element.id}
       data-review-report={element.id}
       data-selected={selected || undefined}
-      style={{
-        left: element.frame.x,
-        top: element.frame.y,
-        width: element.frame.width,
-        height: element.frame.height,
-        zIndex: element.zIndex,
-      }}
+      style={style}
     >
       <textarea
+        {...editorControlProps}
         className={REVIEW_PROBLEM_CLASS}
         aria-label="Review problem"
         placeholder="Describe the problem"

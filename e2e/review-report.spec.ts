@@ -26,7 +26,7 @@ test("saves a slash-created Review report and reproduces it with native load", a
       return {
         commands: (editorRuntime.editorViews.getActive() ?? editorRuntime.editorViews.getDefault())!.slashCommands.getAll({ blockId: id }).map(({ id: commandId }) => commandId),
         definition: editorRuntime.blockTypes.getDefinition("demo.review")?.type,
-        element: editorRuntime.elements.getElement("demo-review-element")?.type,
+        element: editorRuntime.elements.getElementNode("demo-review-element")?.type,
       };
     }, blockId);
     expect(runtimeState).toMatchObject({
@@ -96,3 +96,82 @@ test("saves a slash-created Review report and reproduces it with native load", a
     await Promise.all(generated.map((name) => rm(resolve(reportDirectory, name), { force: true })));
   }
 });
+
+for (const repeat of [0, 200]) {
+  test(`edgeless Review controls accept native input without dragging the card, repeat=${repeat}`, async ({ page }) => {
+    await page.route("**/__review-reports", (route) => route.fulfill({ json: { ok: true } }));
+    await page.goto(`/?repeat=${repeat}`);
+    const today = page.locator('[data-journal-document="today"]');
+    await today.locator("[data-block-content]").first().waitFor();
+    await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+    // Long auto-height cards overlap the demo report; expose the form for native pointer input.
+    await page.evaluate(() => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+      editor.elements.updateElement("demo-review-element", { zIndex: 1000 });
+    });
+    const report = today.locator('[data-review-report="demo-review-element"]');
+    const problem = report.getByRole("textbox", { name: "Review problem" });
+    await problem.scrollIntoViewIfNeeded();
+    const readReport = () => page.evaluate(() => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+      return { node: editor.elements.getElementNode("demo-review-element")!, count: editor.elements.getElementNodes().length };
+    });
+    const initial = await readReport();
+    await problem.click();
+    await expect(problem).toBeFocused();
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("Review input");
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Control+c");
+    await page.keyboard.press("End");
+    await page.keyboard.press("Control+v");
+    await expect(problem).toHaveValue("Review inputReview input");
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Control+x");
+    await expect(problem).toHaveValue("");
+    await page.keyboard.press("Control+v");
+    await expect(problem).toHaveValue("Review inputReview input");
+    await expect.poll(async () => (await readReport()).node.props.problem).toBe("Review inputReview input");
+    const above = report.getByRole("spinbutton", { name: "Review items above" });
+    await above.click();
+    await expect(above).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect.poll(async () => (await readReport()).node.props.elementsAbove).toBe(Number(initial.node.props.elementsAbove) + 1);
+    const saveButton = report.getByRole("button", { name: "Save context" });
+    await saveButton.scrollIntoViewIfNeeded();
+    const buttonBox = await saveButton.boundingBox();
+    const reportBox = await report.boundingBox();
+    if (!buttonBox || !reportBox) throw new Error("Expected Review form geometry");
+    // A missed button click must not start native selection across the document.
+    await page.mouse.move(reportBox.x + reportBox.width - 24, buttonBox.y + buttonBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(reportBox.x + 24, reportBox.y + 24, { steps: 6 });
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("");
+    await expect(today.locator(".edgeless-viewport")).not.toHaveAttribute("data-transforming", "move");
+    const saved = page.waitForRequest("**/__review-reports");
+    await report.getByRole("button", { name: "Save context" }).click();
+    expect((await saved).postDataJSON().problem).toBe("Review inputReview input");
+    await expect(report).toContainText("Saved");
+    await report.getByText("Snapshot JSON", { exact: true }).click();
+    await expect(report.locator("details")).toHaveAttribute("open", "");
+    await report.getByText("Snapshot JSON", { exact: true }).click();
+    const edited = await readReport();
+    expect(edited.count).toBe(initial.count);
+    expect(edited.node.frame).toEqual(initial.node.frame);
+    // The card's padding remains a drag target while the form owns native input.
+    await report.scrollIntoViewIfNeeded();
+    const box = await report.boundingBox();
+    if (!box) throw new Error("Expected Review card geometry");
+    await page.keyboard.down("Alt");
+    await page.mouse.move(box.x + 5, box.y + 5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 45, box.y + 25, { steps: 5 });
+    await page.mouse.up();
+    await page.keyboard.up("Alt");
+    await expect.poll(async () => (await readReport()).node.frame).toEqual({ ...initial.node.frame, x: initial.node.frame.x + 40, y: initial.node.frame.y + 20 });
+    await report.getByRole("button", { name: "Restore snapshot" }).click();
+    await expect.poll(async () => (await readReport()).node.frame).toEqual(initial.node.frame);
+    await expect(problem).toHaveValue("Review inputReview input");
+  });
+}

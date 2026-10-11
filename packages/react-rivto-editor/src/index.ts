@@ -62,6 +62,7 @@ export type { BulletThreadingAnchor, BulletThreadingOptions } from "./extensions
 export {
   EdgelessVisualsExtension,
   edgelessPreset,
+  useEdgelessElementStyle,
   edgelessSurfaceExtension,
   edgelessVisualsExtension,
 } from "./extensions/edgeless";
@@ -219,3 +220,5 @@ export { SurfaceContext } from "./surfaces/surface";
 export * from "./editor/editor-storage";
 
 export type { EditorViewApi } from "./types";
+export { EditorPanel } from "./editor-view/panel";
+export type { Panel, EditorPanelProps, OpenPanelBlockRequest } from "./editor-view/panel";

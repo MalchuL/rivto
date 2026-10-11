@@ -14,7 +14,7 @@ import { SurfaceContext } from "../../surfaces/surface";
  *
  * @module
  */
-import type { EditorBlockNode, EditorElement } from "@chulane/rivto";
+import type { EditorBlockNode, EditorElementNode } from "@chulane/rivto";
 import { Fragment, type ReactNode } from "react";
 import { useEditorView } from "../../hooks";
 import {
@@ -153,7 +153,7 @@ export function ElementSlots({
   element,
   selected,
 }: {
-  readonly element: EditorElement;
+  readonly element: EditorElementNode;
   readonly selected: boolean;
 }) {
   const editorView = useEditorView();

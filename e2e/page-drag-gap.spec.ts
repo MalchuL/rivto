@@ -85,7 +85,7 @@ test.beforeEach(async ({ page }) => {
       ],
     }).id;
     editor.load({
-      ...editor.dump(),
+      ...editor.dump(), rootElementIds: [],
       blocks: [
         editor.blocks.getBlock(alpha)!,
         editor.blocks.getBlock(beta)!,
@@ -207,7 +207,7 @@ test("drops a block before the first root container", async ({ page }) => {
       __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.load({
-      ...editor.dump(),
+      ...editor.dump(), rootElementIds: [],
       blocks: [boardId, alphaId, betaId].map((id) => editor.blocks.getBlock(id!)!),
       elements: [],
     });
@@ -252,10 +252,9 @@ for (const mode of ["block", "edgeless"] as const) {
         type: "kanban", content: "Board", children: [{ type: "kanban-column", content: "Lane" }],
       }).id;
       const second = editor.blocks.insertBlock({ type: "columns", children: [{ type: "columns-column" }] }).id;
-      editor.load({ ...editor.dump(), blocks: [holder, first, second].map((id) => editor.blocks.getBlock(id)!), elements: [] });
+      editor.load({ ...editor.dump(), rootElementIds: [], blocks: [holder, first, second].map((id) => editor.blocks.getBlock(id)!), elements: [] });
       if (nextMode === "edgeless") {
-        editor.elements.insertElement({
-          type: "block", zIndex: 0,
+        editor.elements.insertElement({           type: "block", zIndex: 0,
           frame: { x: 20, y: 20, width: 900, height: 650 },
           props: { startBlockId: holder, endBlockId: second },
         });
@@ -378,10 +377,9 @@ for (const mode of ["block", "edgeless"] as const) {
           editor.blocks.insertBlock({ id: "gap-container", ...input }),
           editor.blocks.insertBlock({ id: "gap-after", type: "paragraph", content: "After container" }),
         ].map((block) => block.id);
-        editor.load({ ...editor.dump(), blocks: roots.map((id) => editor.blocks.getBlock(id)!), elements: [] });
+        editor.load({ ...editor.dump(), rootElementIds: [], blocks: roots.map((id) => editor.blocks.getBlock(id)!), elements: [] });
         if (nextMode === "edgeless") {
-          editor.elements.insertElement({
-            type: "block",
+          editor.elements.insertElement({             type: "block",
             zIndex: 0,
             frame: { x: 20, y: 20, width: 900, height: 1200 },
             props: { startBlockId: roots[0]!, endBlockId: roots.at(-1)! },
@@ -675,13 +673,12 @@ for (const mode of ["block", "edgeless"] as const) {
       ];
       const roots = inputs.map((input) => editor.blocks.insertBlock(input).id);
       editor.load({
-        ...editor.dump(),
+        ...editor.dump(), rootElementIds: [],
         blocks: roots.map((id) => editor.blocks.getBlock(id)!),
         elements: [],
       });
       if (nextMode === "edgeless") {
-        editor.elements.insertElement({
-          type: "block",
+        editor.elements.insertElement({           type: "block",
           zIndex: 0,
           frame: { x: 20, y: 20, width: 1100, height: 850 },
           props: { startBlockId: roots[0]!, endBlockId: roots.at(-1)! },

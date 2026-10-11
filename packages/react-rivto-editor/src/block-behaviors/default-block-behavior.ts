@@ -52,7 +52,8 @@ export class DefaultBlockBehavior implements BlockBehavior {
     const { editorView, block, root } = context;
     const { isEmptyBlock } = editorView.runtime;
     if (editorView.runtime.blockListProps.onSplit(context)) return "handled";
-    if (isEmptyBlock(block) && editorView.runtime.blocks.getParentId(block.id)) {
+    if (isEmptyBlock(block) && editorView.runtime.blocks.getParentId(block.id)
+      && editorView.panel?.rootBlockId !== editorView.runtime.blocks.getParentId(block.id)) {
       // Lift one permitted level per Enter, stopping at container outline floors.
       outdentBlocks(editorView, [block.id]);
       focusCaret(editorView, root, block.id, 0);
@@ -69,11 +70,11 @@ export class DefaultBlockBehavior implements BlockBehavior {
       // new writing block as the first visible child.
       editorView.runtime.blocks.indentBlock(nextBlock.id);
       editorView.runtime.blocks.moveBlock(nextBlock.id, null);
-    } else if (editorView.events.getSurfaceType() === "edgeless" && editorView.runtime.blocks.isRootBlock(block.id)) {
-      const element = editorView.runtime.elements.getElements().find((candidate) =>
+    } else if (editorView.events.getSurfaceType() === "edgeless" && editorView.getRootBlockIds().includes(block.id)) {
+      const element = editorView.elements.getElementNodes().find((candidate) =>
         candidate.type === "block" && candidate.props.endBlockId === block.id,
       );
-      if (element) editorView.runtime.elements.updateElement(element.id, { props: { endBlockId: nextBlock.id } });
+      if (element) editorView.elements.updateElement(element.id, { props: { endBlockId: nextBlock.id } });
     }
     scheduleBlockFocus(editorView, root, nextBlock.id, 0);
     return "handled";

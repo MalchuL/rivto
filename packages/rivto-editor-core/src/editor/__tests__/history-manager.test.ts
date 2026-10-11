@@ -92,8 +92,7 @@ describe("EditorRuntime history manager", () => {
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "User change" }).id;
 
     editor.history.batchUpdatesWithoutHistory(() => {
-      editor.elements.insertElement({
-        id: "derived",
+      editor.elements.insertElement({ id: "derived",
         type: "block",
         frame: { x: 0, y: 0, width: 100, height: 100 },
         zIndex: 0,
@@ -103,7 +102,7 @@ describe("EditorRuntime history manager", () => {
     editor.history.undo();
 
     expect(editor.blocks.hasBlock(blockId)).toBe(false);
-    expect(editor.elements.getElement("derived")).toBeDefined();
+    expect(editor.elements.getElementNode("derived")).toBeDefined();
     editor.destroy();
   });
 
@@ -128,7 +127,7 @@ describe("EditorRuntime history manager", () => {
 
     editor.blocks.insertBlock({ type: "paragraph", content: "Before load" });
     editor.load({
-      version: 6,
+      version: 9,
       blocks: [{
         id: "loaded",
         type: "paragraph",

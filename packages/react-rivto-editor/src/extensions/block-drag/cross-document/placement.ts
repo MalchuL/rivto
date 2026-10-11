@@ -44,6 +44,11 @@ export function resolveCrossDocumentPageRootPlacement(
     blocks = excludeDropSubtrees(blocks, new Set(sources.map(({ id }) => id)));
   }
   if (!blocks.length) {
+    if (editorView.panel?.rootBlockId) {
+      const destination = { kind: "inside", parentId: editorView.panel.rootBlockId } as const;
+      return editorView.runtime.blockBehaviors.acceptsDrop(destination, sources)
+        ? { targetId: editorView.panel.rootBlockId, position: "inside", indicator: null } : null;
+    }
     if (editorView.rootBlockId) return null;
     const destination = { kind: "between", parentId: null, previousId: null, nextId: null, depth: 0 } as const;
     return editorView.runtime.blockBehaviors.acceptsDrop(destination, sources) ? { targetId: null, position: "after", indicator: null } : null;

@@ -168,18 +168,18 @@ Outermost batch вызывает `stopCapturing()` до и после и вып�
 
 ### `load(snapshot)`
 
-- **Аргументы:** `snapshot: EditorSnapshotUpdate` schema version 6.
+- **Аргументы:** `snapshot: EditorSnapshotUpdate` schema version 9.
 - **Возвращает:** `void`.
 - **Исключения:** document-model validation и CRDT write errors.
 
 Передаёт snapshot напрямую в document-model без block/element processors, затем очищает history и делает загруженное состояние новым baseline. Migration, remapping и repair выполняются явно до `load()`.
 
-Статический и runtime-контракты требуют literal `version: 6`. Любое другое значение отклоняется до записи supplied sections.
+Статический и runtime-контракты требуют literal `version: 9`. Любое другое значение отклоняется до записи supplied sections.
 
 ### `dump()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** complete detached `EditorSnapshot` schema version 6.
+- **Возвращает:** complete detached `EditorSnapshot` schema version 9.
 - **Исключения:** document materialization/validation/conversion errors.
 
 ### `destroy()`

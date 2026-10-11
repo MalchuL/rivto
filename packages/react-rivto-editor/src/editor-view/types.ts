@@ -1,3 +1,5 @@
+import type { ElementTreeApi, ModeManagerApi } from "@chulane/rivto";
+import type { Panel, OpenPanelBlock } from "./panel";
 import type { EditorRuntime } from "../editor/editor-runtime";
 import type { ViewClipboardApi } from "../managers/clipboard/api";
 import type { ViewEventsApi } from "../managers/events/api";
@@ -12,7 +14,8 @@ import type { ViewSlashCommandsApi } from "../managers/slash/api";
  * local event registrations. Use runtime.blocks, runtime.history, and the other
  * runtime managers for document operations and extension registration. Use this
  * view's selection, clipboard, and slashCommands for browser interaction with its
- * own surface. The interface exposes neither mutable registries nor lifecycle methods.
+ * own surface. Use view.elements for its selected element subtree; runtime.elements spans the document.
+ * The interface exposes neither mutable registries nor lifecycle methods.
  *
  * Writing-block factories are installed by defaultWritingBlockExtension or a host
  * extension through runtime.installDefaultWriting. EditorViewController implements
@@ -21,11 +24,22 @@ import type { ViewSlashCommandsApi } from "../managers/slash/api";
 export interface EditorViewApi {
   /** Shared document infrastructure; this occurrence never destroys it. */
   readonly runtime: EditorRuntime;
+  /** Application-owned panel descriptor; absent for ordinary embeddings. */
+  readonly panel?: Panel;
+  /** Elements of this view's canvas, with reads and writes restricted to it. */
+  readonly elements: ElementTreeApi;
+  /** Panel-local mode, or the runtime mode for a plain EditorView. */
+  readonly mode: ModeManagerApi;
+  /** Ordered top-level blocks displayed by this view. */
+  getRootBlockIds(): readonly string[];
+  /** Requests host navigation to a block; absent when navigation is not configured. */
+  readonly openBlock?: OpenPanelBlock;
   /** Document identity exposed on a scoped view; runtime.getDocument always returns this editor's model. */
   readonly documentId: string;
   /**
-   * Root block of the displayed subtree, including the block and its descendants.
-   * Used to show a subtree in views such as embeddings; undefined shows the full document.
+   * Root block that bounds this subtree; undefined shows the full document.
+   * An embedding displays the root and its descendants. A Panel displays only
+   * its children, keeping the root available to the host as a title.
    */
   readonly rootBlockId?: string;
   /** Copy, cut, and paste using this occurrence's selection and destination. */

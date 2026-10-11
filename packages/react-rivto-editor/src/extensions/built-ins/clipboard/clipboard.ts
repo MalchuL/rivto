@@ -96,8 +96,8 @@ export function registerClipboard(
     if (editorView.events.getSurfaceType() !== "edgeless") return undefined;
     const snapshot = findEdgelessRuntime(editorView)?.get();
     const blockIds = snapshot?.active ? snapshot.items.flatMap((id) => {
-      const element = editorView.runtime.elements.getElement(id);
-      return element?.type === "block" ? blockIdsOf(element, editorView.runtime.blocks.getRootIds()) : [];
+      const element = editorView.elements.getElementNode(id);
+      return element?.type === "block" ? blockIdsOf(element, editorView.getRootBlockIds()) : [];
     }) : [];
     return blockIds.length ? createStructuralSelection(blockIds) : undefined;
   };
@@ -106,7 +106,7 @@ export function registerClipboard(
   const writeClipboard = (editorView: EditorViewApi, event: ClipboardEvent, bundle: ClipboardBundle): void => {
     const elementIds = selectedCanvasElementIds(editorView);
     if (elementIds.length) {
-      bundle.elements = elementIds.flatMap((id) => editorView.runtime.elements.getElement(id) ?? []);
+      bundle.elements = elementIds.flatMap((id) => editorView.elements.getElementNode(id) ?? []);
       bundle.selectedElementIds = [...elementIds];
     }
     const portable = editorView.runtime.clipboardFormats.format(bundle.blocks);
@@ -186,7 +186,7 @@ export function registerClipboard(
       ? expanded && editorView.runtime.blocks.hasChildren(activeBlock.id)
         ? { parentId: activeBlock.id, afterId: null }
         : { parentId: editorView.runtime.blocks.getParentId(activeBlock.id) ?? null, afterId: activeBlock.id }
-      : undefined;
+      : editorView.panel?.rootBlockId ? { parentId: editorView.panel.rootBlockId, afterId: null } : undefined;
     if (parsedBlocks?.length) {
       // Parsed blocks do not need IDs. importForest validates them, assigns IDs,
       // inserts them, and returns the complete inserted roots.
@@ -287,7 +287,7 @@ export function registerClipboard(
     if (canvasElementIds.length) {
       editorView.runtime.history.batchUpdates(() => {
         if (canvas) getSelectedBlockIds(canvas).forEach((id) => editorView.runtime.blocks.removeBlock(id));
-        editorView.runtime.elements.removeElements(canvasElementIds);
+        editorView.elements.removeElements(canvasElementIds);
       });
       findEdgelessRuntime(editorView)?.clear();
     }
@@ -318,7 +318,7 @@ export function registerClipboard(
         if (canvasElementIds.length && event.type === "cut") {
           editorView.runtime.history.batchUpdates(() => {
             if (canvas) getSelectedBlockIds(canvas).forEach((id) => editorView.runtime.blocks.removeBlock(id));
-            editorView.runtime.elements.removeElements(canvasElementIds);
+            editorView.elements.removeElements(canvasElementIds);
           });
           findEdgelessRuntime(editorView)?.clear();
         }

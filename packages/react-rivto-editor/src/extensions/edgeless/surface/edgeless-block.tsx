@@ -7,17 +7,15 @@
  * measure is scoped to geometry and content, never to selection, so reading
  * `scrollHeight` cannot hitch pointermove.
  */
-import type { EditorElement } from "@chulane/rivto";
-import { memo, useLayoutEffect, useRef, type CSSProperties } from "react";
+import type { EditorElementNode } from "@chulane/rivto";
+import { memo, useLayoutEffect, useRef } from "react";
 import { BlockTree, ElementSlots } from "../../../blocks";
-import { editorControlProps } from "../../../constants";
 import { useEditorView } from "../../../hooks";
 import { useEdgelessSelected } from "../../built-ins/selection/edgeless-runtime";
+import { useEdgelessElementStyle } from "../use-edgeless-element-style";
 
 const CARD_CLASS = "edgeless-card";
 const CARD_CONTENT_CLASS = "edgeless-card-content";
-const RESIZE_HANDLE_CLASS = "edgeless-resize-handle";
-const RESIZE_HANDLES = ["n", "e", "s", "w", "nw", "ne", "sw", "se"] as const;
 const MIN_CARD_HEIGHT = 100;
 
 /**
@@ -36,31 +34,15 @@ function EdgelessBlockElementView({
   element,
   blockIds,
 }: {
-  readonly element: EditorElement;
+  readonly element: EditorElementNode;
   readonly blockIds: readonly string[];
 }) {
   const selected = useEdgelessSelected(element.id);
   const editorView = useEditorView();
-  const hostRef = useRef<HTMLElement | null>(null);
+  const { ref: hostRef, style } = useEdgelessElementStyle(element);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const autoHeight = element.props.autoHeight !== false;
   const contentKey = blockIds.join("\0");
-  /**
-   * During resize, transform writes preview geometry as inline styles and sets
-   * data-edgeless-geometry-lock. Re-renders must echo those inline values back
-   * through the style prop — omitting them lets React clear left/top/width/height
-   * and the card jumps.
-   */
-  const host = hostRef.current;
-  const geometryLocked = host?.dataset.edgelessGeometryLock === "true";
-  const style: CSSProperties = {
-    left: geometryLocked && host.style.left ? host.style.left : element.frame.x,
-    top: geometryLocked && host.style.top ? host.style.top : element.frame.y,
-    width: geometryLocked && host.style.width ? host.style.width : element.frame.width,
-    height: geometryLocked && host.style.height ? host.style.height : element.frame.height,
-    zIndex: element.zIndex,
-  };
-
   useLayoutEffect(() => {
     const content = contentRef.current;
     const host = hostRef.current;
@@ -83,7 +65,7 @@ function EdgelessBlockElementView({
       if (Math.abs(element.frame.height - height) < 1) return;
       // Undoing a recorded height change would remeasure and record it again, trapping undo.
       editorView.runtime.history.batchUpdatesWithoutHistory(() => {
-        editorView.runtime.elements.updateElement(element.id, { frame: { height } });
+        editorView.elements.updateElement(element.id, { frame: { height } });
       });
     };
     measure();
@@ -114,15 +96,6 @@ function EdgelessBlockElementView({
         <BlockTree blockIds={blockIds} />
       </div>
       <ElementSlots element={element} selected={selected} />
-      {RESIZE_HANDLES.map((corner) => (
-        <button {...editorControlProps}
-          key={corner}
-          type="button"
-          className={RESIZE_HANDLE_CLASS}
-          data-edgeless-resize-handle={corner}
-          aria-label={`Resize canvas block ${corner}`}
-        />
-      ))}
     </section>
   );
 }
@@ -135,8 +108,8 @@ function EdgelessBlockElementView({
  * @returns Whether both inputs describe the same card render.
  */
 function sameEdgelessBlockElement(
-  previous: { readonly element: EditorElement; readonly blockIds: readonly string[] },
-  next: { readonly element: EditorElement; readonly blockIds: readonly string[] },
+  previous: { readonly element: EditorElementNode; readonly blockIds: readonly string[] },
+  next: { readonly element: EditorElementNode; readonly blockIds: readonly string[] },
 ): boolean {
   return previous.element === next.element
     && previous.blockIds.length === next.blockIds.length

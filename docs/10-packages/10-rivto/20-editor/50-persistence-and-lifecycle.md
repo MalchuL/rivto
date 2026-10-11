@@ -18,13 +18,13 @@ Editor runtime соединяет versioned document snapshots с local history 
 
 `load()` передаёт snapshot напрямую в document-model, не запускает editor processors, заменяет только supplied sections, затем вызывает `history.clear()`. Поэтому state до load нельзя вернуть через `editor.history.undo()`. Migration, remapping и repair выполняются явно до вызова `load()`.
 
-Public TypeScript shape и runtime loader требуют `version: 6`. Другая версия отклоняется до document mutations.
+Public TypeScript shape и runtime loader требуют `version: 9`. Другая версия отклоняется до document mutations.
 
 ```ts
 const snapshot = editor.dump();
 
 editor.load({
-  version: 6,
+  version: 9,
   blocks: snapshot.blocks,
 });
 ```

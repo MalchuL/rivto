@@ -449,10 +449,10 @@ test("canvas adapters share installation and settings while selection belongs to
   await eventually(() => expect(duplicate.getSnapshot().retained).toBe(true));
   const api = first.getSnapshot().api!;
   f.runtime.blockElements.setDefaultWidth(321);
-  api.runtime.elements.removeElements(api.runtime.elements.getElements().map((element) => element.id));
+  api.runtime.elements.removeElements(api.runtime.elements.getElementNodes().map((element) => element.id));
   api.runtime.blockElements.reconcile();
-  expect(api.runtime.elements.getElements()[0]!.frame.width).toBe(321);
-  const id = api.runtime.elements.getElements()[0]!.id;
+  expect(api.runtime.elements.getElementNodes()[0]!.frame.width).toBe(321);
+  const id = api.runtime.elements.getElementNodes()[0]!.id;
   firstRoot.dispatchEvent(event("focusin", firstRoot));
   const canvas = getEdgelessRuntime(api);
   canvas.set([id]);
@@ -686,15 +686,14 @@ test("retained slash and clipboard APIs keep their surface without changing the 
   expect(f.runtime.blocks.getBlockNode("same-id")?.content).toBe("A");
   const { ElementPasteStrategy } = await import("../extensions/built-ins/clipboard/element-paste-strategy");
   const removeStrategy = f.runtime.pasteStrategies.register("view.elements", new ElementPasteStrategy(f.runtime));
-  const bundle = { version: 4 as const, blocks: [], elements: [{
-    id: "visual-source", type: "text", frame: { x: 0, y: 0, width: 100, height: 40 },
+  const bundle = { version: 4 as const, blocks: [], elements: [{ childIds: [], id: "visual-source", type: "text", frame: { x: 0, y: 0, width: 100, height: 40 },
     zIndex: 1, props: { text: "Paste" },
   }] };
-  const before = f.runtime.elements.getElements().filter(({ type }) => type === "text").length;
+  const before = f.runtime.elements.getElementNodes().filter(({ type }) => type === "text").length;
   pageApi.clipboard.paste({ bundle });
-  expect(f.runtime.elements.getElements().filter(({ type }) => type === "text")).toHaveLength(before);
+  expect(f.runtime.elements.getElementNodes().filter(({ type }) => type === "text")).toHaveLength(before);
   canvasApi.clipboard.paste({ bundle });
-  expect(f.runtime.elements.getElements().filter(({ type }) => type === "text")).toHaveLength(before + 1);
+  expect(f.runtime.elements.getElementNodes().filter(({ type }) => type === "text")).toHaveLength(before + 1);
   expect((f.runtime.editorViews.getActiveRoot() ?? f.runtime.editorViews.getDefaultRoot())).toBe(canvasRoot);
   removeStrategy(); disposeCommand(); closePage(); closeCanvas();
   await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
@@ -747,5 +746,33 @@ test("active lookup stays empty until interaction while default prefers the full
   expect(f.runtime.editorViews.getActive()).toBeUndefined();
   expect(f.runtime.editorViews.getDefault()).toBe(full);
   full.setRoot(null);
+  await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
+});
+
+test("handled pointer events can preserve native defaults without reaching later editor handlers", async () => {
+  const f = await fixture();
+  const realm = new DocumentRealm();
+  const view = new EditorViewController(f.runtime);
+  const viewRoot = root(realm);
+  view.setRoot(viewRoot);
+  const close = view.mount();
+  await eventually(() => expect(view.getSnapshot().retained).toBe(true));
+  const calls: string[] = [];
+  for (const preventDefault of [false, true]) {
+    const removeFirst = f.runtime.events.register({ id: "gesture.first", type: "pointerdown", preventDefault }, () => {
+      calls.push("first");
+      return true;
+    });
+    const removeSecond = f.runtime.events.register({ id: "gesture.second", type: "pointerdown" }, () => {
+      calls.push("second");
+      return true;
+    });
+    const down = event("pointerdown", viewRoot);
+    viewRoot.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(preventDefault);
+    removeFirst(); removeSecond();
+  }
+  expect(calls).toEqual(["first", "first"]);
+  close();
   await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });

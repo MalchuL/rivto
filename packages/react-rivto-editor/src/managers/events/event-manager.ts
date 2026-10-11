@@ -33,6 +33,7 @@ interface DOMRegistration {
   readonly mode?: EditorMode | readonly EditorMode[];
   readonly capture: boolean;
   readonly passive: boolean;
+  readonly preventDefault: boolean;
   readonly when?: (event: AnyEditorEvent) => boolean;
 }
 
@@ -72,7 +73,8 @@ export class EventManager {
    * @param definition - Stable ID, native event type, target, and optional filters.
    * The target defaults to the surface; capture and passive default to false.
    * @param listener - Handler returning true when it handled the event. This stops
-   * later editor handlers and prevents the browser default when cancellation is allowed.
+   * later editor handlers and prevents the browser default when cancellation is allowed,
+   * unless definition.preventDefault is false (for native gesture-library event streams).
    * DOM propagation is not stopped. Passive listeners cannot cancel browser defaults.
    * @param owner - Optional view restricting dispatch to its root and prefixing the ID.
    * The caller must also retain the disposer for view cleanup.
@@ -167,6 +169,7 @@ export class EventManager {
       mode: definition.mode,
       capture: definition.capture ?? false,
       passive: definition.passive ?? false,
+      preventDefault: definition.preventDefault !== false,
       when: definition.when as ((event: AnyEditorEvent) => boolean) | undefined,
     };
   }
@@ -208,7 +211,7 @@ export class EventManager {
         (registration.when && !registration.when(event))
       ) continue;
       if (registration.listener(event)) {
-        this.markHandled(raw);
+        this.markHandled(raw, registration.preventDefault && !registration.passive);
         return;
       }
     }
@@ -257,8 +260,8 @@ export class EventManager {
     });
   }
 
-  private markHandled(raw: globalThis.Event): void {
-    if (raw.cancelable) raw.preventDefault();
+  private markHandled(raw: globalThis.Event, preventDefault: boolean): void {
+    if (preventDefault && raw.cancelable) raw.preventDefault();
     this.claimedEvents.add(raw);
   }
 }

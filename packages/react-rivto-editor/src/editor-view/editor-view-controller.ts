@@ -1,3 +1,5 @@
+import { ModeManager, type ElementTreeApi, type ModeManagerApi } from "@chulane/rivto";
+import type { Panel, OpenPanelBlock } from "./panel";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorRuntime } from "../editor/editor-runtime";
 import type { EditorStorage, RuntimeAcquisition } from "../editor/editor-storage";
@@ -50,6 +52,11 @@ export type EditorViewSnapshot =
  * new consumer. A late acquisition from an earlier mount is immediately released.
  */
 export class EditorViewController implements DocumentViewScope, EditorViewApi {
+  readonly elements: ElementTreeApi;
+  readonly mode: ModeManagerApi;
+  readonly panel?: Panel;
+  readonly openBlock?: OpenPanelBlock;
+  private releasePanel?: () => void;
   readonly events: ViewEventManager;
   readonly keyboard: ViewKeyboardManager;
   readonly clipboard: ViewClipboardManager;
@@ -79,13 +86,24 @@ export class EditorViewController implements DocumentViewScope, EditorViewApi {
    * @param rootBlockId - Optional subtree; omitted to display the full document.
    * @param storage - Optional host cache from EditorStorageContext; omitted for a caller-owned standalone editor.
    */
-  constructor(readonly runtime: EditorRuntime, readonly rootBlockId?: string, private readonly storage?: EditorStorage) {
+  constructor(readonly runtime: EditorRuntime, readonly rootBlockId?: string, private readonly storage?: EditorStorage, options?: { panel?: Panel; openBlock?: OpenPanelBlock; mode?: ModeManagerApi }) {
+    this.panel = options?.panel;
+    this.openBlock = options?.openBlock;
+    this.elements = runtime.elements.forRoot(this.panel?.rootElementId ?? null);
+    this.mode = options?.mode ?? (this.panel ? new ModeManager(runtime.mode.get()) : runtime.mode);
     this.events = new ViewEventManager(runtime.events, this, runtime.editorViews);
     this.keyboard = new ViewKeyboardManager(runtime.keyboard, this);
     this.selectionManager = new ViewSelectionManager(this, runtime.selection);
     this.clipboard = new ViewClipboardManager(runtime.clipboard, this);
     this.slashCommands = new ViewSlashCommandManager(runtime.slashCommands, this);
     this.updateSnapshot(runtime.getDocument());
+  }
+
+  /** @returns Children for a Panel, the embedded root for an embedding, or document roots. */
+  getRootBlockIds(): readonly string[] {
+    if (!this.rootBlockId) return this.runtime.blocks.getRootIds();
+    if (this.panel) return this.runtime.blocks.getBlockNode(this.rootBlockId)?.childIds ?? [];
+    return [this.rootBlockId];
   }
 
   /**
@@ -144,6 +162,7 @@ export class EditorViewController implements DocumentViewScope, EditorViewApi {
    * @returns Cleanup for this mount; an older mount cannot release a newer acquisition.
    */
   mount(): () => void {
+    this.releasePanel = this.runtime.acquirePanel(this.panel?.rootBlockId ?? null, this.panel?.rootElementId ?? null);
     // StrictMode remounts the same controller; pending DOM work belongs to a fresh selection manager.
     if (!this.snapshot.api) this.selectionManager = new ViewSelectionManager(this, this.runtime.selection);
     const request = new AbortController();
@@ -166,6 +185,7 @@ export class EditorViewController implements DocumentViewScope, EditorViewApi {
     });
     return () => {
       request.abort();
+      this.releasePanel?.(); this.releasePanel = undefined;
       if (this.request !== request) return;
       this.request = undefined;
       this.unsubscribeBlock?.(); this.unsubscribeBlock = undefined;

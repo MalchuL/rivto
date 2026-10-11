@@ -4,7 +4,7 @@
  * Selection handles subscribe per visual ID so marquee growth over a neighbor
  * does not re-render this node or recreate its label editor.
  */
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ElementSlots } from "../../../../blocks";
 import {
   EditableLabel,
@@ -15,12 +15,10 @@ import { useEdgelessSelected } from "../../../built-ins/selection/edgeless-runti
 import type { EdgelessVisualController } from "../controller";
 import type { ConnectorEndpoint, EdgelessVisual } from "../types";
 import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from "../utils/geometry";
+import { useEdgelessElementStyle } from "../../use-edgeless-element-style";
 import { shapeStrokePad } from "../utils/shape-stroke";
 
 const LABEL_KINDS = new Set(["text", "sticker", "rectangle", "ellipse", "connector"]);
-const VISUAL_RESIZE_CLASS = "edgeless-visual-resize";
-const VISUAL_ROTATION_CLASS = "edgeless-visual-rotation";
-const RESIZE_HANDLES = ["n", "e", "s", "w", "nw", "ne", "sw", "se"] as const;
 
 /**
  * Renders one persisted visual without owning canvas movement.
@@ -53,7 +51,7 @@ export function VisualElement({
   readonly onReconnect: (key: "source" | "target", endpoint: ConnectorEndpoint) => void;
 }) {
   const selected = useEdgelessSelected(visual.id);
-  const element = controller.runtime.elements.getElement(visual.id);
+  const element = controller.elements.getElementNode(visual.id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<{ key: "source" | "target"; endpoint: ConnectorEndpoint } | null>(null);
   const focusPointRef = useRef<EditableLabelFocusPoint | null>(null);
@@ -62,20 +60,8 @@ export function VisualElement({
   const source = visual.kind === "connector" && draft?.key === "source" ? draft.endpoint : visual.kind === "connector" ? visual.source : undefined;
   const target = visual.kind === "connector" && draft?.key === "target" ? draft.endpoint : visual.kind === "connector" ? visual.target : undefined;
 
-  const hostRef = useRef<HTMLDivElement | null>(null);
   // Echo transform preview inline styles while locked so React does not clear them.
-  const host = hostRef.current;
-  const geometryLocked = host?.dataset.edgelessGeometryLock === "true";
-  const style: CSSProperties = {
-    left: geometryLocked && host.style.left ? host.style.left : visual.frame.x,
-    top: geometryLocked && host.style.top ? host.style.top : visual.frame.y,
-    width: geometryLocked && host.style.width ? host.style.width : visual.frame.width,
-    height: geometryLocked && host.style.height ? host.style.height : visual.frame.height,
-    zIndex: visual.zIndex,
-    transform: geometryLocked && host.style.transform
-      ? host.style.transform
-      : visual.kind !== "connector" ? `rotate(${visual.rotation}deg)` : undefined,
-  };
+  const { ref: hostRef, style } = useEdgelessElementStyle<HTMLDivElement>(element);
   const canEditLabel = LABEL_KINDS.has(visual.kind);
   const content = useMemo(() => {
     const labelFor = (text: string) => (
@@ -284,23 +270,6 @@ export function VisualElement({
     >
       {content}
       {element && <ElementSlots element={element} selected={selected} />}
-      {selected && visual.kind !== "connector" && RESIZE_HANDLES.map((corner) => (
-        <button {...editorControlProps}
-          key={corner}
-          className={VISUAL_RESIZE_CLASS}
-          data-edgeless-resize-handle={corner}
-          type="button"
-          aria-label={`Resize ${corner}`}
-        />
-      ))}
-      {selected && visual.kind !== "connector" && (
-        <button {...editorControlProps}
-          className={VISUAL_ROTATION_CLASS}
-          data-edgeless-rotation-handle="true"
-          type="button"
-          aria-label={`Rotate ${visual.kind}`}
-        />
-      )}
       {selected && visual.kind === "connector" && source && target && (["source", "target"] as const).map((key) => {
         const point = (key === "source" ? source : target).position;
         return (

@@ -64,6 +64,8 @@ export interface DropPlacementStore {
   get(id: string): DropPlacement | null;
   subscribe(id: string, listener: () => void): () => void;
   isDragged(id: string): boolean;
+  /** Changes whenever a drag starts, allowing click handlers to ignore its final click. */
+  getDragSequence(): number;
   isArmed(id: string): boolean;
   arm(id: string): void;
   getDraggable(id: string): PageDragHandle | null;

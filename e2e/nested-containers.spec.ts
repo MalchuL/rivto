@@ -45,10 +45,9 @@ for (const mode of ["block", "edgeless"] as const) {
         }],
       }).id;
       const keep = editor.blocks.getBlock(bento)!;
-      editor.load({ ...editor.dump(), blocks: [keep], elements: [] });
+      editor.load({ ...editor.dump(), rootElementIds: [], blocks: [keep], elements: [] });
       if (nextMode === "edgeless") {
-        editor.elements.insertElement({
-          type: "block",
+        editor.elements.insertElement({           type: "block",
           zIndex: 0,
           frame: { x: 20, y: 20, width: 900, height: 700 },
           props: { startBlockId: keep.id, endBlockId: keep.id },

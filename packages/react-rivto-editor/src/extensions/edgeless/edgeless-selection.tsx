@@ -220,7 +220,7 @@ export function EdgelessInteractionOverlay() {
     if (!start.moved) {
       start.moved = true;
       start.objects = snapshotObjectHits(root);
-      start.parentByChild = groupParentByChild(editorView.runtime.elements.getElements());
+      start.parentByChild = groupParentByChild(editorView.elements.getElementNodes());
     }
     const next = {
       left: Math.min(start.x, event.clientX),

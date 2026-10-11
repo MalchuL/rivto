@@ -36,10 +36,10 @@ export interface BlockStorage {
 
 /** Exact shared fields stored for one generic canvas element. */
 export interface ElementStorage {
+  childIds: CRDTArray<IDElement>;
   id: IDElement;
   type: string;
   frame: CRDTMap<ElementFrameStorage>;
   zIndex: number;
   props: CRDTMap<Record<IDProp, CRDTType>>;
 }
-
