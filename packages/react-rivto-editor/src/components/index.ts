@@ -2,6 +2,6 @@ export {
   EditableLabel,
   type EditableLabelFocusPoint,
   type EditableLabelHandle,
-  type EditableLabelProps,
+  type EditableLabelProps
 } from "./editable-label";
 export { placeCaretAtPoint } from "./place-caret-at-point";

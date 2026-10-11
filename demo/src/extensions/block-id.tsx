@@ -35,8 +35,8 @@ function BlockIdSlot({ block }: BlockSlotProps) {
 /** Demo-only extension showing shortened block IDs in page and edgeless rows. */
 export const blockIdExtension = (): ReactEditorExtension => ({
   id: "demo.block-id",
-  setup(reactEditor) {
-    reactEditor.surfaces.registerBlockSlot({
+  setup(editorRuntime) {
+    editorRuntime.surfaces.registerBlockSlot({
       position: "end",
       component: BlockIdSlot,
     });

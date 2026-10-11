@@ -62,7 +62,7 @@ const visuals = edgelessVisualsExtension({
   orphanConnectors: "detach",
 });
 
-const reactEditor = createReactEditor({
+const editorRuntime = createEditorRuntime({
   editor,
   extensions: [standardPreset(), ...edgelessPreset(), visuals],
 });
@@ -76,7 +76,7 @@ visuals.group();
 ```
 
 The returned `EdgelessVisualsExtension` is both the installable extension and
-the typed host API. Its methods are available after `createReactEditor()` installs
+the typed host API. Its methods are available after `createEditorRuntime()` installs
 it and stop being available after that React editor is destroyed. String-based
 `edgeless.*` commands remain available for command palettes and integrations.
 

@@ -24,7 +24,7 @@ type ReferenceProps = {
 
 Register it with the existing `blockExtension` mechanism. Capture the
 repository in the extension factory or renderer closure; a new global manager
-on `ReactEditor` is unnecessary while references are the only consumer.
+on `EditorViewApi` is unnecessary while references are the only consumer.
 
 ```ts
 const databaseReferenceExtension = (
@@ -76,7 +76,7 @@ its commands and selection would target the host editor.
 Two later options are valid when richer rendering is required:
 
 - create a read-only tree renderer that receives the target editor explicitly;
-- mount a nested target `ReactEditor` boundary with isolated events and
+- mount a nested target `EditorViewApi` boundary with isolated events and
   selection.
 
 The first is smaller. The second is appropriate only for interactive/editable
@@ -115,7 +115,7 @@ useful prototype for loading states, not yet a Rivto entity repository.
 
 Migration should happen in this order:
 
-1. Persist a schema-v6 Rivto snapshot or Yjs update per page/document.
+1. Persist a schema-v9 Rivto snapshot or Yjs update per page/document.
 2. Implement `EntityRepository.resolve(id)` above that service and let it find
    the owning document internally.
 3. Open the primary page through the same repository.

@@ -10,7 +10,7 @@ for (const type of ["bento", "kanban"]) {
     const modal = page.locator("dialog:modal");
     const handleClass = "page-drag-handle";
     const handles = modal.locator(`.${handleClass}`);
-    const handle = type === "bento" ? handles.nth(1) : handles.last();
+    const handle = type === "bento" ? handles.nth(1) : modal.locator('[data-block-type="paragraph"] .page-drag-handle').first();
     await handle.locator("xpath=ancestor::*[@data-block-id][1]").hover();
     await handle.hover();
     const from = (await handle.boundingBox())!;

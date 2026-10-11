@@ -17,16 +17,16 @@ const PAGE_DRAG_PREVIEW_MORE_CLASS = "page-drag-preview-more";
  * Flattens one subtree in visible page order while retaining relative depth.
  *
  * @param block - Root snapshot to flatten.
- * @param collapseActive - Whether collapsed descendants stay hidden.
+ * @param childrenVisible - Shared list behavior deciding whether descendants stay visible.
  * @param depth - Current relative nesting depth used by recursive calls.
  * @returns Pre-order entries suitable for direct preview rendering.
  */
-function flattenPreview(block: Block, collapseActive: boolean, depth = 0): PreviewEntry[] {
+function flattenPreview(block: Block, childrenVisible: (block: Block) => boolean, depth = 0): PreviewEntry[] {
   return [
     { block, depth },
-    ...(collapseActive && block.listProps.collapsed === true
+    ...(!childrenVisible(block)
       ? []
-      : block.children.flatMap((child) => flattenPreview(child, collapseActive, depth + 1))),
+      : block.children.flatMap((child) => flattenPreview(child, childrenVisible, depth + 1))),
   ];
 }
 
@@ -48,12 +48,12 @@ function subtreeSize(block: Block): number {
  */
 export function PageDragPreview({
   blocks,
-  collapseActive,
+  childrenVisible,
 }: {
   readonly blocks: Block[];
-  readonly collapseActive: boolean;
+  readonly childrenVisible: (block: Block) => boolean;
 }) {
-  const entries = blocks.flatMap((block) => flattenPreview(block, collapseActive));
+  const entries = blocks.flatMap((block) => flattenPreview(block, childrenVisible));
   const hiddenCount = Math.max(
     0,
     blocks.reduce((total, block) => total + subtreeSize(block), 0) - Math.min(entries.length, MAX_PREVIEW_BLOCKS),

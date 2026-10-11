@@ -11,14 +11,14 @@ import {
   getSelectedBlockIds,
   isStructuralSelection,
 } from "@chulane/rivto";
-import type { SelectionCapability } from "../../../../capabilities";
+import { createBlockBehaviorContext } from "../../../../block-behaviors/index";
+import type { EditorViewApi } from "../../../../editor-view/types";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
   type KeyboardSelectionTarget,
 } from "../../../../managers";
-import type { ReactEditor } from "../../../../types";
-import { createBlockViewContext, dispatchViewAction } from "../../../../views";
+import type { ViewSelectionApi } from "../../../../managers/selection/api";
 import { getPageVirtualizationControllerForElement } from "../../../../surfaces/page/page-virtualization-controller";
 
 /** Active viewport settlement for one page surface. */
@@ -153,15 +153,15 @@ function restoreBlockViewportTop(
  * @param root - Active page surface or edgeless card.
  * @param event - Native keyboard event that matched the binding.
  * @param outdent - Whether this invocation lifts rather than nests.
- * @param reactEditor - Runtime used to resolve the target block view.
+ * @param editorView - Editor view used to resolve the target block view.
  * @returns `true` when the shortcut was claimed.
  */
 export function applyIndentShortcut(
-  selectionManager: SelectionCapability,
+  selectionManager: ViewSelectionApi,
   root: HTMLElement,
   event: KeyboardEvent,
   outdent: boolean,
-  reactEditor: ReactEditor,
+  editorView: EditorViewApi,
 ): boolean {
   const editable = isEditableKeyboardEvent(event);
   const nativeSelection = editable ? selectionManager.readDOM() : undefined;
@@ -172,7 +172,7 @@ export function applyIndentShortcut(
   const blockSelectionAtRoot = event.target === root && isStructuralSelection(target.item);
   if (!editable && !blockSelectionAtRoot) return false;
 
-  const context = createBlockViewContext(reactEditor, target.blockId, root, selection);
+  const context = createBlockBehaviorContext(editorView, target.blockId, root, selection);
   if (!context) return false;
   const targetIds = indentTargetIds(target);
   // Reparenting a virtualized root block partially above the viewport changes
@@ -218,9 +218,7 @@ export function applyIndentShortcut(
   };
   viewportSettlements.set(root, settlement);
   view?.addEventListener("wheel", onWheel, { passive: true });
-  const claimed = dispatchViewAction(
-    reactEditor.views.resolve(context.block.id),
-    reactEditor.views.fallback,
+  const claimed = editorView.runtime.blockBehaviors.dispatch(
     outdent ? "onOutdent" : "onIndent",
     context,
     targetIds,

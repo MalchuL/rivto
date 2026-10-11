@@ -87,12 +87,14 @@ components normal DOM scoping: a `control` inside a `structural` region owns its
 gesture, while a deliberate `selection-activator` inside that control can opt
 back into block selection.
 
-Conceptually, `useBlockEditing` should expose attribute bags like these:
+Structural selection uses its own hook. Additional interaction-role attributes
+on block controls remain proposed below:
 
 ```ts
-const editing = useBlockEditing<Props>(blockId, { textEdit: false });
+const editing = useBlockNode<Props>(blockId);
+const attributes = useBlockSelectionAnchor(blockId);
 
-editing.attributes;                    // structural owner for this block
+attributes;                            // structural owner for this block
 editing.controlAttributes;             // nested component owns the gesture
 editing.selectionActivatorAttributes;  // click or structural drag, by threshold
 ```
@@ -156,21 +158,24 @@ permits a drag to become structural selection.
 
 ```tsx
 function Counter({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<CounterProps>(blockId, { textEdit: false });
+  const editing = useBlockNode<CounterProps>(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
+  const editorView = useEditorView();
   if (!editing.block) return null;
 
   return (
-    <div {...editing.attributes} className={COUNTER_REGION_CLASS}>
+    <div {...attributes} className={COUNTER_REGION_CLASS}>
       <button
         {...editing.selectionActivatorAttributes}
         type="button"
         className={COUNTER_BUTTON_CLASS}
         onClick={(event) => {
           if (event.defaultPrevented) return;
-          editing.setProp("count", (editing.getProp("count") ?? 0) + 1);
+          const current = editorView.runtime.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+          editing.operations.setProp("count", (current?.count ?? 0) + 1);
         }}
       >
-        Count: {editing.getProp("count") ?? 0}
+        Count: {editing.block?.props.count ?? 0}
       </button>
     </div>
   );
@@ -187,7 +192,7 @@ selection.
 
 ```tsx
 function Slider({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<SliderProps>(blockId);
+  const editing = useBlockNode<SliderProps>(blockId);
   if (!editing.block) return null;
 
   return (
@@ -196,8 +201,8 @@ function Slider({ blockId }: { readonly blockId: string }) {
       <input
         {...editing.controlAttributes}
         type="range"
-        value={editing.getProp("value") ?? 50}
-        onChange={(event) => editing.setProp("value", Number(event.currentTarget.value))}
+        value={editing.block?.props.value ?? 50}
+        onChange={(event) => editing.operations.setProp("value", Number(event.currentTarget.value))}
       />
     </div>
   );
@@ -226,17 +231,18 @@ A container still renders only its own content region. `BlockTree` renders its
 persisted children.
 
 ```tsx
-const editing = useBlockEditing(blockId, { textEdit: false });
-return <div {...editing.attributes} className={BOARD_BODY_CLASS} />;
+const editing = useBlockNode(blockId);
+const attributes = useBlockSelectionAnchor(blockId);
+return <div {...attributes} className={BOARD_BODY_CLASS} />;
 ```
 
-Container behavior is declared separately with `ContainerBlockView`:
+Container behavior is declared separately with `ContainerBlockBehavior`:
 
 - `dropAxis` describes direct-child layout;
 - `acceptsDropContainer` enables drops on the full body, including empty fields;
 - `dropChildTypes` restricts direct children accepted by dragging (omit for unrestricted content);
 - `dropParentTypes` restricts where a dragged structural shell may be placed;
-- `acceptsDrop({ destination, sources, reactEditor })` validates an exact destination
+- `acceptsDrop({ destination, sources, editor })` validates an exact destination
   against source snapshots, including sources from another document;
 - containment metadata describes fixed or free outline behavior;
 
@@ -275,7 +281,7 @@ blockExtension({
 
 Use one stable type constant. Put creation defaults and validation in the core
 definition. Read current property values again inside callbacks. Mutate through
-`editing.setProp`, `editing.setProps`, or `reactEditor.blocks`; never mutate the
+`editing.operations.setProp`, `editing.operations.setProps`, or `editorView.runtime.blocks`; never mutate the
 detached render snapshot.
 
 Use a dedicated extension only when the feature also owns formatters, wrappers,

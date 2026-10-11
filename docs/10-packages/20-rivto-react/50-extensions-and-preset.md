@@ -5,12 +5,12 @@
 ```ts
 interface ReactEditorExtension {
   readonly id: string;
-  setup(reactEditor: ReactEditor): void | (() => void);
+  setup(editorRuntime: EditorViewApi): void | (() => void);
 }
 ```
 
 - **`id`:** stable unique identity; duplicate installation throws.
-- **`setup(reactEditor)`:** synchronously регистрирует behavior через capabilities.
+- **`setup(editorRuntime)`:** synchronously регистрирует behavior через capabilities.
 - **Возвращает:** optional cleanup для ресурсов, которыми не владеет manager.
 - **Исключения:** setup errors откатывают owned registrations и прерывают runtime creation.
 
@@ -19,8 +19,8 @@ Manager registrations автоматически принадлежат active e
 ```ts
 const analyticsExtension = (editor: RivtoEditorApi): ReactEditorExtension => ({
   id: "app.analytics",
-  setup(reactEditor) {
-    return reactEditor.subscribe(() => report(editor.dump()));
+  setup(editorRuntime) {
+    return editorRuntime.subscribe(() => report(editor.dump()));
   },
 });
 ```
@@ -86,8 +86,8 @@ Setup идёт слева направо, cleanup — справа налево.
 
 ## Mounted UI и wrappers
 
-- `reactEditor.extensions.mount(Component)` добавляет headless/visual component рядом с surface.
+- `editorRuntime.extensions.mount(Component)` добавляет headless/visual component рядом с surface.
 - `surfaces.registerEditorWrapper(Wrapper, mode?)` оборачивает всё содержимое `EditorView`.
 - `surfaces.registerBlockWrapper(mode, Wrapper)` оборачивает каждый recursive block.
 
-Mounted component присутствует во всех modes. Mode-specific behavior ограничивайте через event definition или `useEditorMode()`.
+Mounted component присутствует во всех modes. Mode-specific behavior ограничивайте через event definition или `useContext(SurfaceContext)`.

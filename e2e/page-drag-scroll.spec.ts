@@ -249,6 +249,7 @@ test.describe("cross-document drag with a scrolling window", () => {
     await page.goto("/?editors=2");
     const left = page.locator('[data-multi-editor="left"]');
     const right = page.locator('[data-multi-editor="right"]');
+    await expect(right.locator('[data-block-id="right-nested"]')).toBeVisible();
     const scrollable = await page.evaluate(() => (
       document.documentElement.scrollHeight - document.documentElement.clientHeight
     ));

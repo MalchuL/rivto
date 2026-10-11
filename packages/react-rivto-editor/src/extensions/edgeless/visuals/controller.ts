@@ -1,20 +1,19 @@
+import { ElementGeometry } from "../element-geometry";
+import { drawingResizeProps } from "./utils/drawing-frame";
 import {
-  RIVTO_CLIPBOARD_MIME,
-  validateClipboardBundle,
   type ClipboardBundle,
-  type EditorElement,
+  type EditorElementNode,
 } from "@chulane/rivto";
-import { validateElementCollection } from "@chulane/document-model";
+import type { EditorViewApi } from "../../../editor-view/types";
+import type { EditorRuntime } from "../../../editor/editor-runtime";
+import { blockIdsOf } from "../../../elements/block-element-projection";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
-import type { ReactEditor } from "../../../types";
-import { isNonBlockEditableClipboardEvent } from "../../built-ins/clipboard/clipboard-target";
-import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../elements/block-element-projection";
 import { getEdgelessRuntime, type EdgelessSelectionRef } from "../../built-ins/selection/edgeless-runtime";
+import { drawingDefaults, EdgelessToolState } from "./tool-state";
 import type {
   ConnectorEndpoint,
   CreateVisualPayload,
   EdgelessAlignment,
-  EdgelessPlaceKind,
   EdgelessReorder,
   EdgelessVisual,
   EdgelessVisualCommandMap,
@@ -26,9 +25,7 @@ import type {
   VisualFrame,
   VisualGroup,
 } from "./types";
-import { DEFAULT_STICKERS } from "./presets";
-import { connectorFrame, endpointPoint, normalizeRotation, rotatedFrameBounds, unionFrames } from "./utils/geometry";
-import { DEFAULT_PLACE_SIZE } from "./utils/creation-geometry";
+import { connectorFrame, endpointPoint, normalizeRotation, unionFrames } from "./utils/geometry";
 
 const DEFAULT_FRAME: VisualFrame = { x: 120, y: 120, width: 160, height: 120 };
 type VisualCommandPayload<Name extends keyof EdgelessVisualCommandMap> = EdgelessVisualCommandMap[Name]["payload"];
@@ -46,15 +43,17 @@ const isConnectorTextRotation = (
   value === "horizontal" || value === "90" || value === "180" || value === "270" || value === "along"
 );
 
-const DEFAULT_FONT = "Inter, ui-sans-serif, system-ui, sans-serif";
-const drawingDefaults = {
-  pencil: { stroke: "#3f3f46", strokeWidth: 2, opacity: .68 },
-  pen: { stroke: "#18181b", strokeWidth: 3, opacity: 1 },
-  marker: { stroke: "#facc15", strokeWidth: 16, opacity: .34 },
-} as const;
-
 /** Owns React-specific element schemas, canvas commands, grouping, and clipboard behavior. */
 export class EdgelessVisualController {
+  /** Document managers used by both the installed controller and its view-bound operations. */
+  get runtime(): EditorRuntime { return "runtime" in this.editor ? this.editor.runtime : this.editor; }
+  private rootIds() { return "runtime" in this.editor ? this.editor.getRootBlockIds() : this.runtime.blocks.getRootIds(); }
+  /** Element operations for the receiving canvas, or all elements during shared normalization. */
+  get elements() { return "runtime" in this.editor ? this.editor.elements : this.runtime.elements; }
+
+  private readonly commandHandlers = new Map<string, (controller: EdgelessVisualController, payload?: unknown) => unknown>();
+  private readonly tools = new EdgelessToolState(() => this.emit());
+  private get defaults() { return this.tools.defaults; }
   private readonly selection;
   private readonly registrations: Array<{ dispose(): void }> = [];
   private readonly listeners = new Set<() => void>();
@@ -62,41 +61,35 @@ export class EdgelessVisualController {
   private reconciling = false;
   private revision = 0;
   private readonly propertyPreview = new Map<string, Record<string, unknown>>();
-  private currentTool: EdgelessVisualTool = { tool: "select" };
-  private placeSize: Pick<VisualFrame, "width" | "height"> = { ...DEFAULT_PLACE_SIZE };
-  private readonly defaults = {
-    shape: { fill: "#eeeaff", stroke: "#6c5ce7", strokeWidth: 2, filled: true, stroked: true, text: "", color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 16, align: "center" as const, verticalAlign: "middle" as const },
-    text: { color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 24, align: "left" as const, verticalAlign: "top" as const },
-    sticker: { fill: "#fff2a8", color: "#3f3515", fontFamily: DEFAULT_FONT, fontSize: 22, align: "left" as const, verticalAlign: "top" as const },
-    drawing: { brush: "pen" as const, ...drawingDefaults.pen },
-    connector: { route: "straight" as const, stroke: "#52525b", strokeWidth: 2, opacity: 1, lineStyle: "solid" as const, startStyle: "none" as const, endStyle: "arrow" as const, text: "", textRotation: "horizontal" as const, color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 14, align: "center" as const, verticalAlign: "middle" as const },
-  };
-  private readonly lastByCategory: Record<ToolCategory, EdgelessVisualTool> = {
-    shapes: { tool: "place", kind: "rectangle" },
-    // Match session drawing defaults so first category activation does not swap brush presets.
-    drawing: { tool: "drawing", brush: "pen" },
-    text: { tool: "place", kind: "text" },
-    stickers: {
-      tool: "place",
-      kind: "sticker",
-      fill: DEFAULT_STICKERS[0]!.fill,
-      color: DEFAULT_STICKERS[0]!.color,
-      fontFamily: DEFAULT_STICKERS[0]!.fontFamily,
-    },
-    connectors: { tool: "connector", route: "straight" },
-  };
 
-  /** @param reactEditor - Owning React editor with first-class element storage. */
-  constructor(readonly reactEditor: ReactEditor, readonly options: EdgelessVisualsOptions = {}) {
-    this.selection = getEdgelessRuntime(reactEditor);
-    this.registerCommands();
-    this.registerClipboard();
+  /** @param editor - Owning React editor with first-class element storage. */
+  constructor(readonly editor: EditorViewApi | EditorRuntime, readonly options: EdgelessVisualsOptions = {}) {
+    this.selection = getEdgelessRuntime(editor);
+    this.registrations.push({ dispose: this.registerCommands() });
     this.registerToolSelectShortcut();
-    this.unsubscribeDocument = reactEditor.subscribe(() => {
+    this.unsubscribeDocument = this.runtime.subscribe(() => {
       if (this.reconciling) return;
       this.reconciling = true;
-      try { this.normalizeGroups(); this.normalizeConnectors(); } finally { this.reconciling = false; }
+      try { this.normalizeConnectors(); } finally { this.reconciling = false; }
       this.emit();
+    });
+  }
+
+  /**
+   * Uses a view's document and selection while sharing this installed controller.
+   * The API creates no commands, listeners, or acquisitions. Tool state and
+   * revisions remain shared; model reads and writes use the supplied view API.
+   * @param editorView - Native view's document-bound editor API.
+   * @returns Controller API for renderers and retained handlers in that view.
+   */
+  getDocumentView(editorView: EditorViewApi): EdgelessVisualController {
+    const selection = getEdgelessRuntime(editorView);
+    return new Proxy(this, {
+      get(target, key, receiver) {
+        if (key === "editor") return editorView;
+        if (key === "selection") return selection;
+        return Reflect.get(target, key, receiver);
+      },
     });
   }
 
@@ -110,7 +103,7 @@ export class EdgelessVisualController {
 
   /** @returns Detached visual views backed by first-class elements. */
   getVisuals(): EdgelessVisual[] {
-    return this.reactEditor.elements.getElements().flatMap((element) => {
+    return this.elements.getElementNodes().flatMap((element) => {
       if (!VISUAL_TYPES.has(element.type)) return [];
       if (element.type === "sticker" && typeof element.props.text !== "string") return [];
       const preview = this.propertyPreview.get(element.id);
@@ -174,7 +167,7 @@ export class EdgelessVisualController {
       this.emit();
       return;
     }
-    this.reactEditor.history.batchUpdates(() => {
+    this.runtime.history.batchUpdates(() => {
       entries.forEach(([id, patch]) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] }));
     });
     this.emit();
@@ -192,17 +185,17 @@ export class EdgelessVisualController {
 
   /** @returns Detached logical groups backed by `group` elements. */
   getGroups(): VisualGroup[] {
-    return this.reactEditor.elements.getElements().flatMap((element) => {
+    return this.elements.getElementNodes().flatMap((element) => {
       if (element.type !== "group") return [];
-      const children = Array.isArray(element.props.children) ? element.props.children.filter((id): id is string => typeof id === "string") : [];
+      const children = element.childIds;
       return [{ id: element.id, title: typeof element.props.title === "string" ? element.props.title : "Group", children }];
     });
   }
 
   /** @param item - Element ID. @returns Derived outer geometry. */
   getBounds(item: EdgelessSelectionRef): VisualFrame | undefined { return this.bounds(item); }
-  /** @param item - Element ID. @returns Its unrotated persisted frame. */
-  getFrame(item: EdgelessSelectionRef): VisualFrame | undefined { return this.element(item)?.frame; }
+  /** @param item - Element ID. @returns Its frame before rotation; groups derive it from current descendants. */
+  getFrame(item: EdgelessSelectionRef): VisualFrame | undefined { return this.geometry.frame(item); }
   /** @param item - Element ID. @returns Its normalized visual rotation. */
   getRotation(item: EdgelessSelectionRef): number { return this.rotation(item); }
   /** @param item - Element ID. @returns Its persisted stacking order. */
@@ -212,48 +205,23 @@ export class EdgelessVisualController {
     return Math.min(...this.leaves([item]).map((id) => this.element(id)?.zIndex ?? 0), this.getZIndex(item)) - 1;
   }
   /** @returns Current local creation tool. */
-  getTool(): EdgelessVisualTool { return this.currentTool; }
+  getTool(): EdgelessVisualTool { return this.tools.getTool(); }
   /** @returns Default size for the currently active place preset. */
-  getPlaceSize(): Pick<VisualFrame, "width" | "height"> { return { ...this.placeSize }; }
+  getPlaceSize(): Pick<VisualFrame, "width" | "height"> { return this.tools.getPlaceSize(); }
   /** Remembers the final interactive drag size for the active place preset. */
-  rememberPlaceSize(frame: VisualFrame): void {
-    this.placeSize = { width: frame.width, height: frame.height };
-  }
+  rememberPlaceSize(frame: VisualFrame): void { return this.tools.rememberPlaceSize(frame); }
   /** @returns Detached session defaults used by creation menus. */
-  getDefaults() { return copy(this.defaults); }
+  getDefaults() { return this.tools.getDefaults(); }
   /** Last activated tool for a create-toolbar category (session memory). */
-  getLastTool(category: ToolCategory): EdgelessVisualTool { return copy(this.lastByCategory[category]); }
+  getLastTool(category: ToolCategory): EdgelessVisualTool { return this.tools.getLastTool(category); }
   /** Activates the remembered (or first-default) tool for a category. */
-  activateCategory(category: ToolCategory): void {
-    const last = this.lastByCategory[category];
-    if (last.tool === "drawing") {
-      // Avoid clobbering session stroke defaults when the brush is already active.
-      if (this.defaults.drawing.brush !== last.brush) this.setDrawingBrush(last.brush);
-      else this.setTool(last);
-      return;
-    }
-    this.setTool(last);
-  }
+  activateCategory(category: ToolCategory): void { return this.tools.activateCategory(category); }
   /** Enters place mode for a toolbar preset (click, not drag-drop). */
-  setPlaceTool(payload: PresetPayload): void {
-    this.setTool(this.placeToolFromPreset(payload));
-  }
+  setPlaceTool(payload: PresetPayload): void { return this.tools.setPlaceTool(payload); }
   /** Updates local creation defaults without mutating document content. */
-  setCreationDefaults(kind: "shape" | "drawing" | "text" | "sticker" | "connector", patch: Record<string, unknown>): void {
-    const target = this.defaults[kind];
-    Object.keys(target).forEach((key) => { if (key in patch) Object.assign(target, { [key]: copy(patch[key]) }); });
-    this.emit();
-  }
+  setCreationDefaults(kind: "shape" | "drawing" | "text" | "sticker" | "connector", patch: Record<string, unknown>): void { return this.tools.setCreationDefaults(kind, patch); }
   /** Selects a brush and its complete visual preset for subsequent strokes. */
-  setDrawingBrush(brush: keyof typeof drawingDefaults): void {
-    // Switching brushes adopts that brush preset; re-picking the same brush keeps session defaults.
-    if (this.defaults.drawing.brush !== brush) {
-      Object.assign(this.defaults.drawing, { brush, ...drawingDefaults[brush] });
-    } else {
-      this.defaults.drawing.brush = brush;
-    }
-    this.setTool({ tool: "drawing", brush });
-  }
+  setDrawingBrush(brush: keyof typeof drawingDefaults): void { return this.tools.setDrawingBrush(brush); }
   /** @param listener - Tool-state callback. @returns Subscription disposer. */
   subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
 
@@ -269,10 +237,10 @@ export class EdgelessVisualController {
    * @param payload - Visual kind and persisted values.
    * @returns Complete normalized created element.
    */
-  create(payload: CreateVisualPayload): EditorElement {
+  create(payload: CreateVisualPayload): EditorElementNode {
     if (!payload || !VISUAL_TYPES.has(payload.kind)) throw new Error("Unsupported edgeless visual kind");
     let frame = this.frame({ ...DEFAULT_FRAME, ...payload.frame });
-    const zIndex = Math.max(0, ...this.reactEditor.elements.getElements().map((element) => element.zIndex)) + 1;
+    const zIndex = Math.max(0, ...this.elements.getElementNodes().map((element) => element.zIndex)) + 1;
     let props: Record<string, unknown>;
     if (payload.kind === "sticker") {
       props = { ...this.defaults.sticker, rotation: normalizeRotation(payload.rotation ?? 0), text: payload.text ?? "Sticky note", fill: payload.fill ?? this.defaults.sticker.fill, color: payload.color ?? this.defaults.sticker.color, fontFamily: payload.fontFamily ?? this.defaults.sticker.fontFamily, fontSize: payload.fontSize ?? this.defaults.sticker.fontSize, align: payload.align ?? this.defaults.sticker.align, verticalAlign: payload.verticalAlign ?? this.defaults.sticker.verticalAlign };
@@ -333,9 +301,9 @@ export class EdgelessVisualController {
         verticalAlign: payload.verticalAlign ?? this.defaults.shape.verticalAlign,
       };
     }
-    const element = this.reactEditor.elements.insertElement({ type: payload.kind, frame, zIndex, props });
+    const element = this.elements.insertElement({ type: payload.kind, frame, zIndex, props });
     this.selection.set([element.id]);
-    return element;
+    return this.elements.getElementNode(element.id)!;
   }
 
   /**
@@ -343,7 +311,7 @@ export class EdgelessVisualController {
    * @param payload - Element identity and mutable visual fields.
    * @returns Complete normalized updated element.
    */
-  update({ id, patch }: UpdateVisualPayload): EditorElement {
+  update({ id, patch }: UpdateVisualPayload): EditorElementNode {
     const current = this.visual(id);
     if (!current) throw new Error(`Edgeless visual ${id} not found`);
     const safe = copy(patch) as Record<string, unknown>;
@@ -353,9 +321,9 @@ export class EdgelessVisualController {
     const framePatch = isRecord(safe.frame) ? safe.frame as Partial<VisualFrame> : undefined;
     delete safe.frame;
     delete safe.zIndex;
-    const updated = this.reactEditor.elements.updateElement(id, {
+    const updated = this.elements.updateElement(id, {
       frame: framePatch,
-      props: safe,
+      props: { ...drawingResizeProps(this.elements.getElementNode(id)!, framePatch ?? {}), ...safe },
     });
     this.remember(current.kind, safe);
     return updated;
@@ -365,7 +333,7 @@ export class EdgelessVisualController {
   updateMany(ids: readonly string[], patch: Record<string, unknown>): void {
     const visuals = ids.map((id) => this.visual(id));
     if (!visuals.length || visuals.some((visual) => !visual || visual.kind !== visuals[0]!.kind)) throw new Error("Shared properties require one visual type");
-    this.reactEditor.history.batchUpdates(() => ids.forEach((id) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] })));
+    this.runtime.history.batchUpdates(() => ids.forEach((id) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] })));
   }
 
   /** Moves the complete active selection by a canvas delta. */
@@ -381,7 +349,7 @@ export class EdgelessVisualController {
     if (!bounds || width <= 0 || height <= 0 || bounds.width <= 0 || bounds.height <= 0) return;
     const scaleX = width / bounds.width;
     const scaleY = height / bounds.height;
-    this.reactEditor.history.batchUpdates(() => this.leaves(items).forEach((id) => {
+    this.runtime.history.batchUpdates(() => this.leaves(items).forEach((id) => {
       const frame = this.element(id)?.frame;
       if (!frame) return;
       const center = {
@@ -399,50 +367,59 @@ export class EdgelessVisualController {
     }));
   }
 
-  /** @returns Complete group created from the same-parent selection. */
-  group(): EditorElement {
+  /**
+   * Creates an empty group element around the selected siblings and internal connectors.
+   *
+   * Children retain their IDs, original sibling order, and canvas-relative frames.
+   * The parent occupies the first selected sibling's position. Its initial frame
+   * covers the selection; displayed bounds are derived from the children afterward
+   * in the group's props.rotation axes (zero when absent), without persisting
+   * those derived dimensions or changing the angle when a child moves.
+   * Group membership is owned by this extension; the model stores an ordinary parent.
+   * All writes use the editor processing pipeline within one history transaction.
+   *
+   * @returns Detached flat parent record with its final ordered childIds.
+   * @throws If fewer than two distinct existing elements are selected, parents
+   * differ, or the new record fails processing or validation before insertion.
+   */
+  group(): EditorElementNode {
     const selected = [...this.selection.get().items];
     const internalConnectors = this.internalConnectorIds(selected);
-    const items = [...selected, ...internalConnectors];
+    const items = [...new Set([...selected, ...internalConnectors])];
+    if (items.some((id) => !this.elements.hasElement(id))) throw new Error("Grouped objects must exist");
     if (items.length < 2) throw new Error("Grouping requires at least two objects");
     const parents = new Set(items.map((id) => this.parentId(id)));
     if (parents.size !== 1) throw new Error("Grouped objects must share one parent");
     const bounds = unionFrames(items.flatMap((id) => this.bounds(id) ?? [])) ?? DEFAULT_FRAME;
-    const groupParentId = [...parents][0];
-    // Batch insert + parent rewrite so normalizeGroups never sees a child claimed by
-    // both the old parent and the new nested group in the same pass.
-    const id = this.reactEditor.history.batchUpdates(() => {
-      const created = this.reactEditor.elements.insertElement({
-        type: "group",
-        frame: bounds,
+    const parentId = this.parentId(items[0]!) ?? null;
+    const parent = parentId ? this.element(parentId) : undefined;
+    // A Panel exposes its root's children, but excludes the root element itself.
+    const siblings = parent?.childIds ?? this.elements.getRootIds();
+    const selectedIds = new Set(items);
+    const ordered = siblings.filter((id) => selectedIds.has(id));
+    const group = this.runtime.history.batchUpdates(() => {
+      const group = this.elements.insertElement({
+        type: "group", frame: bounds,
         zIndex: Math.max(0, ...items.map((item) => this.element(item)?.zIndex ?? 0)),
-        props: { title: `Group ${this.getGroups().length + 1}`, children: items },
+        props: { title: `Group ${this.getGroups().length + 1}` },
       });
-      if (groupParentId) {
-        const parent = this.groupRecord(groupParentId)!;
-        const children = parent.children.map((child) => items.includes(child) ? created.id : child).filter((child, index, all) => all.indexOf(child) === index);
-        this.reactEditor.elements.updateElement(groupParentId, { props: { children } });
-      }
-      return created;
+      this.elements.moveElements([group.id], { parentId, beforeId: ordered[0] });
+      this.elements.moveElements(ordered, { parentId: group.id });
+      return this.elements.getElementNode(group.id)!;
     });
-    this.selection.set([id.id]);
-    return id;
+    this.selection.set([group.id]);
+    return group;
   }
 
   /** Replaces selected groups with their children and removes their records. */
   ungroup(): void {
     const selected = this.selection.get().items.filter((id) => this.element(id)?.type === "group");
     const children: string[] = [];
-    this.reactEditor.history.batchUpdates(() => selected.forEach((id) => {
+    this.runtime.history.batchUpdates(() => selected.forEach((id) => {
       const group = this.groupRecord(id);
       if (!group) return;
       children.push(...group.children);
-      const parentId = this.parentId(id);
-      if (parentId) {
-        const parent = this.groupRecord(parentId)!;
-        this.reactEditor.elements.updateElement(parentId, { props: { children: parent.children.flatMap((child) => child === id ? group.children : [child]) } });
-      }
-      this.reactEditor.elements.removeElement(id);
+      this.elements.removeElementAndPromoteChildren(id);
     }));
     this.selection.set(children);
   }
@@ -452,7 +429,7 @@ export class EdgelessVisualController {
     const entries = this.selection.get().items.flatMap((id) => { const bounds = this.bounds(id); return bounds ? [{ id, bounds }] : []; });
     const outer = unionFrames(entries.map(({ bounds }) => bounds));
     if (!outer || entries.length < 2) return;
-    this.reactEditor.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
+    this.runtime.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
       const dx = mode === "left" ? outer.x - bounds.x : mode === "center" ? outer.x + outer.width / 2 - bounds.width / 2 - bounds.x : mode === "right" ? outer.x + outer.width - bounds.width - bounds.x : 0;
       const dy = mode === "top" ? outer.y - bounds.y : mode === "middle" ? outer.y + outer.height / 2 - bounds.height / 2 - bounds.y : mode === "bottom" ? outer.y + outer.height - bounds.height - bounds.y : 0;
       if (dx || dy) this.translate([id], dx, dy);
@@ -470,7 +447,7 @@ export class EdgelessVisualController {
     const span = axis === "horizontal" ? last.x + last.width - first.x : last.y + last.height - first.y;
     const gap = (span - occupied) / (entries.length - 1);
     let cursor = axis === "horizontal" ? first.x : first.y;
-    this.reactEditor.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
+    this.runtime.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
       const delta = cursor - (axis === "horizontal" ? bounds.x : bounds.y);
       if (delta) this.translate([id], axis === "horizontal" ? delta : 0, axis === "vertical" ? delta : 0);
       cursor += (axis === "horizontal" ? bounds.width : bounds.height) + gap;
@@ -481,7 +458,7 @@ export class EdgelessVisualController {
   reorder(direction: EdgelessReorder): void {
     const items = this.selection.get().items;
     const selected = new Set([...this.leaves(items), ...this.internalConnectorIds(items)]);
-    const layers = this.reactEditor.elements.getElements().filter((element) => element.type !== "group").sort((a, b) => a.zIndex - b.zIndex).map((element) => element.id);
+    const layers = this.elements.getElementNodes().filter((element) => element.type !== "group").sort((a, b) => a.zIndex - b.zIndex).map((element) => element.id);
     const moving = layers.filter((id) => selected.has(id));
     const stationary = layers.filter((id) => !selected.has(id));
     const frontmost = Math.max(...moving.map((id) => layers.indexOf(id)));
@@ -492,7 +469,7 @@ export class EdgelessVisualController {
           : Math.max(0, current - 1);
     const next = [...stationary];
     next.splice(insertion, 0, ...moving);
-    this.reactEditor.elements.updateElements(next.map((id, zIndex) => ({ id, patch: { zIndex } })));
+    this.elements.updateElements(next.map((id, zIndex) => ({ id, patch: { zIndex } })));
   }
 
   /**
@@ -504,7 +481,7 @@ export class EdgelessVisualController {
   setBlockAutoHeight(items: readonly EdgelessSelectionRef[], enabled: boolean): void {
     const blocks = items.filter((id) => this.element(id)?.type === "block");
     if (!blocks.length) return;
-    this.reactEditor.elements.updateElements(blocks.map((id) => ({ id, patch: { props: { autoHeight: enabled } } })));
+    this.elements.updateElements(blocks.map((id) => ({ id, patch: { props: { autoHeight: enabled } } })));
   }
 
   /** Structurally deletes selected elements and block trees represented by block elements. */
@@ -517,83 +494,99 @@ export class EdgelessVisualController {
   deleteItems(items: readonly string[]): void {
     const selected = [...items];
     const leaves = this.leaves(selected);
-    this.reactEditor.history.batchUpdates(() => {
+    this.runtime.history.batchUpdates(() => {
       leaves.forEach((id) => {
         const element = this.element(id);
-        if (element?.type === "block") blockIdsOf(element, this.reactEditor.blocks.getRootIds()).forEach((blockId) => this.reactEditor.blocks.removeBlock(blockId));
+        if (element?.type === "block") blockIdsOf(element, this.rootIds()).forEach((blockId) => this.runtime.blocks.removeBlock(blockId));
       });
-      this.reactEditor.elements.removeElements([...new Set([...leaves, ...selected.filter((id) => this.element(id)?.type === "group")])]);
-      this.normalizeGroups();
+      this.elements.removeElements([...new Set([...leaves, ...selected.filter((id) => this.element(id)?.type === "group")])]);
     });
   }
 
   /** @returns Leaf IDs represented by an element or nested group selection. */
   getLeaves(items: readonly string[]): string[] { return this.leaves(items); }
-  /** @returns Direct logical group containing an element, if any. */
+  /** @returns Direct parent within this view, or undefined for a view root or missing element. */
   getParentId(id: string): string | undefined { return this.parentId(id); }
 
   /** @returns Detached active canvas selection. */
   getSelection() { return this.selection.get(); }
 
-  private registerCommands(): void {
-    const register = (name: string, handler: (payload?: unknown) => unknown) => this.registrations.push(this.reactEditor.commands.register(name, handler));
-    register("edgeless.visual.create", (value) => {
+  /** Executes a registered visual command using this controller's fixed view and canvas. */
+  execute(name: string, payload?: unknown): unknown {
+    const handler = this.commandHandlers.get(name);
+    if (!handler) throw new Error(`Unknown visual command ${name}`);
+    return handler(this, payload);
+  }
+
+  private registerCommands(): () => void {
+    const registrations: Array<{ dispose(): void }> = [];
+    const register = (name: string, handler: (controller: EdgelessVisualController, payload?: unknown) => unknown) => {
+      this.commandHandlers.set(name, handler);
+      if (!this.runtime.commands.has(name)) registrations.push(this.runtime.commands.register(name, (value) => {
+        if (isRecord(value) && "editorView" in value && "payload" in value) {
+          return handler(this.getDocumentView(value.editorView as EditorViewApi), value.payload);
+        }
+        return handler(this, value);
+      }));
+    };
+    register("edgeless.visual.create", (controller, value) => {
       const data = value as VisualCommandPayload<"edgeless.visual.create">;
-      return this.create(data);
+      return controller.create(data);
     });
-    register("edgeless.visual.update", (value) => {
+    register("edgeless.visual.update", (controller, value) => {
       const data = value as VisualCommandPayload<"edgeless.visual.update">;
-      this.update(data);
+      controller.update(data);
     });
-    register("edgeless.visual.duplicate", () => this.duplicateSelection());
-    register("edgeless.visual.delete", () => this.deleteSelection());
-    register("edgeless.selection.get", () => this.getSelection());
-    register("edgeless.selection.set", (value) => {
+    register("edgeless.visual.duplicate", (controller) => controller.duplicateSelection());
+    register("edgeless.visual.delete", (controller) => controller.deleteSelection());
+    register("edgeless.selection.get", (controller) => controller.getSelection());
+    register("edgeless.selection.set", (controller, value) => {
       const data = value as VisualCommandPayload<"edgeless.selection.set">;
-      this.select("items" in data ? data.items : data);
+      controller.select("items" in data ? data.items : data);
     });
-    register("edgeless.selection.clear", () => this.clearSelection());
-    register("edgeless.selection.move", (value) => {
+    register("edgeless.selection.clear", (controller) => controller.clearSelection());
+    register("edgeless.selection.move", (controller, value) => {
       const data = value as VisualCommandPayload<"edgeless.selection.move">;
-      this.move(Number(data.dx), Number(data.dy));
+      controller.move(Number(data.dx), Number(data.dy));
     });
-    register("edgeless.selection.resize", (value) => {
+    register("edgeless.selection.resize", (controller, value) => {
       const data = value as VisualCommandPayload<"edgeless.selection.resize">;
-      this.resize(Number(data.width), Number(data.height));
+      controller.resize(Number(data.width), Number(data.height));
     });
-    register("edgeless.selection.group", () => this.group());
-    register("edgeless.selection.ungroup", () => this.ungroup());
-    register("edgeless.selection.align", (value) => {
+    register("edgeless.selection.group", (controller) => controller.group());
+    register("edgeless.selection.ungroup", (controller) => controller.ungroup());
+    register("edgeless.selection.align", (controller, value) => {
       const data = value as VisualCommandPayload<"edgeless.selection.align">;
       const mode = typeof data === "string" ? data : data.alignment;
       if (!["left", "center", "right", "top", "middle", "bottom"].includes(mode)) throw new Error("Unsupported alignment");
-      this.align(mode);
+      controller.align(mode);
     });
-    register("edgeless.selection.distribute", (value) => {
+    register("edgeless.selection.distribute", (controller, value) => {
       const data = value as VisualCommandPayload<"edgeless.selection.distribute">;
       const axis = typeof data === "string" ? data : data.axis;
       if (axis !== "horizontal" && axis !== "vertical") throw new Error("Unsupported distribution axis");
-      this.distribute(axis);
+      controller.distribute(axis);
     });
-    register("edgeless.selection.reorder", (value) => {
+    register("edgeless.selection.reorder", (controller, value) => {
       const data = value as VisualCommandPayload<"edgeless.selection.reorder">;
       const direction = typeof data === "string" ? data : data.direction;
       if (!["front", "forward", "backward", "back"].includes(direction)) throw new Error("Unsupported reorder direction");
-      this.reorder(direction);
+      controller.reorder(direction);
     });
-    register("edgeless.tool.set", (value) => {
+    register("edgeless.tool.set", (controller, value) => {
       const data = value as VisualCommandPayload<"edgeless.tool.set">;
-      this.setTool(data);
+      controller.setTool(data);
     });
+    return () => registrations.reverse().forEach((registration) => registration.dispose());
   }
 
   private registerToolSelectShortcut(): void {
-    const dispose = this.reactEditor.keyboard.register({
+    const dispose = this.editor.keyboard.register({
       id: KEYBOARD_BINDING_IDS.edgelessToolSelect,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessToolSelect],
       mode: "edgeless",
       priority: 20,
-      when: ({ root }) => !root.dataset.transforming && this.currentTool.tool !== "select",
+      when: ({ root }) => !root.dataset.transforming && this.tools.getTool().tool !== "select",
     }, () => {
       this.setTool("select");
       return true;
@@ -601,174 +594,17 @@ export class EdgelessVisualController {
     this.registrations.push({ dispose });
   }
 
-  private registerClipboard(): void {
-    // Label editors are plain-text hosts. Claiming copy/paste here would
-    // serialize the selected visual and ignore the caret inside the label.
-    const write = (event: ClipboardEvent, cut: boolean): boolean => {
-      const snapshot = this.selection.get();
-      if (!snapshot.active || !snapshot.items.length) return false;
-      const bundle = this.createClipboardBundle(snapshot.items);
-      const text = this.clipboardText(bundle);
-      event.clipboardData?.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(bundle));
-      event.clipboardData?.setData("text/plain", text);
-      event.clipboardData?.setData("text/html", `<p>${this.escapeHtml(text).replace(/\n/g, "<br>")}</p>`);
-      event.clipboardData?.setData("text/markdown", text);
-      if (cut) this.deleteSelection();
-      return true;
-    };
-    this.reactEditor.events.register({
-      id: "edgeless.visuals.copy",
-      type: "copy",
-      capture: true,
-      mode: "edgeless",
-      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
-    }, ({ raw }) => write(raw, false));
-    this.reactEditor.events.register({
-      id: "edgeless.visuals.cut",
-      type: "cut",
-      capture: true,
-      mode: "edgeless",
-      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
-    }, ({ raw }) => write(raw, true));
-    this.reactEditor.events.register({
-      id: "edgeless.visuals.paste",
-      type: "paste",
-      capture: true,
-      mode: "edgeless",
-      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
-    }, ({ raw }) => {
-      const structured = raw.clipboardData?.getData(RIVTO_CLIPBOARD_MIME);
-      if (!structured) return false;
-      let bundle: ClipboardBundle;
-      try {
-        bundle = JSON.parse(structured) as unknown as ClipboardBundle;
-        validateClipboardBundle(bundle);
-      } catch {
-        return false;
-      }
-      if (!bundle.elements?.length) return false;
-      this.pasteClipboardBundle(bundle);
-      return true;
-    });
+  private createClipboardBundle(items: readonly string[], operation: "copy" | "cut" | "duplicate" = "copy"): ClipboardBundle {
+    return this.runtime.clipboard.copyElements(items, this.editor, operation);
   }
 
-  private createClipboardBundle(items: readonly string[]): ClipboardBundle {
-    const leaves = this.leaves(items);
-    const included = new Set(leaves);
-    const collect = (id: string): void => { const group = this.groupRecord(id); if (!group || included.has(id)) return; included.add(id); group.children.forEach(collect); };
-    items.forEach(collect);
-    const rootIds = this.reactEditor.blocks.getRootIds();
-    const blockIds = new Set(leaves.flatMap((id) => { const element = this.element(id); return element?.type === "block" ? blockIdsOf(element, rootIds) : []; }));
-    const blocks = this.reactEditor.blocks.getBlocks().filter((block) => blockIds.has(block.id)).map(copy);
-    return {
-      version: 4,
-      blocks,
-      elements: this.reactEditor.elements.getElements().filter((element) => included.has(element.id)).map(copy),
-      selectedElementIds: [...items],
-    };
-  }
-
-  private pasteClipboardBundle(bundle: ClipboardBundle): EditorElement[] {
-    validateClipboardBundle(bundle);
-    if (!Array.isArray(bundle.elements)) throw new Error("Invalid edgeless clipboard payload");
-    const elementMap = this.reactEditor.elements.createImportIdMap(
-      bundle.elements.map((element) => element.id),
-    );
-    const sourceRootIds = bundle.blocks.map((block) => block.id);
-    const sourceElements = bundle.elements.map((element) => this.validateElement(element));
-    const selected = (bundle.selectedElementIds ?? []).flatMap((id) => elementMap.get(id) ?? []);
-    let elements: EditorElement[] = [];
-    const results: EditorElement[] = [];
-    this.reactEditor.history.batchUpdates(() => {
-      const afterId = this.reactEditor.blocks.getBlocks().at(-1)?.id;
-      const blockMap = this.reactEditor.blocks.importForest(bundle.blocks, afterId).idMap;
-      elements = sourceElements.map((element): EditorElement => {
-        const props = JSON.parse(JSON.stringify(element.props)) as Record<string, unknown>;
-        if (element.type === "block") Object.assign(props, blockRangeProps(blockIdsOf(element, sourceRootIds).flatMap((id) => blockMap.get(id) ?? [])));
-        if (element.type === "group") props.children = (Array.isArray(props.children) ? props.children : []).flatMap((id) => typeof id === "string" ? elementMap.get(id) ?? [] : []);
-        if (element.type === "connector") {
-          for (const key of ["source", "target"] as const) {
-            const endpoint = props[key];
-            if (!isRecord(endpoint)) continue;
-            const mapped = typeof endpoint.elementId === "string" ? elementMap.get(endpoint.elementId) : undefined;
-            props[key] = { ...endpoint, ...(mapped ? { elementId: mapped } : { elementId: undefined }), position: isRecord(endpoint.position) ? { x: Number(endpoint.position.x) + 24, y: Number(endpoint.position.y) + 24 } : endpoint.position };
-          }
-        }
-        return { ...element, id: elementMap.get(element.id)!, frame: { ...element.frame, x: element.frame.x + 24, y: element.frame.y + 24 }, props };
-      });
-      const blockElements = elements.filter((element) => element.type === "block");
-      const order = this.reactEditor.blocks.getRootIds();
-      const first = blockElements.flatMap((element) => blockIdsOf(element, order))[0];
-      const before = first ? order[order.indexOf(first) - 1] : undefined;
-      if (before) insertBlockElementSeparator(this.reactEditor, before);
-      blockElements.slice(0, -1).forEach((element) => {
-        const last = blockIdsOf(element, order).at(-1);
-        if (last) insertBlockElementSeparator(this.reactEditor, last);
-      });
-      elements.forEach((element) => {
-        try {
-          results.push(this.reactEditor.elements.insertElement(element));
-        } catch (error) {
-          throw new Error(`Failed to paste ${element.type} element ${element.id}`, { cause: error });
-        }
-      });
-    });
-    this.selection.set(selected.length ? selected : results.map(({ id }) => id));
-    return results;
-  }
-
-  private clipboardText(bundle: ClipboardBundle): string {
-    const blockText = bundle.blocks.map((block) => block.content).filter(Boolean);
-    const visualText = (bundle.elements ?? []).flatMap((element) => {
-      if ((element.type === "text" || element.type === "sticker" || element.type === "rectangle" || element.type === "ellipse" || element.type === "connector") && typeof element.props.text === "string" && element.props.text) {
-        return [element.props.text];
-      }
-      return [];
-    });
-    return [...blockText, ...visualText].filter(Boolean).join("\n");
-  }
-
-  private escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character] ?? character); }
-  private placeToolFromPreset(payload: PresetPayload): Extract<EdgelessVisualTool, { tool: "place" }> {
-    if (payload.kind === "sticker") {
-      return {
-        tool: "place",
-        kind: "sticker",
-        fill: payload.fill,
-        color: payload.color,
-        fontFamily: payload.fontFamily,
-      };
-    }
-    return { tool: "place", kind: payload.kind };
-  }
-
-  private rememberTool(tool: EdgelessVisualTool): void {
-    if (tool.tool === "place") {
-      if (tool.kind === "rectangle" || tool.kind === "ellipse") this.lastByCategory.shapes = copy(tool);
-      else if (tool.kind === "text") this.lastByCategory.text = copy(tool);
-      else if (tool.kind === "sticker") this.lastByCategory.stickers = copy(tool);
-      return;
-    }
-    if (tool.tool === "drawing" || tool.tool === "eraser") this.lastByCategory.drawing = copy(tool);
-    if (tool.tool === "connector") this.lastByCategory.connectors = copy(tool);
+  private pasteClipboardBundle(bundle: ClipboardBundle, operation: "paste" | "duplicate" = "paste"): EditorElementNode[] {
+    this.runtime.clipboard.paste({ bundle, placement: { mergeText: false } }, this.editor, operation);
+    return this.selection.get().items.flatMap(id => this.elements.getElementNode(id) ?? []);
   }
 
   /** Activates one canvas interaction tool. */
-  setTool(value: EdgelessVisualTool | "select"): void {
-    const tool = value === "select" ? { tool: "select" } as const : value;
-    if (!tool || !["select", "pan", "place", "drawing", "eraser", "connector"].includes(tool.tool)) throw new Error("Unsupported edgeless visual tool");
-    if (tool.tool === "place" && !(["rectangle", "ellipse", "text", "sticker"] as EdgelessPlaceKind[]).includes(tool.kind)) {
-      throw new Error("Unsupported place kind");
-    }
-    if (tool.tool === "drawing" && !["pencil", "pen", "marker"].includes(tool.brush)) throw new Error("Unsupported drawing brush");
-    if (tool.tool === "connector" && !["straight", "orthogonal", "curve"].includes(tool.route)) throw new Error("Unsupported connector route");
-    if (JSON.stringify(tool) !== JSON.stringify(this.currentTool)) {
-      this.placeSize = { ...DEFAULT_PLACE_SIZE };
-    }
-    this.currentTool = copy(tool);
-    this.rememberTool(tool);
-    this.emit();
-  }
+  setTool(value: EdgelessVisualTool | "select"): void { return this.tools.setTool(value); }
 
   /** Replaces the active canvas selection with validated element references. */
   select(value: unknown): void {
@@ -780,16 +616,16 @@ export class EdgelessVisualController {
   clearSelection(): void { this.selection.clear(); }
 
   /** @returns Complete top-level elements created from the active selection. */
-  duplicateSelection(): EditorElement[] {
+  duplicateSelection(): EditorElementNode[] {
     const items = this.selection.get().items;
     if (!items.length) return [];
-    const created = this.pasteClipboardBundle(this.createClipboardBundle(items));
+    const created = this.pasteClipboardBundle(this.createClipboardBundle(items, "duplicate"), "duplicate");
     const createdById = new Map(created.map((element) => [element.id, element]));
     return this.selection.get().items.flatMap((id) => createdById.get(id) ?? []);
   }
 
   private translate(items: readonly string[], dx: number, dy: number): void {
-    this.reactEditor.history.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.element(id)?.frame; if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));
+    this.runtime.history.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.element(id)?.frame; if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));
   }
 
   private leaves(items: readonly string[], visited = new Set<string>()): string[] {
@@ -827,27 +663,20 @@ export class EdgelessVisualController {
       : [];
   }
 
-  private bounds(id: string): VisualFrame | undefined {
-    const group = this.groupRecord(id);
-    if (group) return unionFrames(group.children.flatMap((child) => this.bounds(child) ?? []));
+  // Resolve through this controller so view proxies keep their Panel boundary.
+  private get geometry() { return new ElementGeometry((id) => this.element(id)); }
+  private bounds(id: string): VisualFrame | undefined { return this.geometry.bounds(id); }
+
+  private setFrame(id: string, frame: VisualFrame): void {
     const element = this.element(id);
-    return element ? rotatedFrameBounds(element.frame, this.rotation(id)) : undefined;
+    if (!element || element.type === "group") return;
+    const next = this.frame(frame);
+    this.elements.updateElement(id, { frame: next, props: drawingResizeProps(element, next) });
   }
-
-  private setFrame(id: string, frame: VisualFrame): void { if (this.element(id)?.type !== "group") this.reactEditor.elements.updateElement(id, { frame: this.frame(frame) }); }
-  private parentId(id: string): string | undefined { return this.getGroups().find((group) => group.children.includes(id))?.id; }
-
-  private normalizeGroups(): void {
-    const elements = new Set(this.reactEditor.elements.getElements().map((element) => element.id));
-    const groups = new Map(this.getGroups().map((group) => [group.id, group]));
-    const parents = new Set<string>();
-    const reaches = (from: string, target: string, seen = new Set<string>()): boolean => { if (from === target) return true; if (seen.has(from)) return false; seen.add(from); return groups.get(from)?.children.some((child) => groups.has(child) && reaches(child, target, seen)) ?? false; };
-    groups.forEach((group) => {
-      const local = new Set<string>();
-      const children = group.children.filter((id) => elements.has(id) && id !== group.id && !local.has(id) && !parents.has(id) && !(groups.has(id) && reaches(id, group.id)) && (local.add(id), parents.add(id), true));
-      if (!children.length) this.reactEditor.elements.removeElement(group.id);
-      else if (children.length !== group.children.length) this.reactEditor.elements.updateElement(group.id, { props: { children } });
-    });
+  private parentId(id: string): string | undefined {
+    const parent = this.elements.getParentId(id);
+    // Stop group selection and connector attachment at the Panel boundary.
+    return parent && this.elements.hasElement(parent) ? parent : undefined;
   }
 
   private normalizeConnectors(): void {
@@ -855,18 +684,19 @@ export class EdgelessVisualController {
       let missing = false;
       const resolve = (endpoint: ConnectorEndpoint): ConnectorEndpoint => {
         if (!endpoint.elementId) return endpoint;
-        const frame = this.bounds(endpoint.elementId);
+        const inSubtree = this.element(endpoint.elementId) !== undefined;
+        const frame = inSubtree ? this.bounds(endpoint.elementId) : undefined;
         if (!frame) {
           missing = true;
           const detached = { ...endpoint };
           delete detached.elementId;
           return detached;
         }
-        return { ...endpoint, position: endpointPoint(endpoint, this.element(endpoint.elementId)?.frame, this.rotation(endpoint.elementId)) };
+        return { ...endpoint, position: endpointPoint(endpoint, this.geometry.frame(endpoint.elementId), this.rotation(endpoint.elementId)) };
       };
       const source = resolve(connector.source);
       const target = resolve(connector.target);
-      if (missing && this.options.orphanConnectors === "delete") { this.reactEditor.elements.removeElement(connector.id); return; }
+      if (missing && this.options.orphanConnectors === "delete") { this.elements.removeElement(connector.id); return; }
       const sourcePoint = this.resolveEndpoint(source);
       const targetPoint = this.resolveEndpoint(target);
       const frame = connectorFrame(
@@ -879,7 +709,7 @@ export class EdgelessVisualController {
         target.elementId ? this.bounds(target.elementId) : undefined,
       );
       if (JSON.stringify(source) !== JSON.stringify(connector.source) || JSON.stringify(target) !== JSON.stringify(connector.target) || JSON.stringify(frame) !== JSON.stringify(connector.frame)) {
-        this.reactEditor.elements.updateElement(connector.id, { frame, props: { source, target } });
+        this.elements.updateElement(connector.id, { frame, props: { source, target } });
       }
     });
   }
@@ -893,7 +723,7 @@ export class EdgelessVisualController {
   }
 
   private resolveEndpoint(endpoint: ConnectorEndpoint): { x: number; y: number } {
-    const frame = endpoint.elementId ? this.element(endpoint.elementId)?.frame : undefined;
+    const frame = endpoint.elementId ? this.geometry.frame(endpoint.elementId) : undefined;
     return endpointPoint(endpoint, frame, endpoint.elementId ? this.rotation(endpoint.elementId) : 0);
   }
 
@@ -902,24 +732,20 @@ export class EdgelessVisualController {
     return element?.type !== "connector" && typeof element?.props.rotation === "number" ? normalizeRotation(element.props.rotation) : 0;
   }
 
-  private remember(kind: EdgelessVisual["kind"], patch: Record<string, unknown>): void {
-    const target = kind === "rectangle" || kind === "ellipse" ? this.defaults.shape : kind === "drawing" ? this.defaults.drawing : kind === "text" ? this.defaults.text : kind === "sticker" ? this.defaults.sticker : kind === "connector" ? this.defaults.connector : undefined;
-    if (!target) return;
-    Object.keys(target).forEach((key) => { if (key in patch) Object.assign(target, { [key]: copy(patch[key]) }); });
-  }
+  private remember(kind: EdgelessVisual["kind"], patch: Record<string, unknown>): void { return this.tools.remember(kind, patch); }
 
-  private element(id: string): EditorElement | undefined { return this.reactEditor.elements.getElement(id); }
+  private element(id: string): EditorElementNode | undefined { return this.elements.getElementNode(id); }
   private visual(id: string): EdgelessVisual | undefined { return this.getVisuals().find((visual) => visual.id === id); }
-  private groupRecord(id: string): VisualGroup | undefined { return this.getGroups().find((group) => group.id === id); }
+  private groupRecord(id: string): VisualGroup | undefined {
+    const element = this.element(id);
+    if (element?.type !== "group") return undefined;
+    return { id, title: typeof element.props.title === "string" ? element.props.title : "Group", children: element.childIds };
+  }
 
   private frame(value: VisualFrame): VisualFrame {
     if (![value.x, value.y, value.width, value.height].every(Number.isFinite) || value.width <= 0 || value.height <= 0) throw new Error("Visual frame requires finite positive geometry");
     return { x: value.x, y: value.y, width: value.width, height: value.height };
   }
 
-  private validateElement(value: unknown): EditorElement {
-    if (!isRecord(value)) throw new Error("Invalid edgeless clipboard element");
-    validateElementCollection([value as unknown as EditorElement]);
-    return copy(value) as unknown as EditorElement;
-  }
+
 }

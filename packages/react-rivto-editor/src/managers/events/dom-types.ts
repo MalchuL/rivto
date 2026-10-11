@@ -34,6 +34,8 @@ export interface DOMEventDefinition<
   readonly mode?: EditorMode | readonly EditorMode[];
   /** Native capture option. */
   readonly capture?: boolean;
+  /** Cancel the browser default when handled; defaults to true. False still stops later editor handlers. */
+  readonly preventDefault?: boolean;
   /** Native passive option. */
   readonly passive?: boolean;
   /** Dynamic availability predicate evaluated immediately before the handler. */

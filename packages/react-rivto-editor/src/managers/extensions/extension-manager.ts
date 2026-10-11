@@ -1,11 +1,11 @@
-import type { ReactEditorImpl } from "../../react-editor";
-import type { ExtensionsCapability } from "../../capabilities";
+import type { EditorRuntime } from "../../editor/editor-runtime";
 import { RevisionStore } from "../../internal-store";
+import type { ExtensionsApi } from "./api";
 import type {
   ExtensionComponent,
   ExtensionMountPosition,
-  RegistrationDisposer,
   ReactEditorExtension,
+  RegistrationDisposer,
 } from "./types";
 
 /**
@@ -15,7 +15,7 @@ import type {
  * event conditions, while surface renderers and wrappers belong exclusively to
  * SurfaceManager.
  */
-export class ExtensionManager implements ExtensionsCapability {
+export class ExtensionManager implements ExtensionsApi {
   private readonly store = new RevisionStore();
   private readonly extensionIds = new Set<string>();
   private readonly extensionDisposers: RegistrationDisposer[] = [];
@@ -30,9 +30,9 @@ export class ExtensionManager implements ExtensionsCapability {
   /**
    * Creates the mode-independent extension lifecycle owner.
    *
-   * @param reactEditor - Owning React runtime supplied during extension setup.
+   * @param editorRuntime - Owning React runtime supplied during extension setup.
    */
-  constructor(private readonly reactEditor: ReactEditorImpl) {}
+  constructor(private readonly editorRuntime: EditorRuntime) {}
 
   /**
    * Installs the creation-time extension list.
@@ -158,7 +158,7 @@ export class ExtensionManager implements ExtensionsCapability {
     this.activeExtensionRegistrations = owned;
     let dispose: RegistrationDisposer = () => undefined;
     try {
-      const cleanup = extension.setup(this.reactEditor);
+      const cleanup = extension.setup(this.editorRuntime);
       dispose = () => {
         let cleanupError: unknown;
         try {

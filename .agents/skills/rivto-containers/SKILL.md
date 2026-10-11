@@ -104,11 +104,12 @@ instances, duplicate drag targets, or manage collapse visibility.
 For a contentless root or structural shell:
 
 ```tsx
-const editing = useBlockEditing(blockId, { textEdit: false });
-return <div {...editing.attributes}>{/* structural UI */}</div>;
+const editing = useBlockNode(blockId);
+const attributes = useBlockSelectionAnchor(blockId);
+return <div {...attributes}>{/* structural UI */}</div>;
 ```
 
-Spread `editing.attributes` on the region representing the block so selection
+Spread `attributes` on the region representing the block so selection
 and dragging retain a `data-block-selection-anchor`. Do not add
 `contentEditable` to contentless roots.
 

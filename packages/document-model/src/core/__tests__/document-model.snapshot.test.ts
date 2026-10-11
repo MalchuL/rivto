@@ -40,12 +40,12 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
     const cyclic = paragraph("root", "Root");
     cyclic.children.push(cyclic);
 
-    expect(() => model.loadSnapshot({ version: 6, blocks: [cyclic] }))
+    expect(() => model.loadSnapshot({ version: 9, blocks: [cyclic] }))
       .toThrow("Block forest must be acyclic");
     expect(model.blocks.getBlockNode("kept")?.content).toBe("Safe");
 
     expect(() => model.loadSnapshot({
-      version: 6,
+      version: 9,
       blocks: [paragraph("dup"), paragraph("dup")],
     })).toThrow("Duplicate block dup");
     expect(model.blocks.hasBlock("kept")).toBe(true);
@@ -61,8 +61,7 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
       .toThrow("Block ID is required");
     expect(() => model.blocks.insertBlock({ id: "   ", type: "paragraph" }))
       .toThrow("Block ID is required");
-    expect(() => model.elements.insertElement({
-      id: "  ",
+    expect(() => model.elements.insertElement({ id: "  ",
       type: "note",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
@@ -81,8 +80,7 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
       children: [{ type: "paragraph", content: "Nested" }],
     });
     const childId = parent.children[0]?.id;
-    const element = model.elements.insertElement({
-      type: "note",
+    const element = model.elements.insertElement({ type: "note",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
     });
@@ -97,7 +95,7 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
     const doc = new YjsDoc("lightweight-mutation-results");
     const model = new DocumentModelImpl(doc);
     const getBlock = jest.spyOn(model.blocks, "getBlock");
-    const getElement = jest.spyOn(model.elements, "getElement");
+    const getElementNode = jest.spyOn(model.elements, "getElementNode");
 
     expect(model.blocks.insertBlock({
       id: "block",
@@ -139,35 +137,31 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
         content: "updated",
         childIds: ["child"],
       }]);
-    expect(model.elements.insertElement({
-      id: "element",
+    expect(model.elements.insertElement({ id: "element",
       type: "note",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
-    })).toEqual({
-      id: "element",
+    })).toEqual({ children: [], id: "element",
       type: "note",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
       props: {},
     });
-    expect(model.elements.updateElement("element", { zIndex: 1 })).toEqual({
-      id: "element",
+    expect(model.elements.updateElement("element", { zIndex: 1 })).toEqual({ childIds: [], id: "element",
       type: "note",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 1,
       props: {},
     });
     expect(model.elements.updateElements([{ id: "element", patch: { props: { done: true } } }]))
-      .toEqual([{
-        id: "element",
+      .toEqual([{ childIds: [], id: "element",
         type: "note",
         frame: { x: 0, y: 0, width: 10, height: 10 },
         zIndex: 1,
         props: { done: true },
       }]);
     expect(getBlock).not.toHaveBeenCalled();
-    expect(getElement).not.toHaveBeenCalled();
+    expect(getElementNode).not.toHaveBeenCalled();
     void doc.destroy();
   });
 
@@ -175,8 +169,7 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
     const doc = new YjsDoc("import-ids");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "occupied-block", type: "paragraph" });
-    model.elements.insertElement({
-      id: "occupied-element",
+    model.elements.insertElement({ id: "occupied-element",
       type: "note",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,

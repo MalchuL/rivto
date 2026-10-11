@@ -5,9 +5,9 @@
  * re-render already-selected neighbors. `useBlockSelection` reads the full
  * list and is for chrome that inspects the containing block payload.
  */
-import { useCallback, useSyncExternalStore } from "react";
 import { hasBlockRanges, type Selection } from "@chulane/rivto";
-import { useEditorContext } from "../../editor-context";
+import { useCallback, useSyncExternalStore } from "react";
+import { useEditorView } from "../../editor-view/use-editor-view";
 import { useEditorSelection } from "../editor/use-editor-selection";
 
 /**
@@ -21,15 +21,15 @@ import { useEditorSelection } from "../editor/use-editor-selection";
  * @throws If called outside an EditorView subtree.
  */
 export function useBlockSelected(blockId: string): boolean {
-  const { reactEditor } = useEditorContext();
+  const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.selection.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => editorView.selection.subscribe(listener),
+    [editorView],
   );
   return useSyncExternalStore(
     subscribe,
-    () => reactEditor.selection.isBlockSelected(blockId),
-    () => reactEditor.selection.isBlockSelected(blockId),
+    () => editorView.selection.isBlockSelected(blockId),
+    () => editorView.selection.isBlockSelected(blockId),
   );
 }
 

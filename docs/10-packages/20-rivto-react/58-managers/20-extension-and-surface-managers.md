@@ -2,7 +2,7 @@
 
 ## `ExtensionManager`
 
-`reactEditor.extensions` владеет setup order, rollback, cleanup и components, mounted рядом с active surface.
+`editorRuntime.extensions` владеет setup order, rollback, cleanup и components, mounted рядом с active surface.
 
 ### Properties
 
@@ -19,15 +19,15 @@
 
 ### Runtime methods класса
 
-`initialize(extensions)` вызывается `ReactEditorImpl` один раз; repeated call или duplicate/empty extension ID throws. `own(release)` создаёт idempotent owned disposer. `assertActive()` throws `React editor is destroyed` после teardown. `destroy()` повторно безопасен и очищает custom cleanup/registrations в reverse order.
+`initialize(extensions)` вызывается `EditorRuntime` один раз; repeated call или duplicate/empty extension ID throws. `own(release)` создаёт idempotent owned disposer. `assertActive()` throws `React editor is destroyed` после teardown. `destroy()` повторно безопасен и очищает custom cleanup/registrations в reverse order.
 
 ### Modes
 
-Mounted components mode-independent и остаются в tree при surface switch. Component сам использует `useEditorMode()` либо mode-filtered events. Это сохраняет его React state между page и edgeless, если он не возвращает `null`/не remounts собственные children.
+Mounted components mode-independent и остаются в tree при surface switch. Component сам использует `useContext(SurfaceContext)` либо mode-filtered events. Это сохраняет его React state между page и edgeless, если он не возвращает `null`/не remounts собственные children.
 
 ## `SurfaceManager`
 
-`reactEditor.surfaces` владеет root component на каждый `EditorMode`, block wrappers и editor wrappers.
+`editorRuntime.surfaces` владеет root component на каждый `EditorMode`, block wrappers и editor wrappers.
 
 ### Properties
 
@@ -53,6 +53,12 @@ Mounted components mode-independent и остаются в tree при surface s
 Surface `subscribe()` имеет ту же семантику `RevisionStore`: один stream registry revision, несколько distinct callbacks без override, deduplication одинаковой function reference, idempotent unsubscribe и отсутствие immediate notification. Изменения surface, block wrappers и editor wrappers вызывают общий stream; subscriber перечитывает `revision` и нужный getter. Destroy очищает subscriptions.
 
 Первый registered wrapper — outermost. Block wrappers применяются только к указанной surface и получают один и тот же persisted block snapshot. Editor wrapper оборачивает children, extension components и active surface целиком.
+
+### Block slots
+
+`registerBlockSlot({ position, component, priority?, mode?, when? })` добавляет component с контекстом `{ block, mode, selected }` и возвращает disposer. `getBlockSlots(position, props)` возвращает отфильтрованные components в порядке priority. Slots используют общий registry revision и cleanup extensions.
+
+Позиции по краям и `start`/`end` принадлежат строке блока. Позиция `body` находится под строкой, перед обычными children; embedding размещает там свой source view, чтобы controls строки не охватывали вложенный редактор. Block wrappers продолжают декорировать единый каркас, а renderer отвечает за содержимое строки.
 
 ### Mode switch
 

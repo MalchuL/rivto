@@ -37,6 +37,9 @@ export function validateClipboardBundle(bundle: unknown): asserts bundle is Clip
   if (!Array.isArray(value.blocks)) {
     throw new Error("Unsupported Rivto clipboard payload");
   }
+  if (value.sourceDocumentId !== undefined && (typeof value.sourceDocumentId !== "string" || !value.sourceDocumentId.trim())) {
+    throw new Error("Unsupported Rivto clipboard source document");
+  }
   validateBlockForest(value.blocks, { requireComplete: true });
   if (value.elements !== undefined) validateElementCollection(value.elements);
   if (value.pluginData !== undefined && (typeof value.pluginData !== "object" || value.pluginData === null || Array.isArray(value.pluginData))) {

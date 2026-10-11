@@ -6,7 +6,7 @@
 
 Основной entry экспортирует:
 
-- `createReactEditor`, `EditorView`, runtime types;
+- `createEditorRuntime`, `EditorView`, runtime types;
 - `standardPreset`, `blockExtension`, `pageDragExtension`, `edgelessPreset`, `edgelessSurfaceExtension`;
 - default writing, separator и error block APIs;
 - `edgelessVisualsExtension` и visual types;
@@ -23,7 +23,9 @@
 
 Скомпилированный Tailwind v4 bundle (`dist/styles.css`, собирается `pnpm build`) без preflight: chrome стилизован utilities и shadcn/ui primitives, structural rules лежат в colocated CSS per feature. Все правила layered, поэтому unlayered CSS приложения переопределяет их; theme настраивается через `--rivto-*` custom properties. Подробнее: `packages/react-rivto-editor/docs/styling.md`.
 
-## Capability methods
+## Контракты менеджеров
+
+Регистрация принадлежит runtime; локальные операции отмечены префиксом editorView.
 
 | Property | Основные methods |
 | --- | --- |
@@ -33,22 +35,32 @@
 | `renderers` | `register`, `get`, `has`, `delete`, `subscribe`, `revision` |
 | `surfaces` | `register/get/delete`, `registerBlockWrapper`, `registerEditorWrapper`, wrapper getters, subscription |
 | `extensions` | `mount`, `getComponents`, `subscribe`, `revision` |
-| `events` | `register`, `delete`, `setRoot`, `getRoot` |
+| `runtime.events` | `register`, `delete` |
+| `runtime.editorViews` | `getActive`, `getDefault`, `getActiveRoot`, `getDefaultRoot` |
+| `editorView.events` | `register`, `delete`, `setRoot`, `getRoot` |
 | `keyboard` | `register`, `delete`, `replaceKeymap`, `setKeymapOverride` |
-| `selection` | `readDOM`, `restoreDOM`, `clearDOMHighlight`, `updateDOMHighlight` |
-| `clipboard` | `registerFormatter`, `registerParser`, `format`, `parse` |
-| `slashCommands` | `register`, `delete`, `getAll`, `execute`, `subscribe`, `revision` |
+| `editorView.selection` | `readDOM`, `restoreDOM`, `clearDOMHighlight`, `updateDOMHighlight` |
+| `runtime.clipboardFormats` | `registerFormatter`, `registerParser`, `format`, `parse` |
+| `runtime.slashCommands` | `register`, `delete`, `get`, `getAll`, `subscribe`, `revision` |
+| `editorView.slashCommands` | `getAll(context)`, `execute`, `subscribe`, `revision` |
+| `editorView.clipboard` | `copy`, `copyText`, `cut`, `paste` |
 
 Registrations обычно возвращают idempotent disposer и автоматически принадлежат extension lifecycle. Stable-key deletion возвращает `boolean`.
 
 ## От generic к concrete в исходниках
 
 ```text
-src/types.ts + capabilities.ts
-  public contracts
+src/editor/
+  runtime, storage, creation options
 
-src/react-editor.tsx + editor-view.tsx
-  composition and React boundary
+src/editor-view/
+  component, controller, context, useEditorView, public view interface
+
+src/managers/*/api.ts and focused *-api.ts
+  public contracts beside their implementations
+
+src/block-behaviors/
+  shared block interaction policy
 
 src/managers/
   registries, events, selection and lifecycle

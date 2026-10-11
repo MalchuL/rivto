@@ -7,15 +7,25 @@
  * @module
  */
 import { useCallback, useSyncExternalStore } from "react";
-import { useEditorContext } from "../../editor-context";
+import { useEditorView } from "../../editor-view/use-editor-view";
 
-/** @returns Stable detached elements refreshed only after element mutations. */
+/**
+ * Subscribes to all flat element records in the current EditorView's canvas.
+ *
+ * Includes roots and descendants once each, with childIds rather than recursive
+ * children. The document manager caches the array between canvas changes. Treat
+ * returned records as read-only and use editor commands for mutations; changing
+ * these objects does not update collaborative storage.
+ *
+ * @returns Current detached node array, empty when the canvas has no elements.
+ * @throws If called outside an EditorView subtree.
+ */
 export function useElements() {
-  const { reactEditor } = useEditorContext();
+  const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.elements.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => editorView.elements.subscribe(listener),
+    [editorView],
   );
-  const getSnapshot = useCallback(() => reactEditor.elements.getElements(), [reactEditor]);
+  const getSnapshot = useCallback(() => editorView.elements.getElementNodes(), [editorView]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

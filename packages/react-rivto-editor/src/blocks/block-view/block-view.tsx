@@ -23,7 +23,7 @@ export interface BlockViewProps extends Omit<HTMLAttributes<HTMLDivElement>, "ch
 /**
  * Renders the stable DOM boundary for one editor block.
  *
- * Interaction policy lives in `views/BaseBlockView`, not here. This component
+ * Interaction policy lives in `views/DefaultBlockBehavior`, not here. This component
  * only owns the `data-block-*` contract shared by every surface.
  *
  * BlockView owns only the DOM contract shared by every surface: a block ID,

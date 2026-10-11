@@ -61,7 +61,7 @@ describe("DocumentPluginDataManager", () => {
       visual: { one: { x: 1 } },
     });
 
-    document.loadSnapshot({ version: 6, pluginData: {
+    document.loadSnapshot({ version: 9, pluginData: {
       neighbor: { retained: false },
       visual: { two: { x: 2 } },
     } });

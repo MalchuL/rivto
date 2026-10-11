@@ -1,5 +1,5 @@
 import type { ReactEditorExtension } from "../../../managers";
-import type { EditorElement } from "@chulane/rivto";
+import type { EditorElementNode } from "@chulane/rivto";
 import { createElement } from "react";
 import { EdgelessVisualController } from "./controller";
 import { EdgelessVisualLayer } from "./visual-layer";
@@ -26,11 +26,11 @@ export class EdgelessVisualsExtension implements ReactEditorExtension {
 
   constructor(private readonly options: EdgelessVisualsOptions = {}) {}
 
-  setup(reactEditor: Parameters<ReactEditorExtension["setup"]>[0]): () => void {
+  setup(editorRuntime: Parameters<ReactEditorExtension["setup"]>[0]): () => void {
     if (this.controller) throw new Error("Edgeless visuals extension is already installed");
-    const controller = new EdgelessVisualController(reactEditor, this.options);
+    const controller = new EdgelessVisualController(editorRuntime, this.options);
     this.controller = controller;
-    reactEditor.extensions.mount(() => createElement(EdgelessVisualLayer, {
+    editorRuntime.extensions.mount(() => createElement(EdgelessVisualLayer, {
       controller,
       options: this.options,
     }));
@@ -41,44 +41,44 @@ export class EdgelessVisualsExtension implements ReactEditorExtension {
   }
 
   /** @param payload - Visual kind and persisted values. @returns Complete created element. */
-  create(payload: CreateVisualPayload): EditorElement { return this.api.create(payload); }
+  create(payload: CreateVisualPayload): EditorElementNode { return this.api.create(payload); }
   /** @param payload - Optional sticky-note values. @returns Complete created element. */
-  createSticker(payload: VisualPayload<"sticker"> = {}): EditorElement {
+  createSticker(payload: VisualPayload<"sticker"> = {}): EditorElementNode {
     return this.create({ kind: "sticker", ...payload });
   }
   /** @param payload - Optional rectangle values. @returns Complete created element. */
-  createRectangle(payload: VisualPayload<"rectangle"> = {}): EditorElement {
+  createRectangle(payload: VisualPayload<"rectangle"> = {}): EditorElementNode {
     return this.create({ kind: "rectangle", ...payload });
   }
   /** @param payload - Optional ellipse values. @returns Complete created element. */
-  createEllipse(payload: VisualPayload<"ellipse"> = {}): EditorElement {
+  createEllipse(payload: VisualPayload<"ellipse"> = {}): EditorElementNode {
     return this.create({ kind: "ellipse", ...payload });
   }
   /** @param payload - Optional canvas-text values. @returns Complete created element. */
-  createText(payload: VisualPayload<"text"> = {}): EditorElement {
+  createText(payload: VisualPayload<"text"> = {}): EditorElementNode {
     return this.create({ kind: "text", ...payload });
   }
   /** @param payload - Drawing geometry and style. @returns Complete created element. */
-  createDrawing(payload: VisualPayload<"drawing">): EditorElement {
+  createDrawing(payload: VisualPayload<"drawing">): EditorElementNode {
     return this.create({ kind: "drawing", ...payload });
   }
   /** @param payload - Connector endpoints and style. @returns Complete created element. */
-  createConnector(payload: VisualPayload<"connector">): EditorElement {
+  createConnector(payload: VisualPayload<"connector">): EditorElementNode {
     return this.create({ kind: "connector", ...payload });
   }
 
   /** @param payload - Element identity and mutable visual fields. @returns Complete updated element. */
-  update(payload: UpdateVisualPayload): EditorElement { return this.api.update(payload); }
+  update(payload: UpdateVisualPayload): EditorElementNode { return this.api.update(payload); }
   /** @returns Detached active canvas selection. */
   getSelection() { return this.api.getSelection(); }
   /** Replaces the active canvas selection. */
   select(items: readonly EdgelessSelectionRef[]): void { this.api.select(items); }
   /** @returns Complete duplicated top-level elements. */
-  duplicateSelection(): EditorElement[] { return this.api.duplicateSelection(); }
+  duplicateSelection(): EditorElementNode[] { return this.api.duplicateSelection(); }
   /** Deletes the active selection. */
   deleteSelection(): void { this.api.deleteSelection(); }
   /** @returns Complete created group element. */
-  group(): EditorElement { return this.api.group(); }
+  group(): EditorElementNode { return this.api.group(); }
   /** Replaces selected groups with their direct children. */
   ungroup(): void { this.api.ungroup(); }
   /** Clears the active canvas selection. */

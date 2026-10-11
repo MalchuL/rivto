@@ -11,6 +11,7 @@
  *
  * @module
  */
+import { editorControlProps } from "../../constants";
 import { DragDropProvider, type DragEndEvent } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { arrayMove } from "@dnd-kit/helpers";
@@ -65,7 +66,7 @@ export function reorderTodoStatuses(
 function SortableStatusRow({ status, position, total }: SortableStatusRowProps) {
   const { ref, isDragging } = useSortable({ id: status, index: position - 1 });
   return (
-    <Button
+    <Button {...editorControlProps}
       ref={ref}
       variant="secondary"
       size="sm"

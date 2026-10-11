@@ -1,6 +1,6 @@
 import type { EditorMode } from "@chulane/rivto";
 import { useCallback, useSyncExternalStore } from "react";
-import { useEditorContext } from "../../editor-context";
+import { useEditorContext } from "../../editor-view/editor-context";
 
 /**
  * Value and mutation API returned by {@link useEditorMode}.
@@ -24,8 +24,10 @@ export interface UseEditorModeResult {
 /**
  * Returns the editor's active presentation mode and a stable mode setter.
  *
- * Mode is view-local runtime state and is never persisted in the collaborative
- * document. This hook subscribes directly to ModeManager.
+ * Mode is local presentation state, never persisted in the collaborative document.
+ * Ordinary views share the runtime ModeManager. Panels have their own manager,
+ * unless the host supplies one to retain the mode across navigation. This hook
+ * subscribes directly to the manager of the surrounding view.
  *
  * The returned `setMode` function keeps the same identity while the surrounding
  * component rerenders. Calling it with the active mode is a no-op.
@@ -34,15 +36,15 @@ export interface UseEditorModeResult {
  * @throws If called outside an EditorView subtree.
  */
 export function useEditorMode(): UseEditorModeResult {
-  const { reactEditor } = useEditorContext();
+  const { editorView } = useEditorContext();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.mode.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => editorView.mode.subscribe(listener),
+    [editorView],
   );
-  const mode = useSyncExternalStore(subscribe, () => reactEditor.mode.get(), () => reactEditor.mode.get());
+  const mode = useSyncExternalStore(subscribe, () => editorView.mode.get(), () => editorView.mode.get());
   const setMode = useCallback(
-    (mode: EditorMode) => reactEditor.mode.set(mode),
-    [reactEditor],
+    (mode: EditorMode) => editorView.mode.set(mode),
+    [editorView],
   );
 
   return {

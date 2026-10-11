@@ -49,7 +49,7 @@ React package
 
 1. Определить, является ли state persisted или local.
 2. Persisted operation разместить во focused manager/document model.
-3. Local mode/selection behavior оставить в соответствующем manager.
+3. Local selection behavior оставить в single core manager; surface choice принадлежит React host.
 4. Runtime method добавлять только для действительно cross-cutting lifecycle operation.
 5. Named command должен валидировать unknown payload на своей boundary.
 6. Document mutation обернуть `documentCommand()` или explicit `history.batchUpdates()`.
@@ -59,7 +59,7 @@ React package
 ## Основные consumers
 
 - React hooks используют `subscribe()` и `revision` через external-store pattern.
-- Page/edgeless surfaces читают `blocks`, `elements`, `mode` и `selection`.
+- Page/edgeless surfaces читают `blocks`, `elements` и `selection` своей document view; surface type задан компонентом.
 - Keyboard, slash, clipboard и drag extensions вызывают typed methods или named commands.
 - Demo использует public managers и factory как integration host.
 - Applications могут внедрить custom `CRDTDoc`, persistence и provider lifecycle.

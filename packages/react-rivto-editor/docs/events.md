@@ -1,6 +1,6 @@
 # React events and keymaps
 
-`ReactEditor` owns an `EventManager` for delegated native DOM events and a
+`EditorViewApi` owns an `EventManager` for delegated native DOM events and a
 `KeyboardManager` for semantic shortcuts. The keyboard manager registers its
 surface/window keydown and keyup transport through the event manager, so both
 follow the active surface's browser realm and share event claiming.
@@ -21,7 +21,7 @@ registration's `when` predicate and handler.
 Functional extensions can register delegated native behavior directly:
 
 ```ts
-reactEditor.events.register({
+editorRuntime.events.register({
   id: "acme.pointer",
   type: "pointerdown",
   target: "surface",
@@ -89,7 +89,7 @@ Keyboard registrations describe semantic actions rather than checking keys
 inside extensions:
 
 ```ts
-reactEditor.keyboard.register({
+editorRuntime.keyboard.register({
   id: "block.indent",
   keys: ["Tab"],
   target: "surface",
@@ -132,7 +132,7 @@ as indent and delete remain handlers.
 Initial overrides can be supplied when the React editor is created:
 
 ```ts
-createReactEditor({
+createEditorRuntime({
   editor,
   extensions,
   keymap: {
@@ -151,12 +151,12 @@ typos remain visible. Each extension declares its own default keys beside
 The active map can be replaced without reinstalling extensions:
 
 ```ts
-reactEditor.keyboard.replaceKeymap({
+editorRuntime.keyboard.replaceKeymap({
   "block.indent": ["Primary+ArrowRight"],
 });
 
-reactEditor.keyboard.setKeymapOverride("history.redo", []); // disable
-reactEditor.keyboard.setKeymapOverride("history.redo", undefined); // defaults
+editorRuntime.keyboard.setKeymapOverride("history.redo", []); // disable
+editorRuntime.keyboard.setKeymapOverride("history.redo", undefined); // defaults
 ```
 
 `replaceKeymap` restores declared defaults for omitted IDs.

@@ -1,4 +1,6 @@
+import type { EditorRuntime } from "../../../../editor/editor-runtime";
 /** Keyboard registration for resetting the first empty custom block. */
+import { createBlockBehaviorContext } from "../../../../block-behaviors/context";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -7,31 +9,26 @@ import {
   readKeyboardSelection,
   shouldDeleteSelection,
 } from "../../../../managers";
-import type { ReactEditor } from "../../../../types";
-import { createBlockViewContext } from "../../../../views/context";
-import { dispatchViewAction } from "../../../../views/dispatch";
 
 /**
  * Registers reset-to-writing behavior for Backspace at offset zero.
  *
- * @param reactEditor - Runtime receiving the keyboard binding.
+ * @param editorRuntime - Runtime receiving the keyboard binding.
  * @returns No value.
  */
-export function registerEmptyBlockReset(reactEditor: ReactEditor): void {
-  reactEditor.keyboard.register({
+export function registerEmptyBlockReset(editorRuntime: EditorRuntime): void {
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.emptyBlockReset,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.emptyBlockReset],
-    when: ({ raw: event, blockId }) =>
+    when: ({ editorView, raw: event, blockId }) =>
       isEditableKeyboardEvent(event) &&
-      !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, reactEditor, blockId)),
-  }, ({ root, blockId }) => {
-    const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, reactEditor, blockId));
+      !shouldDeleteSelection(readKeyboardSelection(editorView.selection, editorView.runtime.blocks, blockId)),
+  }, ({ editorView, root, blockId }) => {
+    const target = firstKeyboardTarget(readKeyboardSelection(editorView.selection, editorView.runtime.blocks, blockId));
     if (!target?.collapsed || target.offset !== 0) return false;
-    const context = createBlockViewContext(reactEditor, target.blockId, root, reactEditor.selection.get());
+    const context = createBlockBehaviorContext(editorView, target.blockId, root, editorView.selection.get());
     if (!context) return false;
-    return dispatchViewAction(
-      reactEditor.views.resolve(context.block.id),
-      reactEditor.views.fallback,
+    return editorView.runtime.blockBehaviors.dispatch(
       "onResetEmpty",
       context,
       target,

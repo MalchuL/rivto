@@ -3,7 +3,7 @@ export {
   adjacentBlockSelection,
   blockSelection,
   extendBlockSelection,
-  toggleBlockSelection,
+  toggleBlockSelection
 } from "./block-selection";
 export { reconcileCollapsedSelection } from "./collapsed-selection";
 export { keyboardMovePlacement } from "./move-placement";
@@ -13,12 +13,12 @@ export {
   navigationDomRoot,
   navigationOutlineBlocks,
   owningBlockElement,
-  owningRootId,
+  owningRootId
 } from "./scope";
 export type {
   IsCollapsedBlock,
   KeyboardMovePlacement,
   PageBlockEntry,
   SelectedMoveRoots,
-  VerticalDirection,
+  VerticalDirection
 } from "./types";

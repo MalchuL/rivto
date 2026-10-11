@@ -11,7 +11,6 @@
 import type { ReactEditorExtension } from "../../managers";
 import type { EdgelessSurfaceOptions } from "./surface";
 import { registerEdgelessDeletion } from "./edgeless-deletion";
-import { EdgelessElementDragSlot } from "./edgeless-drag-handle";
 import { registerEdgelessMovement } from "./edgeless-movement";
 import { installEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 import { EdgelessInteractionOverlay } from "./edgeless-selection";
@@ -24,7 +23,7 @@ export function edgelessSurfaceExtension(
 ): ReactEditorExtension {
   return {
     id: "surface.edgeless",
-    setup: (reactEditor) => registerEdgelessSurface(reactEditor, options),
+    setup: (editorRuntime) => registerEdgelessSurface(editorRuntime, options),
   };
 }
 
@@ -32,9 +31,9 @@ export function edgelessSurfaceExtension(
 export function edgelessSelectionExtension(): ReactEditorExtension {
   return {
     id: "selection.edgeless",
-    setup: (reactEditor) => {
-      const disposeRuntime = installEdgelessRuntime(reactEditor);
-      reactEditor.extensions.mount(EdgelessInteractionOverlay);
+    setup: (editorRuntime) => {
+      const disposeRuntime = installEdgelessRuntime(editorRuntime);
+      editorRuntime.extensions.mount(EdgelessInteractionOverlay);
       return disposeRuntime;
     },
   };
@@ -50,20 +49,15 @@ export function edgelessMovementExtension(): ReactEditorExtension {
   return { id: "movement.edgeless", setup: registerEdgelessMovement };
 }
 
-/** @returns Pointer drag and resize interactions for edgeless root cards. */
+/**
+ * Installs Moveable dragging, snapping, resize, and rotation for selected HTML elements.
+ * Handles are mounted per view; the editor retains selection, connector previews, and undo.
+ * @returns The optional edgeless transform extension.
+ */
 export function edgelessTransformExtension(): ReactEditorExtension {
   return {
     id: "transform.edgeless",
-    setup: (reactEditor) => {
-      reactEditor.surfaces.registerElementSlot({
-        position: "left-top",
-        priority: 100,
-        component: EdgelessElementDragSlot,
-        mode: "edgeless",
-        when: ({ element, selected }) => selected && element.type !== "connector",
-      });
-      return registerEdgelessTransform(reactEditor);
-    },
+    setup: (editorRuntime) => registerEdgelessTransform(editorRuntime),
   };
 }
 
@@ -92,3 +86,5 @@ export function edgelessPreset(options: EdgelessPresetOptions = {}): readonly Re
 }
 
 export * from "./visuals";
+
+export { useEdgelessElementStyle } from "./use-edgeless-element-style";

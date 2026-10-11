@@ -1,0 +1,37 @@
+/* Decorate only the embedding reference body, leaving ordinary outline
+   children outside its background and border. Keep the right-slot reference
+   control overlaid on its anchor without affecting the nested rows. */
+.page-block:where([data-block-type="embedding"]) > .rivto-slot[data-slot-position="body"] {
+  background: color-mix(in srgb, var(--rivto-muted) 65%, var(--rivto-background));
+  border: 1px solid var(--rivto-border);
+  border-radius: var(--rivto-radius);
+}
+
+/* The shared shell paints whole-subtree selection. Let that background show
+   through when the reference itself or one of its outline ancestors is selected. */
+.page-block:where([data-block-type="embedding"][data-block-selected]) > .rivto-slot[data-slot-position="body"],
+.page-block[data-block-selected] .page-block:where([data-block-type="embedding"]) > .rivto-slot[data-slot-position="body"] {
+  background: transparent;
+}
+
+.rivto-embedded-surface > .page-surface {
+  min-height: 0;
+  background: transparent;
+}
+
+[data-block-type="embedding"] > .page-block-row > .rivto-slot[data-slot-position="right"] {
+  left: auto;
+  right: 0;
+}
+
+[data-block-type="embedding"] > .page-block-row > .rivto-slot[data-slot-position="right"] > button {
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-block-type="embedding"]:hover > .page-block-row > .rivto-slot[data-slot-position="right"] > button,
+[data-block-type="embedding"] > .page-block-row > .rivto-slot[data-slot-position="right"] > button:focus,
+[data-block-type="embedding"] > .page-block-row > .rivto-slot[data-slot-position="right"] > button[data-state="open"] {
+  opacity: 1;
+  pointer-events: auto;
+}

@@ -1,40 +1,40 @@
+import type { EditorRuntime } from "../../../../editor/editor-runtime";
 /** Runtime registration for page indentation keyboard behavior. */
 import { KEYBOARD_BINDING_IDS } from "../../../../managers";
-import type { ReactEditor } from "../../../../types";
 import type { IndentExtensionOptions } from "./types";
 import { applyIndentShortcut } from "./utils";
 
 /**
  * Installs configurable indent and outdent keyboard actions.
  *
- * @param reactEditor - Runtime receiving the keyboard bindings.
+ * @param editorRuntime - Runtime receiving the keyboard bindings.
  * @param options - Optional replacement shortcuts.
  * @returns No value.
  */
 export function registerIndent(
-  reactEditor: ReactEditor,
+  editorRuntime: EditorRuntime,
   options: IndentExtensionOptions,
 ): void {
   const indentKeys = options.indentKeys ?? ["Tab"];
   const outdentKeys = options.outdentKeys ?? ["Shift+Tab"];
-  reactEditor.keyboard.register({
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockIndent,
     keys: indentKeys,
-  }, ({ root, raw: event }) => applyIndentShortcut(
-    reactEditor.selection,
+  }, ({ editorView, root, raw: event }) => applyIndentShortcut(
+    editorView.selection,
     root,
     event,
     false,
-    reactEditor,
+    editorView,
   ));
-  reactEditor.keyboard.register({
+  editorRuntime.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockOutdent,
     keys: outdentKeys,
-  }, ({ root, raw: event }) => applyIndentShortcut(
-    reactEditor.selection,
+  }, ({ editorView, root, raw: event }) => applyIndentShortcut(
+    editorView.selection,
     root,
     event,
     true,
-    reactEditor,
+    editorView,
   ));
 }

@@ -6,7 +6,7 @@
 
 ## Coordinator
 
-- `core/document-model.ts` — `DocumentModelImpl`, manager ownership, transaction origin, update subscription, undo scope aggregation и schema-v6 snapshot orchestration.
+- `core/document-model.ts` — `DocumentModelImpl`, manager ownership, transaction origin, update subscription, undo scope aggregation и schema-v9 snapshot orchestration.
 - `core/types/document.ts` — public detached records, inputs, patches, snapshots и `DocumentModel` contract.
 - `core/types/storage.ts` — точные live CRDT fields и ID aliases.
 
@@ -25,7 +25,7 @@
 
 ## Tests
 
-- `core/__tests__/document-model.v5.test.ts` — несмотря на историческое имя файла, проверяет текущий schema version 6: storage roots, snapshots, hierarchy, convergence, elements, links, text, props и normalization.
+- `core/__tests__/document-model.v9.test.ts` — проверяет текущий schema version 9: storage roots, snapshots, hierarchy, convergence, elements, links, text, props и normalization.
 - `core/__tests__/plugin-data-manager.test.ts` — namespace isolation, shared map promotion, undo и convergence.
 
 ## Поток вызова

@@ -85,6 +85,9 @@
 }
 
 .review-report-controls {
+  /* Dragging empty form space must not select labels or text elsewhere on the page. */
+  user-select: none;
+  cursor: default;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -210,4 +213,10 @@
 @media (prefers-reduced-motion: reduce) {
   .review-report-problem,
   .review-report-controls button { transition: none; }
+}
+
+/* Fields and the saved JSON still allow text selection inside their own content. */
+.review-report-controls input,
+.review-report-preview {
+  user-select: text;
 }

@@ -1,4 +1,4 @@
-import type { EditorBlockNode, EditorElement, EditorMode } from "@chulane/rivto";
+import type { EditorBlockNode, EditorElementNode, EditorMode } from "@chulane/rivto";
 import type { ComponentType, ReactNode } from "react";
 import type { BlockWrapperComponent } from "../../blocks/block-wrapper/block-wrapper";
 
@@ -51,10 +51,18 @@ export type SlotPosition = typeof SLOT_POSITIONS[number];
  */
 export const BLOCK_FLOW_SLOT_POSITIONS = ["start", "end"] as const;
 
-/** One supported block-row anchor, including its in-flow start and end. */
+/**
+ * One supported block anchor, including row start/end and a body below the row.
+ *
+ * `body` renders between the block's main row and its own document children.
+ * Embedding uses it for the referenced block and its subtree, outside the row's
+ * checkbox, collapse button, and drag handle. This slot only controls presentation;
+ * it does not make the rendered content a child in the document hierarchy.
+ */
 export type BlockSlotPosition =
   | SlotPosition
-  | typeof BLOCK_FLOW_SLOT_POSITIONS[number];
+  | typeof BLOCK_FLOW_SLOT_POSITIONS[number]
+  | "body";
 
 /** Render context supplied to a registered block-slot component or predicate. */
 export interface BlockSlotProps {
@@ -69,16 +77,16 @@ export interface BlockSlotProps {
 /** Render context supplied to a registered element-slot component or predicate. */
 export interface ElementSlotProps {
   /** Latest detached first-class canvas element. */
-  readonly element: EditorElement;
+  readonly element: EditorElementNode;
   /** Active presentation mode containing the element. */
   readonly mode: EditorMode;
   /** Whether the canvas element participates in the current edgeless selection. */
   readonly selected: boolean;
 }
 
-/** Ordered extension contribution rendered at one block-row anchor. */
+/** Ordered extension contribution rendered at one block-row or body anchor. */
 export interface BlockSlotRegistration {
-  /** Perimeter or in-flow logical anchor receiving the component. */
+  /** Perimeter or in-flow logical anchor; `body` renders below the row, before children. */
   readonly position: BlockSlotPosition;
   /** React component rendered with the owning block context. */
   readonly component: ComponentType<BlockSlotProps>;
@@ -102,4 +110,12 @@ export interface ElementSlotRegistration {
   readonly mode?: EditorMode | readonly EditorMode[];
   /** Optional synchronous presentation filter. */
   readonly when?: (props: ElementSlotProps) => boolean;
+}
+
+/** Stable identity of one installed slot, retained while neighboring slots change. */
+export interface ResolvedSlot<Props> {
+  /** Manager-local identity assigned once per registration, including repeated components. */
+  readonly id: number;
+  /** Component rendered with the current owner context. */
+  readonly component: ComponentType<Props>;
 }

@@ -1,19 +1,8 @@
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
-import type { SlashCommand } from "../../../managers/slash";
+import type { DocumentModel } from "@chulane/document-model";
 import { createCaretSelection } from "@chulane/rivto";
-import {
-  BLOCK_CONTENT_SELECTOR,
-  BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
-} from "../../../constants";
-import {
-  useDOMEvent,
-  useReactEditor,
-  useEditorRoot,
-  useKeyboardEvent,
-} from "../../../hooks";
 import {
   useCallback,
   useEffect,
@@ -23,13 +12,25 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "../../../components/ui/command";
+import {
+  BLOCK_CONTENT_SELECTOR,
+  BLOCK_ID_ATTRIBUTE,
+  BLOCK_ID_SELECTOR,
+} from "../../../constants";
+import {
+  useDOMEvent,
+  useEditorRoot,
+  useEditorView,
+  useKeyboardEvent,
+} from "../../../hooks";
 import {
   BUILTIN_KEYMAP,
   findRenderedBlock,
   KEYBOARD_BINDING_IDS,
 } from "../../../managers";
+import type { SlashCommand } from "../../../managers/slash";
 import { keepNoResultMenuOpen, rankSlashCommands } from "./slash-search";
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "../../../components/ui/command";
 
 /**
  * Floating menu chrome. The root is the scroll container so long command lists
@@ -53,6 +54,9 @@ export interface SlashMenuPositionOptions {
 const DEFAULT_POSITION = { width: 280, maxHeight: 320, gap: 6, viewportPadding: 8 };
 
 interface SlashSession {
+  readonly document?: DocumentModel;
+  readonly rootBlockId?: string;
+  readonly viewRoot: HTMLElement;
   readonly blockId: string;
   readonly slashOffset: number;
   readonly query: string;
@@ -144,9 +148,9 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   const maxHeight = Math.max(1, options.maxHeight ?? DEFAULT_POSITION.maxHeight);
   const gap = Math.max(0, options.gap ?? DEFAULT_POSITION.gap);
   const viewportPadding = Math.max(0, options.viewportPadding ?? DEFAULT_POSITION.viewportPadding);
-  const reactEditor = useReactEditor();
-  const roots = reactEditor.blocks.getBlocks();
-  const slashCommands = reactEditor.slashCommands;
+  const editorView = useEditorView();
+  const roots = editorView.runtime.blocks.getBlocks();
+  const slashCommands = editorView.slashCommands;
   const { element: root } = useEditorRoot();
   const [session, setSession] = useState<SlashSession | null>(null);
   const sessionRef = useRef(session);
@@ -159,7 +163,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
 
   const available = useMemo(() => session
     ? slashCommands.getAll({ blockId: session.blockId })
-    : [], [slashCommands, slashCommands.revision, session?.blockId]);
+    : [], [editorView, slashCommands, slashCommands.revision, session?.blockId, session?.document, session?.rootBlockId]);
   const ranked = useMemo(() => rankSlashCommands(available, session?.query ?? ""), [available, session?.query]);
   const groups = useMemo(() => groupCommands(ranked.map(({ command }) => command)), [ranked]);
 
@@ -172,6 +176,8 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
     if (ignore && current) ignoredTrigger.current = `${current.blockId}:${current.slashOffset}`;
     setSession(null);
   }, []);
+
+  useEffect(() => editorView.subscribeDeactivation(close), [editorView, close]);
 
   /** Validates the current caret and optionally discovers a freshly typed slash. */
   const refresh = useCallback((content: HTMLElement, blockId: string, discover: boolean) => {
@@ -204,7 +210,12 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
         setSession(null);
       } else {
         const position = popupPosition(content, { width, maxHeight, gap, viewportPadding });
+        const viewRoot = editorView.events.getRoot();
+        if (!viewRoot) return;
         setSession({
+          document: editorView.runtime.getDocument(),
+          rootBlockId: editorView.rootBlockId,
+          viewRoot,
           blockId,
           slashOffset: trigger.slashOffset,
           query: trigger.query,
@@ -216,7 +227,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
         });
       }
     }
-  }, [slashCommands, width, maxHeight, gap, viewportPadding]);
+  }, [editorView, slashCommands, width, maxHeight, gap, viewportPadding]);
 
   useDOMEvent({
     id: "slash.input",
@@ -238,8 +249,8 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   });
 
   useEffect(() => {
-    if (session && !reactEditor.blocks.hasBlock(session.blockId)) close();
-  }, [close, reactEditor, roots, session]);
+    if (session && (!session.viewRoot.isConnected || !editorView.runtime.blocks.hasBlock(session.blockId))) close();
+  }, [close, editorView, roots, session]);
 
   useDOMEvent({
     id: "slash.selection-change",
@@ -248,7 +259,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   }, () => {
     const current = sessionRef.current;
     if (root && current) {
-      const block = findRenderedBlock(root, current.blockId);
+      const block = findRenderedBlock(current.viewRoot, current.blockId);
       const content = block?.querySelector<HTMLElement>(BLOCK_CONTENT_SELECTOR);
       if (!content || content.closest(BLOCK_ID_SELECTOR) !== block) return close();
       refresh(content, current.blockId, false);
@@ -258,25 +269,27 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   const execute = useCallback((command: SlashCommand) => {
     const current = sessionRef.current;
     if (!current || !root) return;
-    const block = reactEditor.blocks.getBlockNode(current.blockId);
+
+    const block = editorView.runtime.blocks.getBlockNode(current.blockId);
     if (!block) return close();
     const caret = current.slashOffset + current.query.length + 1;
     if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
 
-    reactEditor.history.batchUpdates(() => {
+    editorView.runtime.history.batchUpdates(() => {
       const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
-      reactEditor.blocks.updateBlock(current.blockId, { content: next });
-      reactEditor.selection.set(createCaretSelection(current.blockId, current.slashOffset));
+      editorView.runtime.blocks.updateBlock(current.blockId, { content: next });
+      editorView.selection.set(createCaretSelection(current.blockId, current.slashOffset));
       slashCommands.execute(command.id, { blockId: current.blockId });
     });
     setSession(null);
 
-    requestAnimationFrame(() => {
-      if (reactEditor.selection.restoreDOM()) return;
-      root.ownerDocument.getSelection()?.removeAllRanges();
-      root.focus({ preventScroll: true });
+    editorView.selection.scheduleIfSelectionUnchanged(() => {
+      if (editorView.selection.restoreDOM()) return;
+      current.viewRoot.ownerDocument.getSelection()?.removeAllRanges();
+      current.viewRoot.focus({ preventScroll: true });
     });
-  }, [close, reactEditor, root, slashCommands]);
+
+  }, [close, editorView, root, slashCommands]);
 
   const currentResults = useCallback(() => {
     const current = sessionRef.current;

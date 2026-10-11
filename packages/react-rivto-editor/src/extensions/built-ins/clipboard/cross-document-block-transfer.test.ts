@@ -2,16 +2,16 @@ import { type RivtoEditorApi } from "@chulane/rivto";
 import { createTestCoreEditor as createRivtoEditor } from "../../../test-utils";
 import { crossDocumentBlockTransfer } from "./cross-document-block-transfer";
 
-function createEditor(): RivtoEditorApi {
-  const editor = createRivtoEditor();
+async function createEditor(): Promise<RivtoEditorApi> {
+  const editor = await createRivtoEditor();
   editor.blockRegistry.defineBlock({ type: "test.counter", defaultProps: { count: 0 } });
   return editor;
 }
 
 describe("cross-document block transfer", () => {
-  test("preserves selected subtree order and data", () => {
-    const source = createEditor();
-    const destination = createEditor();
+  test("preserves selected subtree order and data", async () => {
+    const source = await createEditor();
+    const destination = await createEditor();
     const first = source.blocks.insertBlock({
       id: "first",
       type: "paragraph",
@@ -47,9 +47,9 @@ describe("cross-document block transfer", () => {
     destination.destroy();
   });
 
-  test("appends into an empty destination", () => {
-    const source = createEditor();
-    const destination = createEditor();
+  test("appends into an empty destination", async () => {
+    const source = await createEditor();
+    const destination = await createEditor();
     source.blocks.insertBlock({ id: "moved", type: "paragraph", content: "Moved" });
 
     crossDocumentBlockTransfer(source, destination, ["moved"], { targetId: null, position: "after" });
@@ -60,9 +60,9 @@ describe("cross-document block transfer", () => {
     destination.destroy();
   });
 
-  test("rejects a duplicate block ID without changing either document", () => {
-    const source = createEditor();
-    const destination = createEditor();
+  test("rejects a duplicate block ID without changing either document", async () => {
+    const source = await createEditor();
+    const destination = await createEditor();
     source.blocks.insertBlock({
       id: "moved",
       type: "paragraph",
@@ -82,19 +82,53 @@ describe("cross-document block transfer", () => {
     destination.destroy();
   });
 
-  test("validates destination definitions before changing either document", () => {
-    const source = createEditor();
-    const destination = createRivtoEditor();
+  test("validates destination definitions before changing either document", async () => {
+    const source = await createEditor();
+    const destination = await createRivtoEditor();
     source.blocks.insertBlock({ id: "custom", type: "test.counter", props: { count: 9 } });
     const sourceBefore = source.dump();
 
     expect(() => crossDocumentBlockTransfer(source, destination, ["custom"], {
       targetId: null,
       position: "after",
-    })).toThrow("Block type test.counter is unavailable in block mode");
+    })).toThrow("Block type test.counter is not registered");
     expect(source.dump()).toEqual(sourceBefore);
     expect(destination.blocks.getBlocks()).toEqual([]);
     source.destroy();
     destination.destroy();
   });
+});
+
+test("transfers between two source models using one editor runtime", async () => {
+  const { DocumentModelImpl } = await import("@chulane/document-model");
+  const { YjsDoc } = await import("@chulane/crdt-doc");
+  const editor = await createEditor();
+  editor.blocks.insertBlock({ id: "host", type: "paragraph", content: "Host" });
+  const source = new DocumentModelImpl(new YjsDoc(crypto.randomUUID()));
+  const destination = new DocumentModelImpl(new YjsDoc(crypto.randomUUID()));
+  source.blocks.insertBlock({ id: "moved", type: "paragraph", content: "Moved" });
+  source.history.clear(); destination.history.clear();
+  const { createTestMultiEditor } = await import("../../../test-utils");
+  const { createEditorRuntime } = await import("../../../editor/editor-runtime");
+  const runtime = await createTestMultiEditor([source, destination]);
+  crossDocumentBlockTransfer(runtime.getRuntime(source.id)!, runtime.getRuntime(destination.id)!, ["moved"], { targetId: null, position: "after" });
+  expect(source.blocks.hasBlock("moved")).toBe(false);
+  expect(destination.blocks.getBlockNode("moved")?.content).toBe("Moved");
+  expect(editor.blocks.getRootIds()).toEqual(["host"]);
+  destination.history.undo(); source.history.undo();
+  expect(source.blocks.getBlockNode("moved")?.content).toBe("Moved");
+  expect(destination.blocks.getRootIds()).toEqual([]);
+  await runtime.destroy(); await editor.destroy();
+});
+
+test("rejects overlapping roots and processor-changed identities before writing either document", async () => {
+  const source = await createEditor(); const destination = await createEditor();
+  source.blocks.insertBlock({ id: "parent", type: "paragraph", children: [{ id: "child", type: "paragraph" }] });
+  const before = source.dump();
+  expect(() => crossDocumentBlockTransfer(source, destination, ["parent", "child"], { targetId: null, position: "after" })).toThrow();
+  expect(destination.blocks.getRootIds()).toEqual([]);
+  const stop = destination.blocks.registerProcessor({ id: "rewrite", priority: 0, processor: (block) => ({ ...block, id: `${block.id}-changed` }) });
+  expect(() => crossDocumentBlockTransfer(source, destination, ["parent"], { targetId: null, position: "after" })).toThrow("preserve block IDs");
+  expect(source.dump()).toEqual(before); expect(destination.blocks.getRootIds()).toEqual([]);
+  stop(); await source.destroy(); await destination.destroy();
 });

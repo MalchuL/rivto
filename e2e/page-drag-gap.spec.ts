@@ -37,6 +37,7 @@ async function holdDragAt(page: Page, source: Locator, x: number | (() => Promis
   const handle = source.locator(`:scope > .${ROW_CLASS} .${HANDLE_CLASS}`);
   await source.locator(`:scope > .${ROW_CLASS}`).hover();
   await handle.hover();
+  await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
   const from = (await handle.boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
@@ -84,7 +85,7 @@ test.beforeEach(async ({ page }) => {
       ],
     }).id;
     editor.load({
-      ...editor.dump(),
+      ...editor.dump(), rootElementIds: [],
       blocks: [
         editor.blocks.getBlock(alpha)!,
         editor.blocks.getBlock(beta)!,
@@ -158,13 +159,17 @@ test("drops a block after the last root container", async ({ page }) => {
   const alphaId = await alpha.getAttribute("data-block-id");
   const betaId = await beta.getAttribute("data-block-id");
   const boardId = await board.getAttribute("data-block-id");
-  const boardBox = (await board.boundingBox())!;
-
-  await holdDragAt(page, alpha, boardBox.x + CHILD_DROP_INDENT / 2, boardBox.y + boardBox.height + 12);
+  await holdDragAt(page, alpha, async () => {
+    const boardBox = (await board.boundingBox())!;
+    return { x: boardBox.x + CHILD_DROP_INDENT / 2, y: boardBox.y + boardBox.height + 12 };
+  });
   const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
   await expect(line).toBeVisible();
-  const lineBox = (await line.boundingBox())!;
-  const currentBoardBox = (await board.boundingBox())!;
+  const { lineBox, currentBoardBox } = await page.evaluate((id) => {
+    const lineBox = document.querySelector(".page-drop-indicator")!.getBoundingClientRect().toJSON();
+    const currentBoardBox = document.querySelector(`[data-block-id="${id}"]`)!.getBoundingClientRect().toJSON();
+    return { lineBox, currentBoardBox };
+  }, boardId);
   expect(lineBox.y + lineBox.height / 2).toBeCloseTo(currentBoardBox.y + currentBoardBox.height, 0);
   await page.mouse.up();
 
@@ -202,7 +207,7 @@ test("drops a block before the first root container", async ({ page }) => {
       __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
     }).__rivtoDemo.editor;
     editor.load({
-      ...editor.dump(),
+      ...editor.dump(), rootElementIds: [],
       blocks: [boardId, alphaId, betaId].map((id) => editor.blocks.getBlock(id!)!),
       elements: [],
     });
@@ -247,10 +252,9 @@ for (const mode of ["block", "edgeless"] as const) {
         type: "kanban", content: "Board", children: [{ type: "kanban-column", content: "Lane" }],
       }).id;
       const second = editor.blocks.insertBlock({ type: "columns", children: [{ type: "columns-column" }] }).id;
-      editor.load({ ...editor.dump(), blocks: [holder, first, second].map((id) => editor.blocks.getBlock(id)!), elements: [] });
+      editor.load({ ...editor.dump(), rootElementIds: [], blocks: [holder, first, second].map((id) => editor.blocks.getBlock(id)!), elements: [] });
       if (nextMode === "edgeless") {
-        editor.elements.insertElement({
-          type: "block", zIndex: 0,
+        editor.elements.insertElement({           type: "block", zIndex: 0,
           frame: { x: 20, y: 20, width: 900, height: 650 },
           props: { startBlockId: holder, endBlockId: second },
         });
@@ -291,6 +295,10 @@ test("moves a card out of the demo Kanban into the Kanban–Columns gap", async 
   const cardId = await card.getAttribute("data-block-id");
   await card.scrollIntoViewIfNeeded();
   await holdDragAt(page, card, async () => {
+    // Bring the destination into view after activation; scrolling the handle
+    // into view alone can leave the gap below the viewport.
+    await columns.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     const boardBox = (await board.boundingBox())!;
     const columnsBox = (await columns.boundingBox())!;
     return { x: boardBox.x + boardBox.width / 2, y: (boardBox.y + boardBox.height + columnsBox.y) / 2 };
@@ -324,13 +332,20 @@ test("moves a block between the demo TODO storage and Bento", async ({ page }) =
   const sourceId = await source.getAttribute("data-block-id");
   await source.scrollIntoViewIfNeeded();
   await holdDragAt(page, source, async () => {
+    // The last task may be visible while the storage's bottom is offscreen.
+    // Centre the destination after activation before measuring its boundary.
+    await storage.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     const box = (await storage.boundingBox())!;
     return { x: box.x + box.width / 2, y: box.y + box.height - 4 };
   });
   const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
   await expect(line).toBeVisible();
-  const lineBox = (await line.boundingBox())!;
-  const storageBox = (await storage.boundingBox())!;
+  const { lineBox, storageBox } = await page.evaluate((id) => {
+    const lineBox = document.querySelector(".page-drop-indicator")!.getBoundingClientRect().toJSON();
+    const storageBox = document.querySelector(`[data-block-id="${id}"]`)!.getBoundingClientRect().toJSON();
+    return { lineBox, storageBox };
+  }, ids.storageId);
   expect(Math.abs(lineBox.y + lineBox.height / 2 - storageBox.y - storageBox.height)).toBeLessThan(9);
   await page.mouse.up();
   await expect.poll(() => page.evaluate((id) => {
@@ -362,10 +377,9 @@ for (const mode of ["block", "edgeless"] as const) {
           editor.blocks.insertBlock({ id: "gap-container", ...input }),
           editor.blocks.insertBlock({ id: "gap-after", type: "paragraph", content: "After container" }),
         ].map((block) => block.id);
-        editor.load({ ...editor.dump(), blocks: roots.map((id) => editor.blocks.getBlock(id)!), elements: [] });
+        editor.load({ ...editor.dump(), rootElementIds: [], blocks: roots.map((id) => editor.blocks.getBlock(id)!), elements: [] });
         if (nextMode === "edgeless") {
-          editor.elements.insertElement({
-            type: "block",
+          editor.elements.insertElement({             type: "block",
             zIndex: 0,
             frame: { x: 20, y: 20, width: 900, height: 1200 },
             props: { startBlockId: roots[0]!, endBlockId: roots.at(-1)! },
@@ -659,13 +673,12 @@ for (const mode of ["block", "edgeless"] as const) {
       ];
       const roots = inputs.map((input) => editor.blocks.insertBlock(input).id);
       editor.load({
-        ...editor.dump(),
+        ...editor.dump(), rootElementIds: [],
         blocks: roots.map((id) => editor.blocks.getBlock(id)!),
         elements: [],
       });
       if (nextMode === "edgeless") {
-        editor.elements.insertElement({
-          type: "block",
+        editor.elements.insertElement({           type: "block",
           zIndex: 0,
           frame: { x: 20, y: 20, width: 1100, height: 850 },
           props: { startBlockId: roots[0]!, endBlockId: roots.at(-1)! },

@@ -1,13 +1,24 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE, PREVENT_TEXT_EDITING_ATTRIBUTE } from "../packages/react-rivto-editor/src/constants";
 import {
   BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
-  blockIdSelector,
+  HOST_BLOCK_ID_SELECTOR as BLOCK_ID_SELECTOR,
+  hostBlockIdSelector as blockIdSelector,
   blockTypeSelector,
 } from "./dom-markers";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
-const textContents = (page: Page): Locator => page.locator("[data-block-content]:not(:empty)");
+// Keep text endpoints in today's document occurrence, excluding editable
+// source rows rendered by nested views of embedding blocks.
+const textContents = (page: Page): Locator => page.locator(
+  '[data-journal-document="today"] [data-block-content]:not(:empty):not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])',
+);
+
+// These three consecutive writing blocks have no contentless references
+// between them, so partial-text checks exercise native text endpoints.
+const selectionTextContents = (page: Page): Locator => textContents(page).filter({
+  hasText: /^(Start a selection in|This complete|Nested branch one owns)/,
+});
 
 async function textPoint(content: Locator, offset: number): Promise<{ x: number; y: number }> {
   return content.evaluate((element, requestedOffset) => {
@@ -34,7 +45,9 @@ async function dragText(page: Page, start: Locator, startOffset: number, end: Lo
 }
 
 test.beforeEach(async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto("/");
+  await expect(page.locator('[data-journal-document="today"] > .page-surface')).toBeVisible();
 });
 
 test("switches cross-block drag to blocks and restores text on return", async ({ page }) => {
@@ -93,7 +106,7 @@ test("switches cross-block drag to blocks and restores text on return", async ({
 });
 
 test("Shift+Alt drag keeps partial text across blocks", async ({ page }) => {
-  const contents = textContents(page);
+  const contents = selectionTextContents(page);
   await page.keyboard.down("Shift");
   await page.keyboard.down("Alt");
   await dragText(page, contents.nth(0), 2, contents.nth(2), 8);
@@ -239,22 +252,51 @@ test("dragging from a contentless Counter anchors selection without incrementing
   await expect(button).toHaveText("Count: 2");
 });
 
-test("dragging within a contentless Counter selects only that block", async ({ page }) => {
-  const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
-  const button = counter.locator(".custom-counter-block");
-  await button.scrollIntoViewIfNeeded();
-  const box = await button.boundingBox();
-  if (!box) throw new Error("Expected Counter geometry");
+for (const canvas of [false, true]) {
+  test(`dragging within a contentless Counter selects only that block in ${canvas ? "edgeless" : "page"}`, async ({ page }) => {
+    if (canvas) await page.locator('[data-journal-document="today"]').getByRole("button", { name: "Edgeless", exact: true }).click();
+    const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+    const button = counter.locator(".custom-counter-block");
+    await expect(button).toHaveAttribute(BLOCK_SELECTION_ANCHOR_ATTRIBUTE, "");
+    await button.scrollIntoViewIfNeeded();
+    const box = await button.boundingBox();
+    if (!box) throw new Error("Expected Counter geometry");
 
-  await page.mouse.move(box.x + box.width / 2 - 6, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 4 });
-  await page.mouse.up();
+    await page.mouse.move(box.x + box.width / 2 - 6, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 4 });
+    await page.mouse.up();
 
-  await expect(counter).toHaveAttribute("data-block-selected", "true");
-  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
-  await expect(button).toHaveText("Count: 2");
-});
+    await expect(counter).toHaveAttribute("data-block-selected", "true");
+    await expect(page.locator("[data-block-selected]")).toHaveCount(1);
+    await expect(button).toHaveText("Count: 2");
+  });
+}
+
+for (const [canvas, preventSelection] of [[false, false], [false, true], [true, false], [true, true]] as const) {
+  test(`a ${preventSelection ? "protected" : "unmarked"} Counter button keeps its pointer gesture in ${canvas ? "edgeless" : "page"}`, async ({ page }) => {
+    if (canvas) await page.locator('[data-journal-document="today"]').getByRole("button", { name: "Edgeless", exact: true }).click();
+    const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+    const button = counter.locator(".custom-counter-block");
+    // Removing the control's opt-in or explicitly opting out must leave its
+    // native gesture alone even though the surrounding renderer has an anchor.
+    await button.evaluate((element, attributes) => {
+      if (attributes.preventSelection) element.setAttribute(attributes.prevent, "");
+      else element.removeAttribute(attributes.anchor);
+    }, { preventSelection, prevent: PREVENT_TEXT_EDITING_ATTRIBUTE, anchor: BLOCK_SELECTION_ANCHOR_ATTRIBUTE });
+    await button.scrollIntoViewIfNeeded();
+    const box = await button.boundingBox();
+    if (!box) throw new Error("Expected Counter geometry");
+    await page.mouse.move(box.x + box.width / 2 - 6, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 4 });
+    await page.mouse.up();
+    await expect(counter).not.toHaveAttribute("data-block-selected", "true");
+    const count = Number((await button.textContent())!.replace("Count: ", ""));
+    await button.click();
+    await expect(button).toHaveText(`Count: ${count + 1}`);
+  });
+}
 
 test("dragging from the empty right side of Counter starts structural selection", async ({ page }) => {
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
@@ -303,14 +345,14 @@ test("plain clicks select structural regions without activating their controls",
 });
 
 test("Shift click ranges complete blocks", async ({ page }) => {
-  const contents = textContents(page);
+  const contents = selectionTextContents(page);
   await contents.nth(0).click();
   await contents.nth(2).click({ modifiers: ["Shift"] });
   await expect(page.locator("[data-block-selected]")).toHaveCount(3);
 });
 
 test("Shift+Alt click keeps partial text across blocks", async ({ page }) => {
-  const contents = textContents(page);
+  const contents = selectionTextContents(page);
   const start = await textPoint(contents.nth(0), 2);
   const end = await textPoint(contents.nth(2), 8);
   await page.mouse.click(start.x, start.y);
@@ -325,7 +367,7 @@ test("Shift+Alt click keeps partial text across blocks", async ({ page }) => {
 });
 
 test("bottom-up Shift+Alt drag preserves the directed native text range", async ({ page }) => {
-  const contents = textContents(page);
+  const contents = selectionTextContents(page);
   const upper = contents.nth(0);
   const lower = contents.nth(2);
   const upperId = await upper.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
@@ -428,7 +470,7 @@ test("bottom-up nested drag does not select a parent from the gap between childr
 });
 
 test("selecting a parent draws one selection rectangle around its subtree", async ({ page }) => {
-  const parent = page.locator(".page-block:has(> .page-block-children)").first();
+  const parent = page.locator("[data-journal-document='today'] > .page-surface > .page-block:has(> .page-block-children)").first();
   const child = parent.locator(`.page-block-children ${BLOCK_ID_SELECTOR}`).last();
   await parent.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
 
@@ -542,7 +584,7 @@ for (const change of ["indent", "select", "clear", "select-and-return"] as const
       const editor = (window as unknown as {
         __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
       }).__rivtoDemo.editor;
-      const root = document.querySelector<HTMLElement>("[data-journal-document='today'] [data-rivto-page-editor-root]")!;
+      const root = document.querySelector<HTMLElement>("[data-journal-document='today'] > [data-rivto-page-editor-root]")!;
       const ids = editor.blocks.getRootIds().slice(1, 3);
       root.focus();
       for (const [index, id] of ids.entries()) {
@@ -567,12 +609,14 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`restores a caret after a transient empty native selection on ${mode}`, async ({ page }) => {
     if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
     const result = await page.evaluate(async () => {
-      const { editor, reactEditor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi; reactEditor: import("@chulane/rivto-react").ReactEditor };
+      const { editor, editorRuntime } = (window as unknown as {
+        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi; editorRuntime: import("@chulane/rivto-react").EditorRuntime };
       }).__rivtoDemo;
       const id = editor.blocks.getRootIds()[1]!;
       editor.selection.set({ type: "selection", blocks: [{ id, start: 1, end: 1 }], anchorBlockId: id, focusBlockId: id });
-      reactEditor.selection.restoreDOM();
+      const view = (editorRuntime.editorViews.getActive() ?? editorRuntime.editorViews.getDefault());
+      if (!view) throw new Error("Expected mounted editor view");
+      view.selection.restoreDOM();
       const content = document.querySelector<HTMLElement>(`[data-block-id="${id}"] [contenteditable]`)!;
       content.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
       document.getSelection()?.removeAllRanges();
@@ -590,7 +634,7 @@ for (const mode of ["block", "edgeless"] as const) {
 }
 
 test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => {
-  const parent = page.locator(".page-block:has(> .page-block-children)").first();
+  const parent = page.locator("[data-journal-document='today'] > .page-surface > .page-block:has(> .page-block-children)").first();
   const siblings = parent.locator(`:scope > .page-block-children > ${BLOCK_ID_SELECTOR}`);
   const first = siblings.first();
   const second = siblings.last();
@@ -612,7 +656,7 @@ test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => 
 });
 
 test("Down follows wrapped visual lines at approximately the same x", async ({ page }) => {
-  await page.locator('[data-journal-document="today"] .page-surface')
+  await page.locator('[data-journal-document="today"] > .page-surface')
     .evaluate((element) => { element.style.width = "300px"; });
   const content = textContents(page).nth(1);
   const point = await textPoint(content, 8);

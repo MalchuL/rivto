@@ -2,13 +2,6 @@ import type { ConnectorEndpoint, VisualFrame } from "../types";
 import type { Point } from "./geometry-core";
 import { segmentIntersectsFrame } from "./geometry-core";
 
-export type { Point } from "./geometry-core";
-export {
-  anchorNormal,
-  inflateFrame,
-  pointInFrame,
-  segmentIntersectsFrame,
-} from "./geometry-core";
 export {
   connectorFrame,
   connectorLabelCssDegrees,
@@ -21,8 +14,15 @@ export {
   normalizeUprightLabelAngle,
   pathLength,
   pointAlongPolyline,
-  polylineCutsNodes,
+  polylineCutsNodes
 } from "./connector-path";
+export {
+  anchorNormal,
+  inflateFrame,
+  pointInFrame,
+  segmentIntersectsFrame
+} from "./geometry-core";
+export type { Point } from "./geometry-core";
 
 export interface SnapGuide { readonly axis: "x" | "y"; readonly position: number; readonly from: number; readonly to: number; readonly kind: "align" | "spacing" }
 export interface SnapResult { readonly dx: number; readonly dy: number; readonly guides: readonly SnapGuide[] }
@@ -289,42 +289,6 @@ export function applyCornerResize(
     y = bottom - height;
   }
   return { x, y, width, height };
-}
-
-/**
- * Resizes in a rotated frame's local axes while keeping its opposite handle fixed.
- *
- * @param frame - Initial unrotated persisted frame.
- * @param dx - Horizontal canvas pointer delta.
- * @param dy - Vertical canvas pointer delta.
- * @param handle - Active side or corner handle.
- * @param minWidth - Smallest permitted width.
- * @param minHeight - Smallest permitted height.
- * @param rotation - Clockwise visual rotation in degrees.
- * @returns Resized frame whose opposite handle stays at its canvas position.
- */
-export function applyRotatedResize(
-  frame: VisualFrame,
-  dx: number,
-  dy: number,
-  handle: ResizeCorner,
-  minWidth: number,
-  minHeight: number,
-  rotation = 0,
-): VisualFrame {
-  const radians = -normalizeRotation(rotation) * Math.PI / 180;
-  const localDx = dx * Math.cos(radians) - dy * Math.sin(radians);
-  const localDy = dx * Math.sin(radians) + dy * Math.cos(radians);
-  const local = applyCornerResize({ x: 0, y: 0, width: frame.width, height: frame.height }, localDx, localDy, handle, minWidth, minHeight);
-  const widthDelta = local.width - frame.width;
-  const heightDelta = local.height - frame.height;
-  const localShift = {
-    x: handle.includes("e") ? widthDelta / 2 : handle.includes("w") ? -widthDelta / 2 : 0,
-    y: handle.includes("s") ? heightDelta / 2 : handle.includes("n") ? -heightDelta / 2 : 0,
-  };
-  const center = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
-  const shifted = rotatePoint({ x: center.x + localShift.x, y: center.y + localShift.y }, center, rotation);
-  return { x: shifted.x - local.width / 2, y: shifted.y - local.height / 2, width: local.width, height: local.height };
 }
 
 /** Snaps a resized frame's moving edges to candidate edges and centers. */

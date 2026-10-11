@@ -4,19 +4,30 @@
 
 ## Runtime hooks
 
-### `useReactEditor()`
+### `useEditorView()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** stable `ReactEditor`.
+- **Возвращает:** stable `EditorViewApi`.
 - **Исключения:** та же provider error.
+
+### `useContext(SurfaceContext)`
+
+- **Аргументы:** exported `SurfaceContext`.
+- **Возвращает:** `"block" | "edgeless"`, kind ближайшего explicit surface; default `"block"`.
+- **Исключения:** отсутствуют.
+
+Context immutable; он описывает ближайший rendered surface, включая page embedding внутри canvas.
+Переключение основного surface выполняет host через core mode manager и JSX.
 
 ### `useEditorMode()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** `{ mode; setMode(mode): void }`.
-- **Исключения:** provider или mode manager errors.
+- **Возвращает:** `{ mode, setMode }`, текущее значение core `editor.mode` и stable setter.
+- **Исключения:** та же provider error.
 
-Mode локален и не входит в snapshot.
+Hook подписывается непосредственно на mode manager. Mode локален для core editor,
+общий для его views и не синхронизируется через CRDT. Повторный `setMode()` активного
+значения — no-op; конкретный rendered surface выбирается приложением через JSX.
 
 ### `useEditorSelection()`
 
@@ -67,13 +78,24 @@ Detached `block` обновляется по подписке на его subtre
 
 Text selection намеренно возвращает `null`.
 
-### `useBlockEditing(blockId, options?)`
+### `useBlockEditing(blockId)`
 
-- **Аргументы:** `blockId`; optional `{ textEdit?: boolean }`, default `true`.
-- **Возвращает:** block/operations, `getProps`, `getProp`, `setProps`, `setProp`, `attributes`, `preventTextEditingAttributes`.
+- **Аргументы:** `blockId`; хук предназначен для текстового блока.
+- **Возвращает:** block/operations, `attributes`, `preventTextEditingAttributes`. Методы `setProps` и типизированный `setProp` находятся в `operations`.
 - **Исключения:** provider error; setters передают schema/store errors.
 
-Imperative getters читают latest state и безопасны в event closures. `setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
+В рендере читайте `block.props`, а внутри event closures — актуальный `editorView.runtime.blocks.getBlockNode(blockId)`. `operations.setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
+
+### Отдельные команды и DOM
+
+`useBlockOperations<Props>(blockId)` возвращает стабильные команды без подписки.
+`useBlockNode<Props>(blockId)` добавляет реактивный snapshot; generic описывает
+схему props, но не проверяет её при чтении. Записи валидируются менеджером.
+
+`useBlockTextEditing(blockId, block?.content)` возвращает текстовые attributes без
+второй подписки. `useBlockSelectionAnchor(blockId)` возвращает структурный anchor
+и восстанавливает ожидающий фокус. `usePreventTextEditing()` независимо обслуживает
+вложенные контролы и снимает временные pointer listeners при unmount.
 
 ## Interaction hooks
 

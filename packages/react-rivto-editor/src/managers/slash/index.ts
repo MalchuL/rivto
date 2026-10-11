@@ -1,2 +1,2 @@
-export * from "./slash-command-manager";
+export * from "./slash-command-registry";
 export * from "./types";

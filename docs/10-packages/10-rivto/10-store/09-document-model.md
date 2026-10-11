@@ -26,7 +26,7 @@ Host создаёт модель и передаёт её в `EditorRuntime`, к
 - выполнять семантические изменения в CRDT-транзакциях;
 - агрегировать undo scopes и единый локальный origin;
 - проверять входные данные до destructive snapshot replacement;
-- преобразовывать shared storage в detached schema-v6 snapshots;
+- преобразовывать shared storage в detached schema-v9 snapshots;
 - нормализовать дерево после конкурентных изменений.
 
 ## Корневые CRDT-контейнеры
@@ -61,6 +61,6 @@ const snapshot = document.getSnapshot();
 document.loadSnapshot(snapshot);
 ```
 
-Приложение создаёт `DocumentModelImpl`, присоединяет её через `editor.setDocument(document)` и работает через focused editor managers.
+Приложение создаёт `DocumentStorage` над CRDT registry и передаёт callback `openDocument` в `EditorStorage`. Editor cache владеет открытыми моделями и создаёт отдельный core для каждой; `openCoreEditor(documentId)` возвращает этот core. DocumentModel хранит generic persisted data и hierarchy invariants. Type definitions, defaults, semantic validation и property processors принадлежат single editor.
 
 Вложенные страницы описывают все классы, свойства, методы, аргументы, результаты, исключения, persisted-типы, utilities и реальные consumers модели документа.

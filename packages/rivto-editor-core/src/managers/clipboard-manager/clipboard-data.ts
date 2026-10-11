@@ -5,7 +5,7 @@
  * while paste strategies own destination-specific mutation logic.
  */
 import type { Selection } from "../selection-manager";
-import type { Block, DocumentElement } from "@chulane/document-model";
+import type { Block, ElementNode } from "@chulane/document-model";
 import type { BlockPrepareErrorHandler } from "../block-manager/types";
 
 /** Clipboard schema version, independent from document snapshot versions. */
@@ -23,10 +23,12 @@ export interface ClipboardBundle {
   version: typeof CLIPBOARD_BUNDLE_VERSION;
   /** Whether copied content originates from text/caret selection; omission denotes structural blocks. */
   fromTextSelection?: boolean;
+  /** Source document for qualifying internal block references during a structural paste. */
+  sourceDocumentId?: string;
   /** Selected block subtrees preserving native types, props, and plugin data. */
   blocks: Block[];
   /** Optional first-class canvas elements contributed by an edgeless host. */
-  elements?: DocumentElement[];
+  elements?: ElementNode[];
   /** Top-level element IDs that should be selected after an edgeless paste. */
   selectedElementIds?: string[];
   /** Optional lossless namespaces contributed by installed editor plugins. */
@@ -83,6 +85,8 @@ export interface BlockPastePlacement {
  * intentionally do not appear in this interface, keeping core DOM-free.
  */
 export interface ClipboardPasteInput {
+  /** Preallocated block identities used by converters; import still runs processors and validation. */
+  readonly blockIdMap?: ReadonlyMap<string, string>;
   /** Optional editing range to replace; omit to use the current selection. */
   readonly textTarget?: Selection;
   /** Already parsed lossless Rivto data. Takes precedence over every fallback. */

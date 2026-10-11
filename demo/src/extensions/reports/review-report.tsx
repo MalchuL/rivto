@@ -7,22 +7,25 @@
  *
  * @module
  */
+import type { EditorElementNode, RivtoEditorApi } from "@chulane/rivto";
 import {
   ElementSlots,
+  SurfaceContext,
   blockExtension,
+  editorControlProps,
   useBlockEditing,
-  useEditorMode,
   useEditorRoot,
   useEditorSelection,
   useElements,
+  useEdgelessElementStyle,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
-import type { EditorElement, RivtoEditorApi } from "@chulane/rivto";
-import { createPortal } from "react-dom";
 import {
+  useContext,
   useState,
   type ChangeEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   REVIEW_REPORT_TYPE,
   captureBlockReview,
@@ -77,7 +80,7 @@ function ReviewControls(props: ReviewControlsProps) {
   };
 
   return (
-    <div className={REVIEW_CONTROLS_CLASS}>
+    <div {...editorControlProps} className={REVIEW_CONTROLS_CLASS}>
       <label>
         Above
         <input
@@ -207,10 +210,10 @@ function ReviewBlock({
           saving={saving}
           error={error}
           includeReportBlock={props.includeReportBlock}
-          onAboveChange={(blocksAbove) => editing.setProp("blocksAbove", blocksAbove)}
-          onBelowChange={(blocksBelow) => editing.setProp("blocksBelow", blocksBelow)}
+          onAboveChange={(blocksAbove) => editing.operations.setProp("blocksAbove", blocksAbove)}
+          onBelowChange={(blocksBelow) => editing.operations.setProp("blocksBelow", blocksBelow)}
           onIncludeReportBlockChange={(includeReportBlock) => (
-            editing.setProp("includeReportBlock", includeReportBlock)
+            editing.operations.setProp("includeReportBlock", includeReportBlock)
           )}
           onSave={() => void save()}
           onRestore={() => editor.load(props.snapshot!)}
@@ -233,10 +236,11 @@ function ReviewElement({
   saveReport,
 }: {
   readonly editor: RivtoEditorApi;
-  readonly element: EditorElement;
+  readonly element: EditorElementNode;
   readonly selected: boolean;
   readonly saveReport: SaveReviewReport;
 }) {
+  const { ref, style } = useEdgelessElementStyle(element);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const props = reviewElementPropsSchema.parse(element.props);
@@ -252,7 +256,7 @@ function ReviewElement({
     setSaving(true);
     setError(null);
     try {
-      const live = editor.elements.getElement(element.id);
+      const live = editor.elements.getElementNode(element.id);
       if (!live) throw new Error("Review element no longer exists");
       const liveProps = reviewElementPropsSchema.parse(live.props);
       const snapshot = captureElementReviewSnapshot(
@@ -279,20 +283,16 @@ function ReviewElement({
 
   return (
     <section
+      ref={ref}
       className={REVIEW_ELEMENT_CLASS}
       data-edgeless-object-kind="review"
       data-edgeless-object-id={element.id}
       data-review-report={element.id}
       data-selected={selected || undefined}
-      style={{
-        left: element.frame.x,
-        top: element.frame.y,
-        width: element.frame.width,
-        height: element.frame.height,
-        zIndex: element.zIndex,
-      }}
+      style={style}
     >
       <textarea
+        {...editorControlProps}
         className={REVIEW_PROBLEM_CLASS}
         aria-label="Review problem"
         placeholder="Describe the problem"
@@ -326,7 +326,7 @@ function ReviewElementLayer({ editor, saveReport }: {
   readonly editor: RivtoEditorApi;
   readonly saveReport: SaveReviewReport;
 }) {
-  const { mode } = useEditorMode();
+  const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const elements = useElements();
   const selection = useEditorSelection();
@@ -373,11 +373,11 @@ export function reviewReportExtensions(options: {
     }),
     {
       id: "demo.review-report.elements",
-      setup: (reactEditor) => {
-        reactEditor.extensions.mount(() => (
+      setup: (editorRuntime) => {
+        editorRuntime.extensions.mount(() => (
           <ReviewElementLayer editor={options.editor} saveReport={options.saveReport} />
         ));
-        return reactEditor.elements.registerProcessor({
+        return editorRuntime.elements.registerProcessor({
           id: "demo.review-report.props",
           priority: 0,
           processor: (element) => element.type === REVIEW_REPORT_TYPE
@@ -393,11 +393,11 @@ export {
   REVIEW_REPORT_TYPE,
   createReviewBlockInput,
   createReviewElementInput,
-  reviewBlockDefinition,
+  reviewBlockDefinition
 } from "./review-report-model";
 export type {
   ReviewBlockProps,
   ReviewElementProps,
   ReviewReport,
-  SaveReviewReport,
+  SaveReviewReport
 } from "./review-report-model";

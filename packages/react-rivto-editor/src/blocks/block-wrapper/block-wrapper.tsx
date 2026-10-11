@@ -1,3 +1,4 @@
+import { SurfaceContext } from "../../surfaces/surface";
 /**
  * Surface-to-extension boundary for rendering the structural shell of a block.
  *
@@ -15,7 +16,7 @@ import {
   type ReactNode,
   type RefCallback,
 } from "react";
-import { useEditorMode, useReactEditor } from "../../hooks";
+import { useEditorView } from "../../hooks";
 
 /**
  * Stable slots used by BlockTree to render one block shell.
@@ -146,9 +147,9 @@ export function BlockWrapper({
   isSelected,
   ...slots
 }: BlockWrapperSlotProps) {
-  const reactEditor = useReactEditor();
-  const { mode } = useEditorMode();
-  const wrappers = reactEditor.surfaces.getBlockWrappers(mode);
+  const editorView = useEditorView();
+  const mode = useContext(SurfaceContext);
+  const wrappers = editorView.runtime.surfaces.getBlockWrappers(mode);
   let result: ReactNode = (
     <Fallback block={block} isSelected={isSelected} {...slots} />
   );

@@ -91,9 +91,8 @@ test("moves Kanban cards in edgeless mode", async ({ page }) => {
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "kanban")!;
-    editor.load({ ...editor.dump(), blocks: [board], elements: [] });
-    editor.elements.insertElement({
-      type: "block", zIndex: 0, frame: { x: 20, y: 20, width: 800, height: 400 },
+    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
+    editor.elements.insertElement({       type: "block", zIndex: 0, frame: { x: 20, y: 20, width: 800, height: 400 },
       props: { startBlockId: board.id, endBlockId: board.id },
     });
   });
@@ -103,7 +102,11 @@ test("moves Kanban cards in edgeless mode", async ({ page }) => {
   await expect.poll(() => chrome.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
   await expect.poll(() => lanes.evaluate((element) => {
     const last = element.lastElementChild as HTMLElement | null;
-    return last ? element.scrollWidth - (last.offsetLeft + last.offsetWidth) : 0;
+    if (!last) return 0;
+    // The lane's offsetParent may be the board. Compare in the scrollport's
+    // coordinates and retain its intentional trailing padding.
+    const right = last.getBoundingClientRect().right - element.getBoundingClientRect().left + element.scrollLeft;
+    return Math.abs(element.scrollWidth - right - Number.parseFloat(getComputedStyle(element).paddingRight));
   })).toBeLessThanOrEqual(2);
   const columns = page.locator('[data-block-type="kanban-column"]');
   const card = columns.first().locator('[data-block-type="paragraph"]');
@@ -122,14 +125,13 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.evaluate((mode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === "kanban")!;
-      editor.load({ ...editor.dump(), blocks: [board], elements: [] });
+      editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
       const column = board.children[0]!;
       for (const content of ["Second card", "Third card"]) {
         const id = editor.blocks.insertBlock({ type: "paragraph", content }, board.id).id;
         editor.blocks.moveBlocks([id], column.id, "inside");
       }
-      if (mode === "edgeless") editor.elements.insertElement({
-        type: "block", zIndex: 0, frame: { x: 20, y: 20, width: 950, height: 500 },
+      if (mode === "edgeless") editor.elements.insertElement({         type: "block", zIndex: 0, frame: { x: 20, y: 20, width: 950, height: 500 },
         props: { startBlockId: board.id, endBlockId: board.id },
       });
       editor.history.clear();

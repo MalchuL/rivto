@@ -6,6 +6,8 @@
  *
  * @module
  */
+import type { EditorBlock, EditorBlockNode } from "@chulane/rivto";
+import { ArrowDownIcon } from "lucide-react";
 import {
   createContext,
   useContext,
@@ -17,17 +19,16 @@ import {
   type KeyboardEvent,
   type MouseEvent,
 } from "react";
-import type { EditorBlock, EditorBlockNode } from "@chulane/rivto";
 import { z } from "zod";
-import { ArrowDownIcon } from "lucide-react";
-import { useBlock, useBlockEditing, useReactEditor } from "../../hooks";
+import { createBlockBehaviorContext } from "../../block-behaviors/context";
+import { ContainerBlockBehavior } from "../../block-behaviors/index";
+import type { BlockWrapperProps } from "../../blocks";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import type { BlockWrapperProps } from "../../blocks";
-import { ContainerBlockView } from "../../views";
-import { createBlockViewContext } from "../../views/context";
+import { editorControlProps } from "../../constants";
+import { useBlock, useBlockNode, useBlockSelectionAnchor, useEditorRoot, useEditorView, usePreventTextEditing } from "../../hooks";
 import type { TodoItemProps, TodoItemStatus } from "./todo-item";
 import { TODO_ITEM_BLOCK_TYPE } from "./todo-item";
 import {
@@ -45,8 +46,8 @@ import {
   TODO_STORAGE_SUMMARY_STATS_CLASS,
   TODO_STORAGE_TOOLBAR_CLASS,
 } from "./todo-item-classes";
-import { TodoStorageMenu } from "./todo-storage-menu";
 import { TODO_STATUS_LABELS, TodoStatusOrder } from "./todo-status-order";
+import { TodoStorageMenu } from "./todo-storage-menu";
 
 /** Persisted native type installed by `todoItemExtension`. */
 export const TODO_STORAGE_BLOCK_TYPE = "todo-storage";
@@ -97,7 +98,7 @@ interface TodoStorageContextValue {
 const TodoStorageContext = createContext<TodoStorageContextValue | undefined>(undefined);
 
 /** Shared vertical-container behavior used by keyboard and drag dispatchers. */
-export const todoStorageView = new ContainerBlockView();
+export const todoStorageBehavior = new ContainerBlockBehavior();
 
 /** Creates persisted defaults without sharing the mutable status-order array. */
 export function createTodoStorageProps(): TodoStorageProps {
@@ -180,7 +181,7 @@ function FilterOption({ id, checked, label, onToggle }: {
 }) {
   return (
     <Label className={TODO_STORAGE_FILTER_OPTION_CLASS} htmlFor={id}>
-      <Checkbox id={id} checked={checked} onCheckedChange={onToggle} />
+      <Checkbox {...editorControlProps} id={id} checked={checked} onCheckedChange={onToggle} />
       {label}
     </Label>
   );
@@ -188,7 +189,7 @@ function FilterOption({ id, checked, label, onToggle }: {
 
 /** Supplies local storage state and a card boundary around the shared subtree. */
 function TodoStorageState({ block, children }: BlockWrapperProps) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const { block: tree } = useBlock(block.id);
   const childBlocks = tree?.children ?? [];
   const [query, setQuery] = useState("");
@@ -215,13 +216,13 @@ function TodoStorageState({ block, children }: BlockWrapperProps) {
     const desired = orderTodoStorageChildren(childBlocks, props.statusOrder);
     const current = childBlocks.map(({ id }) => id);
     if (desired.some((id, index) => id !== current[index])) {
-      reactEditor.history.batchUpdates(() => {
+      editorView.runtime.history.batchUpdates(() => {
         desired.forEach((id, index) => {
-          reactEditor.blocks.moveBlock(id, index ? desired[index - 1]! : null);
+          editorView.runtime.blocks.moveBlock(id, index ? desired[index - 1]! : null);
         });
       });
     }
-  }, [block.props, childBlocks, reactEditor, tree]);
+  }, [block.props, childBlocks, editorView, tree]);
 
   const value = useMemo<TodoStorageContextValue>(() => ({
     storageId: block.id,
@@ -247,8 +248,11 @@ export function TodoStorageBlockWrapper({ block, children }: BlockWrapperProps) 
 
 /** Renders search, disclosure filter menus, and persisted status-order controls. */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
-  const reactEditor = useReactEditor();
-  const editing = useBlockEditing<TodoStorageProps>(blockId, { textEdit: false });
+  const editorView = useEditorView();
+  const { element: root } = useEditorRoot();
+  const editing = useBlockNode<TodoStorageProps>(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
+  const preventTextEditingAttributes = usePreventTextEditing();
   const block = editing.block;
   const context = useContext(TodoStorageContext);
   const fieldId = useId();
@@ -259,7 +263,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
 
   /** Persists a validated ordering-property patch. */
   const updateProps = (patch: Partial<TodoStorageProps>): void => {
-    reactEditor.blocks.updateBlock(blockId, { props: patch });
+    editing.operations.setProps(patch);
   };
 
   /** Replaces one filter category while preserving the other categories. */
@@ -281,15 +285,14 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    const root = reactEditor.events.getRoot();
-    const viewContext = root ? createBlockViewContext(reactEditor, blockId, root) : undefined;
-    if (viewContext) todoStorageView.insertFirstChild(viewContext);
+    const viewContext = root ? createBlockBehaviorContext(editorView, blockId, root) : undefined;
+    if (viewContext) todoStorageBehavior.appendWritingBlock(viewContext);
   };
 
   if (block.listProps.collapsed === true) {
     const itemCount = childIds.length;
     return (
-      <div {...editing.attributes} className={TODO_STORAGE_SUMMARY_CLASS}>
+      <div {...attributes} className={TODO_STORAGE_SUMMARY_CLASS}>
         <strong>TODO storage</strong>
         <span className={TODO_STORAGE_SUMMARY_STATS_CLASS}>{itemCount} {itemCount === 1 ? "item" : "items"}</span>
       </div>
@@ -300,9 +303,9 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   // sortable status rows keep valid document offsets for keyboard dragging;
   // see `TodoStorageMenu` for the dnd-kit constraint behind this choice.
   return (
-    <div {...editing.attributes} className={TODO_STORAGE_CONTENT_CLASS}>
-      <div {...editing.preventTextEditingAttributes} className={TODO_STORAGE_TOOLBAR_CLASS}>
-        <Input
+    <div {...attributes} className={TODO_STORAGE_CONTENT_CLASS}>
+      <div {...preventTextEditingAttributes} className={TODO_STORAGE_TOOLBAR_CLASS}>
+        <Input {...editorControlProps}
           className={TODO_STORAGE_SEARCH_CLASS}
           type="search"
           aria-label="Search TODOs"
@@ -341,7 +344,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
               onToggle={() => updateFilters("projects", toggleFilter(context.filters.projects, project))}
             />)}
           </fieldset>}
-          <Button variant="outline" size="sm" className={TODO_STORAGE_CLEAR_CLASS} type="button" onClick={clearFilters}>Clear filters</Button>
+          <Button {...editorControlProps} variant="outline" size="sm" className={TODO_STORAGE_CLEAR_CLASS} type="button" onClick={clearFilters}>Clear filters</Button>
         </TodoStorageMenu>
         <TodoStorageMenu label="Order" panelLabel="Ordering">
           <FilterOption
@@ -358,7 +361,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
       </div>
       {childIds.length === 0 && (
         <div
-          {...editing.preventTextEditingAttributes}
+          {...preventTextEditingAttributes}
           className={TODO_STORAGE_DROP_FIELD_CLASS}
           role="button"
           tabIndex={0}
@@ -379,9 +382,9 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
 
 /** Hides a direct TODO child when its owning storage presentation rejects it. */
 export function TodoStorageVisibility({ block, children }: BlockWrapperProps) {
-  const reactEditor = useReactEditor();
+  const editorView = useEditorView();
   const context = useContext(TodoStorageContext);
-  const directChild = context && reactEditor.blocks.getParentId(block.id) === context.storageId;
+  const directChild = context && editorView.runtime.blocks.getParentId(block.id) === context.storageId;
   if (directChild && !matchesTodoStorage(block, context.query, context.filters)) return null;
   return children;
 }

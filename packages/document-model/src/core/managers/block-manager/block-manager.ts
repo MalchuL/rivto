@@ -11,6 +11,7 @@ import {
     CRDTMap,
     CRDTText,
     CRDTUndoScope,
+    type CRDTObserveEvent,
 } from "@chulane/crdt-doc";
 import type {
     Block,
@@ -77,7 +78,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     /** Largest move batch that uses individual parent lookups during an open CRDT transaction. */
     private static readonly PARENT_INDEX_MOVE_THRESHOLD = 8;
     /** Creates block identities without exposing generator configuration. */
-    private readonly generateId = (): string => crypto.randomUUID();
+    protected generateId(): string { return crypto.randomUUID(); }
     /** Detached snapshots invalidated before subscribers are notified. */
     private readonly cache: BlockCache;
     /** Per-block subscribers, including recursive snapshot consumers on ancestors. */
@@ -119,79 +120,10 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         // Nested maps name the owning block in `path` / `keys`. Child-list
         // edits therefore already include the parent ID, so ancestor snapshots
         // are dropped through `invalidateBlocks` without a parent-map diff.
-        this.storage.observe((events, transaction) => {
-            this.currentRevision += 1;
-            // Start points for recursive snapshot invalidation up the tree.
-            const changedBlockIds = new Set<string>();
-            // Blocks whose own-field node snapshots must be rebuilt.
-            const nodeFieldChangedIds = new Set<string>();
-            // Parents whose direct child-ID snapshots must be rebuilt.
-            const childListChangedIds = new Set<string>();
-            let structureChanged = false;
-            let recordReplaced = false;
-            events.forEach(({ path, keys }) => {
-                // storage.set/delete("b1") -> path: [], keys: ["b1"].
-                // The whole record changed, so both focused caches are stale.
-                if (path.length === 0) {
-                    keys.forEach((id) => {
-                        changedBlockIds.add(id);
-                        nodeFieldChangedIds.add(id);
-                        childListChangedIds.add(id);
-                        if (this.cache.hasParent(id)) recordReplaced = true;
-                    });
-                    return;
-                }
-                const id = path[0];
-                if (typeof id !== "string") return;
-                changedBlockIds.add(id);
-                // block.set("type", ...): path ["b1"], keys ["type"].
-                // block.set("children", ...): path ["b1"], keys ["children"].
-                // content.insert(...): path ["b1", "content"], keys [].
-                // props.set("color", ...): path ["b1", "props"], keys ["color"].
-                // children.push("c1"): path ["b1", "children"], keys [].
-                const childrenChanged = path[1] === "children"
-                    || (path.length === 1 && keys.includes("children"));
-                const nodeChanged = path.length === 1
-                    ? keys.some((key) => key !== "children")
-                    : path[1] !== "children";
-                if (childrenChanged) childListChangedIds.add(id);
-                if (nodeChanged) nodeFieldChangedIds.add(id);
-                structureChanged ||= childrenChanged;
-            });
-            if (structureChanged || recordReplaced) {
-                this.cache.refreshParents(recordReplaced ? undefined : childListChangedIds, transaction);
-            }
-            // Placement changes update the parent index and changed child lists.
-            // A moved block's own node snapshot is unchanged, so its node
-            // listener must not wake just because it moved under another parent.
-            this.invalidateBlocks(changedBlockIds, nodeFieldChangedIds, childListChangedIds);
-            if (structureChanged || recordReplaced) this.emitStructure(transaction);
-        });
+        this.storage.observe((events, transaction) => this.onRecordsChanged(events, transaction));
         // The roots array is not a field on any block, so these events have an
         // empty path and cannot name a parent for `invalidateBlocks`.
-        this.roots.observe((_events, transaction) => {
-            this.currentRevision += 1;
-            this.cache.invalidateRoots();
-            const previousParents = this.cache.hasDuplicatePlacements() ? this.cache.snapshotParents() : undefined;
-            const oldRoots = new Set(this.cache.getIndexedChildren(null));
-            const newRoots = new Set(strings(this.roots));
-            const changedRoots = new Set([...oldRoots, ...newRoots].filter((id) => oldRoots.has(id) !== newRoots.has(id)));
-            const affected = this.cache.getAncestorIds(changedRoots, true);
-            this.cache.refreshParents(new Set([null]), transaction);
-            // Valid trees need only the parent chains of IDs entering/leaving
-            // roots. Duplicate references can change the first winner on reorder.
-            if (previousParents) {
-                const changed = this.cache.invalidateChangedParents(previousParents);
-                this.emitFocused(changed, this.blockListeners);
-            } else {
-                this.cache.getAncestorIds(changedRoots, true).forEach((id) => affected.add(id));
-                this.cache.invalidate(affected);
-                this.emitFocused(affected, this.blockListeners);
-            }
-            this.emitFocused(changedRoots, this.blockNodeListeners);
-            this.emit(this.rootListeners);
-            this.emitStructure(transaction);
-        });
+        this.roots.observe((_events, transaction) => this.onRootsChanged(transaction));
     }
 
     /** @returns Monotonic revision incremented by block data or hierarchy changes. */
@@ -353,20 +285,127 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     /**
      * Inserts a block into an ordered root or sibling list.
      *
-     * @param block - Initial portable block data including its required native type.
+     * Existing subtree IDs are preserved, including during document transfers.
+     * Local collisions and portable invariants are checked before shared writes.
+     * Application managers prepare missing IDs and validate reuse of allocated IDs;
+     * supplied identities do not require separate database creation or transfer APIs.
+     *
+     * @param block - Initial portable block data including its required native type and optional stable IDs.
      * @param afterId - Sibling to insert after block id, `null` for first, or omitted for last.
      * @returns Complete inserted block assembled during storage creation.
-     * @throws If the ID already exists or the requested sibling is missing.
+     * @throws If malformed, an ID already exists in this document, application identity checks fail, or the requested sibling is missing.
      */
     insertBlock(block: BlockInput, afterId?: string | null): Block {
         if (!block.type) throw new Error("Block type is required");
         const container = this.resolveInsertContainer(afterId);
         this.validateInsertedForest([block]);
+        const prepared = this.prepareBlock(block);
         let inserted: Block | undefined;
         this.crdt.transact(() => {
-            inserted = this.insertInto(block, container, afterId);
+            inserted = this.insertInto(prepared, container, afterId);
         });
         return inserted!;
+    }
+
+    /**
+     * Prepares insertion after local validation and before the first shared write.
+     * Checks application identity reuse for subtrees carrying stable identities;
+     * missing IDs may be allocated by the application before storage creation.
+     * Default storage needs no external identity check and leaves the input unchanged.
+     *
+     * @param block - Locally validated subtree with optional stable IDs.
+     * @returns Input with application-allocated or reused IDs, or the unchanged default input.
+     * @throws If application creation constraints fail or an identity cannot be reused.
+     */
+    protected prepareBlock(block: BlockInput): BlockInput { return block; }
+
+    /**
+     * Processes nested record changes, including remote and undo writes.
+     * Invalidates cached fields and hierarchy before notifying subscribers.
+     * Subclasses call super first, then use the returned IDs for their added work;
+     * record readers see current transaction state without a collection scan.
+     * @param events - Changes relative to the block storage map, including deleted keys.
+     * @param transaction - Opaque commit identity used to coalesce hierarchy notifications.
+     * @returns Changed or deleted block IDs; the default manager performs no external persistence.
+     */
+    protected onRecordsChanged(events: readonly CRDTObserveEvent[], transaction: unknown): ReadonlySet<string> {
+        this.currentRevision += 1;
+        // Start points for recursive snapshot invalidation up the tree.
+        const changedBlockIds = new Set<string>();
+        // Blocks whose own-field node snapshots must be rebuilt.
+        const nodeFieldChangedIds = new Set<string>();
+        // Parents whose direct child-ID snapshots must be rebuilt.
+        const childListChangedIds = new Set<string>();
+        let structureChanged = false;
+        let recordReplaced = false;
+        events.forEach(({ path, keys }) => {
+            // storage.set/delete("b1") -> path: [], keys: ["b1"].
+            // The whole record changed, so both focused caches are stale.
+            if (path.length === 0) {
+                keys.forEach((id) => {
+                    changedBlockIds.add(id);
+                    nodeFieldChangedIds.add(id);
+                    childListChangedIds.add(id);
+                    if (this.cache.hasParent(id)) recordReplaced = true;
+                });
+                return;
+            }
+            const id = path[0];
+            if (typeof id !== "string") return;
+            changedBlockIds.add(id);
+            // block.set("type", ...): path ["b1"], keys ["type"].
+            // block.set("children", ...): path ["b1"], keys ["children"].
+            // content.insert(...): path ["b1", "content"], keys [].
+            // props.set("color", ...): path ["b1", "props"], keys ["color"].
+            // children.push("c1"): path ["b1", "children"], keys [].
+            const childrenChanged = path[1] === "children"
+                || (path.length === 1 && keys.includes("children"));
+            const nodeChanged = path.length === 1
+                ? keys.some((key) => key !== "children")
+                : path[1] !== "children";
+            if (childrenChanged) childListChangedIds.add(id);
+            if (nodeChanged) nodeFieldChangedIds.add(id);
+            structureChanged ||= childrenChanged;
+        });
+        if (structureChanged || recordReplaced) {
+            this.cache.refreshParents(recordReplaced ? undefined : childListChangedIds, transaction);
+        }
+        // Placement changes update the parent index and changed child lists.
+        // A moved block's own node snapshot is unchanged, so its node
+        // listener must not wake just because it moved under another parent.
+        this.invalidateBlocks(changedBlockIds, nodeFieldChangedIds, childListChangedIds);
+        if (structureChanged || recordReplaced) this.emitStructure(transaction);
+        return changedBlockIds;
+    }
+
+    /**
+     * Processes root-order changes and repairs cached placement before notifying subscribers.
+     * Subclasses call super first to preserve root, block, and hierarchy subscriptions.
+     * @param transaction - Opaque commit identity shared with record observers.
+     * @returns Nothing after incrementing revision, invalidating affected snapshots, and publishing changes.
+     */
+    protected onRootsChanged(transaction: unknown): void {
+        this.currentRevision += 1;
+        this.cache.invalidateRoots();
+        const previousParents = this.cache.hasDuplicatePlacements() ? this.cache.snapshotParents() : undefined;
+        const oldRoots = new Set(this.cache.getIndexedChildren(null));
+        const newRoots = new Set(strings(this.roots));
+        const changedRoots = new Set([...oldRoots, ...newRoots].filter((id) => oldRoots.has(id) !== newRoots.has(id)));
+        const affected = this.cache.getAncestorIds(changedRoots, true);
+        this.cache.refreshParents(new Set([null]), transaction);
+        // Valid trees need only the parent chains of IDs entering/leaving
+        // roots. Duplicate references can change the first winner on reorder.
+        if (previousParents) {
+            const changed = this.cache.invalidateChangedParents(previousParents);
+            this.emitFocused(changed, this.blockListeners);
+        } else {
+            this.cache.getAncestorIds(changedRoots, true).forEach((id) => affected.add(id));
+            this.cache.invalidate(affected);
+            this.emitFocused(affected, this.blockListeners);
+        }
+        this.emitFocused(changedRoots, this.blockNodeListeners);
+        this.emit(this.rootListeners);
+        this.emitStructure(transaction);
     }
 
     /**

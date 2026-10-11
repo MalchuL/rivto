@@ -3,7 +3,7 @@
  *
  * Covers the viewport (dot grid, cursor spotlight, pan cursors), the
  * transformed plane, block cards and their content scrollport, the shared
- * left-edge drag handle, resize handles, and the marquee selection rectangle.
+ * viewport chrome and the marquee selection rectangle. Transform controls use Moveable.
  * These rules depend on data attributes written at runtime by
  * `EdgelessSurface` and `EdgelessBlock`, on `:hover` state of ancestors, and
  * on CSS custom properties updated per frame, none of which utilities on the
@@ -14,7 +14,7 @@
   --rivto-edgeless-background: #f7f6fa;
   --rivto-edgeless-grid-dot: #c8c3d3;
   --rivto-edgeless-grid-dot-strong: #81798f;
-  --rivto-edgeless-snap-guide: #ef3f87;
+  --rivto-edgeless-snap-guide: #4af;
   --rivto-edgeless-chrome-shadow: 0 8px 24px rgb(42 34 72 / 12%);
   --rivto-edgeless-panel-shadow: 0 12px 32px rgb(42 34 72 / 14%);
   --rivto-edgeless-panel-divider: #ece8f2;
@@ -106,50 +106,7 @@
   outline: none;
 }
 
-.edgeless-card[data-block-selected] {
-  border-color: var(--rivto-accent);
-  box-shadow: 0 0 0 2px var(--rivto-accent), 0 8px 24px rgb(0 0 0 / 12%);
-}
 
-/* Shared left-edge grab for selected blocks, visuals, and groups.
-   Caps at 3/4 of the parent height so short frames are not taller than the handle. */
-.edgeless-drag-handle {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: min(56px, 75%);
-  max-height: 75%;
-  /* Sit fully outside the frame, clear of the selection/shape border. */
-  translate: calc(-100% - 6px) 0;
-  padding: 0;
-  border: 1px solid var(--rivto-accent);
-  border-radius: 9px;
-  color: var(--rivto-accent);
-  background: var(--rivto-subtle);
-  cursor: grab;
-  pointer-events: auto;
-  touch-action: none;
-  overflow: hidden;
-}
-
-/* Restore the frame-relative height that the handle had before it moved into
-   a slot. The slot supplies the 75% reference; the handle keeps its 56px cap. */
-.rivto-slot[data-slot-owner="element"]:has(> .edgeless-drag-handle) {
-  height: 75%;
-}
-
-.rivto-slot > .edgeless-drag-handle {
-  height: min(56px, 100%);
-  max-height: 100%;
-}
-
-.edgeless-drag-handle:active {
-  cursor: grabbing;
-}
 
 .edgeless-card-content {
   flex: 1 1 auto;
@@ -183,73 +140,17 @@
   inset-inline: auto 0;
 }
 
-.edgeless-resize-handle {
+.edgeless-snap-guide {
   position: absolute;
-  z-index: 2;
-  width: 10px;
-  height: 10px;
-  padding: 0;
-  border: 2px solid var(--rivto-background);
-  border-radius: 50%;
-  background: var(--rivto-accent);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 18%);
-  touch-action: none;
+  z-index: 2147483637;
 }
 
-.edgeless-resize-handle[data-edgeless-resize-handle="nw"] {
-  top: -10px;
-  left: -10px;
-  cursor: nwse-resize;
+.edgeless-snap-guide-x {
+  width: calc(1px / var(--rivto-edgeless-zoom));
 }
 
-.edgeless-resize-handle[data-edgeless-resize-handle="ne"] {
-  top: -10px;
-  right: -10px;
-  cursor: nesw-resize;
-}
-
-.edgeless-resize-handle[data-edgeless-resize-handle="sw"] {
-  bottom: -10px;
-  left: -10px;
-  cursor: nesw-resize;
-}
-
-.edgeless-resize-handle[data-edgeless-resize-handle="se"] {
-  right: -10px;
-  bottom: -10px;
-  cursor: nwse-resize;
-}
-
-.edgeless-resize-handle[data-edgeless-resize-handle="n"],
-.edgeless-visual-resize[data-edgeless-resize-handle="n"] {
-  top: -10px;
-  left: 50%;
-  translate: -50% 0;
-  cursor: ns-resize;
-}
-
-.edgeless-resize-handle[data-edgeless-resize-handle="e"],
-.edgeless-visual-resize[data-edgeless-resize-handle="e"] {
-  top: 50%;
-  right: -10px;
-  translate: 0 -50%;
-  cursor: ew-resize;
-}
-
-.edgeless-resize-handle[data-edgeless-resize-handle="s"],
-.edgeless-visual-resize[data-edgeless-resize-handle="s"] {
-  bottom: -10px;
-  left: 50%;
-  translate: -50% 0;
-  cursor: ns-resize;
-}
-
-.edgeless-resize-handle[data-edgeless-resize-handle="w"],
-.edgeless-visual-resize[data-edgeless-resize-handle="w"] {
-  top: 50%;
-  left: -10px;
-  translate: 0 -50%;
-  cursor: ew-resize;
+.edgeless-snap-guide-y {
+  height: calc(1px / var(--rivto-edgeless-zoom));
 }
 
 .edgeless-selection-rectangle {

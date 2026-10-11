@@ -54,10 +54,11 @@ export class DocumentModelImpl implements DocumentModel {
   constructor(crdt: CRDTDoc) {
     this.crdt = crdt;
     this.id = crdt.id;
-    const blocks = new DocumentBlockManager(crdt);
-    const elements = new DocumentElementManager(crdt);
+    const blocks = this.createBlockManager(crdt);
+    const elements = this.createElementManager(crdt);
     const pluginData = new DocumentPluginDataManager(crdt);
     blocks.normalize();
+    elements.normalize();
     const undoScopes: CRDTUndoScope[] = [
       ...blocks.historyScopes,
       ...elements.historyScopes,
@@ -76,7 +77,32 @@ export class DocumentModelImpl implements DocumentModel {
     this.unsubscribeFromUpdates = this.crdt.on("update", (_update: unknown, updateOrigin?: unknown) => {
       if (this.crdt.isLocalOrigin(updateOrigin)) return;
       blocks.normalize();
+      elements.normalize();
     });
+  }
+
+  /**
+   * Creates block storage before initial normalization and history-scope collection.
+   * Override to use an application manager; the default retains native document behavior.
+   * Called during base construction, before subclass fields are initialized, so managers
+   * must defer reading those fields until their operations run.
+   * @param crdt - This document's collaborative adapter, already assigned with its ID.
+   * @returns Block manager whose scopes are included in document history.
+   */
+  protected createBlockManager(crdt: CRDTDoc): DocumentBlockManager {
+    return new DocumentBlockManager(crdt);
+  }
+
+  /**
+   * Creates element storage before history-scope collection.
+   * Override to use an application manager; the default retains native document behavior.
+   * Called during base construction, before subclass fields are initialized, so managers
+   * must defer reading those fields until their operations run.
+   * @param crdt - This document's collaborative adapter, already assigned with its ID.
+   * @returns Element manager whose scopes are included in document history.
+   */
+  protected createElementManager(crdt: CRDTDoc): DocumentElementManager {
+    return new DocumentElementManager(crdt);
   }
 
   /**
@@ -90,21 +116,22 @@ export class DocumentModelImpl implements DocumentModel {
   }
 
   /**
-   * Produces a lossless portable schema-v6 snapshot.
+   * Produces a lossless portable schema-v9 snapshot.
    *
    * @returns Detached blocks, elements, and document-level plugin data.
    */
   getSnapshot(): Snapshot {
     return {
-      version: 6,
+      version: 9,
       blocks: clone(this.blocks.getBlocks()),
-      elements: clone(this.elements.getElements()),
+      elements: this.elements.getElementNodes().map(({ id, type, childIds, frame, zIndex, props }) => clone({ id, type, childIds, frame, zIndex, props })),
+      rootElementIds: [...this.elements.getRootIds()],
       pluginData: this.pluginData.getAll(),
     };
   }
 
   /**
-   * Applies supplied schema-v6 snapshot sections atomically.
+   * Applies supplied schema-v9 snapshot sections atomically.
    *
    * Every supplied section and its cross-references are validated before the
    * transaction begins. CRDT transactions do not roll back thrown writes, so
@@ -119,18 +146,21 @@ export class DocumentModelImpl implements DocumentModel {
    * are invalid.
    */
   loadSnapshot(snapshot: SnapshotUpdate): void {
-    if (snapshot.version !== 6) {
+    if (snapshot.version !== 9) {
       throw new Error(`Unsupported Rivto document snapshot version: ${String(snapshot.version)}`);
     }
     if ((snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks)) ||
       (snapshot.elements !== undefined && !Array.isArray(snapshot.elements))) {
       throw new Error("Unsupported Rivto document snapshot");
     }
+    const rootElementIds = snapshot.rootElementIds ?? this.elements.getRootIds();
     if (snapshot.blocks) this.blocks.validateBlocks(snapshot.blocks);
     if (snapshot.elements) this.elements.validateElements(snapshot.elements);
+    this.elements.validateHierarchy(snapshot.elements ?? this.elements.getElementNodes(), rootElementIds);
     if (snapshot.pluginData) assertPortableRecord(snapshot.pluginData, "pluginData");
 
     this.crdt.transact(() => {
+      if (snapshot.rootElementIds) this.elements.loadRootIds(snapshot.rootElementIds);
       if (snapshot.blocks) this.blocks.loadBlocks(snapshot.blocks);
       if (snapshot.elements) this.elements.loadElements(snapshot.elements);
       if (snapshot.pluginData) this.pluginData.load(snapshot.pluginData);

@@ -1,19 +1,21 @@
+import { useContext } from "react";
+import { useEdgelessElementStyle } from "../use-edgeless-element-style";
+import { SurfaceContext } from "../../../surfaces/surface";
 /**
- * Edgeless visual plane: persisted visuals, group chrome, tools, and previews.
+ * Edgeless visual plane: persisted visuals, group hit areas, tools, and previews.
  *
  *
  * The layer itself does not subscribe to canvas selection. Each visual and
- * group outline observes its own selected bit, and toolbar/properties live in
+ * group hit area follows the current selection, and toolbar/properties live in
  * a child that is the only full-list subscriber so marquee growth cannot
  * re-render every shape.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { useEditorMode, useEditorRoot } from "../../../hooks";
-import { useEdgelessSelected, useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
-import { ElementSlots } from "../../../blocks";
-import { DrawingCapture } from "./components/drawing-capture";
+import { useEditorRoot, useEditorView } from "../../../hooks";
+import { useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
 import { BlockProperties } from "./components/block-properties";
+import { DrawingCapture } from "./components/drawing-capture";
 import { SelectionToolbar } from "./components/selection-toolbar";
 import { ToolBar } from "./components/tool-bar";
 import { VisualElement } from "./components/visual-element";
@@ -33,59 +35,47 @@ import { canvasPoint } from "./utils/canvas-point";
 
 const VISUAL_LAYER_CLASS = "edgeless-visual-layer";
 const GROUP_HIT_CLASS = "edgeless-group-hit";
-const GROUP_BOUND_CLASS = "edgeless-group-bound";
 
 /**
- * Hit plate and outline for one group, mounted only while that group is selected.
- * 
- * "Chrome" is UI jargon for overlay decoration (outlines, hit plates, toolbar),
- * not the Google Chrome browser.
+ * Provides an invisible hit area between the children of a selected group.
+ *
+ * It stays behind the children so clicks can still select or edit them. Moveable
+ * renders the visible boundary and controls; this area has no outline or drag
+ * handle of its own. Preview geometry survives React updates during a gesture.
  *
  * @param props - Group ID and the controller that supplies derived bounds.
- * @returns Group chrome, or null when the group is unselected or has no bounds.
+ * @returns Hit area, or null when the group has no visible bounds.
  */
-function GroupSelectionChrome({
-  groupId,
-  controller,
-}: {
+function GroupHitArea({ groupId, controller }: {
   readonly groupId: string;
   readonly controller: EdgelessVisualController;
 }) {
-  const selected = useEdgelessSelected(groupId);
-  const bounds = controller.getBounds(groupId);
-  if (!selected || !bounds) return null;
-  const element = controller.reactEditor.elements.getElement(groupId);
-  const geometry = {
-    left: bounds.x,
-    top: bounds.y,
-    width: bounds.width,
-    height: bounds.height,
-  };
-  return (
-    <>
-      {/*
-        Hit plate under children: empty bbox / gaps select & drag the group.
-        Outline stays on top with pointer-events: none so child drill-in still works.
-      */}
-      <div
-        className={GROUP_HIT_CLASS}
-        data-edgeless-group-hit={groupId}
-        data-edgeless-group-bound-id={groupId}
-        data-edgeless-object-kind="group"
-        data-edgeless-object-id={groupId}
-        style={{ ...geometry, zIndex: controller.getGroupHitZIndex(groupId) }}
-      />
-      <div
-        className={GROUP_BOUND_CLASS}
-        data-edgeless-group-bound-id={groupId}
-        data-edgeless-object-kind="group"
-        data-edgeless-object-id={groupId}
-        style={geometry}
-      >
-        {element && <ElementSlots element={element} selected />}
-      </div>
-    </>
-  );
+  const bounds = controller.getFrame(groupId);
+  const element = controller.elements.getElementNode(groupId);
+  const preview = element && bounds ? { ...element, frame: bounds } : undefined;
+  const hit = useEdgelessElementStyle<HTMLDivElement>(preview);
+  if (!bounds) return null;
+  return <div
+    ref={hit.ref}
+    className={GROUP_HIT_CLASS}
+    data-edgeless-group-hit={groupId}
+    data-edgeless-object-kind="group"
+    data-edgeless-object-id={groupId}
+    style={{ ...hit.style, zIndex: controller.getGroupHitZIndex(groupId) }}
+  />;
+}
+
+/**
+ * Mounts hit areas only for selected groups, without subscribing the visual
+ * plane to selection changes or walking every unselected group's descendants.
+ * @param props - Controller used to read the selected group nodes and bounds.
+ * @returns Invisible hit areas between the currently selected groups' children.
+ */
+function SelectedGroups({ controller }: { controller: EdgelessVisualController }) {
+  const selection = useEdgelessSelection();
+  return selection.items.map((id) => controller.elements.getElementNode(id)?.type === "group"
+    ? <GroupHitArea key={id} groupId={id} controller={controller} />
+    : null);
 }
 
 /**
@@ -116,7 +106,7 @@ function EdgelessSelectionChrome({
     ? sameType
     : [];
   const propertyBlocks = selection.items.flatMap((id) => {
-    const element = controller.reactEditor.elements.getElement(id);
+    const element = controller.elements.getElementNode(id);
     return element?.type === "block" ? [element] : [];
   });
   return (
@@ -143,13 +133,15 @@ function EdgelessSelectionChrome({
  * @returns Portaled visual plane and tool chrome, or null outside edgeless mode.
  */
 export function EdgelessVisualLayer({
-  controller,
+  controller: sharedController,
   options,
 }: {
   readonly controller: EdgelessVisualController;
   readonly options: EdgelessVisualsOptions;
 }) {
-  const { mode } = useEditorMode();
+  const editorView = useEditorView();
+  const controller = useMemo(() => sharedController.getDocumentView(editorView), [sharedController, editorView]);
+  const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const tool = useVisualTool(controller);
   useSyncExternalStore(
@@ -160,7 +152,6 @@ export function EdgelessVisualLayer({
   const plane = root?.querySelector<HTMLElement>("[data-edgeless-plane]") ?? null;
   const zoom = Number(root?.dataset.edgelessZoom) || 1;
   const visuals = controller.getVisuals();
-  const groups = controller.getGroups();
   const fontOptions = useMemo(
     () => [...new Map([...DEFAULT_FONTS, ...(options.fonts ?? [])].map((font) => [font.fontFamily, font])).values()],
     [options.fonts],
@@ -205,7 +196,7 @@ export function EdgelessVisualLayer({
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.reactEditor.commands.execute("edgeless.tool.set", "select");
+      controller.execute("edgeless.tool.set", "select");
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 2) return;
@@ -213,7 +204,7 @@ export function EdgelessVisualLayer({
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.reactEditor.commands.execute("edgeless.tool.set", "select");
+      controller.execute("edgeless.tool.set", "select");
     };
     root.addEventListener("contextmenu", onContextMenu);
     root.addEventListener("pointerdown", onPointerDown, true);
@@ -245,13 +236,7 @@ export function EdgelessVisualLayer({
             }}
           />
         ))}
-        {groups.map((group) => (
-          <GroupSelectionChrome
-            key={group.id}
-            groupId={group.id}
-            controller={controller}
-          />
-        ))}
+        <SelectedGroups controller={controller} />
       </div>,
       plane,
     )}

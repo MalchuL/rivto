@@ -1,3 +1,5 @@
+import { editorControlProps } from "../../constants";
+import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
 /**
  * Built-in list and collapse contributions for the shared block left slot.
  *
@@ -11,7 +13,7 @@
  * @module
  */
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
-import { useBlockNode } from "../../hooks";
+import { useBlockOperations } from "../../hooks";
 import type { BlockSlotProps } from "../../managers";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
@@ -28,11 +30,11 @@ const COLLAPSE_TOGGLE_CLASS = "page-collapse-toggle";
  * @returns Interactive checkbox, numeric marker, or nothing for ordinary lists.
  */
 export function BlockListSlot({ block }: BlockSlotProps) {
-  const { operations } = useBlockNode(block.id);
+  const operations = useBlockOperations(block.id);
 
   if (block.listProps.type === "checkbox") {
     return (
-      <Checkbox
+      <Checkbox {...editorControlProps}
         className={cn(LIST_CHECKBOX_CLASS, "size-[18px] rounded-[5px]")}
         aria-label={`Mark block as ${block.listProps.checked ? "incomplete" : "complete"}: ${block.content || block.type}`}
         checked={block.listProps.checked === true}
@@ -57,12 +59,12 @@ export function BlockListSlot({ block }: BlockSlotProps) {
  * @returns Collapse toggle for a branch block, otherwise nothing.
  */
 export function BlockCollapseSlot({ block }: BlockSlotProps) {
-  const { operations } = useBlockNode(block.id);
+  const operations = useBlockOperations(block.id);
+  const childrenId = useBlockChildrenId(block.id);
   if (!block.childIds.length) return null;
-  const childrenId = `block-children-${block.id}`;
   const collapsed = block.listProps.collapsed === true;
   return (
-    <Button
+    <Button {...editorControlProps}
       variant="ghost"
       size="icon-xs"
       className={cn(COLLAPSE_TOGGLE_CLASS, "h-6 w-5 rounded text-muted-foreground select-none hover:bg-transparent hover:text-foreground")}

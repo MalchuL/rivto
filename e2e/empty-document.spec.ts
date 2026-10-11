@@ -7,8 +7,8 @@ test.beforeEach(async ({ page }) => {
 
 test("creates every paragraph through the chosen trailing insertion target", async ({ page }) => {
   const document = page.locator('[data-journal-document="today"]');
-  const surface = document.locator(".page-surface");
-  const roots = surface.locator(`:scope > ${BLOCK_ID_SELECTOR}`);
+  const surface = document.locator(":scope > .page-surface");
+  const roots = surface.locator(`:scope > ${BLOCK_ID_SELECTOR}, :scope > :not(${BLOCK_ID_SELECTOR}) > ${BLOCK_ID_SELECTOR}`);
   const affordances = document.locator(".page-trailing-block");
   await expect(affordances).toHaveCount(3);
   const paragraphHeight = await roots.first()
@@ -21,6 +21,8 @@ test("creates every paragraph through the chosen trailing insertion target", asy
 
   const count = await roots.count();
   for (let index = 0; index < count; index += 1) {
+    const toggle = roots.nth(index).locator(":scope > .page-block-row [data-collapse-toggle]");
+    if (await toggle.count()) await toggle.click();
     const row = roots.nth(index).locator(":scope > .page-block-row");
     await row.click({ modifiers: ["Control"], position: { x: 4, y: 4 } });
   }
@@ -32,13 +34,14 @@ test("creates every paragraph through the chosen trailing insertion target", asy
   await expect(affordances).toHaveCount(3);
   const affordance = document.getByRole("button", { name: "Add 3 blocks" });
   await expect(affordance).toBeVisible();
-  await expect(affordance).toHaveText("+ Add block");
+  await expect(affordance).toHaveText("Add block");
   await expect(affordance).toHaveCSS("color", "rgba(0, 0, 0, 0)");
   await expect(affordance).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
 
   await affordance.focus();
   await expect(affordance).not.toHaveCSS("color", "rgba(0, 0, 0, 0)");
-  await expect(affordance).toHaveCSS("outline-style", "solid");
+  // The current UI draws keyboard focus with a ring (box shadow).
+  await expect(affordance).not.toHaveCSS("box-shadow", "none");
   await affordance.hover();
   await expect(affordance).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await affordance.click();

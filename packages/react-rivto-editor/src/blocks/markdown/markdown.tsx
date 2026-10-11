@@ -6,19 +6,20 @@
  * @module
  */
 import {
-  useCallback,
   memo,
+  useCallback,
   useMemo,
   useState,
 } from "react";
-import type { MarkdownLinkClick } from "../../types";
-import {
-  useBlockEditing,
-  useBlockNode,
-} from "../../hooks";
 import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
+import { editorControlProps } from "../../constants";
+import {
+  useBlockEditing,
+  useEditorView,
+} from "../../hooks";
+import type { MarkdownLinkClick } from "../../types";
 import {
   MarkdownCodeBlock,
   rehypeCodeFenceMetadata,
@@ -90,13 +91,17 @@ export function MarkdownContent({
   readonly onLinkClick?: (context: MarkdownLinkClick) => void;
 }) {
   const editing = useBlockEditing(blockId);
-  const { block, operations } = useBlockNode(blockId);
+  const { block, operations } = editing;
+  const editorView = useEditorView();
   const [isEditing, setIsEditing] = useState(false);
   const source = block?.content ?? "";
 
   const updateCode = useCallback((node: PositionedNode, value: string) => {
-    operations.setContent(replaceMarkdownCode(source, node, value));
-  }, [operations, source]);
+    // An external write can precede this old render's input handler in the
+    // same turn. Preserve its current surrounding text rather than the snapshot.
+    const current = editorView.runtime.blocks.getBlockNode(blockId)?.content;
+    if (current !== undefined) operations.setContent(replaceMarkdownCode(current, node, value));
+  }, [editorView, blockId, operations]);
   const transformUrl = useCallback<UrlTransform>((url) => {
     const safe = defaultUrlTransform(url);
     if (safe || !onLinkClick) return safe;
@@ -104,7 +109,7 @@ export function MarkdownContent({
   }, [onLinkClick]);
   const components = useMemo<Components>(() => ({
     a: ({ node: _node, href = "", ...props }) => (
-      <a
+      <a {...editorControlProps}
         {...props}
         href={href}
         tabIndex={-1}

@@ -2,7 +2,7 @@
 
 ## DOM events
 
-`useDOMEvent()` и `reactEditor.events.register()` используют один delegated runtime. Native listener привязан к active surface, document или window и автоматически переносится при switch surface.
+`useDOMEvent()` и `editorRuntime.events.register()` используют один delegated runtime. Native listener привязан к active surface, document или window и автоматически переносится при switch surface.
 
 ### `DOMEventDefinition` properties
 
@@ -35,7 +35,7 @@ useKeyboardEvent({
 ### Keymap overrides
 
 ```ts
-createReactEditor({
+createEditorRuntime({
   editor,
   keymap: {
     [KEYBOARD_BINDING_IDS.blockIndent]: ["Primary+ArrowRight"],
@@ -56,20 +56,20 @@ core editor.selection     blockId + UTF-16 offsets, portable local state
 React DOM selection       browser nodes/ranges/highlights текущей surface
 ```
 
-`reactEditor.selection` methods:
+`editorView.selection` methods:
 
 - `readDOM()` возвращает `Selection | undefined`;
 - `restoreDOM(selection?)` возвращает `boolean` success;
 - `clearDOMHighlight()` возвращает `void`;
 - `updateDOMHighlight(selection?)` возвращает `void`.
 
-Все methods без явного root используют текущий root из EventManager. Core selection всегда меняйте через `editor.selection`.
+Все methods без явного root используют root конкретного отображения из ViewEventManager. Core selection всегда меняйте через `editor.selection`.
 
 Text selection extension синхронизирует caret/ranges. Обычный cross-block drag создаёт block selection; Alt-drag сохраняет partial text endpoints. Selection локален и не синхронизируется между collaborators.
 
 ## Clipboard
 
-Built-in `clipboardExtension()` связывает browser MIME data с core structured bundle. React capability добавляет portable formats для external apps.
+Built-in `clipboardExtension()` связывает browser MIME data с core structured bundle. `runtime.clipboardFormats` добавляет portable formats для external apps.
 
 ### Formatters
 
@@ -85,4 +85,4 @@ Core custom MIME сохраняет lossless Rivto structure; portable React for
 
 ## Slash commands
 
-`reactEditor.slashCommands.register({ id, title, group?, keywords?, isAvailable?, execute })` возвращает disposer. `getAll({ blockId })` фильтрует context; `execute(id, context)` запускает command или throws для unknown ID. `standardPreset()` монтирует searchable menu и generic list/duplicate/delete/collapse actions.
+`editorRuntime.slashCommands.register({ id, title, group?, keywords?, isAvailable?, execute })` возвращает disposer. `editorView.slashCommands.getAll({ blockId })` фильтрует context; `editorView.slashCommands.execute(id, context)` запускает command или throws для unknown ID. `standardPreset()` монтирует searchable menu и generic list/duplicate/delete/collapse actions.

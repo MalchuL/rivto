@@ -1,6 +1,6 @@
 import {
-  createVisibleStructuralSelection,
   createTextSelection,
+  createVisibleStructuralSelection,
   resolveSelectionEndpoints,
 } from "../managers";
 

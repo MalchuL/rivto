@@ -34,7 +34,7 @@ export function textRangeFromSelection(
  * @returns Whether the preserve-newlines strategy should run.
  */
 export function isPreserveNewlinesPaste(context: PasteContext, placement: PastePlacement): boolean {
-  return placement.preserveNewlines === true && Boolean(context.text) && !context.bundle?.blocks.length;
+  return placement.preserveNewlines === true && Boolean(context.text) && !context.bundle?.blocks.length && !context.bundle?.elements?.length;
 }
 
 /**
@@ -53,7 +53,8 @@ export function isTextPasteContext(
   if (context.bundle?.blocks.length) {
     return Boolean(range && context.bundle.fromTextSelection === true && placement.mergeText !== false);
   }
-  return Boolean(context.text);
+  // A canvas-only bundle is structured content too; its text flavor is only a fallback.
+  return !context.bundle?.elements?.length && Boolean(context.text);
 }
 
 /**
@@ -80,6 +81,7 @@ export function isBlockPasteContext(
  * @param splitNewlines - When true, each line becomes a sibling block.
  * @param range - Optional replacement range from selection.
  * @param afterId - Sibling insertion anchor without a text range.
+ * @param parentId - Destination parent when no sibling anchor or replacement range exists.
  * @returns Resulting caret, or undefined for empty input.
  */
 export function insertPlainText(
@@ -89,6 +91,7 @@ export function insertPlainText(
   splitNewlines: boolean,
   range: TextPasteTarget | undefined,
   afterId: string | undefined,
+  parentId?: string | null,
 ): EditorPosition | undefined {
   if (!value) return undefined;
   const lines = splitNewlines ? value.split(/\r\n?|\n/) : [value];
@@ -110,6 +113,9 @@ export function insertPlainText(
         type: defaultBlockType,
         content: line + (last ? suffix : ""),
       }, previous).id;
+      if (!destination && index === 0 && !afterId && parentId) {
+        editor.blocks.moveBlocks([previous], parentId, "inside");
+      }
     }
     caret = { blockId: previous!, offset };
   });

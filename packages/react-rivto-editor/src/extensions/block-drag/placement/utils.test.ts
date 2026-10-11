@@ -5,11 +5,11 @@
  */
 import {
   dropMoveTarget,
-  isCurrentDropDestination,
   excludeDropSubtrees,
-  resolveBlockDropPlacementOptions,
+  isCurrentDropDestination,
   resolveAfterDropPlacement,
   resolveBeforeDropPlacement,
+  resolveBlockDropPlacementOptions,
   resolveInsideDropPlacement,
   resolveSiblingAfterDropPlacement,
   type DropBlock,

@@ -6,9 +6,9 @@
  * Caret and block-range publishes no longer bump `editor.revision`; this hook
  * is the refresh path for consumers that need all selection domains.
  */
-import { useCallback, useSyncExternalStore } from "react";
 import type { Selection } from "@chulane/rivto";
-import { useEditorContext } from "../../editor-context";
+import { useCallback, useSyncExternalStore } from "react";
+import { useEditorView } from "../../editor-view/use-editor-view";
 
 /**
  * Returns the current detached local selection.
@@ -17,14 +17,14 @@ import { useEditorContext } from "../../editor-context";
  * @throws If called outside an EditorView subtree.
  */
 export function useEditorSelection(): Selection | undefined {
-  const { reactEditor } = useEditorContext();
+  const editorView = useEditorView();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.selection.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => editorView.selection.subscribe(listener),
+    [editorView],
   );
   return useSyncExternalStore(
     subscribe,
-    () => reactEditor.selection.snapshot(),
-    () => reactEditor.selection.snapshot(),
+    () => editorView.selection.snapshot(),
+    () => editorView.selection.snapshot(),
   );
 }

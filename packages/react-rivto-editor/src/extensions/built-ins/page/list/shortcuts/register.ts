@@ -1,10 +1,13 @@
+import { focusCaret, scheduleBlockFocus } from "../../../../../block-behaviors/ops/focus-ops";
+import { convertEmptyToList } from "../../../../../block-behaviors/ops/text-ops";
+import type { EditorRuntime } from "../../../../../editor/editor-runtime";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import { createCaretSelection } from "@chulane/rivto";
 import { BlockListSlot } from "../../../../../blocks/block-slot-controls/block-slot-controls";
+import type { EditorViewApi } from "../../../../../editor-view/types";
 import { focusBlock } from "../../../../../managers";
-import type { ReactEditor } from "../../../../../types";
 import type { BlockListType, ListShortcutPatch } from "../types";
 import { BLOCK_LIST_TYPES, isNumberedListType, resolveBlockListNumbers } from "../utils";
 import { listShortcutPatch } from "./utils";
@@ -16,25 +19,63 @@ import { listShortcutPatch } from "./utils";
  * the typed space, then removes the complete shortcut and restores a caret at
  * offset zero in one editor batch.
  *
- * @param reactEditor - Runtime receiving delegated content input events.
+ * @param editorRuntime - Runtime receiving delegated content input events.
  * @returns No value.
  */
-export function registerListShortcuts(reactEditor: ReactEditor): void {
-  reactEditor.blockListProps.register({
+export function registerListShortcuts(editorRuntime: EditorRuntime): void {
+  const listCommands: readonly { type: BlockListType; title: string }[] = [
+    { type: "list", title: "List" },
+    { type: "checkbox", title: "Checkbox" },
+    { type: "numbered_list", title: "Numbered list" },
+    { type: "start_numbered_list", title: "Start numbered list" },
+    { type: "continue_numbered_list", title: "Continue numbered list" },
+  ];
+  listCommands.forEach(({ type, title }) => editorRuntime.slashCommands.register({
+    id: `list.${type}`,
+    title,
+    group: "Lists",
+    isAvailable: ({ blockId }) => editorRuntime.blockListProps.has("list") &&
+      editorRuntime.blocks.getBlockNode(blockId)?.listProps.type !== type,
+    execute: ({ blockId }) => editorRuntime.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
+  }));
+
+  editorRuntime.blockListProps.register({
     id: "list",
+    prepareSplit: (block) => {
+      let type: BlockListType = "list";
+      if (block.listProps.type === "checkbox") type = "checkbox";
+      else if (isNumberedListType(block.listProps.type)) type = "numbered_list";
+      return { type, checked: false };
+    },
+    onSplit: ({ editorView, block, root }) => {
+      if (editorView.runtime.isEmptyBlock(block) &&
+        (block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type))) {
+        // The first Enter removes only the visible list state; the block keeps
+        // its outline position and unrelated properties for the next press.
+        editorView.runtime.blocks.deleteListProps(block.id, ["type", "checked"]);
+        focusCaret(editorView, root, block.id, 0);
+        return true;
+      }
+      if (!editorView.runtime.blocks.getParentId(block.id) && editorView.runtime.isEmptyBlock(block) && block.listProps.type !== "list") {
+        convertEmptyToList(editorView, block.id);
+        scheduleBlockFocus(editorView, root, block.id, 0);
+        return true;
+      }
+      return false;
+    },
     defaults: { type: "list", checked: false },
     isValid: (candidate) =>
       BLOCK_LIST_TYPES.includes(candidate.type as BlockListType) &&
       typeof candidate.checked === "boolean",
   });
-  reactEditor.surfaces.registerBlockSlot({
+  editorRuntime.surfaces.registerBlockSlot({
     position: "start",
     priority: 300,
     component: BlockListSlot,
     when: ({ block }) =>
       block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type),
   });
-  reactEditor.clipboard.registerFormatter({
+  editorRuntime.clipboardFormats.registerFormatter({
     id: "list",
     matches: ({ block }) =>
       block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type),
@@ -53,45 +94,46 @@ export function registerListShortcuts(reactEditor: ReactEditor): void {
     },
   });
   const convert = (
+    editorView: EditorViewApi,
     blockId: string,
     root: HTMLElement,
     shortcut: ListShortcutPatch,
   ): void => {
-    reactEditor.history.batchUpdates(() => {
-      reactEditor.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
-      reactEditor.selection.set(createCaretSelection(blockId, 0));
+    editorView.runtime.history.batchUpdates(() => {
+      editorView.runtime.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
+      editorView.selection.set(createCaretSelection(blockId, 0));
     });
     // Only place the caret and its editing focus; list conversion is already committed.
-    reactEditor.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, 0));
+    editorView.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, 0));
   };
 
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "list.shortcut.before-input",
     type: "beforeinput",
     scope: "content",
-  }, ({ raw: event, blockId, contentElement, root }) => {
+  }, ({ editorView, raw: event, blockId, contentElement, root }) => {
     if (!(event instanceof InputEvent) || event.inputType !== "insertText" || event.data !== " " || !blockId) {
       return false;
     }
     const shortcut = listShortcutPatch(`${contentElement?.textContent ?? ""} `);
     if (!shortcut) return false;
-    convert(blockId, root, shortcut);
+    convert(editorView, blockId, root, shortcut);
     return true;
   });
 
-  reactEditor.events.register({
+  editorRuntime.events.register({
     id: "list.shortcut.input",
     type: "input",
     scope: "content",
-  }, ({ raw: event, blockId, root }) => {
+  }, ({ editorView, raw: event, blockId, root }) => {
     if (!(event instanceof InputEvent) || event.inputType !== "insertText" || !blockId) {
       return false;
     }
     queueMicrotask(() => {
-      const block = reactEditor.blocks.getBlockNode(blockId);
+      const block = editorView.runtime.blocks.getBlockNode(blockId);
       const shortcut = block ? listShortcutPatch(block.content.replaceAll("\u00a0", " ")) : undefined;
       if (!shortcut) return;
-      convert(blockId, root, shortcut);
+      convert(editorView, blockId, root, shortcut);
     });
     return false;
   });

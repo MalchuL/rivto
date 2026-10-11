@@ -32,10 +32,14 @@ export const PAGE_END_SLOT_SELECTOR = `[${PAGE_END_SLOT_ATTRIBUTE}]`;
 /**
  * Opt-in marker for a renderer region from which selection may begin.
  *
- * Every `useBlockEditing` mode returns this marker. The text-selection extension uses
+ * `useBlockTextEditing` and `useBlockSelectionAnchor` return this marker. The text-selection extension uses
  * the marked element's native `isContentEditable` state to distinguish text
  * editing from structural selection; `data-block-content` remains responsible
  * only for persisted text offsets and DOM range conversion.
+ * A native control must carry this marker itself to opt into selection drags;
+ * a marker on its containing region does not opt the control in. A normal click
+ * still activates the control, and `data-prevent-text-editing` takes precedence
+ * over the marker when the control must own the complete pointer gesture.
  */
 export const BLOCK_SELECTION_ANCHOR_ATTRIBUTE = "data-block-selection-anchor";
 
@@ -45,7 +49,7 @@ export const BLOCK_SELECTION_ANCHOR_SELECTOR = `[${BLOCK_SELECTION_ANCHOR_ATTRIB
 /**
  * Opt-in marker for an interactive child that owns its pointer interaction.
  *
- * `useBlockEditing` places this marker alongside a pointer handler that prevents
+ * `usePreventTextEditing` places this marker alongside a pointer handler that prevents
  * an ancestor preview from entering raw-text mode. Delegated extensions cannot
  * depend on React propagation alone—especially for capture-phase clicks—so the
  * marker also lets structural selection exclude the same region without knowing
@@ -65,3 +69,24 @@ export const PREVENT_TEXT_EDITING_SELECTOR = `[${PREVENT_TEXT_EDITING_ATTRIBUTE}
  * promote the parent.
  */
 export const BLOCK_ROW_CLASS = "page-block-row";
+
+/**
+ * Marks a control that owns clicks and pointer input inside a block.
+ * Apply this to custom controls as well as semantic buttons, inputs, and links.
+ * A control can opt into selection dragging by also carrying the selection-anchor
+ * attribute; the prevent-text-editing attribute always prevents that opt-in.
+ */
+export const EDITOR_CONTROL_ATTRIBUTE = "data-editor-control";
+
+/** Matches marked controls without depending on their HTML tag or component. */
+export const EDITOR_CONTROL_SELECTOR = `[${EDITOR_CONTROL_ATTRIBUTE}]`;
+
+/**
+ * Props for a control that owns clicks and pointer input inside the editor.
+ * Spread these onto the control in its extension or renderer; shared UI
+ * components remain independent of editor behavior and must forward the props
+ * to their DOM element. Combine with the selection-anchor attribute when the
+ * control should also allow structural selection drags. This adds no handlers
+ * and does not change native element semantics or keyboard behavior.
+ */
+export const editorControlProps = { [EDITOR_CONTROL_ATTRIBUTE]: "" } as const;

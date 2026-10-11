@@ -1,17 +1,17 @@
 # Editor runtime
 
-Каталог `packages/rivto-editor-core/src/editor` — composition root framework-neutral редактора. Он соединяет `DocumentModel`, focused public managers, command registry, local selection/mode, clipboard, undo и runtime revision stream.
+Каталог `packages/rivto-editor-core/src/editor` — composition root framework-neutral редактора. Он соединяет `DocumentModel`, focused public managers, command registry, local selection, clipboard, undo и runtime revision stream.
 
 ## Место в архитектуре
 
 ```text
 createRivtoEditor(options)
   -> EditorRuntime
-    -> supplied DocumentModel
+    -> one supplied DocumentModel
     -> BlockManager + BlockRegistryManager
     -> ElementManager + LinkManager
     -> CommandRegistry
-    -> SelectionManager + ModeManager
+    -> SelectionManager
     -> ClipboardManager + HistoryManager
       -> React surfaces / extensions / host integrations
 ```
@@ -21,9 +21,9 @@ Editor не владеет rendering и DOM. React-пакет подписыва
 ## Быстрый пример
 
 ```ts
-const document = new DocumentModelImpl(new YjsDoc("document-id"));
-const editor = createRivtoEditor();
-editor.setDocument(document);
+const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
+const document = await storage.create("document-id");
+const editor = createRivtoEditor({ document });
 
 editor.blockRegistry.defineBlock({
   type: "paragraph",
@@ -57,8 +57,8 @@ Persisted в CRDT:
 
 Остаётся локальным runtime state:
 
-- selection;
-- `block`/`edgeless` mode;
+- selection отдельного document core и её subscriptions;
+- presentation surface choice хранится в React host;
 - command registrations;
 - undo stack конкретного editor;
 - revision counter и subscribers;
@@ -66,6 +66,6 @@ Persisted в CRDT:
 
 ## Владение lifecycle
 
-`EditorRuntime.destroy()` уничтожает только runtime managers, registry, listeners и commands. Переданный document принадлежит host: его можно переключить через `setDocument()` или совместно использовать, а после завершения работы нужно отдельно вызвать `document.destroy()` для отключения providers и CRDT cleanup.
+`EditorRuntime.destroy()` уничтожает только runtime managers, registry, listeners и commands. Storage принадлежит host; views independently acquire документы, включая embeds и inactive tabs. Последний release уничтожает live document и отключает его providers. После завершения `editorStorage.destroy()` host вызывает `storage.destroy()` для cleanup workspace registry; storage не хранит editor consumers.
 
 Вложенные страницы описывают каждый interface, property, method, argument, return value, exception, built-in command и interaction с остальными модулями.

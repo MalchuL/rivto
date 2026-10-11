@@ -8,11 +8,14 @@ Canvas extensions подключаются отдельно от `standardPreset
 extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset()]
 ```
 
-Mode переключается локально:
+Surface выбирается локальным React state:
 
 ```tsx
-const { setMode } = useEditorMode();
-setMode("edgeless");
+const [canvas, setCanvas] = useState(false);
+<EditorView runtime={editorRuntime}>
+  <button onClick={() => setCanvas(!canvas)}>Switch surface</button>
+  {canvas ? <EdgelessSurface /> : <PageSurface />}
+</EditorView>
 ```
 
 Root blocks проецируются в first-class elements type `"block"`. Один block card может содержать range соседних root blocks; separator partitions ranges. Frame и z-index сохраняются в core elements snapshot.
@@ -55,7 +58,7 @@ const visuals = edgelessVisualsExtension({
   stickers: [{ id: "mint", label: "Mint", fill: "#d3f9d8" }],
 });
 
-const reactEditor = createReactEditor({
+const editorRuntime = createEditorRuntime({
   editor,
   extensions: [standardPreset(), ...edgelessPreset(), visuals],
 });
@@ -109,4 +112,4 @@ const rectangle = visuals.createRectangle({
 
 ## Demo reference
 
-`demo/src/App.tsx` создаёт rectangle, ellipse, sticker, drawing, free text, connectors и nested group через тот же public imperative object `visuals`. Это хороший seed pattern: extension instance создаётся до `createReactEditor()`, передаётся в extensions, затем используется после setup.
+`demo/src/App.tsx` создаёт rectangle, ellipse, sticker, drawing, free text, connectors и nested group через тот же public imperative object `visuals`. Это хороший seed pattern: extension instance создаётся до `createEditorRuntime()`, передаётся в extensions, затем используется после setup.

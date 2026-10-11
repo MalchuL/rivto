@@ -4,10 +4,11 @@
  * Block cards reuse the same right-side panel chrome as visual elements while
  * persisting layout behavior through their existing opaque element props.
  */
-import type { EditorElement } from "@chulane/rivto";
+import type { EditorElementNode } from "@chulane/rivto";
 import { useId } from "react";
 import { Checkbox } from "../../../../components/ui/checkbox";
 import { Label } from "../../../../components/ui/label";
+import { editorControlProps } from "../../../../constants";
 import type { EdgelessVisualController } from "../controller";
 import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "./properties-panel";
 
@@ -25,7 +26,7 @@ export function BlockProperties({
   elements,
   controller,
 }: {
-  readonly elements: readonly EditorElement[];
+  readonly elements: readonly EditorElementNode[];
   readonly controller: EdgelessVisualController;
 }) {
   const ids = elements.map((element) => element.id);
@@ -36,12 +37,12 @@ export function BlockProperties({
       title="Block card"
       count={elements.length}
       ariaLabel="Block properties"
-      onClose={() => controller.reactEditor.commands.execute("edgeless.selection.clear")}
+      onClose={() => controller.execute("edgeless.selection.clear")}
     >
       <PropertyGroup title="Layout">
         <PropertyRow label="Height">
           <div className={AUTO_HEIGHT_FIELD_CLASS}>
-            <Checkbox
+            <Checkbox {...editorControlProps}
               id={autoHeightId}
               className={AUTO_HEIGHT_INPUT_CLASS}
               aria-label="Automatic card height"

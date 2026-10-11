@@ -9,8 +9,8 @@ import { DocumentationEditor, type PastedDocumentationImage } from "./Documentat
 import {
   buildDocumentationTree,
   createDocumentationPagePath,
-  type DocumentationPagePlacement,
   type DocumentationNavigationNode,
+  type DocumentationPagePlacement,
 } from "./document-tree";
 import {
   createDocumentationPage,

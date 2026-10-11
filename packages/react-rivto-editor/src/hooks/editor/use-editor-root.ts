@@ -1,5 +1,5 @@
 import type { RefCallback } from "react";
-import { useEditorRootContext } from "../../editor-root-context";
+import { useEditorRootContext } from "../../editor-view/editor-root-context";
 
 /** Surface root state returned by useEditorRoot. */
 export interface UseEditorRootResult {

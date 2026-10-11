@@ -2,11 +2,11 @@ import {
   Children,
   cloneElement,
   isValidElement,
+  useLayoutEffect,
+  useRef,
   type HTMLAttributes,
   type ReactElement,
   type ReactNode,
-  useLayoutEffect,
-  useRef,
 } from "react";
 
 /** Minimal HAST shape needed by the fenced-code metadata transform. */

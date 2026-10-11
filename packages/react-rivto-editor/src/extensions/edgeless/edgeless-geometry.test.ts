@@ -20,9 +20,9 @@ describe("edgeless marquee geometry", () => {
 
   test("outermostGroupId walks nested groups in O(depth)", () => {
     const parentByChild = groupParentByChild([
-      { id: "inner", type: "group", props: { children: ["leaf"] } },
-      { id: "outer", type: "group", props: { children: ["inner", "sibling"] } },
-      { id: "block", type: "block", props: {} },
+      { id: "inner", type: "group", childIds: ["leaf"] },
+      { id: "outer", type: "group", childIds: ["inner", "sibling"] },
+      { id: "block", type: "block", childIds: [] },
     ]);
     expect(parentByChild.get("leaf")).toBe("inner");
     expect(parentByChild.get("inner")).toBe("outer");
