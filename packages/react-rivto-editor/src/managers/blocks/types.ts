@@ -53,6 +53,8 @@ export interface ReactBlockSlashCommand {
 
 /** Atomic model, renderer, and conversion registration for one block type. */
 export interface ReactBlockRegistration {
+  /** Clipboard data conversion and portable formats installed with this type. */
+  readonly clipboard?: import("../clipboard/clipboard-converters").BlockClipboardConverter;
   /** Framework-neutral definition registered with the core block registry. */
   readonly definition: ReactBlockDefinition;
   /** React content renderer selected by all registered surfaces. */

@@ -11,8 +11,8 @@ import {
   createStructuralSelection,
 } from "../../selection-manager";
 import type { EditorPosition } from "../../selection-manager";
-import type { ClipboardBundle } from "../clipboard-data";
-import type { BlockPrepareErrorHandler } from "../../block-manager/types";
+import type { EditorBlockInput } from "../../../editor/model";
+
 import { cloneSelectedTopLevelSubtrees } from "../utils";
 import type {
   PasteContext,
@@ -58,23 +58,22 @@ export class TextPasteStrategy implements PasteStrategy {
     const range = textRangeFromSelection(this.editor, context.selection);
     if (context.bundle?.blocks.length && range && context.bundle.fromTextSelection === true
       && placement.mergeText !== false
-    ) return this.pasteBundle(context.bundle, range, context.onPrepareError);
+    ) return this.pasteBundle(context, range);
     const caret = this.pastePlainText(context, placement, range);
     return caret ? { proposedSelection: createCaretSelection(caret.blockId, caret.offset) } : undefined;
   }
 
   /**
    * Merges a partial structured bundle into a text range.
-   * @param bundle - Valid partial-text clipboard bundle.
    * @param target - Valid normalized replacement range.
-   * @param onPrepareError - Optional one-shot replacement for an invalid imported block.
+   * @param context - Source bundle and optional IDs already allocated by the host.
    * @returns Resulting caret selection and source-to-destination block mapping.
    */
   private pasteBundle(
-    bundle: ClipboardBundle,
+    context: PasteContext,
     target: TextPasteTarget,
-    onPrepareError?: BlockPrepareErrorHandler,
   ): PasteResult {
+    const bundle = context.bundle!;
     const destination = target.blocks[0]!;
     const source = bundle.blocks[0]!;
     const suffixBlock = target.blocks.at(-1)!;
@@ -83,22 +82,21 @@ export class TextPasteStrategy implements PasteStrategy {
     const [first, ...rest] = bundle.blocks;
     const idMap = new Map<string, string>([[source.id, destination.id]]);
     let caret = { blockId: destination.id, offset: prefix.length + source.content.length };
-    target.blocks.slice(1).forEach((block) => this.editor.blocks.removeBlock(block.id));
     this.editor.blocks.updateBlock(destination.id, {
       content: prefix + source.content + (rest.length ? "" : suffix),
     });
-    const children = this.editor.blocks.importForest(first?.children ?? [], destination.id, onPrepareError);
+    target.blocks.slice(1).forEach((block) => this.editor.blocks.removeBlock(block.id));
+    const children = importClipboardBlocks(this.editor, context, first?.children ?? [], destination.id);
     children.idMap.forEach((id, sourceId) => idMap.set(sourceId, id));
     children.roots.forEach(({ id }) => {
       this.editor.blocks.moveBlock(id, destination.id, "inside");
     });
-    const imported = this.editor.blocks.importForest(
+    const imported = importClipboardBlocks(this.editor, context,
       rest.map((block, index) => ({
         ...block,
         content: block.content + (index === rest.length - 1 ? suffix : ""),
       })),
       caret.blockId,
-      onPrepareError,
     );
     imported.idMap.forEach((id, sourceId) => idMap.set(sourceId, id));
     imported.roots.forEach(({ id }, index) => {
@@ -202,11 +200,7 @@ export class BlockPasteStrategy implements PasteStrategy {
     const bundle = context.bundle;
     if (!bundle?.blocks.length) return undefined;
     const resolved = this.resolvePlacement(context, placement);
-    const imported = this.editor.blocks.importForest(
-      bundle.blocks,
-      resolved.afterId ?? undefined,
-      context.onPrepareError,
-    );
+    const imported = importClipboardBlocks(this.editor, context, bundle.blocks, resolved.afterId ?? undefined);
     const insertedIds = imported.roots.map(({ id }) => id);
     if (resolved.beforeChildId && insertedIds.length) {
       this.editor.blocks.moveBlocks(insertedIds, resolved.beforeChildId, "before");
@@ -243,4 +237,9 @@ export class BlockPasteStrategy implements PasteStrategy {
       : undefined;
     return { ...resolved, beforeChildId };
   }
+}
+
+/** Imports a clipboard subset using destination IDs already allocated for its references. */
+function importClipboardBlocks(editor: RivtoEditorApi, context: PasteContext, blocks: readonly EditorBlockInput[], afterId?: string) {
+  return editor.blocks.importForest(blocks, afterId, context.onPrepareError, context.blockIdMap);
 }

@@ -66,9 +66,10 @@ test("clipboard retargets copied internal references and preserves qualified ext
   b.blocks.insertBlock({ id: "target", type: "paragraph", content: "Existing target" });
   b.history.clear();
   a.selection.set(createStructuralSelection(["branch"]));
-  const bundle = a.clipboard.copy()!;
+  const bundle = runtime.getRuntime("A")!.clipboard.copy()!;
   expect(bundle.sourceDocumentId).toBe("A");
-  b.clipboard.paste({ bundle, placement: { mergeText: false } });
+  const receivingRuntime = runtime.getRuntime("B")!;
+  receivingRuntime.clipboard.paste({ bundle, placement: { mergeText: false } }, receivingRuntime);
   const branch = b.blocks.getBlock("branch")!;
   const copied = branch.children[0]!;
   expect(copied.id).not.toBe("target");

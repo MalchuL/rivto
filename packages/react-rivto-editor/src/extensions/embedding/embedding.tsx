@@ -1,4 +1,3 @@
-import type { EditorBlock } from "@chulane/rivto";
 import { Link2Icon } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
@@ -157,30 +156,16 @@ export function embeddingExtension(): ReactEditorExtension {
         component: EmbeddingControls,
         when: ({ block }) => block.type === EMBEDDING_BLOCK_TYPE,
       });
-      const formatter = editorRuntime.clipboardFormats.registerFormatter({
-        id: "embedding.reference",
-        matches: ({ block }) => block.type === EMBEDDING_BLOCK_TYPE,
+      const clipboard = editorRuntime.clipboard.registerBlockConverter(EMBEDDING_BLOCK_TYPE, {
         format: ({ block }, current) => ({ ...current, plain: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}`, markdown: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}` }),
-      });
-      const paste = editorRuntime.pasteStrategies.register("paste.embedding-references", {
-        matches: (context) => Boolean(context.bundle?.sourceDocumentId && context.blockIdMap),
-        paste: (context) => {
-          const map = context.blockIdMap!;
-          const visit = (blocks: readonly EditorBlock[]) => blocks.forEach((block) => {
-            if (block.type === EMBEDDING_BLOCK_TYPE && block.props.targetDocumentId === context.bundle!.sourceDocumentId) {
-              const targetId = map.get(String(block.props.targetBlockId));
-              const pastedId = map.get(block.id);
-              if (targetId && pastedId) editorRuntime.blocks.updateBlock(pastedId, {
-                props: { ...block.props, targetDocumentId: editorRuntime.getDocument().id, targetBlockId: targetId },
-              });
-            }
-            visit(block.children);
-          });
-          visit(context.bundle!.blocks);
-          return undefined;
+        paste(block, context) {
+          if (block.props.targetDocumentId !== context.sourceDocumentId) return {};
+          const targetBlockId = context.blockIdMap.get(String(block.props.targetBlockId));
+          if (!targetBlockId) return {};
+          return { props: { ...block.props, targetDocumentId: context.destinationDocumentId, targetBlockId } };
         },
       });
-      return () => { paste(); formatter(); controls(); body(); dispose(); };
+      return () => { clipboard(); controls(); body(); dispose(); };
     },
   };
 }

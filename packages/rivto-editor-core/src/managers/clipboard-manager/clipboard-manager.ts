@@ -143,6 +143,7 @@ export class ClipboardManager implements ClipboardManagerApi {
     }
     return {
       bundle,
+      blockIdMap: input.blockIdMap,
       text: input.text,
       defaultBlockType: input.defaultBlockType,
       selection: input.textTarget ?? this.editor.selection.get(),

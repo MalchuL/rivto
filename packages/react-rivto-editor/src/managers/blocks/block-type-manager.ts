@@ -50,6 +50,7 @@ export class BlockTypeManager implements BlockTypesApi {
         }
       } else disposers.push(this.editor.blockRegistry.defineBlock(definition));
       disposers.push(renderers.register(definition.type, render));
+      if (registration.clipboard) disposers.push(this.editorRuntime.clipboard.registerBlockConverter(definition.type, registration.clipboard));
       if (behavior) disposers.push(blockBehaviors.register(definition.type, behavior));
       if (registration.separatesBlockElements) {
         this.blockElementSeparatorTypes.add(definition.type);

@@ -50,10 +50,7 @@ export const errorBlockExtension = (): ReactEditorExtension => ({
     editorRuntime.blockTypes.register({
       definition: { type: ERROR_BLOCK_TYPE, title: "Invalid block" },
       render: ErrorBlock,
-    });
-    editorRuntime.clipboardFormats.registerFormatter({
-      id: "error",
-      matches: ({ block }) => block.type === ERROR_BLOCK_TYPE,
+      clipboard: {
       format: ({ block }) => {
         const data = JSON.stringify(block.props.originalBlock, null, 2);
         const text = `${block.content}\n${data}`;
@@ -62,6 +59,7 @@ export const errorBlockExtension = (): ReactEditorExtension => ({
           markdown: `> ${block.content}\n\n\`\`\`json\n${data}\n\`\`\``,
           html: `<aside><strong>${escapeHtml(block.content)}</strong><pre>${escapeHtml(data)}</pre></aside>`,
         };
+      },
       },
     });
   },

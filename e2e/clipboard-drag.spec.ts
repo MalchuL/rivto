@@ -199,7 +199,7 @@ test("copies Counter display text to every portable clipboard flavor", async ({ 
     window as typeof window & { counterCopy: Record<string, string> }
   ).counterCopy);
   expect(flavors.text).toBe("Count: 2");
-  expect(flavors.html).toBe("<p>Count: 2</p>");
+  expect(flavors.html).toBe('<p data-rivto-block="counter" data-count="2">Count: 2</p>');
   expect(flavors.markdown).toBe("Count: 2");
   expect(JSON.parse(flavors.structured).blocks[0]).toMatchObject({
     content: "",

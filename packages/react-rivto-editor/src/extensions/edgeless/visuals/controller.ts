@@ -1,17 +1,13 @@
 import { ElementGeometry } from "../element-geometry";
 import { drawingResizeProps } from "./utils/drawing-frame";
-import { copyElementProps, restoreElementChildren } from "../../../elements/clipboard-element-props";
 import {
-  RIVTO_CLIPBOARD_MIME,
-  validateClipboardBundle,
   type ClipboardBundle,
   type EditorElementNode,
 } from "@chulane/rivto";
 import type { EditorViewApi } from "../../../editor-view/types";
 import type { EditorRuntime } from "../../../editor/editor-runtime";
-import { blockIdsOf, blockRangeProps, insertBlockElementSeparator } from "../../../elements/block-element-projection";
+import { blockIdsOf } from "../../../elements/block-element-projection";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
-import { isNonBlockEditableClipboardEvent } from "../../built-ins/clipboard/clipboard-target";
 import { getEdgelessRuntime, type EdgelessSelectionRef } from "../../built-ins/selection/edgeless-runtime";
 import { drawingDefaults, EdgelessToolState } from "./tool-state";
 import type {
@@ -70,7 +66,6 @@ export class EdgelessVisualController {
   constructor(readonly editor: EditorViewApi | EditorRuntime, readonly options: EdgelessVisualsOptions = {}) {
     this.selection = getEdgelessRuntime(editor);
     this.registrations.push({ dispose: this.registerCommands() });
-    this.registerClipboard();
     this.registerToolSelectShortcut();
     this.unsubscribeDocument = this.runtime.subscribe(() => {
       if (this.reconciling) return;
@@ -599,133 +594,14 @@ export class EdgelessVisualController {
     this.registrations.push({ dispose });
   }
 
-  private registerClipboard(): void {
-    // Label editors are plain-text hosts. Claiming copy/paste here would
-    // serialize the selected visual and ignore the caret inside the label.
-    const write = (event: ClipboardEvent, cut: boolean, editorView: EditorViewApi): boolean => {
-      const controller = this.getDocumentView(editorView);
-      const snapshot = controller.selection.get();
-      if (!snapshot.active || !snapshot.items.length) return false;
-      const bundle = controller.createClipboardBundle(snapshot.items);
-      const text = this.clipboardText(bundle);
-      event.clipboardData?.setData(RIVTO_CLIPBOARD_MIME, JSON.stringify(bundle));
-      event.clipboardData?.setData("text/plain", text);
-      event.clipboardData?.setData("text/html", `<p>${this.escapeHtml(text).replace(/\n/g, "<br>")}</p>`);
-      event.clipboardData?.setData("text/markdown", text);
-      if (cut) controller.deleteSelection();
-      return true;
-    };
-    this.editor.events.register({
-      id: "edgeless.visuals.copy",
-      type: "copy",
-      capture: true,
-      mode: "edgeless",
-      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
-    }, ({ raw, editorView }) => write(raw, false, editorView));
-    this.editor.events.register({
-      id: "edgeless.visuals.cut",
-      type: "cut",
-      capture: true,
-      mode: "edgeless",
-      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
-    }, ({ raw, editorView }) => write(raw, true, editorView));
-    this.editor.events.register({
-      id: "edgeless.visuals.paste",
-      type: "paste",
-      capture: true,
-      mode: "edgeless",
-      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
-    }, ({ raw, editorView }) => {
-      const structured = raw.clipboardData?.getData(RIVTO_CLIPBOARD_MIME);
-      if (!structured) return false;
-      let bundle: ClipboardBundle;
-      try {
-        bundle = JSON.parse(structured) as unknown as ClipboardBundle;
-        validateClipboardBundle(bundle);
-      } catch {
-        return false;
-      }
-      if (!bundle.elements?.length) return false;
-      this.getDocumentView(editorView).pasteClipboardBundle(bundle);
-      return true;
-    });
+  private createClipboardBundle(items: readonly string[], operation: "copy" | "cut" | "duplicate" = "copy"): ClipboardBundle {
+    return this.runtime.clipboard.copyElements(items, this.editor, operation);
   }
 
-  private createClipboardBundle(items: readonly string[]): ClipboardBundle {
-    const leaves = this.leaves(items);
-    const included = new Set(leaves);
-    const collect = (id: string): void => { const group = this.groupRecord(id); if (!group || included.has(id)) return; included.add(id); group.children.forEach(collect); };
-    items.forEach(collect);
-    const rootIds = this.rootIds();
-    const blockIds = new Set(leaves.flatMap((id) => { const element = this.element(id); return element?.type === "block" ? blockIdsOf(element, rootIds) : []; }));
-    const blocks = [...blockIds].flatMap((id) => this.runtime.blocks.getBlock(id) ?? []).map(copy);
-    return {
-      version: 4,
-      blocks,
-      elements: this.elements.getElementNodes().filter((element) => included.has(element.id)).map(copy),
-      selectedElementIds: [...items],
-    };
+  private pasteClipboardBundle(bundle: ClipboardBundle, operation: "paste" | "duplicate" = "paste"): EditorElementNode[] {
+    this.runtime.clipboard.paste({ bundle, placement: { mergeText: false } }, this.editor, operation);
+    return this.selection.get().items.flatMap(id => this.elements.getElementNode(id) ?? []);
   }
-
-  private pasteClipboardBundle(bundle: ClipboardBundle): EditorElementNode[] {
-    validateClipboardBundle(bundle);
-    if (!Array.isArray(bundle.elements)) throw new Error("Invalid edgeless clipboard payload");
-    const elementMap = this.elements.createImportIdMap(
-      bundle.elements.map((element) => element.id),
-    );
-    const sourceRootIds = bundle.blocks.map((block) => block.id);
-    const sourceElements = bundle.elements.map(copy);
-    const selected = (bundle.selectedElementIds ?? []).flatMap((id) => elementMap.get(id) ?? []);
-    let elements: EditorElementNode[] = [];
-    const results: EditorElementNode[] = [];
-    this.runtime.history.batchUpdates(() => {
-      const afterId = this.rootIds().at(-1);
-      const imported = this.runtime.blocks.importForest(bundle.blocks, afterId);
-      const parentId = "runtime" in this.editor ? this.editor.panel?.rootBlockId : undefined;
-      if (parentId && !afterId && imported.roots.length) {
-        this.runtime.blocks.moveBlocks(imported.roots.map((block) => block.id), parentId, "inside");
-      }
-      const blockMap = imported.idMap;
-      elements = sourceElements.map((element): EditorElementNode => {
-        const props = copyElementProps(element, elementMap);
-        if (element.type === "block") Object.assign(props, blockRangeProps(blockIdsOf(element, sourceRootIds).flatMap((id) => blockMap.get(id) ?? [])));
-        return { ...element, id: elementMap.get(element.id)!, frame: { ...element.frame, x: element.frame.x + 24, y: element.frame.y + 24 }, props };
-      });
-      const blockElements = elements.filter((element) => element.type === "block");
-      const order = this.rootIds();
-      const first = blockElements.flatMap((element) => blockIdsOf(element, order))[0];
-      const before = first ? order[order.indexOf(first) - 1] : undefined;
-      if (before) insertBlockElementSeparator(this.runtime, before);
-      blockElements.slice(0, -1).forEach((element) => {
-        const last = blockIdsOf(element, order).at(-1);
-        if (last) insertBlockElementSeparator(this.runtime, last);
-      });
-      elements.forEach((element) => {
-        try {
-          const inserted = this.elements.insertElement({ ...element, childIds: [] });
-          results.push(this.elements.getElementNode(inserted.id)!);
-        } catch (error) {
-          throw new Error(`Failed to paste ${element.type} element ${element.id}`, { cause: error });
-        }
-      });
-      restoreElementChildren(this.elements, sourceElements, elementMap);
-    });
-    this.selection.set(selected.length ? selected : results.map(({ id }) => id));
-    return results;
-  }
-
-  private clipboardText(bundle: ClipboardBundle): string {
-    const blockText = bundle.blocks.map((block) => block.content).filter(Boolean);
-    const visualText = (bundle.elements ?? []).flatMap((element) => {
-      if ((element.type === "text" || element.type === "sticker" || element.type === "rectangle" || element.type === "ellipse" || element.type === "connector") && typeof element.props.text === "string" && element.props.text) {
-        return [element.props.text];
-      }
-      return [];
-    });
-    return [...blockText, ...visualText].filter(Boolean).join("\n");
-  }
-
-  private escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character] ?? character); }
 
   /** Activates one canvas interaction tool. */
   setTool(value: EdgelessVisualTool | "select"): void { return this.tools.setTool(value); }
@@ -743,7 +619,7 @@ export class EdgelessVisualController {
   duplicateSelection(): EditorElementNode[] {
     const items = this.selection.get().items;
     if (!items.length) return [];
-    const created = this.pasteClipboardBundle(this.createClipboardBundle(items));
+    const created = this.pasteClipboardBundle(this.createClipboardBundle(items, "duplicate"), "duplicate");
     const createdById = new Map(created.map((element) => [element.id, element]));
     return this.selection.get().items.flatMap((id) => createdById.get(id) ?? []);
   }

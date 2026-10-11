@@ -34,7 +34,7 @@ export function textRangeFromSelection(
  * @returns Whether the preserve-newlines strategy should run.
  */
 export function isPreserveNewlinesPaste(context: PasteContext, placement: PastePlacement): boolean {
-  return placement.preserveNewlines === true && Boolean(context.text) && !context.bundle?.blocks.length;
+  return placement.preserveNewlines === true && Boolean(context.text) && !context.bundle?.blocks.length && !context.bundle?.elements?.length;
 }
 
 /**
@@ -53,7 +53,8 @@ export function isTextPasteContext(
   if (context.bundle?.blocks.length) {
     return Boolean(range && context.bundle.fromTextSelection === true && placement.mergeText !== false);
   }
-  return Boolean(context.text);
+  // A canvas-only bundle is structured content too; its text flavor is only a fallback.
+  return !context.bundle?.elements?.length && Boolean(context.text);
 }
 
 /**

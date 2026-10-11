@@ -690,7 +690,7 @@ test("retained slash and clipboard APIs keep their surface without changing the 
     zIndex: 1, props: { text: "Paste" },
   }] };
   const before = f.runtime.elements.getElementNodes().filter(({ type }) => type === "text").length;
-  pageApi.clipboard.paste({ bundle });
+  pageApi.clipboard.paste({ bundle, defaultBlockType: "paragraph" });
   expect(f.runtime.elements.getElementNodes().filter(({ type }) => type === "text")).toHaveLength(before);
   canvasApi.clipboard.paste({ bundle });
   expect(f.runtime.elements.getElementNodes().filter(({ type }) => type === "text")).toHaveLength(before + 1);

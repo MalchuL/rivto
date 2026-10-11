@@ -1,4 +1,5 @@
-import { copyElementProps, restoreElementChildren } from "../../../elements/clipboard-element-props";
+import { restoreElementChildren } from "../../../elements/clipboard-element-props";
+import type { ConvertedClipboardElements, CreatedClipboardRecords } from "../../../managers/clipboard/clipboard-manager";
 import type { EditorRuntime } from "../../../editor/editor-runtime";
 /**
  * Recreates first-class canvas elements after core has pasted referenced blocks.
@@ -24,9 +25,11 @@ export class ElementPasteStrategy implements PasteStrategy {
 
   /**
    * Creates a strategy for one React runtime.
-   * @param editor - Runtime receiving canvas elements.
+   * @param editor - Receiving view, or runtime for a document-only operation.
+   * @param converted - Converter output; omitted for direct strategy callers.
+   * @param created - Records created by this paste, including generated cards and separators, for failure cleanup.
    */
-  constructor(private readonly editor: EditorViewApi | EditorRuntime) {}
+  constructor(private readonly editor: EditorViewApi | EditorRuntime, private readonly converted?: ConvertedClipboardElements, private readonly created?: CreatedClipboardRecords) {}
 
   /** Returns an independent strategy using the receiving view's surface and selection. */
   createViewStrategy(editorView: EditorViewApi): ElementPasteStrategy { return new ElementPasteStrategy(editorView); }
@@ -43,6 +46,8 @@ export class ElementPasteStrategy implements PasteStrategy {
     if (("runtime" in this.editor ? this.editor.events.getSurfaceType() : this.runtime.editorViews.getSurfaceType()) !== "edgeless") return false;
     if (!context.bundle) return false;
     if (context.bundle.elements?.length) return true;
+    // An explicit empty target requests block insertion without borrowing canvas selection.
+    if (!context.selection?.blocks.length && !context.selection?.elements?.length) return false;
     return Boolean(this.canvasBlockSelection());
   }
 
@@ -55,70 +60,38 @@ export class ElementPasteStrategy implements PasteStrategy {
   paste(context: PasteContext, _placement: PastePlacement): PasteResult | undefined {
     const bundle = context.bundle;
     if (!bundle) return undefined;
-    const selected = new Set(bundle.selectedElementIds ?? bundle.elements?.map((element) => element.id));
-    const byId = new Map((bundle.elements ?? []).map((element) => [element.id, element]));
-    const included = new Set<string>();
-    const include = (id: string): void => {
-      if (included.has(id)) return;
-      const element = byId.get(id);
-      if (!element) return;
-      included.add(id);
-      element.childIds.forEach(include);
-    };
-    selected.forEach(include);
-    const sources = (bundle.elements ?? []).filter((element) => included.has(element.id));
-    const elementIdMap = this.elements.createImportIdMap(sources.map((element) => element.id));
-    const pastedRootIds = bundle.blocks.flatMap((block) => context.blockIdMap?.get(block.id) ?? []);
-    if (!sources.length && !pastedRootIds.length) return undefined;
-    const sourceRootIds = bundle.blocks.map((block) => block.id);
+    const converted = this.converted ?? this.runtime.clipboard.convertElements(bundle, this.editor, context.blockIdMap ?? new Map());
+    const pastedRootIds = bundle.blocks.flatMap(block => context.blockIdMap?.get(block.id) ?? []);
     const created: string[] = [];
-    const importedElementIds = new Map<string, string>();
-    const topLayer = Math.max(0, ...this.elements.getElementNodes().map((element) => element.zIndex));
     this.runtime.history.batchUpdates(() => {
-      if (!sources.length && pastedRootIds.length) {
-        created.push(this.elements.insertElement({
-          type: "block",
-          frame: { x: 60, y: 60, width: 320, height: 120 },
-          zIndex: topLayer + 1,
-          props: blockRangeProps(pastedRootIds),
-        }).id);
+      if (!converted.nodes.length && !bundle.elements?.length && pastedRootIds.length) {
+        const card = this.elements.insertElement({ type: "block", frame: { x: 60, y: 60, width: 320, height: 120 },
+          zIndex: Math.max(0, ...this.elements.getElementNodes().map(node => node.zIndex)) + 1,
+          props: blockRangeProps(pastedRootIds) });
+        created.push(card.id);
+        this.created?.elementIds.add(card.id);
       }
-      sources.forEach((source, index) => {
-        const id = elementIdMap.get(source.id)!;
-        if (source.type === "block") {
-          const blockIds = blockIdsOf(source, sourceRootIds).flatMap((id) => context.blockIdMap?.get(id) ?? []);
-          if (!blockIds.length) return;
-          const first = blockIds[0];
+      for (const node of converted.nodes) {
+        const blockIds = converted.referencedBlocks.get(node.id);
+        if (blockIds?.length) {
           const roots = this.rootIds();
-          const before = first ? roots[roots.indexOf(first) - 1] : undefined;
-          if (before) insertBlockElementSeparator(this.runtime, before);
-          const createdElement = this.elements.insertElement({
-            id,
-            type: "block",
-            frame: { ...source.frame, x: source.frame.x + 24, y: source.frame.y + 24 },
-            zIndex: topLayer + index + 1,
-            props: { ...copyElementProps(source, elementIdMap), ...blockRangeProps(blockIds) },
-          });
-          created.push(createdElement.id);
-          importedElementIds.set(source.id, createdElement.id);
-        } else {
-          const createdElement = this.elements.insertElement({
-            id,
-            type: source.type,
-            frame: { ...source.frame, x: source.frame.x + 24, y: source.frame.y + 24 },
-            zIndex: topLayer + index + 1,
-            props: copyElementProps(source, elementIdMap),
-          });
-          created.push(createdElement.id);
-          importedElementIds.set(source.id, createdElement.id);
+          const before = roots[roots.indexOf(blockIds[0]!) - 1];
+          if (before) {
+            const separator = insertBlockElementSeparator(this.runtime, before);
+            this.created?.blockIds.add(separator.id);
+          }
         }
-      });
-      restoreElementChildren(this.elements, sources, importedElementIds);
+        const parentId = "runtime" in this.editor ? this.editor.panel?.rootElementId ?? null : null;
+        const inserted = this.runtime.elements.insertElement({ ...node, childIds: [] }, { parentId });
+        created.push(inserted.id);
+        this.created?.elementIds.add(inserted.id);
+      }
+      restoreElementChildren(this.elements, bundle.elements ?? [], converted.idMap);
     });
     return created.length ? {
       proposedSelection: createEdgelessSelection(this.editor.selection.get(), true, bundle.selectedElementIds?.length
-        ? [...selected].flatMap((id) => importedElementIds.get(id) ?? []) : created),
-      elementIdMap: importedElementIds,
+        ? bundle.selectedElementIds.flatMap(id => converted.idMap.get(id) ?? []) : created),
+      elementIdMap: converted.idMap,
     } : undefined;
   }
 

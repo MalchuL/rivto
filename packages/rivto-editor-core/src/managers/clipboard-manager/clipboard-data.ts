@@ -85,6 +85,8 @@ export interface BlockPastePlacement {
  * intentionally do not appear in this interface, keeping core DOM-free.
  */
 export interface ClipboardPasteInput {
+  /** Preallocated block identities used by converters; import still runs processors and validation. */
+  readonly blockIdMap?: ReadonlyMap<string, string>;
   /** Optional editing range to replace; omit to use the current selection. */
   readonly textTarget?: Selection;
   /** Already parsed lossless Rivto data. Takes precedence over every fallback. */

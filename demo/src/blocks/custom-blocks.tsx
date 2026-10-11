@@ -198,18 +198,23 @@ export const customBlockExtensions: readonly ReactEditorExtension[] = [
       definition: counterBlockDefinition,
       render: CounterBlock,
       slashCommand: { title: "Counter", group: "Turn into", keywords: ["count", "button"] },
-    }),
-    {
-      id: "clipboard.demo-counter",
-      setup: (editorRuntime) => {
-        editorRuntime.clipboardFormats.registerFormatter({
-          id: "demo.counter",
-          matches: ({ block }) => block.type === COUNTER_BLOCK_TYPE,
-          format: ({ block }) => {
-            const text = `Count: ${block.props.count}`;
-            return { plain: text, markdown: text, html: `<p>${text}</p>` };
-          },
-        });
+      clipboard: {
+        format: ({ block }) => {
+          const count = Number(block.props.count);
+          const text = `Count: ${count}`;
+          return { plain: text, markdown: text, html: `<p data-rivto-block="counter" data-count="${count}">${text}</p>` };
+        },
+        parseHTML: (element) => {
+          if (element.getAttribute("data-rivto-block") !== "counter") return;
+          const count = Number(element.getAttribute("data-count"));
+          if (!Number.isInteger(count) || count < 0) return;
+          return { blocks: [{ type: COUNTER_BLOCK_TYPE, props: { count } }] };
+        },
+        parseText: (text) => {
+          const match = /^Count: (\d+)$/.exec(text.trim());
+          if (!match) return;
+          return { blocks: [{ type: COUNTER_BLOCK_TYPE, props: { count: Number(match[1]) } }] };
+        },
       },
-    },
+    }),
 ];

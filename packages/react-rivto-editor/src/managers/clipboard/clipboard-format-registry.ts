@@ -1,3 +1,5 @@
+import type { ClipboardBundle, EditorElementNode } from "@chulane/rivto";
+import type { ClipboardContent, ClipboardParseContext } from "./clipboard-converters";
 import type { EditorBlock, EditorBlockInput } from "@chulane/rivto";
 import type { RegistrationOwner } from "../extensions/types";
 
@@ -43,7 +45,8 @@ export interface ClipboardParser {
   readonly parse: (data: { readonly html: string; readonly text: string }) => EditorBlockInput[] | undefined;
 }
 
-const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (character) => ({
+/** Escapes text before including it in exported clipboard HTML. */
+export const escapeClipboardHTML = (value: string): string => value.replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
 })[character]!);
 
@@ -55,8 +58,9 @@ export class ClipboardFormatRegistry {
   /**
    * Creates the React-owned formatter and parser registry.
    * @param registrations - Extension lifecycle owning registered contributions.
+   * @param converters - Optional runtime type converters applied before general formatting.
    */
-  constructor(private readonly registrations: RegistrationOwner) {}
+  constructor(private readonly registrations: RegistrationOwner, private readonly converters?: import("./clipboard-converters").ClipboardConverters) {}
 
   /**
    * Appends a formatter to the ordered, composable formatting pipeline.
@@ -111,13 +115,14 @@ export class ClipboardFormatRegistry {
         const children = visit(block.children, depth + 1);
         const indent = "  ".repeat(depth);
         const ownPlain = block.content.split(/\r\n?|\n/).map((line) => indent + line).join("\n");
-        const ownHtml = `<p>${escapeHtml(block.content).replace(/\r\n?|\n/g, "<br>")}</p>`;
+        const ownHtml = `<p>${escapeClipboardHTML(block.content).replace(/\r\n?|\n/g, "<br>")}</p>`;
         const context = { block, siblings, index, depth, children };
         let current: PortableBlockFormats = {
           plain: children.plain ? `${ownPlain}\n${children.plain}` : ownPlain,
           markdown: children.markdown ? `${ownPlain}\n${children.markdown}` : ownPlain,
           html: ownHtml + children.html,
         };
+        current = this.converters?.blocks.get(block.type)?.format?.(context, current) ?? current;
         this.formatters.forEach((formatter) => {
           if (formatter.matches?.(context) !== false) current = formatter.format(context, current);
         });
@@ -146,4 +151,130 @@ export class ClipboardFormatRegistry {
     }
     return undefined;
   }
+  /**
+   * Formats a canvas subtree, reusing block formatters for referenced block content.
+   * @param element - Detached subtree root included in the bundle.
+   * @param bundle - Source records and blocks used to resolve children and references.
+   * @param includedBlocks - IDs already formatted; updated to prevent repeated block output.
+   * @returns Plain text, Markdown and HTML; an unknown leaf type contributes empty strings.
+   */
+  formatElement(element: EditorElementNode, bundle: ClipboardBundle, includedBlocks = new Set<string>()): PortableBlockFormats {
+    const byId = new Map(bundle.elements?.map(node => [node.id, node]));
+    const seen = new Set<string>();
+    const visit = (node: EditorElementNode): PortableBlockFormats => {
+      if (seen.has(node.id)) return emptyFormats();
+      seen.add(node.id);
+      const children = joinFormats(node.childIds.flatMap(id => { const child = byId.get(id); return child ? [visit(child)] : []; }));
+      const converter = this.converters?.elements.get(node.type);
+      const ids = new Set(converter?.getReferencedBlockIds?.(node, bundle.blocks.map(block => block.id)) ?? []);
+      const blocks = this.format(bundle.blocks.filter(block => {
+        if (!ids.has(block.id) || includedBlocks.has(block.id)) return false;
+        includedBlocks.add(block.id); return true;
+      }));
+      return converter?.format?.({ element: node, children, blocks }, children) ?? children;
+    };
+    return visit(element);
+  }
+
+  /**
+   * Formats selected canvas roots and remaining blocks once, preserving their source order.
+   * @param bundle - Detached clipboard payload with optional selected element IDs.
+   * @returns Plain text, Markdown and HTML composed from registered type and list formatters.
+   */
+  formatBundle(bundle: ClipboardBundle): PortableBlockFormats {
+    if (!bundle.elements?.length) return this.format(bundle.blocks);
+    const nodes = new Map(bundle.elements.map(node => [node.id, node]));
+    const selected = new Set(bundle.selectedElementIds ?? [...nodes.keys()]);
+    const parents = new Map(bundle.elements.flatMap(node => node.childIds.map(id => [id, node.id] as const)));
+    const hasSelectedAncestor = (id: string): boolean => {
+      let parent = parents.get(id);
+      const seen = new Set<string>();
+      while (parent && !seen.has(parent)) {
+        if (selected.has(parent)) return true;
+        seen.add(parent);
+        parent = parents.get(parent);
+      }
+      return false;
+    };
+    const included = new Set<string>();
+    const formats = [...selected].filter(id => !hasSelectedAncestor(id)).flatMap(id => {
+      const node = nodes.get(id); return node ? [this.formatElement(node, bundle, included)] : [];
+    });
+    formats.push(this.format(bundle.blocks.filter(block => !included.has(block.id))));
+    return joinFormats(formats);
+  }
+
+  /**
+   * Parses portable clipboard content without mounting external markup.
+   * Whole-buffer parsers run first; type parsers then claim individual HTML subtrees.
+   * Unclaimed containers preserve their children, while scripts and embedded documents are ignored.
+   * @param data - Available HTML and plain-text flavors.
+   * @param context - Receiving surface and writing-block fallback.
+   * @returns Detached block/element inputs, or undefined when only ordinary plain text remains.
+   */
+  parseContent(data: { readonly html: string; readonly text: string }, context: ClipboardParseContext): ClipboardContent | undefined {
+    const whole = this.parse(data);
+    if (whole) return { blocks: whole };
+    const converters = this.converters?.getParsers() ?? [];
+    if (data.html && typeof DOMParser !== "undefined") {
+      const document = new DOMParser().parseFromString(data.html, "text/html");
+      const blocks: EditorBlockInput[] = [];
+      const elements: import("@chulane/rivto").EditorElementInput[] = [];
+      const visit = (node: Node, destination: EditorBlockInput[]): void => {
+        if (node.nodeType === 3) {
+          const content = node.textContent ?? "";
+          if (content.trim()) destination.push({ type: context.defaultBlockType, content });
+          return;
+        }
+        if (node.nodeType !== 1) return;
+        const element = node as Element;
+        if (["SCRIPT", "STYLE", "IFRAME", "OBJECT", "TEMPLATE"].includes(element.tagName)) return;
+        for (const converter of converters) {
+          const result = converter.parseHTML?.(element, context);
+          if (result === undefined) continue;
+          if (context.surface === "page" && result.elements?.length) throw new Error("Page clipboard parsers must return blocks");
+          destination.push(...result.blocks ?? []); elements.push(...result.elements ?? []); return;
+        }
+        if (element.tagName === "LI") {
+          const children: EditorBlockInput[] = [];
+          const own = [...element.childNodes].filter(child => !(child.nodeType === 1 && ["UL", "OL"].includes((child as Element).tagName)));
+          const content = own.map(clipboardHTMLText).join("");
+          for (const child of [...element.children]) if (["UL", "OL"].includes(child.tagName)) visit(child, children);
+          const checkbox = element.querySelector('input[type="checkbox"]');
+          const listProps = checkbox ? { type: "checkbox", checked: checkbox.hasAttribute("checked") }
+            : { type: element.parentElement?.tagName === "OL" ? "numbered_list" : "list" };
+          destination.push({ type: context.defaultBlockType, content, children, listProps }); return;
+        }
+        if (["P", "H1", "H2", "H3", "H4", "H5", "H6", "PRE"].includes(element.tagName)
+          || (element.tagName === "DIV" && !element.querySelector("p,div,ul,ol,pre,section,article"))) {
+          destination.push({ type: context.defaultBlockType, content: clipboardHTMLText(element) }); return;
+        }
+        [...element.childNodes].forEach(child => visit(child, destination));
+      };
+      [...document.body.childNodes].forEach(node => visit(node, blocks));
+      if (blocks.length || elements.length) return { blocks, elements };
+    }
+    for (const converter of converters) {
+      const result = converter.parseText?.(data.text, context);
+      if (result !== undefined) return result;
+    }
+    return undefined;
+  }
+
+}
+
+function emptyFormats(): PortableBlockFormats { return { plain: "", markdown: "", html: "" }; }
+function joinFormats(items: readonly PortableBlockFormats[]): PortableBlockFormats {
+  return { plain: items.map(item => item.plain).filter(Boolean).join("\n"),
+    markdown: items.map(item => item.markdown).filter(Boolean).join("\n"), html: items.map(item => item.html).join("") };
+}
+
+/** Reads detached HTML text, preserving line breaks and ignoring executable or embedded content. */
+export function clipboardHTMLText(node: Node): string {
+  if (node.nodeType === 3) return node.textContent ?? "";
+  if (node.nodeType !== 1) return "";
+  const element = node as Element;
+  if (["SCRIPT", "STYLE", "IFRAME", "OBJECT", "TEMPLATE"].includes(element.tagName)) return "";
+  if (element.tagName === "BR") return "\n";
+  return [...node.childNodes].map(clipboardHTMLText).join("");
 }

@@ -288,3 +288,35 @@ describe("block feature ownership independent of presentation", () => {
   });
 
 });
+
+test("imports with preallocated identities and runs processors once per block", async () => {
+  const editor = await createTestEditor();
+  const calls: string[] = [];
+  const dispose = editor.blocks.registerProcessor({ id: "prepare-once", priority: 0, processor: block => {
+    calls.push(block.id!); return { ...block, content: `${block.content ?? ""}!` };
+  } });
+  const ids = new Map([["parent", "new-parent"], ["child", "new-child"]]);
+  const result = editor.blocks.importForest([{ id: "parent", type: "paragraph", content: "parent",
+    children: [{ id: "child", type: "paragraph", content: "child" }] }], undefined, undefined, ids);
+  expect(calls).toEqual(["new-parent", "new-child"]);
+  expect(result.idMap).toBe(ids);
+  expect(result.roots[0]).toMatchObject({ id: "new-parent", content: "parent!", children: [{ id: "new-child", content: "child!" }] });
+  dispose(); await editor.destroy();
+});
+
+test("rejects an incomplete preallocated identity map before insertion", async () => {
+  const editor = await createTestEditor();
+  expect(() => editor.blocks.importForest([{ id: "source", type: "paragraph" }], undefined, undefined, new Map()))
+    .toThrow("Missing imported block ID");
+  expect(editor.blocks.getRootIds()).toEqual([]);
+  await editor.destroy();
+});
+
+test("import recovery can replace a rejected subtree with a single error block", async () => {
+  const editor = await createTestEditor();
+  const imported = editor.blocks.importForest([
+    { id: "invalid", type: "unknown", children: [{ id: "child", type: "paragraph" }] },
+  ], undefined, (block) => ({ type: "paragraph", content: "Recovered", props: { original: block } }));
+  expect(imported.roots[0]).toMatchObject({ id: imported.idMap.get("invalid"), content: "Recovered", children: [] });
+  editor.destroy();
+});

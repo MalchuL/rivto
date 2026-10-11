@@ -120,11 +120,10 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         },
         render: SeparatorBlock,
         separatesBlockElements: true,
-      }),
-      editorRuntime.clipboardFormats.registerFormatter({
-        id: "separator",
-        matches: ({ block }) => block.type === SEPARATOR_BLOCK_TYPE,
-        format: () => ({ plain: "---", markdown: "---", html: "<hr>" }),
+        clipboard: {
+          format: () => ({ plain: "---", markdown: "---", html: "<hr>" }),
+          parseHTML: element => element.tagName === "HR" ? { blocks: [{ type: SEPARATOR_BLOCK_TYPE }] } : undefined,
+        },
       }),
       editorRuntime.slashCommands.register({
         id: "block.separator.insert",

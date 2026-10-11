@@ -104,11 +104,12 @@ export interface BlockManagerApi {
   isRootBlock(id: string): boolean;
   /** @param block - Creation input. @param afterId - Placement anchor. @returns Complete persisted block. */
   insertBlock(block: EditorBlockInput, afterId?: string | null): EditorBlock;
-  /** @param blocks - Complete copied roots or creation inputs. @param afterId - Placement anchor. @param onError - Optional one-shot node recovery. @returns Imported roots and identities. */
+  /** @param blocks - Complete copied roots or creation inputs. @param afterId - Placement anchor. @param onError - Optional one-shot node recovery. @param ids - Optional preallocated source-to-destination IDs; processors and validation still run. @returns Imported roots and identities. */
   importForest(
     blocks: readonly (EditorBlock | EditorBlockInput)[],
     afterId?: string | null,
     onError?: BlockPrepareErrorHandler,
+    ids?: ReadonlyMap<string, string>,
   ): ImportedBlockForest;
   /** @param id - Block ID. @param patch - Mutable fields. @returns Updated non-recursive block fields. */
   updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;

@@ -350,12 +350,15 @@ export class BlockManager implements BlockManagerApi {
    * @param blocks - Complete copied roots or creation inputs to insert recursively.
    * @param afterId - Existing sibling after which roots are inserted.
    * @param onError - Optional handler that supplies one replacement for a failed node.
+   * @param ids - Optional source-to-destination IDs already allocated for clipboard references.
+   * Creation processors and validation still run during this import.
    * @returns Complete persisted roots and source mappings.
    */
   importForest(
     blocks: readonly (EditorBlock | EditorBlockInput)[],
     afterId?: string | null,
     onError?: BlockPrepareErrorHandler,
+    ids?: ReadonlyMap<string, string>,
   ): ImportedBlockForest {
     validateBlockForest(blocks);
     const sourceIds: string[] = [];
@@ -367,11 +370,12 @@ export class BlockManager implements BlockManagerApi {
     blocks.forEach(collectIds);
     // Map every descendant before insertion so clipboard extensions can use
     // the same destination IDs when rewriting stored references.
-    const idMap = this.document.blocks.createImportIdMap(sourceIds);
+    const idMap = ids ?? this.document.blocks.createImportIdMap(sourceIds);
     /** Rewrites one complete source subtree with its destination identities. */
     const remap = (block: EditorBlock | EditorBlockInput): EditorBlockInput => {
-      const id = block.id === undefined ? undefined : idMap.get(block.id)!;
-      return { ...block, id, children: block.children?.map(remap) };
+      const id = block.id === undefined ? undefined : idMap.get(block.id);
+      if (block.id !== undefined && !id) throw new Error(`Missing imported block ID: ${block.id}`);
+      return { ...block, id, children: block.children?.map(remap) ?? [] };
     };
     const prepared = this.prepareInput(blocks.map(remap), onError);
     const roots: EditorBlock[] = [];

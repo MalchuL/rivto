@@ -187,8 +187,8 @@ export class EditorRuntime {
     this.blockListProps = new BlockListPropsManager(this, editor.blockListProps);
     this.blockTypes = new BlockTypeManager(this, editor);
     this.blocks = editor.blocks;
-    this.clipboard = new ClipboardManager(editor);
-    this.clipboardFormats = new ClipboardFormatRegistry(extensions);
+    this.clipboard = new ClipboardManager(editor, this);
+    this.clipboardFormats = new ClipboardFormatRegistry(extensions, this.clipboard.converters);
     this.pasteStrategies = editor.clipboard.pasteStrategies;
     this.surfaces = new SurfaceManager(extensions);
     this.blockElements = new BlockElementProjection(this);

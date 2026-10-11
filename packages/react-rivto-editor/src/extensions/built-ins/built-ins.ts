@@ -8,8 +8,6 @@
  */
 import {
   createStructuralSelection,
-  type EditorBlock as Block,
-  type EditorBlockInput as BlockInput,
 } from "@chulane/rivto";
 import { createElement } from "react";
 import {
@@ -196,7 +194,9 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
   setup: (editorRuntime) => {
     editorRuntime.extensions.mount(() => createElement(SlashMenu, { options }));
     const disposers = [
-      // Clone the complete subtree while leaving persisted IDs for the store to generate.
+      // Copy the complete detached subtree through its type converters. Import assigns
+      // fresh identities and retains type, content, list state, props, plugin data
+      // and descendants without sharing mutable payloads with the source tree.
       editorRuntime.slashCommands.register({
         id: "block.duplicate",
         title: "Duplicate block",
@@ -206,7 +206,8 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
         execute: ({ blockId, editorView }) => {
           const block = editorView.runtime.blocks.getBlock(blockId);
           if (!block) return;
-          const input = duplicateBlockInput(block);
+          const bundle = editorRuntime.clipboard.copy(createStructuralSelection([blockId]), editorView, "duplicate");
+          if (!bundle) return;
           // Use the receiving view: a page embedding can share an edgeless core.
           // Duplicating there should insert a sibling, not create a canvas card.
           const isEdgelessRoot = editorView.events.getSurfaceType() === "edgeless" && editorView.getRootBlockIds().includes(blockId);
@@ -215,17 +216,22 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
             : undefined;
           let duplicateId = "";
           editorView.runtime.history.batchUpdates(() => {
-            const afterId = isEdgelessRoot
-              ? insertBlockElementSeparator(editorView.runtime, editorView.getRootBlockIds().at(-1)!).id
-              : block.id;
-            duplicateId = editorView.runtime.blocks.insertBlock(input, afterId).id;
+            const afterId = isEdgelessRoot ? editorView.getRootBlockIds().at(-1)! : block.id;
+            editorRuntime.clipboard.paste({
+              bundle,
+              textTarget: createStructuralSelection([]),
+              placement: { afterId, mergeText: false },
+            }, editorView, "duplicate");
+            duplicateId = editorView.selection.get()?.blocks[0]?.id ?? "";
+            if (!duplicateId) return;
+            if (isEdgelessRoot) insertBlockElementSeparator(editorView.runtime, afterId);
             if (isEdgelessRoot) editorView.elements.insertElement({
               type: "block",
               frame: sourceElement
                 ? { ...sourceElement.frame, x: sourceElement.frame.x + 24, y: sourceElement.frame.y + 24 }
                 : { x: 84, y: 84, width: 320, height: 120 },
               zIndex: Math.max(0, ...editorView.elements.getElementNodes().map((element) => element.zIndex)) + 1,
-              props: { startBlockId: duplicateId, endBlockId: duplicateId },
+              props: { ...sourceElement?.props, startBlockId: duplicateId, endBlockId: duplicateId },
             });
           });
           editorView.selection.set(createStructuralSelection([duplicateId]));
@@ -247,26 +253,6 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
     // Core slash registrations are stack-like and therefore dispose in reverse.
     return () => disposers.reverse().forEach((dispose) => dispose());
   },
-});
-
-/**
- * Converts a detached block snapshot into recursive insertion input.
- *
- * IDs are intentionally omitted so the core store assigns fresh identity.
- * Mutable payloads are cloned to
- * prevent the new subtree from sharing application-owned object references.
- *
- * @param block - Root snapshot of the subtree to duplicate.
- * @returns Recursive, ID-free input preserving type, list state, content,
- * props, extension data, and descendants.
- */
-const duplicateBlockInput = (block: Block): BlockInput => ({
-  type: block.type,
-  listProps: structuredClone(block.listProps),
-  content: block.content,
-  props: structuredClone(block.props),
-  pluginData: structuredClone(block.pluginData),
-  children: block.children.map(duplicateBlockInput),
 });
 
 /** Creates one atomic model, renderer, and optional slash-command extension. */
