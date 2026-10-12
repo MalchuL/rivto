@@ -1,4 +1,4 @@
-import { DOCUMENT_VIEW_SELECTOR, DocumentViewDOM, isInDocumentView } from "../events/document-view";
+import { PANEL_SELECTOR, PanelDOM, isInPanel } from "../events/panel-dom";
 /**
  * DOM ↔ editor selection bridge for Rivto's multi-contenteditable surfaces.
  *
@@ -123,7 +123,7 @@ function blockIdForContent(content: HTMLElement): string | undefined {
  */
 function orderedContents(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)].filter((content) => (
-    Boolean(blockIdForContent(content)) && isInDocumentView(root, content)
+    Boolean(blockIdForContent(content)) && isInPanel(root, content)
   ));
 }
 
@@ -158,7 +158,7 @@ export function createVisibleStructuralSelection(
 export function orderedBlockIds(root: HTMLElement): string[] {
   return [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
     const blockId = block.getAttribute(BLOCK_ID_ATTRIBUTE);
-    return blockId && isInDocumentView(root, block) ? [blockId] : [];
+    return blockId && isInPanel(root, block) ? [blockId] : [];
   });
 }
 
@@ -196,7 +196,7 @@ function readPosition(root: HTMLElement, node: Node | null, offset: number): Edi
   const element = isElementNode(node) ? node : node?.parentElement;
   const content = element?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
   const blockId = content ? blockIdForContent(content) : undefined;
-  if (!node || !content || !blockId || !root.contains(content) || !isInDocumentView(root, content)) return;
+  if (!node || !content || !blockId || !root.contains(content) || !isInPanel(root, content)) return;
 
   // Measure "how many characters from content start to (node, offset)".
   // setEnd accepts a Node (Text or Element), matching Selection's model.
@@ -240,7 +240,7 @@ export function readDOMPointPosition(root: HTMLElement, point: DOMSelectionPoint
  * nearest nested row instead, so the parent joins the range only when the
  * pointer enters its content or chrome. Registered body slots also belong to
  * the block itself, rather than its ordinary outline descendants. Hits inside
- * another nested view resolve to the enclosing block in this surface, keeping
+ * another nested panel resolve to the enclosing block in this surface, keeping
  * the originating selection gesture within its own document occurrence.
  *
  * @param root - Active surface root that scopes valid block containers.
@@ -254,8 +254,8 @@ export function readBlockIdAtPoint(
   y: number,
 ): string | undefined {
   const hit = root.ownerDocument.elementFromPoint(x, y);
-  const dom = new DocumentViewDOM(root);
-  // A nested view is one block in the originating surface. Its source rows
+  const dom = new PanelDOM(root);
+  // A nested panel is one block in the originating surface. Its source rows
   // must not turn a host selection endpoint into a nearby editable sibling.
   const block = dom.getBlock(isElementNode(hit) ? hit : null);
   if (!block || !root.contains(block)) return undefined;
@@ -294,9 +294,9 @@ function ownedBlockRow(block: HTMLElement): HTMLElement | null {
  * @returns Nearest nested BlockView, or `undefined` when none have a row.
  */
 function nearestNestedBlock(parent: HTMLElement, x: number, y: number): HTMLElement | undefined {
-  const root = parent.closest<HTMLElement>(DOCUMENT_VIEW_SELECTOR);
+  const root = parent.closest<HTMLElement>(PANEL_SELECTOR);
   return [...parent.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)]
-    .filter((candidate) => !root || isInDocumentView(root, candidate))
+    .filter((candidate) => !root || isInPanel(root, candidate))
     .map((candidate) => {
       const row = ownedBlockRow(candidate);
       return row ? { candidate, distance: distanceToRect(row.getBoundingClientRect(), x, y) } : undefined;
@@ -320,7 +320,7 @@ export function createDOMSelection(
   head: EditorPosition,
 ): Selection | undefined {
   if (anchor.blockId === head.blockId) {
-    const content = new DocumentViewDOM(root).findContent(anchor.blockId);
+    const content = new PanelDOM(root).findContent(anchor.blockId);
     if (content) {
       return createTextSelection([{ id: anchor.blockId, length: content.textContent?.length ?? 0 }], anchor, head);
     }
@@ -335,7 +335,7 @@ export function createDOMSelection(
   // contentless renderer such as Counter disappears from a Shift+Alt range.
   const rendered = [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
     const id = block.getAttribute(BLOCK_ID_ATTRIBUTE);
-    if (!id || !isInDocumentView(root, block)) return [];
+    if (!id || !isInPanel(root, block)) return [];
     const content = contents.get(block);
     return [{ id, content }];
   });
@@ -405,7 +405,7 @@ function distanceToRect(rect: DOMRect, x: number, y: number): number {
  */
 function contentNearPoint(root: HTMLElement, x: number, y: number): HTMLElement | undefined {
   const hit = root.ownerDocument.elementFromPoint(x, y)?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
-  if (hit && root.contains(hit) && isInDocumentView(root, hit)) return hit;
+  if (hit && root.contains(hit) && isInPanel(root, hit)) return hit;
   return orderedContents(root)
     .map((content) => ({ content, distance: distanceToRect(content.getBoundingClientRect(), x, y) }))
     .sort((left, right) => left.distance - right.distance)[0]?.content;
@@ -575,7 +575,7 @@ function pointAtOffset(content: HTMLElement, requestedOffset: number): { node: N
  */
 export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosition): DOMSelectionPoint | undefined {
   getPageVirtualizationControllerForElement(root)?.mountBlocks([position.blockId]);
-  const content = new DocumentViewDOM(root).findContent(position.blockId);
+  const content = new PanelDOM(root).findContent(position.blockId);
   return content ? { ...pointAtOffset(content, position.offset), content } : undefined;
 }
 
@@ -609,7 +609,7 @@ export function restoreEditorDOMSelection(
     );
   }
   if (isStructuralSelection(selection)) return false;
-  const dom = new DocumentViewDOM(root);
+  const dom = new PanelDOM(root);
   const contents = new Map<string, HTMLElement | null>();
   const contentOf = (id: string): HTMLElement | null => {
     if (!contents.has(id)) contents.set(id, dom.findContent(id));

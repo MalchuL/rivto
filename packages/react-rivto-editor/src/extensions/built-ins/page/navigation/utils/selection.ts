@@ -1,4 +1,4 @@
-import { findViewElements } from "../../../../../managers/events/document-view";
+import { findPanelElements } from "../../../../../managers/events/panel-dom";
 /**
  * Shared selection and focus operations for page navigation registrations.
  *
@@ -19,7 +19,7 @@ import {
 } from "../../../../../constants";
 import type { PanelAPI } from "../../../../../panels/types";
 import { focusBlock, resolveSelectionEndpoints } from "../../../../../managers";
-import type { ViewSelectionApi } from "../../../../../managers/selection/api";
+import type { PanelSelectionApi } from "../../../../../managers/selection/api";
 import { getPageVirtualizationControllerForElement } from "../../../../../surfaces/page/page-virtualization-controller";
 import { pageEntries } from "./outline";
 import { navigationOutlineBlocks } from "./scope";
@@ -34,7 +34,7 @@ export type { VerticalDirection } from "./types";
  * @returns Current selection when present.
  */
 export function currentNavigationSelection(
-  selectionManager: ViewSelectionApi,
+  selectionManager: PanelSelectionApi,
 ): Selection | undefined {
   return selectionManager.readDOM() ?? selectionManager.get();
 }
@@ -108,7 +108,7 @@ export function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirect
   const adjacent = roots[index + (direction === "up" ? -1 : 1)];
   if (!adjacent) return false;
   getPageVirtualizationControllerForElement(adjacent)?.mountFirstOrLastBlock(direction === "up" ? -1 : 1);
-  const blocks = findViewElements(adjacent, BLOCK_ID_SELECTOR);
+  const blocks = findPanelElements(adjacent, BLOCK_ID_SELECTOR);
   if (direction === "up") blocks.reverse();
   let focused = false;
   for (const block of blocks) {

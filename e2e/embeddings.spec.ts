@@ -438,7 +438,7 @@ for (const [repeat, canvas] of [[0, false], [0, true], [200, false], [200, true]
       // Autoscroll can move the canvas during a sweep; compare the line with
       // its current neighbors rather than their pre-gesture viewport positions.
       await expect.poll(() => line.evaluate((element, { embedId, nextId }) => {
-        const view = element.closest("[data-rivto-document-view]")!;
+        const view = element.closest("[data-rivto-panel]")!;
         const before = view.querySelector(`[data-block-id="${embedId}"]`)!.getBoundingClientRect();
         const after = view.querySelector(`[data-block-id="${nextId}"]`)!.getBoundingClientRect();
         const indicator = element.getBoundingClientRect();
@@ -559,7 +559,7 @@ for (const mode of ["Page", "Edgeless"] as const) {
       for (let index = 0; index < 3; index++) await zoom.getByRole("button", { name: "Zoom out", exact: true }).click();
       await expect(zoom.getByRole("button", { name: "Reset zoom" })).toHaveText("70%");
     }
-    const outer = today.locator('[data-rivto-document-view]').first();
+    const outer = today.locator('[data-rivto-panel]').first();
     const header = outer.locator(`[data-block-id="${embedId}"] > .page-block-row`);
     const source = outer.locator(`[data-block-id="${movedId}"] > .page-block-row`);
     const destination = region.locator(`[data-block-id="${childId}"] > .page-block-row`);
@@ -789,7 +789,7 @@ test("reference shell selection removes only the reference and collapse controls
   const controls = await toggles.evaluateAll((elements) => elements.map((element) => {
     const id = element.getAttribute("aria-controls")!;
     const region = document.getElementById(id);
-    return { id, own: region?.closest("[data-rivto-document-view]") === element.closest("[data-rivto-document-view]") };
+    return { id, own: region?.closest("[data-rivto-panel]") === element.closest("[data-rivto-panel]") };
   }));
   expect(new Set(controls.map(({ id }) => id)).size).toBe(3);
   expect(controls.every(({ own }) => own)).toBe(true);

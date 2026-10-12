@@ -409,8 +409,8 @@ registration uses `behavior`, alongside `definition` and `render`.
 The `BlockView` React component still renders the block shell.
 
 Public manager contracts use the `Api` suffix and live next to their owning
-manager: for example, `BlocksApi`, `BlockBehaviorsApi`, `ViewEventsApi`,
-`ViewSelectionApi`, and `ViewClipboardApi`. They remain available from the main
+manager: for example, `BlocksApi`, `BlockBehaviorsApi`, `PanelEventsApi`,
+`PanelSelectionApi`, and `PanelClipboardApi`. They remain available from the main
 package entry point. Internal code imports them directly from their owner;
 `capabilities.ts` only collects type re-exports.
 

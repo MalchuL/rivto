@@ -9,13 +9,13 @@ import type { PendingSelectionCallback } from "./types";
  */
 import { isStructuralSelection, type Selection, type SelectionManagerApi } from "@chulane/rivto";
 import type { PanelAPI } from "../../panels/types";
-import type { RestoreDOMSelectionOptions, ViewSelectionApi } from "./api";
+import type { RestoreDOMSelectionOptions, PanelSelectionApi } from "./api";
 import { readEditorDOMSelection, restoreEditorDOMSelection } from "./editor-dom-selection";
 
 export { createCaretSelection, createTextSelection } from "@chulane/rivto";
 
 /** DOM adapter over the core selection manager. */
-export class ViewSelectionManager implements ViewSelectionApi {
+export class PanelSelectionManager implements PanelSelectionApi {
 
   private checkedSelection: Selection | undefined;
   private checkedRevision = -1;
@@ -46,11 +46,11 @@ export class ViewSelectionManager implements ViewSelectionApi {
   private readonly pendingSelectionCallbacks = new Map<HTMLElement, PendingSelectionCallback>();
   /**
    * Creates a DOM bridge scoped to one rendered occurrence.
-   * Each view owns its DOM adapter while sharing the document core selection.
-   * DOM requests capture the receiving view's event scope and remain separate
-   * by root. Removing a surface cancels its own pending work; view teardown
+   * Each panel owns its DOM adapter while sharing the document core selection.
+   * DOM requests capture the receiving panel's event scope and remain separate
+   * by root. Removing a surface cancels its own pending work; panel teardown
    * cancels its remaining requests before shared extensions are destroyed.
-   * @param panel - Owning view editor providing its fixed DOM occurrence.
+   * @param panel - Owning panel editor providing its fixed DOM occurrence.
    * @param coreSelection - Core manager providing the document's local selection state.
    */
   constructor(
@@ -59,7 +59,7 @@ export class ViewSelectionManager implements ViewSelectionApi {
   ) {}
 
   /**
-   * Identifies a pending callback in the current view whose scheduled model selection remains current.
+   * Identifies a pending callback in the current panel whose scheduled model selection remains current.
    * @returns False after any effective core selection change, including explicit clearing.
    */
   get hasPendingSelectionCallback(): boolean {
@@ -68,14 +68,14 @@ export class ViewSelectionManager implements ViewSelectionApi {
   }
 
   /** @returns Detached current selection, or undefined when empty, outside this subtree,
-   * or owned by another view. */
+   * or owned by another panel. */
   get(): Selection | undefined {
     return this.ownsSelection() ? this.coreSelection.get() : undefined;
   }
 
   /**
-   * Publishes selection through core without activating or focusing this view.
-   * A selection containing blocks outside this view's subtree clears shared selection.
+   * Publishes selection through core without activating or focusing this panel.
+   * A selection containing blocks outside this panel's subtree clears shared selection.
    * @param selection - Document selection values to publish.
    * @returns No value.
    */
@@ -84,13 +84,13 @@ export class ViewSelectionManager implements ViewSelectionApi {
     this.coreSelection.set(selection);
   }
 
-  /** Clears the document's shared selection, even when another view last set it. */
+  /** Clears the document's shared selection, even when another panel last set it. */
   clear(): void {
     this.coreSelection.clear();
   }
 
   /**
-   * Subscribes to the document's shared selection changes, including other views.
+   * Subscribes to the document's shared selection changes, including other panels.
    * @param listener - Callback invoked after an effective change.
    * @returns Function that removes the listener.
    */
@@ -98,8 +98,8 @@ export class ViewSelectionManager implements ViewSelectionApi {
     return this.coreSelection.subscribe(listener);
   }
 
-  /** Deletes selected content through core only when this view owns the selection.
-   * Does nothing when the selection is empty, outside this subtree, or owned by another view. */
+  /** Deletes selected content through core only when this panel owns the selection.
+   * Does nothing when the selection is empty, outside this subtree, or owned by another panel. */
   delete(): void {
     if (!this.ownsSelection()) return;
     const selection = this.coreSelection.get();
@@ -108,7 +108,7 @@ export class ViewSelectionManager implements ViewSelectionApi {
   }
 
   /** @returns Immutable core selection snapshot with stable identity until selection changes,
-   * or undefined when empty, outside this subtree, or owned by another view. */
+   * or undefined when empty, outside this subtree, or owned by another panel. */
   snapshot(): Selection | undefined { return this.ownsSelection() ? this.coreSelection.snapshot() : undefined; }
 
   /** @returns Whether a block has structural selection coverage. */
@@ -119,7 +119,7 @@ export class ViewSelectionManager implements ViewSelectionApi {
 
   /**
    * Reads current native endpoints.
-   * @param root - Receiving DOM occurrence; omitted to use this view’s mounted root.
+   * @param root - Receiving DOM occurrence; omitted to use this panel’s mounted root.
    * @returns Browser selection, or undefined outside this editor.
    */
   readDOM(root = this.panel.events.getRoot()): Selection | undefined {
@@ -130,7 +130,7 @@ export class ViewSelectionManager implements ViewSelectionApi {
    * Restores a non-structural range after DOM reconciliation.
    * @param selection - Selection to restore, defaulting to current state.
    * @param options - Virtual endpoint mounting and navigation policy.
-   * @param root - Receiving DOM occurrence; null means the view has unmounted.
+   * @param root - Receiving DOM occurrence; null means the panel has unmounted.
    * @returns Whether both text endpoints could be restored.
    */
   restoreDOM(
@@ -156,13 +156,13 @@ export class ViewSelectionManager implements ViewSelectionApi {
    * Use this slot only for caret, DOM selection, and their associated editing focus.
    * Keep document mutations and independent UI work outside the callback: a new
    * scheduled callback replaces the previous one for that DOM root even if
-   * selection is unchanged. Requests in other views remain independently cancellable.
+   * selection is unchanged. Requests in other panels remain independently cancellable.
    * Endpoint mounting and viewport preservation may support selection restoration,
    * but must not turn this into a scheduler for unrelated operations.
    *
    * @param callback - Work to run next frame if selection has not changed since scheduling.
    * @param onCancel - Cleanup for caller-owned resources when the callback cannot run.
-   * @param events - View-bound root access retained until invocation or cancellation.
+   * @param events - Panel-bound root access retained until invocation or cancellation.
    * @returns An idempotent cancellation function, also invoked during runtime teardown.
    */
   scheduleIfSelectionUnchanged(
@@ -180,7 +180,7 @@ export class ViewSelectionManager implements ViewSelectionApi {
       onCancel?.();
       return () => {};
     }
-    // Capture the mounted occurrence, not whichever view is active next frame.
+    // Capture the mounted occurrence, not whichever panel is active next frame.
     const pending: PendingSelectionCallback = { root, events, view, callback, onCancel, active: true };
     /**
      * Cancels only this request, even after newer work replaces it.
@@ -219,7 +219,7 @@ export class ViewSelectionManager implements ViewSelectionApi {
 
   /**
    * Cancels DOM restoration belonging to a surface that is being removed or replaced.
-   * The view registry calls this before releasing the root; requests in other views
+   * The panel registry calls this before releasing the root; requests in other panels
    * are retained. Cleanup that schedules more work for this same root is also cancelled.
    * @param root - Exact surface root whose pending frame and resources must be released.
    * @returns No value; roots without pending work are harmless.
@@ -274,9 +274,9 @@ export class ViewSelectionManager implements ViewSelectionApi {
    * Releases the pending callback before the owning runtime tears down extensions.
    * Cancelling removes the frame and core subscription and releases caller-owned
    * resources exactly once, including when destruction is repeated.
-   * Requests for every mounted view are cancelled here, including shared work
+   * Requests for every mounted panel are cancelled here, including shared work
    * scheduled by their cancellation callbacks while cleanup is running.
-   * Views own separate DOM adapters, but never independent core selection state.
+   * Panels own separate DOM adapters, but never independent core selection state.
    * @returns No value.
    */
   destroy(): void {

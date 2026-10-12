@@ -28,9 +28,9 @@ describe("ClipboardFormatRegistry", () => {
 
 test("rejects format and parser registrations after runtime cleanup", async () => {
   const editor = await createTestCoreEditor();
-  const view = createReactEditor({ editor });
-  const formats = view.editor.clipboardFormats;
-  view.editor.destroy();
+  const panel = createReactEditor({ editor });
+  const formats = panel.editor.clipboardFormats;
+  panel.editor.destroy();
   expect(() => formats.registerFormatter({ id: "late", format: (_context, value) => value })).toThrow();
   expect(() => formats.registerParser({ id: "late", parse: () => undefined })).toThrow();
   editor.destroy();

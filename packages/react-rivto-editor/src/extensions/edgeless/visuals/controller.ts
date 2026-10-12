@@ -45,7 +45,7 @@ const isConnectorTextRotation = (
 
 /** Owns React-specific element schemas, canvas commands, grouping, and clipboard behavior. */
 export class EdgelessVisualController {
-  /** Document managers used by both the installed controller and its view-bound operations. */
+  /** Document managers used by both the installed controller and its panel-bound operations. */
   get runtime(): ReactEditorApi { return "editor" in this.editor ? this.editor.editor : this.editor; }
   private rootIds() { return "editor" in this.editor ? this.editor.blocks.getRootIds() : this.editor.document.blocks.getRootIds(); }
   /** Element operations for the receiving canvas, or all elements during shared normalization. */
@@ -76,13 +76,13 @@ export class EdgelessVisualController {
   }
 
   /**
-   * Uses a view's document and selection while sharing this installed controller.
+   * Uses a panel's document and selection while sharing this installed controller.
    * The API creates no commands, listeners, or acquisitions. Tool state and
-   * revisions remain shared; model reads and writes use the supplied view API.
-   * @param panel - Native view's document-bound editor API.
-   * @returns Controller API for renderers and retained handlers in that view.
+   * revisions remain shared; model reads and writes use the supplied panel API.
+   * @param panel - Native panel's document-bound editor API.
+   * @returns Controller API for renderers and retained handlers in that panel.
    */
-  getDocumentView(panel: PanelAPI): EdgelessVisualController {
+  forPanel(panel: PanelAPI): EdgelessVisualController {
     const selection = getEdgelessRuntime(panel);
     return new Proxy(this, {
       get(target, key, receiver) {
@@ -101,7 +101,7 @@ export class EdgelessVisualController {
   /** Snapshot token for React external-store subscriptions. */
   getRevision(): number { return this.revision; }
 
-  /** @returns Detached visual views backed by first-class elements. */
+  /** @returns Detached visual panels backed by first-class elements. */
   getVisuals(): EdgelessVisual[] {
     return this.elements.getElementNodes().flatMap((element) => {
       if (!VISUAL_TYPES.has(element.type)) return [];
@@ -515,13 +515,13 @@ export class EdgelessVisualController {
 
   /** @returns Leaf IDs represented by an element or nested group selection. */
   getLeaves(items: readonly string[]): string[] { return this.leaves(items); }
-  /** @returns Direct parent within this view, or undefined for a view root or missing element. */
+  /** @returns Direct parent within this panel, or undefined for a panel root or missing element. */
   getParentId(id: string): string | undefined { return this.parentId(id); }
 
   /** @returns Detached active canvas selection. */
   getSelection() { return this.selection.get(); }
 
-  /** Executes a registered visual command using this controller's fixed view and canvas. */
+  /** Executes a registered visual command using this controller's fixed panel and canvas. */
   execute(name: string, payload?: unknown): unknown {
     const handler = this.commandHandlers.get(name);
     if (!handler) throw new Error(`Unknown visual command ${name}`);
@@ -534,7 +534,7 @@ export class EdgelessVisualController {
       this.commandHandlers.set(name, handler);
       if (!this.editor.document.commands.has(name)) registrations.push(this.editor.document.commands.register(name, (value) => {
         if (isRecord(value) && "panel" in value && "payload" in value) {
-          return handler(this.getDocumentView(value.panel as PanelAPI), value.payload);
+          return handler(this.forPanel(value.panel as PanelAPI), value.payload);
         }
         return handler(this, value);
       }));
@@ -673,7 +673,7 @@ export class EdgelessVisualController {
       : [];
   }
 
-  // Resolve through this controller so view proxies keep their Panel boundary.
+  // Resolve through this controller so panel proxies keep their Panel boundary.
   private get geometry() { return new ElementGeometry((id) => this.element(id)); }
   private bounds(id: string): VisualFrame | undefined { return this.geometry.bounds(id); }
 

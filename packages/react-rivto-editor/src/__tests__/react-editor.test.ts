@@ -64,7 +64,7 @@ describe("PanelAPI", () => {
     } finally { editor.destroy(); await core.destroy(); }
   });
 
-  test("nested views inherit the nearest storage while independent providers keep equal document IDs separate", async () => {
+  test("nested panels inherit the nearest storage while independent providers keep equal document IDs separate", async () => {
     const first = await createTestMultiEditor([new DocumentModelImpl(new YjsDoc("shared"))]);
     const second = await createTestMultiEditor([new DocumentModelImpl(new YjsDoc("shared"))]);
     const a = first.getEditor("shared")!;
@@ -99,48 +99,48 @@ describe("PanelAPI", () => {
     hostPanel.mode.set("edgeless");
     const sourceEditor = mediator.getEditor(source.id)!;
     const controller = new EmbeddingPanel(sourceEditor, { rootBlockId: "shared-id",  });
-    const closeView = controller.mount();
-    const view = controller.getSnapshot().api!;
-    expect(view.editor.renderers).toBe(sourceEditor.renderers);
-    expect(view.events).not.toBe(sourceEditor.events);
+    const closePanel = controller.mount();
+    const panel = controller.getSnapshot().api!;
+    expect(panel.editor.renderers).toBe(sourceEditor.renderers);
+    expect(panel.events).not.toBe(sourceEditor.events);
     expect("getView" in sourceEditor).toBe(false);
-    expect(view.editor.document.blocks).toBe(sourceEditor.document.blocks);
-    expect(view.mode).not.toBe(hostPanel.mode);
-    expect(view.mode.get()).toBe("block");
+    expect(panel.editor.document.blocks).toBe(sourceEditor.document.blocks);
+    expect(panel.mode).not.toBe(hostPanel.mode);
+    expect(panel.mode.get()).toBe("block");
     expect(editor).not.toHaveProperty("mode");
     expect(hostPanel.mode.get()).toBe("edgeless");
     const changes: string[] = [];
-    const unsubscribe = view.editor.document.blocks.subscribeBlockNode("shared-id", () => {
-      changes.push(view.editor.document.blocks.getBlockNode("shared-id")!.content);
+    const unsubscribe = panel.editor.document.blocks.subscribeBlockNode("shared-id", () => {
+      changes.push(panel.editor.document.blocks.getBlockNode("shared-id")!.content);
     });
     // Retain an ordinary manager method across an await and another document receiving focus.
-    const update = view.editor.document.blocks.updateBlock.bind(view.editor.document.blocks);
+    const update = panel.editor.document.blocks.updateBlock.bind(panel.editor.document.blocks);
     await Promise.resolve();
-    const replacementView = mediator.getEditor(replacement.id)!;
-    replacementView.document.blocks.updateBlock("shared-id", { content: "Replacement" });
-    expect(view.editor.document.getDocument()).toBe(source);
-    expect(view.editor.document.blocks.getRootIds()).toEqual(["shared-id"]);
-    const result = view.editor.document.history.batchUpdates(() => {
+    const replacementPanel = mediator.getEditor(replacement.id)!;
+    replacementPanel.document.blocks.updateBlock("shared-id", { content: "Replacement" });
+    expect(panel.editor.document.getDocument()).toBe(source);
+    expect(panel.editor.document.blocks.getRootIds()).toEqual(["shared-id"]);
+    const result = panel.editor.document.history.batchUpdates(() => {
       update("shared-id", { content: "Edited source" });
-      view.editor.document.blocks.setBlockProp("shared-id", "checked", true);
+      panel.editor.document.blocks.setBlockProp("shared-id", "checked", true);
       return "source transaction";
     });
     expect(result).toBe("source transaction");
     expect(changes).toContain("Edited source");
     expect(replacement.blocks.getBlockNode("shared-id")!.content).toBe("Replacement");
     expect(source.blocks.getBlockNode("shared-id")!.props.checked).toBe(true);
-    replacementView.document.blocks.updateBlock("shared-id", { content: "Replacement" });
-    view.editor.document.history.undo();
+    replacementPanel.document.blocks.updateBlock("shared-id", { content: "Replacement" });
+    panel.editor.document.history.undo();
     expect(source.blocks.getBlockNode("shared-id")).toMatchObject({ content: "Source", props: {} });
-    view.editor.document.history.redo();
+    panel.editor.document.history.redo();
     expect(source.blocks.getBlockNode("shared-id")!.content).toBe("Edited source");
-    expect(() => view.editor.document.history.batchUpdates(() => { throw new Error("aborted callback"); })).toThrow("aborted callback");
-    expect(replacementView.document.blocks.getBlockNode("shared-id")!.content).toBe("Replacement");
+    expect(() => panel.editor.document.history.batchUpdates(() => { throw new Error("aborted callback"); })).toThrow("aborted callback");
+    expect(replacementPanel.document.blocks.getBlockNode("shared-id")!.content).toBe("Replacement");
     const count = changes.length;
     unsubscribe();
     update("shared-id", { content: "After unsubscribe" });
     expect(changes).toHaveLength(count);
-    closeView();
+    closePanel();
     reactEditor.destroy();
     await mediator.destroy();
   });

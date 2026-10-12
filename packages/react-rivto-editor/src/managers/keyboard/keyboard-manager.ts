@@ -3,7 +3,7 @@ import type { EditorMode } from "@chulane/rivto";
 import type { ReactEditorApi } from "../../editor/types";
 import { RevisionStore } from "../../internal-store";
 import { modeMatches, scopeMatches } from "../events/event-manager";
-import type { DocumentViewScope, EditorEventHandler } from "../events/types";
+import type { PanelRegistration, EditorEventHandler } from "../events/types";
 import { KeyboardEditorEvent } from "./keyboard-editor-event";
 import type {
   KeyboardBindingSnapshot,
@@ -78,7 +78,7 @@ export class KeyboardManager {
   register(
     definition: KeyboardEventDefinition,
     listener: EditorEventHandler<KeyboardEditorEvent>,
-    owner?: DocumentViewScope,
+    owner?: PanelRegistration,
   ): () => void {
     this.assertActive();
     const semanticId = definition.id.trim();
@@ -124,7 +124,7 @@ export class KeyboardManager {
   /**
    * Returns a stable inventory of installed bindings and orphan overrides.
    *
-   * View-local copies of an action share one inventory row and keymap override;
+   * Panel-local copies of an action share one inventory row and keymap override;
    * the first installed definition supplies that row's defaults.
    * @returns Immutable snapshots until the next registry or override revision.
    */

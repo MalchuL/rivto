@@ -57,13 +57,13 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
   const [blockElement, setBlockElement] = useState<HTMLDivElement | null>(null);
   const row = blockElement?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`) ?? null;
   const parentId = blockElement ? findParentBlock(blockElement)?.dataset.blockId : undefined;
-  const targetView = panel.editor.blockBehaviors.resolve(block.id);
-  const isLayoutRoot = targetView.dropAxis !== undefined && targetView.dropParentTypes === undefined;
-  const parentView = parentId ? panel.editor.blockBehaviors.resolve(parentId) : undefined;
+  const targetBehavior = panel.editor.blockBehaviors.resolve(block.id);
+  const isLayoutRoot = targetBehavior.dropAxis !== undefined && targetBehavior.dropParentTypes === undefined;
+  const parentBehavior = parentId ? panel.editor.blockBehaviors.resolve(parentId) : undefined;
   const parentOutline = parentId ? blockContainment(panel, parentId)?.childOutline : undefined;
-  const axis = parentOutline === "fixed" ? parentView?.dropAxis : undefined;
+  const axis = parentOutline === "fixed" ? parentBehavior?.dropAxis : undefined;
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
-  const dropNode = sortable || targetView.acceptsDropContainer ? blockElement : row;
+  const dropNode = sortable || targetBehavior.acceptsDropContainer ? blockElement : row;
 
   // Layout roots reveal their handle across the whole container. Structural
   // rows and lanes declare dropParentTypes and retain ordinary row hover.

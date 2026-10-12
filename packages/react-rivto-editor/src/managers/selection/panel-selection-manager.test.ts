@@ -1,7 +1,7 @@
 import { createCaretSelection, createStructuralSelection, createTextSelection } from "@chulane/rivto";
 import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
 
-describe("ViewSelectionManager", () => {
+describe("PanelSelectionManager", () => {
   test("reports pending restoration only for the current DOM root", async () => {
     const editor = await createEditor();
     const panel = createReactEditor({ editor });

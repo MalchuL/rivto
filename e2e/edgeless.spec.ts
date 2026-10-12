@@ -1648,7 +1648,7 @@ test("moves a card by dragging from the left of an indented nested block", async
   // nested block (via .page-block-row::before), which previously failed card move
   // because only root IDs were accepted — while still keeping ⋮⋮ handle reveal.
   const dragFrom = await card.evaluate((cardElement, id) => {
-    const block = cardElement.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]:not([data-rivto-document-view][role="region"] [data-block-id])`);
+    const block = cardElement.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]:not([data-rivto-panel][role="region"] [data-block-id])`);
     const row = block?.querySelector<HTMLElement>(":scope > .page-block-row");
     const chrome = cardElement.querySelector<HTMLElement>(":scope > .edgeless-card-content");
     if (!block || !row || !chrome) throw new Error("Expected nested row chrome");
@@ -1870,7 +1870,7 @@ test("edits Markdown and custom controls without selecting their root cards", as
   await expect(counter).toHaveText("Count: 3");
 
   await switchMode(page, "block");
-  await expect(page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first()).toHaveText("**Rivto editor**!/sloder");
+  await expect(page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first()).toHaveText("**Rivto editor**!/sloder");
 });
 
 test("moves through the shared slash menu with arrow keys", async ({ page }) => {
@@ -1902,7 +1902,7 @@ test("moves through the shared slash menu with arrow keys", async ({ page }) => 
 });
 
 test("renders explicit separators and creates a new card with the separator shortcut", async ({ page }) => {
-  const separators = page.locator('[data-separator-block="true"]:not([data-rivto-document-view] [data-rivto-document-view] [data-separator-block])');
+  const separators = page.locator('[data-separator-block="true"]:not([data-rivto-panel] [data-rivto-panel] [data-separator-block])');
   await expect(separators).toHaveCount(1);
   await expect(separators.first()).toHaveAttribute("role", "separator");
   const arrows = separators.first().locator(".rivto-separator-arrow svg");
@@ -1918,7 +1918,7 @@ test("renders explicit separators and creates a new card with the separator shor
 
   await switchMode(page, "edgeless");
   await expect(page.locator("[data-edgeless-root]")).toHaveCount(3);
-  await expect(page.locator('[data-edgeless-root] [data-separator-block]:not([data-rivto-document-view][role="region"] [data-separator-block])')).toHaveCount(0);
+  await expect(page.locator('[data-edgeless-root] [data-separator-block]:not([data-rivto-panel][role="region"] [data-separator-block])')).toHaveCount(0);
 
   await page.locator(".edgeless-viewport").focus();
   await page.keyboard.press("Control+Shift+Enter");
@@ -1926,7 +1926,7 @@ test("renders explicit separators and creates a new card with the separator shor
 });
 
 test("creates and focuses a separator continuation from slash", async ({ page }) => {
-  const content = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first();
+  const content = page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first();
   await content.click();
   await page.keyboard.press("End");
   await page.keyboard.type("/separator");
@@ -1934,7 +1934,7 @@ test("creates and focuses a separator continuation from slash", async ({ page })
   await expect(command).toBeVisible();
   await command.click();
 
-  await expect(page.locator('[data-separator-block="true"]:not([data-rivto-document-view] [data-rivto-document-view] [data-separator-block])')).toHaveCount(2);
+  await expect(page.locator('[data-separator-block="true"]:not([data-rivto-panel] [data-rivto-panel] [data-separator-block])')).toHaveCount(2);
   await expect.poll(() => page.evaluate(() => document.activeElement?.hasAttribute("data-block-content"))).toBe(true);
 });
 
@@ -1942,11 +1942,11 @@ test("renders nested separators without splitting document cards", async ({ page
   const nested = page.locator(".page-surface > .page-block .page-block-children [data-block-content]").first();
   await nested.click();
   await page.keyboard.press("Control+Shift+Enter");
-  await expect(page.locator('[data-separator-block="true"]:not([data-rivto-document-view] [data-rivto-document-view] [data-separator-block])')).toHaveCount(2);
+  await expect(page.locator('[data-separator-block="true"]:not([data-rivto-panel] [data-rivto-panel] [data-separator-block])')).toHaveCount(2);
 
   await switchMode(page, "edgeless");
   await expect(page.locator("[data-edgeless-root]")).toHaveCount(2);
-  await expect(page.locator('[data-edgeless-root] [data-separator-block]:not([data-rivto-document-view][role="region"] [data-separator-block])')).toHaveCount(1);
+  await expect(page.locator('[data-edgeless-root] [data-separator-block]:not([data-rivto-panel][role="region"] [data-separator-block])')).toHaveCount(1);
 });
 
 test("toggles root selection and moves or resizes layouts atomically", async ({ page }) => {

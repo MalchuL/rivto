@@ -50,7 +50,7 @@ function isActive(selection: Selection | undefined): boolean {
   return Boolean(value && typeof value === "object" && (value as { active?: unknown }).active === true);
 }
 
-/** Core-backed view used by edgeless gestures and React selection hooks. */
+/** Core-backed panel used by edgeless gestures and React selection hooks. */
 export class EdgelessSelectionRuntime {
   private snapshotSource: Selection | undefined;
   private snapshotValue: EdgelessSelectionSnapshot = { active: false, items: [] };
@@ -63,7 +63,7 @@ export class EdgelessSelectionRuntime {
 
   private get selection() { return "editor" in this.editor ? this.editor.selection : this.editor.document.selection; }
 
-  /** @returns Detached current canvas selection view. */
+  /** @returns Detached current canvas selection panel. */
   get(): EdgelessSelectionSnapshot {
     const current = this.selection.get();
     return { active: isActive(current), items: [...(current?.elements ?? [])] };
@@ -162,8 +162,8 @@ export class EdgelessSelectionRuntime {
   }
 }
 
-// Installation belongs to the shared editor; adapters read through each view's
-// bound selection API so identical element IDs in other views stay unselected.
+// Installation belongs to the shared editor; adapters read through each panel's
+// bound selection API so identical element IDs in other panels stay unselected.
 const runtimes = new WeakMap<ReactEditorApi["extensions"], WeakMap<PanelAPI | ReactEditorApi, EdgelessSelectionRuntime>>();
 
 /**
@@ -187,9 +187,9 @@ export function installEdgelessRuntime(editor: PanelAPI | ReactEditorApi): () =>
 
 /**
  * Returns the installed canvas selection adapter.
- * View-bound APIs receive a cached adapter that reads their local selection;
+ * Panel-bound APIs receive a cached adapter that reads their local selection;
  * installation and cleanup remain owned by the shared extension runtime.
- * @param editor - Owning React editor instance or its document-bound view API.
+ * @param editor - Owning React editor instance or its document-bound panel API.
  * @returns Installed adapter.
  */
 export function getEdgelessRuntime(editor: PanelAPI | ReactEditorApi): EdgelessSelectionRuntime {
@@ -200,8 +200,8 @@ export function getEdgelessRuntime(editor: PanelAPI | ReactEditorApi): EdgelessS
 
 /**
  * Returns the optional installed adapter.
- * View-bound APIs receive a cached adapter while the shared extension is installed.
- * @param editor - Owning React editor instance or its document-bound view API.
+ * Panel-bound APIs receive a cached adapter while the shared extension is installed.
+ * @param editor - Owning React editor instance or its document-bound panel API.
  * @returns Installed adapter, or undefined.
  */
 export function findEdgelessRuntime(editor: PanelAPI | ReactEditorApi): EdgelessSelectionRuntime | undefined {

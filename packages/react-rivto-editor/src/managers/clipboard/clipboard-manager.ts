@@ -8,19 +8,19 @@ import { ElementPasteStrategy } from "../../extensions/built-ins/clipboard/eleme
 import { clipboardContentBundle, selectedClipboardElements } from "./clipboard-content";
 import { ClipboardConverters } from "./clipboard-converters";
 import { panelClipboardDocument } from "./panel-clipboard-document";
-import type { BlockClipboardConverter, ClipboardCopyContext, ClipboardPasteContext, ConvertedClipboardElements, CreatedClipboardRecords, ElementClipboardConverter, ViewPasteStrategy } from "./types";
+import type { BlockClipboardConverter, ClipboardCopyContext, ClipboardPasteContext, ConvertedClipboardElements, CreatedClipboardRecords, ElementClipboardConverter, PanelPasteStrategy } from "./types";
 
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { BLOCK_PASTE_STRATEGY_ID, ClipboardManager as CoreClipboardManager, PRESERVE_NEWLINES_PASTE_STRATEGY_ID, TEXT_PASTE_STRATEGY_ID } from "@chulane/rivto";
 import type { PanelAPI } from "../../panels/types";
 
-/** Shared clipboard operations; paste receives a view or a runtime for document-only commands. */
+/** Shared clipboard operations; paste receives a panel or a runtime for document-only commands. */
 export class ClipboardManager {
   /** Runtime-owned type registrations used by structured and portable clipboard operations. */
   readonly converters: ClipboardConverters;
 
   /**
-   * Creates structured clipboard operations shared by a document's views.
+   * Creates structured clipboard operations shared by a document's panels.
    * @param document - Core runtime providing clipboard operations and paste transactions.
    * @param editor - React runtime providing shared clipboard operations and portable formats.
    * @param extensions - Internal converter registration ownership and destruction guard.
@@ -60,8 +60,8 @@ export class ClipboardManager {
 
   /**
    * Copies selected block subtrees, text ranges and canvas subtrees through type converters.
-   * @param selection - Explicit selection, or omitted to read the view/runtime selection.
-   * @param panel - Source view defining Panel roots; omitted for a document-only copy.
+   * @param selection - Explicit selection, or omitted to read the panel/runtime selection.
+   * @param panel - Source panel defining Panel roots; omitted for a document-only copy.
    * @param operation - Copy, cut or duplicate intent supplied to converters; defaults to copy.
    * @returns Detached payload, or undefined for an empty selection. Does not write the document.
    * @throws If a converter rejects the copied data.
@@ -81,7 +81,7 @@ export class ClipboardManager {
   /**
    * Copies an explicit text selection through block converters, excluding unselected children.
    * @param selection - Block text ranges to copy.
-   * @param panel - Optional source view supplied to converters.
+   * @param panel - Optional source panel supplied to converters.
    * @returns Detached partial-text bundle, or undefined when there is no text to copy.
    */
   copyText(selection: Selection, panel?: PanelAPI): ClipboardBundle | undefined {
@@ -109,7 +109,7 @@ export class ClipboardManager {
    * to existing text are not reverted by this cleanup. A malformed
    * serialized bundle falls back to plain text; an invalid explicit bundle throws.
    * @param input - Clipboard data, selection override and placement; plain text keeps core behavior.
-   * @param panel - Receiving view, or runtime for document-only commands without a mounted view.
+   * @param panel - Receiving panel, or runtime for document-only commands without a mounted panel.
    * @param operation - Paste or duplicate intent; defaults to paste.
    * @returns Core paste result, including the resulting caret when text was inserted.
    * @throws If a converter, creation processor or validator rejects the payload.
@@ -150,7 +150,7 @@ export class ClipboardManager {
     const strategies = this.pasteStrategies.getPasteStrategies();
     if (!strategies.some(strategy => strategy instanceof ElementPasteStrategy)) strategies.push(new ElementPasteStrategy(this.editor));
     strategies.forEach((strategy, index) => {
-      const bind = (strategy as Partial<ViewPasteStrategy>).createPanelStrategy;
+      const bind = (strategy as Partial<PanelPasteStrategy>).createPanelStrategy;
       let bound = strategy;
       if (strategy instanceof ElementPasteStrategy) bound = new ElementPasteStrategy(panel, convertedElements, created);
       else if (strategy instanceof BlockPasteStrategy) bound = new BlockPasteStrategy(pasteDocument);
@@ -159,7 +159,7 @@ export class ClipboardManager {
       else if (bind && "editor" in panel) bound = bind.call(strategy, panel);
       clipboard.pasteStrategies.register(String(index), bound);
     });
-    // An inactive view has no caret; undefined would make core borrow another view's selection.
+    // An inactive panel has no caret; undefined would make core borrow another panel's selection.
     const root = "editor" in panel ? panel.rootBlockId : undefined;
     const placement = { ...input.placement };
     if (root && !selection.blocks.length && placement.afterId === undefined && placement.parentId === undefined) {
@@ -250,7 +250,7 @@ export class ClipboardManager {
   /**
    * Collects selected canvas subtrees and referenced block trees before applying copy hooks once.
    * @param ids - Selected element IDs; overlapping subtrees are visited only once.
-   * @param panel - Source view restricting elements and block roots, or the owning runtime.
+   * @param panel - Source panel restricting elements and block roots, or the owning runtime.
    * @param operation - Copy, cut or duplicate intent; defaults to copy.
    * @returns Detached bundle with source identities and ordered referenced block roots.
    */
@@ -287,7 +287,7 @@ export class ClipboardManager {
    * Empty block cards are omitted. Other elements retain their type and child order; creation
    * processors run later through ordinary insertion. Copied frames move by 24 document units on each axis.
    * @param bundle - Detached source records and referenced block roots.
-   * @param panel - Destination view or document runtime used for placement and processors.
+   * @param panel - Destination panel or document runtime used for placement and processors.
    * @param blockIdMap - Already allocated source-to-destination block IDs.
    * @param ids - Preallocated element IDs, or omitted to allocate them here.
    * @param operation - Paste or duplicate intent; defaults to paste.

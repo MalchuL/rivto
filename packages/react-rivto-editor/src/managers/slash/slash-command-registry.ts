@@ -59,7 +59,7 @@ export class SlashCommandRegistry {
     return true;
   }
 
-  /** Returns registered definitions in declaration order; availability is view-specific. */
+  /** Returns registered definitions in declaration order; availability is panel-specific. */
   getAll(): SlashCommand[] { return [...this.commands.values()]; }
 
   /** Returns the definition with this ID, or undefined when it is not registered. */

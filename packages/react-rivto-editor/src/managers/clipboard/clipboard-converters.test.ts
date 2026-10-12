@@ -6,9 +6,9 @@ import { edgelessVisualsExtension } from "../../extensions/edgeless/visuals";
 
 async function fixture() {
   const editor = await createTestCoreEditor({ mode: "edgeless" });
-  const view = createTestReactEditor({ editor, extensions: [slashCommandExtension(), edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })] });
-  return { editor, view, clipboard: view.editor.clipboard,
-    close: () => { view.editor.destroy(); editor.destroy(); } };
+  const panel = createTestReactEditor({ editor, extensions: [slashCommandExtension(), edgelessSelectionExtension(), edgelessVisualsExtension({ toolbar: false })] });
+  return { editor, panel, clipboard: panel.editor.clipboard,
+    close: () => { panel.editor.destroy(); editor.destroy(); } };
 }
 
 test("converts each copied descendant once and supplies complete destination IDs before insertion", async () => {
@@ -28,7 +28,7 @@ test("converts each copied descendant once and supplies complete destination IDs
   const source = f.clipboard.copy(createStructuralSelection([root.id]))!;
   expect(source.blocks[0]!.props).toEqual({ ref: "child" });
   expect(f.editor.blocks.getBlockNode(root.id)!.props.transient).toBe(true);
-  f.clipboard.paste({ bundle: source, placement: { mergeText: false } }, f.view);
+  f.clipboard.paste({ bundle: source, placement: { mergeText: false } }, f.panel);
   const pasted = f.editor.blocks.getBlocks().find(block => block.id !== root.id)!;
   expect(pasted.props.ref).toBe(pasted.children[0]!.id);
   expect(source.blocks[0]!.props.ref).toBe("child");
@@ -45,14 +45,14 @@ test("converter errors prevent insertion and processor errors remove created rec
   const source = { version: 4 as const, blocks: [{ id: "copied-block", type: "paragraph", content: "copied", props: {}, listProps: {}, pluginData: {}, children: [] }],
     elements: [{ id: "copied-element", type: "custom", childIds: [], props: {}, frame: { x: 0, y: 0, width: 100, height: 100 }, zIndex: 0 }] };
   const before = f.editor.getDocument().getSnapshot();
-  const selection = f.view.selection.get();
+  const selection = f.panel.selection.get();
   const stop = f.clipboard.registerElementConverter("custom", { paste() { throw new Error("reject converter"); } });
-  expect(() => f.clipboard.paste({ bundle: source }, f.view)).toThrow("reject converter");
+  expect(() => f.clipboard.paste({ bundle: source }, f.panel)).toThrow("reject converter");
   expect(f.editor.getDocument().getSnapshot()).toEqual(before);
-  expect(f.view.selection.get()).toEqual(selection);
+  expect(f.panel.selection.get()).toEqual(selection);
   stop();
   const processor = f.editor.elements.registerProcessor({ id: "reject", priority: 0, processor() { throw new Error("reject processor"); } });
-  expect(() => f.clipboard.paste({ bundle: source }, f.view)).toThrow("reject processor");
+  expect(() => f.clipboard.paste({ bundle: source }, f.panel)).toThrow("reject processor");
   expect(f.editor.getDocument().getSnapshot()).toEqual(before);
   processor(); f.close();
 });
@@ -83,8 +83,8 @@ test("portable formats include group children and referenced blocks only once", 
     { id: "note", type: "sticker", props: { text: "Note" }, frame: { x: 0, y: 0, width: 80, height: 80 }, zIndex: 0 },
     { id: "card", type: "block", props: { startBlockId: "text-block", endBlockId: "text-block" }, frame: { x: 100, y: 0, width: 80, height: 80 }, zIndex: 1 },
   ] });
-  const bundle = f.clipboard.copyElements([group.id], f.view);
-  expect(f.view.editor.clipboardFormats.formatBundle(bundle).plain).toBe("Note\nBlock text");
+  const bundle = f.clipboard.copyElements([group.id], f.panel);
+  expect(f.panel.editor.clipboardFormats.formatBundle(bundle).plain).toBe("Note\nBlock text");
   expect(bundle.blocks).toHaveLength(1);
   f.close();
 });
@@ -93,22 +93,22 @@ test("type parsers are disposed and ordinary text keeps its fallback", async () 
   const f = await fixture();
   const stop = f.clipboard.registerBlockConverter("paragraph", { parseText: text => text === "custom" ? { blocks: [{ type: "paragraph", content: "parsed" }] } : undefined });
   const context = { surface: "page" as const, defaultBlockType: "paragraph" };
-  expect(f.view.editor.clipboardFormats.parseContent({ html: "", text: "custom" }, context)).toEqual({ blocks: [{ type: "paragraph", content: "parsed" }] });
-  expect(f.view.editor.clipboardFormats.parseContent({ html: "", text: "ordinary" }, context)).toBeUndefined();
+  expect(f.panel.editor.clipboardFormats.parseContent({ html: "", text: "custom" }, context)).toEqual({ blocks: [{ type: "paragraph", content: "parsed" }] });
+  expect(f.panel.editor.clipboardFormats.parseContent({ html: "", text: "ordinary" }, context)).toBeUndefined();
   stop();
-  expect(f.view.editor.clipboardFormats.parseContent({ html: "", text: "custom" }, context)).toBeUndefined();
+  expect(f.panel.editor.clipboardFormats.parseContent({ html: "", text: "custom" }, context)).toBeUndefined();
   f.close();
 });
 
-test("Cut formats before deleting and supplies its receiving view to converters", async () => {
+test("Cut formats before deleting and supplies its receiving panel to converters", async () => {
   const f = await fixture();
   const root = f.editor.blocks.insertBlock({ id: "cut", type: "paragraph", content: "keep on failure" });
-  f.view.selection.set(createStructuralSelection([root.id]));
+  f.panel.selection.set(createStructuralSelection([root.id]));
   const stop = f.clipboard.registerBlockConverter("paragraph", {
-    copy(_block, context) { expect(context.operation).toBe("cut"); expect(context.panel).toBe(f.view); return {}; },
+    copy(_block, context) { expect(context.operation).toBe("cut"); expect(context.panel).toBe(f.panel); return {}; },
     format() { throw new Error("cannot format"); },
   });
-  expect(() => f.view.clipboard.cut()).toThrow("cannot format");
+  expect(() => f.panel.clipboard.cut()).toThrow("cannot format");
   expect(f.editor.blocks.hasBlock(root.id)).toBe(true);
   stop(); f.close();
 });
@@ -121,7 +121,7 @@ for (const unrelated of [0, 200]) {
     let copies = 0, pastes = 0;
     f.clipboard.registerBlockConverter("paragraph", { copy() { copies++; return {}; }, paste() { pastes++; return {}; } });
     const bundle = f.clipboard.copy(createStructuralSelection([root.id]))!;
-    f.clipboard.paste({ bundle, placement: { mergeText: false } }, f.view);
+    f.clipboard.paste({ bundle, placement: { mergeText: false } }, f.panel);
     expect({ copies, pastes }).toEqual({ copies: 2, pastes: 2 });
     f.close();
   });
@@ -132,9 +132,9 @@ test("portable formatting keeps a selected child whose parent is not selected", 
   f.editor.elements.insertElement({ id: "group", type: "group", zIndex: 0, children: [
     { id: "note", type: "sticker", props: { text: "Selected" }, frame: { x: 0, y: 0, width: 80, height: 80 }, zIndex: 0 },
   ] });
-  const bundle = f.clipboard.copyElements(["group"], f.view);
+  const bundle = f.clipboard.copyElements(["group"], f.panel);
   bundle.selectedElementIds = ["note"];
-  expect(f.view.editor.clipboardFormats.formatBundle(bundle).plain).toBe("Selected");
+  expect(f.panel.editor.clipboardFormats.formatBundle(bundle).plain).toBe("Selected");
   f.close();
 });
 
@@ -144,7 +144,7 @@ test("all converters see the same element map when an empty block card is omitte
   f.clipboard.registerBlockConverter("paragraph", { paste(_block, context) { seen = [...context.elementIdMap.keys()]; return {}; } });
   const bundle = { version: 4 as const, blocks: [{ id: "text", type: "paragraph", content: "text", props: {}, listProps: {}, pluginData: {}, children: [] }],
     elements: [{ id: "empty-card", type: "block", props: { startBlockId: "missing", endBlockId: "missing" }, frame: { x: 0, y: 0, width: 80, height: 80 }, childIds: [], zIndex: 0 }] };
-  f.clipboard.paste({ bundle, placement: { mergeText: false } }, f.view);
+  f.clipboard.paste({ bundle, placement: { mergeText: false } }, f.panel);
   expect(seen).toEqual([]);
   expect(f.editor.elements.getElementNodes().some(node => node.type === "block")).toBe(false);
   f.close();
@@ -161,13 +161,13 @@ test("partial text maps the merged first block to the caret destination only", a
     maps.push(new Map(context.blockIdMap));
     return { props: { ...block.props, reference: context.blockIdMap.get("first")! } };
   } });
-  f.clipboard.paste({ bundle, textTarget: createCaretSelection(target.id, 1) }, f.view);
+  f.clipboard.paste({ bundle, textTarget: createCaretSelection(target.id, 1) }, f.panel);
   expect(maps[0]!.get("first")).toBe(target.id);
   const second = f.editor.blocks.getBlockNode(maps[0]!.get("second")!)!;
   expect(second).toMatchObject({ content: "secondB", props: { reference: target.id } });
   expect(f.editor.blocks.getBlockNode(target.id)!.content).toBe("Afirst");
   maps.length = 0;
-  f.clipboard.paste({ bundle, textTarget: createStructuralSelection([target.id]) }, f.view);
+  f.clipboard.paste({ bundle, textTarget: createStructuralSelection([target.id]) }, f.panel);
   expect(maps[0]!.get("first")).not.toBe(target.id);
   expect(f.editor.blocks.getBlockNode(maps[0]!.get("first")!)!.content).toBe("first");
   f.close();
@@ -176,9 +176,9 @@ test("partial text maps the merged first block to the caret destination only", a
 test("a canvas bundle does not also paste its portable text as document blocks", async () => {
   const f = await fixture();
   const node = f.editor.elements.insertElement({ id: "note", type: "sticker", props: { text: "First\nSecond" }, frame: { x: 0, y: 0, width: 80, height: 80 }, zIndex: 0 });
-  const bundle = f.clipboard.copyElements([node.id], f.view);
+  const bundle = f.clipboard.copyElements([node.id], f.panel);
   for (const preserveNewlines of [false, true]) {
-    f.clipboard.paste({ bundle, text: "First\nSecond", defaultBlockType: "paragraph", placement: { preserveNewlines } }, f.view);
+    f.clipboard.paste({ bundle, text: "First\nSecond", defaultBlockType: "paragraph", placement: { preserveNewlines } }, f.panel);
     expect(f.editor.blocks.getRootIds()).toEqual([]);
   }
   expect(f.editor.elements.getElementNodes()).toHaveLength(3);
@@ -187,7 +187,7 @@ test("a canvas bundle does not also paste its portable text as document blocks",
 
 test("slash Duplicate uses block converters and keeps the entire operation undoable", async () => {
   const f = await fixture();
-  f.view.mode.set("block");
+  f.panel.mode.set("block");
   const root = f.editor.blocks.insertBlock({ id: "source", type: "paragraph", children: [{ id: "child", type: "paragraph" }] });
   const operations: string[] = [];
   f.clipboard.registerBlockConverter("paragraph", {
@@ -195,7 +195,7 @@ test("slash Duplicate uses block converters and keeps the entire operation undoa
     paste(block, context) { operations.push(context.operation); return { props: { ...block.props, source: context.blockIdMap.get("source")! } }; },
   });
   f.editor.history.clear();
-  f.view.slashCommands.execute("block.duplicate", { blockId: root.id });
+  f.panel.slashCommands.execute("block.duplicate", { blockId: root.id });
   const duplicate = f.editor.blocks.getBlocks().find(block => block.id !== root.id)!;
   expect(operations).toEqual(["duplicate", "duplicate", "duplicate", "duplicate"]);
   expect(duplicate.children[0]!.props.source).toBe(duplicate.id);
@@ -208,17 +208,17 @@ test("failure after canvas insertion removes imported trees and separators, keep
   const f = await fixture();
   // A card needs the separator type when it is inserted after an existing block range.
   const { separatorBlockExtension } = await import("../../extensions/built-ins/separator/separator-block");
-  const stopSeparator = f.view.editor.extensions.install(separatorBlockExtension());
+  const stopSeparator = f.panel.editor.extensions.install(separatorBlockExtension());
   f.editor.blocks.insertBlock({ id: "original", type: "paragraph", content: "Keep" });
   f.editor.elements.insertElement({ id: "original-card", type: "block", props: { startBlockId: "original", endBlockId: "original" }, frame: { x: 0, y: 0, width: 80, height: 80 }, zIndex: 0 });
-  const bundle = f.clipboard.copyElements(["original-card"], f.view);
-  f.view.selection.set(createStructuralSelection(["original"]));
+  const bundle = f.clipboard.copyElements(["original-card"], f.panel);
+  f.panel.selection.set(createStructuralSelection(["original"]));
   const before = f.editor.getDocument().getSnapshot();
-  const selection = f.view.selection.get();
+  const selection = f.panel.selection.get();
   f.editor.history.clear();
   // Register a failure after the element strategy, when records and a separator already exist.
   const { ElementPasteStrategy } = await import("../../extensions/built-ins/clipboard/element-paste-strategy");
-  const stopElements = f.clipboard.pasteStrategies.register("test.elements", new ElementPasteStrategy(f.view));
+  const stopElements = f.clipboard.pasteStrategies.register("test.elements", new ElementPasteStrategy(f.panel));
   const stop = f.clipboard.pasteStrategies.register("test.fail", {
     matches: () => true,
     paste() {
@@ -227,9 +227,9 @@ test("failure after canvas insertion removes imported trees and separators, keep
       throw new Error("late failure");
     },
   });
-  expect(() => f.clipboard.paste({ bundle, placement: { mergeText: false } }, f.view)).toThrow("late failure");
+  expect(() => f.clipboard.paste({ bundle, placement: { mergeText: false } }, f.panel)).toThrow("late failure");
   expect(f.editor.getDocument().getSnapshot()).toEqual(before);
-  expect(f.view.selection.get()).toEqual(selection);
+  expect(f.panel.selection.get()).toEqual(selection);
   f.editor.history.undo();
   expect(f.editor.getDocument().getSnapshot()).toEqual(before);
   f.editor.history.redo();
@@ -239,13 +239,13 @@ test("failure after canvas insertion removes imported trees and separators, keep
 
 test("cleanup keeps an existing text destination when a later strategy fails", async () => {
   const f = await fixture();
-  f.view.mode.set("block");
+  f.panel.mode.set("block");
   f.editor.blocks.insertBlock({ id: "target", type: "paragraph", content: "AB" });
   const bundle = { version: 4 as const, fromTextSelection: true, blocks: ["first", "second"].map(id => ({
     id, type: "paragraph", content: id, props: {}, listProps: {}, pluginData: {}, children: [],
   })) };
   const stop = f.clipboard.pasteStrategies.register("test.fail", { matches: () => true, paste() { throw new Error("late failure"); } });
-  expect(() => f.clipboard.paste({ bundle, textTarget: createCaretSelection("target", 1) }, f.view)).toThrow("late failure");
+  expect(() => f.clipboard.paste({ bundle, textTarget: createCaretSelection("target", 1) }, f.panel)).toThrow("late failure");
   expect(f.editor.blocks.getRootIds()).toEqual(["target"]);
   expect(f.editor.blocks.getBlockNode("target")!.content).toBe("Afirst");
   stop(); f.close();

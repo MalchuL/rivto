@@ -61,17 +61,17 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
   const reconcile = () => {
     const current = reactEditor.document.selection.get();
     if (!current) return;
-    const view = (reactEditor.panels.getActive() ?? reactEditor.panels.getDefault());
-    const api = view ?? reactEditor.document;
+    const panel = (reactEditor.panels.getActive() ?? reactEditor.panels.getDefault());
+    const api = panel ?? reactEditor.document;
     if (!api.selection.get()) {
       // A remote move can put selected blocks outside the active subtree.
-      if (view) api.selection.clear();
+      if (panel) api.selection.clear();
       return;
     }
-    const reconcileView = () => {
+    const reconcilePanel = () => {
   const apiDocument = "editor" in api ? api.document : api;
-      const root = view?.events.getRoot();
-      const boundary = view?.rootBlockId;
+      const root = panel?.events.getRoot();
+      const boundary = panel?.rootBlockId;
       const next = reconcileCollapsedSelection(apiDocument.blocks, current, boundary);
       if (next !== current) {
         if (next) api.selection.set(next);
@@ -82,7 +82,7 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
         root?.focus({ preventScroll: true });
       }
     };
-    reconcileView();
+    reconcilePanel();
   };
   const unsubscribeDocument = reactEditor.document.subscribe(reconcile);
   const unsubscribeSelection = reactEditor.document.selection.subscribe(reconcile);

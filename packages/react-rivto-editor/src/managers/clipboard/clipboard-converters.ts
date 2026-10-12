@@ -1,7 +1,7 @@
 import type { RegistrationOwner } from "../extensions/types";
 import type { BlockClipboardConverter, ClipboardParsers, ElementClipboardConverter } from "./types";
 
-/** Per-type clipboard registrations shared by a runtime's views. */
+/** Per-type clipboard registrations shared by a runtime's panels. */
 export class ClipboardConverters {
   private readonly blockTypes = new Map<string, BlockClipboardConverter>();
   private readonly elementTypes = new Map<string, ElementClipboardConverter>();

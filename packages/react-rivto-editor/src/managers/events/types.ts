@@ -9,12 +9,12 @@ export type EditorEventHandler<EventValue> = (
 ) => boolean | void;
 
 /** Local registration identity and DOM root belonging to one mounted EditorPanel. */
-export interface DocumentViewScope {
+export interface PanelRegistration {
   /** Stable occurrence identity; shared shortcut settings continue to use semantic action IDs. */
   readonly id: string;
   /** Current root, or null before mounting and after cleanup. */
   getRoot(): HTMLElement | null;
-  /** Registers the occurrence's root without replacing another view's root. */
+  /** Registers the occurrence's root without replacing another panel's root. */
   setRoot(root: HTMLElement | null): void;
   /** Owns a local registration until this occurrence is cleaned up. */
   own(dispose: () => void): () => void;
@@ -49,7 +49,7 @@ export interface EditorEventInit<
   readonly panel: PanelAPI;
   /** Root DOM element of the currently committed React surface. */
   readonly root: HTMLElement;
-  /** Editor mode captured for this dispatch, supplied by the receiving view's rendered surface. */
+  /** Editor mode captured for this dispatch, supplied by the receiving panel's rendered surface. */
   readonly mode: EditorMode;
   /** Detached structured selection captured for this dispatch. */
   readonly selection: Selection | undefined;
@@ -69,7 +69,7 @@ export type AnyEditorEvent = EditorEvent<DOMEventTarget, never>;
 
 export interface DOMRegistration {
   readonly id: string;
-  readonly owner?: DocumentViewScope;
+  readonly owner?: PanelRegistration;
   readonly type: string;
   readonly target: DOMEventTarget;
   readonly scope?: DOMEventScope;

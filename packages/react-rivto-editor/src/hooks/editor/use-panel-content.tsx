@@ -33,7 +33,7 @@ function normalizeVirtualizationCount(value: number, fallback: number): number {
 }
 
 /**
- * Provides a document-backed editing view using one shared reactive editor runtime.
+ * Provides a document-backed editing panel using one shared reactive editor runtime.
  *
  * EditorPanel provides document context and renders the supplied surface and application UI.
  * It does not create or destroy the editor runtime, traverse blocks itself,
@@ -52,7 +52,7 @@ function normalizeVirtualizationCount(value: number, fallback: number): number {
  *
  * @param props - Shared editor, panel roots and React subtree to bind together.
  * @param embedding - Includes and protects the block root instead of displaying its children.
- * @returns The view's context providers and supplied surface, or a loading indicator before its model is available.
+ * @returns The panel's context providers and supplied surface, or a loading indicator before its model is available.
  */
 export function usePanelContent({
   editor: hostEditor,

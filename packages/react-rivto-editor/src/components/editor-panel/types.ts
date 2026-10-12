@@ -32,21 +32,21 @@ export interface EditorPanelProps {
  * Reactive value shared by one EditorPanel subtree.
  *
  * The editor reference is stable for the lifetime of a mounted EditorPanel.
- * Source views share that runtime through a document-bound API for reads and commands
+ * Source panels share that runtime through a document-bound API for reads and commands
  * to the resolved model until the target moves to another document.
  */
 export interface EditorContextValue {
   /** Editor for this occurrence, with shared runtime available through its runtime field. */
   readonly panel: PanelAPI;
-  /** Model acquired by this view; absent while its document is loading. */
+  /** Model acquired by this panel; absent while its document is loading. */
   readonly document?: DocumentModel;
-  /** Identity used to route mutations to the single editor acquired by this view. */
+  /** Identity used to route mutations to the single editor acquired by this panel. */
   readonly documentId: string;
   /** Displayed source root limiting selection and keyboard navigation. */
   readonly rootBlockId?: string;
-  /** Per-view DOM namespace; keeps collapse controls unique across source replicas. */
+  /** Per-panel DOM namespace; keeps collapse controls unique across source replicas. */
   readonly domIdPrefix?: string;
-  /** Hidden tabs retain their documents but suspend interaction in all nested views. */
+  /** Hidden tabs retain their documents but suspend interaction in all nested panels. */
   readonly enabled?: boolean;
 }
 

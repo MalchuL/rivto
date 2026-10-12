@@ -1,4 +1,4 @@
-import { DocumentViewDOM, isInDocumentView } from "../../../managers/events/document-view";
+import { PanelDOM, isInPanel } from "../../../managers/events/panel-dom";
 /** Measures one active surface and resolves its explicit drop regions. */
 import type { EditorBlock } from "@chulane/rivto";
 import type { PanelAPI } from "../../../panels/types";
@@ -30,7 +30,7 @@ export function getDropBlocks(panel: PanelAPI): EditorBlock[] {
  * rectangle getters; blocks without a direct page row or client rectangles are omitted.
  */
 export function collectDropLayout(root: HTMLElement, panel: PanelAPI): DropLayoutBlock[] {
-  const dom = new DocumentViewDOM(root);
+  const dom = new PanelDOM(root);
   return dom.getBlocks().flatMap((element) => {
     const id = element.dataset.blockId;
     const row = dom.getRow(element);
@@ -84,7 +84,7 @@ export function resolveSurfaceDrop(
   // Blank canvas has no outline destination; only the card under the pointer
   // contributes blocks. Keyboard movement still uses its supplied geometry.
   if (!options.keyboard && root.getAttribute?.("data-rivto-surface") === "edgeless" && !card) return null;
-  const layoutRoot = card && root.contains(card) && isInDocumentView(root, card) ? card : root;
+  const layoutRoot = card && root.contains(card) && isInPanel(root, card) ? card : root;
   const measured = collectDropLayout(layoutRoot, panel);
   const panelRoot = panel.rootBlockId && !panel.blocks.hasBlock(panel.rootBlockId) && panel.document.blocks.hasBlock(panel.rootBlockId) ? panel.rootBlockId : undefined;
   const placement = resolveDropPlacement(measured, blocks, pointer, options,

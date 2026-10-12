@@ -1,4 +1,4 @@
-import type { ViewEventsApi } from "../events/api";
+import type { PanelEventsApi } from "../events/api";
 
 /**
  * State owned by one deferred selection request. Cancellation handles retain
@@ -7,7 +7,7 @@ import type { ViewEventsApi } from "../events/api";
  */
 export interface PendingSelectionCallback {
   readonly root: HTMLElement;
-  readonly events: ViewEventsApi;
+  readonly events: PanelEventsApi;
   readonly view: Window;
   readonly callback: () => void;
   readonly onCancel?: () => void;

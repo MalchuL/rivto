@@ -140,7 +140,7 @@ export function EdgelessVisualLayer({
   readonly options: EdgelessVisualsOptions;
 }) {
   const panel = usePanel();
-  const controller = useMemo(() => sharedController.getDocumentView(panel), [sharedController, panel]);
+  const controller = useMemo(() => sharedController.forPanel(panel), [sharedController, panel]);
   const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const tool = useVisualTool(controller);

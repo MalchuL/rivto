@@ -44,7 +44,7 @@ const structuredBundle = JSON.stringify({
 });
 
 async function paste(page: import("@playwright/test").Page, asPlainText: boolean): Promise<void> {
-  const content = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first();
+  const content = page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first();
   await content.click();
   await page.keyboard.press("End");
   await content.evaluate((element, { structured, plainText, forcePlainText }) => {
@@ -71,7 +71,7 @@ test.beforeEach(async ({ page }) => {
 for (const mode of ["block", "edgeless"] as const) {
   test(`cuts and pastes partial text inside one block in ${mode} mode`, async ({ page }) => {
     await page.locator(`[data-editor-mode="${mode}"]`).click();
-    const content = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first();
+    const content = page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first();
     await content.click();
     const original = (await content.textContent())!;
     const blockCount = await page.locator(BLOCK_ID_SELECTOR).count();
@@ -108,8 +108,8 @@ for (const mode of ["block", "edgeless"] as const) {
 }
 
 test("normal structured text paste merges into the target", async ({ page }) => {
-  const content = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first();
-  const original = await page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first().textContent();
+  const content = page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first();
+  const original = await page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first().textContent();
   await paste(page, false);
   await expect(content).toHaveText(`${original}Copied`);
   await expect.poll(() => caretOffset(content)).toBe(`${original}Copied`.length);
@@ -117,20 +117,20 @@ test("normal structured text paste merges into the target", async ({ page }) => 
 
 test("Ctrl+Shift+V pastes multiline plain text inside one block", async ({ page }) => {
   const rootsBefore = await page.locator(`${BLOCK_ID_SELECTOR}.page-block`).count();
-  const original = await page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first().textContent();
+  const original = await page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first().textContent();
   await paste(page, true);
-  await expect.poll(() => page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first().textContent()).toBe(
+  await expect.poll(() => page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first().textContent()).toBe(
     `${original}Copied\n    second line`,
   );
-  await expect.poll(() => caretOffset(page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first())).toBe(
+  await expect.poll(() => caretOffset(page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first())).toBe(
     `${original}Copied\n    second line`.length,
   );
   await expect(page.locator(`${BLOCK_ID_SELECTOR}.page-block`)).toHaveCount(rootsBefore);
 });
 
 test("copies a mouse text selection and pastes it inline", async ({ page }) => {
-  const source = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first();
-  const target = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").nth(1);
+  const source = page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first();
+  const target = page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").nth(1);
   const copiedText = await source.textContent();
   const targetText = await target.textContent();
   await source.selectText();
@@ -208,7 +208,7 @@ test("copies Counter display text to every portable clipboard flavor", async ({ 
 });
 
 test("replaces invalid structured block properties with an Error block", async ({ page }) => {
-  const target = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])").first();
+  const target = page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first();
   await target.click();
   await target.evaluate((element) => {
     const data = new DataTransfer();
@@ -236,7 +236,7 @@ test("replaces invalid structured block properties with an Error block", async (
 });
 
 test("copies a multi-block selection from the focused page", async ({ page }) => {
-  const contents = page.locator("[data-block-content]:not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])");
+  const contents = page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])");
   const first = await contents.nth(0).textContent();
   const second = await contents.nth(1).textContent();
   await contents.nth(0).click({ modifiers: ["Control"] });

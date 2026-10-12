@@ -1,19 +1,19 @@
 import type { PanelAPI } from "../../panels/types";
-import type { ViewSlashCommandsApi } from "./api";
+import type { PanelSlashCommandsApi } from "./api";
 import type { SlashCommandRegistry } from "./slash-command-registry";
 
 /** Executes commands in one occurrence while sharing the document command registry. */
-export class ViewSlashCommandManager implements ViewSlashCommandsApi {
+export class PanelSlashCommandManager implements PanelSlashCommandsApi {
   /** @param commands - Document command registrations. @param panel - Invoking occurrence. */
   constructor(private readonly commands: SlashCommandRegistry, private readonly panel: PanelAPI) {}
   get revision() { return this.commands.revision; }
-  subscribe: ViewSlashCommandsApi["subscribe"] = (listener) => this.commands.subscribe(listener);
+  subscribe: PanelSlashCommandsApi["subscribe"] = (listener) => this.commands.subscribe(listener);
   /**
    * Returns contextually available commands in declaration order.
    * @param context - Active block context evaluated by availability predicates.
-   * @returns Available definitions in registry order for this view.
+   * @returns Available definitions in registry order for this panel.
    */
-  getAll: ViewSlashCommandsApi["getAll"] = (context) => {
+  getAll: PanelSlashCommandsApi["getAll"] = (context) => {
     const commandContext = { ...context, panel: this.panel };
     return this.commands.getAll().filter((command) => command.isAvailable?.(commandContext) !== false);
   };
@@ -24,7 +24,7 @@ export class ViewSlashCommandManager implements ViewSlashCommandsApi {
    * @param context - Active block context revalidated before execution.
    * @throws For an unknown or unavailable command, or when its callback fails.
    */
-  execute: ViewSlashCommandsApi["execute"] = (id, context) => {
+  execute: PanelSlashCommandsApi["execute"] = (id, context) => {
     const command = this.commands.get(id);
     if (!command) throw new Error(`Unknown slash command ${id}`);
     const commandContext = { ...context, panel: this.panel };

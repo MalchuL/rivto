@@ -285,8 +285,8 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    const viewContext = root ? createBlockBehaviorContext(panel, blockId, root) : undefined;
-    if (viewContext) todoStorageBehavior.appendWritingBlock(viewContext);
+    const behaviorContext = root ? createBlockBehaviorContext(panel, blockId, root) : undefined;
+    if (behaviorContext) todoStorageBehavior.appendWritingBlock(behaviorContext);
   };
 
   if (block.listProps.collapsed === true) {

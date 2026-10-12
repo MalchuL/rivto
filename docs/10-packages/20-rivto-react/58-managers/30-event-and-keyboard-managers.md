@@ -2,7 +2,7 @@
 
 ## `EventManager`
 
-`runtime.events` владеет общим delegated transport и маршрутизирует события к зарегистрированным отображениям. `panel.events` — локальный ViewEventManager: он использует root и cleanup своего отображения.
+`runtime.events` владеет общим delegated transport и маршрутизирует события к зарегистрированным отображениям. `panel.events` — локальный PanelEventManager: он использует root и cleanup своего отображения.
 
 ### Properties
 

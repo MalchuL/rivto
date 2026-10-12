@@ -71,13 +71,13 @@ async function fixture() {
   return { storage, a, b, core, editor: editor, connections, disconnections };
 }
 
-test("nested views share a retained editor and leave acquisition release to the owner", async () => {
+test("nested panels share a retained editor and leave acquisition release to the owner", async () => {
   const f = await fixture();
   const first = new ChildrenPanel(f.a.editor);
   const nested = new EmbeddingPanel(f.editor, { rootBlockId: "same-id",  });
   const other = new ChildrenPanel(f.b.editor);
   const closeFirst = first.mount(); const closeNested = nested.mount(); const closeOther = other.mount();
-  await eventually(() => expect([first, nested, other].every((view) => view.getSnapshot().retained)).toBe(true));
+  await eventually(() => expect([first, nested, other].every((panel) => panel.getSnapshot().retained)).toBe(true));
   expect(first.getSnapshot().document).toBe(nested.getSnapshot().document);
   expect(f.connections.filter((id) => id === "A")).toHaveLength(1);
   first.getSnapshot().api!.editor.document.blocks.updateBlock("same-id", { content: "Edited A" });
@@ -105,27 +105,27 @@ test("nested views share a retained editor and leave acquisition release to the 
 
 test("a missing target keeps its document acquired and source undo restores it", async () => {
   const f = await fixture();
-  const view = new EmbeddingPanel(f.editor, { rootBlockId: "same-id",  });
-  const close = view.mount();
-  await eventually(() => expect(view.getSnapshot().retained).toBe(true));
-  const api = view.getSnapshot().api!;
+  const panel = new EmbeddingPanel(f.editor, { rootBlockId: "same-id",  });
+  const close = panel.mount();
+  await eventually(() => expect(panel.getSnapshot().retained).toBe(true));
+  const api = panel.getSnapshot().api!;
   api.editor.document.history.batchUpdates(() => api.editor.document.blocks.removeBlock("same-id"));
-  expect(view.getSnapshot().status).toBe("missing");
+  expect(panel.getSnapshot().status).toBe("missing");
   expect(f.core.getDocument("A")).toBeDefined();
   api.editor.document.history.undo();
-  expect(view.getSnapshot().status).toBe("available");
+  expect(panel.getSnapshot().status).toBe("available");
   expect(api.editor.document.blocks.getBlockNode("same-id")?.content).toBe("A");
   close(); await f.a.release(); await f.b.release(); f.editor.destroy(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test("a view can remount with explicit storage without releasing another occurrence", async () => {
+test("a panel can remount with explicit storage without releasing another occurrence", async () => {
   const f = await fixture();
-  const view = new EmbeddingPanel(f.editor, { rootBlockId: "same-id",  });
-  const closeCancelled = view.mount();
+  const panel = new EmbeddingPanel(f.editor, { rootBlockId: "same-id",  });
+  const closeCancelled = panel.mount();
   closeCancelled();
-  const close = view.mount();
-  await eventually(() => expect(view.getSnapshot().retained).toBe(true));
-  expect(view.getSnapshot().api!.editor.document.blocks).toBe(f.editor.document.blocks);
+  const close = panel.mount();
+  await eventually(() => expect(panel.getSnapshot().retained).toBe(true));
+  expect(panel.getSnapshot().api!.editor.document.blocks).toBe(f.editor.document.blocks);
   expect(f.connections.filter((id) => id === "A")).toHaveLength(1);
   close();
   expect(f.core.getDocument("A")).toBeDefined();
@@ -134,7 +134,7 @@ test("a view can remount with explicit storage without releasing another occurre
   await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test.each(["block", "edgeless"] as const)("view and shared selection calls replace the same root's pending restoration in %s", async (mode) => {
+test.each(["block", "edgeless"] as const)("panel and shared selection calls replace the same root's pending restoration in %s", async (mode) => {
   const f = await fixture();
   const realm = new DocumentRealm();
   const frames = new Map<number, FrameRequestCallback>();
@@ -145,17 +145,17 @@ test.each(["block", "edgeless"] as const)("view and shared selection calls repla
     },
     cancelAnimationFrame: (frame: number) => { frames.delete(frame); },
   });
-  const view = new ChildrenPanel(f.editor);
-  view.mode.set(mode);
-  const viewRoot = root(realm);
-  view.setRoot(viewRoot);
-  const close = view.mount();
-  await eventually(() => expect(view.getSnapshot().retained).toBe(true));
-  const api = view.getSnapshot().api!;
+  const panel = new ChildrenPanel(f.editor);
+  panel.mode.set(mode);
+  const panelRoot = root(realm);
+  panel.setRoot(panelRoot);
+  const close = panel.mount();
+  await eventually(() => expect(panel.getSnapshot().retained).toBe(true));
+  const api = panel.getSnapshot().api!;
   const calls: string[] = [];
   const cancelOld = api.selection.scheduleIfSelectionUnchanged(() => calls.push("old"), () => calls.push("cancelled"));
   api.selection.scheduleIfSelectionUnchanged(() => {
-    expect((f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot())).toBe(viewRoot);
+    expect((f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot())).toBe(panelRoot);
     calls.push("new");
   });
   expect(calls).toEqual(["cancelled"]);
@@ -170,7 +170,7 @@ test.each(["block", "edgeless"] as const)("view and shared selection calls repla
   await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test("replacing a root cancels only its restoration and retains another view's DOM scope", async () => {
+test("replacing a root cancels only its restoration and retains another panel's DOM scope", async () => {
   const f = await fixture();
   const realm = new DocumentRealm();
   const frames = new Map<number, FrameRequestCallback>();
@@ -205,7 +205,7 @@ test("replacing a root cancels only its restoration and retains another view's D
   await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test.each(["block", "edgeless"] as const)("view cleanup cancels local DOM work, remounts fresh bindings, and runtime teardown cancels surviving views in %s", async (mode) => {
+test.each(["block", "edgeless"] as const)("panel cleanup cancels local DOM work, remounts fresh bindings, and runtime teardown cancels surviving panels in %s", async (mode) => {
   const f = await fixture();
   const realm = new DocumentRealm();
   const frames = new Map<number, FrameRequestCallback>();
@@ -227,10 +227,10 @@ test.each(["block", "edgeless"] as const)("view cleanup cancels local DOM work, 
   const firstSelection = firstApi.selection;
   const secondApi = second.getSnapshot().api!;
   const cancelled: string[] = [];
-  firstApi.selection.scheduleIfSelectionUnchanged(() => { throw new Error("closed view ran"); }, () => { cancelled.push("first"); });
+  firstApi.selection.scheduleIfSelectionUnchanged(() => { throw new Error("closed panel ran"); }, () => { cancelled.push("first"); });
   secondApi.selection.scheduleIfSelectionUnchanged(() => { throw new Error("destroyed runtime ran"); }, () => {
     cancelled.push("second");
-    // A view's cancellation can schedule shared work; teardown must cancel that too.
+    // A panel's cancellation can schedule shared work; teardown must cancel that too.
     secondApi.selection.scheduleIfSelectionUnchanged(() => { throw new Error("teardown work ran"); }, () => { cancelled.push("runtime"); });
   });
   expect(frames.size).toBe(2);
@@ -266,18 +266,18 @@ test.each(["block", "edgeless"] as const)("view cleanup cancels local DOM work, 
   await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test("a standalone view leaves editor and document disposal to its caller", async () => {
+test("a standalone panel leaves editor and document disposal to its caller", async () => {
   const f = await fixture();
-  const view = new EmbeddingPanel(f.editor, { rootBlockId: "same-id",  });
-  const close = view.mount();
-  await eventually(() => expect(view.getSnapshot().retained).toBe(true));
+  const panel = new EmbeddingPanel(f.editor, { rootBlockId: "same-id",  });
+  const close = panel.mount();
+  await eventually(() => expect(panel.getSnapshot().retained).toBe(true));
   close();
   expect(f.editor.document.blocks.getBlockNode("same-id")?.content).toBe("A");
   expect(f.disconnections).not.toContain("A");
   await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test("view-local events and shortcuts reuse IDs, dispatch once, and preserve semantic keymap overrides", async () => {
+test("panel-local events and shortcuts reuse IDs, dispatch once, and preserve semantic keymap overrides", async () => {
   const f = await fixture();
   const realm = new DocumentRealm();
   const first = new ChildrenPanel(f.a.editor);
@@ -295,8 +295,8 @@ test("view-local events and shortcuts reuse IDs, dispatch once, and preserve sem
   realm.defaultView.dispatchEvent(event("keydown", root(realm), "initial"));
   expect(unfocusedDocument).toBe("A");
   const calls: string[] = [];
-  for (const view of [first, nested]) {
-    const api = view.getSnapshot().api!;
+  for (const panel of [first, nested]) {
+    const api = panel.getSnapshot().api!;
     api.events.register({ id: "local.input", type: "input" }, () => {
       calls.push(api.editor.document.blocks.getBlockNode("same-id")!.content); return false;
     });
@@ -305,9 +305,9 @@ test("view-local events and shortcuts reuse IDs, dispatch once, and preserve sem
     });
   }
   const gestures: string[] = [];
-  for (const view of [first, nested]) {
-    view.getSnapshot().api!.events.register({ id: "local.drag", type: "pointermove", target: "window" }, () => {
-      gestures.push(view.editor.document.getDocument().id); return false;
+  for (const panel of [first, nested]) {
+    panel.getSnapshot().api!.events.register({ id: "local.drag", type: "pointermove", target: "window" }, () => {
+      gestures.push(panel.editor.document.getDocument().id); return false;
     });
   }
   let lostFocus = 0;
@@ -345,7 +345,7 @@ test("view-local events and shortcuts reuse IDs, dispatch once, and preserve sem
   f.editor.destroy(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test("hover routes to the pointed view without activating it or clearing selection", async () => {
+test("hover routes to the pointed panel without activating it or clearing selection", async () => {
   const f = await fixture();
   const realm = new DocumentRealm();
   const full = new ChildrenPanel(f.editor);
@@ -356,8 +356,8 @@ test("hover routes to the pointed view without activating it or clearing selecti
   const closeFull = full.mount(); const closeNested = nested.mount();
   await eventually(() => expect(nested.getSnapshot().retained).toBe(true));
   const pointed: HTMLElement[] = [];
-  for (const view of [full, nested]) {
-    view.getSnapshot().api!.events.register({ id: "hover", type: "pointermove", target: "window" }, ({ root }) => {
+  for (const panel of [full, nested]) {
+    panel.getSnapshot().api!.events.register({ id: "hover", type: "pointermove", target: "window" }, ({ root }) => {
       pointed.push(root); return false;
     });
   }
@@ -385,7 +385,7 @@ test("hover routes to the pointed view without activating it or clearing selecti
   await f.a.release(); await f.b.release(); f.editor.destroy(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test("events read each view's surface type while sharing the core mode, managers, and canvas settings", async () => {
+test("events read each panel's surface type while sharing the core mode, managers, and canvas settings", async () => {
   const f = await fixture();
   expect(f.editor.panels.getSurfaceType()).toBe("block");
   expect("surfaceType" in f.editor).toBe(false);
@@ -512,14 +512,14 @@ test("two editors synchronize their two shared documents while each third docume
   const seeds = [new Map([["A", modelA], ["B", modelB], ["C", modelC]]), new Map([["D", modelD]])];
   const cores = stores.map((storage, user) => new EditorStorage({ openDocument: async (id) => { const model = seeds[user]!.get(id); seeds[user]!.delete(id); return model ?? storage.openDocument(id); }, createEditor: (editor) => { editor.blockRegistry.defineBlock({ type: "paragraph" }); return createReactEditor({ editor }); } }));
   const leases = await Promise.all([["A", "B", "C"], ["A", "B", "D"]].map((ids, user) => Promise.all(ids.map((id) => cores[user]!.acquireEditor(id)))));
-  const views = leases.map((entries, user) => entries.map((entry) => new ChildrenPanel(entry.editor)));
-  const cleanups = views.flat().map((view) => view.mount());
-  await eventually(() => expect(views.flat().every((view) => view.getSnapshot().retained)).toBe(true));
+  const panels = leases.map((entries, user) => entries.map((entry) => new ChildrenPanel(entry.editor)));
+  const cleanups = panels.flat().map((panel) => panel.mount());
+  await eventually(() => expect(panels.flat().every((panel) => panel.getSnapshot().retained)).toBe(true));
   await eventually(() => expect(cores[1]!.getDocument("A")!.blocks.getBlockNode("shared")?.content).toBe("Initial A"));
-  views[0]![0]!.getSnapshot().api!.editor.document.blocks.updateBlock("shared", { content: "From first user" });
-  views[1]![1]!.getSnapshot().api!.editor.document.blocks.updateBlock("shared", { content: "From second user" });
-  views[0]![2]!.getSnapshot().api!.editor.document.blocks.updateBlock("shared", { content: "Private C edit" });
-  views[1]![2]!.getSnapshot().api!.editor.document.blocks.updateBlock("shared", { content: "Private D edit" });
+  panels[0]![0]!.getSnapshot().api!.editor.document.blocks.updateBlock("shared", { content: "From first user" });
+  panels[1]![1]!.getSnapshot().api!.editor.document.blocks.updateBlock("shared", { content: "From second user" });
+  panels[0]![2]!.getSnapshot().api!.editor.document.blocks.updateBlock("shared", { content: "Private C edit" });
+  panels[1]![2]!.getSnapshot().api!.editor.document.blocks.updateBlock("shared", { content: "Private D edit" });
   await eventually(() => expect(cores[1]!.getDocument("A")!.blocks.getBlockNode("shared")?.content).toBe("From first user"));
   await eventually(() => expect(cores[0]!.getDocument("B")!.blocks.getBlockNode("shared")?.content).toBe("From second user"));
   expect(cores[0]!.getDocuments().map((doc) => doc.id).sort()).toEqual(["A", "B", "C"]);
@@ -537,7 +537,7 @@ test("two editors synchronize their two shared documents while each third docume
   await Promise.all(stores.map((storage) => storage.destroy()));
 });
 
-test.each([10, 2000])("views own selection boundaries without repeated tree reads for %i blocks", async (count) => {
+test.each([10, 2000])("panels own selection boundaries without repeated tree reads for %i blocks", async (count) => {
   const f = await fixture();
   f.a.document.blocks.insertBlock({ id: "outside-parent", type: "paragraph", children: [{
     id: "branch", type: "paragraph", children: Array.from({ length: count }, (_, index) => ({ id: `child-${index}`, type: "paragraph", content: "Child" })),
@@ -551,7 +551,7 @@ test.each([10, 2000])("views own selection boundaries without repeated tree read
   (embeddedRoot as unknown as ElementTarget).parentElement = fullRoot as unknown as ElementTarget;
   full.setRoot(fullRoot); embedded.setRoot(embeddedRoot); duplicate.setRoot(duplicateRoot);
   const closeFull = full.mount(); const closeEmbedded = embedded.mount(); const closeDuplicate = duplicate.mount();
-  await eventually(() => expect([full, embedded, duplicate].every((view) => view.getSnapshot().retained)).toBe(true));
+  await eventually(() => expect([full, embedded, duplicate].every((panel) => panel.getSnapshot().retained)).toBe(true));
   const api = embedded.getSnapshot().api!;
   embeddedRoot.dispatchEvent(event("focusin", embeddedRoot));
   expect((f.editor.panels.getActive() ?? f.editor.panels.getDefault())).toBe(api);
@@ -595,7 +595,7 @@ test.each([10, 2000])("views own selection boundaries without repeated tree read
   await f.a.release(); await f.b.release(); f.editor.destroy(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test("view behavior resolves against its own document before any DOM root is mounted", async () => {
+test("panel behavior resolves against its own document before any DOM root is mounted", async () => {
   const f = await fixture();
   const a = f.a.editor; const b = f.b.editor;
   expect(a.blockBehaviors.resolve("same-id")).toBe(a.blockBehaviors.fallback);
@@ -621,15 +621,15 @@ test("destroying a runtime during drag releases window pointer ownership to surv
   closeFirst(); closeSecond(); await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test("view keymap updates share inventory and dispatch without inheriting manager state", async () => {
+test("panel keymap updates share inventory and dispatch without inheriting manager state", async () => {
   const f = await fixture();
   const realm = new DocumentRealm();
-  const view = new ChildrenPanel(f.editor);
+  const panel = new ChildrenPanel(f.editor);
   const surface = root(realm);
-  view.setRoot(surface);
-  const close = view.mount();
-  await eventually(() => expect(view.getSnapshot().retained).toBe(true));
-  const api = view.getSnapshot().api!;
+  panel.setRoot(surface);
+  const close = panel.mount();
+  await eventually(() => expect(panel.getSnapshot().retained).toBe(true));
+  const api = panel.getSnapshot().api!;
   let calls = 0;
   api.keyboard.register({ id: "local.action", keys: "a" }, () => { calls += 1; return true; });
   api.keyboard.replaceKeymap({ "local.action": ["b"] });
@@ -648,7 +648,7 @@ test("view keymap updates share inventory and dispatch without inheriting manage
   await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test("retained slash and clipboard APIs keep their surface without changing the active view", async () => {
+test("retained slash and clipboard APIs keep their surface without changing the active panel", async () => {
   const f = await fixture();
   const realm = new DocumentRealm();
   const canvas = new ChildrenPanel(f.editor);
@@ -663,18 +663,18 @@ test("retained slash and clipboard APIs keep their surface without changing the 
   canvasRoot.dispatchEvent(event("focusin", canvasRoot));
   const calls: string[] = [];
   const disposeCommand = f.editor.slashCommands.register({
-    id: "view.explicit", title: "Explicit view",
+    id: "panel.explicit", title: "Explicit panel",
     execute: ({ panel }) => {
       calls.push(panel.events.getSurfaceType());
       expect((f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot())).toBe(canvasRoot);
     },
   });
   await Promise.resolve();
-  pageApi.slashCommands.execute("view.explicit", { blockId: "same-id" });
-  canvasApi.slashCommands.execute("view.explicit", { blockId: "same-id" });
+  pageApi.slashCommands.execute("panel.explicit", { blockId: "same-id" });
+  canvasApi.slashCommands.execute("panel.explicit", { blockId: "same-id" });
   expect(calls).toEqual(["block", "edgeless"]);
   // Hover dispatch supplies its receiver without replacing the focused root.
-  f.editor.events.register({ id: "view.hover", type: "pointermove" }, ({ panel, mode }) => {
+  f.editor.events.register({ id: "panel.hover", type: "pointermove" }, ({ panel, mode }) => {
     expect(panel).toBe(pageApi);
     expect(mode).toBe("block");
     expect((f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot())).toBe(canvasRoot);
@@ -685,7 +685,7 @@ test("retained slash and clipboard APIs keep their surface without changing the 
   pageApi.clipboard.paste({ text: "Unfocused paste", defaultBlockType: "paragraph" });
   expect(f.editor.document.blocks.getBlockNode("same-id")?.content).toBe("A");
   const { ElementPasteStrategy } = await import("../extensions/built-ins/clipboard/element-paste-strategy");
-  const removeStrategy = f.editor.pasteStrategies.register("view.elements", new ElementPasteStrategy(f.editor));
+  const removeStrategy = f.editor.pasteStrategies.register("panel.elements", new ElementPasteStrategy(f.editor));
   const bundle = { version: 4 as const, blocks: [], elements: [{ childIds: [], id: "visual-source", type: "text", frame: { x: 0, y: 0, width: 100, height: 40 },
     zIndex: 1, props: { text: "Paste" },
   }] };
@@ -699,7 +699,7 @@ test("retained slash and clipboard APIs keep their surface without changing the 
   await f.a.release(); await f.b.release(); await f.core.destroy(); await f.storage.destroy();
 });
 
-test("view editors share runtime registrations and keep independent DOM managers", async () => {
+test("panel editors share runtime registrations and keep independent DOM managers", async () => {
   const f = await fixture();
   const first = new ChildrenPanel(f.editor);
   const second = new ChildrenPanel(f.editor);
@@ -750,11 +750,11 @@ test("active lookup stays empty until interaction while default prefers the full
 test("handled pointer events can preserve native defaults without reaching later editor handlers", async () => {
   const f = await fixture();
   const realm = new DocumentRealm();
-  const view = new ChildrenPanel(f.editor);
-  const viewRoot = root(realm);
-  view.setRoot(viewRoot);
-  const close = view.mount();
-  await eventually(() => expect(view.getSnapshot().retained).toBe(true));
+  const panel = new ChildrenPanel(f.editor);
+  const panelRoot = root(realm);
+  panel.setRoot(panelRoot);
+  const close = panel.mount();
+  await eventually(() => expect(panel.getSnapshot().retained).toBe(true));
   const calls: string[] = [];
   for (const preventDefault of [false, true]) {
     const removeFirst = f.editor.events.register({ id: "gesture.first", type: "pointerdown", preventDefault }, () => {
@@ -765,8 +765,8 @@ test("handled pointer events can preserve native defaults without reaching later
       calls.push("second");
       return true;
     });
-    const down = event("pointerdown", viewRoot);
-    viewRoot.dispatchEvent(down);
+    const down = event("pointerdown", panelRoot);
+    panelRoot.dispatchEvent(down);
     expect(down.defaultPrevented).toBe(preventDefault);
     removeFirst(); removeSecond();
   }

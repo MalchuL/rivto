@@ -13,7 +13,7 @@ export interface ClipboardCopyContext {
   readonly sourceDocumentId: string;
   /** Omitted for document-only programmatic copy. */
   readonly panel?: PanelAPI;
-  /** Ordered block siblings represented by this source view. */
+  /** Ordered block siblings represented by this source panel. */
   readonly rootBlockIds: readonly string[];
 }
 
@@ -22,7 +22,7 @@ export interface ClipboardPasteContext {
   readonly operation: "paste" | "duplicate";
   readonly sourceDocumentId?: string;
   readonly destinationDocumentId: string;
-  /** Receiving mounted view, absent for document-only programmatic operations. */
+  /** Receiving mounted panel, absent for document-only programmatic operations. */
   readonly panel?: PanelAPI;
   /** Source IDs mapped to prepared destination IDs; text merge may reuse an existing block. */
   readonly blockIdMap: ReadonlyMap<string, string>;
@@ -99,7 +99,7 @@ export interface ElementClipboardConverter extends ClipboardParsers {
    * Returns source block IDs to transfer with these elements; missing blocks are ignored.
    * Canvas Cut removes these original blocks after export, so ordinary external links
    * should stay in props instead of being declared here. Root IDs are ordered siblings
-   * from the source view, allowing a block card to resolve its inclusive range.
+   * from the source panel, allowing a block card to resolve its inclusive range.
    */
   readonly getReferencedBlockIds?: (element: EditorElementNode, rootBlockIds: readonly string[]) => readonly string[];
 }
@@ -159,8 +159,8 @@ export interface CreatedClipboardRecords {
   readonly elementIds: Set<string>;
 }
 
-/** Optional view binding for paste algorithms that depend on a rendered surface. */
-export interface ViewPasteStrategy extends PasteStrategy {
+/** Optional panel binding for paste algorithms that depend on a rendered surface. */
+export interface PanelPasteStrategy extends PasteStrategy {
   /** Returns an algorithm bound to the receiving occurrence, without changing registrations. */
   createPanelStrategy(panel: PanelAPI): PasteStrategy;
 }

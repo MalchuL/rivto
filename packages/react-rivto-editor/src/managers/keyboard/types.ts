@@ -1,5 +1,5 @@
 import type { EditorEvent } from "../events/editor-event";
-import type { DocumentViewScope, EditorEventHandler, EditorEventInit } from "../events/types";
+import type { PanelRegistration, EditorEventHandler, EditorEventInit } from "../events/types";
 import type { KeyboardEventDefinition, KeyboardEventPhase, KeyboardEventTarget } from "./keyboard-types";
 import type { KeyboardEditorEvent } from "./keyboard-editor-event";
 import type { ParsedShortcut } from "./shortcut";
@@ -17,7 +17,7 @@ export interface KeyboardEditorEventInit
 }
 
 export interface KeyboardRegistration {
-  readonly owner?: DocumentViewScope;
+  readonly owner?: PanelRegistration;
   readonly definition: KeyboardEventDefinition;
   shortcuts: ParsedShortcut[];
   readonly listener: EditorEventHandler<KeyboardEditorEvent>;

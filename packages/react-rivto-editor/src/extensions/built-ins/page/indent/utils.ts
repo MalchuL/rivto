@@ -14,7 +14,7 @@ import {
 import { createBlockBehaviorContext } from "../../../../block-behaviors";
 import type { PanelAPI } from "../../../../panels/types";
 import { firstKeyboardTarget, isEditableKeyboardEvent, type KeyboardSelectionTarget } from "../../../../managers";
-import type { ViewSelectionApi } from "../../../../managers/selection/api";
+import type { PanelSelectionApi } from "../../../../managers/selection/api";
 import { getPageVirtualizationControllerForElement } from "../../../../surfaces/page/page-virtualization-controller";
 
 /** Active viewport settlement for one page surface. */
@@ -153,7 +153,7 @@ function restoreBlockViewportTop(
  * @returns `true` when the shortcut was claimed.
  */
 export function applyIndentShortcut(
-  selectionManager: ViewSelectionApi,
+  selectionManager: PanelSelectionApi,
   root: HTMLElement,
   event: KeyboardEvent,
   outdent: boolean,

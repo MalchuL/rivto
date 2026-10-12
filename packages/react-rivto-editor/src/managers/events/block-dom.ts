@@ -5,7 +5,7 @@ import {
   BLOCK_ID_SELECTOR,
 } from "../../constants";
 import { getPageVirtualizationControllerForElement } from "../../surfaces/page/page-virtualization-controller";
-import { DOCUMENT_VIEW_SELECTOR, findViewElements, isInDocumentView } from "./document-view";
+import { PANEL_SELECTOR, findPanelElements, isInPanel } from "./panel-dom";
 
 /** DOM elements and persisted identity resolved from a delegated event target. */
 export interface EventBlock {
@@ -41,7 +41,7 @@ export function findBlockFromEvent(event: Event): EventBlock | null {
 
 /** Finds a rendered BlockView by ID without interpolating that ID into CSS. */
 export function findRenderedBlock(root: HTMLElement, blockId: string): HTMLElement | null {
-  for (const block of findViewElements(root, BLOCK_ID_SELECTOR)) {
+  for (const block of findPanelElements(root, BLOCK_ID_SELECTOR)) {
     if (block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId) return block;
   }
   return null;
@@ -67,11 +67,11 @@ function findOwnedContent(block: HTMLElement): HTMLElement | null {
  * @returns Previous editable block identity and elements, or null.
  */
 export function findPreviousEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
-  let blocks = findViewElements(root, BLOCK_ID_SELECTOR);
+  let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
   let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   if (index === 0 && getPageVirtualizationControllerForElement(root)) {
     getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(blockId, -1);
-    blocks = findViewElements(root, BLOCK_ID_SELECTOR);
+    blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
     index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   }
   if (index <= 0) return null;
@@ -84,11 +84,11 @@ export function findPreviousEditableBlock(root: HTMLElement, blockId: string): E
 
 /** Finds the immediately next rendered block when that block is editable. */
 export function findNextEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
-  let blocks = findViewElements(root, BLOCK_ID_SELECTOR);
+  let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
   let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   if (index === blocks.length - 1 && getPageVirtualizationControllerForElement(root)) {
     getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(blockId, 1);
-    blocks = findViewElements(root, BLOCK_ID_SELECTOR);
+    blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
     index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   }
   if (index < 0 || index >= blocks.length - 1) return null;
@@ -107,8 +107,8 @@ export function findNextEditableBlock(root: HTMLElement, blockId: string): Event
  */
 export function findParentBlock(block: HTMLElement): HTMLElement | null {
   const parent = block.parentElement?.closest<HTMLElement>(BLOCK_ID_SELECTOR) ?? null;
-  const root = block.closest?.<HTMLElement>(DOCUMENT_VIEW_SELECTOR);
-  return parent && (!root || isInDocumentView(root, parent)) ? parent : null;
+  const root = block.closest?.<HTMLElement>(PANEL_SELECTOR);
+  return parent && (!root || isInPanel(root, parent)) ? parent : null;
 }
 
 /**
@@ -249,11 +249,11 @@ export function verticalCaretPosition(
   const nextLine = lines[lineIndex + (direction === "up" ? -1 : 1)];
   if (nextLine) return { blockId: position.blockId, offset: closestOnLine(nextLine, current.left).offset };
 
-  let blocks = findViewElements(root, BLOCK_ID_SELECTOR);
+  let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
   let currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId);
   if ((direction === "up" && currentIndex === 0 || direction === "down" && currentIndex === blocks.length - 1) && getPageVirtualizationControllerForElement(root)) {
     getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(position.blockId, direction === "up" ? -1 : 1);
-    blocks = findViewElements(root, BLOCK_ID_SELECTOR);
+    blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
     currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId);
   }
   for (

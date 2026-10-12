@@ -1,9 +1,9 @@
-# ViewSelectionManager и modes
+# PanelSelectionManager и modes
 
 Core `editor.selection` хранит generic selection с block ranges, element IDs и
 plugin data. React синхронизирует native DOM endpoints с тем же core state.
 
-На один PanelAPI создаётся один ViewSelectionManager. Все EditorPanel
+На один PanelAPI создаётся один PanelSelectionManager. Все EditorPanel
 обращаются к нему через API, привязанный к DOM-корню конкретного view.
 Ожидающие восстановления курсора хранятся в общем менеджере по DOM-корню:
 новый запрос заменяет предыдущий для того же корня, а закрытие view отменяет

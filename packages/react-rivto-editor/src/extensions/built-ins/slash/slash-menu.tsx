@@ -47,7 +47,7 @@ const DEFAULT_POSITION = { width: 280, maxHeight: 320, gap: 6, viewportPadding: 
 interface SlashSession {
   readonly document?: DocumentModel;
   readonly rootBlockId?: string;
-  readonly viewRoot: HTMLElement;
+  readonly panelRoot: HTMLElement;
   readonly blockId: string;
   readonly slashOffset: number;
   readonly query: string;
@@ -201,12 +201,12 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
         setSession(null);
       } else {
         const position = popupPosition(content, { width, maxHeight, gap, viewportPadding });
-        const viewRoot = panel.events.getRoot();
-        if (!viewRoot) return;
+        const panelRoot = panel.events.getRoot();
+        if (!panelRoot) return;
         setSession({
           document: panel.editor.document.getDocument(),
           rootBlockId: panel.rootBlockId,
-          viewRoot,
+          panelRoot,
           blockId,
           slashOffset: trigger.slashOffset,
           query: trigger.query,
@@ -240,7 +240,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   });
 
   useEffect(() => {
-    if (session && (!session.viewRoot.isConnected || !panel.blocks.hasBlock(session.blockId))) close();
+    if (session && (!session.panelRoot.isConnected || !panel.blocks.hasBlock(session.blockId))) close();
   }, [close, panel, roots, session]);
 
   useDOMEvent({
@@ -250,7 +250,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   }, () => {
     const current = sessionRef.current;
     if (root && current) {
-      const block = findRenderedBlock(current.viewRoot, current.blockId);
+      const block = findRenderedBlock(current.panelRoot, current.blockId);
       const content = block?.querySelector<HTMLElement>(BLOCK_CONTENT_SELECTOR);
       if (!content || content.closest(BLOCK_ID_SELECTOR) !== block) return close();
       refresh(content, current.blockId, false);
@@ -276,8 +276,8 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
 
     panel.selection.scheduleIfSelectionUnchanged(() => {
       if (panel.selection.restoreDOM()) return;
-      current.viewRoot.ownerDocument.getSelection()?.removeAllRanges();
-      current.viewRoot.focus({ preventScroll: true });
+      current.panelRoot.ownerDocument.getSelection()?.removeAllRanges();
+      current.panelRoot.focus({ preventScroll: true });
     });
 
   }, [close, panel, root, slashCommands]);

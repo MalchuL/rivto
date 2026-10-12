@@ -1,13 +1,13 @@
 import type { DocumentModel } from "@chulane/document-model";
 import { ModeManager, type DocumentEditorAPI, type ModeManagerApi } from "@chulane/rivto";
 import type { ReactEditorApi } from "../editor/types";
-import { ViewClipboardManager } from "../managers/clipboard/view-clipboard-manager";
-import { DOCUMENT_VIEW_ATTRIBUTE } from "../managers/events/document-view";
-import { ViewEventManager } from "../managers/events/view-event-manager";
-import { ViewKeyboardManager } from "../managers/keyboard/view-keyboard-manager";
-import type { ViewSelectionApi } from "../managers/selection/api";
-import { ViewSelectionManager } from "../managers/selection/view-selection-manager";
-import { ViewSlashCommandManager } from "../managers/slash/view-slash-command-manager";
+import { PanelClipboardManager } from "../managers/clipboard/panel-clipboard-manager";
+import { PANEL_ATTRIBUTE } from "../managers/events/panel-dom";
+import { PanelEventManager } from "../managers/events/panel-event-manager";
+import { PanelKeyboardManager } from "../managers/keyboard/panel-keyboard-manager";
+import type { PanelSelectionApi } from "../managers/selection/api";
+import { PanelSelectionManager } from "../managers/selection/panel-selection-manager";
+import { PanelSlashCommandManager } from "../managers/slash/panel-slash-command-manager";
 import type { PanelBlocks } from "./panel-blocks";
 import { PanelElements } from "./panel-elements";
 import type { OpenPanelBlock, PanelOptions } from "./types";
@@ -16,29 +16,29 @@ import type { PanelSnapshot, PanelInstance } from "./types";
 /**
  * Connects one EditorPanel or EditorEmbed component to its document, DOM root, and local managers.
  *
- * Each mounted component has its own panel, including repeated views of the
+ * Each mounted component has its own panel, including repeated panels of the
  * same document and embedded subtrees. Blocks, history, extension registrations,
  * and document lifetime belong to the supplied ReactEditorApi and its owner.
  * The panel exposes PanelAPI to components and event handlers while
- * keeping mount, DOM registrations, and local cleanup inside the React view lifecycle.
+ * keeping mount, DOM registrations, and local cleanup inside the React panel lifecycle.
  *
  * Creating the panel does not acquire a document. With EditorStorage, the caller
  * retains the acquisition; without storage the caller keeps owning the React editor.
  * The panel's rootBlockId limits selection and navigation to one subtree.
- * Its registered DOM root determines which view receives local events and shortcuts.
- * Selection reads are empty when another registered view owns the current selection.
+ * Its registered DOM root determines which panel receives local events and shortcuts.
+ * Selection reads are empty when another registered panel owns the current selection.
  *
  * Manager methods and subscriptions keep using their original document after a
  * focus change. Transaction callbacks are synchronous: after awaiting external work,
- * call the same view's managers again rather than expecting a global editing context.
- * Closing this view cancels pending DOM work and local registrations, then releases
- * its local subscriptions. Other views keep their bindings and shared React editor.
+ * call the same panel's managers again rather than expecting a global editing context.
+ * Closing this panel cancels pending DOM work and local registrations, then releases
+ * its local subscriptions. Other panels keep their bindings and shared React editor.
  *
  * React StrictMode may mount the same panel again after cleanup. Its identity
  * stays stable, but the next mount creates a fresh selection manager and installs
  * fresh local bindings. Shared editor ownership never changes during this mount replay.
  *
- * Prepares a view without acquiring or changing document state during render.
+ * Prepares a panel without acquiring or changing document state during render.
  * Loaded models can be read immediately, including server-side rendering.
  * Block boundaries and root protection are configured by the concrete panel.
  * The independent element root selects document elements when null.
@@ -51,13 +51,13 @@ export abstract class Panel implements PanelInstance {
   readonly mode: ModeManagerApi;
   readonly openBlock: OpenPanelBlock | undefined;
   readonly elements: PanelElements;
-  readonly events: ViewEventManager;
-  readonly keyboard: ViewKeyboardManager;
-  readonly clipboard: ViewClipboardManager;
-  readonly slashCommands: ViewSlashCommandManager;
+  readonly events: PanelEventManager;
+  readonly keyboard: PanelKeyboardManager;
+  readonly clipboard: PanelClipboardManager;
+  readonly slashCommands: PanelSlashCommandManager;
   readonly id = crypto.randomUUID();
   private releasePanel: (() => void) | undefined;
-  private selectionManager: ViewSelectionManager;
+  private selectionManager: PanelSelectionManager;
   private root: HTMLElement | null = null;
   private enabled = true;
   private snapshot: PanelSnapshot = { status: "loading" };
@@ -81,16 +81,16 @@ export abstract class Panel implements PanelInstance {
     this.mode = options.mode ?? new ModeManager();
     this.openBlock = options.openBlock;
     this.elements = new PanelElements(this.document.elements, this.document.getDocument(), this.rootElementId);
-    this.events = new ViewEventManager(editor.events, this, editor.panels);
-    this.keyboard = new ViewKeyboardManager(editor.keyboard, this);
-    this.selectionManager = new ViewSelectionManager(this, this.document.selection);
-    this.clipboard = new ViewClipboardManager(editor.clipboard, this);
-    this.slashCommands = new ViewSlashCommandManager(editor.slashCommands, this);
+    this.events = new PanelEventManager(editor.events, this, editor.panels);
+    this.keyboard = new PanelKeyboardManager(editor.keyboard, this);
+    this.selectionManager = new PanelSelectionManager(this, this.document.selection);
+    this.clipboard = new PanelClipboardManager(editor.clipboard, this);
+    this.slashCommands = new PanelSlashCommandManager(editor.slashCommands, this);
     this.updateSnapshot(this.document.getDocument());
   }
 
   /** Selection operations for this occurrence; lifecycle remains internal to this panel instance. */
-  get selection(): ViewSelectionApi { return this.selectionManager; }
+  get selection(): PanelSelectionApi { return this.selectionManager; }
   /** Persisted identity of the document displayed by this occurrence. */
   get documentId(): string { return this.editor.document.getDocument().id; }
   /** Connects the concrete panel's block-card projection and returns its release callback. */
@@ -103,8 +103,8 @@ export abstract class Panel implements PanelInstance {
   readonly getSnapshot = (): PanelSnapshot => this.snapshot;
 
   /**
-   * Returns the DOM root currently available to this view's interaction handlers.
-   * @returns The assigned root, or null when no root is assigned or the view is disabled.
+   * Returns the DOM root currently available to this panel's interaction handlers.
+   * @returns The assigned root, or null when no root is assigned or the panel is disabled.
    */
   readonly getRoot = (): HTMLElement | null => this.enabled ? this.root : null;
 
@@ -114,18 +114,18 @@ export abstract class Panel implements PanelInstance {
     return () => { this.listeners.delete(listener); };
   };
 
-  /** @returns Nothing after notifying local transient UI that this view lost focus. */
+  /** @returns Nothing after notifying local transient UI that this panel lost focus. */
   private readonly deactivate = (): void => { this.deactivationListeners.forEach((listener) => listener()); };
 
   /**
-   * Replaces the DOM root used by this view's events and selection operations.
+   * Replaces the DOM root used by this panel's events and selection operations.
    *
    * The old root is unregistered first, cancelling its pending selection work.
-   * A new root receives the document-view attribute and reflects the enabled state
+   * A new root receives the document-panel attribute and reflects the enabled state
    * through inert. Subtree roots also receive the block-editor accessibility label.
-   * The root is registered for events when the view has a document and is enabled.
+   * The root is registered for events when the panel has a document and is enabled.
    * @param nextRoot - Surface element supplied by useEditorRoot, or null when detached.
-   * @returns Nothing; other views keep their own roots and registrations.
+   * @returns Nothing; other panels keep their own roots and registrations.
    */
   readonly setRoot = (nextRoot: HTMLElement | null): void => {
     if (nextRoot === this.root) return;
@@ -133,7 +133,7 @@ export abstract class Panel implements PanelInstance {
     this.root = nextRoot;
     if (this.root) {
       this.root.inert = !this.enabled;
-      this.root.setAttribute(DOCUMENT_VIEW_ATTRIBUTE, "");
+      this.root.setAttribute(PANEL_ATTRIBUTE, "");
       if (this.rootBlockId) {
         this.root.setAttribute("role", "region");
         this.root.setAttribute("aria-label", "Block editor");
@@ -145,14 +145,14 @@ export abstract class Panel implements PanelInstance {
   /** Cancels pending caret work for this occurrence, including runtime shutdown and root removal. */
   private readonly cancelPendingSelection = (): void => { this.selectionManager.destroy(); };
 
-  /** @param listener - Closes transient UI when another view becomes active. @returns Unsubscribe callback. */
+  /** @param listener - Closes transient UI when another panel becomes active. @returns Unsubscribe callback. */
   readonly subscribeDeactivation = (listener: () => void): () => void => {
     this.deactivationListeners.add(listener);
     return () => { this.deactivationListeners.delete(listener); };
   };
 
   /**
-   * Retains cleanup for an event or keyboard registration made by this view.
+   * Retains cleanup for an event or keyboard registration made by this panel.
    * @param dispose - Removes one local registration without destroying the shared manager.
    * @returns An idempotent disposer; mount cleanup also calls it if it is still retained.
    */
@@ -169,7 +169,7 @@ export abstract class Panel implements PanelInstance {
   };
 
   /**
-   * Mounts local view bindings and observes the selected block root, if any.
+   * Mounts local panel bindings and observes the selected block root, if any.
    *
    * The loading owner retains the shared editor before mounting any panel. This
    * panel never acquires a second consumer from ambient storage. Cancelling
@@ -185,7 +185,7 @@ export abstract class Panel implements PanelInstance {
    */
   readonly mount = (): () => void => {
     this.releasePanel = this.acquireProjection();
-    if (!this.snapshot.api) this.selectionManager = new ViewSelectionManager(this, this.document.selection);
+    if (!this.snapshot.api) this.selectionManager = new PanelSelectionManager(this, this.document.selection);
     this.updateSnapshot(this.document.getDocument(), true);
     if (this.rootBlockId) this.unsubscribeBlock = this.document.blocks.subscribeBlockNode(this.rootBlockId, () => this.updateSnapshot(this.document.getDocument(), true));
     const unsubscribeMode = this.mode.subscribe(() => this.document.history.stopCapturing());
@@ -221,7 +221,7 @@ export abstract class Panel implements PanelInstance {
 
   private readonly registerRoot = (): void => {
     if (!this.enabled || !this.root || !this.snapshot.document || this.unregisterRoot) return;
-    this.unregisterRoot = this.editor.panels.registerDocumentView(
+    this.unregisterRoot = this.editor.panels.registerPanel(
       this.root, this.snapshot.document, this.rootBlockId, this.snapshot.api, this.deactivate, this.cancelPendingSelection,
     );
   };
@@ -231,13 +231,13 @@ export abstract class Panel implements PanelInstance {
    *
    * A subtree is loading until its root block has been observed in this panel.
    * If that root later disappears, the state becomes missing so the document can stay
-   * retained and undo can restore the block. A full-document view is always available
+   * retained and undo can restore the block. A full-document panel is always available
    * once its document is supplied. Subscribers are notified only when the document,
    * status, or retention flag changes; ordinary content edits use block subscriptions.
    *
    * @param document - The document already supplied by the runtime or its acquisition.
    * @param retained - Whether this mount has installed its local bindings; defaults to false.
-   * @returns Nothing; publishes this panel as the view API when state changes.
+   * @returns Nothing; publishes this panel as the panel API when state changes.
    */
   private readonly updateSnapshot = (document: DocumentModel, retained = false): void => {
     const sameDocument = this.snapshot.document === document;

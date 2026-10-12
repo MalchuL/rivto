@@ -11,7 +11,7 @@ const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
 // Keep text endpoints in today's document occurrence, excluding editable
 // source rows rendered by nested views of embedding blocks.
 const textContents = (page: Page): Locator => page.locator(
-  '[data-journal-document="today"] [data-block-content]:not(:empty):not([data-rivto-document-view] [data-rivto-document-view] [data-block-content])',
+  '[data-journal-document="today"] [data-block-content]:not(:empty):not([data-rivto-panel] [data-rivto-panel] [data-block-content])',
 );
 
 // These three consecutive writing blocks have no contentless references

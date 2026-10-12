@@ -46,14 +46,14 @@ test("resolve falls back to DefaultBlockBehavior and indent stays free at the ro
 
 test("asks the resolved behavior whether a drop is accepted", async () => {
   const editor = await createTestCoreEditor();
-  const rejectingView = new RejectingBlockBehavior();
+  const rejectingBehavior = new RejectingBlockBehavior();
   const panel = createReactEditor({
     editor,
     extensions: [
       defaultWritingBlockExtension(),
       {
         id: "test.reject-drop",
-        setup: (reactEditor) => reactEditor.blockBehaviors.register("paragraph", rejectingView),
+        setup: (reactEditor) => reactEditor.blockBehaviors.register("paragraph", rejectingBehavior),
       },
     ],
   });

@@ -377,7 +377,7 @@ describe("edgelessVisualsExtension", () => {
   });
 });
 
-test("one visuals controller binds model reads, writes, and selection to different document views", async () => {
+test("one visuals controller binds model reads, writes, and selection to different document panels", async () => {
   const { DocumentStorage } = await import("@chulane/document-model");
   const { YjsDocumentRegistry } = await import("@chulane/crdt-doc");
   const { createTestReactEditor: createRuntime } = await import("../../../test-utils");
@@ -407,7 +407,7 @@ test("one visuals controller binds model reads, writes, and selection to differe
    await storage.destroy();
 });
 
-test.each(["block", "edgeless"] as const)("visuals render inside native %s views without a default document", async (mode) => {
+test.each(["block", "edgeless"] as const)("visuals render inside native %s panels without a default document", async (mode) => {
   const { DocumentStorage } = await import("@chulane/document-model");
   const { YjsDocumentRegistry } = await import("@chulane/crdt-doc");
   const { createTestReactEditor: createRuntime } = await import("../../../test-utils");
@@ -448,18 +448,18 @@ test.each(["block", "edgeless"] as const)("visuals render inside native %s views
 test("groups Panel roots in sibling order and keeps grouping in one undo step", async () => {
   const { ChildrenPanel } = await import("../../../panels/children-panel");
   const editor = await createDocumentEditor({ mode: "edgeless" });
-  const view = createReactEditor({ editor, extensions: [edgelessSelectionExtension()] });
+  const fullPanel = createReactEditor({ editor, extensions: [edgelessSelectionExtension()] });
   const frame = { x: 10, y: 20, width: 100, height: 100 };
   const parent = editor.elements.insertElement({ type: "container", zIndex: 0, children: [
     { id: "a", type: "rectangle", zIndex: 0, frame },
     { id: "between", type: "rectangle", zIndex: 0, frame },
     { id: "b", type: "rectangle", zIndex: 0, frame },
   ] });
-  const panel = new ChildrenPanel(view.editor, { rootElementId: parent.id });
+  const panel = new ChildrenPanel(fullPanel.editor, { rootElementId: parent.id });
   const controller = new EdgelessVisualController(panel, { toolbar: false });
   expect(controller.getParentId("a")).toBeUndefined();
   expect(controller.getFrame(parent.id)).toBeUndefined();
-  expect(controller.getDocumentView(view).getFrame(parent.id)).toBeDefined();
+  expect(controller.forPanel(fullPanel).getFrame(parent.id)).toBeDefined();
   controller.select(["b", "a"]);
   editor.history.clear();
   const group = controller.group();
@@ -470,13 +470,13 @@ test("groups Panel roots in sibling order and keeps grouping in one undo step", 
   editor.history.undo();
   expect(panel.elements.getRootIds()).toEqual(["a", "between", "b"]);
   expect(editor.elements.hasElement(group.id)).toBe(false);
-  controller.destroy(); view.editor.destroy(); await editor.destroy();
+  controller.destroy(); fullPanel.editor.destroy(); await editor.destroy();
 });
 
 test("connector anchors follow a rotated group's derived frame after a child moves", async () => {
   const editor = await createDocumentEditor({ mode: "edgeless" });
-  const view = createReactEditor({ editor, extensions: [edgelessSelectionExtension()] });
-  const controller = new EdgelessVisualController(view, { toolbar: false });
+  const fullPanel = createReactEditor({ editor, extensions: [edgelessSelectionExtension()] });
+  const controller = new EdgelessVisualController(fullPanel, { toolbar: false });
   const group = editor.elements.insertElement({ type: "group", zIndex: 0, props: { rotation: 90 }, children: [
     { id: "a", type: "rectangle", frame: { x: 0, y: 20, width: 100, height: 40 }, zIndex: 0, props: { rotation: 90 } },
     { id: "b", type: "rectangle", frame: { x: 200, y: 20, width: 100, height: 40 }, zIndex: 0, props: { rotation: 90 } },
@@ -490,5 +490,5 @@ test("connector anchors follow a rotated group's derived frame after a child mov
   expect(source.position.x).toBeCloseTo(150);
   expect(source.position.y).toBeCloseTo(190);
   expect(controller.getRotation(group.id)).toBe(90);
-  controller.destroy(); view.editor.destroy(); editor.destroy();
+  controller.destroy(); fullPanel.editor.destroy(); editor.destroy();
 });

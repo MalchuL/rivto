@@ -3,7 +3,7 @@ import { DOMEventListeners } from "./dom-event-listeners";
 import type { AnyEditorEvent, DOMRegistration, NativeListenerGroup } from "./types";
 /**
  * Browser event registration and dispatch. Event payloads identify the receiving
- * view and its selection; document mutations still go through core managers.
+ * panel and its selection; document mutations still go through core managers.
  */
 import type { EditorMode } from "@chulane/rivto";
 import {
@@ -20,13 +20,13 @@ import type {
 } from "./dom-types";
 import { EditorEvent } from "./editor-event";
 import type { PanelRegistry } from "./panel-registry";
-import type { DocumentViewScope, EditorEventHandler } from "./types";
+import type { PanelRegistration, EditorEventHandler } from "./types";
 
 /**
- * Registers and dispatches browser events for all views of one document.
+ * Registers and dispatches browser events for all panels of one document.
  *
  * DOMEventListeners attaches the native listeners. PanelRegistry chooses the
- * receiving view; this manager creates its EditorEvent and runs matching handlers
+ * receiving panel; this manager creates its EditorEvent and runs matching handlers
  * in registration order. A handled event is not offered to later registrations.
  * KeyboardManager defines keyboard actions and registers its keydown and keyup
  * handlers here, on the editor surface or window.
@@ -61,8 +61,8 @@ export class EventManager {
    * later editor handlers and prevents the browser default when cancellation is allowed,
    * unless definition.preventDefault is false (for native gesture-library event streams).
    * DOM propagation is not stopped. Passive listeners cannot cancel browser defaults.
-   * @param owner - Optional view restricting dispatch to its root and prefixing the ID.
-   * The caller must also retain the disposer for view cleanup.
+   * @param owner - Optional panel restricting dispatch to its root and prefixing the ID.
+   * The caller must also retain the disposer for panel cleanup.
    * @returns Idempotent disposer, also owned by the registering extension.
    * @throws If the ID is empty, already registered in its scope, or the runtime is destroyed.
    */
@@ -72,13 +72,13 @@ export class EventManager {
   >(
     definition: DOMEventDefinition<Target, Type>,
     listener: EditorEventHandler<EditorEvent<Target, Type>>,
-    owner?: DocumentViewScope,
+    owner?: PanelRegistration,
   ): () => void;
 
   register(
     definition: DOMEventDefinition,
     listener: EditorEventHandler<AnyEditorEvent>,
-    owner?: DocumentViewScope,
+    owner?: PanelRegistration,
   ): () => void {
     this.assertActive();
     const id = owner ? `${owner.id}:${definition.id.trim()}` : definition.id.trim();
@@ -112,7 +112,7 @@ export class EventManager {
   /**
    * Deletes one DOM registration by its stable ID.
    *
-   * @param id - Registered ID, including the view prefix for a view-owned registration.
+   * @param id - Registered ID, including the panel prefix for a panel-owned registration.
    * @returns True when a registration existed and was disposed.
    */
   delete(id: string): boolean {

@@ -77,7 +77,7 @@ describe("useBlock", () => {
   });
 });
 
-test("native source views reuse renderers and bind ordinary editor calls without a custom provider", async () => {
+test("native source panels reuse renderers and bind ordinary editor calls without a custom provider", async () => {
   const { DocumentStorage } = await import("@chulane/document-model");
   const { YjsDocumentRegistry } = await import("@chulane/crdt-doc");
   const { standardPreset } = await import("../../extensions/built-ins/built-ins");
@@ -95,10 +95,10 @@ test("native source views reuse renderers and bind ordinary editor calls without
   let result: UseBlockNodeResult | undefined;
   let directWrite: (() => void) | undefined;
   reactEditor.blockTypes.register({ definition: { type: "custom" }, render: ({ blockId }) => {
-    const view = usePanel();
-    expect(view.editor.renderers).toBe(reactEditor.renderers);
-    expect(view.editor.document.getDocument()).toBe(source);
-    directWrite = () => view.editor.document.blocks.updateBlock(blockId, { content: "Direct renderer edit" });
+    const panel = usePanel();
+    expect(panel.editor.renderers).toBe(reactEditor.renderers);
+    expect(panel.editor.document.getDocument()).toBe(source);
+    directWrite = () => panel.editor.document.blocks.updateBlock(blockId, { content: "Direct renderer edit" });
     result = useBlockNode(blockId);
     return createElement("span", { "data-custom": "true" }, result.block?.content);
   } });

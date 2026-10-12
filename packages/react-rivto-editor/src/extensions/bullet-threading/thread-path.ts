@@ -5,7 +5,7 @@
  *
  * @module
  */
-import { DOCUMENT_VIEW_SELECTOR, DocumentViewDOM } from "../../managers/events/document-view";
+import { PANEL_SELECTOR, PanelDOM } from "../../managers/events/panel-dom";
 
 const ROOT_LEAD_RADIUS = 6;
 
@@ -60,13 +60,13 @@ export function buildThreadPath({ root, rootLineOffset, excluded, continued, poi
     const type = block.getAttribute("data-block-type") ?? "";
     return !excluded.has(type) && (!continued || continued.has(type));
   };
-  const dom = new DocumentViewDOM(root);
+  const dom = new PanelDOM(root);
   const active = root.ownerDocument.activeElement;
   const focused = active && root.contains(active) ? dom.getBlock(active) : null;
   if (!focused) return "";
   // An embedding owns its own overlay; the enclosing view must not thread
   // through the source subtree merely because its DOM contains that view.
-  if (active?.closest(DOCUMENT_VIEW_SELECTOR) !== root.closest(DOCUMENT_VIEW_SELECTOR)) return "";
+  if (active?.closest(PANEL_SELECTOR) !== root.closest(PANEL_SELECTOR)) return "";
 
   // Direct and wrapped root blocks share the same document boundary regardless of wrapper depth.
   const roots = dom.getRootBlocks();
