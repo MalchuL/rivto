@@ -177,7 +177,15 @@ export interface BlockRegistryManagerApi {
 
 /** Document-wide element commands; canvas handles expose restricted operations. */
 export interface ElementManagerApi {
-  /** @param parentId - Actual element container. @returns Direct child IDs, empty when absent. */
+  /**
+   * Reads an element's direct child IDs in stored sibling order, excluding descendants.
+   *
+   * The parent itself is excluded. Use getRootIds() to read document roots.
+   *
+   * @param parentId - Stable ID of the element whose direct children should be read.
+   * @returns Read-only child list, with stable identity while its contents are unchanged;
+   * an empty list when the parent is missing or has no children.
+   */
   getChildIds(parentId: string): readonly string[];
   /**
    * Reads one element with its complete recursive child tree.
