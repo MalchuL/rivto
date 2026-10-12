@@ -404,7 +404,7 @@ Rendering должен:
 Block Mode рендерит дерево документа.
 
 ```tsx
-function BlockModeEditor({ editor }: { editor: EditorRuntime }) {
+function BlockModeEditor({ editor }: { editor: ReactEditor }) {
   const rootBlocks = editor.blocks.getBlocks();
 
   return (
@@ -447,7 +447,7 @@ function BlockTreeNode({ editor, blockId }) {
 Edgeless Mode рендерит canvas viewport.
 
 ```tsx
-function EdgelessEditor({ editor }: { editor: EditorRuntime }) {
+function EdgelessEditor({ editor }: { editor: ReactEditor }) {
   const viewport = useViewport(editor);
   const objects = useEdgelessObjects(editor);
 
@@ -519,12 +519,12 @@ if (!renderer) {
 
 ### 9.1 Runtime Responsibilities
 
-`EditorRuntime` — центральный объект редактора.
+`ReactEditor` — центральный объект редактора.
 
 Он должен содержать:
 
 ```ts
-type EditorRuntime = {
+type ReactEditor = {
   document: DocumentModelAdapter;
 
   mode: ModeManager;
@@ -593,7 +593,7 @@ Commands — единый способ изменения документа и 
 
 ```ts
 type CommandContext = {
-  editor: EditorRuntime;
+  editor: ReactEditor;
   document: DocumentModelAdapter;
   selection: SelectionManager;
   mode: EditorMode;
@@ -953,7 +953,7 @@ User types "/cal"
 
 ```ts
 type SlashMenuContext = {
-  editor: EditorRuntime;
+  editor: ReactEditor;
   mode: EditorMode;
   currentBlockId?: BlockId;
   selection: EditorSelection;
@@ -1017,9 +1017,9 @@ type EditorPlugin = {
 
   overlays?: OverlayContribution[];
 
-  onDocumentChange?: (event: DocumentChangeEvent, ctx: EditorRuntime) => void;
+  onDocumentChange?: (event: DocumentChangeEvent, ctx: ReactEditor) => void;
 
-  onSelectionChange?: (selection: EditorSelection, ctx: EditorRuntime) => void;
+  onSelectionChange?: (selection: EditorSelection, ctx: ReactEditor) => void;
 };
 ```
 
@@ -1660,7 +1660,7 @@ document metadata
 
 ### 23.2 Runtime State
 
-Stored in `EditorRuntime`:
+Stored in `ReactEditor`:
 
 ```txt
 current mode
@@ -1786,7 +1786,7 @@ edgeless connector
 ```txt
 src/editor/
   core/
-    EditorRuntime.ts
+    ReactEditor.ts
     EditorContext.ts
     ModeManager.ts
     EventRouter.ts
@@ -1920,7 +1920,7 @@ Mitigation:
 
 Deliver:
 
-* `EditorRuntime`;
+* `ReactEditor`;
 * `DocumentModelAdapter`;
 * `BlockRegistry`;
 * `defineBlock`;

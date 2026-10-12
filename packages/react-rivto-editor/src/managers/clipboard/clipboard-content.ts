@@ -1,5 +1,5 @@
 import { CLIPBOARD_BUNDLE_VERSION, type ClipboardBundle, type EditorBlock, type EditorBlockInput, type EditorElementInput, type EditorElementNode } from "@chulane/rivto";
-import type { ClipboardContent } from "./clipboard-converters";
+import type { ClipboardContent } from "./types";
 
 /** Collects selected element subtrees once, retaining source record order. */
 export function selectedClipboardElements(bundle: ClipboardBundle): EditorElementNode[] {

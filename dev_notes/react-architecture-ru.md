@@ -398,7 +398,7 @@ workspace lint, сборка React-пакета с декларациями — 
 
 ### План: отдельные runtime документа и редактор отображения
 
-Выбран третий вариант: общий EditorRuntime владеет core, регистрациями и
+Выбран третий вариант: общий DocumentEditor владеет core, регистрациями и
 расширениями. ReactEditor предоставляет операции конкретного отображения.
 EditorViewController сохраняет загрузку/удержание документа и mounted lifecycle,
 но не собирает вторую реализацию редактора через объект с замыканиями.
@@ -418,7 +418,7 @@ Stage не изменяется.
 
 Актуальная архитектура заменяет описанный выше промежуточный `createViewApi`.
 
-- `editor-runtime.ts`: `EditorRuntime` создаёт общие менеджеры, устанавливает
+- `editor-runtime.ts`: `DocumentEditor` создаёт общие менеджеры, устанавливает
   расширения один раз и управляет их очисткой. `createEditorRuntime` заменяет
   прежнюю фабрику `createReactEditor`. Model selection остаётся общим core state.
 - `react-editor.tsx`: класс `ReactEditor` получает runtime и владельца отображения.
@@ -538,7 +538,7 @@ model selection и DOM focus. Render — proxy до двух requestAnimationFra
 
 Класс и публичный тип редактора отображения теперь называются `EditorViewApi`,
 файл реализации — `editor-view-api.ts`. Хук переименован в `useEditorView()`,
-проверка типа — в `isEditorViewApi()`. `EditorRuntime`, `EditorViewController`
+проверка типа — в `isEditorViewApi()`. `DocumentEditor`, `EditorViewController`
 и React-компонент `EditorView` сохраняют имена. Поле `event.reactEditor` и поле
 React-контекста пока сохраняют названия: меняются названия типа и хука, а не форма
 payload событий. Старые разделы выше отражают последовательность решений.
@@ -559,7 +559,7 @@ payload событий. Старые разделы выше отражают п
 ### Имена переменных и полей после разделения runtime и отображения
 
 Переменные, параметры и поля с `EditorViewApi` теперь называются `editorView`,
-с `EditorRuntime` — `editorRuntime`. Там, где принимаются оба варианта, используется
+с `DocumentEditor` — `editorRuntime`. Там, где принимаются оба варианта, используется
 `editor`. Контексты событий, slash-команд, block views и React-контекст передают
 API отображения через `editorView`; общий drop-контекст использует `editor`.
 Обновлены demo, тестовые fixtures, проверки и примеры документации. Это также
@@ -580,13 +580,13 @@ Firefox прошли все 8 сценариев mode, block-hooks и review-rep
 ### Общий контракт runtime и отображения
 
 `SharedEditorApi` через один `Pick<EditorViewApi, ...>` описывает общие менеджеры
-документа, регистрации и подписку. `EditorRuntime` явно реализует этот контракт;
+документа, регистрации и подписку. `DocumentEditor` явно реализует этот контракт;
 `EditorViewApi` совместим с ним структурно. Тип экспортируется из пакета.
 DOM-события, selection, clipboard/slash execution и destroy в него не входят:
 их контракты у runtime и отображения различаются.
 
 Общие операции вставки разделителя и drop-контекст используют `SharedEditorApi`.
-`BlockElementProjection` принимает конкретный `EditorRuntime`, который ей владеет.
+`BlockElementProjection` принимает конкретный `DocumentEditor`, который ей владеет.
 Проверка принадлежности блока карточке и чтение keyboard selection получают
 `BlocksCapability` напрямую. Контекст привязанного slash manager теперь записан
 явно как `{ blockId: string }`; сигнатура вызовов и подстановка отображения сохранены.

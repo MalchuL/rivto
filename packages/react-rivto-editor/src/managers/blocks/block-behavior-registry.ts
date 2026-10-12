@@ -1,3 +1,4 @@
+import type { RegistrationOwner } from "../extensions/types";
 import { dispatchBlockAction } from "../../block-behaviors/dispatch";
 /**
  * Registry of per-type block behaviors with a shared generic fallback.
@@ -11,7 +12,7 @@ import { dispatchBlockAction } from "../../block-behaviors/dispatch";
 import type { EditorBlock } from "@chulane/rivto";
 import { DefaultBlockBehavior } from "../../block-behaviors/default-block-behavior";
 import type { BlockBehavior, BlockBehaviorAction, BlockDropDestination } from "../../block-behaviors/types";
-import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { ReactEditorApi } from "../../editor/types";
 import type { BlockBehaviorsApi } from "./block-behaviors-api";
 
 /** Shared fallback used for unregistered and unknown block types. */
@@ -38,9 +39,10 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
   /**
    * Creates a behavior registry bound to one React runtime.
    *
-   * @param editorRuntime - Owning React runtime providing blocks and extension lifecycle.
+   * @param reactEditor - Owning React runtime providing blocks and extension lifecycle.
+   * @param extensions - Internal registration ownership and destruction guard.
    */
-  constructor(private readonly editorRuntime: EditorRuntime) {}
+  constructor(private readonly reactEditor: ReactEditorApi, private readonly extensions: RegistrationOwner) {}
 
   /**
    * Registers one behavior object for a unique non-empty block type.
@@ -51,7 +53,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
    * @throws If the type is empty, already registered, or the runtime is destroyed.
    */
   register(type: string, behavior: BlockBehavior): () => void {
-    this.editorRuntime.extensions.assertActive();
+    this.extensions.assertActive();
     if (!type.trim()) throw new Error("Block behavior type is required");
     if (this.behaviors.has(type)) throw new Error(`Block behavior ${type} is already registered`);
     const registration: {
@@ -62,7 +64,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
       dispose: () => undefined,
     };
     this.behaviors.set(type, registration);
-    registration.dispose = this.editorRuntime.extensions.own(() => {
+    registration.dispose = this.extensions.own(() => {
       if (this.behaviors.get(type) !== registration) return;
       this.behaviors.delete(type);
     });
@@ -76,7 +78,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
    * @returns `true` when a behavior existed and was disposed.
    */
   delete(type: string): boolean {
-    this.editorRuntime.extensions.assertActive();
+    this.extensions.assertActive();
     const registration = this.behaviors.get(type);
     if (!registration) return false;
     registration.dispose();
@@ -113,7 +115,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
    * @returns The registered instance, or the shared default without creating an instance.
    */
   resolve(blockId: string): BlockBehavior {
-    const type = this.editorRuntime.blocks.getBlockNode(blockId)?.type;
+    const type = this.reactEditor.document.blocks.getBlockNode(blockId)?.type;
     return (type && this.behaviors.get(type)?.behavior) || this.fallback;
   }
 
@@ -142,7 +144,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
    */
   acceptsDrop(destination: BlockDropDestination, sources: readonly EditorBlock[]): boolean {
     const parent = destination.parentId
-      ? this.editorRuntime.blocks.getBlock(destination.parentId)
+      ? this.reactEditor.document.blocks.getBlock(destination.parentId)
       : undefined;
     if (destination.parentId && !parent) return false;
     const behavior = parent ? this.resolve(parent.id) : this.fallback;
@@ -150,7 +152,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
       const sourceBehavior = this.get(source.type) ?? this.fallback;
       return (!behavior.dropChildTypes || behavior.dropChildTypes.includes(source.type))
         && (!sourceBehavior.dropParentTypes || Boolean(parent && sourceBehavior.dropParentTypes.includes(parent.type)));
-    }) && behavior.acceptsDrop({ editor: this.editorRuntime, destination, sources });
+    }) && behavior.acceptsDrop({ editor: this.reactEditor, destination, sources });
   }
 
   /** Shared generic behavior used when a type registers no specialization. */

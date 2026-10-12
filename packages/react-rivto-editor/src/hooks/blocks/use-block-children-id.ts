@@ -1,4 +1,4 @@
-import { useEditorContext } from "../../editor-view/editor-context";
+import { useEditorContext } from "../editor/use-editor-context";
 
 /**
  * Names a child region within one mounted editor, including repeated source embeds.

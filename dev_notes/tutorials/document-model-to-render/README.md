@@ -11,7 +11,7 @@ state, но пока не видит, как collaborative document вообще
 ```text
 CRDT storage
   → DocumentModelImpl
-  → EditorRuntime
+  → DocumentEditor
   → React binding
   → renderer
   → DOM
@@ -64,7 +64,7 @@ src/store/
     └── types/document.ts             Block, Link, Snapshot
 
 src/editor/
-├── editor/rivto-editor.ts            commands и invalidation stream
+├── editor/document-editor.ts            commands и invalidation stream
 ├── blocks/
 │   ├── block-definition.ts           presentation contract
 │   └── block-registry.ts             type → definition/renderer

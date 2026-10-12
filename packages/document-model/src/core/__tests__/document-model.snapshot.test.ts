@@ -27,7 +27,7 @@ describe("DocumentModelImpl snapshot and insert preflight", () => {
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "a", type: "paragraph" });
 
-    expect(() => model.blocks.insertBlock({ id: "b", type: "paragraph" }, "missing"))
+    expect(() => model.blocks.insertBlock({ id: "b", type: "paragraph" }, model.blocks.getInsertionDestinationAfter("missing")))
       .toThrow("Target block missing not found");
     expect(model.blocks.getRootIds()).toEqual(["a"]);
     void doc.destroy();

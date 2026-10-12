@@ -62,7 +62,7 @@ async function loadSingleChildReport(page: Page): Promise<void> {
   )) as import("@chulane/rivto").EditorSnapshot;
   await page.evaluate((value) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     editor.load(value);
   }, snapshot);
@@ -72,7 +72,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     const alpha = editor.blocks.insertBlock({ type: "paragraph", content: "Alpha" }).id;
     const beta = editor.blocks.insertBlock({ type: "paragraph", content: "Beta" }).id;
@@ -175,7 +175,7 @@ test("drops a block after the last root container", async ({ page }) => {
 
   await expect.poll(() => page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return editor.blocks.getBlocks().map((block) => block.id);
   })).toEqual([betaId, boardId, alphaId]);
@@ -204,7 +204,7 @@ test("drops a block before the first root container", async ({ page }) => {
   const boardId = await board.getAttribute("data-block-id");
   await page.evaluate(({ alphaId, betaId, boardId }) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     editor.load({
       ...editor.dump(), rootElementIds: [],
@@ -223,7 +223,7 @@ test("drops a block before the first root container", async ({ page }) => {
 
   await expect.poll(() => page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return editor.blocks.getBlocks().map((block) => block.id);
   })).toEqual([betaId, boardId, alphaId]);
@@ -241,7 +241,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.setViewportSize({ width: 1280, height: 1000 });
     const ids = await page.evaluate((nextMode) => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
       }).__rivtoDemo.editor;
       const holder = editor.blocks.insertBlock({
         type: "paragraph", content: "Holder",
@@ -278,7 +278,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.mouse.up();
     await expect.poll(() => page.evaluate(() => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
       }).__rivtoDemo.editor;
       return editor.blocks.getRootIds();
     })).toEqual([ids.holder, ids.first, ids.source, ids.second]);
@@ -307,7 +307,7 @@ test("moves a card out of the demo Kanban into the Kanban–Columns gap", async 
   await page.mouse.up();
   await expect.poll(() => page.evaluate((id) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return editor.blocks.getParentId(id!);
   }, cardId)).toBeNull();
@@ -321,7 +321,7 @@ test("moves a block between the demo TODO storage and Bento", async ({ page }) =
   const source = storage.locator('[data-block-type="todo-item"]').last();
   const ids = await page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     const roots = editor.blocks.getRootIds();
     const storageId = roots.find((id) => editor.blocks.getBlock(id)?.type === "todo-storage")!;
@@ -350,12 +350,12 @@ test("moves a block between the demo TODO storage and Bento", async ({ page }) =
   await page.mouse.up();
   await expect.poll(() => page.evaluate((id) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return editor.blocks.getRootIds().indexOf(id!);
   }, sourceId)).toBe((await page.evaluate((id) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return editor.blocks.getRootIds().indexOf(id);
   }, ids.storageId)) + 1);
@@ -367,7 +367,7 @@ for (const mode of ["block", "edgeless"] as const) {
     test(`centers the ${container.type} root gap like an ordinary block in ${mode}`, async ({ page }) => {
       const ids = await page.evaluate(({ input, nextMode }) => {
         const editor = (window as unknown as {
-          __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
         }).__rivtoDemo.editor;
         const roots = [
           editor.blocks.insertBlock({ id: "gap-source", type: "paragraph", content: "Gap source" }),
@@ -406,7 +406,7 @@ for (const mode of ["block", "edgeless"] as const) {
       await page.mouse.up();
       await expect.poll(() => page.evaluate(() => {
         const editor = (window as unknown as {
-          __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
         }).__rivtoDemo.editor;
         return editor.blocks.getRootIds();
       })).toEqual([ids[1], ids[2], ids[3], ids[0], ids[4], ids[5]]);
@@ -467,7 +467,7 @@ test("shows the only-child outdent line on its parent's bottom edge", async ({ p
     await page.mouse.up();
     await expect.poll(() => page.evaluate(({ sourceId, expectedParentId }) => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
       }).__rivtoDemo.editor;
       const siblings = expectedParentId
         ? editor.blocks.getBlock(expectedParentId)?.children.map(({ id }) => id)
@@ -499,7 +499,7 @@ test("keeps the report's parent body and next-block top edge drop zones", async 
   await page.mouse.up();
   await expect.poll(() => page.evaluate((id) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return editor.blocks.getParentId(id);
   }, REPORT_LEVEL_2_ID)).toBe(REPORT_PARENT_ID);
@@ -514,7 +514,7 @@ test("keeps the report's parent body and next-block top edge drop zones", async 
   await page.mouse.up();
   await expect.poll(() => page.evaluate((id) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return editor.blocks.getParentId(id);
   }, REPORT_LEVEL_2_ID)).toBeNull();
@@ -528,7 +528,7 @@ test("hovering a block in a free container nests inside that block", async ({ pa
   const columnId = await page.locator('[data-block-type="kanban-column"]').first().getAttribute("data-block-id");
   await page.evaluate(({ alphaId, betaId, columnId }) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlocks([alphaId!, betaId!], columnId!, "inside");
   }, { alphaId, betaId, columnId });
@@ -542,7 +542,7 @@ test("hovering a block in a free container nests inside that block", async ({ pa
   await page.mouse.up();
   await expect.poll(() => page.evaluate(({ sourceId }) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return editor.blocks.getParentId(sourceId!);
   }, { sourceId: alphaId })).toBe(betaId);
@@ -559,7 +559,7 @@ test("an empty kanban column still accepts an inside drop on its body", async ({
   await page.mouse.up();
   await expect.poll(() => page.evaluate(({ sourceId }) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return sourceId ? editor.blocks.getParentId(sourceId) : undefined;
   }, { sourceId: alphaId })).toBe(emptyId);
@@ -568,7 +568,7 @@ test("an empty kanban column still accepts an inside drop on its body", async ({
 test("does not add an ordinary block directly to an empty kanban", async ({ page }) => {
   const boardId = await page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return editor.blocks.insertBlock({ type: "kanban", content: "Empty board" }).id;
   });
@@ -581,7 +581,7 @@ test("does not add an ordinary block directly to an empty kanban", async ({ page
   await page.mouse.up();
   expect(await page.evaluate(({ sourceId, targetId }) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return { parentId: editor.blocks.getParentId(sourceId!), childIds: editor.blocks.getBlock(targetId)?.children.map(({ id }) => id) };
   }, { sourceId: alphaId, targetId: boardId })).toEqual({ parentId: null, childIds: [] });
@@ -590,7 +590,7 @@ test("does not add an ordinary block directly to an empty kanban", async ({ page
 test("moves an ordinary block between sibling kanban columns", async ({ page }) => {
   const ids = await page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     const alpha = editor.blocks.getRootIds().find((id) => editor.blocks.getBlock(id)?.content === "Alpha")!;
     const board = editor.blocks.getRootIds().find((id) => editor.blocks.getBlock(id)?.type === "kanban")!;
@@ -606,7 +606,7 @@ test("moves an ordinary block between sibling kanban columns", async ({ page }) 
   await page.mouse.up();
   await expect.poll(() => page.evaluate((id) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return editor.blocks.getParentId(id);
   }, ids.alpha)).toBe(ids.second);
@@ -635,7 +635,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.setViewportSize({ width: 1280, height: 1000 });
     const ids = await page.evaluate((nextMode) => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
       }).__rivtoDemo.editor;
       const inputs = [
         { type: "paragraph", content: "Ordinary source" },
@@ -719,7 +719,7 @@ for (const mode of ["block", "edgeless"] as const) {
       await page.mouse.up();
       await expect.poll(() => page.evaluate((sourceId) => {
         const editor = (window as unknown as {
-          __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
         }).__rivtoDemo.editor;
         return editor.blocks.getParentId(sourceId);
       }, dragCase.source)).toBe(dragCase.expectedParent);

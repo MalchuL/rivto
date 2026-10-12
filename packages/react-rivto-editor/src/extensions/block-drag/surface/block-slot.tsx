@@ -10,7 +10,7 @@
  *
  * @module
  */
-import { useEditorView } from "../../../editor-view/use-editor-view";
+import { usePanel } from "../../../hooks/editor/use-panel";
 import { editorControlProps } from "../../../constants";
 import { useCallback, useContext, useRef, useSyncExternalStore } from "react";
 import { GripVerticalIcon } from "lucide-react";
@@ -27,7 +27,7 @@ const PAGE_DRAG_HANDLE_CLASS = "page-drag-handle";
  */
 export function PageDragBlockSlot({ block }: BlockSlotProps) {
   const item = useContext(PageDragItemContext);
-  const editorView = useEditorView();
+  const panel = usePanel();
   const clickSequence = useRef(0);
   const subscribe = useCallback(
     (listener: () => void) => item?.placements.subscribe(block.id, listener) ?? (() => undefined),
@@ -46,15 +46,15 @@ export function PageDragBlockSlot({ block }: BlockSlotProps) {
       type="button"
       className={`${PAGE_DRAG_HANDLE_CLASS} inline-flex items-center justify-center`}
       aria-label={`Move block: ${block.content || block.type}`}
-      aria-description={editorView.openBlock ? "Enter opens this block. Space starts dragging." : undefined}
+      aria-description={panel.openBlock ? "Enter opens this block. Space starts dragging." : undefined}
       contentEditable={false}
       onPointerDownCapture={() => { clickSequence.current = item.placements.getDragSequence(); }}
       onKeyDownCapture={(event) => {
-        if (event.key === "Enter" && editorView.openBlock && !item.placements.isDragged(block.id)) {
+        if (event.key === "Enter" && panel.openBlock && !item.placements.isDragged(block.id)) {
           // Reserve Enter for opening; Space still starts a keyboard drag.
           event.preventDefault();
           event.stopPropagation();
-          editorView.openBlock(block.id);
+          panel.openBlock(block.id);
           return;
         }
         if (event.key === "Enter" || event.key === " ") {
@@ -64,7 +64,7 @@ export function PageDragBlockSlot({ block }: BlockSlotProps) {
       onClick={(event) => {
         if (event.defaultPrevented || item.placements.isDragged(block.id)
           || clickSequence.current !== item.placements.getDragSequence()) return;
-        editorView.openBlock?.(block.id);
+        panel.openBlock?.(block.id);
       }}
       onPointerEnter={arm}
       onFocus={arm}

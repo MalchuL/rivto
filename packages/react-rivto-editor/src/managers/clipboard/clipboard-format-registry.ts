@@ -1,49 +1,6 @@
-import type { ClipboardBundle, EditorElementNode } from "@chulane/rivto";
-import type { ClipboardContent, ClipboardParseContext } from "./clipboard-converters";
-import type { EditorBlock, EditorBlockInput } from "@chulane/rivto";
+import type { ClipboardBundle, EditorBlock, EditorBlockInput, EditorElementNode } from "@chulane/rivto";
 import type { RegistrationOwner } from "../extensions/types";
-
-/** Portable text representations produced for one block forest. */
-export interface PortableBlockFormats {
-  /** Unformatted text suitable for `text/plain`. */
-  readonly plain: string;
-  /** Markdown representation suitable for `text/markdown`. */
-  readonly markdown: string;
-  /** HTML fragment suitable for `text/html`. */
-  readonly html: string;
-}
-
-/** Structural context supplied while formatting one block. */
-export interface ClipboardFormatContext {
-  /** Current detached block being formatted. */
-  readonly block: EditorBlock;
-  /** Ordered siblings containing the current block. */
-  readonly siblings: readonly EditorBlock[];
-  /** Zero-based position of the current block among its siblings. */
-  readonly index: number;
-  /** Zero-based nesting depth in the copied block forest. */
-  readonly depth: number;
-  /** Already formatted descendant forest. */
-  readonly children: PortableBlockFormats;
-}
-
-/** Ordered contribution that may rewrite portable formats for matching blocks. */
-export interface ClipboardFormatter {
-  /** Stable ID used to prevent duplicate formatter registration. */
-  readonly id: string;
-  /** Optional predicate; returning `false` skips this formatter for the block. */
-  readonly matches?: (context: ClipboardFormatContext) => boolean;
-  /** Produces the next formats from structural context and preceding output. */
-  readonly format: (context: ClipboardFormatContext, current: PortableBlockFormats) => PortableBlockFormats;
-}
-
-/** Candidate parser consulted in registration order for external clipboard data. */
-export interface ClipboardParser {
-  /** Stable ID used to prevent duplicate parser registration. */
-  readonly id: string;
-  /** Returns parsed block inputs on a match or `undefined` to try the next parser. */
-  readonly parse: (data: { readonly html: string; readonly text: string }) => EditorBlockInput[] | undefined;
-}
+import type { ClipboardContent, ClipboardFormatter, ClipboardParseContext, ClipboardParser, PortableBlockFormats } from "./types";
 
 /** Escapes text before including it in exported clipboard HTML. */
 export const escapeClipboardHTML = (value: string): string => value.replace(/[&<>"']/g, (character) => ({

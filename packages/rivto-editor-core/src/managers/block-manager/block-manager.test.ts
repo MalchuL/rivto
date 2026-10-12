@@ -49,7 +49,7 @@ describe("block feature ownership independent of presentation", () => {
       content: "First",
       children: [{ type: "paragraph", content: "Child" }],
     });
-    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first.id);
+    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(first.id));
     const getBlock = jest.spyOn(editor.runtime.blocks, "getBlock");
 
     const updated = editor.blocks.updateBlock(first.id, { content: "Updated" });
@@ -212,8 +212,8 @@ describe("block feature ownership independent of presentation", () => {
   it("indents only the supplied ids even when other blocks are selected", async () => {
     const editor = await createTestEditor();
     const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" }).id;
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId).id;
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
+    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, editor.blocks.getInsertionDestinationAfter(previousId)).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(firstId)).id;
     editor.selection.set(createStructuralSelection([firstId, secondId], firstId, secondId));
     editor.blocks.indentBlock(firstId);
     expect(editor.blocks.getBlocks()).toMatchObject([

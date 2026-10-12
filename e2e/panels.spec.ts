@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-type Inspection = { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi; editorRuntime: import("@chulane/rivto-react").EditorRuntime } };
+type Inspection = { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI; reactEditor: import("@chulane/rivto-react").ReactEditor } };
 
 async function seed(page: Page, repeat = 0) {
   await page.goto(`/?repeat=${repeat}`);
@@ -11,7 +11,7 @@ async function seed(page: Page, repeat = 0) {
     const root = editor.blocks.insertBlock({ type: "paragraph", content: "Panel section", children: [
       { type: "paragraph", content: "Panel child" },
       { type: "paragraph", content: "Panel branch", children: [{ type: "paragraph", content: "Panel detail" }] },
-    ] }, first);
+    ] }, editor.blocks.getInsertionDestinationAfter(first));
     return { root: root.id, child: root.children[0]!.id, branch: root.children[1]!.id, detail: root.children[1]!.children[0]!.id };
   });
 }
@@ -63,26 +63,26 @@ test("creates and reuses a separate element group for an empty Panel", async ({ 
   await expect(today.locator('[data-edgeless-root]')).toHaveCount(1);
   const elementRoot = await today.locator('[data-panel-root]').getAttribute("data-panel-element-root");
   expect(elementRoot).toBeTruthy();
-  const container = await page.evaluate((id) => (window as unknown as Inspection).__rivtoDemo.editorRuntime.elements.getElementNode(id!), elementRoot);
+  const container = await page.evaluate((id) => (window as unknown as Inspection).__rivtoDemo.reactEditor.document.elements.getElementNode(id!), elementRoot);
   expect(container?.type).toBe("group");
   expect(container?.childIds).toHaveLength(1);
   const original = await page.evaluate((elementRoot) => {
-    const { editorRuntime } = (window as unknown as Inspection).__rivtoDemo;
-    const elements = editorRuntime.elements;
-    const card = elements.forRoot(elementRoot!).getElementNodes().find((element) => element.type === "block")!;
+    const { reactEditor } = (window as unknown as Inspection).__rivtoDemo;
+    const elements = reactEditor.document.elements;
+    const card = elements.getChildIds(elementRoot!).map(id => elements.getElementNode(id)!).find((element) => element.type === "block")!;
     const other = elements.getElementNodes().filter((element) => element.id !== card.id);
     elements.updateElement(card.id, { frame: { x: 444 } });
     return { other, cardId: card.id, parentId: elements.getParentId(card.id) };
   }, elementRoot);
   expect(original.parentId).toBe(elementRoot);
-  expect(await page.evaluate((cardId) => (window as unknown as Inspection).__rivtoDemo.editorRuntime.elements.getElementNodes()
+  expect(await page.evaluate((cardId) => (window as unknown as Inspection).__rivtoDemo.reactEditor.document.elements.getElementNodes()
     .filter((element) => element.id !== cardId), original.cardId)).toEqual(original.other);
   await today.getByRole("navigation").getByRole("button", { name: "Document", exact: true }).click();
   await expect(today.locator('.page-surface').first()).toBeVisible();
   await open(page, ids.child);
   await expect(today.locator('[data-edgeless-root]')).toHaveCount(1);
   await expect(today.locator('[data-panel-root]')).toHaveAttribute("data-panel-element-root", elementRoot!);
-  expect(await page.evaluate((id) => (window as unknown as Inspection).__rivtoDemo.editorRuntime.elements.getElementNode(id)!.frame.x, original.cardId)).toBe(444);
+  expect(await page.evaluate((id) => (window as unknown as Inspection).__rivtoDemo.reactEditor.document.elements.getElementNode(id)!.frame.x, original.cardId)).toBe(444);
 });
 
 test("does not open a Panel after dragging or cancelling a drag", async ({ page }) => {
@@ -101,17 +101,17 @@ test("does not open a Panel after dragging or cancelling a drag", async ({ page 
 test("pastes a group and connector into a Panel inside its own element group without changing source elements", async ({ page }) => {
   const ids = await seed(page);
   const bundle = await page.evaluate(() => {
-    const { editorRuntime } = (window as unknown as Inspection).__rivtoDemo;
+    const { reactEditor } = (window as unknown as Inspection).__rivtoDemo;
     const input = { childIds: [], type: "rectangle", frame: { x: 10, y: 10, width: 100, height: 60 }, zIndex: 2 };
-    return editorRuntime.history.batchUpdates(() => {
-      const a = editorRuntime.elements.insertElement(input);
-      const b = editorRuntime.elements.insertElement({ ...input, frame: { ...input.frame, x: 200 } });
-      const connector = editorRuntime.elements.insertElement({ ...input, type: "connector", frame: { x: 110, y: 40, width: 90, height: 1 }, props: {
+    return reactEditor.document.history.batchUpdates(() => {
+      const a = reactEditor.document.elements.insertElement(input);
+      const b = reactEditor.document.elements.insertElement({ ...input, frame: { ...input.frame, x: 200 } });
+      const connector = reactEditor.document.elements.insertElement({ ...input, type: "connector", frame: { x: 110, y: 40, width: 90, height: 1 }, props: {
         source: { elementId: a.id, anchor: { x: 1, y: 0.5 }, position: { x: 110, y: 40 } },
         target: { elementId: b.id, anchor: { x: 0, y: 0.5 }, position: { x: 200, y: 40 } }, route: "straight",
       } });
-      const group = editorRuntime.elements.insertElement({ ...input, type: "group", childIds: [a.id, b.id, connector.id], props: {} });
-      return { version: 4, blocks: [], elements: [a, b, connector, group].map(({ id }) => editorRuntime.elements.getElementNode(id)!), selectedElementIds: [group.id] };
+      const group = reactEditor.document.elements.insertElement({ ...input, type: "group", childIds: [a.id, b.id, connector.id], props: {} });
+      return { version: 4, blocks: [], elements: [a, b, connector, group].map(({ id }) => reactEditor.document.elements.getElementNode(id)!), selectedElementIds: [group.id] };
     });
   });
   await open(page, ids.child);
@@ -119,7 +119,7 @@ test("pastes a group and connector into a Panel inside its own element group wit
   await today.getByRole("button", { name: "Edgeless", exact: true }).click();
   const root = today.locator('[data-rivto-surface="edgeless"]');
   await root.focus();
-  const beforeIds = await page.evaluate(() => (window as unknown as Inspection).__rivtoDemo.editorRuntime.elements.getElementNodes().map(({ id }) => id));
+  const beforeIds = await page.evaluate(() => (window as unknown as Inspection).__rivtoDemo.reactEditor.document.elements.getElementNodes().map(({ id }) => id));
   await root.evaluate((element, bundle) => {
     const transfer = new DataTransfer();
     transfer.setData('application/x-rivto+json', JSON.stringify(bundle));
@@ -129,13 +129,13 @@ test("pastes a group and connector into a Panel inside its own element group wit
     element.dispatchEvent(event);
   }, bundle);
   const sourceIds = bundle.elements.map((element) => element.id);
-  await expect.poll(() => page.evaluate((sourceIds) => (window as unknown as Inspection).__rivtoDemo.editorRuntime.elements.getElementNodes()
+  await expect.poll(() => page.evaluate((sourceIds) => (window as unknown as Inspection).__rivtoDemo.reactEditor.document.elements.getElementNodes()
     .filter((element) => element.type !== "block" && !sourceIds.includes(element.id)).length, beforeIds)).toBe(4);
-  const elements = await page.evaluate((sourceIds) => (window as unknown as Inspection).__rivtoDemo.editorRuntime.elements.getElementNodes()
+  const elements = await page.evaluate((sourceIds) => (window as unknown as Inspection).__rivtoDemo.reactEditor.document.elements.getElementNodes()
     .filter((element) => element.type !== "block" && !sourceIds.includes(element.id)), beforeIds);
   const group = elements.find((element) => element.type === 'group')!;
   expect(group.childIds).toHaveLength(3);
-  expect(await page.evaluate((sourceIds) => sourceIds.map((id) => (window as unknown as Inspection).__rivtoDemo.editorRuntime.elements.getElementNode(id)), sourceIds)).toEqual(bundle.elements);
+  expect(await page.evaluate((sourceIds) => sourceIds.map((id) => (window as unknown as Inspection).__rivtoDemo.reactEditor.document.elements.getElementNode(id)), sourceIds)).toEqual(bundle.elements);
 });
 
 
@@ -165,7 +165,7 @@ test("Enter creates siblings inside the Panel and extends its edgeless card", as
   const newContent = today.locator(`[data-block-id="${sibling}"] [data-block-content]`).first();
   await expect(newContent).toBeVisible();
   await expect.poll(() => page.evaluate((childId) => {
-    return (window as unknown as Inspection).__rivtoDemo.editorRuntime.elements.getElementNodes()
+    return (window as unknown as Inspection).__rivtoDemo.reactEditor.document.elements.getElementNodes()
       .find((element) => element.props.startBlockId === childId)?.props.endBlockId;
   }, ids.child)).toBe(sibling);
   await newContent.press("Enter");
@@ -178,9 +178,9 @@ test("drags a Panel element without selecting its excluded root group", async ({
   const today = page.locator('[data-journal-document="today"]');
   const rootId = await today.locator('[data-panel-root]').getAttribute("data-panel-element-root");
   await page.evaluate((rootId) => {
-    const elements = (window as unknown as Inspection).__rivtoDemo.editorRuntime.elements;
+    const elements = (window as unknown as Inspection).__rivtoDemo.reactEditor.document.elements;
     elements.insertElement({ id: "outside-panel", type: "rectangle", frame: { x: 300, y: 100, width: 120, height: 80 }, zIndex: 1000 });
-    elements.forRoot(rootId!).insertElement({ id: "inside-panel", type: "rectangle", frame: { x: 100, y: 100, width: 120, height: 80 }, zIndex: 1000 });
+    elements.insertElement({ id: "inside-panel", type: "rectangle", frame: { x: 100, y: 100, width: 120, height: 80 }, zIndex: 1000 }, { parentId: rootId! });
   }, rootId);
   await today.getByRole("button", { name: "Edgeless", exact: true }).click();
   await expect(today.locator('[data-edgeless-object-id="outside-panel"]')).toHaveCount(0);

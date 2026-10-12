@@ -14,10 +14,7 @@ import {
   blockIdsOf,
   insertBlockElementSeparator,
 } from "../../elements/block-element-projection";
-import {
-  type ReactBlockRegistration,
-  type ReactEditorExtension,
-} from "../../managers";
+import { type ReactBlockRegistration, type ReactEditorExtension } from "../../managers";
 import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard/clipboard";
 import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
 import { registerHistory, type HistoryExtensionOptions } from "./history/history";
@@ -30,11 +27,7 @@ import type { DefaultWritingBlockOptions } from "./page/default-writing-block/ty
 import { registerEmptyBlockReset } from "./page/empty-block-reset";
 import { registerIndent, type IndentExtensionOptions } from "./page/indent";
 import { registerListShortcuts } from "./page/list";
-import {
-  registerBlockSelectionNavigation,
-  registerCaretNavigation,
-  registerKeyboardBlockMove,
-} from "./page/navigation";
+import { registerBlockSelectionNavigation, registerCaretNavigation, registerKeyboardBlockMove } from "./page/navigation";
 import { registerTrailingBlock } from "./page/trailing-block";
 import { registerBlockSelection } from "./selection/block-selection";
 import { registerSelectionDeletion } from "./selection/selection-deletion";
@@ -54,10 +47,9 @@ export function defaultWritingBlockExtension(
 ): ReactEditorExtension {
   return {
     id: "block.default-writing",
-    setup: (editorRuntime) => registerDefaultWritingBlock(editorRuntime, options),
+    setup: (reactEditor) => registerDefaultWritingBlock(reactEditor, options),
   };
 }
-
 
 /**
  * Installs CRDT-backed undo/redo and native contenteditable history suppression.
@@ -66,7 +58,7 @@ export function defaultWritingBlockExtension(
  * @returns A mode-independent history extension.
  */
 export const historyExtension = (options: HistoryExtensionOptions = {}): ReactEditorExtension => {
-  return { id: "history", setup: (editorRuntime) => registerHistory(editorRuntime, options) };
+  return { id: "history", setup: (reactEditor) => registerHistory(reactEditor, options) };
 };
 
 /** @returns DOM-to-editor text and cross-block selection synchronization. */
@@ -82,7 +74,7 @@ export const textSelectionExtension = (): ReactEditorExtension => ({
  * @returns A mode-independent clipboard extension.
  */
 export const clipboardExtension = (options: ClipboardExtensionOptions = {}): ReactEditorExtension => {
-  return { id: "clipboard", setup: (editorRuntime) => registerClipboard(editorRuntime, options) };
+  return { id: "clipboard", setup: (reactEditor) => registerClipboard(reactEditor, options) };
 };
 
 /** @returns Pointer and modifier-based whole-block selection for every surface. */
@@ -137,7 +129,7 @@ export const trailingBlockExtension = (count: number): ReactEditorExtension => {
   }
   return {
     id: "block.trailing-create",
-    setup: (editorRuntime) => registerTrailingBlock(editorRuntime, count),
+    setup: (reactEditor) => registerTrailingBlock(reactEditor, count),
   };
 };
 
@@ -170,7 +162,7 @@ export type { IndentExtensionOptions } from "./page/indent";
 export const indentExtension = (options: IndentExtensionOptions = {}): ReactEditorExtension => {
   return {
     id: "block.indent",
-    setup: (editorRuntime) => registerIndent(editorRuntime, options),
+    setup: (reactEditor) => registerIndent(reactEditor, options),
   };
 };
 
@@ -191,62 +183,62 @@ export const collapseExtension = (): ReactEditorExtension => ({
  */
 export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): ReactEditorExtension => ({
   id: "slash.commands",
-  setup: (editorRuntime) => {
-    editorRuntime.extensions.mount(() => createElement(SlashMenu, { options }));
+  setup: (reactEditor) => {
+    reactEditor.extensions.mount(() => createElement(SlashMenu, { options }));
     const disposers = [
       // Copy the complete detached subtree through its type converters. Import assigns
       // fresh identities and retains type, content, list state, props, plugin data
       // and descendants without sharing mutable payloads with the source tree.
-      editorRuntime.slashCommands.register({
+      reactEditor.slashCommands.register({
         id: "block.duplicate",
         title: "Duplicate block",
         group: "Actions",
         keywords: ["copy", "clone"],
-        isAvailable: ({ blockId }) => editorRuntime.blocks.hasBlock(blockId),
-        execute: ({ blockId, editorView }) => {
-          const block = editorView.runtime.blocks.getBlock(blockId);
+        isAvailable: ({ blockId }) => reactEditor.document.blocks.hasBlock(blockId),
+        execute: ({ blockId, panel }) => {
+          const block = panel.blocks.getBlock(blockId);
           if (!block) return;
-          const bundle = editorRuntime.clipboard.copy(createStructuralSelection([blockId]), editorView, "duplicate");
+          const bundle = reactEditor.clipboard.copy(createStructuralSelection([blockId]), panel, "duplicate");
           if (!bundle) return;
           // Use the receiving view: a page embedding can share an edgeless core.
           // Duplicating there should insert a sibling, not create a canvas card.
-          const isEdgelessRoot = editorView.events.getSurfaceType() === "edgeless" && editorView.getRootBlockIds().includes(blockId);
+          const isEdgelessRoot = panel.events.getSurfaceType() === "edgeless" && panel.blocks.getRootIds().includes(blockId);
           const sourceElement = isEdgelessRoot
-            ? editorView.elements.getElementNodes().find((element) => element.type === "block" && blockIdsOf(element, editorView.getRootBlockIds()).includes(blockId))
+            ? panel.elements.getElementNodes().find((element) => element.type === "block" && blockIdsOf(element, panel.blocks.getRootIds()).includes(blockId))
             : undefined;
           let duplicateId = "";
-          editorView.runtime.history.batchUpdates(() => {
-            const afterId = isEdgelessRoot ? editorView.getRootBlockIds().at(-1)! : block.id;
-            editorRuntime.clipboard.paste({
+          panel.editor.document.history.batchUpdates(() => {
+            const afterId = isEdgelessRoot ? panel.blocks.getRootIds().at(-1)! : block.id;
+            reactEditor.clipboard.paste({
               bundle,
               textTarget: createStructuralSelection([]),
               placement: { afterId, mergeText: false },
-            }, editorView, "duplicate");
-            duplicateId = editorView.selection.get()?.blocks[0]?.id ?? "";
+            }, panel, "duplicate");
+            duplicateId = panel.selection.get()?.blocks[0]?.id ?? "";
             if (!duplicateId) return;
-            if (isEdgelessRoot) insertBlockElementSeparator(editorView.runtime, afterId);
-            if (isEdgelessRoot) editorView.elements.insertElement({
+            if (isEdgelessRoot) insertBlockElementSeparator(panel.editor, afterId);
+            if (isEdgelessRoot) panel.elements.insertElement({
               type: "block",
               frame: sourceElement
                 ? { ...sourceElement.frame, x: sourceElement.frame.x + 24, y: sourceElement.frame.y + 24 }
                 : { x: 84, y: 84, width: 320, height: 120 },
-              zIndex: Math.max(0, ...editorView.elements.getElementNodes().map((element) => element.zIndex)) + 1,
+              zIndex: Math.max(0, ...panel.elements.getElementNodes().map((element) => element.zIndex)) + 1,
               props: { ...sourceElement?.props, startBlockId: duplicateId, endBlockId: duplicateId },
             });
           });
-          editorView.selection.set(createStructuralSelection([duplicateId]));
+          panel.selection.set(createStructuralSelection([duplicateId]));
         },
       }),
       // Route deletion through structural selection so descendants are atomic.
-      editorRuntime.slashCommands.register({
+      reactEditor.slashCommands.register({
         id: "block.delete",
         title: "Delete block",
         group: "Actions",
         keywords: ["remove"],
-        isAvailable: ({ blockId }) => editorRuntime.blocks.hasBlock(blockId),
-        execute: ({ blockId, editorView }) => {
-          editorView.selection.set(createStructuralSelection([blockId]));
-          editorView.selection.delete();
+        isAvailable: ({ blockId }) => reactEditor.document.blocks.hasBlock(blockId),
+        execute: ({ blockId, panel }) => {
+          panel.selection.set(createStructuralSelection([blockId]));
+          panel.selection.delete();
         },
       }),
     ];
@@ -260,8 +252,8 @@ export const blockExtension = (
   registration: ReactBlockRegistration,
 ): ReactEditorExtension => ({
   id: `block.${registration.definition.type}`,
-  setup: (editorRuntime) => {
-    editorRuntime.blockTypes.register(registration);
+  setup: (reactEditor) => {
+    reactEditor.blockTypes.register(registration);
   },
 });
 
@@ -312,11 +304,11 @@ export const standardPreset = (
   ];
   return {
     id: "rivto.standard",
-    setup: (editorRuntime) => {
+    setup: (reactEditor) => {
       const cleanups: Array<() => void> = [];
       try {
         for (const extension of extensions) {
-          const cleanup = extension.setup(editorRuntime);
+          const cleanup = extension.setup(reactEditor);
           if (cleanup) cleanups.push(cleanup);
         }
       } catch (error) {

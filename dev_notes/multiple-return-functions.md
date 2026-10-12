@@ -277,7 +277,7 @@ Marked: 56 changed, 24 guard-only.
 - stopPan:180 (2 returns, guards only)
 - <anonymous>:220 (2 returns, guards only)
 
-## [ X ] packages/rivto-editor-core/src/editor/rivto-editor.ts
+## [ X ] packages/rivto-editor-core/src/editor/document-editor.ts
 - <anonymous>:320 (2 returns, guards only)
 - <anonymous>:337 (2 returns, guards only)
 

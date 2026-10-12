@@ -46,8 +46,8 @@ export const createErrorBlockInput = (block: EditorBlockInput, error: unknown): 
  */
 export const errorBlockExtension = (): ReactEditorExtension => ({
   id: "block.error",
-  setup: (editorRuntime) => {
-    editorRuntime.blockTypes.register({
+  setup: (reactEditor) => {
+    reactEditor.blockTypes.register({
       definition: { type: ERROR_BLOCK_TYPE, title: "Invalid block" },
       render: ErrorBlock,
       clipboard: {

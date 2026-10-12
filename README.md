@@ -88,78 +88,35 @@ The package directories and public names differ; see the package map below.
 ### Create a React editor
 
 ```tsx
-import { useEffect, useState } from "react";
-import { YjsDocumentRegistry } from "@chulane/crdt-doc";
-import { DocumentStorage } from "@chulane/document-model";
-import {
-  createEditorRuntime, EditorStorage, EditorStorageContext, EditorView, PageSurface, standardPreset,
-  type EditorRuntime,
-} from "@chulane/rivto-react";
+import type { DocumentModel } from "@chulane/document-model";
+import { EditorPanel, PageSurface, standardPreset, useReactEditor } from "@chulane/rivto-react";
 import "@chulane/rivto-react/styles.css";
 
-export function DocumentEditor() {
-  const [view, setView] = useState<{ editorRuntime: EditorRuntime; editors: EditorStorage; releaseInitial: () => Promise<void> } | null>(null);
-  useEffect(() => {
-    let active = true;
-    const documents = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
-    documents.registerDocument("document-id");
-    const editors = new EditorStorage({
-      openDocument: (id) => documents.openDocument(id),
-      createEditor: (editor) => createEditorRuntime({
-        editor,
-        extensions: [standardPreset()],
-      }),
-    });
-    void editors.acquireEditor("document-id").then((acquisition) => {
-      acquisition.editor.blocks.insertBlock({ type: "paragraph", content: "Hello **Rivto**!" });
-      if (active) setView({ editorRuntime: acquisition.editor, editors, releaseInitial: acquisition.release });
-      else void acquisition.release();
-    }).catch(console.error);
-    return () => {
-      active = false;
-      void editors.destroy().then(() => documents.destroy()).catch(console.error);
-    };
-  }, []);
-  return view ? <EditorStorageContext.Provider value={view.editors}>
-    <EditorView runtime={view.editorRuntime} onReady={view.releaseInitial}><PageSurface /></EditorView>
-  </EditorStorageContext.Provider> : null;
+export function DocumentEditor({ document }: { document: DocumentModel }) {
+  const state = useReactEditor({ document, extensions: [standardPreset()] });
+  if (state.status === "loading") return <p>Loading…</p>;
+  if (state.status === "error") return <p>Editor setup failed</p>;
+  return <EditorPanel editor={state.editor}><PageSurface /></EditorPanel>;
 }
 ```
 
-Each core and EditorRuntime permanently belongs to one model. `EditorStorage` loads and
-caches both layers, with a host factory supplying fresh extensions per document.
-Each `EditorView` receives that document's runtime and constructs its own
-`EditorViewApi` for DOM operations. Inside an
-`EditorStorageContext.Provider`, it automatically retains its document while
-mounted, including nested embedding views; the runtime itself has no storage reference.
+The host supplies and owns the DocumentModel. `useReactEditor` creates core and React
+resources after commit and disposes them on unmount or document replacement without
+destroying that model. Share one hook result across several editor panels. Extensions
+and keymap are creation settings; remount the owner to replace them.
 
-Use `await editors.getSingleEditor(documentId)` to explicitly retain a core until
-`editors.closeEditor(documentId)`. Storage creates the core and passes it to the
-React factory; EditorViewApi exposes its managers for ordinary editing commands.
-Ordinary commands require no document routing. Clipboard ID
-allocation belongs to document managers; application subclasses can enforce a
-shared database namespace even for closed documents. Transfers preserve IDs and
-keep independent histories. See [embeddings.md](embeddings.md) and
-[the demo database model](demo/src/database.ts) for the complete lifecycle.
+`ReactEditorApi.document` exposes the framework-neutral DocumentEditorAPI. Components use
+`usePanel()` to read and edit their bounded blocks/elements, selection, clipboard and
+local mode. `EditorPanel` displays children; `EditorEmbed` includes and protects
+its root. Both support independent element roots. Custom blocks and extensions remain
+explicit through `blockExtension`, `standardPreset`, and surface selection.
 
-To enable the demo's optional features, import `pageDragExtension`,
-`edgelessPreset`, `edgelessVisualsExtension`, and `todoItemExtension` from
-`@chulane/rivto-react` and use:
-
-```ts
-extensions: [
-  standardPreset(),
-  pageDragExtension(),
-  ...edgelessPreset(),
-  edgelessVisualsExtension(),
-  todoItemExtension(),
-]
-```
-
-Choose `<PageSurface />` or `<EdgelessSurface />` inside each `<EditorView>`.
-Keep the choice in React state; core editors and the editor cache store no mode.
-See [the demo setup](demo/src/App.tsx) for container creation, a view toolbar,
-custom blocks, and synchronization.
+For cached/loading documents, `EditorStorage.acquireEditor(id)` returns
+`{ editor, document, release }`. The owner retains this acquisition until dependent
+views unmount. EditorPanel borrows the editor and creates no hidden storage acquisition.
+Embedding source loading uses EditorStorageContext. See the
+[developer guide](packages/react-rivto-editor/docs/developer-guide.md) for low-level
+construction, storage ownership, extension registration and panel destinations.
 
 ## Run the demo
 

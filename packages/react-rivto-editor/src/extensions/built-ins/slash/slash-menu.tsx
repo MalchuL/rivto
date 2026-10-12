@@ -18,17 +18,8 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../../constants";
-import {
-  useDOMEvent,
-  useEditorRoot,
-  useEditorView,
-  useKeyboardEvent,
-} from "../../../hooks";
-import {
-  BUILTIN_KEYMAP,
-  findRenderedBlock,
-  KEYBOARD_BINDING_IDS,
-} from "../../../managers";
+import { useDOMEvent, useEditorRoot, usePanel, useKeyboardEvent } from "../../../hooks";
+import { BUILTIN_KEYMAP, findRenderedBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
 import type { SlashCommand } from "../../../managers/slash";
 import { keepNoResultMenuOpen, rankSlashCommands } from "./slash-search";
 
@@ -148,9 +139,9 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   const maxHeight = Math.max(1, options.maxHeight ?? DEFAULT_POSITION.maxHeight);
   const gap = Math.max(0, options.gap ?? DEFAULT_POSITION.gap);
   const viewportPadding = Math.max(0, options.viewportPadding ?? DEFAULT_POSITION.viewportPadding);
-  const editorView = useEditorView();
-  const roots = editorView.runtime.blocks.getBlocks();
-  const slashCommands = editorView.slashCommands;
+  const panel = usePanel();
+  const roots = panel.blocks.getBlocks();
+  const slashCommands = panel.slashCommands;
   const { element: root } = useEditorRoot();
   const [session, setSession] = useState<SlashSession | null>(null);
   const sessionRef = useRef(session);
@@ -163,7 +154,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
 
   const available = useMemo(() => session
     ? slashCommands.getAll({ blockId: session.blockId })
-    : [], [editorView, slashCommands, slashCommands.revision, session?.blockId, session?.document, session?.rootBlockId]);
+    : [], [panel, slashCommands, slashCommands.revision, session?.blockId, session?.document, session?.rootBlockId]);
   const ranked = useMemo(() => rankSlashCommands(available, session?.query ?? ""), [available, session?.query]);
   const groups = useMemo(() => groupCommands(ranked.map(({ command }) => command)), [ranked]);
 
@@ -177,7 +168,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
     setSession(null);
   }, []);
 
-  useEffect(() => editorView.subscribeDeactivation(close), [editorView, close]);
+  useEffect(() => panel.subscribeDeactivation(close), [panel, close]);
 
   /** Validates the current caret and optionally discovers a freshly typed slash. */
   const refresh = useCallback((content: HTMLElement, blockId: string, discover: boolean) => {
@@ -210,11 +201,11 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
         setSession(null);
       } else {
         const position = popupPosition(content, { width, maxHeight, gap, viewportPadding });
-        const viewRoot = editorView.events.getRoot();
+        const viewRoot = panel.events.getRoot();
         if (!viewRoot) return;
         setSession({
-          document: editorView.runtime.getDocument(),
-          rootBlockId: editorView.rootBlockId,
+          document: panel.editor.document.getDocument(),
+          rootBlockId: panel.rootBlockId,
           viewRoot,
           blockId,
           slashOffset: trigger.slashOffset,
@@ -227,7 +218,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
         });
       }
     }
-  }, [editorView, slashCommands, width, maxHeight, gap, viewportPadding]);
+  }, [panel, slashCommands, width, maxHeight, gap, viewportPadding]);
 
   useDOMEvent({
     id: "slash.input",
@@ -249,8 +240,8 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   });
 
   useEffect(() => {
-    if (session && (!session.viewRoot.isConnected || !editorView.runtime.blocks.hasBlock(session.blockId))) close();
-  }, [close, editorView, roots, session]);
+    if (session && (!session.viewRoot.isConnected || !panel.blocks.hasBlock(session.blockId))) close();
+  }, [close, panel, roots, session]);
 
   useDOMEvent({
     id: "slash.selection-change",
@@ -270,26 +261,26 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
     const current = sessionRef.current;
     if (!current || !root) return;
 
-    const block = editorView.runtime.blocks.getBlockNode(current.blockId);
+    const block = panel.blocks.getBlockNode(current.blockId);
     if (!block) return close();
     const caret = current.slashOffset + current.query.length + 1;
     if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
 
-    editorView.runtime.history.batchUpdates(() => {
+    panel.editor.document.history.batchUpdates(() => {
       const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
-      editorView.runtime.blocks.updateBlock(current.blockId, { content: next });
-      editorView.selection.set(createCaretSelection(current.blockId, current.slashOffset));
+      panel.blocks.updateBlock(current.blockId, { content: next });
+      panel.selection.set(createCaretSelection(current.blockId, current.slashOffset));
       slashCommands.execute(command.id, { blockId: current.blockId });
     });
     setSession(null);
 
-    editorView.selection.scheduleIfSelectionUnchanged(() => {
-      if (editorView.selection.restoreDOM()) return;
+    panel.selection.scheduleIfSelectionUnchanged(() => {
+      if (panel.selection.restoreDOM()) return;
       current.viewRoot.ownerDocument.getSelection()?.removeAllRanges();
       current.viewRoot.focus({ preventScroll: true });
     });
 
-  }, [close, editorView, root, slashCommands]);
+  }, [close, panel, root, slashCommands]);
 
   const currentResults = useCallback(() => {
     const current = sessionRef.current;

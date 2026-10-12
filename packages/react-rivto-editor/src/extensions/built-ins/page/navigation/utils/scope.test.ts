@@ -1,6 +1,6 @@
 import { createTestReactEditor as createReactEditor } from "../../../../../test-utils";
 /** Regression coverage for block and edgeless outline navigation boundaries. */
-import { createTestCoreEditor as createRivtoEditor } from "../../../../../test-utils";
+import { createTestCoreEditor as createDocumentEditor } from "../../../../../test-utils";
 
 import { createStructuralSelection, type EditorBlock, type Selection } from "@chulane/rivto";
 import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../../../separator/separator-block";
@@ -45,16 +45,16 @@ function outlineBlock(
 
 describe("edgeless outline scope", () => {
   const twoCards = async () => {
-    const editor = await createRivtoEditor({ mode: "edgeless" });
-    const editorView = createReactEditor({
+    const editor = await createDocumentEditor({ mode: "edgeless" });
+    const panel = createReactEditor({
       editor,
       extensions: [separatorBlockExtension()],
     });
     const leftA = editor.blocks.insertBlock({ type: "paragraph", content: "Left A" }).id;
-    const leftB = editor.blocks.insertBlock({ type: "paragraph", content: "Left B" }, leftA).id;
-    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, leftB).id;
-    const rightA = editor.blocks.insertBlock({ type: "paragraph", content: "Right A" }, separator).id;
-    const rightB = editor.blocks.insertBlock({ type: "paragraph", content: "Right B" }, rightA).id;
+    const leftB = editor.blocks.insertBlock({ type: "paragraph", content: "Left B" }, editor.blocks.getInsertionDestinationAfter(leftA)).id;
+    const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, editor.blocks.getInsertionDestinationAfter(leftB)).id;
+    const rightA = editor.blocks.insertBlock({ type: "paragraph", content: "Right A" }, editor.blocks.getInsertionDestinationAfter(separator)).id;
+    const rightB = editor.blocks.insertBlock({ type: "paragraph", content: "Right B" }, editor.blocks.getInsertionDestinationAfter(rightA)).id;
     editor.elements.insertElement({ id: "left",
       type: "block",
       frame: { x: 0, y: 0, width: 200, height: 120 },
@@ -67,57 +67,57 @@ describe("edgeless outline scope", () => {
       zIndex: 1,
       props: { startBlockId: rightA, endBlockId: rightB },
     });
-    return { editor, editorView, leftA, leftB, rightA, rightB };
+    return { editor, panel, leftA, leftB, rightA, rightB };
   };
 
   test("navigationOutlineBlocks keeps page mode as the full document", async () => {
-    const editor = await createRivtoEditor({ mode: "block" });
-    const editorView = createReactEditor({ editor });
+    const editor = await createDocumentEditor({ mode: "block" });
+    const panel = createReactEditor({ editor });
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "A" }).id;
-    const second = editor.blocks.insertBlock({ type: "paragraph", content: "B" }, first).id;
-    expect(navigationOutlineBlocks(editorView, first).map((block) => block.id)).toEqual([first, second]);
+    const second = editor.blocks.insertBlock({ type: "paragraph", content: "B" }, editor.blocks.getInsertionDestinationAfter(first)).id;
+    expect(navigationOutlineBlocks(panel, first).map((block) => block.id)).toEqual([first, second]);
     editor.destroy();
   });
 
   test("navigationOutlineBlocks stays inside the owning card", async () => {
-    const { editor, editorView, leftA, leftB, rightA, rightB } = await twoCards();
+    const { editor, panel, leftA, leftB, rightA, rightB } = await twoCards();
     expect(owningBlockElement(editor, leftB)?.id).toBe("left");
-    expect(navigationOutlineBlocks(editor, leftB).map((block) => block.id)).toEqual([leftA, leftB]);
-    expect(navigationOutlineBlocks(editorView, leftB).map((block) => block.id)).toEqual([leftA, leftB]);
-    expect(navigationOutlineBlocks(editorView, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
-    expect(navigationOutlineBlocks(editor, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
-    editorView.runtime.destroy();
+    expect(navigationOutlineBlocks(panel, leftB).map((block) => block.id)).toEqual([leftA, leftB]);
+    expect(navigationOutlineBlocks(panel, leftB).map((block) => block.id)).toEqual([leftA, leftB]);
+    expect(navigationOutlineBlocks(panel, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
+    expect(navigationOutlineBlocks(panel, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
+    panel.editor.destroy();
     editor.destroy();
   });
 
   test("adjacent block selection does not leave the card", async () => {
-    const { editor, editorView, leftA, leftB } = await twoCards();
-    const outline = navigationOutlineBlocks(editorView, leftB);
+    const { editor, panel, leftA, leftB } = await twoCards();
+    const outline = navigationOutlineBlocks(panel, leftB);
     const current = createStructuralSelection([leftB], leftB, leftB);
     expect(adjacentBlockSelection(outline, current, "down")).toEqual(current);
     expect(adjacentBlockSelection(outline, current, "up").focusBlockId).toBe(leftA);
-    editorView.runtime.destroy();
+    panel.editor.destroy();
     editor.destroy();
   });
 
   test("keyboard move placement refuses to cross into another card", async () => {
-    const { editor, editorView, leftA, leftB } = await twoCards();
-    const outline = navigationOutlineBlocks(editorView, leftB);
+    const { editor, panel, leftA, leftB } = await twoCards();
+    const outline = navigationOutlineBlocks(panel, leftB);
     expect(keyboardMovePlacement(outline, [leftB], "down")).toBeUndefined();
     expect(keyboardMovePlacement(outline, [leftA], "up")).toBeUndefined();
     expect(keyboardMovePlacement(outline, [leftB], "up")).toEqual({
       targetId: leftA,
       position: "before",
     });
-    editorView.runtime.destroy();
+    panel.editor.destroy();
     editor.destroy();
   });
 
   test("pageEntries on a card outline excludes other cards", async () => {
-    const { editor, editorView, leftA, leftB } = await twoCards();
-    const ids = pageEntries(navigationOutlineBlocks(editorView, leftA)).map(({ block }) => block.id);
+    const { editor, panel, leftA, leftB } = await twoCards();
+    const ids = pageEntries(navigationOutlineBlocks(panel, leftA)).map(({ block }) => block.id);
     expect(ids).toEqual([leftA, leftB]);
-    editorView.runtime.destroy();
+    panel.editor.destroy();
     editor.destroy();
   });
 });

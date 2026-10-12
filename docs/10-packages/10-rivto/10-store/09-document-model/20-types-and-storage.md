@@ -132,7 +132,7 @@ Alias `Record<string, unknown>` для opaque outline/page presentation. Пер�
 - **Возвращает:** validated/normalized `Record<string, unknown>`.
 - **Исключения:** validator может отклонить props исключением; block manager передаёт его caller-у до shared write, где это возможно.
 
-По умолчанию manager возвращает props без изменений. `EditorRuntime` устанавливает validator из `BlockRegistryManager`.
+По умолчанию manager возвращает props без изменений. `ReactEditor` устанавливает validator из `BlockRegistryManager`.
 
 ## Persisted CRDT types
 
@@ -195,8 +195,9 @@ Outer link record является `CRDTMap`, но manager не использу
 
 Panel хранится приложением и указывает rootBlockId и rootElementId. Null выбирает
 корни соответствующего дерева. Явный rootElementId выбирает потомков контейнера.
-`elements.forRoot(id)` в core ограничивает операции поддеревом; модель принимает
-явный destination в insertElement и moveElements.
+`PanelAPI.elements` в React ограничивает операции выбранным поддеревом;
+DocumentEditorAPI.elements работает со всем документом. Модель и core принимают
+явный destination в insertElement и moveElements. Метода forRoot в core нет.
 
 Partial snapshot может заменить rootElementIds. Ссылки проверяются относительно
 итоговых элементов, включая неизменённые секции, до первой записи. Недостижимые,

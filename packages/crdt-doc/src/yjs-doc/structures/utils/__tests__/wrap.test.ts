@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import { unwrapCRDTtoYJS, wrapBasicTypeToCRDTType, wrapYJStoCRDT } from '../wrap';
-import { YjsArray, YjsMap, YjsText } from '../../';
+import { YjsArray, YjsMap, YjsText } from "../..";
 
 function containsYjsTypes(value: unknown): boolean {
   let result: boolean;

@@ -1,6 +1,6 @@
-import type { ElementClipboardConverter } from "../managers/clipboard/clipboard-converters";
-import { blockIdsOf, blockRangeProps } from "./block-element-projection";
 import { clipboardHTMLText, escapeClipboardHTML } from "../managers/clipboard/clipboard-format-registry";
+import type { ElementClipboardConverter } from "../managers/clipboard/types";
+import { blockIdsOf, blockRangeProps } from "./block-element-projection";
 
 /**
  * Copies block presentation settings without retaining source range boundaries

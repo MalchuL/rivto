@@ -1,5 +1,5 @@
+import type { DocumentViewScope } from "../events/types";
 import type { KeyboardApi } from "./keyboard-api";
-import type { DocumentViewScope } from "../events/document-view";
 import type { KeyboardManager } from "./keyboard-manager";
 
 /** Local operations over the document's shared registrations. */

@@ -8,10 +8,10 @@
  *
  * @module
  */
-import type { RivtoEditorApi } from "@chulane/rivto";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
 import type { BlockBehaviorContext, BlockBehaviorOutcome, DropAxis } from "../../../block-behaviors/types";
-import type { EditorViewApi } from "../../../editor-view/types";
+import type { PanelAPI } from "../../../panels/types";
 
 export const COLUMNS_BLOCK_TYPE = "columns";
 export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
@@ -27,8 +27,8 @@ export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
  * @param columnIds - Column identifiers whose children must survive.
  * @returns Nothing; callers delete the empty shells afterwards.
  */
-export function relocateColumnContents(editor: EditorViewApi | RivtoEditorApi, columnIds: readonly string[]): void {
-  const documentEditor = "runtime" in editor ? editor.runtime : editor;
+export function relocateColumnContents(editor: PanelAPI | DocumentEditorAPI, columnIds: readonly string[]): void {
+  const documentEditor = "editor" in editor ? editor.document : editor;
   const unique = [...new Set(columnIds)].filter((id) => documentEditor.blocks.getBlockNode(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE);
   unique.forEach((id) => {
     const parentId = documentEditor.blocks.getParentId(id);
@@ -68,9 +68,9 @@ export class ColumnsColumnBehavior extends ContainerBlockBehavior {
    */
   override onStructuralDelete(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome {
     const columnIds = ids.filter((id) => (
-      context.editorView.runtime.blocks.getBlockNode(id)?.type === context.block.type
+      context.panel.blocks.getBlockNode(id)?.type === context.block.type
     ));
-    if (columnIds.length) relocateColumnContents(context.editorView, columnIds);
+    if (columnIds.length) relocateColumnContents(context.panel, columnIds);
     return "default";
   }
 }

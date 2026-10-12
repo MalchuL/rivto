@@ -59,7 +59,7 @@ Host владеет `DocumentStorage`; storage подключает CRDT provide
 ```ts
 const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace") });
 const document = await storage.create("shared");
-const editor = createRivtoEditor({ document });
+const editor = createDocumentEditor({ document });
 
 // ...работа...
 await editor.destroy();
@@ -69,21 +69,21 @@ await storage.destroy();
 
 Последний consumer release отключает providers и уничтожает live model; registry сохраняет document ID. Базовый DocumentStorage не сохраняет content: при reacquisition он приходит от оставшихся peers. Модель приложения может восстанавливать его через `createDocumentModel`; в демо DBDocumentModel воспроизводит CRDT updates из базы в памяти. `YjsDoc.destroy()` ждёт все provider disconnect operations и затем уничтожает `Y.Doc`. Ручной `detachProvider()` нужен только для отдельного provider до завершения lifecycle.
 
-## Factory `createRivtoEditor()`
+## Factory `createDocumentEditor()`
 
 - **Аргументы:** required `{ document: DocumentModel }`.
-- **Возвращает:** `EditorRuntime`, который использует, но не уничтожает переданный document.
+- **Возвращает:** `ReactEditor`, который использует, но не уничтожает переданный document.
 - **Исключения:** constructor initialization errors.
 
-Host может использовать single editor с caller-owned моделью или EditorStorage с callback loader-ом. Host владеет EditorStorage; views получают document-bound EditorViewApi и автоматически удерживают consumers. После shutdown всех core/model host закрывает registry storage.
+Host может использовать single editor с caller-owned моделью или EditorStorage с callback loader-ом. Host владеет EditorStorage; views получают document-bound PanelAPI и автоматически удерживают consumers. После shutdown всех core/model host закрывает registry storage.
 
-## `getDocument()` и `openCoreEditor(documentId)`
+## `getDocument()` и `acquireEditor(documentId)`
 
-`getDocument()` всегда возвращает единственную модель, переданную в `createRivtoEditor({ document })`. Managers, retained callbacks, subscriptions, clipboard и history постоянно связаны с ней; смены document context нет. Single editor освобождает свои registrations и subscriptions, но не уничтожает caller-owned модель. Для нескольких документов `EditorStorage` принимает async `openDocument(documentId)` и optional `createEditor(editor)` returning EditorRuntime; по умолчанию создаёт пустой Yjs-backed документ. `openCoreEditor(documentId)` открывает и кеширует отдельный core, сохраняя explicit ownership до `releaseCoreEditor(documentId)`. Loader передаёт EditorStorage владение моделью, а storage создаёт core перед вызовом React-фабрики: последний view consumer или shutdown закрывает сначала EditorRuntime, затем core и модель. Views одного документа делят core, разные документы имеют собственные selection, clipboard policy и undo history.
+`getDocument()` всегда возвращает единственную модель, переданную в `createDocumentEditor({ document })`. Managers, retained callbacks, subscriptions, clipboard и history постоянно связаны с ней; смены document context нет. Single editor освобождает свои registrations и subscriptions, но не уничтожает caller-owned модель. Для нескольких документов `EditorStorage` принимает async `openDocument(documentId)` и optional `createEditor(editor)` returning ReactEditor; по умолчанию создаёт пустой Yjs-backed документ. `acquireEditor(documentId)` возвращает `{ editor, document, release }`: каждый acquisition удерживает отдельную ссылку до вызова своего release. Loader передаёт EditorStorage владение моделью, а storage создаёт core перед вызовом React-фабрики: последний acquisition или shutdown закрывает сначала ReactEditor, затем core и модель. Views одного документа делят core, разные документы имеют собственные selection, clipboard policy и undo history.
 
 ## Test helper `createTestEditor()`
 
-- **Аргументы:** optional `Partial<CreateRivtoEditorOptions>`.
+- **Аргументы:** optional `Partial<CreateDocumentEditorOptions>`.
 - **Возвращает:** `Promise<TestEditor>` с явным document-bound API, raw `runtime` и зарегистрированным local block type `paragraph`.
 - **Исключения:** editor construction или block definition registration errors.
 

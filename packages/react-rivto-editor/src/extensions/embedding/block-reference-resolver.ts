@@ -1,19 +1,8 @@
-import type { EditorRuntime } from "../../editor/editor-runtime";
 import type { DocumentModel } from "@chulane/document-model";
-import type { EditorStorage, EditorStorageOptions } from "../../editor/editor-storage";
+import type { EditorStorage } from "../../editor/editor-storage";
+import type { EditorStorageOptions, ReactEditorApi } from "../../editor/types";
 import { waitWithAbort } from "../../editor/wait-with-abort";
-
-/** Persisted address of a block; block IDs are unique only within their document. */
-export interface BlockReference {
-  readonly documentId: string;
-  readonly blockId: string;
-}
-
-/** Resolved address for display; ambiguity does not prevent the default resolver choosing a source. */
-export interface BlockResolution {
-  readonly documentId?: string;
-  readonly ambiguous: boolean;
-}
+import type { BlockReference, BlockResolution } from "./types";
 
 /** Resolves document-qualified block references and observes source relocation. */
 export class BlockReferenceResolver {
@@ -119,20 +108,18 @@ export class BlockReferenceResolver {
     return cleanup;
   }
 
-
-
   /**
    * Locates the first matching block among open documents without loading or traversing forests.
    * @param blockId - Document-local identity to find.
    * @returns Matching single editor in sorted document ID order, or undefined when absent.
    * Multiple documents may contain the ID; use resolveBlock when ambiguity matters.
    */
-  findRuntimeWithBlock(blockId: string): EditorRuntime | undefined {
-    return this.storage.getRuntimes().filter((editor) => editor.blocks.hasBlock(blockId))
-      .sort((a, b) => a.getDocument().id.localeCompare(b.getDocument().id))[0];
+  findEditorWithBlock(blockId: string): ReactEditorApi | undefined {
+    return this.storage.getEditors().filter((editor) => editor.document.blocks.hasBlock(blockId))
+      .sort((a, b) => a.document.getDocument().id.localeCompare(b.document.getDocument().id))[0];
   }
   /** @param blockId - Document-local identity. @returns First loaded containing model in sorted document ID order, or undefined. */
-  findDocumentWithBlock(blockId: string): DocumentModel | undefined { return this.findRuntimeWithBlock(blockId)?.getDocument(); }
+  findDocumentWithBlock(blockId: string): DocumentModel | undefined { return this.findEditorWithBlock(blockId)?.document.getDocument(); }
 
   /** Cancels every outstanding location observer; documents remain owned by storage. */
   destroy(): void {

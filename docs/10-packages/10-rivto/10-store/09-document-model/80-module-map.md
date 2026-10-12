@@ -51,7 +51,7 @@ React extension / demo / host application
 
 ## Основные consumers
 
-- `EditorRuntime` создаёт модель, подписывается на updates и управляет persistence/history.
+- `ReactEditor` создаёт модель, подписывается на updates и управляет persistence/history.
 - core `BlockManager`, `ElementManager` и `LinkManager` регистрируют commands и делегируют document operations.
 - React page surface использует ordered block tree, hierarchy operations и text updates.
 - React edgeless surface materializes elements и их geometry.

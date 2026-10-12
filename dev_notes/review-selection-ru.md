@@ -93,7 +93,7 @@
    get()
    ```
 
-6. [src/editor/editor/rivto-editor.ts](/media/ssd_stuff/work/assistants/rivto/src/editor/editor/rivto-editor.ts)
+6. [src/editor/editor/document-editor.ts](/media/ssd_stuff/work/assistants/rivto/src/editor/editor/document-editor.ts)
 
    Тут runtime валидирует и применяет selection.
 
@@ -140,7 +140,7 @@ types.ts
   ↓
 selection-manager.ts
   ↓
-editor/rivto-editor.ts
+editor/document-editor.ts
   ↓
 clipboard-bundle.ts
   ↓

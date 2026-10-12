@@ -1,9 +1,10 @@
-import type { DocumentModel, ElementDestination } from "@chulane/document-model";
-import type { EditorElementInput, EditorElementPatch, EditorElementUpdate } from "../../editor/model";
-import type { ElementManagerApi, ElementTreeApi } from "../types";
+import type { DocumentModel } from "@chulane/document-model";
+import type { EditorElementInput, EditorElementPatch, EditorElementUpdate, ElementManagerApi } from "@chulane/rivto";
+import type { PanelDestination } from './panel-destination';
+import type { PanelElementsAPI } from './panel-elements-api';
 
 /** Applies element operations to one element subtree while reusing the editor's processing pipeline. */
-export class ElementTree implements ElementTreeApi {
+export class PanelElements implements PanelElementsAPI {
   /**
    * Binds subtree reads and commands to the shared document and editor pipeline.
    *
@@ -27,10 +28,12 @@ export class ElementTree implements ElementTreeApi {
    * Finds the direct parent of an element belonging to this element subtree.
    *
    * @param id - Stable element ID to inspect.
-   * @returns Actual parent ID, null for a document root, or undefined when missing or outside this subtree.
+   * @returns Panel-relative parent ID, null at the panel root, or undefined when missing or outside this subtree.
    */
   getParentId(id: string): string | null | undefined {
-    return this.hasElement(id) ? this.elements.getParentId(id) : undefined;
+    if (!this.hasElement(id)) return undefined;
+    const parentId = this.elements.getParentId(id);
+    return parentId === this.rootElementId ? null : parentId;
   }
   /**
    * Moves local subtrees to a parent or root position within this element subtree.
@@ -40,16 +43,18 @@ export class ElementTree implements ElementTreeApi {
    * one transaction and history batch through the editor manager.
    *
    * @param ids - Existing local elements in destination order.
-   * @param destination - Local parent (null for this handle's root) and optional next sibling;
+   * @param destination - Local parent or `{ root: true }` for the panel root, and optional next sibling;
    * omitting beforeId appends to that list.
    * @throws Before writing if any target is missing or outside this element subtree, the
    * destination or anchor is invalid, or the move would create a cycle.
    */
-  moveElements(ids: readonly string[], destination: ElementDestination): void {
+  moveElements(ids: readonly string[], destination: PanelDestination = { root: true }): void {
     ids.forEach((id) => this.requireElement(id));
-    const parentId = destination.parentId ?? this.rootElementId;
+    if ("root" in destination ? destination.root !== true : typeof destination.parentId !== "string") throw new Error("Panel destination requires root: true or a parent ID");
+    const parentId = "root" in destination ? this.rootElementId : destination.parentId;
     if (parentId !== this.rootElementId && parentId !== null) this.requireElement(parentId);
-    this.elements.moveElements(ids, { ...destination, parentId });
+    this.requireRoot();
+    this.elements.moveElements(ids, { parentId, beforeId: destination.beforeId });
   }
   /**
    * Promotes a local element's children at its position and deletes only the parent.
@@ -188,10 +193,10 @@ export class ElementTree implements ElementTreeApi {
   /**
    * Inserts a new recursive subtree into this element subtree through the editor pipeline.
    *
-   * The root is appended to this handle's container, or to document roots for null.
+   * The root is inserted in the selected local parent, or appended to panel roots by default.
    * children creates new subtrees, while childIds reparents existing nonoverlapping
    * local subtrees. Supplied IDs are preserved and must be unique across the whole
-   * document; missing IDs are allocated. The root is appended to this element subtree's roots.
+   * document; missing IDs are allocated. An explicit beforeId selects its sibling position.
    *
    * Elements with children may omit frame to use their direct children's bounds at insertion;
    * elements without children need a frame. All new nodes pass through
@@ -201,11 +206,12 @@ export class ElementTree implements ElementTreeApi {
    *
    * @param input - Element type, stacking order, optional identity/props/children, and
    * canvas-relative frame when required. Nonempty childIds cannot accompany children.
+   * @param destination - Panel root or included parent, and optional next sibling; omitted appends to panel roots.
    * @returns Detached inserted tree with recursive children and final identities.
    * @throws If the root is absent, IDs collide, children are invalid or outside,
    * input is cyclic or malformed, or processing or application preparation fails.
    */
-  insertElement(input: EditorElementInput) {
+  insertElement(input: EditorElementInput, destination: PanelDestination = { root: true }) {
     this.requireRoot();
     const visiting = new Set<EditorElementInput>();
     const checkChildren = (value: EditorElementInput) => {
@@ -216,20 +222,11 @@ export class ElementTree implements ElementTreeApi {
       visiting.delete(value);
     };
     checkChildren(input);
-    return this.elements.insertElement(input, { parentId: this.rootElementId });
+    if ("root" in destination ? destination.root !== true : typeof destination.parentId !== "string") throw new Error("Panel destination requires root: true or a parent ID");
+    const parentId = "root" in destination ? this.rootElementId : destination.parentId;
+    if (parentId !== this.rootElementId && parentId !== null) this.requireElement(parentId);
+    return this.elements.insertElement(input, { parentId, beforeId: destination.beforeId });
   }
-  /**
-   * Allocates an ID mapping for an immediate import using document-wide collisions.
-   *
-   * Available source IDs are preserved; IDs already used anywhere in this document
-   * receive replacements. No elements are inserted, IDs are not reserved, and the
-   * root element itself is not validated. Callers rewrite child and opaque references
-   * using this map before insertion.
-   *
-   * @param ids - Source element IDs in import order.
-   * @returns Source-to-destination identity map for this document.
-   */
-  createImportIdMap(ids: readonly string[]) { return this.elements.createImportIdMap(ids); }
   /**
    * Patches one local element through the shared editor pipeline and history batch.
    *
@@ -308,6 +305,9 @@ export class ElementTree implements ElementTreeApi {
     });
     return () => { unsubscribeRecord(); unsubscribeStructure(); };
   }
+
+  /** @param parentId - Local parent. @returns Its children without descendants, empty outside the panel. */
+  getChildIds(parentId: string): readonly string[] { return this.getElementNode(parentId)?.childIds ?? []; }
 
   private requireRoot(): void {
     if (this.rootElementId !== null && !this.elements.hasElement(this.rootElementId)) throw new Error(`Root element ${this.rootElementId} not found`);

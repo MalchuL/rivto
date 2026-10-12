@@ -145,6 +145,6 @@ export function bulletThreadingExtension(options: BulletThreadingOptions): React
   }
   return {
     id: "block.bullet-threading",
-    setup: (editorRuntime) => editorRuntime.extensions.mount(() => <ThreadOverlay {...options} />, "afterSurface"),
+    setup: (reactEditor) => reactEditor.extensions.mount(() => <ThreadOverlay {...options} />, "afterSurface"),
   };
 }

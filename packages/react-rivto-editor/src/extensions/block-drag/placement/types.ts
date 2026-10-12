@@ -1,11 +1,3 @@
-/**
- * Canonical data contracts shared by page drag placement calculations.
- *
- * Pointer and keyboard adapters share stable destinations, independent of
- * dnd-kit events and DOM hit reasons.
- *
- * @module
- */
 import type { BlockDropDestination } from "../../../block-behaviors/types";
 
 /** Minimal recursive shape needed to resolve outline drop positions. */

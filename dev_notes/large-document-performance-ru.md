@@ -44,7 +44,7 @@
 каретки. Три чтения внутри транзакции обходят кеш: примерно 9184 чтения узлов.
 
 Места: `packages/rivto-editor-core/src/managers/selection-manager/selection-manager.ts`,
-`packages/rivto-editor-core/src/editor/rivto-editor.ts`,
+`packages/rivto-editor-core/src/editor/document-editor.ts`,
 `packages/react-rivto-editor/src/extensions/built-ins/page/collapse/register.ts`.
 
 Решение: проверять выбранные ID и цепочки родителей, использовать порядок

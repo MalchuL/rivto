@@ -1,3 +1,4 @@
+import type { PendingSelectionCallback } from "./types";
 /**
  * Bridges core selection state to browser DOM selection.
  *
@@ -6,29 +7,12 @@
  * effective core selection changes so newer selection changes always win,
  * including transitions from an empty selection back to an empty selection.
  */
-import type { Selection, SelectionManagerApi } from "@chulane/rivto";
-import type { EditorViewApi } from "../../editor-view/types";
-import type { ViewEventsApi } from "../events/api";
+import { isStructuralSelection, type Selection, type SelectionManagerApi } from "@chulane/rivto";
+import type { PanelAPI } from "../../panels/types";
 import type { RestoreDOMSelectionOptions, ViewSelectionApi } from "./api";
 import { readEditorDOMSelection, restoreEditorDOMSelection } from "./editor-dom-selection";
 
 export { createCaretSelection, createTextSelection } from "@chulane/rivto";
-
-/**
- * State owned by one deferred selection request. Cancellation handles retain
- * this record so a stale handle cannot cancel a newer request on the manager.
- * Frame and subscription are assigned during scheduling before caller cleanup runs.
- */
-interface PendingSelectionCallback {
-  readonly root: HTMLElement;
-  readonly events: ViewEventsApi;
-  readonly view: Window;
-  readonly callback: () => void;
-  readonly onCancel?: () => void;
-  active: boolean;
-  frame?: number;
-  unsubscribe?: () => void;
-}
 
 /** DOM adapter over the core selection manager. */
 export class ViewSelectionManager implements ViewSelectionApi {
@@ -38,27 +22,17 @@ export class ViewSelectionManager implements ViewSelectionApi {
   private contained = false;
 
   private containsSelection(selection: Selection): boolean {
-    if (selection.elements?.some((id) => !this.editorView.elements.hasElement(id))) return false;
-    const rootId = this.editorView.rootBlockId;
-    if (!rootId) return true;
-    return selection.blocks.every(({ id }) => {
-      if (this.editorView.panel && id === rootId) return false;
-      let current: string | null | undefined = id;
-      while (current) {
-        if (current === rootId) return true;
-        current = this.editorView.runtime.getDocument().blocks.getParentId(current);
-      }
-      return false;
-    });
+    if (selection.elements?.some((id) => !this.panel.elements.hasElement(id))) return false;
+    return selection.blocks.every(({ id }) => this.panel.blocks.hasBlock(id));
   }
 
   private ownsSelection(): boolean {
-    const root = this.editorView.events.getRoot();
-    if ((this.editorView.runtime.editorViews.getActiveRoot() ?? this.editorView.runtime.editorViews.getDefaultRoot()) !== root) return false;
+    const root = this.panel.events.getRoot();
+    if ((this.panel.editor.panels.getActiveRoot() ?? this.panel.editor.panels.getDefaultRoot()) !== root) return false;
     const value = this.coreSelection.snapshot();
     if (!value) return false;
-    if (!this.editorView.rootBlockId) return this.containsSelection(value);
-    const revision = this.editorView.runtime.getDocument().blocks.revision;
+    if (!this.panel.rootBlockId) return this.containsSelection(value);
+    const revision = this.panel.editor.document.getDocument().blocks.revision;
     // Rows reuse the immutable snapshot; check subtree membership once per revision.
     if (value !== this.checkedSelection || revision !== this.checkedRevision) {
       this.checkedSelection = value;
@@ -76,11 +50,11 @@ export class ViewSelectionManager implements ViewSelectionApi {
    * DOM requests capture the receiving view's event scope and remain separate
    * by root. Removing a surface cancels its own pending work; view teardown
    * cancels its remaining requests before shared extensions are destroyed.
-   * @param editorView - Owning view editor providing its fixed DOM occurrence.
+   * @param panel - Owning view editor providing its fixed DOM occurrence.
    * @param coreSelection - Core manager providing the document's local selection state.
    */
   constructor(
-    private readonly editorView: EditorViewApi,
+    private readonly panel: PanelAPI,
     private readonly coreSelection: Omit<SelectionManagerApi, "resolveBlockSelection">,
   ) {}
 
@@ -89,7 +63,7 @@ export class ViewSelectionManager implements ViewSelectionApi {
    * @returns False after any effective core selection change, including explicit clearing.
    */
   get hasPendingSelectionCallback(): boolean {
-    const root = this.editorView.events.getRoot();
+    const root = this.panel.events.getRoot();
     return root !== null && this.pendingSelectionCallbacks.has(root);
   }
 
@@ -127,7 +101,10 @@ export class ViewSelectionManager implements ViewSelectionApi {
   /** Deletes selected content through core only when this view owns the selection.
    * Does nothing when the selection is empty, outside this subtree, or owned by another view. */
   delete(): void {
-    if (this.ownsSelection()) this.coreSelection.delete();
+    if (!this.ownsSelection()) return;
+    const selection = this.coreSelection.get();
+    if (selection && isStructuralSelection(selection) && selection.blocks.some(({ id }) => !this.panel.blocks.canRemove(id))) return;
+    this.coreSelection.delete();
   }
 
   /** @returns Immutable core selection snapshot with stable identity until selection changes,
@@ -145,7 +122,7 @@ export class ViewSelectionManager implements ViewSelectionApi {
    * @param root - Receiving DOM occurrence; omitted to use this view’s mounted root.
    * @returns Browser selection, or undefined outside this editor.
    */
-  readDOM(root = this.editorView.events.getRoot()): Selection | undefined {
+  readDOM(root = this.panel.events.getRoot()): Selection | undefined {
     return root ? readEditorDOMSelection(root) : undefined;
   }
 
@@ -159,7 +136,7 @@ export class ViewSelectionManager implements ViewSelectionApi {
   restoreDOM(
     selection: Selection | undefined = this.get(),
     options?: RestoreDOMSelectionOptions,
-    root = this.editorView.events.getRoot(),
+    root = this.panel.events.getRoot(),
   ): boolean {
     return root && selection ? restoreEditorDOMSelection(root, selection, options) : false;
   }
@@ -191,7 +168,7 @@ export class ViewSelectionManager implements ViewSelectionApi {
   scheduleIfSelectionUnchanged(
     callback: () => void,
     onCancel?: () => void,
-    events = this.editorView.events,
+    events = this.panel.events,
   ): () => void {
     const root = events.getRoot();
     const previous = root ? this.pendingSelectionCallbacks.get(root) : undefined;

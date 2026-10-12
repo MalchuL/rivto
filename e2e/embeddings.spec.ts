@@ -4,12 +4,12 @@ interface DemoInspection {
   storage: import("@chulane/document-model").DocumentStorage;
   editor: import("@chulane/rivto-react").EditorStorage;
   registry: import("@chulane/crdt-doc").YjsDocumentRegistry;
-  panes: Set<{ id: string; editorRuntime: import("@chulane/rivto-react").EditorRuntime }>;
+  panes: Set<{ id: string; reactEditor: import("@chulane/rivto-react").ReactEditor }>;
 }
 
 interface JournalInspection {
-  editor: import("@chulane/rivto").RivtoEditorApi;
-  editorRuntime: import("@chulane/rivto-react").EditorRuntime;
+  editor: import("@chulane/rivto").DocumentEditorAPI;
+  reactEditor: import("@chulane/rivto-react").ReactEditor;
 }
 
 for (const repeat of [0, 200]) {
@@ -18,6 +18,8 @@ for (const repeat of [0, 200]) {
     page.setDefaultTimeout(10_000);
     await page.goto(`/?repeat=${repeat}`);
     const today = page.locator('[data-journal-document="today"]');
+    // Host construction precedes asynchronous embedding mount; keep fixture loading outside interaction timing.
+    await today.locator(".page-surface").first().waitFor({ state: "visible" });
     const region = today.getByRole("region", { name: "Block editor" });
     await expect(region.locator('[data-block-id]')).toHaveCount(5);
     await expect(region.locator('[data-block-content]').first()).toHaveText("Nested branch one owns several Markdown children.");
@@ -98,8 +100,8 @@ for (const repeat of [0, 200]) {
       await content.hover();
       expect(await readSelection()).toEqual(selected);
       expect(await page.evaluate(() => {
-        const { editorRuntime } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-        return (editorRuntime.editorViews.getActiveRoot() ?? editorRuntime.editorViews.getDefaultRoot())?.getAttribute("role");
+        const { reactEditor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+        return (reactEditor.panels.getActiveRoot() ?? reactEditor.panels.getDefaultRoot())?.getAttribute("role");
       })).toBe("region");
       await content.click();
       await content.press("End");
@@ -268,7 +270,7 @@ for (const canvas of [false, true]) {
     await page.mouse.move(0, 0);
     await expect(edit).toHaveCSS("opacity", "0");
     const readProps = () => page.evaluate((id) => (window as unknown as { __rivtoDocuments: DemoInspection })
-      .__rivtoDocuments.editor.getRuntime("references")!.blocks.getBlockNode(id)!.props, `${room}:embed-1`);
+      .__rivtoDocuments.editor.getEditor("references")!.document.blocks.getBlockNode(id)!.props, `${room}:embed-1`);
     const original = await readProps();
     await edit.focus();
     await expect(edit).toHaveCSS("opacity", "1");
@@ -285,7 +287,7 @@ for (const canvas of [false, true]) {
     await settings.getByRole("textbox", { name: "Target document ID" }).fill(" references ");
     await settings.getByRole("textbox", { name: "Target block ID" }).fill(` ${room}:reference-heading `);
     expect(await readProps()).toEqual(original);
-    await page.evaluate(() => (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor.getRuntime("references")!.history.clear());
+    await page.evaluate(() => (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor.getEditor("references")!.document.history.clear());
     await settings.getByRole("button", { name: "Save embedding" }).click();
     await expect(settings).toBeHidden();
     expect(await readProps()).toEqual({ targetDocumentId: "references", targetBlockId: `${room}:reference-heading` });
@@ -293,7 +295,7 @@ for (const canvas of [false, true]) {
     await edit.click();
     await expect(settings.getByRole("textbox", { name: "Target document ID" })).toHaveValue("references");
     await settings.getByRole("textbox", { name: "Target block ID" }).press("Escape");
-    await page.evaluate(() => (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor.getRuntime("references")!.history.undo());
+    await page.evaluate(() => (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor.getEditor("references")!.document.history.undo());
     expect(await readProps()).toEqual(original);
     await expect(host.getByRole("region", { name: "Block editor" }).locator('[data-block-content]').first()).toHaveText("Source text");
   });
@@ -342,7 +344,7 @@ test("checking an embedded child changes only its own row styling", async ({ pag
   const room = await openDemo(page);
   await page.evaluate((roomId) => {
     const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    editor.getRuntime("source")!.blocks.updateBlock(`${roomId}:child-0`, { listProps: { type: "checkbox", checked: false } });
+    editor.getEditor("source")!.document.blocks.updateBlock(`${roomId}:child-0`, { listProps: { type: "checkbox", checked: false } });
   }, room);
   const region = page.getByRole("region", { name: "Block editor" }).first();
   const child = region.locator(`[data-block-id="${room}:child-0"]`);
@@ -601,12 +603,12 @@ test("edits source through shared-runtime embeds, survives source pane closure, 
   await page.evaluate((id) => {
     const inspection = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
     const pane = [...inspection.panes].find((entry) => entry.id === "source")!;
-    pane.editorRuntime.history.batchUpdates(() => pane.editorRuntime.blocks.removeBlock(id));
+    pane.reactEditor.document.history.batchUpdates(() => pane.reactEditor.document.blocks.removeBlock(id));
   }, target);
   await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(2);
   await page.evaluate(() => {
     const inspection = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    [...inspection.panes].find((entry) => entry.id === "source")!.editorRuntime.history.undo();
+    [...inspection.panes].find((entry) => entry.id === "source")!.reactEditor.document.history.undo();
   });
   await expect(embeds).toHaveCount(2);
   await expect(embeds.first().locator('[data-block-content]').first()).toHaveText("Source has no pane");
@@ -617,13 +619,13 @@ test("references follow the same block into a new document identity without pers
   const target = `${room}:source-block`;
   await page.evaluate(async (blockId) => {
     const { editor, panes } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    const source = [...panes].find((pane) => pane.id === "source")!.editorRuntime;
-    const snapshot = source.blocks.getBlock(blockId)!;
+    const source = [...panes].find((pane) => pane.id === "source")!.reactEditor;
+    const snapshot = source.document.blocks.getBlock(blockId)!;
     const inspection = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
     inspection.storage.registerDocument("new-source");
-    const moved = await editor.acquireRuntime("new-source");
+    const moved = await editor.acquireEditor("new-source");
     (window as unknown as { __movedSource: typeof moved }).__movedSource = moved;
-    source.blocks.removeBlock(blockId);
+    source.document.blocks.removeBlock(blockId);
     moved.document.blocks.insertBlock(snapshot);
   }, target);
   const content = page.getByRole("region", { name: "Block editor" }).first().locator('[data-block-content]').first();
@@ -638,41 +640,41 @@ test("references follow the same block into a new document identity without pers
     return editor.getDocument("new-source")?.blocks.getBlockNode(id)?.content;
   }, target)).toBe("Moved source edit");
   await page.evaluate(async () => {
-    await (window as unknown as { __movedSource: import("@chulane/rivto-react").RuntimeAcquisition }).__movedSource.release();
+    await (window as unknown as { __movedSource: import("@chulane/rivto-react").EditorAcquisition }).__movedSource.release();
   });
   await expect(content).toHaveText("Moved source edit");
   const props = await page.evaluate(() => {
     const { panes } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    return [...panes].find((pane) => pane.id === "references")!.editorRuntime.blocks.getBlocks().filter((block) => block.type === "embedding").map((block) => block.props);
+    return [...panes].find((pane) => pane.id === "references")!.reactEditor.document.blocks.getBlocks().filter((block) => block.type === "embedding").map((block) => block.props);
   });
   expect(props).toEqual([{ targetDocumentId: "source", targetBlockId: target }, { targetDocumentId: "source", targetBlockId: target }]);
 });
 
-test("shared keyboard handling creates source siblings without expanding the reference or mutating the host", async ({ page }) => {
+test("Enter in a protected embedding root inserts a child without mutating the host", async ({ page }) => {
   await openDemo(page);
   await page.evaluate(() => {
     const panes = [...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes];
-    const source = panes.find((pane) => pane.id === "source")!.editorRuntime;
-    const root = source.blocks.getRootIds()[0]!;
-    source.history.batchUpdates(() => source.blocks.getBlockNode(root)!.childIds.forEach((id) => source.blocks.removeBlock(id)));
+    const source = panes.find((pane) => pane.id === "source")!.reactEditor;
+    const root = source.document.blocks.getRootIds()[0]!;
+    source.document.history.batchUpdates(() => source.document.blocks.getBlockNode(root)!.childIds.forEach((id) => source.document.blocks.removeBlock(id)));
   });
   const first = page.getByRole("region", { name: "Block editor" }).first();
   const content = first.locator('[data-block-content]').first();
   await content.click(); await content.press("End");
   await expect.poll(() => page.evaluate(() => {
     const { panes } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    return [...panes].find((pane) => pane.id === "source")!.editorRuntime.selection.get()?.blocks[0]?.id;
+    return [...panes].find((pane) => pane.id === "source")!.reactEditor.document.selection.get()?.blocks[0]?.id;
   })).toContain(":source-block");
   await content.press("Enter");
-  await expect(first.locator('[data-block-id]')).toHaveCount(1);
+  await expect(first.locator('[data-block-id]')).toHaveCount(2);
   await expect.poll(() => page.evaluate(() => {
     const panes = [...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes];
-    return panes.find((pane) => pane.id === "source")!.editorRuntime.blocks.getRootIds().length;
-  })).toBe(2);
+    return panes.find((pane) => pane.id === "source")!.reactEditor.document.blocks.getRootIds().length;
+  })).toBe(1);
   const host = await page.evaluate(() => {
     const panes = [...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes];
     const pane = panes.find((pane) => pane.id === "references")!;
-    return { roots: pane.editorRuntime.blocks.getRootIds().length, selection: pane.editorRuntime.selection.get() };
+    return { roots: pane.reactEditor.document.blocks.getRootIds().length, selection: pane.reactEditor.document.selection.get() };
   });
   expect(host.roots).toBe(3);
   expect(host.selection?.blocks.every(({ id }) => id.endsWith(":source-block")) ?? true).toBe(true);
@@ -683,8 +685,8 @@ test("cycles stop before recursive acquisition and target changes release the pr
   await page.evaluate((roomId) => {
     const inspection = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
     const source = [...inspection.panes].find((pane) => pane.id === "source")!;
-    source.editorRuntime.blocks.insertBlock({ id: `${roomId}:cycle`, type: "embedding", props: { targetDocumentId: "references", targetBlockId: `${roomId}:embed-1` } });
-    source.editorRuntime.blocks.moveBlocks([`${roomId}:cycle`], `${roomId}:source-block`, "inside");
+    source.reactEditor.document.blocks.insertBlock({ id: `${roomId}:cycle`, type: "embedding", props: { targetDocumentId: "references", targetBlockId: `${roomId}:embed-1` } });
+    source.reactEditor.document.blocks.moveBlocks([`${roomId}:cycle`], `${roomId}:source-block`, "inside");
   }, room);
   await expect(page.getByText("Recursive block reference.", { exact: true }).first()).toBeVisible();
   await page.locator(`[data-document-pane="references"] [data-block-id="${room}:embed-1"]`).first().hover();
@@ -828,9 +830,9 @@ for (const repeat of [0, 200]) {
       const keyboard = Date.now() - keyboardStart;
       const timing = await page.evaluate(async ({ target, index }) => {
         const panes = [...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes];
-        const source = panes.find((pane) => pane.id === "source")!.editorRuntime;
+        const source = panes.find((pane) => pane.id === "source")!.reactEditor;
         const start = performance.now();
-        source.blocks.updateBlock(target, { content: `Command sample ${index}` });
+        source.document.blocks.updateBlock(target, { content: `Command sample ${index}` });
         const command = performance.now() - start;
         await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
         return { command, render: performance.now() - start };
@@ -867,7 +869,7 @@ test("one host selection follows the clicked occurrence and source keyboard edit
     document.querySelectorAll('[role="region"]')[1])).toBe(true);
   await expect.poll(() => page.evaluate(() => {
     const { panes } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    return [...panes].find((pane) => pane.id === "source")!.editorRuntime.selection.get()?.blocks;
+    return [...panes].find((pane) => pane.id === "source")!.reactEditor.document.selection.get()?.blocks;
   })).toEqual([{ id: `${room}:source-block`, start: 12, end: 12 }]);
   await second.press("Control+z");
   await expect(second).toHaveText("Source text");
@@ -908,7 +910,7 @@ test("slash conversion and native clipboard paste use the source model in an emb
   await content.fill("Paste here"); await content.click(); await content.press("End");
   await expect.poll(() => page.evaluate(() => {
     const { panes } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    return [...panes].find((pane) => pane.id === "source")!.editorRuntime.selection.get()?.blocks[0]?.start;
+    return [...panes].find((pane) => pane.id === "source")!.reactEditor.document.selection.get()?.blocks[0]?.start;
   })).toBe(10);
   await content.evaluate((element) => {
     const clipboardData = new DataTransfer();
@@ -945,25 +947,44 @@ test("source drag handles move children through shared commands without moving t
   await expect(page.getByRole("region", { name: "Block editor" })).toHaveCount(2);
 });
 
-test("shared source selection deletes the target and source view undo restores it", async ({ page }) => {
-  const room = await openDemo(page);
-  const content = page.getByRole("region", { name: "Block editor" }).first().locator('[data-block-content]').first();
-  await content.click();
-  await page.evaluate((id) => {
-    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    const source = editor.getRuntime("source")!;
-    source.selection.set({ type: "selection", blocks: [{ id, start: 0, end: -1 }], anchorBlockId: id, focusBlockId: id });
-    document.getSelection()?.removeAllRanges();
-    document.querySelector<HTMLElement>('[role="region"][aria-label="Block editor"]')!.focus();
-  }, `${room}:source-block`);
-  await page.keyboard.press("Delete");
-  await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(2);
-  await page.keyboard.press("Control+z");
-  await expect(content).toHaveText("Source text");
-  await expect(page.getByRole("region", { name: "Block editor" })).toHaveCount(2);
-  await page.keyboard.press("Control+Shift+z");
-  await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(2);
-});
+for (const canvas of [false, true]) {
+  test(`embedding protects its root while document deletion and undo update every occurrence in ${canvas ? "edgeless" : "page"}`, async ({ page }) => {
+    const room = await openDemo(page);
+    if (canvas) await page.locator('[data-document-pane="references"]').getByRole("button", { name: "Toggle mode", exact: true }).click();
+    const content = page.getByRole("region", { name: "Block editor" }).first().locator('[data-block-content]').first();
+    await content.click();
+    await page.evaluate((id) => {
+      const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
+      const source = editor.getEditor("source")!;
+      source.document.selection.set({ type: "selection", blocks: [{ id, start: 0, end: -1 }], anchorBlockId: id, focusBlockId: id });
+      document.getSelection()?.removeAllRanges();
+      document.querySelector<HTMLElement>('[role="region"][aria-label="Block editor"]')!.focus();
+    }, `${room}:source-block`);
+    await page.keyboard.press("Delete");
+    await expect(content).toHaveText("Source text");
+    await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(0);
+    await content.click();
+    await page.evaluate(id => {
+      const source = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor.getEditor("source")!;
+      source.document.blocks.removeBlock(id);
+    }, `${room}:source-block`);
+    await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(2);
+    await expect(page.getByRole("region", { name: "Block editor" }).first()).toBeFocused();
+    await page.keyboard.press("Control+z");
+    await expect(content).toHaveText("Source text");
+    await expect(page.getByRole("region", { name: "Block editor" })).toHaveCount(2);
+    await page.keyboard.press("Control+Shift+z");
+    await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(2);
+    const outside = page.locator('[data-document-pane="references"]').getByRole("button", { name: "Toggle mode", exact: true });
+    await outside.focus();
+    await page.evaluate(() => (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor.getEditor("source")!.document.history.undo());
+    await expect(content).toHaveText("Source text");
+    await expect(outside).toBeFocused();
+    await page.evaluate(id => (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor.getEditor("source")!.document.blocks.removeBlock(id), `${room}:source-block`);
+    await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(2);
+    await expect(outside).toBeFocused();
+  });
+}
 
 test("document tabs share one editor cache and retain inactive documents without reconnecting", async ({ page }) => {
   const room = `tabs-${crypto.randomUUID()}`;
@@ -975,7 +996,7 @@ test("document tabs share one editor cache and retain inactive documents without
   const before = await page.evaluate(() => {
     const info = (window as unknown as { __rivtoDocuments: DemoInspection & { channels: Map<string, number> } }).__rivtoDocuments;
     const panes = [...info.panes];
-    return { shared: panes.every((pane) => info.editor.getRuntime(pane.id) === pane.editorRuntime && !("editorStorage" in pane.editorRuntime)), channels: [...info.channels] };
+    return { shared: panes.every((pane) => info.editor.getEditor(pane.id) === pane.reactEditor && !("editorStorage" in pane.reactEditor)), channels: [...info.channels] };
   });
   expect(before.shared).toBe(true);
   await referencesTab.click();
@@ -1014,8 +1035,8 @@ async function checkTwoUsers(first: Page, second: Page, route: string): Promise<
       const info = (window as unknown as { __rivtoDocuments: DemoInspection & { channels: Map<string, number> } }).__rivtoDocuments;
       const panes = [...info.panes];
       return {
-        oneEditorStorage: panes.every((pane) => info.editor.getRuntime(pane.id) === pane.editorRuntime && !("editorStorage" in pane.editorRuntime)),
-        singleEditors: new Set(panes.map((pane) => pane.editorRuntime)).size,
+        oneEditorStorage: panes.every((pane) => info.editor.getEditor(pane.id) === pane.reactEditor && !("editorStorage" in pane.reactEditor)),
+        singleEditors: new Set(panes.map((pane) => pane.reactEditor)).size,
         loaded: info.editor.getDocuments().map((doc) => doc.id).sort(),
         channels: [...info.channels.keys()].map((channel) => JSON.parse(channel)[1]),
         unopenedLoaded: info.editor.getDocument(unopened) !== undefined,
@@ -1062,15 +1083,15 @@ test("qualified embeddings allow equal block IDs, show ambiguous fallback, and k
   const target = `${room}:source-block`;
   await page.evaluate((id) => {
     const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    editor.getRuntime("references")!.blocks.insertBlock({ id, type: "paragraph", content: "Same ID in references" });
+    editor.getEditor("references")!.document.blocks.insertBlock({ id, type: "paragraph", content: "Same ID in references" });
   }, target);
   const embeds = page.getByRole("region", { name: "Block editor" });
   await expect(embeds.first().locator('[data-block-content]').first()).toHaveText("Source text");
   await expect(page.getByText("Multiple documents contain this block; showing the first match.", { exact: true })).toHaveCount(0);
   await page.evaluate((id) => {
     const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    const reference = editor.getRuntime("references")!.blocks.getBlocks().find((block) => block.type === "embedding")!;
-    editor.getRuntime("references")!.blocks.setBlockProp(reference.id, "targetDocumentId", "old-document");
+    const reference = editor.getEditor("references")!.document.blocks.getBlocks().find((block) => block.type === "embedding")!;
+    editor.getEditor("references")!.document.blocks.setBlockProp(reference.id, "targetDocumentId", "old-document");
     if (!editor.getDocument("source")!.blocks.hasBlock(id)) throw new Error("Source must remain present");
   }, target);
   await expect(page.getByText("Multiple documents contain this block; showing the first match.", { exact: true })).toHaveCount(1);
@@ -1082,15 +1103,15 @@ test("qualified embeddings allow equal block IDs, show ambiguous fallback, and k
   }, target)).toEqual(["Edited fallback document", "Source text"]);
   expect(await page.evaluate(() => {
     const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    return editor.getRuntime("references")!.blocks.getBlocks().find((block) => block.type === "embedding")!.props.targetDocumentId;
+    return editor.getEditor("references")!.document.blocks.getBlocks().find((block) => block.type === "embedding")!.props.targetDocumentId;
   })).toBe("old-document");
   await page.evaluate((id) => {
     const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
     // An embedding may itself have the same local ID as its target in another document.
-    const host = editor.getRuntime("references")!;
-    host.history.batchUpdates(() => {
-      host.blocks.setBlockType(id, "embedding");
-      host.blocks.updateBlock(id, { content: "", props: { targetDocumentId: "source", targetBlockId: id } });
+    const host = editor.getEditor("references")!;
+    host.document.history.batchUpdates(() => {
+      host.document.blocks.setBlockType(id, "embedding");
+      host.document.blocks.updateBlock(id, { content: "", props: { targetDocumentId: "source", targetBlockId: id } });
     });
   }, target);
   await expect(page.getByText("Recursive block reference.", { exact: true })).toHaveCount(0);

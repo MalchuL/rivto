@@ -6,8 +6,8 @@ import { createTestCoreEditor } from "../../test-utils";
 describe("ClipboardFormatRegistry", () => {
   test("keeps descendants inside composed list formats", async () => {
     const editor = await createTestCoreEditor();
-    const editorView = createReactEditor({ editor, extensions: [listShortcutsExtension()] });
-    const id = editorView.runtime.blocks.insertBlock({
+    const panel = createReactEditor({ editor, extensions: [listShortcutsExtension()] });
+    const id = panel.editor.document.blocks.insertBlock({
       type: "paragraph",
       content: "Parent",
       listProps: { type: "checkbox" },
@@ -15,23 +15,22 @@ describe("ClipboardFormatRegistry", () => {
     }).id;
     const block = editor.blocks.getBlock(id)!;
 
-    expect(editorView.runtime.clipboardFormats.format([block])).toEqual({
+    expect(panel.editor.clipboardFormats.format([block])).toEqual({
       plain: "- [ ] Parent\n  Child",
       markdown: "- [ ] Parent\n  Child",
       html: '<ul><li><input type="checkbox" disabled><p>Parent</p><p>Child</p></li></ul>',
     });
 
-    editorView.runtime.destroy();
+    panel.editor.destroy();
     editor.destroy();
   });
 });
 
-
 test("rejects format and parser registrations after runtime cleanup", async () => {
   const editor = await createTestCoreEditor();
   const view = createReactEditor({ editor });
-  const formats = view.runtime.clipboardFormats;
-  view.runtime.destroy();
+  const formats = view.editor.clipboardFormats;
+  view.editor.destroy();
   expect(() => formats.registerFormatter({ id: "late", format: (_context, value) => value })).toThrow();
   expect(() => formats.registerParser({ id: "late", parse: () => undefined })).toThrow();
   editor.destroy();

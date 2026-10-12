@@ -12,7 +12,7 @@ import { scheduleBlockFocus } from "./ops/focus-ops";
 import { appendWritingBlock } from "./ops/outline-ops";
 import { DefaultBlockBehavior } from "./default-block-behavior";
 import type { BlockBehaviorContext, BlockBehaviorOutcome, DropAxis } from "./types";
-import type { KeyboardSelectionTarget } from "../managers/index";
+import type { KeyboardSelectionTarget } from "../managers";
 
 /**
  * Base class for kanban, bento, columns, and table behaviors.
@@ -46,8 +46,8 @@ export class ContainerBlockBehavior extends DefaultBlockBehavior {
    * @returns "handled" after insertion and scheduling focus at offset zero.
    */
   appendWritingBlock(context: BlockBehaviorContext): BlockBehaviorOutcome {
-    const child = appendWritingBlock(context.editorView, context.block.id);
-    scheduleBlockFocus(context.editorView, context.root, child.id, 0);
+    const child = appendWritingBlock(context.panel, context.block.id);
+    scheduleBlockFocus(context.panel, context.root, child.id, 0);
     return "handled";
   }
 }

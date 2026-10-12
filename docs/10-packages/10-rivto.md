@@ -15,13 +15,13 @@
 Create host-owned storage, then use an explicit API for an acquired model:
 
 ```ts
-import { createRivtoEditor } from "@chulane/rivto";
+import { createDocumentEditor } from "@chulane/rivto";
 import { DocumentStorage } from "@chulane/document-model";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 
 const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
 const document = await storage.create("document-id");
-const editor = createRivtoEditor({ document });
+const editor = createDocumentEditor({ document });
 editor.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
 const blockId = editor.blocks.insertBlock({
   type: "paragraph",

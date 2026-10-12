@@ -1,18 +1,19 @@
-import { createTestReactEditor, createTestCoreEditor } from "../test-utils";
-import { EditorViewController } from "./editor-view-controller";
 import { outdentBlocks } from "../block-behaviors/ops/outline-ops";
+import { createTestCoreEditor, createTestReactEditor } from "../test-utils";
+import { ChildrenPanel } from "./children-panel";
+import { PanelElements } from "./panel-elements";
 
 const groupInput = { type: "group", frame: { x: 0, y: 0, width: 100, height: 100 }, zIndex: 0 };
 
 it("reconciles separate element groups of one subtree without resetting their geometry", async () => {
   const core = await createTestCoreEditor();
   const view = createTestReactEditor({ editor: core });
-  const runtime = view.runtime;
+  const runtime = view.editor;
   const root = core.blocks.insertBlock({ type: "paragraph", content: "Title", children: [{ type: "paragraph", content: "Child" }] });
-  const first = runtime.elements.insertElement(groupInput);
-  const second = runtime.elements.insertElement(groupInput);
+  const first = runtime.document.elements.insertElement(groupInput);
+  const second = runtime.document.elements.insertElement(groupInput);
   const releaseFirst = runtime.acquirePanel(root.id, first.id); const releaseSecond = runtime.acquirePanel(root.id, second.id);
-  const a = runtime.elements.forRoot(first.id); const b = runtime.elements.forRoot(second.id);
+  const a = new PanelElements(runtime.document.elements, runtime.document.getDocument(), first.id); const b = new PanelElements(runtime.document.elements, runtime.document.getDocument(), second.id);
   const card = a.getElementNodes()[0]!;
   expect(card.props.startBlockId).toBe(root.children[0]!.id);
   expect(b.getElementNodes()[0]!.id).not.toBe(card.id);
@@ -29,56 +30,53 @@ it("reconciles separate element groups of one subtree without resetting their ge
 it("shows children and prevents outdenting them past the Panel root", async () => {
   const core = await createTestCoreEditor(); const view = createTestReactEditor({ editor: core });
   const root = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph", content: "Child" }] });
-  const panel = { id: "panel", documentId: core.getDocument().id, rootBlockId: root.id, rootElementId: null };
-  const controller = new EditorViewController(view.runtime, root.id, undefined, { panel });
-  expect(controller.getRootBlockIds()).toEqual([root.children[0]!.id]);
-  outdentBlocks(controller, [root.children[0]!.id]);
+  const panel = new ChildrenPanel(view.editor, { rootBlockId: root.id });
+  expect(panel.blocks.getRootIds()).toEqual([root.children[0]!.id]);
+  outdentBlocks(panel, [root.children[0]!.id]);
   expect(core.blocks.getParentId(root.children[0]!.id)).toBe(root.id);
   core.history.clear(); core.blocks.removeBlock(root.id);
-  expect(controller.getRootBlockIds()).toEqual([]);
+  expect(panel.blocks.getRootIds()).toEqual([]);
   core.history.undo();
-  expect(controller.getRootBlockIds()).toEqual([root.children[0]!.id]);
-  view.runtime.destroy(); await core.destroy();
+  expect(panel.blocks.getRootIds()).toEqual([root.children[0]!.id]);
+  view.editor.destroy(); await core.destroy();
 });
 
 it("pastes text and structured blocks into an empty Panel without changing document roots", async () => {
   const core = await createTestCoreEditor(); const view = createTestReactEditor({ editor: core });
   const root = core.blocks.insertBlock({ type: "paragraph", content: "Title" });
-  const panel = { id: "paste-panel", documentId: core.getDocument().id, rootBlockId: root.id, rootElementId: null };
-  const controller = new EditorViewController(view.runtime, root.id, undefined, { panel });
-  controller.clipboard.paste({ text: "Pasted child", defaultBlockType: "paragraph" });
+  const panel = new ChildrenPanel(view.editor, { rootBlockId: root.id });
+  panel.clipboard.paste({ text: "Pasted child", defaultBlockType: "paragraph" });
   expect(core.blocks.getRootIds()).toEqual([root.id]);
   expect(core.blocks.getBlock(root.id)!.children[0]!.content).toBe("Pasted child");
   core.blocks.removeBlocks([...core.blocks.getBlockNode(root.id)!.childIds]);
-  controller.clipboard.paste({ bundle: { version: 4, blocks: [{ id: "source", type: "paragraph", content: "Structured", props: {}, listProps: {}, pluginData: {}, children: [] }] } });
+  panel.clipboard.paste({ bundle: { version: 4, blocks: [{ id: "source", type: "paragraph", content: "Structured", props: {}, listProps: {}, pluginData: {}, children: [] }] } });
   expect(core.blocks.getRootIds()).toEqual([root.id]);
   expect(core.blocks.getBlock(root.id)!.children[0]!.content).toBe("Structured");
-  view.runtime.destroy(); await core.destroy();
+  view.editor.destroy(); await core.destroy();
 });
 
 it("remaps copied group and connector references into the receiving element subtree", async () => {
   const { ElementPasteStrategy } = await import("../extensions/built-ins/clipboard/element-paste-strategy");
   const core = await createTestCoreEditor(); const view = createTestReactEditor({ editor: core });
   const container = core.elements.insertElement(groupInput);
-  const panel = { id: "group-panel", documentId: core.getDocument().id, rootBlockId: null, rootElementId: container.id };
-  const controller = new EditorViewController(view.runtime, undefined, undefined, { panel });
+  const panel = new ChildrenPanel(view.editor, { rootElementId: container.id });
   const base = { childIds: [], type: "rectangle", frame: { x: 0, y: 0, width: 40, height: 50 }, zIndex: 0 };
   const left = core.elements.insertElement(base);
   const right = core.elements.insertElement(base);
   const connector = core.elements.insertElement({ ...base, type: "connector", props: { source: { elementId: left.id, position: { x: 1, y: 2 } }, target: { elementId: right.id, position: { x: 3, y: 4 } } } });
   const group = core.elements.insertElement({ ...base, type: "group", childIds: [left.id, right.id, connector.id], props: {} });
-  const result = new ElementPasteStrategy(controller).paste({ bundle: { version: 4, blocks: [], elements: [left, right, connector, group].map(({ id }) => core.elements.getElementNode(id)!), selectedElementIds: [group.id] } }, {});
+  const result = new ElementPasteStrategy(panel).paste({ bundle: { version: 4, blocks: [], elements: [left, right, connector, group].map(({ id }) => core.elements.getElementNode(id)!), selectedElementIds: [group.id] } }, {});
   const ids = result!.elementIdMap!;
-  expect(controller.elements.getElementNodes()).toHaveLength(4);
-  expect(controller.elements.getElementNode(ids.get(group.id)!)!.childIds).toEqual([left, right, connector].map((element) => ids.get(element.id)));
-  expect(controller.elements.getElementNode(ids.get(connector.id)!)!.props.source).toMatchObject({ elementId: ids.get(left.id) });
+  expect(panel.elements.getElementNodes()).toHaveLength(4);
+  expect(panel.elements.getElementNode(ids.get(group.id)!)!.childIds).toEqual([left, right, connector].map((element) => ids.get(element.id)));
+  expect(panel.elements.getElementNode(ids.get(connector.id)!)!.props.source).toMatchObject({ elementId: ids.get(left.id) });
   expect(core.elements.getElement(group.id)).toEqual(group);
-  view.runtime.destroy(); await core.destroy();
+  view.editor.destroy(); await core.destroy();
 });
 
 it("shares document elements between null-root Panels without deleting another block scope", async () => {
   const core = await createTestCoreEditor(); const view = createTestReactEditor({ editor: core });
-  const runtime = view.runtime;
+  const runtime = view.editor;
   const a = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph", content: "A" }] });
   const b = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph", content: "B" }] });
   const releaseA = runtime.acquirePanel(a.id, null);
@@ -99,7 +97,7 @@ it("shares document elements between null-root Panels without deleting another b
 
 it("reassigns a moved block card to its current parent while retaining ID and geometry", async () => {
   const core = await createTestCoreEditor(); const view = createTestReactEditor({ editor: core });
-  const runtime = view.runtime;
+  const runtime = view.editor;
   const a = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph", content: "Moving" }] });
   const b = core.blocks.insertBlock({ type: "paragraph" });
   const releaseA = runtime.acquirePanel(a.id, null);
@@ -118,8 +116,8 @@ it("keeps an explicit element root empty after deletion and restores it through 
   const core = await createTestCoreEditor(); const view = createTestReactEditor({ editor: core });
   const root = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph" }] });
   const container = core.elements.insertElement(groupInput);
-  const release = view.runtime.acquirePanel(root.id, container.id);
-  const elements = core.elements.forRoot(container.id);
+  const release = view.editor.acquirePanel(root.id, container.id);
+  const elements = new PanelElements(core.elements, core.getDocument(), container.id);
   const card = elements.getElementNodes()[0]!;
   await Promise.resolve();
   expect(elements.getElementNodes()).toHaveLength(1);
@@ -129,7 +127,7 @@ it("keeps an explicit element root empty after deletion and restores it through 
   expect(() => elements.insertElement(groupInput)).toThrow("not found");
   core.history.undo(); await Promise.resolve();
   expect(elements.getElementNodes().map(({ id }) => id)).toEqual([card.id]);
-  release(); view.runtime.destroy(); await core.destroy();
+  release(); view.editor.destroy(); await core.destroy();
 });
 
 it("adopts a compatible existing card when an explicit element group is opened", async () => {
@@ -139,13 +137,13 @@ it("adopts a compatible existing card when an explicit element group is opened",
     type: "block", id: "existing-card", frame: { x: 234, y: 80, width: 300, height: 120 }, zIndex: 7,
     props: { startBlockId: block.id, endBlockId: block.id },
   }] });
-  const release = view.runtime.acquirePanel(null, container.id);
+  const release = view.editor.acquirePanel(null, container.id);
   await Promise.resolve();
-  const cards = core.elements.forRoot(container.id).getElementNodes();
+  const cards = new PanelElements(core.elements, core.getDocument(), container.id).getElementNodes();
   expect(cards).toHaveLength(1);
   expect(cards[0]).toMatchObject({ id: "existing-card", frame: { x: 234 }, zIndex: 7,
     props: { startBlockId: block.id, endBlockId: block.id } });
-  release(); view.runtime.destroy(); await core.destroy();
+  release(); view.editor.destroy(); await core.destroy();
 });
 
 it("repairs and removes only block elements in the Panel's block scope", async () => {
@@ -154,9 +152,9 @@ it("repairs and removes only block elements in the Panel's block scope", async (
     { type: "paragraph", content: "First" }, { type: "paragraph", content: "Last" },
   ] });
   const container = core.elements.insertElement(groupInput);
-  const elements = core.elements.forRoot(container.id);
+  const elements = new PanelElements(core.elements, core.getDocument(), container.id);
   const shape = elements.insertElement({ ...groupInput, type: "rectangle" });
-  const projection = view.runtime.blockElements.createPanelProjection(root.id, container.id);
+  const projection = view.editor.blockElements.createPanelProjection(root.id, container.id);
   projection.reconcile();
   const card = elements.getElementNodes().find((element) => element.type === "block")!;
   elements.updateElement(card.id, { props: { rotation: 25, autoHeight: false } });
@@ -171,21 +169,21 @@ it("repairs and removes only block elements in the Panel's block scope", async (
   expect(elements.hasElement(card.id)).toBe(false);
   expect(elements.getElement(shape.id)).toEqual(shape);
   expect(core.blocks.hasBlock(root.id)).toBe(true);
-  projection.destroy(); view.runtime.destroy(); await core.destroy();
+  projection.destroy(); view.editor.destroy(); await core.destroy();
 });
 
 it("does not recreate valid block elements in overlapping Panel areas", async () => {
   const core = await createTestCoreEditor(); const view = createTestReactEditor({ editor: core });
   core.blocks.insertBlock({ type: "paragraph", content: "Shared" });
   const a = core.elements.insertElement(groupInput); const b = core.elements.insertElement(groupInput);
-  const first = view.runtime.blockElements.createPanelProjection(null, a.id);
-  const second = view.runtime.blockElements.createPanelProjection(null, b.id);
+  const first = view.editor.blockElements.createPanelProjection(null, a.id);
+  const second = view.editor.blockElements.createPanelProjection(null, b.id);
   first.reconcile(); second.reconcile();
-  const secondCard = core.elements.forRoot(b.id).getElementNodes()[0]!;
+  const secondCard = new PanelElements(core.elements, core.getDocument(), b.id).getElementNodes()[0]!;
   core.elements.updateElement(secondCard.id, { frame: { x: 456 }, props: { rotation: 25 } });
   const before = core.elements.getElementNodes();
   // The document area includes both groups. Revisiting any area must be idempotent.
-  view.runtime.blockElements.reconcile(); first.reconcile(); second.reconcile();
+  view.editor.blockElements.reconcile(); first.reconcile(); second.reconcile();
   expect(core.elements.getElementNodes()).toEqual(before);
-  first.destroy(); second.destroy(); view.runtime.destroy(); await core.destroy();
+  first.destroy(); second.destroy(); view.editor.destroy(); await core.destroy();
 });

@@ -1,9 +1,10 @@
+import { EditorLifecycleTest } from "./EditorLifecycleTest";
 import { DemoEditorPanels } from "./editor-panels";
 import { BroadcastChannelProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
 import {
-  createRivtoEditor,
-  type RivtoEditorApi,
+  createDocumentEditor,
+  type DocumentEditorAPI,
 } from "@chulane/rivto";
 import {
   BENTO_BLOCK_TYPE,
@@ -11,7 +12,7 @@ import {
   COLUMNS_BLOCK_TYPE,
   createBentoBlockInput,
   createColumnsBlockInput,
-  createEditorRuntime,
+  createReactEditor,
   createKanbanBlockInput,
   createTableBlockInput,
   DEFAULT_WRITING_BLOCK_TYPE,
@@ -19,7 +20,7 @@ import {
   edgelessVisualsExtension,
   EditorStorage,
   EditorStorageContext,
-  EditorView,
+  EditorPanel,
   EMBEDDING_BLOCK_TYPE,
   embeddingExtension,
   KANBAN_BLOCK_TYPE,
@@ -33,7 +34,7 @@ import {
   TODO_STORAGE_BLOCK_TYPE,
   todoItemExtension,
   useEditorMode,
-  type EditorRuntime,
+  type ReactEditorApi,
   type MarkdownLinkClick,
 } from "@chulane/rivto-react";
 import { useEffect, useState, useSyncExternalStore, type ChangeEvent } from "react";
@@ -80,7 +81,7 @@ async function saveDemoReviewReport(report: ReviewReport): Promise<void> {
 }
 
 /** @returns A fresh Review extension for one independently owned editor. */
-const demoReviewReports = (editor: RivtoEditorApi) => reviewReportExtensions({
+const demoReviewReports = (editor: DocumentEditorAPI) => reviewReportExtensions({
   editor,
   saveReport: saveDemoReviewReport,
 });
@@ -282,14 +283,14 @@ async function createDemoDocument() {
  */
 async function destroyDemoEditor(runtime: {
   readonly storage: DocumentStorage;
-  readonly editor: RivtoEditorApi;
-  readonly editorRuntime: EditorRuntime;
+  readonly editor: DocumentEditorAPI;
+  readonly reactEditor: ReactEditorApi;
   readonly editorStorage?: EditorStorage;
 }): Promise<void> {
   if (runtime.editorStorage) {
     await runtime.editorStorage.destroy();
   } else {
-    runtime.editorRuntime.destroy();
+    runtime.reactEditor.destroy();
     runtime.editor.destroy();
     await runtime.editor.getDocument().destroy();
   }
@@ -325,7 +326,7 @@ async function createDemoEditor() {
       return document ?? resources.storage.openDocument(id);
     },
     createEditor: (documentEditor) => {
-      return createEditorRuntime({
+      return createReactEditor({
         editor: documentEditor,
         keymap: alternateKeymap,
         extensions: [
@@ -353,13 +354,14 @@ async function createDemoEditor() {
       });
     },
   });
-  const editor = await editorStorage.openCoreEditor(resources.document.id);
-  const editorRuntime = editorStorage.getRuntime(editor.getDocument().id)!;
+  const acquisition = await editorStorage.acquireEditor(resources.document.id);
+  const editor = acquisition.editor.document;
+  const reactEditor = editorStorage.getEditor(editor.getDocument().id)!;
   // Playwright and host scripts locate this demo instance through window, not React refs.
   // The token changes on each create so a stale handle cannot be mistaken for a remount.
   const demoToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   Object.assign(window, {
-    __rivtoDemo: { token: demoToken, editor, editorRuntime },
+    __rivtoDemo: { token: demoToken, editor, reactEditor },
   });
   const introId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
@@ -368,113 +370,113 @@ async function createDemoEditor() {
   const paragraphId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "This paragraph renders *Markdown*, ~~old text~~, and `inline code` when it is not edited.",
-  }, introId).id;
+  }, editor.blocks.getInsertionDestinationAfter(introId)).id;
 
   const selectionStartId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Start a selection in the middle of this sentence and drag downward. See [Rivto](https://example.com).",
-  }, paragraphId).id;
+  }, editor.blocks.getInsertionDestinationAfter(paragraphId)).id;
   const middleParagraphId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "This complete **Markdown paragraph** should be included between partial selections.",
-  }, selectionStartId).id;
+  }, editor.blocks.getInsertionDestinationAfter(selectionStartId)).id;
   const listId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Nested branch one owns several Markdown children.",
-  }, middleParagraphId).id;
+  }, editor.blocks.getInsertionDestinationAfter(middleParagraphId)).id;
   const childId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Level 2: this child owns another nested branch.",
-  }, listId).id;
+  }, editor.blocks.getInsertionDestinationAfter(listId)).id;
   editor.blocks.indentBlock(childId);
   const grandchildId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Level 3: selection now crosses two indentation boundaries.",
-  }, childId).id;
+  }, editor.blocks.getInsertionDestinationAfter(childId)).id;
   editor.blocks.indentBlock(grandchildId);
   const greatGrandchildId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Level 4: deepest item for recursive rendering and outdent checks.",
-  }, grandchildId).id;
+  }, editor.blocks.getInsertionDestinationAfter(grandchildId)).id;
   editor.blocks.indentBlock(greatGrandchildId);
   editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Level 2: sibling after the deep branch.",
-  }, childId);
+  }, editor.blocks.getInsertionDestinationAfter(childId));
 
   const reverseSelectionId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Reverse selection should preserve the browser's anchor and focus direction.",
-  }, listId).id;
+  }, editor.blocks.getInsertionDestinationAfter(listId)).id;
   const secondBranchId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Nested branch two is a second independent structure.",
-  }, reverseSelectionId).id;
+  }, editor.blocks.getInsertionDestinationAfter(reverseSelectionId)).id;
   const numberedChildId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Second branch level 2 child.",
-  }, secondBranchId).id;
+  }, editor.blocks.getInsertionDestinationAfter(secondBranchId)).id;
   editor.blocks.indentBlock(numberedChildId);
   const numberedGrandchildId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Second branch level 3 descendant.",
-  }, numberedChildId).id;
+  }, editor.blocks.getInsertionDestinationAfter(numberedChildId)).id;
   editor.blocks.indentBlock(numberedGrandchildId);
   editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Second branch level 2 sibling.",
-  }, numberedChildId);
+  }, editor.blocks.getInsertionDestinationAfter(numberedChildId));
 
   const sliderId = editor.blocks.insertBlock({
     type: SLIDER_BLOCK_TYPE,
     content: "const selectedBlocks = selection.filter(item => item.type === 'block');",
     props: { value: 35 },
-  }, secondBranchId).id;
+  }, editor.blocks.getInsertionDestinationAfter(secondBranchId)).id;
   const selectionEndId = editor.blocks.insertBlock({
     type: COUNTER_BLOCK_TYPE,
     props: { count: 2 },
-  }, sliderId).id;
+  }, editor.blocks.getInsertionDestinationAfter(sliderId)).id;
   const finalId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Finish the selection in the middle of this sentence, then try copy or cut.",
-  }, selectionEndId).id;
+  }, editor.blocks.getInsertionDestinationAfter(selectionEndId)).id;
   const slashId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Type `/` anywhere here to open searchable slash commands.",
-  }, finalId).id;
+  }, editor.blocks.getInsertionDestinationAfter(finalId)).id;
   const uncheckedId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Try the interactive checkbox",
     listProps: { type: "checkbox", checked: false },
-  }, slashId).id;
+  }, editor.blocks.getInsertionDestinationAfter(slashId)).id;
   const checkedId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Completed checkbox item",
     listProps: { type: "checkbox", checked: true },
-  }, uncheckedId).id;
+  }, editor.blocks.getInsertionDestinationAfter(uncheckedId)).id;
   const numberedStartId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Start a numbered sequence",
     listProps: { type: "start_numbered_list" },
-  }, checkedId).id;
+  }, editor.blocks.getInsertionDestinationAfter(checkedId)).id;
   const numberedNextId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Continue the adjacent sequence",
     listProps: { type: "numbered_list" },
-  }, numberedStartId).id;
+  }, editor.blocks.getInsertionDestinationAfter(numberedStartId)).id;
   const numberedGapId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Ordinary content between numbered items",
-  }, numberedNextId).id;
+  }, editor.blocks.getInsertionDestinationAfter(numberedNextId)).id;
   const numberedContinueId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Continue numbering across the ordinary block",
     listProps: { type: "continue_numbered_list" },
-  }, numberedGapId).id;
+  }, editor.blocks.getInsertionDestinationAfter(numberedGapId)).id;
 
   // The explicit separator is visible in block mode and partitions cards only
   // because its React block plugin declares `separatesBlockElements`.
-  editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, reverseSelectionId);
+  editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, editor.blocks.getInsertionDestinationAfter(reverseSelectionId));
   editor.elements.insertElement({
     type: "block",
     frame: { x: 60, y: 60, width: 500, height: 360 },
@@ -491,25 +493,25 @@ async function createDemoEditor() {
     { type: DEFAULT_WRITING_BLOCK_TYPE, content: "A small idea", props: { bentoWidth: 220 } },
     { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.", props: { bentoWidth: 400 } },
     { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Drag blocks between tiles, nest them inside, or move them back into the editor." },
-  ] }, numberedContinueId);
-  const tableId = editor.blocks.insertBlock(createTableBlockInput(), numberedContinueId).id;
-  const kanbanId = editor.blocks.insertBlock(createKanbanBlockInput(), tableId).id;
+  ] }, editor.blocks.getInsertionDestinationAfter(numberedContinueId));
+  const tableId = editor.blocks.insertBlock(createTableBlockInput(), editor.blocks.getInsertionDestinationAfter(numberedContinueId)).id;
+  const kanbanId = editor.blocks.insertBlock(createKanbanBlockInput(), editor.blocks.getInsertionDestinationAfter(tableId)).id;
   const column = editor.blocks.getBlock(kanbanId)!.children[0]!;
   const cardId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Drag me between columns or back into the editor",
-  }, kanbanId).id;
+  }, editor.blocks.getInsertionDestinationAfter(kanbanId)).id;
   editor.blocks.moveBlocks([cardId], column.id, "inside");
-  const columnsId = editor.blocks.insertBlock(createColumnsBlockInput(2), kanbanId).id;
+  const columnsId = editor.blocks.insertBlock(createColumnsBlockInput(2), editor.blocks.getInsertionDestinationAfter(kanbanId)).id;
   const columnsBoard = editor.blocks.getBlock(columnsId)!;
   const leftColumnId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Left column. Add more blocks here, or use the settings control to change the column count.",
-  }, columnsId).id;
+  }, editor.blocks.getInsertionDestinationAfter(columnsId)).id;
   const rightColumnId = editor.blocks.insertBlock({
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "Right column. Deleting a column moves its blocks into the remaining column.",
-  }, columnsId).id;
+  }, editor.blocks.getInsertionDestinationAfter(columnsId)).id;
   editor.blocks.moveBlocks([leftColumnId], columnsBoard.children[0]!.id, "inside");
   editor.blocks.moveBlocks([rightColumnId], columnsBoard.children[1]!.id, "inside");
   const repeatCount = demoRepeatCount();
@@ -524,8 +526,8 @@ async function createDemoEditor() {
     editor.history.batchUpdates(() => {
       let afterId = editor.blocks.getRootIds().at(-1);
       for (let index = 0; index < repeatCount; index += 1) {
-        afterId = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, afterId).id;
-        afterId = editor.blocks.importForest(template, afterId).roots.at(-1)?.id ?? afterId;
+        afterId = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, editor.blocks.getInsertionDestinationAfter(afterId)).id;
+        afterId = editor.blocks.importForest(template, editor.blocks.getInsertionDestinationAfter(afterId)).roots.at(-1)?.id ?? afterId;
       }
     });
   }
@@ -542,7 +544,7 @@ async function createDemoEditor() {
       priority: 2,
       project: "Planning",
     },
-  }, todoStorageId).id;
+  }, editor.blocks.getInsertionDestinationAfter(todoStorageId)).id;
   editor.blocks.indentBlock(todoId);
   const doingId = editor.blocks.insertBlock({
     type: TODO_ITEM_BLOCK_TYPE,
@@ -553,7 +555,7 @@ async function createDemoEditor() {
       priority: 1,
       project: "Rivto",
     },
-  }, todoId).id;
+  }, editor.blocks.getInsertionDestinationAfter(todoId)).id;
   editor.blocks.insertBlock({
     type: TODO_ITEM_BLOCK_TYPE,
     content: "Set up the workspace",
@@ -563,7 +565,7 @@ async function createDemoEditor() {
       priority: 3,
       project: "Rivto",
     },
-  }, doingId);
+  }, editor.blocks.getInsertionDestinationAfter(doingId));
   seedEdgelessShowcase(edgelessVisuals);
   editor.elements.insertElement(createReviewElementInput({
     id: "demo-review-element",
@@ -574,10 +576,10 @@ async function createDemoEditor() {
   editor.blocks.insertBlock({
     type: EMBEDDING_BLOCK_TYPE,
     props: { targetDocumentId: editor.getDocument().id, targetBlockId: listId },
-  }, paragraphId);
+  }, editor.blocks.getInsertionDestinationAfter(paragraphId));
   editor.history.clear();
 
-  return { ...resources, editor, editorRuntime, editorStorage };
+  return { ...resources, editor, reactEditor, editorStorage };
 }
 
 /**
@@ -588,8 +590,8 @@ async function createDemoEditor() {
  */
 async function createEmptyDemoEditor() {
   const resources = await createDemoDocument();
-  const editor = createRivtoEditor({ document: resources.document });
-  const editorRuntime = createEditorRuntime({
+  const editor = createDocumentEditor({ document: resources.document });
+  const reactEditor = createReactEditor({
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
@@ -602,7 +604,7 @@ async function createEmptyDemoEditor() {
       ...demoReviewReports(editor),
     ],
   });
-  return { ...resources, editor, editorRuntime };
+  return { ...resources, editor, reactEditor };
 }
 
 /**
@@ -649,7 +651,7 @@ function DemoToolbar({
   virtualizePageOverscan,
   onVirtualizePageOverscanChange,
 }: {
-  readonly editor: RivtoEditorApi;
+  readonly editor: DocumentEditorAPI;
   readonly showBlockIds: boolean;
   readonly onShowBlockIdsChange: (visible: boolean) => void;
   readonly virtualizePageThreshold?: boolean | number;
@@ -773,7 +775,7 @@ function JournalDemoApp() {
     return { today, yesterday };
   });
 
-  // EditorView acquires its model but does not own the shared runtime. The
+  // EditorPanel acquires its model but does not own the shared runtime. The
   // application releases runtime subscriptions, commands, and host storage.
   // Cleanup also closes factories that finish after this component unmounts.
   useEffect(() => {
@@ -800,7 +802,7 @@ function JournalDemoApp() {
         {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
         <section className="journal-document" data-journal-document="today">
           <EditorStorageContext.Provider value={todayEditor.editorStorage}>
-            <DemoEditorPanels runtime={todayEditor.editorRuntime}
+            <DemoEditorPanels editor={todayEditor.reactEditor}
               virtualizePageThreshold={virtualizePageThreshold} virtualizePageOverscan={virtualizePageOverscan}>
               <DemoToolbar
                 editor={todayEditor.editor}
@@ -819,10 +821,10 @@ function JournalDemoApp() {
           </EditorStorageContext.Provider>
         </section>
         <section className="journal-document" data-journal-document="yesterday">
-          <EditorView runtime={yesterdayEditor.editorRuntime}>
+          <EditorPanel editor={yesterdayEditor.reactEditor}>
             <JournalDate date={dates.yesterday} />
             <PageSurface />
-          </EditorView>
+          </EditorPanel>
         </section>
       </div>
     </BlockIdsVisibleProvider>
@@ -842,8 +844,8 @@ async function createMultiEditor(
   options: { readonly empty?: boolean; readonly conflict?: "block" } = {},
 ) {
   const resources = await createDemoDocument();
-  const editor = createRivtoEditor({ document: resources.document });
-  const editorRuntime = createEditorRuntime({
+  const editor = createDocumentEditor({ document: resources.document });
+  const reactEditor = createReactEditor({
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
@@ -896,11 +898,11 @@ async function createMultiEditor(
     editor.blocks.insertBlock({ id: "right-counter", type: COUNTER_BLOCK_TYPE, props: { count: 20 } });
   }
   editor.history.clear();
-  return { ...resources, editor, editorRuntime };
+  return { ...resources, editor, reactEditor };
 }
 
 /** Used by e2e: hidden `editor.dump()` for asserting structure not shown in the UI. */
-function DocumentStateDump({ editor }: { readonly editor: RivtoEditorApi }) {
+function DocumentStateDump({ editor }: { readonly editor: DocumentEditorAPI }) {
   const snapshot = useSyncExternalStore(
     (listener) => editor.subscribe(listener),
     () => JSON.stringify(editor.dump()),
@@ -922,12 +924,12 @@ function MultiEditorPane({
     // `data-multi-editor` is used by e2e to scope left/right locators.
     <section className="multi-editor-pane" data-multi-editor={side}>
       <BlockIdsVisibleProvider visible={showBlockIds}>
-        <EditorView runtime={runtime.editorRuntime}>
+        <EditorPanel editor={runtime.reactEditor}>
           <DemoToolbar editor={runtime.editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
           <RevisionsPanel />
           <DocumentStateDump editor={runtime.editor} />
           <DemoEditorSurface />
-        </EditorView>
+        </EditorPanel>
       </BlockIdsVisibleProvider>
     </section>
   );
@@ -1016,8 +1018,8 @@ async function createSyncedPeer(side: "left" | "right", roomId: string, repeatCo
     await storage.destroy();
     throw failure;
   }
-  const editor = createRivtoEditor({ document: document! });
-  const editorRuntime = createEditorRuntime({
+  const editor = createDocumentEditor({ document: document! });
+  const reactEditor = createReactEditor({
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
@@ -1038,19 +1040,19 @@ async function createSyncedPeer(side: "left" | "right", roomId: string, repeatCo
     editor.blocks.insertBlock({
       type: DEFAULT_WRITING_BLOCK_TYPE,
       content: "Both editors share one Yjs room over `BroadcastChannel` (same PC, no server).",
-    }, introId);
+    }, editor.blocks.getInsertionDestinationAfter(introId));
     editor.history.batchUpdates(() => {
       let afterId = editor.blocks.getRootIds().at(-1);
       for (let index = 0; index < repeatCount; index += 1) {
         afterId = editor.blocks.insertBlock({
           type: DEFAULT_WRITING_BLOCK_TYPE,
           content: `Synced repeated block ${index + 1}`,
-        }, afterId).id;
+        }, editor.blocks.getInsertionDestinationAfter(afterId)).id;
       }
     });
     editor.history.clear();
   }
-  return { storage, editor, editorRuntime };
+  return { storage, editor, reactEditor };
 }
 
 /**
@@ -1095,11 +1097,11 @@ function SyncEditorsApp() {
           // `data-editor-sync` is used by e2e to scope sync panes.
           <section key={side} className="multi-editor-pane" data-editor-sync={side}>
             <BlockIdsVisibleProvider visible={showBlockIds}>
-              <EditorView runtime={peers[side].editorRuntime}>
+              <EditorPanel editor={peers[side].reactEditor}>
                 <DemoToolbar editor={peers[side].editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
                 <RevisionsPanel />
                 <DemoEditorSurface />
-              </EditorView>
+              </EditorPanel>
             </BlockIdsVisibleProvider>
           </section>
         ))}
@@ -1122,6 +1124,7 @@ function SyncEditorsApp() {
  */
 export function App() {
   const params = new URLSearchParams(window.location.search);
+  if (params.get("editorLifecycle") === "1") return <EditorLifecycleTest />;
   if (params.get("embeddings") === "1") return <DocumentsDemo />;
   if (params.get("editors") === "2") return <MultiEditorApp />;
   if (params.get("sync") === "1") return <SyncEditorsApp />;

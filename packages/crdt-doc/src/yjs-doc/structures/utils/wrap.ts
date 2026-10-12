@@ -1,11 +1,7 @@
 import * as Y from 'yjs';
-import {
-  CRDTType,
-  BasicType,
-  WrapBasicTypeToCRDTOptions,
-} from '../../../types';
+import { CRDTType, BasicType, WrapBasicTypeToCRDTOptions } from "../../../types";
 import { YJSType } from './types';
-import { YjsArray, YjsMap, YjsText } from '..';
+import { YjsArray, YjsMap, YjsText } from "..";
 import { convertBasicTypeToYJS } from './yjs-converters';
 import { isDeepPlainRecord } from './plain-check';
 import { YjsConvertError } from './error';

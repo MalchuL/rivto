@@ -1,3 +1,4 @@
+import type { EditorEventInit } from "./types";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
@@ -5,44 +6,12 @@ import type {
   EditorMode,
   Selection,
 } from "@chulane/rivto";
-import type { EditorViewApi } from "../../editor-view/types";
+import type { PanelAPI } from "../../panels/types";
 import type {
   DOMEventMap,
   DOMEventName,
   DOMEventTarget,
 } from "./dom-types";
-
-/**
- * Constructor values for one normalized editor event.
- *
- * Registries resolve these values once per native dispatch. The resulting
- * event is then shared by availability predicates and ordered handlers.
- */
-export interface EditorEventInit<
-  Target extends DOMEventTarget = DOMEventTarget,
-  Type extends DOMEventName<Target> = DOMEventName<Target>,
-> {
-  /** Original native browser event. */
-  readonly raw: DOMEventMap<Target>[Type];
-  /** React editor owning browser interaction and focused document capabilities. */
-  readonly editorView: EditorViewApi;
-  /** Root DOM element of the currently committed React surface. */
-  readonly root: HTMLElement;
-  /** Editor mode captured for this dispatch, supplied by the receiving view's rendered surface. */
-  readonly mode: EditorMode;
-  /** Detached structured selection captured for this dispatch. */
-  readonly selection: Selection | undefined;
-  /** Realm on which the native listener is attached. */
-  readonly eventTarget: Target;
-  /** Whether the native target belongs to the active surface. */
-  readonly insideRoot: boolean;
-  /** Nearest stable block container inside the active surface. */
-  readonly blockElement: HTMLElement | null;
-  /** Persisted identity read from blockElement. */
-  readonly blockId: string | undefined;
-  /** Nearest editable content host inside the active surface. */
-  readonly contentElement: HTMLElement | null;
-}
 
 /**
  * Immutable-by-convention value passed through one editor event dispatch.
@@ -55,7 +24,7 @@ export class EditorEvent<
   Type extends DOMEventName<Target> = DOMEventName<Target>,
 > {
   readonly raw: DOMEventMap<Target>[Type];
-  readonly editorView: EditorViewApi;
+  readonly panel: PanelAPI;
   readonly root: HTMLElement;
   readonly mode: EditorMode;
   readonly selection: Selection | undefined;
@@ -68,7 +37,7 @@ export class EditorEvent<
   /** Creates one normalized snapshot from registry-resolved values. */
   constructor(init: EditorEventInit<Target, Type>) {
     this.raw = init.raw;
-    this.editorView = init.editorView;
+    this.panel = init.panel;
     this.root = init.root;
     this.mode = init.mode;
     this.selection = init.selection;

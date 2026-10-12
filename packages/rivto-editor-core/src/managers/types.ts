@@ -1,5 +1,5 @@
 /**
- * Structural contracts for every manager exposed by RivtoEditorApi.
+ * Structural contracts for every manager exposed by DocumentEditorAPI.
  * Concrete manager classes implement these interfaces; consumers depend only
  * on the contracts collected here.
  */
@@ -15,7 +15,7 @@ import type {
   EditorElementPatch,
   EditorElementUpdate,
 } from "../editor/model";
-import type { ElementDestination } from "@chulane/document-model";
+import type { ElementDestination, BlockDestination } from "@chulane/document-model";
 import type { EditorMode } from "../editor/types";
 import type { BlockProcessor } from "./block-manager/block-pipe";
 import type { BlockPrepareErrorHandler } from "./block-manager/types";
@@ -102,12 +102,16 @@ export interface BlockManagerApi {
   getParentId(id: string): string | null | undefined;
   /** @param id - Block ID. @returns True when the block exists and has no parent. */
   isRootBlock(id: string): boolean;
-  /** @param block - Creation input. @param afterId - Placement anchor. @returns Complete persisted block. */
-  insertBlock(block: EditorBlockInput, afterId?: string | null): EditorBlock;
-  /** @param blocks - Complete copied roots or creation inputs. @param afterId - Placement anchor. @param onError - Optional one-shot node recovery. @param ids - Optional preallocated source-to-destination IDs; processors and validation still run. @returns Imported roots and identities. */
+  /** @param block - Creation input. @param destination - Actual parent and optional next sibling. @returns Complete persisted block. */
+  insertBlock(block: EditorBlockInput, destination?: BlockDestination): EditorBlock;
+  /** @param parentId - Parent identity. @returns Its direct child IDs or empty when absent. */
+  getChildIds(parentId: string): readonly string[];
+  /** @param afterId - Sibling to follow, null to prepend, or omitted to append. @returns Document destination. @throws For a missing sibling. */
+  getInsertionDestinationAfter(afterId?: string | null): BlockDestination;
+  /** @param blocks - Complete copied roots or creation inputs. @param destination - Actual parent and optional next sibling. @param onError - Optional one-shot node recovery. @param ids - Optional preallocated source-to-destination IDs; processors and validation still run. @returns Imported roots and identities. */
   importForest(
     blocks: readonly (EditorBlock | EditorBlockInput)[],
-    afterId?: string | null,
+    destination?: BlockDestination,
     onError?: BlockPrepareErrorHandler,
     ids?: ReadonlyMap<string, string>,
   ): ImportedBlockForest;
@@ -171,43 +175,10 @@ export interface BlockRegistryManagerApi {
   destroy(): void;
 }
 
-/**
- * Element commands restricted to the descendants of one container.
- * Null selects the entire document tree. A non-null root is excluded from reads
- * and writes; missing roots read as empty until restored. Insertions go into the
- * root's child list. Existing targets outside the subtree are rejected before writes.
- * Coordinates remain document-canvas coordinates, not offsets from the container.
- * Subscriptions share the editor manager lifetime and can also be disposed early.
- */
-export interface ElementTreeApi extends Omit<ElementManagerApi,
-  "registerProcessor" | "destroy" | "forRoot" | "subscribeStructure" | "getRootIds" | "getElements" | "getElementNodes" | "insertElement"> {
-  /** Fixed container identity, or null for the complete document tree. */
-  readonly rootElementId: string | null;
-  /** @returns Ordered direct child IDs, or document roots for null; empty for a missing container. */
-  getRootIds(): readonly string[];
-  /** @returns Cached recursive child trees, excluding the container itself. Treat snapshots as read-only. */
-  getElements(): EditorElement[];
-  /** @returns Cached flat descendants, excluding the container; empty for a missing container. */
-  getElementNodes(): EditorElementNode[];
-  /**
-   * Inserts a processed tree as the last child of this handle's root.
-   * Existing childIds must already belong to this subtree; IDs are unique document-wide.
-   * @param input - Recursive creation input, including geometry for leaves.
-   * @returns Detached inserted tree with final identities and ordered children.
-   * @throws If the root is absent, an existing child is outside the subtree, or input validation fails.
-   */
-  insertElement(input: EditorElementInput): EditorElement;
-}
-
 /** Document-wide element commands; canvas handles expose restricted operations. */
 export interface ElementManagerApi {
-  /**
-   * Binds reads and commands to one container without creating stored records.
-   * Missing containers read as empty; insertion fails until the container is restored.
-   * @param rootElementId - Container ID, or null for the complete document tree.
-   * @returns Stable handle sharing this manager's processors, history, and subscriptions.
-   */
-  forRoot(rootElementId: string | null): ElementTreeApi;
+  /** @param parentId - Actual element container. @returns Direct child IDs, empty when absent. */
+  getChildIds(parentId: string): readonly string[];
   /**
    * Reads one element with its complete recursive child tree.
    *
@@ -222,17 +193,17 @@ export interface ElementManagerApi {
    */
   getElement(id: string): EditorElement | undefined;
   /**
-   * Reads the root element trees of the document or children of one element.
+   * Reads the root element trees of the whole document, including their nested children.
    *
-   * Roots follow the document root list or the selected element's child list.
+   * Roots follow the document root list; descendants follow each element's child list.
    * Descendants appear inside their parents, rather than as additional array entries.
    * Outside transactions, the array is cached until a contributing element changes,
    * and unchanged subtrees reuse their objects. Treat all returned values as read-only.
    *
-   * @param rootElementId - Container ID, or null/omitted for document roots. Missing containers read as empty.
+   * This collection always starts at document roots; use a panel for bounded subtree reads.
    * @returns Detached recursive roots, or an empty array when there are no elements.
    */
-  getElements(rootElementId?: string | null): EditorElement[];
+  getElements(): EditorElement[];
   /**
    * Observes changes to one element and its complete subtree.
    *
@@ -251,11 +222,11 @@ export interface ElementManagerApi {
   /**
    * Reads the ordered direct child IDs of an element or document root IDs, excluding descendants.
    *
-   * @param rootElementId - Container ID, or null/omitted for document roots. The container itself is excluded.
+   * Returns document roots only; getChildIds(parentId) reads one real parent's direct children.
    * @returns Read-only root list, with stable identity while its contents are unchanged;
-   * an empty list when the selected container is missing or has no children.
+   * an empty list when the document contains no root elements.
    */
-  getRootIds(rootElementId?: string | null): readonly string[];
+  getRootIds(): readonly string[];
   /**
    * Resolves an element's direct parent from document roots and child lists.
    *
@@ -320,17 +291,17 @@ export interface ElementManagerApi {
   /**
    * Reads every stored element once as a flat record, including nested elements.
    *
-   * Without a root, records follow collaborative map iteration order. With a root,
-   * descendants follow tree traversal order and exclude that container. Neither
-   * order is determined by stacking values.
+   * Records follow collaborative map iteration order and include every nested element.
+   * Structural parentage remains available through getParentId and childIds. The
+   * collection order is independent of stacking values and hierarchy traversal.
    * Each contains childIds rather than recursive children. The array is cached outside
    * transactions until invalidated by document changes; treat it and its nodes as
    * read-only. Use getElements when recursive root trees are required.
    *
-   * @param rootElementId - Container ID, or null/omitted for the complete document. Missing containers read as empty.
+   * The complete document is observed; React panel APIs separately bind subtree membership.
    * @returns Detached node array, empty when the selected tree contains no elements.
    */
-  getElementNodes(rootElementId?: string | null): EditorElementNode[];
+  getElementNodes(): EditorElementNode[];
   /**
    * Observes element records and structural changes across the document.
    *

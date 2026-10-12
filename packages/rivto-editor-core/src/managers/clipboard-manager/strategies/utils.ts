@@ -2,7 +2,7 @@
  * Stateless matching, placement, and plain-text insertion helpers shared by
  * clipboard paste strategies.
  */
-import type { RivtoEditorApi } from "../../../editor/types";
+import type { DocumentEditorAPI } from "../../../editor/types";
 import type { EditorPosition, Selection } from "../../selection-manager";
 import { isStructuralSelection } from "../../selection-manager";
 import type { PasteContext, PastePlacement, TextPasteTarget } from "./types";
@@ -14,7 +14,7 @@ import type { PasteContext, PastePlacement, TextPasteTarget } from "./types";
  * @returns Range including empty overlap slices, or undefined for structural/empty selection.
  */
 export function textRangeFromSelection(
-  editor: RivtoEditorApi,
+  editor: DocumentEditorAPI,
   selection: Selection | undefined,
 ): TextPasteTarget | undefined {
   if (!selection || isStructuralSelection(selection)) return undefined;
@@ -85,7 +85,7 @@ export function isBlockPasteContext(
  * @returns Resulting caret, or undefined for empty input.
  */
 export function insertPlainText(
-  editor: RivtoEditorApi,
+  editor: DocumentEditorAPI,
   value: string,
   defaultBlockType: string,
   splitNewlines: boolean,
@@ -112,10 +112,8 @@ export function insertPlainText(
       previous = editor.blocks.insertBlock({
         type: defaultBlockType,
         content: line + (last ? suffix : ""),
-      }, previous).id;
-      if (!destination && index === 0 && !afterId && parentId) {
-        editor.blocks.moveBlocks([previous], parentId, "inside");
-      }
+      }, !destination && index === 0 && !afterId && parentId
+        ? { parentId } : editor.blocks.getInsertionDestinationAfter(previous)).id;
     }
     caret = { blockId: previous!, offset };
   });

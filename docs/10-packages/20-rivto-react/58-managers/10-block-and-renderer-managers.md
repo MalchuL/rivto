@@ -2,7 +2,7 @@
 
 ## `BlockTypeManager`
 
-`editorRuntime.blockTypes` соединяет core block definition, React renderer, optional view, slash conversion и separator metadata. Сам block content хранится только в core.
+`reactEditor.blockTypes` соединяет core block definition, React renderer, optional view, slash conversion и separator metadata. Сам block content хранится только в core.
 
 ### Properties
 
@@ -28,7 +28,7 @@ Public mutable properties отсутствуют. Manager хранит type regi
 
 ## `blockListProps` lifecycle adapter
 
-`editorRuntime.blockListProps` делегирует core `BlockListPropsManager`; React владеет только cleanup registrations extension lifecycle.
+`reactEditor.blockListProps` делегирует core `BlockListPropsManager`; React владеет только cleanup registrations extension lifecycle.
 
 ### `register(registration)`
 
@@ -46,14 +46,17 @@ Defaults объединяются shallowly в registration order. Ошибка 
 
 ## `BlockManager` operations
 
-`editorRuntime.blocks` — тот же core block manager. React не создаёт дополнительную forwarding facade; validation и mutations остаются в core.
+`reactEditor.document.blocks` — тот же core block manager. React не создаёт дополнительную forwarding facade; validation и mutations остаются в core.
 
 `prepareInput(input)` делегирует recursive preparation core `BlockManager`.
 
+`destination` задаёт реального parentId (null для document roots) и optional beforeId.
+PanelAPI принимает `{ root: true }` для своих корней либо локальный parentId и ограничивает операции поддеревом.
+
 ### Mutation methods
 
-- `insertBlock(input, afterId?)` → complete persisted block; throws для invalid list props/core insertion.
-- `importForest(blocks, afterId?, onError?)` accepts explicit `EditorBlock | EditorBlockInput` roots and returns `{ roots, idMap }`.
+- `insertBlock(input, destination?)` → complete persisted block; throws для invalid list props/core insertion.
+- `importForest(blocks, destination?, onError?)` accepts explicit `EditorBlock | EditorBlockInput` roots and returns `{ roots, idMap }`.
 - `updateBlock(id, patch)` → complete persisted block; throws для missing/invalid operation.
 - `updateBlocks(updates)` → complete persisted blocks in input order; strict atomic core batch, throws если любая entry invalid.
 - `deleteListProps(id, keys)` → change `boolean`; throws для missing/invalid operation.
@@ -61,7 +64,7 @@ Defaults объединяются shallowly в registration order. Ошибка 
 
 ## `RendererManager`
 
-`editorRuntime.renderers` — lower-level lookup, когда definition установлен отдельно или persisted unknown type нужно отобразить без регистрации model rule.
+`reactEditor.renderers` — lower-level lookup, когда definition установлен отдельно или persisted unknown type нужно отобразить без регистрации model rule.
 
 ### Properties
 

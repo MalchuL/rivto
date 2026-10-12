@@ -2,7 +2,7 @@ import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
 import { createStructuralSelection } from "@chulane/rivto";
 import { renderToStaticMarkup } from "react-dom/server";
-import { EditorView } from "../../editor-view/editor-view";
+import { EditorPanel } from "../../components/editor-panel/editor-panel";
 import { EditorStorageContext } from "../../editor/editor-storage-context";
 import { PageSurface } from "../../surfaces/page/page-surface";
 import { createTestMultiEditor } from "../../test-utils";
@@ -15,26 +15,26 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   const source = await storage.create("source", [{ id: "target", type: "paragraph", content: "source" }]);
   const host = await storage.create("host");
   const runtime = await createTestMultiEditor([host, source], storage, { extensions: [standardPreset(), embeddingExtension()] });
-  const editor = await runtime.openCoreEditor(host.id);
-  const editorRuntime = runtime.getRuntime(host.id)!;
-  const reference = editorRuntime.blocks.insertBlock({ type: EMBEDDING_BLOCK_TYPE, props: { targetDocumentId: "source", targetBlockId: "target" } });
+  const editor = (await runtime.acquireEditor(host.id)).editor.document;
+  const reactEditor = runtime.getEditor(host.id)!;
+  const reference = reactEditor.document.blocks.insertBlock({ type: EMBEDDING_BLOCK_TYPE, props: { targetDocumentId: "source", targetBlockId: "target" } });
   expect(reference.content).toBe("");
-  expect(() => editorRuntime.blocks.setBlockProp(reference.id, "targetBlockId", 12)).toThrow();
+  expect(() => reactEditor.document.blocks.setBlockProp(reference.id, "targetBlockId", 12)).toThrow();
   editor.selection.set(createStructuralSelection([reference.id], reference.id));
   const copied = editor.clipboard.copy();
   expect(copied?.blocks[0]?.props).toEqual({ targetDocumentId: "source", targetBlockId: "target" });
   expect(copied?.blocks[0]?.children).toEqual([]);
   expect(editor.dump().blocks[0]?.props).toEqual({ targetDocumentId: "source", targetBlockId: "target" });
-  const formats = editorRuntime.clipboardFormats.format([reference]);
+  const formats = reactEditor.clipboardFormats.format([reference]);
   expect(formats.plain).toBe("Embedded block: source/target");
-  const standalone = renderToStaticMarkup(<EditorView runtime={editorRuntime}><PageSurface /></EditorView>);
+  const standalone = renderToStaticMarkup(<EditorPanel editor={reactEditor}><PageSurface /></EditorPanel>);
   expect(standalone).toContain("Block resolution is unavailable.");
   const markup = renderToStaticMarkup(<EditorStorageContext.Provider value={runtime}>
-    <EditorView runtime={editorRuntime}><PageSurface /></EditorView>
+    <EditorPanel editor={reactEditor}><PageSurface /></EditorPanel>
   </EditorStorageContext.Provider>);
   expect(markup).toContain("Loading embedded block…");
   expect(markup).not.toContain("Block resolution is unavailable.");
-  expect("editorStorage" in editorRuntime).toBe(false);
+  expect("editorStorage" in reactEditor).toBe(false);
   expect(markup).toContain('aria-label="Edit embedding"');
   expect(markup).not.toContain('aria-label="Target block ID"');
   expect(markup).not.toContain('aria-label="Target document ID"');
@@ -43,12 +43,12 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   expect(markup).not.toContain(">Embedded block<");
   expect(markup).toContain('data-block-selection-anchor=""');
   expect(markup).toContain('data-slot-position="body"');
-  expect(editorRuntime.blockBehaviors.acceptsDrop({ kind: "between", parentId: reference.id, previousId: null, nextId: null, depth: 1 }, [source.blocks.getBlock("target")!])).toBe(true);
-  const sourceEditor = await runtime.openCoreEditor(source.id);
+  expect(reactEditor.blockBehaviors.acceptsDrop({ kind: "between", parentId: reference.id, previousId: null, nextId: null, depth: 1 }, [source.blocks.getBlock("target")!])).toBe(true);
+  const sourceEditor = (await runtime.acquireEditor(source.id)).editor.document;
   crossDocumentBlockTransfer(sourceEditor, editor, ["target"], { targetId: null, position: "after" });
   expect(source.blocks.hasBlock("target")).toBe(false);
   expect(host.blocks.hasBlock("target")).toBe(true);
-  editorRuntime.destroy();
+  reactEditor.destroy();
   expect(editor.blockRegistry.has(EMBEDDING_BLOCK_TYPE)).toBe(false);
   await runtime.destroy(); await storage.destroy();
 });
@@ -57,7 +57,7 @@ test("clipboard retargets copied internal references and preserves qualified ext
   const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
   const source = await storage.create("A"); const target = await storage.create("B");
   const runtime = await createTestMultiEditor([source, target], storage, { extensions: [standardPreset(), embeddingExtension()] });
-  const a = await runtime.openCoreEditor("A"); const b = await runtime.openCoreEditor("B");
+  const a = (await runtime.acquireEditor("A")).editor.document; const b = (await runtime.acquireEditor("B")).editor.document;
   a.blocks.insertBlock({ id: "branch", type: "paragraph", children: [
     { id: "target", type: "paragraph", content: "Copied target" },
     { id: "internal", type: EMBEDDING_BLOCK_TYPE, props: { targetDocumentId: "A", targetBlockId: "target" } },
@@ -66,9 +66,9 @@ test("clipboard retargets copied internal references and preserves qualified ext
   b.blocks.insertBlock({ id: "target", type: "paragraph", content: "Existing target" });
   b.history.clear();
   a.selection.set(createStructuralSelection(["branch"]));
-  const bundle = runtime.getRuntime("A")!.clipboard.copy()!;
+  const bundle = runtime.getEditor("A")!.clipboard.copy()!;
   expect(bundle.sourceDocumentId).toBe("A");
-  const receivingRuntime = runtime.getRuntime("B")!;
+  const receivingRuntime = runtime.getEditor("B")!;
   receivingRuntime.clipboard.paste({ bundle, placement: { mergeText: false } }, receivingRuntime);
   const branch = b.blocks.getBlock("branch")!;
   const copied = branch.children[0]!;

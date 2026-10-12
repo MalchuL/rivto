@@ -1,6 +1,6 @@
 # React capability reference
 
-`EditorRuntime` предоставляет общие менеджеры; `EditorViewApi` предоставляет локальные операции и явный доступ к runtime. Контракты лежат рядом с реализациями. Registrations, созданные внутри extension `setup`, автоматически удаляются при cleanup.
+`ReactEditor` предоставляет общие менеджеры; `PanelAPI` предоставляет локальные операции и явный доступ к runtime. Контракты лежат рядом с реализациями. Registrations, созданные внутри extension `setup`, автоматически удаляются при cleanup.
 
 Все публичные React `subscribe(listener)` capabilities используют один stream на manager и Set-семантику: разрешено несколько distinct callbacks, новый callback не заменяет старые, одинаковая function reference имеет одну effective registration, returned unsubscribe idempotent, immediate вызова нет. После notification consumer читает соответствующий `revision`/snapshot/getter. Исключения listener не перехватываются.
 
@@ -38,9 +38,9 @@
 
 `prepareInput(inputs)` принимает root forest и без изменения document рекурсивно применяет core block definitions, list-property policy, processors и portable validation.
 
-### `insertBlock(input, afterId?)`
+### `insertBlock(input, destination?)`
 
-- **Аргументы:** input; optional sibling `afterId`, где `null` означает начало.
+- **Аргументы:** input; в DocumentEditorAPI — `{ parentId: string | null, beforeId?: string }`, в PanelAPI — `{ root: true, beforeId?: string } | { parentId: string, beforeId?: string }`. Без destination вставка идёт в конец корней соответствующего API.
 - **Возвращает:** complete persisted block.
 - **Исключения:** preparation/core insertion errors.
 
@@ -132,10 +132,10 @@ Handler errors передаются native dispatch caller. Higher `priority` в
 - `format(blocks)` → `{ plain, markdown, html }`; formatter errors propagate.
 - `parse({ html, text })` → first matched inputs или `undefined`; parser errors propagate.
 
-## `runtime.slashCommands` и `editorView.slashCommands`
+## `runtime.slashCommands` и `panel.slashCommands`
 
 - `register(command)` → disposer; throws для empty/duplicate ID.
 - `delete(id)` → `boolean`.
-- `editorView.slashCommands.getAll(context)` → available commands в registration order; predicate errors propagate.
-- `editorView.slashCommands.execute(id, context)` → `void`; throws для unknown ID и command errors.
+- `panel.slashCommands.getAll(context)` → available commands в registration order; predicate errors propagate.
+- `panel.slashCommands.execute(id, context)` → `void`; throws для unknown ID и command errors.
 - readonly `revision` и `subscribe(listener)` поддерживают menu rendering.

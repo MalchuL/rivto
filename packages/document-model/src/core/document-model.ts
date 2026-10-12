@@ -1,19 +1,6 @@
 import { CRDTDoc, CRDTUndoScope } from "@chulane/crdt-doc";
-import {
-  DocumentBlockManager,
-  DocumentElementManager,
-  DocumentPluginDataManager,
-  DocumentHistoryManager,
-} from "./managers";
-import type {
-  DocumentBlockManagerApi,
-  DocumentElementManagerApi,
-  DocumentHistoryManagerApi,
-  DocumentModel,
-  DocumentPluginDataManagerApi,
-  Snapshot,
-  SnapshotUpdate,
-} from "./types";
+import { DocumentBlockManager, DocumentElementManager, DocumentPluginDataManager, DocumentHistoryManager } from "./managers";
+import type { DocumentBlockManagerApi, DocumentElementManagerApi, DocumentHistoryManagerApi, DocumentModel, DocumentPluginDataManagerApi, Snapshot, SnapshotUpdate } from "./types";
 import { assertPortableRecord, clone } from "./utils";
 
 /**

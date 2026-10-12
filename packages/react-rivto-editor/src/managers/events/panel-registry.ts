@@ -1,7 +1,8 @@
+import type { RegistrationOwner } from "../extensions/types";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorMode } from "@chulane/rivto";
-import type { EditorViewApi } from "../../editor-view/types";
-import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { PanelAPI } from "../../panels/types";
+import type { ReactEditorApi } from "../../editor/types";
 import { DOCUMENT_VIEW_SELECTOR } from "./document-view";
 
 // Window pointer continuations belong to the editor that started the gesture,
@@ -10,17 +11,18 @@ const pointerRoots = new WeakMap<Document, HTMLElement>();
 const pointerEventRoots = new WeakMap<Event, HTMLElement>();
 
 /** Owns mounted document roots, focus, and event routing between their views. */
-export class EditorViewRegistry {
+export class PanelRegistry {
   private activeRoot: HTMLElement | null = null;
   private pointerRoot?: HTMLElement;
   private readonly eventViews = new WeakMap<globalThis.Event, HTMLElement | null>();
-  private readonly documentViews = new Map<HTMLElement, { document: DocumentModel; rootBlockId?: string; api?: EditorViewApi; deactivate?: () => void; cancelSelection?: () => void }>();
+  private readonly documentViews = new Map<HTMLElement, { document: DocumentModel; rootBlockId?: string; api?: PanelAPI; deactivate?: () => void; cancelSelection?: () => void }>();
 
   /**
-   * @param editorRuntime - Document editor whose selection follows the active view.
+   * @param reactEditor - Document editor whose selection follows the active view.
    * Root subscribers reconnect delegated listeners after roots change.
+   * @param extensions - Internal registration ownership and destruction guard.
    */
-  constructor(private readonly editorRuntime: EditorRuntime) {}
+  constructor(private readonly reactEditor: ReactEditorApi, private readonly extensions: RegistrationOwner) {}
   private readonly rootListeners = new Set<() => void>();
   /** Observes root registration changes without observing document edits. */
   subscribeRoots(listener: () => void): () => void {
@@ -31,15 +33,14 @@ export class EditorViewRegistry {
   /** Returns the API for the last activated registered view. The view remains remembered
    * when focus leaves the editor. Returns undefined before activation, after its root
    * is removed, or when that root was registered without an API. */
-  getActive(): EditorViewApi | undefined { return this.activeRoot ? this.getApi(this.activeRoot) : undefined; }
+  getActive(): PanelAPI | undefined { return this.activeRoot ? this.getApi(this.activeRoot) : undefined; }
   /** Returns the first registered full-document view, falling back to the first subtree.
    * Returns undefined when no root is registered or the chosen root has no API.
    * This choice does not depend on which view is active. */
-  getDefault(): EditorViewApi | undefined { const root = this.getDefaultRoot(); return root ? this.getApi(root) : undefined; }
+  getDefault(): PanelAPI | undefined { const root = this.getDefaultRoot(); return root ? this.getApi(root) : undefined; }
   /** Returns the last activated registered root without applying a fallback, or null
    * before activation and after that root is removed. */
   getActiveRoot(): HTMLElement | null { return this.activeRoot; }
-
 
   /** @returns A new set of all registered roots, including full-document and subtree views.
    * Later registrations and removals do not change the returned set. */
@@ -52,7 +53,7 @@ export class EditorViewRegistry {
 
   /** @param root - Registered editor surface.
    * @returns Its API, or undefined for an unknown root or a registration without an API. */
-  getApi(root: HTMLElement): EditorViewApi | undefined { return this.documentViews.get(root)?.api; }
+  getApi(root: HTMLElement): PanelAPI | undefined { return this.documentViews.get(root)?.api; }
 
   /** @returns A mounted full-document surface, independent of interaction; falls back to the first subtree when no full document is mounted. */
   getDefaultRoot(): HTMLElement | null {
@@ -74,7 +75,7 @@ export class EditorViewRegistry {
    * falling back to the first full-document view or first subtree. No additional mode state is stored, and the core mode remains shared.
    * Dispatch captures this value once in `event.mode`; handlers use that snapshot.
    * View-specific commands outside dispatch can call this method, while operations
-   * that depend on document mode should use `editorRuntime.mode.get()`.
+   * that depend on document mode should use `reactEditor.mode.get()`.
    * @param root - Surface to inspect; omitted to choose the active or default root.
    * Explicit null reads the core mode without choosing another root.
    * @returns Current DOM view's surface kind, or core mode before mounting
@@ -83,7 +84,7 @@ export class EditorViewRegistry {
   getSurfaceType(root = this.getActiveRoot() ?? this.getDefaultRoot()): EditorMode {
     const surface = root?.getAttribute("data-rivto-surface");
     if (surface === "block" || surface === "edgeless") return surface;
-    return this.editorRuntime.mode.get();
+    return (root ? this.documentViews.get(root)?.api?.mode.get() : undefined) ?? "block";
   }
 
   /**
@@ -98,8 +99,8 @@ export class EditorViewRegistry {
    * and returns keyboard focus to an enclosing mounted surface, retaining source undo.
    * Full-document surface changes preserve selection when switching presentation modes.
    */
-  registerDocumentView(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: EditorViewApi, deactivate?: () => void, cancelSelection?: () => void): () => void {
-    this.editorRuntime.extensions.assertActive();
+  registerDocumentView(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: PanelAPI, deactivate?: () => void, cancelSelection?: () => void): () => void {
+    this.extensions.assertActive();
     const entry = { document, rootBlockId, api, deactivate, cancelSelection };
     this.documentViews.set(root, entry);
     this.notifyRootsChanged();
@@ -118,7 +119,7 @@ export class EditorViewRegistry {
       // Retain source undo while the target is missing; the next view interaction chooses its own history again.
       // Replacing a full-document surface (page/canvas) keeps core selection.
       // Removing the active embedded subtree releases its occurrence's selection.
-      if (entry.rootBlockId !== undefined) this.editorRuntime.selection.clear();
+      if (entry.rootBlockId !== undefined) this.reactEditor.document.selection.clear();
       if (root.contains(root.ownerDocument.activeElement)) {
         const parent = root.parentElement?.closest<HTMLElement>(DOCUMENT_VIEW_SELECTOR);
         if (parent && this.documentViews.has(parent)) parent.focus({ preventScroll: true });
@@ -182,7 +183,7 @@ export class EditorViewRegistry {
     if (changed && activatesView) {
       if (this.activeRoot) {
         this.documentViews.get(this.activeRoot)?.deactivate?.();
-        this.editorRuntime.selection.clear();
+        this.reactEditor.document.selection.clear();
       }
       this.activeRoot = chosen;
     }

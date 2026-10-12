@@ -21,14 +21,14 @@ import {
 } from "react";
 import { z } from "zod";
 import { createBlockBehaviorContext } from "../../block-behaviors/context";
-import { ContainerBlockBehavior } from "../../block-behaviors/index";
+import { ContainerBlockBehavior } from "../../block-behaviors";
 import type { BlockWrapperProps } from "../../blocks";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { editorControlProps } from "../../constants";
-import { useBlock, useBlockNode, useBlockSelectionAnchor, useEditorRoot, useEditorView, usePreventTextEditing } from "../../hooks";
+import { useBlock, useBlockNode, useBlockSelectionAnchor, useEditorRoot, usePanel, usePreventTextEditing } from "../../hooks";
 import type { TodoItemProps, TodoItemStatus } from "./todo-item";
 import { TODO_ITEM_BLOCK_TYPE } from "./todo-item";
 import {
@@ -189,7 +189,7 @@ function FilterOption({ id, checked, label, onToggle }: {
 
 /** Supplies local storage state and a card boundary around the shared subtree. */
 function TodoStorageState({ block, children }: BlockWrapperProps) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const { block: tree } = useBlock(block.id);
   const childBlocks = tree?.children ?? [];
   const [query, setQuery] = useState("");
@@ -216,13 +216,13 @@ function TodoStorageState({ block, children }: BlockWrapperProps) {
     const desired = orderTodoStorageChildren(childBlocks, props.statusOrder);
     const current = childBlocks.map(({ id }) => id);
     if (desired.some((id, index) => id !== current[index])) {
-      editorView.runtime.history.batchUpdates(() => {
+      panel.editor.document.history.batchUpdates(() => {
         desired.forEach((id, index) => {
-          editorView.runtime.blocks.moveBlock(id, index ? desired[index - 1]! : null);
+          panel.blocks.moveBlock(id, index ? desired[index - 1]! : null);
         });
       });
     }
-  }, [block.props, childBlocks, editorView, tree]);
+  }, [block.props, childBlocks, panel, tree]);
 
   const value = useMemo<TodoStorageContextValue>(() => ({
     storageId: block.id,
@@ -248,7 +248,7 @@ export function TodoStorageBlockWrapper({ block, children }: BlockWrapperProps) 
 
 /** Renders search, disclosure filter menus, and persisted status-order controls. */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const { element: root } = useEditorRoot();
   const editing = useBlockNode<TodoStorageProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
@@ -285,7 +285,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    const viewContext = root ? createBlockBehaviorContext(editorView, blockId, root) : undefined;
+    const viewContext = root ? createBlockBehaviorContext(panel, blockId, root) : undefined;
     if (viewContext) todoStorageBehavior.appendWritingBlock(viewContext);
   };
 
@@ -382,9 +382,9 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
 
 /** Hides a direct TODO child when its owning storage presentation rejects it. */
 export function TodoStorageVisibility({ block, children }: BlockWrapperProps) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const context = useContext(TodoStorageContext);
-  const directChild = context && editorView.runtime.blocks.getParentId(block.id) === context.storageId;
+  const directChild = context && panel.blocks.getParentId(block.id) === context.storageId;
   if (directChild && !matchesTodoStorage(block, context.query, context.filters)) return null;
   return children;
 }

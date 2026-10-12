@@ -1,27 +1,27 @@
 import { isStructuralSelection } from "@chulane/rivto";
-import type { EditorViewApi } from "../../editor-view/types";
-import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { PanelAPI } from "../../panels/types";
+import type { ReactEditorApi } from "../../editor/types";
 import { blockIdsOf } from "../../elements/block-element-projection";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS, isHTMLElementNode } from "../../managers";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 
 /** Removes selected descendants whose selected ancestor already owns them. */
-function topLevelSelection(editorView: EditorViewApi, blockIds: readonly string[]): string[] {
+function topLevelSelection(panel: PanelAPI, blockIds: readonly string[]): string[] {
   const selected = new Set(blockIds);
   return blockIds.filter((id) => {
-    let parentId = editorView.runtime.blocks.getParentId(id);
+    let parentId = panel.blocks.getParentId(id);
     while (parentId) {
       if (selected.has(parentId)) return false;
-      parentId = editorView.runtime.blocks.getParentId(parentId);
+      parentId = panel.blocks.getParentId(parentId);
     }
     return true;
   });
 }
 
 /** Deletes selected blocks, including nested blocks, as one structural transaction. */
-export function registerEdgelessDeletion(editorRuntime: EditorRuntime): void {
-  const selection = getEdgelessRuntime(editorRuntime);
-  editorRuntime.keyboard.register({
+export function registerEdgelessDeletion(reactEditor: ReactEditorApi): void {
+  const selection = getEdgelessRuntime(reactEditor);
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.edgelessSelectionDelete,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessSelectionDelete],
     mode: "edgeless",
@@ -33,32 +33,32 @@ export function registerEdgelessDeletion(editorRuntime: EditorRuntime): void {
         !target.isContentEditable &&
         !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName);
     },
-  }, ({ editorView, root }) => {
+  }, ({ panel, root }) => {
     const canvas = selection.get();
     let handled = false;
-    if (canvas.active && canvas.items.length && editorView.runtime.commands.has("edgeless.visual.delete")) {
-      editorView.runtime.commands.execute("edgeless.visual.delete", { editorView, payload: { selection: true } });
+    if (canvas.active && canvas.items.length && panel.editor.document.commands.has("edgeless.visual.delete")) {
+      panel.editor.document.commands.execute("edgeless.visual.delete", { panel, payload: { selection: true } });
       root.focus({ preventScroll: true });
       handled = true;
     } else {
-      const current = editorView.selection.get();
+      const current = panel.selection.get();
       const core = isStructuralSelection(current) ? current : undefined;
       const blockIds = canvas.active && canvas.items.length
         ? canvas.items.flatMap((id) => {
-          const element = editorView.elements.getElementNode(id);
-          return element?.type === "block" ? blockIdsOf(element, editorView.getRootBlockIds()) : [];
+          const element = panel.elements.getElementNode(id);
+          return element?.type === "block" ? blockIdsOf(element, panel.blocks.getRootIds()) : [];
         })
         : core?.blocks.map((block) => block.id) ?? [];
-      const targets = topLevelSelection(editorView, blockIds);
-      if (targets.length) {
+      const targets = topLevelSelection(panel, blockIds);
+      if (targets.length && targets.every(id => panel.blocks.canRemove(id))) {
         if (canvas.active && canvas.items.length) {
-          editorView.runtime.history.batchUpdates(() => {
-            targets.forEach((id) => editorView.runtime.blocks.removeBlock(id));
-            editorView.elements.removeElements(canvas.items);
+          panel.editor.document.history.batchUpdates(() => {
+            panel.blocks.removeBlocks(targets);
+            panel.elements.removeElements(canvas.items);
           });
           selection.clear();
         } else {
-          editorView.selection.delete();
+          panel.selection.delete();
         }
         root.focus({ preventScroll: true });
         requestAnimationFrame(() => root.focus({ preventScroll: true }));

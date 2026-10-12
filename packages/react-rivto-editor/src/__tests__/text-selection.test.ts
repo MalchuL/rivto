@@ -1,8 +1,4 @@
-import {
-  createTextSelection,
-  createVisibleStructuralSelection,
-  resolveSelectionEndpoints,
-} from "../managers";
+import { createTextSelection, createVisibleStructuralSelection, resolveSelectionEndpoints } from "../managers";
 
 const blocks = [
   { id: "first", length: 10 },

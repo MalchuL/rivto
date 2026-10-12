@@ -4,7 +4,7 @@ import {
   GraphRuntime,
   type PropagationContext,
   type ValueBinding,
-} from "./index";
+} from ".";
 
 /** Creates a live value binding whose writes synchronously notify subscribers. */
 function memoryValue(initial: unknown): ValueBinding & { value: unknown; notify(value: unknown, context?: PropagationContext): void } {

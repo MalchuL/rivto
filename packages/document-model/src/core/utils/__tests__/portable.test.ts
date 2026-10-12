@@ -1,9 +1,4 @@
-import {
-  assertPortableValue,
-  clone,
-  isPortableValue,
-  requireNonemptyId,
-} from "..";
+import { assertPortableValue, clone, isPortableValue, requireNonemptyId } from "..";
 
 describe("portable import values", () => {
   it("accepts primitives, arrays, and plain records", () => {

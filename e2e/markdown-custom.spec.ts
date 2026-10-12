@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
 
 test("renders plain writing text and keeps Markdown list syntax", async ({ page }) => {
   const ids = await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
     return {
       plain: editor.blocks.insertBlock({ type: "paragraph", content: "Child 0-1" }).id,
       list: editor.blocks.insertBlock({ type: "paragraph", content: "- item" }).id,
@@ -47,7 +47,7 @@ test("preserves an existing caret during an external text update", async ({ page
     selection.setBaseAndExtent(text, 4, text, 4);
   });
   await page.evaluate((blockId) => {
-    const runtime = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const runtime = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
     runtime.blocks.updateBlock(blockId, { content: "Changed content" });
   }, id);
   await expect(editor).toHaveText("Changed content");
@@ -188,7 +188,7 @@ test("preserves a newer Markdown edit when code input arrives before React reren
   const newer = "```text\nold\n```\n\nNewer tail";
 
   await page.evaluate(({ blockId, content }) => {
-    const core = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const core = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
     core.blocks.updateBlock(blockId, { content });
   }, { blockId: id, content: source });
   await expect(code).toHaveText("old");
@@ -199,7 +199,7 @@ test("preserves a newer Markdown edit when code input arrives before React reren
   // If this fails, read the current block content inside updateCode before
   // replacing code; also recheck the fence position if earlier text shifted.
   await code.evaluate((element, { blockId, content }) => {
-    const core = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const core = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
     core.blocks.updateBlock(blockId, { content });
     element.textContent = "edited";
     element.dispatchEvent(new InputEvent("input", { bubbles: true }));
@@ -240,7 +240,7 @@ test("keeps a filtered slash menu beside the caret when it opens upward", async 
   await page.setViewportSize({ width: 900, height: 600 });
   const id = await page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
   });

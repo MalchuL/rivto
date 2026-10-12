@@ -1,17 +1,17 @@
-import { createTestEditor as createRivtoEditor } from "../test-utils";
+import { createTestEditor as createDocumentEditor } from "../test-utils";
 import { YjsDoc, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentModelImpl, DocumentStorage } from "@chulane/document-model";
-import { createRivtoEditor as createCoreEditor } from "../rivto-editor";
+import { createDocumentEditor as createCoreEditor } from "../document-editor";
 import { createStructuralSelection } from "../../managers/selection-manager";
 
-describe("EditorRuntime methods", () => {
+describe("DocumentEditor methods", () => {
   it("requires one fixed document and leaves other documents untouched", async () => {
     const document = new DocumentModelImpl(new YjsDoc("fixed"));
     const editor = createCoreEditor({ document });
     expect(() => createCoreEditor({} as never)).toThrow("Document is required");
     expect(editor).not.toHaveProperty("setDocument");
     expect(editor).not.toHaveProperty("documents");
-    expect(editor.mode.get()).toBe("block");
+    expect(editor).not.toHaveProperty("mode");
     editor.blockRegistry.defineBlock({ type: "paragraph" });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Fixed" }).id;
     expect(editor.getDocument()).toBe(document);
@@ -23,10 +23,10 @@ describe("EditorRuntime methods", () => {
     type RemovedEditorMethods = Extract<
       "register" | "execute" | "removeCommand" | "deleteSelection" | "undo" | "redo"
       | "batchUpdates" | "batchUpdatesWithoutHistory",
-      keyof Awaited<ReturnType<typeof createRivtoEditor>>
+      keyof Awaited<ReturnType<typeof createDocumentEditor>>
     >;
     const noRemovedMethods: Record<RemovedEditorMethods, never> = {};
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
 
     expect(noRemovedMethods).toEqual({});
     expect(editor).not.toHaveProperty("register");
@@ -41,7 +41,7 @@ describe("EditorRuntime methods", () => {
   });
 
   it("supports a complete lifecycle without blocks", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
 
     expect(editor.blocks.getBlocks()).toEqual([]);
     expect(editor.blocks.getRootIds()).toEqual([]);
@@ -266,7 +266,7 @@ describe("EditorRuntime methods", () => {
   });
 
   it("keeps shared reads, history, selection, and subscriptions isolated while another document is used", async () => {
-    const shared = new DocumentModelImpl(new YjsDoc("shared-editor-runtime"));
+    const shared = new DocumentModelImpl(new YjsDoc("shared-react-editor"));
     const alternate = new DocumentModelImpl(new YjsDoc("shared-editor-alternate"));
     shared.blocks.insertBlock({ id: "shared", type: "paragraph", content: "Initial" });
     alternate.blocks.insertBlock({ id: "alternate", type: "paragraph", content: "Alternate" });
@@ -308,10 +308,10 @@ describe("EditorRuntime methods", () => {
   });
 
   it("mutates blocks through the focused block manager", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
 
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
+    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(firstId)).id;
 
     editor.blocks.updateBlock(firstId, { content: "First updated" });
     editor.blocks.setBlockProp(firstId, "tone", "info");
@@ -340,7 +340,7 @@ describe("EditorRuntime methods", () => {
   });
 
   it("loads and dumps snapshots through editor methods", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
 
     editor.load({
       version: 9,

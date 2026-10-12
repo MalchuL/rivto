@@ -7,10 +7,9 @@ import type {
   EditorElementUpdate,
 } from "../../editor/model";
 import type { DocumentModel, ElementDestination, ElementInput, ElementUpdate } from "@chulane/document-model";
-import type { RivtoEditorApi } from "../../editor/types";
+import type { DocumentEditorAPI } from "../../editor/types";
 import type { ElementProcessor } from "./element-pipe";
 import type { ElementManagerApi } from "../types";
-import { ElementTree } from "./element-tree";
 import { Pipe } from "../../utils/pipe";
 
 interface ElementProcessorRegistration {
@@ -28,22 +27,24 @@ export class ElementManager implements ElementManagerApi {
    */
   private readonly pipe = new Pipe<ElementInput>();
   private readonly processors = new Set<ElementProcessorRegistration>();
-  private readonly trees = new Map<string | null, ElementTree>();
   private readonly subscriptions = new Set<() => void>();
 
   constructor(
-    private readonly editor: RivtoEditorApi,
+    private readonly editor: DocumentEditorAPI,
   ) {
   }
 
   /**
    * Reads the ordered direct child IDs of an element or document root IDs, excluding descendants.
    *
-   * @param rootElementId - Container ID, or null/omitted for document roots. The container itself is excluded.
+   * Returns document roots only; getChildIds(parentId) reads one real parent's direct children.
    * @returns Read-only root list, with stable identity while its contents are unchanged;
-   * an empty list when the selected container is missing or has no children.
+   * an empty list when the document contains no root elements.
    */
-  getRootIds(rootElementId: string | null = null): readonly string[] { return this.document.elements.getRootIds(rootElementId); }
+  getRootIds(): readonly string[] { return this.document.elements.getRootIds(); }
+
+  /** @param parentId - Actual parent identity. @returns Direct children or empty when absent. */
+  getChildIds(parentId: string): readonly string[] { return this.document.elements.getRootIds(parentId); }
 
   /**
    * Resolves an element's direct parent from document roots and child lists.
@@ -53,23 +54,6 @@ export class ElementManager implements ElementManagerApi {
    */
   getParentId(id: string): string | null | undefined { return this.document.elements.getParentId(id); }
 
-
-  /**
-   * Binds element reads and commands to a container's descendants or document roots.
-   * Handles reuse this editor's processors, history, and model; no records are created.
-   * A missing container reads as empty and rejects insertion until restored, including
-   * by undo. The container itself is excluded and cannot be mutated through the handle.
-   * @param rootElementId - Container ID, or null for the complete document tree.
-   * @returns Stable handle for this root for the lifetime of the manager.
-   */
-  forRoot(rootElementId: string | null): ElementTree {
-    let tree = this.trees.get(rootElementId);
-    if (!tree) {
-      tree = new ElementTree(this, this.document, rootElementId);
-      this.trees.set(rootElementId, tree);
-    }
-    return tree;
-  }
 
   /**
    * Moves selected subtrees together, preserving IDs and canvas-relative geometry.
@@ -153,17 +137,17 @@ export class ElementManager implements ElementManagerApi {
   getElement(id: string): EditorElement | undefined { return this.document.elements.getElement(id); }
 
   /**
-   * Reads the root element trees of the document or children of one element.
+   * Reads the root element trees of the whole document, including their nested children.
    *
-   * Roots follow the document root list or the selected element's child list.
+   * Roots follow the document root list; descendants follow each element's child list.
    * Descendants appear inside their parents, rather than as additional array entries.
    * Outside transactions, the array is cached until a contributing element changes,
    * and unchanged subtrees reuse their objects. Treat all returned values as read-only.
    *
-   * @param rootElementId - Container ID, or null/omitted for document roots. Missing containers read as empty.
+   * This collection always starts at document roots; use a panel for bounded subtree reads.
    * @returns Detached recursive roots, or an empty array when there are no elements.
    */
-  getElements(rootElementId: string | null = null): EditorElement[] { return this.document.elements.getElements(rootElementId); }
+  getElements(): EditorElement[] { return this.document.elements.getElements(); }
 
   /**
    * Observes changes to one element and its complete subtree.
@@ -201,18 +185,18 @@ export class ElementManager implements ElementManagerApi {
   /**
    * Reads every stored element once as a flat record, including nested elements.
    *
-   * Without a root, records follow collaborative map iteration order. With a root,
-   * descendants follow tree traversal order and exclude that container. Neither
-   * order is determined by stacking values.
+   * Records follow collaborative map iteration order and include every nested element.
+   * Structural parentage remains available through getParentId and childIds. The
+   * collection order is independent of stacking values and hierarchy traversal.
    * Each contains childIds rather than recursive children. The array is cached outside
    * transactions until invalidated by document changes; treat it and its nodes as
    * read-only. Use getElements when recursive root trees are required.
    *
-   * @param rootElementId - Container ID, or null/omitted for the complete document. Missing containers read as empty.
+   * The complete document is observed; React panel APIs separately bind subtree membership.
    * @returns Detached node array, empty when the selected tree contains no elements.
    */
-  getElementNodes(rootElementId: string | null = null): EditorElementNode[] {
-    return this.document.elements.getElementNodes(rootElementId);
+  getElementNodes(): EditorElementNode[] {
+    return this.document.elements.getElementNodes();
   }
 
   /**
@@ -413,7 +397,6 @@ export class ElementManager implements ElementManagerApi {
   destroy(): void {
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
-    this.trees.clear();
     this.processors.forEach((registration) => registration.dispose());
     this.processors.clear();
   }

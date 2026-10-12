@@ -1,8 +1,7 @@
-import type { ReactEditorExtension } from "../../../managers";
 import type { EditorElementNode } from "@chulane/rivto";
 import { createElement } from "react";
+import type { ReactEditorExtension } from "../../../managers";
 import { EdgelessVisualController } from "./controller";
-import { EdgelessVisualLayer } from "./visual-layer";
 import type {
   CreateVisualPayload,
   EdgelessAlignment,
@@ -11,13 +10,9 @@ import type {
   EdgelessVisualsOptions,
   EdgelessVisualTool,
   UpdateVisualPayload,
+  VisualPayload,
 } from "./types";
-
-type PayloadForKind<Payload, Kind> = Payload extends { kind: infer Kinds }
-  ? Kind extends Kinds ? Omit<Payload, "kind"> : never
-  : never;
-type VisualPayload<Kind extends CreateVisualPayload["kind"]> =
-  PayloadForKind<CreateVisualPayload, Kind>;
+import { EdgelessVisualLayer } from "./visual-layer";
 
 /** Installable edgeless extension with a typed imperative API for host code. */
 export class EdgelessVisualsExtension implements ReactEditorExtension {
@@ -26,11 +21,11 @@ export class EdgelessVisualsExtension implements ReactEditorExtension {
 
   constructor(private readonly options: EdgelessVisualsOptions = {}) {}
 
-  setup(editorRuntime: Parameters<ReactEditorExtension["setup"]>[0]): () => void {
+  setup(reactEditor: Parameters<ReactEditorExtension["setup"]>[0]): () => void {
     if (this.controller) throw new Error("Edgeless visuals extension is already installed");
-    const controller = new EdgelessVisualController(editorRuntime, this.options);
+    const controller = new EdgelessVisualController(reactEditor, this.options);
     this.controller = controller;
-    editorRuntime.extensions.mount(() => createElement(EdgelessVisualLayer, {
+    reactEditor.extensions.mount(() => createElement(EdgelessVisualLayer, {
       controller,
       options: this.options,
     }));
@@ -115,4 +110,35 @@ export function edgelessVisualsExtension(options: EdgelessVisualsOptions = {}): 
   return new EdgelessVisualsExtension(options);
 }
 
-export * from "./types";
+export type {
+  EdgelessSelectionRef,
+  VisualFrame,
+  EdgelessBrush,
+  ConnectorRoute,
+  ConnectorEndpointStyle,
+  ConnectorLineStyle,
+  ConnectorTextRotation,
+  ConnectorEndpoint,
+  TextHorizontalAlign,
+  TextVerticalAlign,
+  StickerVisual,
+  DrawingVisual,
+  ShapeVisual,
+  TextVisual,
+  ConnectorVisual,
+  EdgelessVisual,
+  VisualGroup,
+  EdgelessFontOption,
+  EdgelessStickerOption,
+  OrphanConnectorBehavior,
+  EdgelessVisualsOptions,
+  CreateVisualPayload,
+  PresetPayload,
+  ToolCategory,
+  UpdateVisualPayload,
+  EdgelessAlignment,
+  EdgelessReorder,
+  EdgelessPlaceKind,
+  EdgelessVisualTool,
+  EdgelessVisualCommandMap,
+} from "./types";

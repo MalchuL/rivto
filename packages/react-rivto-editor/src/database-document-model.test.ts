@@ -2,7 +2,7 @@ const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage, type BlockInput } from "@chulane/document-model";
 import { DBDocumentModel, DemoDatabase } from "../../../demo/src/database";
-import { createEditorRuntime } from "./editor/editor-runtime";
+import { createReactEditor } from "./editor/react-editor";
 import { EditorStorage } from "./editor/editor-storage";
 import { standardPreset } from "./extensions/built-ins/built-ins";
 import { crossDocumentBlockTransfer } from "./extensions/built-ins/clipboard/cross-document-block-transfer";
@@ -12,10 +12,11 @@ const element = { childIds: [], type: "shape", frame: { x: 0, y: 0, width: 10, h
 async function fixture(database = new DemoDatabase()) {
   const registry = new YjsDocumentRegistry(crypto.randomUUID());
   const models = new DocumentStorage({ registry, createDocumentModel: (crdt) => new DBDocumentModel(crdt, database), lookupDocumentIds: async (id) => database.findDocumentIdsWithBlock(id) });
-  const editors = new EditorStorage({ openDocument: (id) => models.openDocument(id), createEditor: (editor) => createEditorRuntime({ editor, extensions: [standardPreset()] }), lookupDocumentIds: (id, options) => models.findDocumentIdsWithBlock(id, options), subscribeDocumentIds: (listener) => database.subscribe(listener) });
+  const editors = new EditorStorage({ openDocument: (id) => models.openDocument(id), createEditor: (editor) => createReactEditor({ editor, extensions: [standardPreset()] }), lookupDocumentIds: (id, options) => models.findDocumentIdsWithBlock(id, options), subscribeDocumentIds: (listener) => database.subscribe(listener) });
   models.registerDocument("A"); models.registerDocument("B");
-  const a = await editors.openCoreEditor("A"); const b = await editors.openCoreEditor("B");
-  return { database, editors, models, a, b, destroy: async () => { await editors.destroy(); await models.destroy(); } };
+  const leaseA = await editors.acquireEditor("A"); const leaseB = await editors.acquireEditor("B");
+  const a = leaseA.editor.document; const b = leaseB.editor.document;
+  return { leaseA, leaseB, database, editors, models, a, b, destroy: async () => { await editors.destroy(); await models.destroy(); } };
 }
 
 test("allocates IDs through the database and rejects local duplicates and other record kinds before writing", async () => {
@@ -34,7 +35,7 @@ test("allocates IDs through the database and rejects local duplicates and other 
   // The same identities, including IDs used as document names, are free in B.
   for (const id of [shape.id, "A"]) f.b.blocks.insertBlock({ id, type: "paragraph" });
   f.b.getDocument().elements.insertElement({ ...element, id: block.id });
-  await f.editors.releaseCoreEditor("A");
+  await f.leaseA.release();
   expect(await f.editors.blockReferences.resolveBlock({ documentId: "A", blockId: block.id })).toEqual({ documentId: "A", ambiguous: false });
   await f.destroy();
 });
@@ -42,7 +43,7 @@ test("allocates IDs through the database and rejects local duplicates and other 
 test("ordinary insertion reuses allocated subtree IDs and overwrites rows when removed blocks are reinserted", async () => {
   const f = await fixture();
   const source = f.a.blocks.insertBlock({ id: "shared", type: "paragraph", content: "Original", children: [{ id: "shared-child", type: "paragraph", content: "Child" }] });
-  await f.editors.releaseCoreEditor("A");
+  await f.leaseA.release();
   const allocate = jestApi.spyOn(f.database, "createId");
   const inserted = f.b.blocks.insertBlock(source);
   expect(inserted).toEqual(source);
@@ -63,7 +64,7 @@ test("ordinary insertion reuses allocated subtree IDs and overwrites rows when r
   expect(f.database.blocks.get(source.id)?.get("B")?.content).toBe("Original");
   f.b.history.redo();
   expect(f.database.blocks.get(source.id)?.get("B")?.content).toBe("Replaced");
-  expect((await f.editors.openCoreEditor("A")).blocks.getBlock(source.id)).toEqual(source);
+  expect(((await f.editors.acquireEditor("A")).editor.document).blocks.getBlock(source.id)).toEqual(source);
   await f.destroy();
 });
 
@@ -71,7 +72,7 @@ test("ordinary element insertion reuses allocated IDs and persists replacement g
   const f = await fixture();
   const source = f.a.elements.insertElement({ ...element, props: { label: "Original" } });
   const sourceNode = f.a.elements.getElementNode(source.id)!;
-  await f.editors.releaseCoreEditor("A");
+  await f.leaseA.release();
   const allocate = jestApi.spyOn(f.database, "createId");
   expect(f.b.elements.insertElement(source)).toEqual(source);
   expect(allocate).not.toHaveBeenCalled();
@@ -86,9 +87,9 @@ test("ordinary element insertion reuses allocated IDs and persists replacement g
   expect(f.b.elements.getElement(source.id)).toEqual(source);
   expect(f.database.elements.get(source.id)?.get("B")).toEqual(sourceNode);
   f.b.history.redo();
-  await f.editors.releaseCoreEditor("B");
-  expect((await f.editors.openCoreEditor("B")).elements.getElementNode(source.id)).toMatchObject({ frame: { x: 30 }, props: { label: "Replacement" } });
-  expect((await f.editors.openCoreEditor("A")).elements.getElement(source.id)).toEqual(source);
+  await f.leaseB.release();
+  expect(((await f.editors.acquireEditor("B")).editor.document).elements.getElementNode(source.id)).toMatchObject({ frame: { x: 30 }, props: { label: "Replacement" } });
+  expect(((await f.editors.acquireEditor("A")).editor.document).elements.getElement(source.id)).toEqual(source);
   await f.destroy();
 });
 
@@ -99,15 +100,16 @@ test("reopening replays native collaborative data and keeps blocks, elements, an
   f.a.getDocument().pluginData.set("demo", { persisted: true });
   await Promise.resolve(); // Complete native block-element projection before comparing persisted data.
   const snapshot = f.a.dump();
-  await f.editors.releaseCoreEditor("A");
-  const reopened = await f.editors.openCoreEditor("A");
+  await f.leaseA.release();
+  const reopenedLease = await f.editors.acquireEditor("A");
+  const reopened = reopenedLease.editor.document;
   expect(reopened.getDocument()).toBeInstanceOf(DBDocumentModel);
   expect(reopened.dump()).toEqual(snapshot);
   expect(f.database.blocks.get(block.id)?.get("A")?.content).toBe("Saved");
   expect(f.database.elements.get(shape.id)?.get("A")?.type).toBe("shape");
   reopened.blocks.updateBlock(block.id, { content: "Updated after reopen" });
-  await f.editors.releaseCoreEditor("A");
-  expect((await f.editors.openCoreEditor("A")).blocks.getBlockNode(block.id)?.content).toBe("Updated after reopen");
+  await reopenedLease.release();
+  expect(((await f.editors.acquireEditor("A")).editor.document).blocks.getBlockNode(block.id)?.content).toBe("Updated after reopen");
   await f.destroy();
 });
 
@@ -126,7 +128,7 @@ test("clipboard remaps destination collisions, while transfer and independent un
   f.b.getDocument().elements.removeElement(copiedElement.id);
   expect(f.b.getDocument().elements.createImportIdMap([copiedElement.id]).get(copiedElement.id)).toBe(copiedElement.id);
   f.a.history.clear(); f.b.history.clear();
-  crossDocumentBlockTransfer(f.editors.getRuntime("A")!, f.editors.getRuntime("B")!, ["source"], { targetId: null, position: "after" });
+  crossDocumentBlockTransfer(f.editors.getEditor("A")!, f.editors.getEditor("B")!, ["source"], { targetId: null, position: "after" });
   expect(f.a.blocks.hasBlock("source")).toBe(false); expect(f.b.blocks.getBlock("source")?.children[0]?.id).toBe("child");
   expect(f.database.findDocumentIdsWithBlock("source")).toEqual(["B"]);
   f.a.history.undo();

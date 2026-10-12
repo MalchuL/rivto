@@ -1,6 +1,6 @@
 import type { Selection } from "@chulane/rivto";
 
-/** Selection commands and DOM synchronization for one EditorView.
+/** Selection commands and DOM synchronization for one EditorPanel.
  * The model selection is shared by the document. Reads expose it only in the active
  * view (or the default view before activation) and within that view's subtree. */
 export interface ViewSelectionApi {

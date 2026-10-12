@@ -1,29 +1,31 @@
+import { ModeManager } from "@chulane/rivto";
 import { BroadcastChannelProvider, WebRTCProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage, type DocumentModel } from "@chulane/document-model";
 import {
-  createEditorRuntime,
+  createReactEditor,
   edgelessPreset,
   EditorStorage, EditorStorageContext,
-  EditorView,
+  EditorPanel,
   EMBEDDING_BLOCK_TYPE,
   embeddingExtension,
-  pageDragExtension, standardPreset, type EditorRuntime,
-  type RuntimeAcquisition,
+  pageDragExtension, standardPreset, type ReactEditorApi,
+  type EditorAcquisition,
 } from "@chulane/rivto-react";
 import { useEffect, useState } from "react";
 import { DBDocumentModel, DemoDatabase } from "./database";
 import { DemoEditorSurface } from "./editor-surface";
 
 interface Pane {
+  readonly mode: ModeManager;
   id: string;
   instanceId: string;
-  readonly editorRuntime: EditorRuntime;
+  readonly reactEditor: ReactEditorApi;
   release(): Promise<void>;
 }
 interface Runtime {
   storage: DocumentStorage;
   editor: EditorStorage;
-  seeded: Map<string, RuntimeAcquisition>;
+  seeded: Map<string, EditorAcquisition>;
 }
 
 /** Session-only demo: document views acquire models and all tabs share one runtime. */
@@ -67,11 +69,11 @@ export function DocumentsDemo() {
         const databaseSubscription = database.subscribe(listener);
         return () => { registrySubscription(); databaseSubscription(); };
       },
-      createEditor: (editor) => createEditorRuntime({ editor, extensions: [
+      createEditor: (editor) => createReactEditor({ editor, extensions: [
         standardPreset(), pageDragExtension(), ...edgelessPreset(), embeddingExtension(),
       ] }),
     });
-    const seeded = new Map<string, RuntimeAcquisition>();
+    const seeded = new Map<string, EditorAcquisition>();
     setRuntime({ storage, editor, seeded });
     const refresh = () => { if (active) setIds(storage.getDocumentIds()); };
     const unsubscribe = storage.subscribe(() => {
@@ -80,11 +82,11 @@ export function DocumentsDemo() {
     });
     const open = async (id: string) => {
       if (!active) return;
-      const acquisition = await editor.acquireRuntime(id);
+      const acquisition = await editor.acquireEditor(id);
       if (!active) { await acquisition.release(); return; }
       const pane: Pane = {
         id, instanceId: crypto.randomUUID(),
-        editorRuntime: acquisition.runtime, release: acquisition.release,
+        reactEditor: acquisition.editor, mode: new ModeManager(), release: acquisition.release,
       };
       livePanes.add(pane);
       setPanes((current) => [...current, pane]);
@@ -94,7 +96,7 @@ export function DocumentsDemo() {
       const model = await storage.create(id, blocks);
       if (!active) { await model.destroy(); return; }
       prepared.set(id, model);
-      seeded.set(id, await editor.acquireRuntime(id));
+      seeded.set(id, await editor.acquireEditor(id));
     };
     const seed = async () => {
       await storage.ready;
@@ -170,13 +172,13 @@ export function DocumentsDemo() {
             <section className="multi-editor-pane" key={pane.instanceId} data-document-pane={pane.id}
               hidden={tabs && activeTab !== pane.instanceId}>
               <button type="button" onClick={() => close(pane)}>Close {pane.id}</button>
-              <button type="button" onClick={() => pane.editorRuntime.mode.set(pane.editorRuntime.mode.get() === "block" ? "edgeless" : "block")}>Toggle mode</button>
-              <EditorView runtime={pane.editorRuntime} active={!tabs || activeTab === pane.instanceId} onReady={() => {
+              <button type="button" onClick={() => pane.mode.set(pane.mode.get() === "block" ? "edgeless" : "block")}>Toggle mode</button>
+              <EditorPanel mode={pane.mode} editor={pane.reactEditor} active={!tabs || activeTab === pane.instanceId} onReady={() => {
                 const seed = runtime.seeded.get(pane.id);
                 if (seed) { runtime.seeded.delete(pane.id); void seed.release().catch(console.error); }
               }}>
                 <DemoEditorSurface />
-              </EditorView>
+              </EditorPanel>
             </section>
           ))}
         </div>

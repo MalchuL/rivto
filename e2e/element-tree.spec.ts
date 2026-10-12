@@ -6,7 +6,7 @@ test("creates nested groups without child IDs and preserves their children when 
   await today.locator("[data-block-content]").first().waitFor();
   await today.getByRole("button", { name: "Edgeless", exact: true }).click();
   const initial = await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
     const group = editor.elements.insertElement({
       id: "tree-outer", type: "group", zIndex: 100,
       children: [
@@ -27,7 +27,7 @@ test("creates nested groups without child IDs and preserves their children when 
   await toolbar.getByRole("button", { name: "Ungroup", exact: true }).click();
   await expect(toolbar.getByRole("button", { name: "Group", exact: true })).toBeVisible();
   const after = await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
     return { outer: editor.elements.getElement("tree-outer"), inner: editor.elements.getElement("tree-inner"), sibling: editor.elements.getElement("tree-sibling") };
   });
   expect(after.outer).toBeUndefined();

@@ -14,7 +14,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.goto("/");
     await page.evaluate((nextMode) => {
       const runtime = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
       }).__rivtoDemo.editor;
       const editor = runtime;
       const bento = editor.blocks.insertBlock({
@@ -58,7 +58,7 @@ for (const mode of ["block", "edgeless"] as const) {
 
     const ids = await page.evaluate(() => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
       }).__rivtoDemo.editor;
       const all = editor.blocks.getBlocks().flatMap(function walk(block): string[] {
         return [block.id, ...block.children.flatMap(walk)];
@@ -73,7 +73,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.keyboard.press("Shift+Tab");
     await expect.poll(() => page.evaluate((id) => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
       }).__rivtoDemo.editor;
       const parent = editor.blocks.getBlock(editor.blocks.getParentId(id) ?? "");
       return parent?.type;
@@ -83,7 +83,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.keyboard.press("Shift+Tab");
     await expect.poll(() => page.evaluate((id) => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
       }).__rivtoDemo.editor;
       const parent = editor.blocks.getBlock(editor.blocks.getParentId(id) ?? "");
       return parent?.type;

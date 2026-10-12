@@ -1,7 +1,7 @@
 /** Regression checks for portable files, collapsed hierarchy and complex export. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { exportMarkdown, parseDocument, type DocumentFile } from '../renderer/documents.ts';
+import { exportMarkdown, parseDocument, type DocumentFile } from "../renderer/documents";
 import type { EditorBlock } from '@chulane/rivto';
 
 /** Builds a complete block for export tests.

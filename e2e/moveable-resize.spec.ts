@@ -6,7 +6,7 @@ async function openDrawing(page: Page, repeat = 0) {
   await today.locator("[data-block-content]").first().waitFor();
   await today.getByRole("button", { name: "Edgeless", exact: true }).click();
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
     editor.elements.insertElement({ id: "resize-drawing", type: "drawing", frame: { x: 100, y: 100, width: 120, height: 80 }, zIndex: 3000,
       props: { points: [{ x: 10, y: 10, pressure: 0.4 }, { x: 110, y: 70, pressure: 0.8 }], stroke: "#222", strokeWidth: 4, opacity: 1, brush: "pen", rotation: 0 } });
     editor.commands.execute("edgeless.selection.set", ["resize-drawing"]);
@@ -14,7 +14,7 @@ async function openDrawing(page: Page, repeat = 0) {
   const drawing = today.locator('[data-edgeless-object-id="resize-drawing"]');
   const controls = today.locator('[data-edgeless-controls-for="resize-drawing"]');
   await expect(controls).toBeVisible();
-  const read = () => page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.elements.getElementNode("resize-drawing")!);
+  const read = () => page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.elements.getElementNode("resize-drawing")!);
   return { today, drawing, controls, read };
 }
 
@@ -40,7 +40,7 @@ for (const repeat of [0, 200]) {
     await today.locator('[data-editor-mode="block"]').click();
     await today.locator('[data-editor-mode="edgeless"]').click();
     await expect.poll(async () => (await path.boundingBox())!.width).toBeCloseTo(preview.width, 0);
-    await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.history.undo());
+    await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.history.undo());
     await expect.poll(read).toEqual(before);
     await expect.poll(async () => (await path.boundingBox())!.width).toBeCloseTo(initialBox.width, 0);
   });
@@ -90,7 +90,7 @@ test("Shift can be pressed and released during resize", async ({ page }) => {
 test("Shift resizes a group proportionally and preserves its drawing points", async ({ page }) => {
   const { today, read } = await openDrawing(page);
   const groupId = await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
     editor.elements.insertElement({ id: "resize-sibling", type: "rectangle", frame: { x: 340, y: 100, width: 120, height: 80 }, zIndex: 3000, props: {} });
     editor.commands.execute("edgeless.selection.set", ["resize-drawing", "resize-sibling"]);
     return (editor.commands.execute("edgeless.selection.group") as { id: string }).id;

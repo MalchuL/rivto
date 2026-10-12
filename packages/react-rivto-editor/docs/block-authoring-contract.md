@@ -160,7 +160,7 @@ permits a drag to become structural selection.
 function Counter({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode<CounterProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
-  const editorView = useEditorView();
+  const panel = usePanel();
   if (!editing.block) return null;
 
   return (
@@ -171,7 +171,7 @@ function Counter({ blockId }: { readonly blockId: string }) {
         className={COUNTER_BUTTON_CLASS}
         onClick={(event) => {
           if (event.defaultPrevented) return;
-          const current = editorView.runtime.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+          const current = panel.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
           editing.operations.setProp("count", (current?.count ?? 0) + 1);
         }}
       >
@@ -281,7 +281,7 @@ blockExtension({
 
 Use one stable type constant. Put creation defaults and validation in the core
 definition. Read current property values again inside callbacks. Mutate through
-`editing.operations.setProp`, `editing.operations.setProps`, or `editorView.runtime.blocks`; never mutate the
+`editing.operations.setProp`, `editing.operations.setProps`, or `panel.blocks`; never mutate the
 detached render snapshot.
 
 Use a dedicated extension only when the feature also owns formatters, wrappers,

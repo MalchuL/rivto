@@ -24,7 +24,7 @@ runtime ради владения регистрациями.
 
 ### 1. Runtime и отображение
 
-Сохранить две сущности. EditorRuntime владеет общими менеджерами документа и
+Сохранить две сущности. DocumentEditor владеет общими менеджерами документа и
 регистрациями расширений. EditorViewApi описывает взаимодействие с одним
 отображением: DOM, selection, clipboard и slash execution.
 
@@ -52,7 +52,7 @@ runtime ради владения регистрациями.
 - BaseBlockView → DefaultBlockBehavior.
 - DocumentViewRegistry → EditorViewRegistry.
 - ReactSelectionManager → ViewSelectionManager.
-- EditorRuntime, EditorView, EditorViewApi и EditorViewController сохраняют имена.
+- DocumentEditor, EditorView, EditorViewApi и EditorViewController сохраняют имена.
 
 Не переименовывать React-компонент BlockView только из-за совпадения слова view:
 он действительно отображает блок. Пересмотреть связанные названия контекстов,
@@ -352,7 +352,7 @@ runtime/view и новые storage/registry методы по примерам �
 ### Уточнение документации и имён после рефакторинга
 
 Документация основных классов и публичных контрактов React уточнена по реализации:
-`EditorRuntime`, `EditorStorage`, `EditorViewController`, `useEditorView`, поведение
+`DocumentEditor`, `EditorStorage`, `EditorViewController`, `useEditorView`, поведение
 блоков и менеджеры событий, выделения, clipboard и slash-команд. В описаниях
 разделены общие данные документа и операции конкретного отображения, объяснены
 владение ресурсами, освобождение подписок, отмена загрузки, значения по умолчанию

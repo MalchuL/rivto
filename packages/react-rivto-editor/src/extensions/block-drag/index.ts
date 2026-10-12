@@ -16,7 +16,7 @@ export {
 export { resolveDropPlacement, type DropLayoutBlock, type DropLayoutOptions, type DropRect } from "./placement/resolver";
 export {
   PageDragProvider,
-  type PageDragExtensionOptions
+  type PageDragExtensionOptions,
 } from "./provider";
 export { registerPageDrag } from "./register";
 export { PageDragBlockSlot, PageDragBlockWrapper } from "./surface";

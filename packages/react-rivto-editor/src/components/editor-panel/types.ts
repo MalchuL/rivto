@@ -1,0 +1,59 @@
+import type { DocumentModel } from "@chulane/document-model";
+import type { ModeManagerApi } from "@chulane/rivto";
+import type { ReactNode, RefCallback } from "react";
+import type { ReactEditorApi } from "../../editor/types";
+import type { OpenPanelBlock, PanelAPI } from "../../panels/types";
+
+/** Properties accepted by the React editor boundary. */
+export interface EditorPanelProps {
+  /** React runtime created and destroyed by the host application. */
+  readonly editor: ReactEditorApi;
+  /** Independent element container; null or omitted selects document element roots. */
+  readonly rootElementId?: string | null;
+  /** Host navigation handler for a specific block. */
+  readonly onOpenBlock?: OpenPanelBlock;
+  /** Optional Panel-local presentation mode retained by the host. */
+  readonly mode?: ModeManagerApi;
+  /** Block whose children are displayed; omitted displays document roots. */
+  readonly rootBlockId?: string;
+  /** False suspends hidden-tab interaction while retaining local bindings; defaults to true. */
+  readonly active?: boolean;
+  /** Notifies the host after this panel mounts with its borrowed model; ownership stays with the editor owner. */
+  readonly onReady?: (document: DocumentModel) => void;
+  /** Explicit PageSurface or EdgelessSurface, plus optional application chrome; extensions are registered at runtime creation. */
+  readonly children?: ReactNode;
+  /** False disables page virtualization, true always enables it, and a number sets the minimum root count; defaults to false. */
+  readonly virtualizePageThreshold?: boolean | number;
+  /** Extra mounted roots on each side of the viewport; defaults to 8. */
+  readonly virtualizePageOverscan?: number;
+}
+
+/**
+ * Reactive value shared by one EditorPanel subtree.
+ *
+ * The editor reference is stable for the lifetime of a mounted EditorPanel.
+ * Source views share that runtime through a document-bound API for reads and commands
+ * to the resolved model until the target moves to another document.
+ */
+export interface EditorContextValue {
+  /** Editor for this occurrence, with shared runtime available through its runtime field. */
+  readonly panel: PanelAPI;
+  /** Model acquired by this view; absent while its document is loading. */
+  readonly document?: DocumentModel;
+  /** Identity used to route mutations to the single editor acquired by this view. */
+  readonly documentId: string;
+  /** Displayed source root limiting selection and keyboard navigation. */
+  readonly rootBlockId?: string;
+  /** Per-view DOM namespace; keeps collapse controls unique across source replicas. */
+  readonly domIdPrefix?: string;
+  /** Hidden tabs retain their documents but suspend interaction in all nested views. */
+  readonly enabled?: boolean;
+}
+
+/** Internal value connecting one surface DOM root to editor extensions. */
+export interface EditorRootContextValue {
+  /** Current root element, or null before mount and after unmount. */
+  readonly element: HTMLElement | null;
+  /** Stable callback ref used by the active surface to register its root. */
+  readonly ref: RefCallback<HTMLElement>;
+}

@@ -180,7 +180,7 @@ Undo manager умеет обратить записанную CRDT-транза�
 ```text
 CommandRegistry
       ↓
-EditorRuntime command handler
+DocumentEditor command handler
       ↓
 DocumentModelImpl.transact
       ↓

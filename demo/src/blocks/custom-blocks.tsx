@@ -16,7 +16,7 @@ import {
   tableExtension,
   useBlockNode,
   useBlockSelectionAnchor,
-  useEditorView,
+  usePanel,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import {
@@ -64,7 +64,7 @@ export {
  */
 function SliderBlock({ blockId }: { readonly blockId: string }) {
   const { block, operations: { setProp } } = useBlockNode<SliderProps>(blockId);
-  const editorView = useEditorView();
+  const panel = usePanel();
   const draggingRef = useRef(false);
   const [draftValue, setDraftValue] = useState<number | null>(null);
   const committedValue = block?.props.value ?? 50;
@@ -78,9 +78,9 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
    */
   const commitValue = useCallback((next: number) => {
     setDraftValue(null);
-    if (next === (editorView.runtime.blocks.getBlockNode(blockId)?.props.value ?? 50)) return;
+    if (next === (panel.editor.document.blocks.getBlockNode(blockId)?.props.value ?? 50)) return;
     setProp("value", next);
-  }, [editorView, blockId, setProp]);
+  }, [panel, blockId, setProp]);
 
   /**
    * Marks the current pointer gesture as an in-progress drag.
@@ -157,12 +157,12 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
 function CounterBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode<CounterProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
-  const editorView = useEditorView();
+  const panel = usePanel();
   if (!editing.block) return null;
   const count = editing.block.props.count ?? 0;
   const increment = (event: MouseEvent<HTMLButtonElement>) => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
-    const current = editorView.runtime.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+    const current = panel.editor.document.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
     editing.operations.setProp("count", (current?.count ?? 0) + 1);
   };
   return (

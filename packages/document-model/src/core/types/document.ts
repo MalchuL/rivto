@@ -165,6 +165,14 @@ export interface BlockUpdate {
 }
 
 /** Public block-store capabilities required by editors and extensions. */
+/** Placement in a real document child list; omitted beforeId appends. */
+export interface BlockDestination {
+  /** Actual parent block, or null for document roots. */
+  readonly parentId: string | null;
+  /** Immediate child of that parent before which to insert. */
+  readonly beforeId?: string;
+}
+
 export interface DocumentBlockManagerApi {
   /** Monotonic block-data and hierarchy revision. */
   readonly revision: number;
@@ -205,11 +213,15 @@ export interface DocumentBlockManagerApi {
   /**
    * Inserts portable data with new or reused stable identities; local collisions still throw.
    * @param block - Block to insert, including optional existing subtree IDs.
-   * @param afterId - Optional sibling anchor, null for first, or omitted for last.
+   * @param destination - Actual parent and optional next sibling; omitted appends to document roots.
    * @returns Complete inserted block with supplied IDs preserved and missing IDs allocated.
    * @throws If malformed, an ID exists in this document, the sibling is missing, or application identity checks fail.
    */
-  insertBlock(block: BlockInput, afterId?: string | null): Block;
+  insertBlock(block: BlockInput, destination?: BlockDestination): Block;
+  /** @param parentId - Existing parent. @returns Its direct child IDs, empty when absent. */
+  getChildIds(parentId: string): readonly string[];
+  /** @param afterId - Sibling to follow, null for first document root, or omitted for append. @returns Explicit document placement. @throws When a named sibling is missing. */
+  getInsertionDestinationAfter(afterId?: string | null): BlockDestination;
   /** @param id - Block identifier. @param patch - Fields to update. @returns Updated non-recursive block fields. */
   updateBlock(id: string, patch: BlockPatch): BlockNode;
   /** @param updates - Ordered block patches. @returns Updated non-recursive block fields in input order. */

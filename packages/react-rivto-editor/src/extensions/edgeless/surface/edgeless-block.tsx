@@ -10,7 +10,7 @@
 import type { EditorElementNode } from "@chulane/rivto";
 import { memo, useLayoutEffect, useRef } from "react";
 import { BlockTree, ElementSlots } from "../../../blocks";
-import { useEditorView } from "../../../hooks";
+import { usePanel } from "../../../hooks";
 import { useEdgelessSelected } from "../../built-ins/selection/edgeless-runtime";
 import { useEdgelessElementStyle } from "../use-edgeless-element-style";
 
@@ -38,7 +38,7 @@ function EdgelessBlockElementView({
   readonly blockIds: readonly string[];
 }) {
   const selected = useEdgelessSelected(element.id);
-  const editorView = useEditorView();
+  const panel = usePanel();
   const { ref: hostRef, style } = useEdgelessElementStyle(element);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const autoHeight = element.props.autoHeight !== false;
@@ -64,8 +64,8 @@ function EdgelessBlockElementView({
       host.style.height = previousHeight;
       if (Math.abs(element.frame.height - height) < 1) return;
       // Undoing a recorded height change would remeasure and record it again, trapping undo.
-      editorView.runtime.history.batchUpdatesWithoutHistory(() => {
-        editorView.elements.updateElement(element.id, { frame: { height } });
+      panel.editor.document.history.batchUpdatesWithoutHistory(() => {
+        panel.elements.updateElement(element.id, { frame: { height } });
       });
     };
     measure();
@@ -76,7 +76,7 @@ function EdgelessBlockElementView({
     // Selection is intentionally omitted from deps: chrome-only
     // `data-block-selected` must not remount ResizeObserver or force scrollHeight.
     return () => observer.disconnect();
-  }, [autoHeight, contentKey, element.frame.height, element.frame.width, element.id, editorView]);
+  }, [autoHeight, contentKey, element.frame.height, element.frame.width, element.id, panel]);
 
   if (!blockIds.length) return null;
 

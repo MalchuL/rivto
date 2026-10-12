@@ -1,10 +1,9 @@
+import type { RegistrationOwner } from "../extensions/types";
 import type { EditorMode } from "@chulane/rivto";
-import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { ReactEditorApi } from "../../editor/types";
 import { RevisionStore } from "../../internal-store";
-import type { DocumentViewScope } from "../events/document-view";
-import type { EditorEvent } from "../events/editor-event";
 import { modeMatches, scopeMatches } from "../events/event-manager";
-import type { EditorEventHandler } from "../events/types";
+import type { DocumentViewScope, EditorEventHandler } from "../events/types";
 import { KeyboardEditorEvent } from "./keyboard-editor-event";
 import type {
   KeyboardBindingSnapshot,
@@ -19,19 +18,7 @@ import {
   shortcutFromKeyboardEvent,
   type ParsedShortcut,
 } from "./shortcut";
-
-interface KeyboardRegistration {
-  readonly owner?: DocumentViewScope;
-  readonly definition: KeyboardEventDefinition;
-  shortcuts: ParsedShortcut[];
-  readonly listener: EditorEventHandler<KeyboardEditorEvent>;
-}
-
-type KeyboardDOMEvent =
-  | EditorEvent<"surface", "keydown">
-  | EditorEvent<"surface", "keyup">
-  | EditorEvent<"window", "keydown">
-  | EditorEvent<"window", "keyup">;
+import type { KeyboardDOMEvent, KeyboardRegistration } from "./types";
 
 /** Owns semantic keyboard bindings while EventManager owns native transport. */
 export class KeyboardManager {
@@ -47,38 +34,39 @@ export class KeyboardManager {
   /**
    * Creates keyboard transport before extensions register DOM or keyboard behavior.
    *
-   * @param editorRuntime - Owning React runtime providing events and extensions.
+   * @param reactEditor - Owning React runtime providing events and extensions.
    * @param keymap - Initial semantic binding overrides.
+   * @param extensions - Internal registration ownership and destruction guard.
    */
   constructor(
-    private readonly editorRuntime: EditorRuntime,
+    reactEditor: ReactEditorApi,
+    private readonly extensions: RegistrationOwner,
     keymap: KeymapOverrides = {},
   ) {
     this.keymap = cloneKeymap(keymap);
     validateKeymap(this.keymap);
     this.publish();
     this.transportDisposers = [
-      editorRuntime.events.register<"surface", "keydown">({
+      reactEditor.events.register<"surface", "keydown">({
         id: "rivto.keyboard.surface.keydown",
         type: "keydown",
       }, (event) => this.dispatch(event, "keydown")),
-      editorRuntime.events.register<"surface", "keyup">({
+      reactEditor.events.register<"surface", "keyup">({
         id: "rivto.keyboard.surface.keyup",
         type: "keyup",
       }, (event) => this.dispatch(event, "keyup")),
-      editorRuntime.events.register<"window", "keydown">({
+      reactEditor.events.register<"window", "keydown">({
         id: "rivto.keyboard.window.keydown",
         type: "keydown",
         target: "window",
       }, (event) => this.dispatch(event, "keydown")),
-      editorRuntime.events.register<"window", "keyup">({
+      reactEditor.events.register<"window", "keyup">({
         id: "rivto.keyboard.window.keyup",
         type: "keyup",
         target: "window",
       }, (event) => this.dispatch(event, "keyup")),
     ];
   }
-
 
   /**
    * Registers one semantic keyboard action in declaration order.
@@ -117,7 +105,7 @@ export class KeyboardManager {
 
     let active = true;
     let dispose: () => void = () => undefined;
-    dispose = this.editorRuntime.extensions.own(() => {
+    dispose = this.extensions.own(() => {
       if (!active) return;
       active = false;
       const index = this.registrations.indexOf(registration);
@@ -293,7 +281,7 @@ export class KeyboardManager {
     const raw = domEvent.raw;
     const event = new KeyboardEditorEvent({
       raw,
-      editorView: domEvent.editorView,
+      panel: domEvent.panel,
       root: domEvent.root,
       mode: domEvent.mode,
       selection: domEvent.selection,
@@ -335,7 +323,7 @@ export class KeyboardManager {
 
   private assertActive(): void {
     if (this.destroyed) throw new Error("Keyboard runtime is destroyed");
-    this.editorRuntime.extensions.assertActive();
+    this.extensions.assertActive();
   }
 }
 

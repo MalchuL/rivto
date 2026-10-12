@@ -6,7 +6,7 @@
 
 Основной entry экспортирует:
 
-- `createEditorRuntime`, `EditorView`, runtime types;
+- `createReactEditor`, `EditorPanel`, runtime types;
 - `standardPreset`, `blockExtension`, `pageDragExtension`, `edgelessPreset`, `edgelessSurfaceExtension`;
 - default writing, separator и error block APIs;
 - `edgelessVisualsExtension` и visual types;
@@ -25,7 +25,7 @@
 
 ## Контракты менеджеров
 
-Регистрация принадлежит runtime; локальные операции отмечены префиксом editorView.
+Регистрация принадлежит runtime; локальные операции отмечены префиксом panel.
 
 | Property | Основные methods |
 | --- | --- |
@@ -36,14 +36,14 @@
 | `surfaces` | `register/get/delete`, `registerBlockWrapper`, `registerEditorWrapper`, wrapper getters, subscription |
 | `extensions` | `mount`, `getComponents`, `subscribe`, `revision` |
 | `runtime.events` | `register`, `delete` |
-| `runtime.editorViews` | `getActive`, `getDefault`, `getActiveRoot`, `getDefaultRoot` |
-| `editorView.events` | `register`, `delete`, `setRoot`, `getRoot` |
+| `runtime.panels` | `getActive`, `getDefault`, `getActiveRoot`, `getDefaultRoot` |
+| `panel.events` | `register`, `delete`, `setRoot`, `getRoot` |
 | `keyboard` | `register`, `delete`, `replaceKeymap`, `setKeymapOverride` |
-| `editorView.selection` | `readDOM`, `restoreDOM`, `clearDOMHighlight`, `updateDOMHighlight` |
+| `panel.selection` | `readDOM`, `restoreDOM`, `clearDOMHighlight`, `updateDOMHighlight` |
 | `runtime.clipboardFormats` | `registerFormatter`, `registerParser`, `format`, `parse` |
 | `runtime.slashCommands` | `register`, `delete`, `get`, `getAll`, `subscribe`, `revision` |
-| `editorView.slashCommands` | `getAll(context)`, `execute`, `subscribe`, `revision` |
-| `editorView.clipboard` | `copy`, `copyText`, `cut`, `paste` |
+| `panel.slashCommands` | `getAll(context)`, `execute`, `subscribe`, `revision` |
+| `panel.clipboard` | `copy`, `copyText`, `cut`, `paste` |
 
 Registrations обычно возвращают idempotent disposer и автоматически принадлежат extension lifecycle. Stable-key deletion возвращает `boolean`.
 
@@ -53,8 +53,14 @@ Registrations обычно возвращают idempotent disposer и авто�
 src/editor/
   runtime, storage, creation options
 
-src/editor-view/
-  component, controller, context, useEditorView, public view interface
+src/panels/
+  internal panel implementations, bounded operations and PanelAPI
+
+src/components/editor-panel/ + src/components/editor-embed/
+  React components, contexts and component props
+
+src/hooks/editor/
+  usePanel, useReactEditor and internal context readers
 
 src/managers/*/api.ts and focused *-api.ts
   public contracts beside their implementations
@@ -72,7 +78,7 @@ src/extensions/
   optional interaction behavior
 
 src/surfaces/
-  standard page layout
+  standard page layout, virtualization context and settings
 
 src/elements/ + src/extensions/edgeless/surface/
   generic element projection + optional canvas layout
@@ -89,7 +95,7 @@ demo/src/
 | Block drag | `pageDragExtension()` |
 | Canvas editor | `standardPreset()` + `...edgelessPreset()` |
 | Custom native block | `blockExtension()` + `useBlockEditing()` |
-| Toolbar | children `EditorView` + hooks |
+| Toolbar | children `EditorPanel` + hooks |
 | Custom keyboard behavior | `useKeyboardEvent()` или extension `keyboard.register()` |
 | Custom browser gesture | `useDOMEvent()` |
 | Custom page decoration | block/editor wrapper registration |

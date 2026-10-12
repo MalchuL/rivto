@@ -8,22 +8,21 @@
 import type {
   EditorBlock,
   EditorElementNode,
-  RivtoEditorApi,
+  DocumentEditorAPI,
 } from "@chulane/rivto";
-import type { EditorViewApi } from "../../../../../editor-view/types";
+import type { PanelAPI } from "../../../../../panels/types";
 import { blockIdsOf } from "../../../../../elements/block-element-projection";
 import { findRenderedBlock } from "../../../../../managers/events/block-dom";
 
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 
 /** Walks to the document root that owns `blockId`. */
-export function owningRootId(editor: EditorViewApi | RivtoEditorApi, blockId: string): string {
-  const documentEditor = "runtime" in editor ? editor.runtime : editor;
+export function owningRootId(editor: PanelAPI | DocumentEditorAPI, blockId: string): string {
   let rootId = blockId;
   for (
-    let parentId = documentEditor.blocks.getParentId(rootId);
-    parentId && !("panel" in editor && editor.panel?.rootBlockId === parentId);
-    parentId = documentEditor.blocks.getParentId(rootId)
+    let parentId = editor.blocks.getParentId(rootId);
+    parentId;
+    parentId = editor.blocks.getParentId(rootId)
   ) {
     rootId = parentId;
   }
@@ -32,12 +31,11 @@ export function owningRootId(editor: EditorViewApi | RivtoEditorApi, blockId: st
 
 /** Finds the edgeless card element whose root range includes `blockId`. */
 export function owningBlockElement(
-  editor: EditorViewApi | RivtoEditorApi,
+  editor: PanelAPI | DocumentEditorAPI,
   blockId: string,
 ): EditorElementNode | undefined {
-  const documentEditor = "runtime" in editor ? editor.runtime : editor;
   const rootId = owningRootId(editor, blockId);
-  const rootOrder = "runtime" in editor ? editor.getRootBlockIds() : documentEditor.blocks.getRootIds();
+  const rootOrder = editor.blocks.getRootIds();
   return editor.elements.getElementNodes().find(
     (element) => element.type === "block" && blockIdsOf(element, rootOrder).includes(rootId),
   );
@@ -51,20 +49,12 @@ export function owningBlockElement(
  * React callers use their rendered view's surface; core-only callers use the
  * document mode because they have no DOM occurrence.
  */
-export function navigationOutlineBlocks(editor: EditorViewApi | RivtoEditorApi, blockId: string): EditorBlock[] {
-  const documentEditor = "runtime" in editor ? editor.runtime : editor;
-  const sourceRootId = "rootBlockId" in editor ? editor.rootBlockId : undefined;
-  if (sourceRootId && !("panel" in editor && editor.panel)) {
-    const root = documentEditor.blocks.getBlock(sourceRootId);
-    return root ? [root] : [];
-  }
-  const roots = "panel" in editor && editor.panel && sourceRootId
-    ? documentEditor.blocks.getBlock(sourceRootId)?.children ?? []
-    : documentEditor.blocks.getBlocks();
+export function navigationOutlineBlocks(editor: PanelAPI | DocumentEditorAPI, blockId: string): EditorBlock[] {
+  const roots = editor.blocks.getBlocks();
   let outline = roots;
   // Navigation follows the rendered view, which can be a page in an edgeless document.
-  // Core-only callers have no view, so their document mode is the appropriate fallback.
-  const mode = "events" in editor ? editor.events.getSurfaceType() : editor.mode.get();
+  // Core-only callers have no view and use the complete block outline.
+  const mode = "events" in editor ? editor.events.getSurfaceType() : "block";
   if (mode === "edgeless") {
     const element = owningBlockElement(editor, blockId);
     if (!element) {

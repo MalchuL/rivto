@@ -10,6 +10,7 @@
 import {
   validateBlockForest,
   type BlockInput,
+  type BlockDestination,
   type BlockUpdate,
   type DocumentModel,
 } from "@chulane/document-model";
@@ -24,7 +25,7 @@ import type {
   EditorBlockPatch,
   EditorBlockUpdate,
 } from "../../editor/model";
-import type { RivtoEditorApi } from "../../editor/types";
+import type { DocumentEditorAPI } from "../../editor/types";
 import type { BlockManagerApi, ImportedBlockForest } from "../types";
 import type { BlockPrepareErrorHandler } from "./types";
 import { Pipe } from "../../utils/pipe";
@@ -59,7 +60,7 @@ export class BlockManager implements BlockManagerApi {
    * @param editor - Owning editor providing shared runtime capabilities.
    */
   constructor(
-    private readonly editor: RivtoEditorApi,
+    private readonly editor: DocumentEditorAPI,
   ) {
     this.registerRequiredProcessors();
   }
@@ -326,15 +327,21 @@ export class BlockManager implements BlockManagerApi {
    * The batch separates creation from the next captured editor action.
    *
    * @param block - Native type and initial persisted values.
-   * @param afterId - Sibling to follow, null to prepend, or undefined to append.
+   * @param destination - Actual parent and optional next sibling; omitted appends to document roots.
    * @returns Complete persisted block assembled during insertion.
    */
-  insertBlock(block: EditorBlockInput, afterId?: string | null): EditorBlock {
+  insertBlock(block: EditorBlockInput, destination?: BlockDestination): EditorBlock {
     const prepared = this.prepareInput([block])[0]!;
     // Storage insertion is already transactional; this wrapper creates undo
     // capture breakpoints so the following action does not merge with creation.
-    return this.editor.history.batchUpdates(() => this.document.blocks.insertBlock(prepared, afterId));
+    return this.editor.history.batchUpdates(() => this.document.blocks.insertBlock(prepared, destination));
   }
+
+  /** @param parentId - Real parent identity. @returns Its direct child IDs or empty when absent. */
+  getChildIds(parentId: string): readonly string[] { return this.document.blocks.getChildIds(parentId); }
+
+  /** @param afterId - Sibling to follow, null to prepend, or omitted to append. @returns Real document placement. @throws For a missing sibling. */
+  getInsertionDestinationAfter(afterId?: string | null): BlockDestination { return this.document.blocks.getInsertionDestinationAfter(afterId); }
 
   /**
    * Imports a detached forest while preserving every source identity that is
@@ -356,7 +363,7 @@ export class BlockManager implements BlockManagerApi {
    */
   importForest(
     blocks: readonly (EditorBlock | EditorBlockInput)[],
-    afterId?: string | null,
+    destination?: BlockDestination,
     onError?: BlockPrepareErrorHandler,
     ids?: ReadonlyMap<string, string>,
   ): ImportedBlockForest {
@@ -380,10 +387,8 @@ export class BlockManager implements BlockManagerApi {
     const prepared = this.prepareInput(blocks.map(remap), onError);
     const roots: EditorBlock[] = [];
     this.editor.history.batchUpdates(() => {
-      let previous = afterId;
       prepared.forEach((block) => {
-        const inserted = this.document.blocks.insertBlock(block, previous);
-        previous = inserted.id;
+        const inserted = this.document.blocks.insertBlock(block, destination);
         roots.push(inserted);
       });
     });

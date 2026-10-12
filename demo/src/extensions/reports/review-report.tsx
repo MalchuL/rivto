@@ -7,7 +7,7 @@
  *
  * @module
  */
-import type { EditorElementNode, RivtoEditorApi } from "@chulane/rivto";
+import type { EditorElementNode, DocumentEditorAPI } from "@chulane/rivto";
 import {
   ElementSlots,
   SurfaceContext,
@@ -149,7 +149,7 @@ function ReviewBlock({
   blockId,
   saveReport,
 }: {
-  readonly editor: RivtoEditorApi;
+  readonly editor: DocumentEditorAPI;
   readonly blockId: string;
   readonly saveReport: SaveReviewReport;
 }) {
@@ -235,7 +235,7 @@ function ReviewElement({
   selected,
   saveReport,
 }: {
-  readonly editor: RivtoEditorApi;
+  readonly editor: DocumentEditorAPI;
   readonly element: EditorElementNode;
   readonly selected: boolean;
   readonly saveReport: SaveReviewReport;
@@ -323,7 +323,7 @@ function ReviewElement({
  * @returns Portal contents in edgeless mode, otherwise null.
  */
 function ReviewElementLayer({ editor, saveReport }: {
-  readonly editor: RivtoEditorApi;
+  readonly editor: DocumentEditorAPI;
   readonly saveReport: SaveReviewReport;
 }) {
   const mode = useContext(SurfaceContext);
@@ -356,7 +356,7 @@ function ReviewElementLayer({ editor, saveReport }: {
  * @returns Separate block and canvas extensions sharing one host callback.
  */
 export function reviewReportExtensions(options: {
-  readonly editor: RivtoEditorApi;
+  readonly editor: DocumentEditorAPI;
   readonly saveReport: SaveReviewReport;
 }): readonly ReactEditorExtension[] {
   return [
@@ -373,11 +373,11 @@ export function reviewReportExtensions(options: {
     }),
     {
       id: "demo.review-report.elements",
-      setup: (editorRuntime) => {
-        editorRuntime.extensions.mount(() => (
+      setup: (reactEditor) => {
+        reactEditor.extensions.mount(() => (
           <ReviewElementLayer editor={options.editor} saveReport={options.saveReport} />
         ));
-        return editorRuntime.elements.registerProcessor({
+        return reactEditor.document.elements.registerProcessor({
           id: "demo.review-report.props",
           priority: 0,
           processor: (element) => element.type === REVIEW_REPORT_TYPE

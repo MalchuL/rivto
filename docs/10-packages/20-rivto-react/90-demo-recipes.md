@@ -9,9 +9,9 @@ async function createAppEditor() {
   const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
   storage.registerDocument("document-id");
   const document = await storage.openDocument("document-id");
-  const core = createRivtoEditor({ document });
+  const core = createDocumentEditor({ document });
   const visuals = edgelessVisualsExtension(appVisualOptions);
-  const editorRuntime = createEditorRuntime({
+  const reactEditor = createReactEditor({
     editor: core,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleLink } }),
@@ -20,7 +20,7 @@ async function createAppEditor() {
       ...customBlockExtensions,
     ],
   });
-  return { storage, core, editor: core, editorRuntime, visuals };
+  return { storage, core, editor: core, reactEditor, visuals };
 }
 ```
 
@@ -34,7 +34,7 @@ Core definitions находятся отдельно от React renderers. Эт�
 
 ## Application toolbar
 
-Demo toolbar получает core editor от host для persistence/lifecycle и использует `useEditorView()` для focused operations. Host React state выбирает `<PageSurface />` либо `<EdgelessSurface />`. UI state вроде видимости block IDs остаётся React state, а не pluginData документа.
+Demo toolbar получает core editor от host для persistence/lifecycle и использует `usePanel()` для focused operations. Host React state выбирает `<PageSurface />` либо `<EdgelessSurface />`. UI state вроде видимости block IDs остаётся React state, а не pluginData документа.
 
 ## Decorator без duplicate block DOM
 
@@ -42,13 +42,13 @@ Demo block-ID extension регистрирует `BlockWrapper` и исполь�
 
 ## Несколько независимых editors
 
-Один user получает EditorStorage с фабрикой отдельных EditorRuntime для документов.
+Один user получает EditorStorage с фабрикой отдельных ReactEditor для документов.
 Два документа используют разные document-bound runtimes; два views одного
-документа получают один cached EditorRuntime и независимые EditorViewApi:
+документа получают один cached ReactEditor и независимые PanelAPI:
 
 ```tsx
-<EditorView runtime={leftAcquisition.runtime}><PageSurface /></EditorView>
-<EditorView runtime={rightAcquisition.runtime}><PageSurface /></EditorView>
+<EditorPanel editor={leftAcquisition.editor}><PageSurface /></EditorPanel>
+<EditorPanel editor={rightAcquisition.editor}><PageSurface /></EditorPanel>
 ```
 
 View автоматически удерживает consumer, включая nesting. Cross-document transfer
@@ -63,17 +63,17 @@ Registry metadata синхронизируется постоянно; content p
 ```tsx
 const editors = new EditorStorage({
   openDocument: (id) => storage.openDocument(id),
-  createEditor: (editor) => createEditorRuntime({
+  createEditor: (editor) => createReactEditor({
     editor,
     extensions: [standardPreset(), embeddingExtension()],
   }),
 });
-const acquisition = await editors.acquireRuntime("document-id");
+const acquisition = await editors.acquireEditor("document-id");
 // Views retain the document through the nearest provider before releasing the initial consumer.
 <EditorStorageContext.Provider value={editors}>
-  <EditorView runtime={acquisition.runtime} onReady={acquisition.release}>
+  <EditorPanel editor={acquisition.editor}>
     <PageSurface />
-  </EditorView>
+  </EditorPanel>
 </EditorStorageContext.Provider>;
 // Final application cleanup:
 await editors.destroy();

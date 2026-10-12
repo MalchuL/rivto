@@ -78,6 +78,11 @@ function PopoverDescription({
 }
 
 export {
-  Popover, PopoverAnchor, PopoverContent, PopoverDescription, PopoverHeader,
-  PopoverTitle, PopoverTrigger
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
 }

@@ -1,6 +1,7 @@
 import type { MouseEvent } from "react";
-export type { EditorViewApi } from "./editor-view/types";
-export type { CreateEditorRuntimeOptions } from "./editor/types";
+
+export type { PanelAPI } from "./panels/types";
+export type { CreateReactEditorOptions } from "./editor/types";
 
 /** Context supplied when a rendered Markdown link is activated. */
 export interface MarkdownLinkClick {

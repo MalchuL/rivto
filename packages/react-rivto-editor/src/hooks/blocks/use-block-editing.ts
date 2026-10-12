@@ -15,7 +15,7 @@ import { usePreventTextEditing, type PreventTextEditingAttributes } from "./use-
  *
  * `block` is the reactive node snapshot from `useBlockNode` and does not include
  * descendants. For callbacks created during an older render, read current values
- * through editorView.blocks.getBlockNode(blockId), not the captured snapshot.
+ * through panel.blocks.getBlockNode(blockId), not the captured snapshot.
  * Current document content excludes uncommitted DOM edits; undefined denotes an
  * unknown/deleted block, while an empty string denotes an existing textless block.
  */
@@ -60,7 +60,7 @@ export interface UseBlockEditingResult<Props extends object = Record<string, unk
  * @returns Reactive block state, validated property commands, and text DOM attributes.
  * Property writes patch supplied keys without replacing siblings; undefined removes
  * a key when the registered schema permits it. Invalid writes throw without mutation.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useBlockEditing<Props extends object = Record<string, unknown>>(blockId: string): UseBlockEditingResult<Props> {
   const result = useBlockNode<Props>(blockId);

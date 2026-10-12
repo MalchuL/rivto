@@ -1,3 +1,4 @@
+import { EditorEmbed } from "../../components/editor-embed/editor-embed";
 import { createTestReactEditor as createReactEditor } from "../../test-utils";
 /**
  * Covers the full useBlock and node-level useBlockNode contracts used by
@@ -8,7 +9,7 @@ import { createTestReactEditor as createReactEditor } from "../../test-utils";
  */
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { EditorView } from "../../editor-view/editor-view";
+import { EditorPanel } from "../../components/editor-panel/editor-panel";
 import { PageSurface } from "../../surfaces/page/page-surface";
 import { createTestCoreEditor as createEditor, createTestMultiEditor } from "../../test-utils";
 
@@ -33,25 +34,25 @@ describe("useBlock", () => {
       nodeResult = useBlockNode(parentId);
       return null;
     };
-    const editorView = createReactEditor({ editor });
-    editorView.runtime.surfaces.register("block", Surface);
+    const panel = createReactEditor({ editor });
+    panel.editor.surfaces.register("block", Surface);
 
-    renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
+    renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)));
     expect(blockResult?.block).toMatchObject({ id: parentId, type: "paragraph", content: "Parent" });
     expect(blockResult?.block?.children.map((child) => child.id)).toEqual([childId]);
     expect(nodeResult?.block?.childIds).toEqual([childId]);
     expect(nodeResult?.block && "children" in nodeResult.block).toBe(false);
 
     editor.blocks.updateBlock(childId, { content: "After" });
-    renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
+    renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)));
     expect(blockResult?.block?.children[0]?.content).toBe("After");
     expect(nodeResult?.block?.childIds).toEqual([childId]);
 
-    const extraId = editor.blocks.insertBlock({ type: "paragraph", content: "Extra" }, childId).id;
-    renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
+    const extraId = editor.blocks.insertBlock({ type: "paragraph", content: "Extra" }, editor.blocks.getInsertionDestinationAfter(childId)).id;
+    renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)));
     expect(nodeResult?.block?.childIds).toEqual([childId, extraId]);
 
-    editorView.runtime.destroy();
+    panel.editor.destroy();
     editor.destroy();
   });
 
@@ -64,14 +65,14 @@ describe("useBlock", () => {
       const { block } = useBlockNode(parentId);
       return block ? createElement(BlockCollapseSlot, { block, mode: "block", selected: false }) : null;
     };
-    const editorView = createReactEditor({ editor });
-    editorView.runtime.surfaces.register("block", Surface);
+    const panel = createReactEditor({ editor });
+    panel.editor.surfaces.register("block", Surface);
 
-    expect(renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)))).toContain("Collapse block");
+    expect(renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)))).toContain("Collapse block");
     editor.blocks.removeBlock(childId);
-    expect(renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)))).not.toContain("Collapse block");
+    expect(renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)))).not.toContain("Collapse block");
 
-    editorView.runtime.destroy();
+    panel.editor.destroy();
     editor.destroy();
   });
 });
@@ -80,7 +81,7 @@ test("native source views reuse renderers and bind ordinary editor calls without
   const { DocumentStorage } = await import("@chulane/document-model");
   const { YjsDocumentRegistry } = await import("@chulane/crdt-doc");
   const { standardPreset } = await import("../../extensions/built-ins/built-ins");
-  const { useEditorView } = await import("../../editor-view/use-editor-view");
+  const { usePanel } = await import("../editor/use-panel");
   const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
   const source = await storage.create("source", [
     { id: "source", type: "custom", content: "Source" },
@@ -88,20 +89,20 @@ test("native source views reuse renderers and bind ordinary editor calls without
   ]);
   const host = await storage.create("host");
   const runtime = await createTestMultiEditor([host, source], storage, { extensions: [standardPreset()] });
-  const editor = await runtime.openCoreEditor(host.id);
+  const editor = (await runtime.acquireEditor(host.id)).editor.document;
   editor.blocks.insertBlock({ id: "host", type: "paragraph", content: "Host" });
-  const editorRuntime = runtime.getRuntime(source.id)!;
+  const reactEditor = runtime.getEditor(source.id)!;
   let result: UseBlockNodeResult | undefined;
   let directWrite: (() => void) | undefined;
-  editorRuntime.blockTypes.register({ definition: { type: "custom" }, render: ({ blockId }) => {
-    const view = useEditorView();
-    expect(view.runtime.renderers).toBe(editorRuntime.renderers);
-    expect(view.runtime.getDocument()).toBe(source);
-    directWrite = () => view.runtime.blocks.updateBlock(blockId, { content: "Direct renderer edit" });
+  reactEditor.blockTypes.register({ definition: { type: "custom" }, render: ({ blockId }) => {
+    const view = usePanel();
+    expect(view.editor.renderers).toBe(reactEditor.renderers);
+    expect(view.editor.document.getDocument()).toBe(source);
+    directWrite = () => view.editor.document.blocks.updateBlock(blockId, { content: "Direct renderer edit" });
     result = useBlockNode(blockId);
     return createElement("span", { "data-custom": "true" }, result.block?.content);
   } });
-  const markup = renderToStaticMarkup(createElement(EditorView, { runtime: editorRuntime, rootBlockId: "source" }, createElement(PageSurface)));
+  const markup = renderToStaticMarkup(createElement(EditorEmbed, { editor: reactEditor, rootBlockId: "source" }, createElement(PageSurface)));
   expect(markup).toContain('data-custom="true">Source');
   expect(markup).not.toContain("Outside displayed subtree");
   directWrite!();
@@ -122,13 +123,13 @@ test.each([
   editor.blocks.insertBlock({ id: "host", type: "paragraph", content: "Host" });
   const sourceCore = await createEditor();
   const { standardPreset } = await import("../../extensions/built-ins/built-ins");
-  const editorView = createReactEditor({ editor: sourceCore, extensions: [standardPreset(), extension()] });
-  editorView.runtime.blocks.insertBlock({ ...input(), id: "container", listProps: { collapsed: true } });
-  const markup = renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime, rootBlockId: "container" }, createElement(PageSurface)));
+  const panel = createReactEditor({ editor: sourceCore, extensions: [standardPreset(), extension()] });
+  panel.editor.document.blocks.insertBlock({ ...input(), id: "container", listProps: { collapsed: true } });
+  const markup = renderToStaticMarkup(createElement(EditorEmbed, { editor: panel.editor, rootBlockId: "container" }, createElement(PageSurface)));
   expect(markup).toContain(title);
   expect(markup).toContain('data-block-id="container"');
   if (title === "Kanban") expect(markup).toContain("3 columns");
   if (title === "Table") expect(markup).toContain("3 × 3");
   expect(editor.blocks.getRootIds()).toEqual(["host"]);
-  editorView.runtime.destroy(); await sourceCore.destroy(); await editor.destroy();
+  panel.editor.destroy(); await sourceCore.destroy(); await editor.destroy();
 });

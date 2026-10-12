@@ -13,15 +13,7 @@ import {
     CRDTUndoScope,
     type CRDTObserveEvent,
 } from "@chulane/crdt-doc";
-import type {
-    Block,
-    BlockInput,
-    BlockListProps,
-    BlockNode,
-    BlockPatch,
-    BlockUpdate,
-    DocumentBlockManagerApi,
-} from "../../types";
+import type { Block, BlockDestination, BlockInput, BlockListProps, BlockNode, BlockPatch, BlockUpdate, DocumentBlockManagerApi } from "../../types";
 import type {
     BlockListPropsStorage,
     BlockStorage,
@@ -29,17 +21,7 @@ import type {
     IDPlugin,
     IDProp,
 } from "../../types/storage";
-import {
-    assignMap,
-    assignText,
-    assertPortableRecord,
-    assertPortableValue,
-    clone,
-    isCRDTArray,
-    isCRDTMap,
-    isCRDTText,
-    requireNonemptyId,
-} from "../../utils";
+import { assignMap, assignText, assertPortableRecord, assertPortableValue, clone, isCRDTArray, isCRDTMap, isCRDTText, requireNonemptyId } from "../../utils";
 import {
     contentFrom,
     strings,
@@ -291,13 +273,21 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
      * supplied identities do not require separate database creation or transfer APIs.
      *
      * @param block - Initial portable block data including its required native type and optional stable IDs.
-     * @param afterId - Sibling to insert after block id, `null` for first, or omitted for last.
+     * @param destination - Actual parent and next sibling; omitted appends to document roots.
      * @returns Complete inserted block assembled during storage creation.
      * @throws If malformed, an ID already exists in this document, application identity checks fail, or the requested sibling is missing.
      */
-    insertBlock(block: BlockInput, afterId?: string | null): Block {
+    insertBlock(block: BlockInput, destination: BlockDestination = { parentId: null }): Block {
         if (!block.type) throw new Error("Block type is required");
-        const container = this.resolveInsertContainer(afterId);
+        const container = destination.parentId === null ? this.roots : this.requiredArray(this.requiredBlock(destination.parentId), "children");
+        let afterId: string | null | undefined;
+        // Appending needs only the container length; do not materialize all existing siblings.
+        if (destination.beforeId !== undefined) {
+            const siblings = strings(container);
+            const index = siblings.indexOf(destination.beforeId);
+            if (index < 0) throw new Error(`Target block ${destination.beforeId} is not a child of ${destination.parentId}`);
+            afterId = index === 0 ? null : siblings[index - 1];
+        }
         this.validateInsertedForest([block]);
         const prepared = this.prepareBlock(block);
         let inserted: Block | undefined;
@@ -1012,17 +1002,25 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     }
 
     /**
-     * Resolves the sibling array that will receive an insertion.
-     *
-     * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
-     * @returns The root array or the sibling's current container.
-     * @throws {Error} When a named sibling is not placed in the tree.
+     * Reads one block's direct children without materializing descendants.
+     * @param parentId - Persisted parent identity.
+     * @returns Stable child IDs or an empty array when the parent is absent.
      */
-    private resolveInsertContainer(afterId?: string | null): CRDTArray<string> {
-        if (afterId === undefined || afterId === null) return this.roots;
-        const found = this.findContainer(afterId);
-        if (!found) throw new Error(`Target block ${afterId} not found`);
-        return found.array;
+    getChildIds(parentId: string): readonly string[] { return this.getBlockNode(parentId)?.childIds ?? []; }
+
+    /**
+     * Resolves insertion after a sibling into an explicit document destination.
+     * @param afterId - Existing sibling, null for first document root, or omitted for append.
+     * @returns Actual parent and next sibling, preserving the requested order.
+     * @throws When the named sibling is not placed in this document.
+     */
+    getInsertionDestinationAfter(afterId?: string | null): BlockDestination {
+        if (afterId === undefined) return { parentId: null };
+        if (afterId === null) return { parentId: null, beforeId: this.getRootIds()[0] };
+        const parentId = this.getParentId(afterId);
+        if (parentId === undefined) throw new Error(`Target block ${afterId} not found`);
+        const siblings = parentId === null ? this.getRootIds() : this.getChildIds(parentId);
+        return { parentId, beforeId: siblings[siblings.indexOf(afterId) + 1] };
     }
 
     /**

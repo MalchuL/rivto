@@ -5,10 +5,10 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { editorControlProps } from "../../constants";
-import { EditorView } from "../../editor-view/editor-view";
+import { EditorEmbed } from "../../components/editor-embed/editor-embed";
 import type { BlockResolution } from "../../editor/editor-storage";
 import { EditorStorageContext } from "../../editor/editor-storage-context";
-import { useBlockNode, useBlockSelectionAnchor, useEditorView } from "../../hooks";
+import { useBlockNode, useBlockSelectionAnchor, usePanel } from "../../hooks";
 import { useAcquiredEditor } from "../../hooks/editor/use-acquired-editor";
 import type { BlockSlotProps, ReactEditorExtension } from "../../managers";
 import { PageSurface } from "../../surfaces/page";
@@ -37,7 +37,7 @@ function EmbeddingBlock({ blockId }: { readonly blockId: string }) {
 
 /** Edits the reference in a right-slot popover, saving both IDs as one document update. */
 function EmbeddingControls({ block }: BlockSlotProps) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const [open, setOpen] = useState(false);
   const props = block.props as EmbeddingProps;
   return (
@@ -51,7 +51,7 @@ function EmbeddingControls({ block }: BlockSlotProps) {
         <form className="flex flex-col gap-3" onSubmit={(event) => {
           event.preventDefault();
           const fields = new FormData(event.currentTarget);
-          editorView.runtime.blocks.updateBlock(block.id, { props: {
+          panel.blocks.updateBlock(block.id, { props: {
             targetDocumentId: String(fields.get("targetDocumentId") ?? "").trim(),
             targetBlockId: String(fields.get("targetBlockId") ?? "").trim(),
           } });
@@ -79,11 +79,11 @@ function EmbeddingControls({ block }: BlockSlotProps) {
 /** Acquires and renders the editable source subtree below the reference row. */
 function EmbeddingBody({ block }: BlockSlotProps) {
   const blockId = block.id;
-  const editorView = useEditorView();
+  const panel = usePanel();
   const ancestors = useContext(ancestryContext);
   const { targetDocumentId, targetBlockId } = block.props as EmbeddingProps;
   const targetAddress = JSON.stringify([targetDocumentId, targetBlockId]);
-  const ownAddress = JSON.stringify([editorView.runtime.getDocument().id, blockId]);
+  const ownAddress = JSON.stringify([panel.editor.document.getDocument().id, blockId]);
   const references = useContext(EditorStorageContext);
   const [location, setLocation] = useState<BlockResolution & { targetAddress: string; error?: unknown }>({ targetAddress: "", ambiguous: false });
   const resolvedAddress = JSON.stringify([location.documentId, targetBlockId]);
@@ -113,11 +113,11 @@ function EmbeddingBody({ block }: BlockSlotProps) {
   return (
     <>
       {locationIsCurrent && location.ambiguous && <div role="status">Multiple documents contain this block; showing the first match.</div>}
-      {!cycle && targetBlockId && locationIsCurrent && location.documentId && source?.getDocument().id === location.documentId ? (
+      {!cycle && targetBlockId && locationIsCurrent && location.documentId && source?.document.getDocument().id === location.documentId ? (
         <ancestryContext.Provider value={ancestry}>
           {Boolean(error) && <div role="status">Unable to load referenced block.</div>}
           <div className={`${EMBEDDED_SURFACE_CLASS} min-w-0 max-w-full`} hidden={Boolean(error)}>
-            <EditorView runtime={source} rootBlockId={targetBlockId} active={!error}><PageSurface /></EditorView>
+            <EditorEmbed editor={source} rootBlockId={targetBlockId} active={!error}><PageSurface /></EditorEmbed>
           </div>
         </ancestryContext.Provider>
       ) : <div role="status" className="px-2 pb-2">{message}</div>}
@@ -127,7 +127,7 @@ function EmbeddingBody({ block }: BlockSlotProps) {
 
 /**
  * Registers live embedding props, rendering, and slash conversion.
- * Source documents are found and acquired through EditorStorageContext; each nested EditorView owns its acquisition.
+ * Source documents are found and acquired through EditorStorageContext; each nested EditorPanel owns its acquisition.
  * Source blocks reuse their source editor's renderers, commands, selection, and history.
  * The reference shell accepts ordinary host-document children through shared outline behavior.
  * @returns Optional extension; install it in each host editor that renders references.
@@ -135,8 +135,8 @@ function EmbeddingBody({ block }: BlockSlotProps) {
 export function embeddingExtension(): ReactEditorExtension {
   return {
     id: "block.embedding",
-    setup: (editorRuntime) => {
-      const dispose = editorRuntime.blockTypes.register({
+    setup: (reactEditor) => {
+      const dispose = reactEditor.blockTypes.register({
         definition: {
           type: EMBEDDING_BLOCK_TYPE,
           title: "Embedded block",
@@ -146,17 +146,17 @@ export function embeddingExtension(): ReactEditorExtension {
         render: (props) => <EmbeddingBlock {...props} />,
         slashCommand: { title: "Embedded block" },
       });
-      const body = editorRuntime.surfaces.registerBlockSlot({
+      const body = reactEditor.surfaces.registerBlockSlot({
         position: "body",
         component: EmbeddingBody,
         when: ({ block }) => block.type === EMBEDDING_BLOCK_TYPE,
       });
-      const controls = editorRuntime.surfaces.registerBlockSlot({
+      const controls = reactEditor.surfaces.registerBlockSlot({
         position: "right",
         component: EmbeddingControls,
         when: ({ block }) => block.type === EMBEDDING_BLOCK_TYPE,
       });
-      const clipboard = editorRuntime.clipboard.registerBlockConverter(EMBEDDING_BLOCK_TYPE, {
+      const clipboard = reactEditor.clipboard.registerBlockConverter(EMBEDDING_BLOCK_TYPE, {
         format: ({ block }, current) => ({ ...current, plain: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}`, markdown: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}` }),
         paste(block, context) {
           if (block.props.targetDocumentId !== context.sourceDocumentId) return {};

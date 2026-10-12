@@ -1,5 +1,5 @@
-import type { EditorViewApi } from "../../../editor-view/types";
-import type { EditorRuntime } from "../../../editor/editor-runtime";
+import type { PanelAPI } from "../../../panels/types";
+import type { ReactEditorApi } from "../../../editor/types";
 import { KEYBOARD_BINDING_IDS } from "../../../managers";
 
 /** One document-history action recognized from a browser editing event. */
@@ -37,15 +37,15 @@ function inputHistoryAction(event: InputEvent): HistoryAction | undefined {
  * text selections are rebuilt from block-relative offsets, while structural or
  * empty selections focus the registered surface root and clear native ranges.
  *
- * Register the extension once during `createEditorRuntime`. Its listeners are scoped to the
+ * Register the extension once during `createReactEditor`. Its listeners are scoped to the
  * active surface root and automatically removed by `useDOMEvent`.
  *
  * @example
  * ```tsx
- * <EditorView runtime={editorRuntime} documentId={documentId}>
+ * <EditorPanel editor={reactEditor} documentId={documentId}>
  *   <HistoryPlugin />
  *   <PageSurface />
- * </EditorView>
+ * </EditorPanel>
  * ```
  */
 export interface HistoryExtensionOptions {
@@ -56,48 +56,48 @@ export interface HistoryExtensionOptions {
 }
 
 export function registerHistory(
-  editorRuntime: EditorRuntime,
+  reactEditor: ReactEditorApi,
   options: HistoryExtensionOptions = {},
 ): void {
   /** Executes one history step and restores focus after React renders it. */
-  const run = (editorView: EditorViewApi, root: HTMLElement, action: HistoryAction): void => {
+  const run = (panel: PanelAPI, root: HTMLElement, action: HistoryAction): void => {
     if (!root) return;
-    editorView.runtime.history[action]();
+    panel.editor.document.history[action]();
     // Only restore selection and its focus here; undo/redo has already changed the document.
-    editorView.selection.scheduleIfSelectionUnchanged(() => {
-      if (editorView.selection.restoreDOM()) return;
+    panel.selection.scheduleIfSelectionUnchanged(() => {
+      if (panel.selection.restoreDOM()) return;
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });
     });
   };
 
-  editorRuntime.keyboard.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.historyUndo,
     keys: options.undoKeys ?? ["Primary+z"],
     composing: "prevent",
-  }, ({ editorView, root }) => {
-    run(editorView, root, "undo");
+  }, ({ panel, root }) => {
+    run(panel, root, "undo");
     return true;
   });
 
-  editorRuntime.keyboard.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.historyRedo,
     keys: options.redoKeys ?? ["Primary+Shift+z", "Primary+y"],
     composing: "prevent",
-  }, ({ editorView, root }) => {
-    run(editorView, root, "redo");
+  }, ({ panel, root }) => {
+    run(panel, root, "redo");
     return true;
   });
 
-  editorRuntime.events.register({
+  reactEditor.events.register({
     id: "history.before-input",
     type: "beforeinput",
     scope: "surface",
-  }, ({ editorView, raw: event, root }) => {
+  }, ({ panel, raw: event, root }) => {
     const action = inputHistoryAction(event);
     if (!action) return false;
 
-    if (!event.isComposing) run(editorView, root, action);
+    if (!event.isComposing) run(panel, root, action);
     return true;
   });
 }

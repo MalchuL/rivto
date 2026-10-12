@@ -4,7 +4,7 @@
  * manager. The host persists only user overrides, never default bindings.
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { parseShortcut, type ReactEditor } from '@chulane/rivto-react';
+import { parseShortcut, type ReactEditorApi } from '@chulane/rivto-react';
 
 export interface Settings { width: number; keymap: Record<string, string[]> }
 export const DEFAULT_SETTINGS: Settings = { width: 860, keymap: {} };
@@ -15,7 +15,7 @@ const SETTINGS_CLASS = 'settings-dialog';
  * @returns Modal settings UI.
  */
 export function SettingsDialog({ editor, settings, onChange, onClose }: {
-  editor: ReactEditor; settings: Settings; onChange: (settings: Settings) => void; onClose: () => void;
+  editor: ReactEditorApi; settings: Settings; onChange: (settings: Settings) => void; onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [error, setError] = useState('');

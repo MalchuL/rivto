@@ -1,9 +1,4 @@
-/**
- * Shared contracts for React block registration and containment metadata.
- */
-import type {
-  BlockDefinition,
-} from "@chulane/rivto";
+import type { BlockDefinition } from "@chulane/rivto";
 import type { SlashCommandContext } from "../slash";
 import type { BlockRenderer } from "./renderer-types";
 import type { BlockBehavior } from "../../block-behaviors/types";
@@ -54,7 +49,7 @@ export interface ReactBlockSlashCommand {
 /** Atomic model, renderer, and conversion registration for one block type. */
 export interface ReactBlockRegistration {
   /** Clipboard data conversion and portable formats installed with this type. */
-  readonly clipboard?: import("../clipboard/clipboard-converters").BlockClipboardConverter;
+  readonly clipboard?: import("../clipboard/types").BlockClipboardConverter;
   /** Framework-neutral definition registered with the core block registry. */
   readonly definition: ReactBlockDefinition;
   /** React content renderer selected by all registered surfaces. */

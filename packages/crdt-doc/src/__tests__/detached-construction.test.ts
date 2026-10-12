@@ -2,7 +2,7 @@
  * Verifies the public detached-construction API for both adapter-neutral and
  * deliberately Yjs-specific consumers.
  */
-import { YjsArray, YjsDoc, YjsMap, YjsNotAttachedError, YjsText } from "../index";
+import { YjsArray, YjsDoc, YjsMap, YjsNotAttachedError, YjsText } from "..";
 
 describe("detached CRDT construction", () => {
   it("creates detached values whose writes survive attachment", async () => {

@@ -8,7 +8,7 @@ import {
   assertBlockRangeEndpoints,
   createCaretSelection,
   type EditorPosition,
-  type RivtoEditorApi,
+  type DocumentEditorAPI,
   type Selection,
 } from "@chulane/rivto";
 import {
@@ -17,7 +17,7 @@ import {
   BLOCK_ID_SELECTOR,
   PAGE_EDITOR_ROOT_SELECTOR,
 } from "../../../../../constants";
-import type { EditorViewApi } from "../../../../../editor-view/types";
+import type { PanelAPI } from "../../../../../panels/types";
 import { focusBlock, resolveSelectionEndpoints } from "../../../../../managers";
 import type { ViewSelectionApi } from "../../../../../managers/selection/api";
 import { getPageVirtualizationControllerForElement } from "../../../../../surfaces/page/page-virtualization-controller";
@@ -43,35 +43,35 @@ export function currentNavigationSelection(
  * Publishes and focuses one caret position.
  *
  * @param root - Active editor root.
- * @param editorView - Owning editor view.
+ * @param panel - Owning editor view.
  * @param position - Target portable position.
  * @returns No value.
  */
 export function setNavigationCaret(
   root: HTMLElement,
-  editorView: EditorViewApi,
+  panel: PanelAPI,
   position: EditorPosition,
 ): void {
-  editorView.selection.set(createCaretSelection(position.blockId, position.offset));
+  panel.selection.set(createCaretSelection(position.blockId, position.offset));
   focusBlock(root, position.blockId, position.offset);
 }
 
 /**
  * Resolves the document-order edge of a text selection.
  *
- * @param editorView - Owning editor view.
+ * @param panel - Owning editor view.
  * @param editor - Core editor API.
  * @param selection - Text-like portable selection.
  * @param edge - Requested logical edge.
  * @returns Position at that edge.
  */
 export function textSelectionEdge(
-  editorView: EditorViewApi,
-  editor: EditorViewApi | RivtoEditorApi,
+  panel: PanelAPI,
+  editor: PanelAPI | DocumentEditorAPI,
   selection: Selection,
   edge: "start" | "end",
 ): EditorPosition {
-  const documentEditor = "runtime" in editor ? editor.runtime : editor;
+  const documentEditor = "editor" in editor ? editor.document : editor;
   assertBlockRangeEndpoints(selection);
   const lengthOf = (id: string) => documentEditor.blocks.getBlockNode(id)?.content.length ?? 0;
   const ends = resolveSelectionEndpoints(selection, lengthOf);
@@ -80,7 +80,7 @@ export function textSelectionEdge(
     navigationOutlineBlocks(editor, selection.focusBlockId),
     null,
     false,
-    (block) => !editorView.runtime.blockListProps.childrenVisible(block),
+    (block) => !panel.editor.blockListProps.childrenVisible(block),
   ).map(({ block }) => block.id);
   const anchorIndex = ids.indexOf(ends.anchor.blockId);
   const headIndex = ids.indexOf(ends.head.blockId);

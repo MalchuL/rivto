@@ -5,7 +5,7 @@
 Implement database-backed content as a React block extension configured with a
 host-owned `EntityRepository`. Keep `useBlock(id)` local and synchronous.
 
-This fits the existing boundary: `EditorView` rerenders from the core editor's
+This fits the existing boundary: `EditorPanel` rerenders from the core editor's
 revision, `BlockTree` resolves local IDs, and renderers invoke operations on the
 same core editor. A foreign block cannot safely enter that path because its
 operations, subscription, selection, and undo belong to another editor.
@@ -24,7 +24,7 @@ type ReferenceProps = {
 
 Register it with the existing `blockExtension` mechanism. Capture the
 repository in the extension factory or renderer closure; a new global manager
-on `EditorViewApi` is unnecessary while references are the only consumer.
+on `PanelAPI` is unnecessary while references are the only consumer.
 
 ```ts
 const databaseReferenceExtension = (
@@ -76,7 +76,7 @@ its commands and selection would target the host editor.
 Two later options are valid when richer rendering is required:
 
 - create a read-only tree renderer that receives the target editor explicitly;
-- mount a nested target `EditorViewApi` boundary with isolated events and
+- mount a nested target `PanelAPI` boundary with isolated events and
   selection.
 
 The first is smaller. The second is appropriate only for interactive/editable

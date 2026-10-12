@@ -1,17 +1,4 @@
-import type { DOMEventTarget } from "./dom-types";
-
-/** Native listener options that must match before registrations can share a listener. */
-export interface NativeListenerGroup {
-  readonly target: DOMEventTarget;
-  readonly type: string;
-  readonly capture: boolean;
-  readonly passive: boolean;
-}
-
-interface ConnectedListener extends NativeListenerGroup {
-  readonly nativeTarget: EventTarget;
-  readonly listener: EventListener;
-}
+import type { ConnectedListener, NativeListenerGroup } from "./types";
 
 /**
  * Attaches and removes native browser listeners for the document's editor views.

@@ -5,7 +5,7 @@ import { createCaretSelection } from "@chulane/rivto";
 import { PlusIcon } from "lucide-react";
 import { createPortal } from "react-dom";
 import { editorControlProps, PAGE_END_SLOT_SELECTOR } from "../../../../constants";
-import { useEditorRoot, useEditorView } from "../../../../hooks";
+import { useEditorRoot, usePanel } from "../../../../hooks";
 import { focusBlock } from "../../../../managers";
 import type { TrailingBlockProps } from "./types";
 
@@ -15,7 +15,7 @@ const TRAILING_BLOCK_CLASS = "page-trailing-block";
 
 /** Page-end controls that create every writing block up to the activated row. */
 export function TrailingBlock({ count }: TrailingBlockProps) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const { element: root } = useEditorRoot();
   const slot = root?.querySelector<HTMLElement>(PAGE_END_SLOT_SELECTOR);
   if (!root || !slot) return null;
@@ -31,19 +31,16 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
           aria-label={amount === 1 ? "Add block" : `Add ${amount} blocks`}
           onClick={() => {
             let id = "";
-            editorView.runtime.history.batchUpdates(() => {
+            panel.editor.document.history.batchUpdates(() => {
               for (let current = 0; current < amount; current += 1) {
-                id = editorView.runtime.blocks.insertBlock(
-                  editorView.runtime.createDefaultBlock(),
-                  id || undefined,
+                id = panel.blocks.insertBlock(
+                  panel.editor.createDefaultBlock(),
+                  panel.blocks.getInsertionDestinationAfter(id || undefined),
                 ).id;
-                if (editorView.panel?.rootBlockId && editorView.runtime.blocks.getParentId(id) === null) {
-                  editorView.runtime.blocks.moveBlocks([id], editorView.panel.rootBlockId, "inside");
-                }
               }
             });
             if (!id) return;
-            editorView.selection.set(createCaretSelection(id, 0));
+            panel.selection.set(createCaretSelection(id, 0));
             requestAnimationFrame(() => focusBlock(root, id, 0));
           }}
         >

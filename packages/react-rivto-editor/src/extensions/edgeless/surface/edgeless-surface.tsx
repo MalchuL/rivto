@@ -29,14 +29,7 @@ import {
   insertBlockElementSeparator,
   nonOverlappingBlockFrame,
 } from "../../../elements/block-element-projection";
-import {
-  useDOMEvent,
-  useEditorRoot,
-  useEditorView,
-  useElements,
-  useKeyboardEvent,
-  useRootBlockIds,
-} from "../../../hooks";
+import { useDOMEvent, useEditorRoot, usePanel, useElements, useKeyboardEvent, useRootBlockIds } from "../../../hooks";
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
 import { ToolBarDivider } from "../visuals/components/tool-bar";
 import { EdgelessToolButton } from "../visuals/components/tool-button";
@@ -85,7 +78,7 @@ function gridDotFade(zoom: number): string {
  */
 /** @param props - Optional local canvas settings. @returns Explicit canvas with its extension UI. */
 export function EdgelessSurface(props: { readonly snapping?: EdgelessSnappingStore; readonly avoidBlockElementOverlap?: boolean; readonly blockElementWidth?: number } = {}) {
-  const editor = useEditorView();
+  const editor = usePanel();
   const configured = getEdgelessSurfaceOptions(editor);
   const suppliedSnapping = props.snapping ?? configured.snapping;
   const snapping = useMemo(() => suppliedSnapping ?? new EdgelessSnappingStore(), [suppliedSnapping]);
@@ -101,10 +94,10 @@ function EdgelessSurfaceContent({
   readonly avoidBlockElementOverlap?: boolean;
   readonly blockElementWidth?: number;
 }) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const rootIds = useRootBlockIds();
   const blockElements = useElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE
-    && blockElementRoot(element, editorView.runtime.blocks) === (editorView.panel?.rootBlockId ?? null));
+    && blockElementRoot(element, panel.blocks) === null);
   const { ref: registerRoot } = useEditorRoot();
   const viewport = useRef<HTMLElement | null>(null);
   const spotlightOverlay = useRef<HTMLDivElement | null>(null);
@@ -275,29 +268,26 @@ function EdgelessSurfaceContent({
       y,
     };
     const frame = avoidBlockElementOverlap
-      ? nonOverlappingBlockFrame(preferredFrame, editorView.elements.getElementNodes().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
+      ? nonOverlappingBlockFrame(preferredFrame, panel.elements.getElementNodes().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
       : preferredFrame;
-    const roots = editorView.getRootBlockIds().flatMap((id) => editorView.runtime.blocks.getBlockNode(id) ?? []);
-    const zIndex = Math.max(0, ...editorView.elements.getElementNodes().map((element) => element.zIndex)) + 1;
+    const roots = panel.blocks.getRootIds().flatMap((id) => panel.blocks.getBlockNode(id) ?? []);
+    const zIndex = Math.max(0, ...panel.elements.getElementNodes().map((element) => element.zIndex)) + 1;
     let id = "";
-    editorView.runtime.history.batchUpdates(() => {
+    panel.editor.document.history.batchUpdates(() => {
       let afterId = roots.at(-1)?.id;
       const last = roots.at(-1);
-      if (last && !editorView.runtime.blockTypes.separatesBlockElements(last.type)) {
-        afterId = insertBlockElementSeparator(editorView.runtime, last.id).id;
+      if (last && !panel.editor.blockTypes.separatesBlockElements(last.type)) {
+        afterId = insertBlockElementSeparator(panel, last.id).id;
       }
-      id = editorView.runtime.blocks.insertBlock(editorView.runtime.createDefaultBlock(), afterId).id;
-      if (editorView.panel?.rootBlockId && editorView.runtime.blocks.getParentId(id) === null) {
-        editorView.runtime.blocks.moveBlocks([id], editorView.panel.rootBlockId, "inside");
-      }
-      editorView.elements.insertElement({
+      id = panel.blocks.insertBlock(panel.editor.createDefaultBlock(), panel.blocks.getInsertionDestinationAfter(afterId)).id;
+      panel.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame,
         zIndex,
         props: { startBlockId: id, endBlockId: id },
       });
     });
-    editorView.selection.set(createCaretSelection(id, 0));
+    panel.selection.set(createCaretSelection(id, 0));
     requestAnimationFrame(() => focusBlock(root, id, 0));
   };
 

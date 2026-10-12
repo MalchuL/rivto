@@ -1,9 +1,9 @@
-import { type RivtoEditorApi } from "@chulane/rivto";
-import { createTestCoreEditor as createRivtoEditor } from "../../../test-utils";
+import { type DocumentEditorAPI } from "@chulane/rivto";
+import { createTestCoreEditor as createDocumentEditor } from "../../../test-utils";
 import { crossDocumentBlockTransfer } from "./cross-document-block-transfer";
 
-async function createEditor(): Promise<RivtoEditorApi> {
-  const editor = await createRivtoEditor();
+async function createEditor(): Promise<DocumentEditorAPI> {
+  const editor = await createDocumentEditor();
   editor.blockRegistry.defineBlock({ type: "test.counter", defaultProps: { count: 0 } });
   return editor;
 }
@@ -84,7 +84,7 @@ describe("cross-document block transfer", () => {
 
   test("validates destination definitions before changing either document", async () => {
     const source = await createEditor();
-    const destination = await createRivtoEditor();
+    const destination = await createDocumentEditor();
     source.blocks.insertBlock({ id: "custom", type: "test.counter", props: { count: 9 } });
     const sourceBefore = source.dump();
 
@@ -109,9 +109,9 @@ test("transfers between two source models using one editor runtime", async () =>
   source.blocks.insertBlock({ id: "moved", type: "paragraph", content: "Moved" });
   source.history.clear(); destination.history.clear();
   const { createTestMultiEditor } = await import("../../../test-utils");
-  const { createEditorRuntime } = await import("../../../editor/editor-runtime");
+  const { createReactEditor } = await import("../../../editor/react-editor");
   const runtime = await createTestMultiEditor([source, destination]);
-  crossDocumentBlockTransfer(runtime.getRuntime(source.id)!, runtime.getRuntime(destination.id)!, ["moved"], { targetId: null, position: "after" });
+  crossDocumentBlockTransfer(runtime.getEditor(source.id)!, runtime.getEditor(destination.id)!, ["moved"], { targetId: null, position: "after" });
   expect(source.blocks.hasBlock("moved")).toBe(false);
   expect(destination.blocks.getBlockNode("moved")?.content).toBe("Moved");
   expect(editor.blocks.getRootIds()).toEqual(["host"]);

@@ -1,30 +1,26 @@
+import type { ExtensionsApi } from "../managers/extensions/api";
+import { PanelElements } from "../panels/panel-elements";
 import { BlockListPropsManager } from "../managers/blocks/block-list-props-manager";
-import { EditorViewRegistry } from "../managers/events/editor-view-registry";
+import { PanelRegistry } from "../managers/events/panel-registry";
+import type { ReactEditorApi } from "./types";
 /**
  * React runtime coordinator.
  *
- * Concrete registration state belongs to focused managers. EditorRuntime only
+ * Concrete registration state belongs to focused managers. ReactEditor only
  * wires those managers around one core editor, installs extensions, and owns
  * final destruction ordering.
  *
  * @module
  */
-import type { DocumentModel } from "@chulane/document-model";
 import type {
-  CommandRegistryApi,
-  ElementManagerApi,
-  HistoryManagerApi,
-  ModeManagerApi,
-  RivtoEditorApi,
+  DocumentEditorAPI,
 } from "@chulane/rivto";
 import { BlockElementProjection } from "../elements/block-element-projection";
-import type { CreateDefaultBlock, IsEmptyBlock } from "../extensions/built-ins/page/default-writing-block/index";
+import type { CreateDefaultBlock, IsEmptyBlock } from "../extensions/built-ins/page/default-writing-block/types";
 import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
 import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
 import type { BlockTypesApi } from "../managers/blocks/block-types-api";
-import type { BlocksApi } from "../managers/blocks/blocks-api";
 import type { RenderersApi } from "../managers/blocks/renderers-api";
-import type { ExtensionsApi } from "../managers/extensions/api";
 import {
   BlockBehaviorRegistry,
   BlockTypeManager,
@@ -36,53 +32,42 @@ import {
   RendererManager,
   SlashCommandRegistry,
   SurfaceManager,
-  type ReactEditorExtension,
-  type RegistrationDisposer,
-} from "../managers/index";
+} from "../managers";
 import type { SurfacesApi } from "../managers/surfaces/api";
-import type { CreateEditorRuntimeOptions } from "./types";
+import type { CreateReactEditorOptions } from "./types";
 
-export type { CreateEditorRuntimeOptions } from "./types";
+export type { CreateReactEditorOptions } from "./types";
 
 const WRITING_NOT_INSTALLED =
   "Install defaultWritingBlockExtension (or call installDefaultWriting) before using writing factories";
 
-/** Internal extension lifecycle required by collaborating managers. */
-interface RuntimeExtensionsApi extends ExtensionsApi {
-  initialize(extensions: readonly ReactEditorExtension[]): void;
-  own(release: RegistrationDisposer): RegistrationDisposer;
-  assertActive(): void;
-}
-
 /**
- * Shares one document's managers and extension registrations across its EditorViews.
+ * Shares one document's managers and extension registrations across its EditorPanel and EditorEmbed components.
  *
- * The supplied core editor provides blocks, elements, history, commands, mode, and
+ * The supplied core editor provides blocks, elements, history, commands, and
  * portable selection. React managers add rendering, browser event handling, block
  * behaviors, clipboard formats, and slash-command definitions. Extensions receive
  * this fully constructed runtime during setup and register their contributions once.
  *
- * Each EditorViewController supplies its own DOM root, selection operations, and
- * clipboard/slash execution. Access shared operations through editorView.runtime.
+ * Each panel implementation supplies its own DOM root, selection operations, and
+ * clipboard/slash execution. Access shared operations through panel.editor.
  * Destroying this runtime releases React resources in dependency order; the caller
  * or EditorStorage still owns destruction of the core editor and document model.
  */
-export class EditorRuntime {
-  /** Framework-neutral core permanently bound to this document and its managers. */
-  private readonly editor: RivtoEditorApi;
-  /** Creates and updates document elements, including canvas objects, through the core element manager.
-   * The underlying core editor remains private; every view uses this same manager. */
-  readonly elements: ElementManagerApi;
+export class ReactEditor implements ReactEditorApi {
+  /** Framework-neutral core permanently bound to this document and its managers.
+   * Document managers provide the following shared capabilities:
+   * Creates and updates document elements, including canvas objects, through the core element manager.
+   * The underlying core editor is exposed through document; every view uses this same manager.
+   * Named core commands registered and invoked by extensions.
+   * The manager is shared by all views without exposing the underlying core editor.
+   * Core undo/redo history and synchronous transaction batching for this editor.
+   * All views of the document share this local history; other editors keep their own.
+   * Guarded mutations and delegated core block operations.
+   * Model selection shared by occurrences; DOM adapters belong to each PanelAPI.
+   */
+  readonly document: DocumentEditorAPI;
   private readonly panelProjections = new Map<string, { consumers: number; release: () => void }>();
-  /** Core presentation mode shared by this document's views and local to this editor.
-   * A particular DOM surface may differ, such as a page embedding inside an edgeless view. */
-  readonly mode: ModeManagerApi;
-  /** Named core commands registered and invoked by extensions.
-   * The manager is shared by all views without exposing the underlying core editor. */
-  readonly commands: CommandRegistryApi;
-  /** Core undo/redo history and synchronous transaction batching for this editor.
-   * All views of the document share this local history; other editors keep their own. */
-  readonly history: HistoryManagerApi;
   /** Creates input for an empty writing block using the installed writing extension.
    *
    * Enter, trailing insertion, separators, and clipboard operations share this factory.
@@ -107,8 +92,6 @@ export class EditorRuntime {
   readonly renderers: RenderersApi;
   /** Per-type outline and drop behavior resolved by page dispatchers. */
   readonly blockBehaviors: BlockBehaviorsApi;
-  /** Guarded mutations and delegated core block operations. */
-  readonly blocks: BlocksApi;
   /** Atomic React block-type and presentation registration. */
   readonly blockTypes: BlockTypesApi;
   /** Registers list-property validation and keyboard behavior with the core policy manager.
@@ -119,19 +102,17 @@ export class EditorRuntime {
   /** Structured document operations; view-dependent paste receives its destination explicitly. */
   readonly clipboard: ClipboardManager;
   /** Core paste strategies extended by React clipboard integrations. */
-  readonly pasteStrategies: RivtoEditorApi["clipboard"]["pasteStrategies"];
+  readonly pasteStrategies: DocumentEditorAPI["clipboard"]["pasteStrategies"];
   /** Root surfaces and their ordered block/editor wrappers. */
   readonly surfaces: SurfacesApi;
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
-  readonly extensions: RuntimeExtensionsApi;
+  readonly extensions: ExtensionsApi;
   /** Delegated surface/document/window DOM event runtime. */
   readonly events: EventManager;
   /** Mounted occurrences and explicit active/default view lookup. */
-  readonly editorViews: EditorViewRegistry;
+  readonly panels: PanelRegistry;
   /** Semantic keyboard bindings and runtime keymap overrides. */
   readonly keyboard: KeyboardManager;
-  /** Model selection shared by occurrences; DOM adapters belong to each EditorViewApi. */
-  readonly selection: RivtoEditorApi["selection"];
   /** React-owned slash-command registry. */
   readonly slashCommands: SlashCommandRegistry;
   private destroyed = false;
@@ -140,11 +121,6 @@ export class EditorRuntime {
   readonly blockElements: BlockElementProjection;
   /** Cleanup callbacks run in reverse order during runtime destruction. */
   private readonly disposers: Array<() => void> = [];
-
-  /** Current revision of the framework-neutral editor. */
-  get revision(): number {
-    return this.editor.revision;
-  }
 
   /**
    * Creates every manager, then installs host extensions.
@@ -156,38 +132,32 @@ export class EditorRuntime {
    * Writing-block registration is not done here — hosts install
    * `defaultWritingBlockExtension` (included by `standardPreset`).
    */
-  constructor(options: CreateEditorRuntimeOptions) {
+  constructor(options: CreateReactEditorOptions) {
     const editor = options.editor;
-    this.editor = editor;
-    this.elements = editor.elements;
-    this.mode = editor.mode;
-    this.commands = editor.commands;
-    this.history = editor.history;
+    this.document = editor;
     const extensions = new ExtensionManager(this);
     this.extensions = extensions;
     this.disposers.push(() => extensions.destroy());
-    this.editorViews = new EditorViewRegistry(this);
-    const events = new EventManager(this);
+    this.panels = new PanelRegistry(this, extensions);
+    const events = new EventManager(this, extensions);
     this.events = events;
-    this.disposers.push(() => this.editorViews.cancelPendingSelections());
-    this.selection = editor.selection;
-    const keyboard = new KeyboardManager(this, options.keymap);
+    this.disposers.push(() => this.panels.cancelPendingSelections());
+    const keyboard = new KeyboardManager(this, extensions, options.keymap);
     this.keyboard = keyboard;
     const slashCommands = new SlashCommandRegistry(extensions);
     this.slashCommands = slashCommands;
     // Release shared registrations after extension cleanup has finished using them.
-    this.extensions.own(() => {
+    extensions.own(() => {
       slashCommands.destroy();
       keyboard.destroy();
       events.destroy();
-      this.editorViews.destroy();
+      this.panels.destroy();
     });
     this.renderers = new RendererManager(extensions, options.unknownBlockRenderer);
-    this.blockBehaviors = new BlockBehaviorRegistry(this);
-    this.blockListProps = new BlockListPropsManager(this, editor.blockListProps);
-    this.blockTypes = new BlockTypeManager(this, editor);
-    this.blocks = editor.blocks;
-    this.clipboard = new ClipboardManager(editor, this);
+    this.blockBehaviors = new BlockBehaviorRegistry(this, extensions);
+    this.blockListProps = new BlockListPropsManager(extensions, editor.blockListProps);
+    this.blockTypes = new BlockTypeManager(this, editor, extensions);
+    this.clipboard = new ClipboardManager(editor, this, extensions);
     this.clipboardFormats = new ClipboardFormatRegistry(extensions, this.clipboard.converters);
     this.pasteStrategies = editor.clipboard.pasteStrategies;
     this.surfaces = new SurfaceManager(extensions);
@@ -195,10 +165,10 @@ export class EditorRuntime {
     this.disposers.push(() => this.blockElements.destroy());
     this.disposers.push(() => { this.panelProjections.forEach((entry) => entry.release()); this.panelProjections.clear(); });
     try {
-      this.extensions.initialize(options.extensions ?? []);
+      extensions.initialize(options.extensions ?? []);
       this.disposers.push(
-        this.blocks.subscribeStructure(this.blockElements.schedule),
-        this.elements.subscribe(this.blockElements.schedule),
+        this.document.blocks.subscribeStructure(this.blockElements.schedule),
+        this.document.elements.subscribe(this.blockElements.schedule),
       );
       this.blockElements.schedule();
     } catch (error) {
@@ -225,8 +195,8 @@ export class EditorRuntime {
     let entry = this.panelProjections.get(key);
     if (!entry) {
       const projection = this.blockElements.createPanelProjection(rootBlockId, rootElementId);
-      const unsubscribeBlocks = this.blocks.subscribeStructure(projection.schedule);
-      const unsubscribeElements = this.elements.forRoot(rootElementId).subscribe(projection.schedule);
+      const unsubscribeBlocks = this.document.blocks.subscribeStructure(projection.schedule);
+      const unsubscribeElements = new PanelElements(this.document.elements, this.document.getDocument(), rootElementId).subscribe(projection.schedule);
       entry = { consumers: 0, release: () => { unsubscribeBlocks(); unsubscribeElements(); projection.destroy(); } };
       this.panelProjections.set(key, entry);
       projection.reconcile();
@@ -262,19 +232,6 @@ export class EditorRuntime {
     };
   }
 
-  /** Forwards changes from this document, its local mode, and core definitions to React subscribers.
-   * Subscribes to this document, its local mode, and core definitions; selection has its own stream. */
-  subscribe(listener: () => void): () => void {
-    return this.editor.subscribe(listener);
-  }
-
-  /**
-   * Reads the permanently bound document without selecting a rendered occurrence.
-   * Every manager and subscription of this editor keeps using that source model.
-   * @returns The fixed model supplied when this editor was constructed.
-   */
-  getDocument(): DocumentModel { return this.editor.getDocument(); }
-
   /**
    * Releases React managers while the lifecycle owner retains the core and document.
    *
@@ -304,6 +261,6 @@ export class EditorRuntime {
 }
 
 /** Creates a modular React runtime around the supplied single-document core editor. */
-export const createEditorRuntime = (
-  options: CreateEditorRuntimeOptions,
-): EditorRuntime => new EditorRuntime(options);
+export const createReactEditor = (
+  options: CreateReactEditorOptions,
+): ReactEditor => new ReactEditor(options);

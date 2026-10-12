@@ -1,7 +1,7 @@
 import { isCaretSelection, resolveBlockRange } from "@chulane/rivto";
 import { useLayoutEffect, type RefObject } from "react";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../constants";
-import { useEditorView } from "../../editor-view/use-editor-view";
+import { usePanel } from "../editor/use-panel";
 import { restoreDOMSelection } from "../../managers";
 
 /** Props spread onto any renderer region from which selection may begin. */
@@ -26,13 +26,13 @@ const selectionAnchorAttributes: BlockSelectionAnchorAttributes = { [BLOCK_SELEC
  * @returns Nothing; layout cleanup cancels stale queued focus restoration.
  */
 export function useRestoreBlockFocus(blockId: string, elementRef?: RefObject<HTMLDivElement | null>): void {
-  const editorView = useEditorView();
+  const panel = usePanel();
   /** Restores a pending command's caret after commit; cleanup cancels stale work. */
   useLayoutEffect(() => {
     const textEdit = elementRef !== undefined;
-    const element = elementRef ? elementRef.current : editorView.events.getRoot();
-    if (!element || !editorView.selection.hasPendingSelectionCallback) return;
-    const selection = editorView.selection.snapshot();
+    const element = elementRef ? elementRef.current : panel.events.getRoot();
+    if (!element || !panel.selection.hasPendingSelectionCallback) return;
+    const selection = panel.selection.snapshot();
     if (selection?.focusBlockId !== blockId || !isCaretSelection(selection)) return;
 
     // A structural command remounts the focused editable before its scheduled
@@ -46,8 +46,8 @@ export function useRestoreBlockFocus(blockId: string, elementRef?: RefObject<HTM
     // Focusing inside the commit forces layout while React is still updating
     // sibling blocks. A newer selection or an unmount invalidates this work.
     queueMicrotask(() => {
-      if (!mounted || !element.isConnected || !editorView.selection.hasPendingSelectionCallback ||
-        editorView.selection.snapshot() !== selection) return;
+      if (!mounted || !element.isConnected || !panel.selection.hasPendingSelectionCallback ||
+        panel.selection.snapshot() !== selection) return;
       element.focus({ preventScroll: true });
       if (textEdit) {
         const range = selection.blocks[0]!;
@@ -58,7 +58,7 @@ export function useRestoreBlockFocus(blockId: string, elementRef?: RefObject<HTM
       }
     });
     return () => { mounted = false; };
-  }, [editorView, blockId, elementRef]);
+  }, [panel, blockId, elementRef]);
 }
 
 /**
@@ -67,7 +67,7 @@ export function useRestoreBlockFocus(blockId: string, elementRef?: RefObject<HTM
  * extension responsibilities. Interactive descendants must respect defaultPrevented.
  * @param blockId - Stable ID of the structural block; no document subscription is created.
  * @returns Stable presence attributes to spread on the single structural selection region.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useBlockSelectionAnchor(blockId: string): BlockSelectionAnchorAttributes {
   useRestoreBlockFocus(blockId);

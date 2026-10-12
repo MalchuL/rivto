@@ -2,12 +2,7 @@
  * Copies normalized block ranges and dispatches paste to registered strategies
  * inside one transaction.
  */
-import {
-  isCaretSelection,
-  isStructuralSelection,
-  type EditorPosition,
-  type Selection,
-} from "../selection-manager";
+import { isCaretSelection, isStructuralSelection, type EditorPosition, type Selection } from "../selection-manager";
 import type { ClipboardBundle, ClipboardPasteInput } from "./clipboard-data";
 import { CLIPBOARD_BUNDLE_VERSION } from "./clipboard-data";
 import {
@@ -16,15 +11,9 @@ import {
   TEXT_PASTE_STRATEGY_ID,
 } from "./constants";
 import { cloneSelectedTopLevelSubtrees, findBlock, validateClipboardBundle } from "./utils";
-import {
-  BlockPasteStrategy,
-  PreserveNewlinesPasteStrategy,
-  TextPasteStrategy,
-  type PasteContext,
-  type PastePlacement,
-} from "./strategies";
+import { BlockPasteStrategy, PreserveNewlinesPasteStrategy, TextPasteStrategy, type PasteContext, type PastePlacement } from "./strategies";
 import { PasteStrategyRegistry } from "./strategies";
-import type { RivtoEditorApi } from "../../editor/types";
+import type { DocumentEditorAPI } from "../../editor/types";
 import type { ClipboardManagerApi } from "../types";
 
 /** Framework-neutral clipboard operations over blocks with per-block offsets. */
@@ -36,7 +25,7 @@ export class ClipboardManager implements ClipboardManagerApi {
    * Creates the clipboard owner and registers core paste strategies.
    * @param editor - Owning editor providing block and selection operations.
    */
-  constructor(private readonly editor: RivtoEditorApi) {
+  constructor(private readonly editor: DocumentEditorAPI) {
     this.pasteStrategies.register(
       PRESERVE_NEWLINES_PASTE_STRATEGY_ID,
       new PreserveNewlinesPasteStrategy(editor),

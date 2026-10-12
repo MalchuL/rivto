@@ -1,14 +1,14 @@
-import { ElementGeometry } from "../element-geometry";
-import { drawingResizeProps } from "./utils/drawing-frame";
 import {
   type ClipboardBundle,
   type EditorElementNode,
 } from "@chulane/rivto";
-import type { EditorViewApi } from "../../../editor-view/types";
-import type { EditorRuntime } from "../../../editor/editor-runtime";
+import type { PanelAPI } from "../../../panels/types";
+import type { ReactEditorApi } from "../../../editor/types";
 import { blockIdsOf } from "../../../elements/block-element-projection";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
-import { getEdgelessRuntime, type EdgelessSelectionRef } from "../../built-ins/selection/edgeless-runtime";
+import { getEdgelessRuntime } from "../../built-ins/selection/edgeless-runtime";
+import type { EdgelessSelectionRef } from "../../built-ins/selection/types";
+import { ElementGeometry } from "../element-geometry";
 import { drawingDefaults, EdgelessToolState } from "./tool-state";
 import type {
   ConnectorEndpoint,
@@ -16,19 +16,19 @@ import type {
   EdgelessAlignment,
   EdgelessReorder,
   EdgelessVisual,
-  EdgelessVisualCommandMap,
   EdgelessVisualsOptions,
   EdgelessVisualTool,
   PresetPayload,
   ToolCategory,
   UpdateVisualPayload,
+  VisualCommandPayload,
   VisualFrame,
   VisualGroup,
 } from "./types";
+import { drawingResizeProps } from "./utils/drawing-frame";
 import { connectorFrame, endpointPoint, normalizeRotation, unionFrames } from "./utils/geometry";
 
 const DEFAULT_FRAME: VisualFrame = { x: 120, y: 120, width: 160, height: 120 };
-type VisualCommandPayload<Name extends keyof EdgelessVisualCommandMap> = EdgelessVisualCommandMap[Name]["payload"];
 const VISUAL_TYPES = new Set(["sticker", "drawing", "rectangle", "ellipse", "text", "connector"]);
 const copy = <Value>(value: Value): Value => structuredClone(value);
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -46,10 +46,10 @@ const isConnectorTextRotation = (
 /** Owns React-specific element schemas, canvas commands, grouping, and clipboard behavior. */
 export class EdgelessVisualController {
   /** Document managers used by both the installed controller and its view-bound operations. */
-  get runtime(): EditorRuntime { return "runtime" in this.editor ? this.editor.runtime : this.editor; }
-  private rootIds() { return "runtime" in this.editor ? this.editor.getRootBlockIds() : this.runtime.blocks.getRootIds(); }
+  get runtime(): ReactEditorApi { return "editor" in this.editor ? this.editor.editor : this.editor; }
+  private rootIds() { return "editor" in this.editor ? this.editor.blocks.getRootIds() : this.editor.document.blocks.getRootIds(); }
   /** Element operations for the receiving canvas, or all elements during shared normalization. */
-  get elements() { return "runtime" in this.editor ? this.editor.elements : this.runtime.elements; }
+  get elements() { return "editor" in this.editor ? this.editor.elements : this.editor.document.elements; }
 
   private readonly commandHandlers = new Map<string, (controller: EdgelessVisualController, payload?: unknown) => unknown>();
   private readonly tools = new EdgelessToolState(() => this.emit());
@@ -63,11 +63,11 @@ export class EdgelessVisualController {
   private readonly propertyPreview = new Map<string, Record<string, unknown>>();
 
   /** @param editor - Owning React editor with first-class element storage. */
-  constructor(readonly editor: EditorViewApi | EditorRuntime, readonly options: EdgelessVisualsOptions = {}) {
+  constructor(readonly editor: PanelAPI | ReactEditorApi, readonly options: EdgelessVisualsOptions = {}) {
     this.selection = getEdgelessRuntime(editor);
     this.registrations.push({ dispose: this.registerCommands() });
     this.registerToolSelectShortcut();
-    this.unsubscribeDocument = this.runtime.subscribe(() => {
+    this.unsubscribeDocument = this.editor.document.subscribe(() => {
       if (this.reconciling) return;
       this.reconciling = true;
       try { this.normalizeConnectors(); } finally { this.reconciling = false; }
@@ -79,14 +79,14 @@ export class EdgelessVisualController {
    * Uses a view's document and selection while sharing this installed controller.
    * The API creates no commands, listeners, or acquisitions. Tool state and
    * revisions remain shared; model reads and writes use the supplied view API.
-   * @param editorView - Native view's document-bound editor API.
+   * @param panel - Native view's document-bound editor API.
    * @returns Controller API for renderers and retained handlers in that view.
    */
-  getDocumentView(editorView: EditorViewApi): EdgelessVisualController {
-    const selection = getEdgelessRuntime(editorView);
+  getDocumentView(panel: PanelAPI): EdgelessVisualController {
+    const selection = getEdgelessRuntime(panel);
     return new Proxy(this, {
       get(target, key, receiver) {
-        if (key === "editor") return editorView;
+        if (key === "editor") return panel;
         if (key === "selection") return selection;
         return Reflect.get(target, key, receiver);
       },
@@ -167,7 +167,7 @@ export class EdgelessVisualController {
       this.emit();
       return;
     }
-    this.runtime.history.batchUpdates(() => {
+    this.editor.document.history.batchUpdates(() => {
       entries.forEach(([id, patch]) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] }));
     });
     this.emit();
@@ -333,7 +333,7 @@ export class EdgelessVisualController {
   updateMany(ids: readonly string[], patch: Record<string, unknown>): void {
     const visuals = ids.map((id) => this.visual(id));
     if (!visuals.length || visuals.some((visual) => !visual || visual.kind !== visuals[0]!.kind)) throw new Error("Shared properties require one visual type");
-    this.runtime.history.batchUpdates(() => ids.forEach((id) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] })));
+    this.editor.document.history.batchUpdates(() => ids.forEach((id) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] })));
   }
 
   /** Moves the complete active selection by a canvas delta. */
@@ -349,7 +349,7 @@ export class EdgelessVisualController {
     if (!bounds || width <= 0 || height <= 0 || bounds.width <= 0 || bounds.height <= 0) return;
     const scaleX = width / bounds.width;
     const scaleY = height / bounds.height;
-    this.runtime.history.batchUpdates(() => this.leaves(items).forEach((id) => {
+    this.editor.document.history.batchUpdates(() => this.leaves(items).forEach((id) => {
       const frame = this.element(id)?.frame;
       if (!frame) return;
       const center = {
@@ -397,13 +397,17 @@ export class EdgelessVisualController {
     const siblings = parent?.childIds ?? this.elements.getRootIds();
     const selectedIds = new Set(items);
     const ordered = siblings.filter((id) => selectedIds.has(id));
-    const group = this.runtime.history.batchUpdates(() => {
+    const group = this.editor.document.history.batchUpdates(() => {
       const group = this.elements.insertElement({
         type: "group", frame: bounds,
         zIndex: Math.max(0, ...items.map((item) => this.element(item)?.zIndex ?? 0)),
         props: { title: `Group ${this.getGroups().length + 1}` },
       });
-      this.elements.moveElements([group.id], { parentId, beforeId: ordered[0] });
+      if ("editor" in this.editor) {
+        this.editor.elements.moveElements([group.id], parentId === null ? { root: true, beforeId: ordered[0] } : { parentId, beforeId: ordered[0] });
+      } else {
+        this.editor.document.elements.moveElements([group.id], { parentId, beforeId: ordered[0] });
+      }
       this.elements.moveElements(ordered, { parentId: group.id });
       return this.elements.getElementNode(group.id)!;
     });
@@ -415,7 +419,7 @@ export class EdgelessVisualController {
   ungroup(): void {
     const selected = this.selection.get().items.filter((id) => this.element(id)?.type === "group");
     const children: string[] = [];
-    this.runtime.history.batchUpdates(() => selected.forEach((id) => {
+    this.editor.document.history.batchUpdates(() => selected.forEach((id) => {
       const group = this.groupRecord(id);
       if (!group) return;
       children.push(...group.children);
@@ -429,7 +433,7 @@ export class EdgelessVisualController {
     const entries = this.selection.get().items.flatMap((id) => { const bounds = this.bounds(id); return bounds ? [{ id, bounds }] : []; });
     const outer = unionFrames(entries.map(({ bounds }) => bounds));
     if (!outer || entries.length < 2) return;
-    this.runtime.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
+    this.editor.document.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
       const dx = mode === "left" ? outer.x - bounds.x : mode === "center" ? outer.x + outer.width / 2 - bounds.width / 2 - bounds.x : mode === "right" ? outer.x + outer.width - bounds.width - bounds.x : 0;
       const dy = mode === "top" ? outer.y - bounds.y : mode === "middle" ? outer.y + outer.height / 2 - bounds.height / 2 - bounds.y : mode === "bottom" ? outer.y + outer.height - bounds.height - bounds.y : 0;
       if (dx || dy) this.translate([id], dx, dy);
@@ -447,7 +451,7 @@ export class EdgelessVisualController {
     const span = axis === "horizontal" ? last.x + last.width - first.x : last.y + last.height - first.y;
     const gap = (span - occupied) / (entries.length - 1);
     let cursor = axis === "horizontal" ? first.x : first.y;
-    this.runtime.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
+    this.editor.document.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
       const delta = cursor - (axis === "horizontal" ? bounds.x : bounds.y);
       if (delta) this.translate([id], axis === "horizontal" ? delta : 0, axis === "vertical" ? delta : 0);
       cursor += (axis === "horizontal" ? bounds.width : bounds.height) + gap;
@@ -494,10 +498,16 @@ export class EdgelessVisualController {
   deleteItems(items: readonly string[]): void {
     const selected = [...items];
     const leaves = this.leaves(selected);
-    this.runtime.history.batchUpdates(() => {
+    const blockIds = leaves.flatMap(id => {
+      const element = this.element(id);
+      return element?.type === "block" ? blockIdsOf(element, this.rootIds()) : [];
+    });
+    const panel = "editor" in this.editor ? this.editor : undefined;
+    if (panel && blockIds.some(id => !panel.blocks.canRemove(id))) return;
+    this.editor.document.history.batchUpdates(() => {
       leaves.forEach((id) => {
         const element = this.element(id);
-        if (element?.type === "block") blockIdsOf(element, this.rootIds()).forEach((blockId) => this.runtime.blocks.removeBlock(blockId));
+        if (element?.type === "block") blockIdsOf(element, this.rootIds()).forEach((blockId) => this.editor.document.blocks.removeBlock(blockId));
       });
       this.elements.removeElements([...new Set([...leaves, ...selected.filter((id) => this.element(id)?.type === "group")])]);
     });
@@ -522,9 +532,9 @@ export class EdgelessVisualController {
     const registrations: Array<{ dispose(): void }> = [];
     const register = (name: string, handler: (controller: EdgelessVisualController, payload?: unknown) => unknown) => {
       this.commandHandlers.set(name, handler);
-      if (!this.runtime.commands.has(name)) registrations.push(this.runtime.commands.register(name, (value) => {
-        if (isRecord(value) && "editorView" in value && "payload" in value) {
-          return handler(this.getDocumentView(value.editorView as EditorViewApi), value.payload);
+      if (!this.editor.document.commands.has(name)) registrations.push(this.editor.document.commands.register(name, (value) => {
+        if (isRecord(value) && "panel" in value && "payload" in value) {
+          return handler(this.getDocumentView(value.panel as PanelAPI), value.payload);
         }
         return handler(this, value);
       }));
@@ -625,7 +635,7 @@ export class EdgelessVisualController {
   }
 
   private translate(items: readonly string[], dx: number, dy: number): void {
-    this.runtime.history.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.element(id)?.frame; if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));
+    this.editor.document.history.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.element(id)?.frame; if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));
   }
 
   private leaves(items: readonly string[], visited = new Set<string>()): string[] {
@@ -746,6 +756,5 @@ export class EdgelessVisualController {
     if (![value.x, value.y, value.width, value.height].every(Number.isFinite) || value.width <= 0 || value.height <= 0) throw new Error("Visual frame requires finite positive geometry");
     return { x: value.x, y: value.y, width: value.width, height: value.height };
   }
-
 
 }

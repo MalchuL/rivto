@@ -6,10 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ElementSlots } from "../../../../blocks";
-import {
-  EditableLabel,
-  type EditableLabelFocusPoint,
-} from "../../../../components";
+import { EditableLabel, type EditableLabelFocusPoint } from "../../../../components";
 import { editorControlProps } from "../../../../constants";
 import { useEdgelessSelected } from "../../../built-ins/selection/edgeless-runtime";
 import type { EdgelessVisualController } from "../controller";

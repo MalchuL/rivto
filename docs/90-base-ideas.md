@@ -37,7 +37,7 @@
 			- Внутри блока все плагины хранят своё состояние в `pluginState[pluginId]` (ключ — `pluginId`). При сериализации/десериализации core вызывает плагинные конвертеры, которые читают/пишут `pluginState[pluginId]`. Это убирает конфликты ключей и даёт явное ownership.
 		- ## Сериализация / Десериализация (chain of responsibility)
 			- Core собирает блоки и вызывает `BlockDefinition.toJSON` для каждого блока. Если плагин отсутствует — core делает safe fallback (stub: id, type, order, position, size, raw pluginState). Десериализация пытаетс я найти `BlockDefinition.fromJSON`; если отсутствует — импортируется как generic block с raw state. Bundle содержит мета (version, registered plugin IDs) для future-proof.
-		- ## ClipboardManager (EditorRuntime, не блок)
+		- ## ClipboardManager (ReactEditor, не блок)
 			- ClipboardManager — глобальный сервис в EditorCore: отвечает за copy/paste. Copy формирует multi-mime payload:
 			- `application/x-myeditor+json` (structured bundle),
 			- `text/html` (fallback, via plugins),
@@ -1030,7 +1030,7 @@
 			- DocumentModel & CRDT adapter
 			- BlockRegistry & BlockDefinition & BlockInstance
 			- PluginRegistry & EditorPlugin
-			- EditorCore & EditorView
+			- EditorCore & EditorPanel
 			- Managers: SelectionManager, ClipboardManager, ProviderManager, UndoManager, ThemeManager, EventBus
 			- Renderer interface(s)
 		- Серилизация / Clipboard flow (детально)
@@ -1043,7 +1043,7 @@
 		- # 1. Ключевая идея (коротко)
 		- `DocumentModel` — **высокоуровневый источник правды** содержимого (блоки, links, meta), агрегирует CRDT через `CRDTDoc` (по умолчанию Yjs через адаптер).
 		- `EditorCore` — runtime/orchestrator: держит `DocumentStore`, `PluginRegistry`, `BlockRegistry`, `ProviderManager`, `Renderer`, `SelectionManager`, `ClipboardManager`, `UndoManager`, `ThemeManager`, `EventBus`.
-		- `EditorView` — UI-слой (React) который монтирует `Renderer` и подключает DOM события к `ClipboardManager`/`SelectionManager`.
+		- `EditorPanel` — UI-слой (React) который монтирует `Renderer` и подключает DOM события к `ClipboardManager`/`SelectionManager`.
 		- `Plugins` регистрируют `BlockDefinition`(ы), UI-виджеты и сериализаторы.
 		- `BlockRegistry` — обязателен: регистрирует типы блоков (фабрики/схемы/версионирование) и используется при `deserialize`/`create`.
 		    
@@ -1054,7 +1054,7 @@
 		- **DocumentModel** — CRUD и транзакции над блоками/links + наблюдатели.
 		- **CRDTDoc** — адаптер к CRDT (YjsDocAdapter implements CRDTDoc).
 		- **EditorCore** — объединяет всё, public API.
-		- **EditorView** — React component (mount/unmount) + DOM event hooks.
+		- **EditorPanel** — React component (mount/unmount) + DOM event hooks.
 		- **Renderer** — Bridge: renders Document → DOM/Canvas.
 		- **Managers** — SelectionManager, ClipboardManager, ProviderManager, UndoManager, ThemeManager, EventBus.
 		- **Plugins** — define blocks, serializers, UI portions.
@@ -1348,7 +1348,7 @@
 		  ```
 		    
 ---
-		- ### h) Renderer & EditorView
+		- ### h) Renderer & EditorPanel
 		    
 		  ```
 		  // core/renderer.ts
@@ -1370,7 +1370,7 @@
 		    
 		  ```
 		  // core/view.ts
-		  export interface EditorView {
+		  export interface EditorPanel {
 		  mount(element: HTMLElement): void;
 		  unmount(): void;
 		  getRootElement(): HTMLElement;
@@ -1425,7 +1425,7 @@
 		  
 		  // renderer/view
 		  setRenderer(renderer: Renderer): void;
-		  view?: EditorView;
+		  view?: EditorPanel;
 		  
 		  // events
 		  events: EventBus;
@@ -1453,7 +1453,7 @@
 				- `text/plain` → stripped text
 			- Put ephemeral copy in local in-memory cache with short id (useful if system clipboard strips custom mimetype).
 		- ## Paste flow
-		- On paste event: `ClipboardManager.handlePasteEvent(ev)` called by EditorView.
+		- On paste event: `ClipboardManager.handlePasteEvent(ev)` called by EditorPanel.
 		- Inspect `ev.clipboardData.types`: prefer `application/x-myeditor+json`. If not found, try HTML importers (plugins may register HTML importers) or plain text.
 		- When bundle obtained:
 			- Generate mapping of old IDs → new UUIDs for each block (prevent collision).
@@ -1478,7 +1478,7 @@
 			- Host code: `editor.createBlock(type, initialData)` or `document.insertBlock(...)`
 			- BlockRegistry.create(type, initial) → returns BlockInstance (in-memory representation for DocumentModel to insert)
 			- DocumentModel.insertBlock runs a CRDT transaction (via `crdt.transact`) and persists minimal metadata + calls BlockDefinition.onCreate to create CRDT state (Y.Text / Y.Map etc).
-			- DocumentModel emits `blocks.update` event; Renderer/EditorView receive and re-render.
+			- DocumentModel emits `blocks.update` event; Renderer/EditorPanel receive and re-render.
 			    
 ---
 		- # 6. Пример:  `editor.defineBlock()`  и paragraph plugin
@@ -1551,7 +1551,7 @@
 		  [EventBus]
 		  }
 		  
-		  rectangle "EditorView (React)" as View {
+		  rectangle "EditorPanel (React)" as View {
 		  [DOM Event Hooks]
 		  [Mount/Unmount]
 		  [Clipboard Listeners]

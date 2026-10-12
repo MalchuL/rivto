@@ -27,7 +27,7 @@ Severity means: **High** can corrupt state, break a primary interaction, or unde
 
 ### 1. Snapshot loading mutates valid state before late validation can fail
 
-`loadSnapshot` validates only the outer block/element arrays, then replaces blocks before loading links and plugin data ([document-model.ts:127](../packages/rivto-editor-core/src/store/document-model/core/document-model.ts#L127)). `loadLinks` clears existing links and validates endpoints one at a time ([link-manager.ts:92](../packages/rivto-editor-core/src/store/document-model/core/managers/link-manager/link-manager.ts#L92)). Yjs transactions do not roll back thrown writes ([rivto-editor.ts:145](../packages/rivto-editor-core/src/editor/rivto-editor.ts#L145)).
+`loadSnapshot` validates only the outer block/element arrays, then replaces blocks before loading links and plugin data ([document-model.ts:127](../packages/rivto-editor-core/src/store/document-model/core/document-model.ts#L127)). `loadLinks` clears existing links and validates endpoints one at a time ([link-manager.ts:92](../packages/rivto-editor-core/src/store/document-model/core/managers/link-manager/link-manager.ts#L92)). Yjs transactions do not roll back thrown writes ([rivto-editor.ts:145](../packages/rivto-editor-core/src/editor/document-editor.ts#L145)).
 
 Reproduction: loading valid new blocks plus one invalid link threw, but the old blocks and links were already gone and the new blocks remained. Fully validate and normalize every supplied section, including cross-references, before the transaction begins; the transaction should perform writes only.
 
@@ -45,7 +45,7 @@ The partial-update contract says omitted sections remain unchanged ([document-mo
 
 ### 5. Remote structural conflicts are normalized only at construction, and cycles are unsafe
 
-The tree is normalized once in `DocumentModelImpl` construction, not after remote updates ([document-model.ts:63](../packages/rivto-editor-core/src/store/document-model/core/document-model.ts#L63); [rivto-editor.ts:102](../packages/rivto-editor-core/src/editor/rivto-editor.ts#L102)). Move is a delete/insert across CRDT arrays, so concurrent moves can create duplicate or orphan ownership. Current normalization can leave an orphan cycle invisible, while `removeTree` and `collectTreeIds` recurse without a visited set ([block-manager.ts:708](../packages/rivto-editor-core/src/store/document-model/core/managers/block-manager/block-manager.ts#L708); [block-manager.ts:922](../packages/rivto-editor-core/src/store/document-model/core/managers/block-manager/block-manager.ts#L922)). Add a deterministic post-remote-update reconciler and make every traversal cycle-safe.
+The tree is normalized once in `DocumentModelImpl` construction, not after remote updates ([document-model.ts:63](../packages/rivto-editor-core/src/store/document-model/core/document-model.ts#L63); [rivto-editor.ts:102](../packages/rivto-editor-core/src/editor/document-editor.ts#L102)). Move is a delete/insert across CRDT arrays, so concurrent moves can create duplicate or orphan ownership. Current normalization can leave an orphan cycle invisible, while `removeTree` and `collectTreeIds` recurse without a visited set ([block-manager.ts:708](../packages/rivto-editor-core/src/store/document-model/core/managers/block-manager/block-manager.ts#L708); [block-manager.ts:922](../packages/rivto-editor-core/src/store/document-model/core/managers/block-manager/block-manager.ts#L922)). Add a deterministic post-remote-update reconciler and make every traversal cycle-safe.
 
 ### 6. `YjsDoc.fromJSON` manipulates Yjs root internals instead of collaborative content
 
@@ -53,7 +53,7 @@ The tree is normalized once in `DocumentModelImpl` construction, not after remot
 
 ### 7. Collapsed-caret copy/cut claims the clipboard with an empty structured block
 
-Selection normalization intentionally returns a one-block range for a caret ([selection-manager.ts:166](../packages/rivto-editor-core/src/managers/selection-manager/selection-manager.ts#L166)). Clipboard copy slices identical offsets to `""` and still returns a bundle ([clipboard-manager.ts:114](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L114)); commands then prevent native behavior and write custom MIME ([rivto-editor.ts:332](../packages/rivto-editor-core/src/editor/rivto-editor.ts#L332)). Reproduction produced a version-4 bundle containing one empty block. Return `undefined` for a pure collapsed text selection so the system clipboard is untouched.
+Selection normalization intentionally returns a one-block range for a caret ([selection-manager.ts:166](../packages/rivto-editor-core/src/managers/selection-manager/selection-manager.ts#L166)). Clipboard copy slices identical offsets to `""` and still returns a bundle ([clipboard-manager.ts:114](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L114)); commands then prevent native behavior and write custom MIME ([rivto-editor.ts:332](../packages/rivto-editor-core/src/editor/document-editor.ts#L332)). Reproduction produced a version-4 bundle containing one empty block. Return `undefined` for a pure collapsed text selection so the system clipboard is untouched.
 
 ### 8. Structured clipboard input is not a real trust boundary
 
@@ -85,7 +85,7 @@ One semantic keydown action sets a closure boolean, while a separately configura
 
 ### 15. Extension cleanup exceptions abort the rest of teardown
 
-`ExtensionManager.destroy` uses a throwing `forEach`; a single custom cleanup prevents later extension and registration cleanup ([extension-manager.ts:102](../packages/react-rivto-editor/src/managers/extensions/extension-manager.ts#L102)). Its installed-extension disposer also runs custom cleanup before owned registrations without `finally` ([extension-manager.ts:123](../packages/react-rivto-editor/src/managers/extensions/extension-manager.ts#L123)). Core editor teardown has the same sequential failure mode before its `finally`-guarded CRDT destroy ([rivto-editor.ts:456](../packages/rivto-editor-core/src/editor/rivto-editor.ts#L456)). Make teardown best-effort: always release every owned resource, collect errors, and throw one aggregate afterward if useful.
+`ExtensionManager.destroy` uses a throwing `forEach`; a single custom cleanup prevents later extension and registration cleanup ([extension-manager.ts:102](../packages/react-rivto-editor/src/managers/extensions/extension-manager.ts#L102)). Its installed-extension disposer also runs custom cleanup before owned registrations without `finally` ([extension-manager.ts:123](../packages/react-rivto-editor/src/managers/extensions/extension-manager.ts#L123)). Core editor teardown has the same sequential failure mode before its `finally`-guarded CRDT destroy ([rivto-editor.ts:456](../packages/rivto-editor-core/src/editor/document-editor.ts#L456)). Make teardown best-effort: always release every owned resource, collect errors, and throw one aggregate afterward if useful.
 
 ### 16. Cross-document DOM support is inconsistent
 
@@ -181,13 +181,13 @@ Every registration/disposal calls `reconnect`, which detaches and recreates all 
 
 `defaultWritingBlockExtension` installs global factories but its cleanup only unregisters the block contribution ([default-writing-block.tsx:75](../packages/react-rivto-editor/src/extensions/built-ins/page/default-writing-block.tsx#L75)); `installDefaultWriting` has no disposer or ownership stack ([react-editor.tsx:104](../packages/react-rivto-editor/src/editor-view-api.ts#L104)). Once extensions become dynamic, uninstall leaves callbacks for an unavailable type. Make default-writing installation an owned, reversible registration.
 
-### 39. `EditorView` has one hard-coded layout bucket
+### 39. `EditorPanel` has one hard-coded layout bucket
 
 The second TODO asks how to separate before/after content ([TODO.md:2](../TODO.md#L2)). Current order is host children, all extension components, then surface, all inside every editor wrapper ([editor-view.tsx:86](../packages/react-rivto-editor/src/editor-view.tsx#L86)). Add only two explicit positions—`beforeSurface` and `afterSurface`—to extension mounts or props; avoid a general layout framework until another placement is needed.
 
-### 40. Global editor revision invalidates the entire `EditorView`
+### 40. Global editor revision invalidates the entire `EditorPanel`
 
-`EditorView` subscribes to the core editor revision at its top boundary ([editor-view.tsx:40](../packages/react-rivto-editor/src/editor-view.tsx#L40)). Every document update can re-enter surface and extension rendering even where focused hooks already provide narrower subscriptions. Measure typing and collaborative bursts, then move block data to selector-level subscriptions or memoized row boundaries; do not add a second state model.
+`EditorPanel` subscribes to the core editor revision at its top boundary ([editor-view.tsx:40](../packages/react-rivto-editor/src/editor-view.tsx#L40)). Every document update can re-enter surface and extension rendering even where focused hooks already provide narrower subscriptions. Measure typing and collaborative bursts, then move block data to selector-level subscriptions or memoized row boundaries; do not add a second state model.
 
 ## Lower-priority maintainability and delivery findings
 
@@ -257,7 +257,7 @@ Implementation rules:
 5. Keep `setKeymapOverride` for instant edits. `undefined` restores declared defaults; `[]` disables. Persistence belongs to Demo/application state, not the editor package.
 6. Make keydown/keyup pairing internal for stateful gestures such as paste-as-plain-text and pan.
 
-Demo should add a `KeyboardPanel` that subscribes with `useSyncExternalStore`, lists default/effective bindings and status, edits a local input, calls `setKeymapOverride`, and offers Disable/Restore buttons. Replace the URL-only E2E with a test that edits a binding, uses it immediately, restores it, and confirms that the `EditorViewApi` instance and page did not reload.
+Demo should add a `KeyboardPanel` that subscribes with `useSyncExternalStore`, lists default/effective bindings and status, edits a local input, calls `setKeymapOverride`, and offers Disable/Restore buttons. Replace the URL-only E2E with a test that edits a binding, uses it immediately, restores it, and confirms that the `PanelAPI` instance and page did not reload.
 
 BlockSuite supplies the right ownership precedent (extension-local keymaps); Logseq supplies the useful inventory, display, persistence, and conflict precedent. Rivto does not need Logseq's heavyweight global reinstall because its manager already reparses overrides in place.
 

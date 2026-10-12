@@ -29,6 +29,12 @@ importers:
 
   app/chulane:
     dependencies:
+      '@chulane/crdt-doc':
+        specifier: workspace:*
+        version: link:../../packages/crdt-doc
+      '@chulane/document-model':
+        specifier: workspace:*
+        version: link:../../packages/document-model
       '@chulane/rivto':
         specifier: workspace:*
         version: link:../../packages/rivto-editor-core

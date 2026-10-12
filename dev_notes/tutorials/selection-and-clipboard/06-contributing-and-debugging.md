@@ -10,7 +10,7 @@
 
 1. `editor/types.ts` — формы данных.
 2. `managers/selection-manager.ts` — storage contract.
-3. `editor/rivto-editor.ts`, методы `setSelection`, `reconcileSelection`,
+3. `editor/document-editor.ts`, методы `setSelection`, `reconcileSelection`,
    `validatePosition` — validation.
 4. `react/selection.ts`, сначала `readPosition` и `pointAtOffset` — conversion.
 5. `react/rivto-editor.tsx` — subscriptions и effects.
@@ -410,7 +410,7 @@ hit-test старой anchor coordinate.
         ↓
 React adapter понимает DOM и browser events
         ↓
-EditorRuntime проверяет portable selection
+DocumentEditor проверяет portable selection
         ↓
 SelectionManager хранит local value
         ↓

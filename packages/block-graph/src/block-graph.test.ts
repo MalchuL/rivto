@@ -1,5 +1,5 @@
 /** Tests block address binding independently from the Rivto document model. */
-import { BlockGraph, blockPropertyId, runInMemoryExample } from "./index";
+import { BlockGraph, blockPropertyId, runInMemoryExample } from ".";
 
 describe("BlockGraph", () => {
   test("formats supported top-level block addresses", () => {

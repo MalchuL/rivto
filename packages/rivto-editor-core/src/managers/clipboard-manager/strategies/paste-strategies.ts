@@ -1,3 +1,4 @@
+import type { BlockDestination } from "@chulane/document-model";
 /**
  * Clipboard paste algorithms consulted by ClipboardManager.
  *
@@ -5,11 +6,8 @@
  * object. Each strategy decides whether it applies via {@link PasteStrategy.matches}
  * and owns insertion for that case. Ranges come from {@link PasteContext.selection}.
  */
-import type { RivtoEditorApi } from "../../../editor/types";
-import {
-  createCaretSelection,
-  createStructuralSelection,
-} from "../../selection-manager";
+import type { DocumentEditorAPI } from "../../../editor/types";
+import { createCaretSelection, createStructuralSelection } from "../../selection-manager";
 import type { EditorPosition } from "../../selection-manager";
 import type { EditorBlockInput } from "../../../editor/model";
 
@@ -36,7 +34,7 @@ export class TextPasteStrategy implements PasteStrategy {
    * Creates the text strategy.
    * @param editor - Editor providing block and selection operations.
    */
-  constructor(private readonly editor: RivtoEditorApi) {}
+  constructor(private readonly editor: DocumentEditorAPI) {}
 
   /**
    * Accepts split plain text or a mergeable partial bundle.
@@ -86,17 +84,14 @@ export class TextPasteStrategy implements PasteStrategy {
       content: prefix + source.content + (rest.length ? "" : suffix),
     });
     target.blocks.slice(1).forEach((block) => this.editor.blocks.removeBlock(block.id));
-    const children = importClipboardBlocks(this.editor, context, first?.children ?? [], destination.id);
+    const children = importClipboardBlocks(this.editor, context, first?.children ?? [], { parentId: destination.id });
     children.idMap.forEach((id, sourceId) => idMap.set(sourceId, id));
-    children.roots.forEach(({ id }) => {
-      this.editor.blocks.moveBlock(id, destination.id, "inside");
-    });
     const imported = importClipboardBlocks(this.editor, context,
       rest.map((block, index) => ({
         ...block,
         content: block.content + (index === rest.length - 1 ? suffix : ""),
       })),
-      caret.blockId,
+      this.editor.blocks.getInsertionDestinationAfter(caret.blockId),
     );
     imported.idMap.forEach((id, sourceId) => idMap.set(sourceId, id));
     imported.roots.forEach(({ id }, index) => {
@@ -137,7 +132,7 @@ export class PreserveNewlinesPasteStrategy implements PasteStrategy {
    * Creates the preserve-newlines text strategy.
    * @param editor - Editor providing block and selection operations.
    */
-  constructor(private readonly editor: RivtoEditorApi) {}
+  constructor(private readonly editor: DocumentEditorAPI) {}
 
   /**
    * Accepts plain text when the host asked to keep newlines in one block.
@@ -178,7 +173,7 @@ export class BlockPasteStrategy implements PasteStrategy {
    * Creates the block strategy.
    * @param editor - Editor providing block and selection operations.
    */
-  constructor(private readonly editor: RivtoEditorApi) {}
+  constructor(private readonly editor: DocumentEditorAPI) {}
 
   /**
    * Accepts a block forest that should remain structural.
@@ -200,13 +195,11 @@ export class BlockPasteStrategy implements PasteStrategy {
     const bundle = context.bundle;
     if (!bundle?.blocks.length) return undefined;
     const resolved = this.resolvePlacement(context, placement);
-    const imported = importClipboardBlocks(this.editor, context, bundle.blocks, resolved.afterId ?? undefined);
+    const destination = resolved.parentId !== undefined && !resolved.afterId
+      ? { parentId: resolved.parentId, beforeId: resolved.beforeChildId }
+      : this.editor.blocks.getInsertionDestinationAfter(resolved.afterId);
+    const imported = importClipboardBlocks(this.editor, context, bundle.blocks, destination);
     const insertedIds = imported.roots.map(({ id }) => id);
-    if (resolved.beforeChildId && insertedIds.length) {
-      this.editor.blocks.moveBlocks(insertedIds, resolved.beforeChildId, "before");
-    } else if (resolved.parentId && resolved.afterId === null && insertedIds.length) {
-      this.editor.blocks.moveBlocks(insertedIds, resolved.parentId, "inside");
-    }
     return insertedIds.length
       ? { proposedSelection: createStructuralSelection(insertedIds), blockIdMap: imported.idMap }
       : undefined;
@@ -240,6 +233,6 @@ export class BlockPasteStrategy implements PasteStrategy {
 }
 
 /** Imports a clipboard subset using destination IDs already allocated for its references. */
-function importClipboardBlocks(editor: RivtoEditorApi, context: PasteContext, blocks: readonly EditorBlockInput[], afterId?: string) {
-  return editor.blocks.importForest(blocks, afterId, context.onPrepareError, context.blockIdMap);
+function importClipboardBlocks(editor: DocumentEditorAPI, context: PasteContext, blocks: readonly EditorBlockInput[], destination?: BlockDestination) {
+  return editor.blocks.importForest(blocks, destination, context.onPrepareError, context.blockIdMap);
 }

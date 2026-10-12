@@ -1,4 +1,6 @@
-import { DOMEventListeners, type NativeListenerGroup } from "./dom-event-listeners";
+import type { RegistrationOwner } from "../extensions/types";
+import { DOMEventListeners } from "./dom-event-listeners";
+import type { AnyEditorEvent, DOMRegistration, NativeListenerGroup } from "./types";
 /**
  * Browser event registration and dispatch. Event payloads identify the receiving
  * view and its selection; document mutations still go through core managers.
@@ -9,8 +11,7 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../constants";
-import type { EditorRuntime } from "../../editor/editor-runtime";
-import type { DocumentViewScope } from "./document-view";
+import type { ReactEditorApi } from "../../editor/types";
 import type {
   DOMEventDefinition,
   DOMEventName,
@@ -18,29 +19,13 @@ import type {
   DOMEventTarget,
 } from "./dom-types";
 import { EditorEvent } from "./editor-event";
-import type { EditorViewRegistry } from "./editor-view-registry";
-import type { EditorEventHandler } from "./types";
-
-type AnyEditorEvent = EditorEvent<DOMEventTarget, never>;
-
-interface DOMRegistration {
-  readonly id: string;
-  readonly owner?: DocumentViewScope;
-  readonly type: string;
-  readonly target: DOMEventTarget;
-  readonly scope?: DOMEventScope;
-  readonly listener: EditorEventHandler<AnyEditorEvent>;
-  readonly mode?: EditorMode | readonly EditorMode[];
-  readonly capture: boolean;
-  readonly passive: boolean;
-  readonly preventDefault: boolean;
-  readonly when?: (event: AnyEditorEvent) => boolean;
-}
+import type { PanelRegistry } from "./panel-registry";
+import type { DocumentViewScope, EditorEventHandler } from "./types";
 
 /**
  * Registers and dispatches browser events for all views of one document.
  *
- * DOMEventListeners attaches the native listeners. EditorViewRegistry chooses the
+ * DOMEventListeners attaches the native listeners. PanelRegistry chooses the
  * receiving view; this manager creates its EditorEvent and runs matching handlers
  * in registration order. A handled event is not offered to later registrations.
  * KeyboardManager defines keyboard actions and registers its keydown and keyup
@@ -53,19 +38,19 @@ export class EventManager {
   private readonly listeners = new DOMEventListeners((group, event, root) => this.dispatch(group, event, root));
   private readonly unsubscribeRoots: () => void;
   private readonly claimedEvents = new WeakSet<globalThis.Event>();
-  private readonly editorViews: EditorViewRegistry;
+  private readonly panels: PanelRegistry;
   private destroyed = false;
 
   /**
    * Creates the browser-event runtime before extensions are installed.
    *
-   * @param editorRuntime - Owning React runtime for payloads and registration lifecycle.
+   * @param reactEditor - Owning React runtime for payloads and registration lifecycle.
+   * @param extensions - Internal registration ownership and destruction guard.
    */
-  constructor(private readonly editorRuntime: EditorRuntime) {
-    this.editorViews = editorRuntime.editorViews;
-    this.unsubscribeRoots = this.editorViews.subscribeRoots(() => this.reconnectListeners());
+  constructor(reactEditor: ReactEditorApi, private readonly extensions: RegistrationOwner) {
+    this.panels = reactEditor.panels;
+    this.unsubscribeRoots = this.panels.subscribeRoots(() => this.reconnectListeners());
   }
-
 
   /**
    * Registers a typed delegated DOM event.
@@ -109,7 +94,7 @@ export class EventManager {
 
     let active = true;
     let dispose: () => void = () => undefined;
-    dispose = this.editorRuntime.extensions.own(() => {
+    dispose = this.extensions.own(() => {
       if (!active) return;
       active = false;
       const index = this.registrations.indexOf(registration);
@@ -153,7 +138,7 @@ export class EventManager {
   /** Throws when a registration is attempted after runtime destruction. */
   assertActive(): void {
     if (this.destroyed) throw new Error("Editor event runtime is destroyed");
-    this.editorRuntime.extensions.assertActive();
+    this.extensions.assertActive();
   }
 
   private createRegistration(
@@ -176,7 +161,7 @@ export class EventManager {
 
   private reconnectListeners(): void {
     if (this.destroyed) this.listeners.disconnect();
-    else this.listeners.connect(this.registrations, this.editorViews.getRoots());
+    else this.listeners.connect(this.registrations, this.panels.getRoots());
   }
 
   /**
@@ -189,7 +174,7 @@ export class EventManager {
    */
   private dispatch(group: NativeListenerGroup, raw: globalThis.Event, attachedRoot?: HTMLElement): void {
     if (raw.defaultPrevented || this.claimedEvents.has(raw)) return;
-    const root = this.editorViews.resolveEventRoot(raw, attachedRoot);
+    const root = this.panels.resolveEventRoot(raw, attachedRoot);
     if (root) this.dispatchRegistrations(group, raw, root);
   }
 
@@ -242,16 +227,16 @@ export class EventManager {
     const contentElement = closestContent && root.contains(closestContent)
       ? closestContent
       : null;
-    const editorView = this.editorViews.getApi(root);
-    if (!editorView) return;
+    const panel = this.panels.getApi(root);
+    if (!panel) return;
     return new EditorEvent({
       raw: raw as never,
-      editorView,
+      panel,
       root,
       // Route handlers by the receiving surface: core mode may be edgeless
       // while this event belongs to a page embedding of the same document.
-      mode: this.editorViews.getSurfaceType(root),
-      selection: editorView.selection.get(),
+      mode: this.panels.getSurfaceType(root),
+      selection: panel.selection.get(),
       eventTarget,
       insideRoot,
       blockElement,

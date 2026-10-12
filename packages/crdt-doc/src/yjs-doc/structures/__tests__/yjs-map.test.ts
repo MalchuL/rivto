@@ -2,7 +2,7 @@ import * as Y from 'yjs';
 import { YjsMap as YjsMapClass } from '../map';
 import { YjsArray } from '../array';
 import { YjsText } from '../text';
-import { wrapBasicTypeToCRDTType } from '../utils';
+import { wrapBasicTypeToCRDTType } from "../utils";
 import { isDeepPlainRecord } from '../utils/plain-check';
 
 

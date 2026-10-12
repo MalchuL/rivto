@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { RivtoEditorApi, EditorElementNode } from "@chulane/rivto";
+import type { DocumentEditorAPI, EditorElementNode } from "@chulane/rivto";
 
-type DemoWindow = Window & { __rivtoDemo: { editor: RivtoEditorApi } };
+type DemoWindow = Window & { __rivtoDemo: { editor: DocumentEditorAPI } };
 
 async function openGroup(page: Page, repeat = 0) {
   await page.goto(repeat ? `/?repeat=${repeat}` : "/");

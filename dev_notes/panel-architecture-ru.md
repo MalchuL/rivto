@@ -64,7 +64,7 @@ Stage не изменять. Временные утилиты и результ
   операции одного canvas поверх существующего pipeline.
 - `packages/react-rivto-editor/src/editor-view/panel.tsx`: EditorPanel и Panel;
   `EditorViewController` предоставляет элементы, верхний уровень и режим view.
-- `EditorRuntime.acquireCanvas` и `BlockElementProjection`: общий владелец
+- `DocumentEditor.acquireCanvas` и `BlockElementProjection`: общий владелец
   реконсиляции каждого используемого canvas, без сброса существующей геометрии.
 - React edgeless/clipboard/selection/navigation: операции получают canvas и
   границы поддерева от view. При вставке групп переназначаются дочерние элементы

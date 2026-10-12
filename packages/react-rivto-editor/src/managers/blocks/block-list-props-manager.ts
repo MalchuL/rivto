@@ -1,14 +1,14 @@
+import type { RegistrationOwner } from "../extensions/types";
 import type { BlockListPropsManagerApi, EditorBlock, EditorBlockNode } from "@chulane/rivto";
 import type { BlockBehaviorContext } from "../../block-behaviors/types";
-import type { EditorRuntime } from "../../editor/editor-runtime";
 import type { BlockListPropsApi, BlockListPropsRegistration } from "./block-list-props-api";
 
 /** Owns React list behavior while the core manager validates persisted properties. */
 export class BlockListPropsManager implements BlockListPropsApi {
   private readonly registrations = new Set<BlockListPropsRegistration>();
 
-  /** @param editor - Extension lifecycle owner. @param core - Existing property validation manager. */
-  constructor(private readonly editor: EditorRuntime, private readonly core: BlockListPropsManagerApi) {}
+  /** @param extensions - Extension lifecycle owner. @param core - Existing property validation manager. */
+  constructor(private readonly extensions: RegistrationOwner, private readonly core: BlockListPropsManagerApi) {}
 
   /**
    * Registers property validation and optional outline behavior as one owned resource.
@@ -17,10 +17,10 @@ export class BlockListPropsManager implements BlockListPropsApi {
    * @throws When the core rejects a duplicate or invalid registration.
    */
   register(registration: BlockListPropsRegistration): () => void {
-    this.editor.extensions.assertActive();
+    this.extensions.assertActive();
     const release = this.core.register({ id: registration.id, defaults: registration.defaults, isValid: registration.isValid });
     this.registrations.add(registration);
-    return this.editor.extensions.own(() => {
+    return this.extensions.own(() => {
       this.registrations.delete(registration);
       release();
     });

@@ -118,7 +118,7 @@ function blockIdForContent(content: HTMLElement): string | undefined {
 /**
  * Returns every editable content host under `root` in visible DOM order.
  *
- * @param root - EditorView root Element that scopes the query.
+ * @param root - EditorPanel root Element that scopes the query.
  * @returns HTMLElements matching `[data-block-content]` that have a block ID.
  */
 function orderedContents(root: HTMLElement): HTMLElement[] {
@@ -153,7 +153,7 @@ export function createVisibleStructuralSelection(
 /**
  * Returns every rendered BlockView ID in visible depth-first DOM order.
  *
- * @param root - EditorView root Element that scopes the query.
+ * @param root - EditorPanel root Element that scopes the query.
  */
 export function orderedBlockIds(root: HTMLElement): string[] {
   return [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
@@ -180,7 +180,7 @@ export function orderedBlockIds(root: HTMLElement): string[] {
  *    `EditorPosition.offset`. The Range endpoint stays typed as Node because
  *    that is what the browser Selection API uses.
  *
- * @param root - EditorView root HTMLElement; endpoints outside it are rejected.
+ * @param root - EditorPanel root HTMLElement; endpoints outside it are rejected.
  * @param node - `Selection.anchorNode` / `focusNode`: usually Text, sometimes
  *   Element, or `null` when there is no selection.
  * @param offset - `Selection.anchorOffset` / `focusOffset` inside `node`.
@@ -215,7 +215,7 @@ function readPosition(root: HTMLElement, node: Node | null, offset: number): Edi
 /**
  * Converts one resolved {@link DOMSelectionPoint} to stable editor coordinates.
  *
- * @param root - EditorView root that must own `point.content`.
+ * @param root - EditorPanel root that must own `point.content`.
  * @param point - Live DOM endpoint (node + offset + content host).
  */
 export function readDOMPointPosition(root: HTMLElement, point: DOMSelectionPoint): EditorPosition | undefined {
@@ -309,7 +309,7 @@ function nearestNestedBlock(parent: HTMLElement, x: number, y: number): HTMLElem
  * Builds a portable {@link Selection} from two editor positions, using
  * the surface's current visible block order under `root`.
  *
- * @param root - EditorView root used to discover visible blocks / lengths.
+ * @param root - EditorPanel root used to discover visible blocks / lengths.
  * @param anchor - Fixed position where the gesture began.
  * @param head - Moving position where the gesture currently ends.
  * @returns Directed text coverage with structural markers for contentless blocks.
@@ -367,7 +367,7 @@ export function createDOMSelection(
  * A Range normalizes endpoints into document order and would lose the
  * direction of a bottom-to-top selection.
  *
- * @param root - EditorView root; both endpoints must live under it.
+ * @param root - EditorPanel root; both endpoints must live under it.
  * @returns Directed selection, or `undefined` when there is no usable
  *   browser selection inside this editor.
  */
@@ -398,7 +398,7 @@ function distanceToRect(rect: DOMRect, x: number, y: number): number {
 /**
  * Finds the editable content under the pointer, or the nearest one in a gap.
  *
- * @param root - EditorView root that scopes ownership.
+ * @param root - EditorPanel root that scopes ownership.
  * @param x - Client X in viewport pixels.
  * @param y - Client Y in viewport pixels.
  * @returns The hit `[data-block-content]` Element, or the closest one by distance.
@@ -461,7 +461,7 @@ function nearestTextPoint(content: HTMLElement, x: number, y: number): DOMSelect
  * outside the target content (or the browser only hit-tests the focused
  * contenteditable), {@link nearestTextPoint} scans text nodes locally.
  *
- * @param root - EditorView root that scopes which content hosts are valid.
+ * @param root - EditorPanel root that scopes which content hosts are valid.
  * @param x - Client X in viewport pixels.
  * @param y - Client Y in viewport pixels.
  * @returns Live `{ node, offset, content }`, or `undefined` if no content host exists.
@@ -569,7 +569,7 @@ function pointAtOffset(content: HTMLElement, requestedOffset: number): { node: N
  * Finds the rendered content Element for `position.blockId`, then maps the
  * plain-text offset onto a live Text (or Element) node via {@link pointAtOffset}.
  *
- * @param root - EditorView root used to find the block's content host.
+ * @param root - EditorPanel root used to find the block's content host.
  * @param position - Stable `{ blockId, offset }` from the editor model.
  * @returns Live {@link DOMSelectionPoint}, or `undefined` if that block is not rendered.
  */
@@ -592,7 +592,7 @@ export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosi
  * false without changing focus. Missing rendered endpoints also return false;
  * callers can safely retry after a later render.
  *
- * @param root - Active EditorView root containing the rendered block content.
+ * @param root - Active EditorPanel root containing the rendered block content.
  * @param selection - Editor selection captured before the structural command.
  * @param options - Virtual endpoint mounting and navigation policy.
  * @returns True when a text selection was resolved and restored.

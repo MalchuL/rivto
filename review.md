@@ -19,7 +19,7 @@ Docs to skim first (short, then code):
         ↑
 createReactEditor         React shell: managers, extensions, surfaces
         ↑
-EditorView + surfaces     Page / Edgeless UI
+EditorPanel + surfaces     Page / Edgeless UI
         ↑
 demo App                  wires presets, seeds data, custom blocks
 ```
@@ -72,7 +72,7 @@ Visual toolbar/controller = separate extension.
 
 **Attention**
 
-- Extensions are the unit of behavior. Almost nothing is “hardcoded in EditorView”.
+- Extensions are the unit of behavior. Almost nothing is “hardcoded in EditorPanel”.
 - Events: `register({ id, type, mode, capture, priority }, handler)` — mode-gated (`page` / `edgeless`).
 - Keyboard: same keymap id can have multiple handlers; **priority +** `when` **+ return true** stops the chain.
 - Surfaces: one active surface; mode switch remounts surface, not the whole editor.

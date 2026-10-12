@@ -1,11 +1,12 @@
+import type { RegistrationOwner } from "../extensions/types";
 /**
  * Owns atomic React block-type registration and presentation metadata.
  *
  * Definitions remain stored in the core registry; this manager coordinates
  * their renderer, optional behavior, slash conversion, and separator metadata.
  */
-import type { BlockRegistryManager, RivtoEditorApi } from "@chulane/rivto";
-import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { BlockRegistryManager, DocumentEditorAPI } from "@chulane/rivto";
+import type { ReactEditorApi } from "../../editor/types";
 import type { BlockTypesApi } from "./block-types-api";
 import { getBlockContainment, type ReactBlockRegistration } from "./types";
 
@@ -16,12 +17,14 @@ export class BlockTypeManager implements BlockTypesApi {
 
   /**
    * Creates the block-type registration manager.
-   * @param editorRuntime - Owning React runtime providing presentation managers.
+   * @param reactEditor - Owning React runtime providing presentation managers.
    * @param editor - Core runtime providing definitions and block mutations.
+   * @param extensions - Internal registration ownership and destruction guard.
    */
   constructor(
-    private readonly editorRuntime: EditorRuntime,
-    private readonly editor: RivtoEditorApi,
+    private readonly reactEditor: ReactEditorApi,
+    private readonly editor: DocumentEditorAPI,
+    private readonly extensions: RegistrationOwner,
   ) {}
 
   /**
@@ -32,7 +35,8 @@ export class BlockTypeManager implements BlockTypesApi {
    */
   register(registration: ReactBlockRegistration): () => void {
     const core = this.editor.blocks;
-    const { extensions, renderers, slashCommands, blockBehaviors } = this.editorRuntime;
+    const { renderers, slashCommands, blockBehaviors } = this.reactEditor;
+    const extensions = this.extensions;
     extensions.assertActive();
     const { definition, render, slashCommand, behavior } = registration;
     if (renderers.has(definition.type)) {
@@ -50,7 +54,7 @@ export class BlockTypeManager implements BlockTypesApi {
         }
       } else disposers.push(this.editor.blockRegistry.defineBlock(definition));
       disposers.push(renderers.register(definition.type, render));
-      if (registration.clipboard) disposers.push(this.editorRuntime.clipboard.registerBlockConverter(definition.type, registration.clipboard));
+      if (registration.clipboard) disposers.push(this.reactEditor.clipboard.registerBlockConverter(definition.type, registration.clipboard));
       if (behavior) disposers.push(blockBehaviors.register(definition.type, behavior));
       if (registration.separatesBlockElements) {
         this.blockElementSeparatorTypes.add(definition.type);
@@ -93,7 +97,7 @@ export class BlockTypeManager implements BlockTypesApi {
    * @returns Whether a complete registration existed and was disposed.
    */
   delete(type: string): boolean {
-    this.editorRuntime.extensions.assertActive();
+    this.extensions.assertActive();
     const dispose = this.registrations.get(type);
     if (!dispose) return false;
     dispose();

@@ -1,3 +1,4 @@
+import type { BlockDestination } from "@chulane/document-model";
 import type { BlockPrepareErrorHandler, EditorBlock, EditorBlockInput, EditorBlockNode, EditorBlockPatch, EditorBlockUpdate } from "@chulane/rivto";
 
 /** Document block operations exposed to React consumers without core lifecycle methods. */
@@ -21,12 +22,15 @@ export interface BlocksApi {
    * Prepares and inserts a block, returning the complete persisted subtree.
    *
    * @param input - Block subtree to receive active defaults and validation.
-   * @param afterId - Sibling after which to insert, `null` for first position, or
-   * omitted for the end of the root list.
+   * @param destination - Actual parent and next sibling; omitted appends to document roots.
    * @returns The complete persisted root block.
    * @throws {Error} When list properties are invalid or core insertion fails.
    */
-  insertBlock(input: EditorBlockInput, afterId?: string | null): EditorBlock;
+  insertBlock(input: EditorBlockInput, destination?: BlockDestination): EditorBlock;
+  /** @param parentId - Real parent identity. @returns Direct child IDs. */
+  getChildIds(parentId: string): readonly string[];
+  /** @param afterId - Sibling, null to prepend, or omitted to append. @returns Actual parent and next sibling. */
+  getInsertionDestinationAfter(afterId?: string | null): BlockDestination;
   /**
    * Applies one patch after core-owned list-property validation.
    *

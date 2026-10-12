@@ -1,7 +1,7 @@
 import { createStructuralSelection, type EditorMode } from "@chulane/rivto";
 import { DOMRectangle } from "@dnd-kit/dom/utilities";
 import type { DragDropManager, DragEndEvent, DragStartEvent } from "@dnd-kit/react";
-import type { EditorViewApi } from "../../editor-view/types";
+import type { PanelAPI } from "../../panels/types";
 import { crossDocumentBlockTransfer, type CrossDocumentBlockTransferPlacement } from "../built-ins/clipboard/cross-document-block-transfer";
 import { selectedMoveRoots, type SelectedMoveRoots } from "../built-ins/page/navigation";
 import { resolveCrossDocumentPageRootPlacement } from "./cross-document/placement";
@@ -11,7 +11,7 @@ import type { CanonicalDropPlacement } from "./placement/types";
 import { dropMoveTarget, excludeDropSubtrees, isCurrentDropDestination } from "./placement/utils";
 import { getDropBlocks, resolveSurfaceDrop } from "./pointer/target";
 import { trackGesturePointer } from "./pointer/tracker";
-import type { CrossDocumentPageRootController, DropPlacement, DropPlacementStore, PointerCoordinates, PointerTracker } from "./types";
+import type { CrossDocumentPageRootController, DropPlacement, DropPlacementStore, PageDragOperation, PointerCoordinates, PointerTracker } from "./types";
 
 /**
  * Stops native text selection while a block handle owns a drag gesture.
@@ -22,9 +22,6 @@ import type { CrossDocumentPageRootController, DropPlacement, DropPlacementStore
 function preventDragSelection(event: Event): void {
   event.preventDefault();
 }
-
-/** Live or snapshotted dnd-kit operation state consumed by placement. */
-type PageDragOperation = DragStartEvent["operation"];
 
 /** Owns one view's block drag state, placement, preview, and commit. */
 export class PageDragController {
@@ -45,7 +42,7 @@ export class PageDragController {
   previewPosition: PointerCoordinates | null = null;
 
   /**
-   * @param editorView - Source view's document-bound API.
+   * @param panel - Source view's document-bound API.
    * @param root - Source surface, or null before mounting.
    * @param mode - Rendered surface used to interpret zoom.
    * @param placements - Existing per-row store for feedback and sensor state.
@@ -57,7 +54,7 @@ export class PageDragController {
    * @param options.allowChildPlacement - Whether ordinary rows accept child drops.
    */
   constructor(
-    private readonly editorView: EditorViewApi,
+    private readonly panel: PanelAPI,
     private readonly root: HTMLElement | null,
     private readonly mode: EditorMode,
     private readonly placements: DropPlacementStore,
@@ -70,12 +67,12 @@ export class PageDragController {
 
   /** Registers this surface for cross-document drops; cleanup also cancels its active gesture. */
   mount(): () => void {
-    const { editorView, root, placements } = this;
+    const { panel, root, placements } = this;
     const { childDropIndent, gapDropZone, allowChildPlacement, outerEdgeDropZone } = this.options;
     this.disposed = false;
     if (!root) return () => this.destroy();
     const controller: CrossDocumentPageRootController = {
-      editorView,
+      panel,
       root,
       setPlacement: (placement, empty = false) => {
         placements.set(placement);
@@ -83,7 +80,7 @@ export class PageDragController {
         else root.removeAttribute("data-drop-empty");
       },
       resolvePlacement: (x, y, sources, sourceDocumentId) => resolveCrossDocumentPageRootPlacement(
-        editorView,
+        panel,
         root,
         x,
         y,
@@ -159,7 +156,7 @@ export class PageDragController {
   };
 
   private updateCrossDocumentTarget = (): boolean => {
-    const { editorView, root } = this;
+    const { panel, root } = this;
     const { outerEdgeDropZone } = this.options;
     const pointer = this.pointerTracker?.get() ?? null;
     const controller = pointer ? findCrossDocumentPageController(root, pointer, outerEdgeDropZone) : null;
@@ -169,10 +166,10 @@ export class PageDragController {
     } else {
       if (this.crossDocumentTarget?.controller !== controller) this.clearCrossDocumentTarget();
       const sources = (this.activeMove?.ids ?? []).flatMap((id) => {
-        const block = editorView.runtime.blocks.getBlock(id);
+        const block = panel.blocks.getBlock(id);
         return block ? [block] : [];
       });
-      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources, editorView.runtime.getDocument().id);
+      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources, panel.editor.document.getDocument().id);
       controller.setPlacement(placement?.indicator ?? null, placement?.targetId === null);
       this.crossDocumentTarget = placement ? {
         controller,
@@ -192,21 +189,21 @@ export class PageDragController {
    * @returns Accepted placement, or null when the gesture has no valid drop.
    */
   private validPlacement = (operation: PageDragOperation): DropPlacement | null => {
-    const { editorView, root, mode } = this;
+    const { panel, root, mode } = this;
     const { childDropIndent, gapDropZone, outerEdgeDropZone, allowChildPlacement } = this.options;
     const zoom = mode === "edgeless"
       ? Number(root?.dataset.edgelessZoom) || 1
       : 1;
-    const blocks = excludeDropSubtrees(getDropBlocks(editorView), new Set(this.activeMove?.ids ?? []));
+    const blocks = excludeDropSubtrees(getDropBlocks(panel), new Set(this.activeMove?.ids ?? []));
     const livePointer = this.pointerTracker?.get() ?? null;
     const rect = operation.shape?.current.boundingRectangle;
     const pointer = livePointer ?? (rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null);
     if (!pointer) return null;
     const sources = (this.activeMove?.ids ?? []).flatMap((id) => {
-      const block = editorView.runtime.blocks.getBlock(id);
+      const block = panel.blocks.getBlock(id);
       return block ? [block] : [];
     });
-    return resolveSurfaceDrop(root, editorView, sources, blocks, pointer, {
+    return resolveSurfaceDrop(root, panel, sources, blocks, pointer, {
       childDropIndent: childDropIndent * zoom, gapDropZone, allowChildPlacement,
       outerEdgeDropZone, keyboard: !livePointer,
     });
@@ -234,7 +231,7 @@ export class PageDragController {
    * @param manager - Manager whose live operation is re-read after scrolling.
    */
   handleDragStart = ({ operation, nativeEvent }: DragStartEvent, manager: DragDropManager) => {
-    const { editorView, root, placements, setActiveIds } = this;
+    const { panel, root, placements, setActiveIds } = this;
     const source = operation.source;
     if (!source) return;
     this.clearCrossDocumentTarget();
@@ -265,12 +262,12 @@ export class PageDragController {
         ownerDocument.removeEventListener("selectionchange", clearSelection, true);
       };
     }
-    const blocks = getDropBlocks(editorView);
+    const blocks = getDropBlocks(panel);
     const move = selectedMoveRoots(
       blocks,
-      editorView.selection.get(),
+      panel.selection.get(),
       String(source.id),
-      (block) => !editorView.runtime.blockListProps.childrenVisible(block),
+      (block) => !panel.editor.blockListProps.childrenVisible(block),
     );
     this.activeMove = move;
     const KeyboardEventType = root?.ownerDocument.defaultView?.KeyboardEvent;
@@ -328,22 +325,22 @@ export class PageDragController {
    * @param event - Final operation state and cancellation flag supplied by dnd-kit.
    */
   handleDragEnd = (event: DragEndEvent) => {
-    const { editorView, root } = this;
+    const { panel, root } = this;
     const move = this.activeMove;
     const crossDocument = this.crossDocumentTarget;
     const placement = event.canceled || crossDocument ? null : this.displayedPlacement;
     const sources = (move?.ids ?? []).flatMap((id) => {
-      const block = editorView.runtime.blocks.getBlock(id);
+      const block = panel.blocks.getBlock(id);
       return block ? [block] : [];
     });
     const valid = placement && sources.length === move?.ids.length
-      && editorView.runtime.blockBehaviors.acceptsDrop(placement, sources)
-      && isCurrentDropDestination(excludeDropSubtrees(getDropBlocks(editorView), new Set(move.ids)), placement);
+      && panel.editor.blockBehaviors.acceptsDrop(placement, sources)
+      && isCurrentDropDestination(excludeDropSubtrees(getDropBlocks(panel), new Set(move.ids)), placement);
     const validCrossDocument = crossDocument && sources.length === move?.ids.length
-      && crossDocument.controller.editorView.runtime.blockBehaviors.acceptsDrop(crossDocument.destination, sources)
+      && crossDocument.controller.panel.editor.blockBehaviors.acceptsDrop(crossDocument.destination, sources)
       && isCurrentDropDestination(excludeDropSubtrees(
-        getDropBlocks(crossDocument.controller.editorView),
-        new Set(crossDocument.controller.editorView.runtime.getDocument() === editorView.runtime.getDocument() ? move.ids : []),
+        getDropBlocks(crossDocument.controller.panel),
+        new Set(crossDocument.controller.panel.editor.document.getDocument() === panel.editor.document.getDocument() ? move.ids : []),
       ), crossDocument.destination);
     this.resetGesture();
     if (event.canceled || !move) {
@@ -352,21 +349,26 @@ export class PageDragController {
       let transferred = false;
       try {
         const destination = crossDocument.controller;
-        const destinationDocument = destination.editorView.runtime.getDocument();
-        if (destinationDocument === editorView.runtime.getDocument()) {
-          editorView.runtime.blocks.moveBlocks(move.ids, crossDocument.placement.targetId, crossDocument.placement.position);
+        const destinationDocument = destination.panel.editor.document.getDocument();
+        if (destinationDocument === panel.editor.document.getDocument()) {
+          if (move.ids.some(id => !panel.blocks.canRemove(id))) throw new Error("Source is outside panel or protected");
+          const { targetId, position } = crossDocument.placement;
+          const destinationPanel = destination.panel;
+          const container = position === "inside" && targetId === destinationPanel.rootBlockId;
+          if (targetId !== null && !container && (!destinationPanel.blocks.hasBlock(targetId) || (position !== "inside" && !destinationPanel.blocks.canRemove(targetId)))) throw new Error("Destination is outside panel or protected");
+          panel.document.blocks.moveBlocks(move.ids, targetId, position);
         } else {
-          crossDocumentBlockTransfer(editorView.runtime, destination.editorView.runtime, move.ids, crossDocument.placement);
+          crossDocumentBlockTransfer(panel, destination.panel, move.ids, crossDocument.placement);
         }
         transferred = true;
       } catch {
         transferred = false;
       }
       if (transferred) {
-        editorView.selection.clear();
+        panel.selection.clear();
         const firstId = move.ids[0]!;
         const lastId = move.ids.at(-1)!;
-        crossDocument.controller.editorView.selection.set(createStructuralSelection([...move.ids], firstId, lastId));
+        crossDocument.controller.panel.selection.set(createStructuralSelection([...move.ids], firstId, lastId));
         requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));
       }
     } else if (placement && valid) {
@@ -374,11 +376,11 @@ export class PageDragController {
       // Persisted parent constraints can reject a structural destination.
       // Refuse the drop instead of leaving an uncaught gesture error.
       try {
-        editorView.runtime.blocks.moveBlocks(move.ids, targetId, position);
+        panel.blocks.moveBlocks(move.ids, targetId, position);
         const selection = move.grouped && move.selection
           ? move.selection
           : createStructuralSelection([move.ids[0]!]);
-        editorView.selection.set(selection);
+        panel.selection.set(selection);
         requestAnimationFrame(() => root?.focus({ preventScroll: true }));
       } catch {
         requestAnimationFrame(() => root?.focus({ preventScroll: true }));

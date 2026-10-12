@@ -1,7 +1,7 @@
 import { YjsDoc } from '../yjs-doc';
 import * as Y from 'yjs';
-import { Provider } from '../../types';
-import { YjsArray, YjsMap, YjsText } from '../structures';
+import { Provider } from "../../types";
+import { YjsArray, YjsMap, YjsText } from "../structures";
 
 describe('YjsDoc', () => {
   let yjsDoc: YjsDoc;

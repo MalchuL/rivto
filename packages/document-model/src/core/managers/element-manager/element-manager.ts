@@ -5,15 +5,7 @@
  */
 import { type ElementDestination, type ElementSnapshot } from "../../types";
 import type { CRDTArray, CRDTDoc, CRDTType, CRDTMap, CRDTUndoScope, CRDTObserveEvent } from "@chulane/crdt-doc";
-import type {
-  ElementNode,
-  DocumentElement,
-  DocumentElementManagerApi,
-  ElementFrame,
-  ElementInput,
-  ElementPatch,
-  ElementUpdate,
-} from "../../types";
+import type { ElementNode, DocumentElement, DocumentElementManagerApi, ElementFrame, ElementInput, ElementPatch, ElementUpdate } from "../../types";
 import type { ElementFrameStorage, ElementStorage, IDElement, IDProp } from "../../types/storage";
 import { assignMap, clone, isCRDTMap, requireNonemptyId } from "../../utils";
 import {

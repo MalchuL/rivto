@@ -1,9 +1,9 @@
-import type { EditorRuntime } from "../../../../editor/editor-runtime";
+import type { ReactEditorApi } from "../../../../editor/types";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import { BlockCollapseSlot } from "../../../../blocks/block-slot-controls/block-slot-controls";
-import type { EditorViewApi } from "../../../../editor-view/types";
+import type { PanelAPI } from "../../../../panels/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../managers";
 import { reconcileCollapsedSelection } from "../navigation";
 import { collapseTargets } from "./utils";
@@ -16,60 +16,60 @@ import { collapseTargets } from "./utils";
  * the first selected block's state. Multiple changes route through the generic
  * atomic block-update command rather than producing one undo item per block.
  *
- * @param editorRuntime - Runtime receiving collapse state and keyboard registrations.
+ * @param reactEditor - Runtime receiving collapse state and keyboard registrations.
  * @returns Cleanup for document and selection reconciliation subscriptions.
  */
-export function registerCollapse(editorRuntime: EditorRuntime): () => void {
-  editorRuntime.slashCommands.register({
+export function registerCollapse(reactEditor: ReactEditorApi): () => void {
+  reactEditor.slashCommands.register({
     id: "block.collapse",
     title: "Collapse block",
     group: "Actions",
     keywords: ["fold", "hide"],
     isAvailable: ({ blockId }) => {
-      const block = editorRuntime.blocks.getBlockNode(blockId);
-      return editorRuntime.blockListProps.has("collapse") &&
+      const block = reactEditor.document.blocks.getBlockNode(blockId);
+      return reactEditor.blockListProps.has("collapse") &&
         Boolean(block?.childIds.length && block.listProps.collapsed !== true);
     },
-    execute: ({ blockId }) => editorRuntime.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
+    execute: ({ blockId }) => reactEditor.document.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
   });
 
-  editorRuntime.slashCommands.register({
+  reactEditor.slashCommands.register({
     id: "block.expand",
     title: "Expand block",
     group: "Actions",
     keywords: ["unfold", "show"],
     isAvailable: ({ blockId }) => {
-      const block = editorRuntime.blocks.getBlockNode(blockId);
-      return editorRuntime.blockListProps.has("collapse") &&
+      const block = reactEditor.document.blocks.getBlockNode(blockId);
+      return reactEditor.blockListProps.has("collapse") &&
         Boolean(block?.childIds.length && block.listProps.collapsed === true);
     },
-    execute: ({ blockId }) => editorRuntime.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
+    execute: ({ blockId }) => reactEditor.document.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
   });
 
-  editorRuntime.blockListProps.register({
+  reactEditor.blockListProps.register({
     id: "collapse",
     childrenVisible: (block) => block.listProps.collapsed !== true,
     defaults: { collapsed: false },
     isValid: (candidate) => typeof candidate.collapsed === "boolean",
   });
-  editorRuntime.surfaces.registerBlockSlot({
+  reactEditor.surfaces.registerBlockSlot({
     position: "left-top",
     priority: 100,
     component: BlockCollapseSlot,
     when: ({ block }) => block.childIds.length > 0,
   });
   const reconcile = () => {
-    const current = editorRuntime.selection.get();
+    const current = reactEditor.document.selection.get();
     if (!current) return;
-    const view = (editorRuntime.editorViews.getActive() ?? editorRuntime.editorViews.getDefault());
-    const api = view ?? editorRuntime;
+    const view = (reactEditor.panels.getActive() ?? reactEditor.panels.getDefault());
+    const api = view ?? reactEditor.document;
     if (!api.selection.get()) {
       // A remote move can put selected blocks outside the active subtree.
       if (view) api.selection.clear();
       return;
     }
     const reconcileView = () => {
-  const apiDocument = "runtime" in api ? api.runtime : api;
+  const apiDocument = "editor" in api ? api.document : api;
       const root = view?.events.getRoot();
       const boundary = view?.rootBlockId;
       const next = reconcileCollapsedSelection(apiDocument.blocks, current, boundary);
@@ -84,48 +84,48 @@ export function registerCollapse(editorRuntime: EditorRuntime): () => void {
     };
     reconcileView();
   };
-  const unsubscribeDocument = editorRuntime.subscribe(reconcile);
-  const unsubscribeSelection = editorRuntime.selection.subscribe(reconcile);
+  const unsubscribeDocument = reactEditor.document.subscribe(reconcile);
+  const unsubscribeSelection = reactEditor.document.selection.subscribe(reconcile);
   const uninstallReconciliation = () => { unsubscribeSelection(); unsubscribeDocument(); };
 
-  const setCollapsed = (editorView: EditorViewApi, value: boolean | "toggle"): boolean => {
-    const current = editorView.selection.get();
+  const setCollapsed = (panel: PanelAPI, value: boolean | "toggle"): boolean => {
+    const current = panel.selection.get();
     // Chromium may deliver the shortcut before its selectionchange event after
     // a click. Reading the native caret keeps the keybinding deterministic.
-    const nativeSelection = editorView.selection.readDOM();
+    const nativeSelection = panel.selection.readDOM();
     const selection = nativeSelection ?? current;
     const ids = collapseTargets(selection);
     if (!ids.length) return false;
     const uniqueIds = [...new Set(ids)];
-    if (uniqueIds.some((id) => !editorView.runtime.blocks.hasBlock(id))) return false;
-    const first = editorView.runtime.blocks.getBlockNode(uniqueIds[0]!);
+    if (uniqueIds.some((id) => !panel.blocks.hasBlock(id))) return false;
+    const first = panel.blocks.getBlockNode(uniqueIds[0]!);
     if (!first) return false;
     const collapsed = value === "toggle" ? first.listProps.collapsed !== true : value;
     const updates = uniqueIds.flatMap((id) => {
-      const block = editorView.runtime.blocks.getBlockNode(id);
+      const block = panel.blocks.getBlockNode(id);
       return block && (!collapsed || block.childIds.length > 0) && block.listProps.collapsed !== collapsed
         ? [{ id, patch: { listProps: { collapsed } } }]
         : [];
     });
-    if (updates.length) editorView.runtime.blocks.updateBlocks(updates);
+    if (updates.length) panel.blocks.updateBlocks(updates);
     return true;
   };
 
-  editorRuntime.keyboard.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockCollapse,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCollapse]!,
     when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
-  }, ({ editorView }) => setCollapsed(editorView,true));
-  editorRuntime.keyboard.register({
+  }, ({ panel }) => setCollapsed(panel,true));
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockExpand,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockExpand]!,
     when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
-  }, ({ editorView }) => setCollapsed(editorView,false));
-  editorRuntime.keyboard.register({
+  }, ({ panel }) => setCollapsed(panel,false));
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockToggleCollapse,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockToggleCollapse]!,
     when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
-  }, ({ editorView }) => setCollapsed(editorView,"toggle"));
+  }, ({ panel }) => setCollapsed(panel,"toggle"));
 
   return () => {
     uninstallReconciliation();

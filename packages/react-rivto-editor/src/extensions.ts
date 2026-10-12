@@ -10,23 +10,13 @@
  */
 export * from "./extensions/block-drag";
 export * from "./extensions/built-ins/built-ins";
-export {
-  DEFAULT_WRITING_BLOCK_TYPE,
-} from "./extensions/built-ins/page/default-writing-block";
-export type {
-  DefaultWritingBlockOptions,
-} from "./extensions/built-ins/page/default-writing-block";
+export { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-writing-block";
+export type { DefaultWritingBlockOptions } from "./extensions/built-ins/page/default-writing-block";
 export * from "./extensions/built-ins/separator/separator-block";
 export * from "./extensions/bullet-threading/bullet-threading";
 export * from "./extensions/edgeless";
 export * from "./extensions/todo-item/todo-item";
-export type {
-  ReactBlockRegistration,
-  ReactBlockSlashCommand,
-  ReactEditorExtension,
-  SlashCommand,
-  SlashCommandContext,
-} from "./managers";
+export type { ReactBlockRegistration, ReactBlockSlashCommand, ReactEditorExtension, SlashCommand, SlashCommandContext } from "./managers";
 
 export {
   KANBAN_BLOCK_TYPE,
@@ -36,7 +26,7 @@ export {
   kanbanExtension,
 } from "./extensions/containers/kanban/kanban";
 
-export { ContainerBlockBehavior, DefaultBlockBehavior } from "./block-behaviors/index";
+export { ContainerBlockBehavior, DefaultBlockBehavior } from "./block-behaviors";
 export type {
   BlockBehavior,
   BlockBehaviorContext,
@@ -44,7 +34,7 @@ export type {
   BlockDropContext,
   BlockDropPlacementOptions,
   DropAxis,
-} from "./block-behaviors/index";
+} from "./block-behaviors";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal/block-modal";
 export { BENTO_BLOCK_TYPE, Bento, bentoExtension, createBentoBlockInput } from "./extensions/containers/bento/bento";
 export {

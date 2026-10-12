@@ -7,7 +7,7 @@
  * delete as an empty slice.
  */
 import { Listeners } from "../../utils";
-import type { RivtoEditorApi } from "../../editor/types";
+import type { DocumentEditorAPI } from "../../editor/types";
 import type { SelectionManagerApi } from "../types";
 import type { Selection } from "./selection";
 import type { ResolvedSelection } from "./resolved-selection";
@@ -31,7 +31,7 @@ export class SelectionManager implements SelectionManagerApi {
    * Creates a manager for one runtime.
    * @param editor - Owning editor providing block, element, and batch capabilities.
    */
-  constructor(private readonly editor: RivtoEditorApi) {}
+  constructor(private readonly editor: DocumentEditorAPI) {}
 
   /** @returns Detached current selection. */
   get(): Selection | undefined {

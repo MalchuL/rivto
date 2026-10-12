@@ -8,3 +8,4 @@
  */
 export * from "./edgeless-surface";
 export * from "./snapping-store";
+export type { EdgelessSnappingSnapshot, EdgelessSurfaceOptions } from "./types";

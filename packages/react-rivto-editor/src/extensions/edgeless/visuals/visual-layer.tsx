@@ -12,7 +12,7 @@ import { SurfaceContext } from "../../../surfaces/surface";
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { useEditorRoot, useEditorView } from "../../../hooks";
+import { useEditorRoot, usePanel } from "../../../hooks";
 import { useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
 import { BlockProperties } from "./components/block-properties";
 import { DrawingCapture } from "./components/drawing-capture";
@@ -139,8 +139,8 @@ export function EdgelessVisualLayer({
   readonly controller: EdgelessVisualController;
   readonly options: EdgelessVisualsOptions;
 }) {
-  const editorView = useEditorView();
-  const controller = useMemo(() => sharedController.getDocumentView(editorView), [sharedController, editorView]);
+  const panel = usePanel();
+  const controller = useMemo(() => sharedController.getDocumentView(panel), [sharedController, panel]);
   const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const tool = useVisualTool(controller);

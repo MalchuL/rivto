@@ -27,7 +27,7 @@ Rivto не реализует алгоритм Undo самостоятельно
 
 ```text
 HistoryManager
-    = публичное имя в EditorRuntime
+    = публичное имя в DocumentEditor
     = тот же класс UndoManager
     = тонкая adapter-neutral обёртка
     = над Y.UndoManager в текущем Yjs adapter

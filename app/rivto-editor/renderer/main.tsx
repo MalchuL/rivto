@@ -7,8 +7,10 @@
  */
 import { Component, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createRivtoEditor, DocumentModelImpl, YjsDoc } from '@chulane/rivto';
-import { createReactEditor, EditorView, standardPreset, pageDragExtension, edgelessPreset, edgelessVisualsExtension, kanbanExtension, tableExtension, columnsExtension, bentoExtension, createKanbanBlockInput, createTableBlockInput, createColumnsBlockInput, createBentoBlockInput } from '@chulane/rivto-react';
+import { createDocumentEditor, ModeManager } from '@chulane/rivto';
+import { DocumentModelImpl } from '@chulane/document-model';
+import { YjsDoc } from '@chulane/crdt-doc';
+import { createReactEditor, EditorPanel, PageSurface, EdgelessSurface, standardPreset, pageDragExtension, edgelessPreset, edgelessVisualsExtension, kanbanExtension, tableExtension, columnsExtension, bentoExtension, createKanbanBlockInput, createTableBlockInput, createColumnsBlockInput, createBentoBlockInput } from '@chulane/rivto-react';
 import { parseDocument, exportMarkdown, type DocumentFile } from './documents';
 import { DEFAULT_SETTINGS, SettingsDialog, type Settings } from './settings';
 import '@chulane/rivto-react/styles.css';
@@ -41,7 +43,9 @@ function readSettings(): Settings {
  */
 function createSession() {
   const settings = readSettings();
-  const editor = createRivtoEditor({ document: new DocumentModelImpl(new YjsDoc(`rivto-desktop-${crypto.randomUUID()}`)) });
+  const document = new DocumentModelImpl(new YjsDoc(`rivto-desktop-${crypto.randomUUID()}`));
+  const editor = createDocumentEditor({ document });
+  const panelMode = new ModeManager();
   const reactEditor = createReactEditor({ editor, extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset(), edgelessVisualsExtension(), kanbanExtension(), tableExtension(), columnsExtension(), bentoExtension()] });
   let error = '';
   for (const [id, keys] of Object.entries(settings.keymap)) {
@@ -61,7 +65,7 @@ function createSession() {
   } catch { error = 'The recovery draft could not be loaded. It has been retained in local storage; open a saved JSON document to continue.'; }
   if (!recovered) editor.blocks.insertBlock({ type: 'paragraph', content: '' });
   editor.history.clear();
-  return { editor, reactEditor, settings, title, recovered, error };
+  return { document, panelMode, editor, reactEditor, settings, title, recovered, error };
 }
 
 /** Keeps a rendering failure visible while leaving the recovery draft intact. */
@@ -123,7 +127,7 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = editor.subscribe(updateDraft);
-    return () => { unsubscribe(); reactEditor.destroy(); void editor.destroy(); };
+    return () => { unsubscribe(); reactEditor.destroy(); void editor.destroy().finally(() => session.document.destroy()); };
   }, [editor, reactEditor]);
 
   /** Saves a captured revision; cancellation leaves all dirty state intact.
@@ -240,7 +244,7 @@ function App() {
     </aside>
     <main className={WORKSPACE_CLASS}>
       <header className={TOOLBAR_CLASS}>
-        <div role="group" aria-label="Editor mode">{(['block', 'edgeless'] as const).map((value) => <button key={value} aria-pressed={mode === value} onClick={() => { editor.mode.set(value); setMode(value); }}>{value === 'block' ? 'Page' : 'Canvas'}</button>)}</div>
+        <div role="group" aria-label="Editor mode">{(['block', 'edgeless'] as const).map((value) => <button key={value} aria-pressed={mode === value} onClick={() => { session.panelMode.set(value); setMode(value); }}>{value === 'block' ? 'Page' : 'Canvas'}</button>)}</div>
         <span>{dirty ? 'Unsaved changes' : path ? 'All changes saved' : 'Local document'}</span>
         <button disabled={busy} onClick={() => void command('export')}>Export Markdown</button>
         <button disabled={busy} onClick={() => void command('save-as')}>Save as…</button>
@@ -249,9 +253,9 @@ function App() {
       {error && <div role="alert" className={ERROR_CLASS}>{error}<button aria-label="Dismiss error" onClick={() => setError('')}>✕</button></div>}
       <article className={PAPER_CLASS} inert={busy} data-mode={mode} style={{ '--editor-width': `${settings.width}px` } as CSSProperties}>
         <div className={TITLE_CLASS}><small>MAKE SOMETHING WORTH KEEPING</small><input aria-label="Document title" maxLength={240} value={title} onChange={(event) => { latestTitle.current = event.target.value; setTitle(event.target.value); updateDraft(); }} placeholder="Untitled" />
-          <nav aria-label="Insert block"><button onClick={() => editor.history.undo()}>Undo</button><button onClick={() => editor.history.redo()}>Redo</button>{Object.entries({ Kanban: createKanbanBlockInput, Table: createTableBlockInput, Columns: createColumnsBlockInput, Bento: createBentoBlockInput }).map(([label, create]) => <button key={label} onClick={() => editor.blocks.insertBlock(create(), editor.blocks.getRootIds().at(-1))}>＋ {label}</button>)}</nav>
+          <nav aria-label="Insert block"><button onClick={() => editor.history.undo()}>Undo</button><button onClick={() => editor.history.redo()}>Redo</button>{Object.entries({ Kanban: createKanbanBlockInput, Table: createTableBlockInput, Columns: createColumnsBlockInput, Bento: createBentoBlockInput }).map(([label, create]) => <button key={label} onClick={() => editor.blocks.insertBlock(create(), editor.blocks.getInsertionDestinationAfter(editor.blocks.getRootIds().at(-1)))}>＋ {label}</button>)}</nav>
         </div>
-        <EditorBoundary key={path ?? 'untitled'}><EditorView reactEditor={reactEditor} /></EditorBoundary>
+        <EditorBoundary key={path ?? 'untitled'}><EditorPanel editor={reactEditor} mode={session.panelMode}>{mode === 'edgeless' ? <EdgelessSurface /> : <PageSurface />}</EditorPanel></EditorBoundary>
       </article>
       <footer className={STATUS_CLASS}><span role="status">{status}</span><span>{words} words · {mode === 'block' ? `${settings.width} px` : 'Infinite canvas'}</span></footer>
     </main>

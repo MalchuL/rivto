@@ -1,7 +1,7 @@
 import * as Y from 'yjs';
 import { YjsArray } from '../array';
 import { YjsMap } from '../map';
-import { BasicType } from '../../../types';
+import { BasicType } from "../../../types";
 
 describe('YjsArray wrapper', () => {
     let doc: Y.Doc;

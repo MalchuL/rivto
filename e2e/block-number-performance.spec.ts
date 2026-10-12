@@ -14,7 +14,7 @@ for (const repeat of [0, 200]) {
     await expect(page.locator('[data-journal-document="today"] [data-block-content]').first()).toBeVisible();
     const id = await page.evaluate(() => {
       const { editor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
       }).__rivtoDemo;
       return editor.blocks.getRootIds()[1]!;
     });
@@ -24,7 +24,7 @@ for (const repeat of [0, 200]) {
     const originalNumber = await number.textContent();
     await page.evaluate(() => {
       const runtime = window as unknown as {
-        __rivtoDemo: { editorRuntime: import("@chulane/rivto-react").EditorRuntime };
+        __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditor };
         __outlineReads: number;
         __contentQueries: number;
       };
@@ -34,7 +34,7 @@ for (const repeat of [0, 200]) {
         if (selector === "[data-block-content]") runtime.__contentQueries += 1;
         return query.call(this, selector);
       } as typeof query;
-      const blocks = runtime.__rivtoDemo.editorRuntime.blocks;
+      const blocks = runtime.__rivtoDemo.reactEditor.document.blocks;
       const getBlocks = blocks.getBlocks.bind(blocks);
       runtime.__outlineReads = 0;
       blocks.getBlocks = () => {
@@ -48,7 +48,7 @@ for (const repeat of [0, 200]) {
         const runtime = window as unknown as {
           __outlineReads: number;
         __contentQueries: number;
-          __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
         };
         runtime.__outlineReads = 0;
         runtime.__contentQueries = 0;
@@ -62,7 +62,7 @@ for (const repeat of [0, 200]) {
         const runtime = window as unknown as {
           __outlineReads: number;
         __contentQueries: number;
-          __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
         };
         return { reads: runtime.__outlineReads, queries: runtime.__contentQueries, focus: runtime.__rivtoDemo.editor.selection.get()?.focusBlockId };
       });
@@ -74,7 +74,7 @@ for (const repeat of [0, 200]) {
     for (const [operation, depth] of [["undo", "1"], ["redo", "0"]] as const) {
       await page.evaluate((action) => {
         (window as unknown as {
-          __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
         }).__rivtoDemo.editor.history[action]();
       }, operation);
       await expect(number).toHaveText(originalNumber!);

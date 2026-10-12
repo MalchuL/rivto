@@ -1,12 +1,12 @@
 /**
  * Editor runtime coordinating document mutations and focused public managers.
  */
-import { BlockListPropsManager, BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, HistoryManager, ModeManager, SelectionManager } from "../managers";
+import { BlockListPropsManager, BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, HistoryManager, SelectionManager } from "../managers";
 import {
   type DocumentModel,
 } from "@chulane/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
-import type { CreateRivtoEditorOptions, RivtoEditorApi } from "./types";
+import type { CreateDocumentEditorOptions, DocumentEditorAPI } from "./types";
 import type { Selection } from "../managers/selection-manager";
 import { Listeners } from "../utils";
 
@@ -14,10 +14,10 @@ import { Listeners } from "../utils";
  * Coordinates editor lifecycle around focused public managers.
  *
  * Block APIs live exclusively on `.blocks`. The runtime
- * owns cross-cutting commands, selection, history, mode, document subscriptions,
+ * owns cross-cutting commands, selection, history, document subscriptions,
  * clipboard bridges, and the shared revision stream.
  */
-export class EditorRuntime implements RivtoEditorApi {
+export class DocumentEditor implements DocumentEditorAPI {
   /** Public owner of typed block operations. */
   readonly blocks: BlockManager;
   /** Public owner of list-property defaults and semantic validation. */
@@ -28,8 +28,6 @@ export class EditorRuntime implements RivtoEditorApi {
   readonly elements: ElementManager;
   /** Named command handlers exposed to integrations and focused managers. */
   readonly commands = new CommandRegistry();
-  /** Local presentation mode shared by views of this single-document runtime. */
-  readonly mode: ModeManager;
   /** Local text and structural selection state; never persisted to the document. */
   readonly selection: SelectionManager;
   /** Local history and transaction batching for document changes. */
@@ -48,13 +46,12 @@ export class EditorRuntime implements RivtoEditorApi {
   /**
    * Creates a single-document runtime with stable managers and local interaction state.
    *
-   * @param options - Caller-owned document whose identity is fixed for this runtime; construction does not load other documents. The optional mode selects the initial local presentation.
+   * @param options - Caller-owned document whose identity is fixed for this runtime; construction does not load other documents. Presentation is owned by the UI panel.
    * @throws If the document is missing or runtime initialization fails.
    */
-  constructor(options: CreateRivtoEditorOptions) {
+  constructor(options: CreateDocumentEditorOptions) {
     if (!options.document) throw new Error("Document is required");
     this.document = options.document;
-    this.mode = new ModeManager(options.mode);
     this.history = new HistoryManager(this.document.history);
     this.blockRegistry = new BlockRegistryManager();
     this.blockListProps = new BlockListPropsManager();
@@ -63,12 +60,6 @@ export class EditorRuntime implements RivtoEditorApi {
     this.selection = new SelectionManager(this);
     this.clipboard = new ClipboardManager(this);
     this.unsubscribeFns.push(
-      this.mode.subscribe(() => {
-        // A surface switch separates history captures without changing document data.
-        this.history.stopCapturing();
-        this.notifyChanges();
-        this.history.stopCapturing();
-      }),
       this.blockRegistry.subscribe(() => this.notifyChanges()),
       this.document.subscribe(() => this.notifyChanges()),
       this.document.blocks.subscribeStructure(() => this.reconcileDocumentSelection()),
@@ -79,7 +70,7 @@ export class EditorRuntime implements RivtoEditorApi {
   /**
    * Returns the current monotonic runtime revision.
    *
-   * Changes in this document, local mode, and registered block definitions increment this value before
+   * Changes in this document, registered block definitions increment this value before
    * runtime subscribers are notified. Selection is excluded so caret and
    * block-range publishes do not invalidate the whole React tree.
    *
@@ -230,6 +221,6 @@ export class EditorRuntime implements RivtoEditorApi {
  * @param options - Caller-owned document; registries and interaction state are local to the returned editor.
  * @returns Runtime whose lifecycle is owned by the caller.
  */
-export function createRivtoEditor(options: CreateRivtoEditorOptions): EditorRuntime {
-  return new EditorRuntime(options);
+export function createDocumentEditor(options: CreateDocumentEditorOptions): DocumentEditor {
+  return new DocumentEditor(options);
 }

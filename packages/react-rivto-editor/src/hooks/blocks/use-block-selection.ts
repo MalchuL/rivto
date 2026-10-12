@@ -7,7 +7,7 @@
  */
 import { hasBlockRanges, type Selection } from "@chulane/rivto";
 import { useCallback, useSyncExternalStore } from "react";
-import { useEditorView } from "../../editor-view/use-editor-view";
+import { usePanel } from "../editor/use-panel";
 import { useEditorSelection } from "../editor/use-editor-selection";
 
 /**
@@ -18,18 +18,18 @@ import { useEditorSelection } from "../editor/use-editor-selection";
  *
  * @param blockId - Stable ID whose whole-block membership is queried.
  * @returns True only while a structural selection contains `blockId`.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useBlockSelected(blockId: string): boolean {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const subscribe = useCallback(
-    (listener: () => void) => editorView.selection.subscribe(listener),
-    [editorView],
+    (listener: () => void) => panel.selection.subscribe(listener),
+    [panel],
   );
   return useSyncExternalStore(
     subscribe,
-    () => editorView.selection.isBlockSelected(blockId),
-    () => editorView.selection.isBlockSelected(blockId),
+    () => panel.selection.isBlockSelected(blockId),
+    () => panel.selection.isBlockSelected(blockId),
   );
 }
 
@@ -43,7 +43,7 @@ export function useBlockSelected(blockId: string): boolean {
  *
  * @param blockId - Stable ID whose whole-block selection membership is queried.
  * @returns The containing block selection, or null when not selected.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useBlockSelection(blockId: string): Selection | null {
   const selection = useEditorSelection();

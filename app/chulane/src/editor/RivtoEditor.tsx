@@ -1,8 +1,8 @@
 /**
  * Product document editor backed by Rivto.
  *
- * Mirrors the demo host: `createRivtoEditor` + `createReactEditor` +
- * `standardPreset` + `edgelessVisualsExtension`, rendered through `EditorView`.
+ * Mirrors the demo host: `createDocumentEditor` + `createReactEditor` +
+ * `standardPreset` + `edgelessVisualsExtension`, rendered through `EditorPanel`.
  * The adapter owns runtime lifetime and writes `editor.dump()` JSON back to
  * the page store. Surfaces stay inside the app chrome; page-surface card
  * styles are flattened in `styles.css`.
@@ -11,7 +11,7 @@
 "use client";
 
 import "@chulane/rivto-react/styles.css";
-import { EditorView } from "@chulane/rivto-react";
+import { EditorPanel, PageSurface, EdgelessSurface, useEditorMode } from "@chulane/rivto-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "../lib/utils";
 import { createPageEditor, type PageEditorRuntime } from "./create-page-editor";
@@ -61,7 +61,7 @@ export function RivtoEditor({
     return () => {
       unsubscribe();
       created.reactEditor.destroy();
-      created.editor.destroy();
+      void created.editor.destroy().finally(() => created.document.destroy());
       setRuntime(null);
     };
     // `content` is the hydration payload for this document, not a live prop.
@@ -74,17 +74,25 @@ export function RivtoEditor({
 
   return (
     <div className={cn(EDITOR_ROOT_CLASS, className)}>
-      <EditorView editor={runtime.reactEditor}>
+      <EditorPanel editor={runtime.reactEditor} mode={runtime.mode}>
+        <EditorSurface />
         {children}
         {showModeSwitch ? (
           <header className={TOOLBAR_CLASS}>
             <EditorModeToggle />
           </header>
         ) : null}
-      </EditorView>
+      </EditorPanel>
     </div>
   );
 }
 
 /** Product document editor. Replaces the TipTap stage-1 adapter. */
 export const DocumentEditor = RivtoEditor;
+
+/** Renders the explicit surface selected by this panel’s mode manager. */
+function EditorSurface() {
+  const { mode } = useEditorMode();
+  if (mode === "edgeless") return <EdgelessSurface />;
+  return <PageSurface />;
+}

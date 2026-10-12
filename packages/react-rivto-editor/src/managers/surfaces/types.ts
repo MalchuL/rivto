@@ -5,14 +5,14 @@ import type { BlockWrapperComponent } from "../../blocks/block-wrapper/block-wra
 /** Root React component rendering one complete presentation mode. */
 export type SurfaceComponent = ComponentType;
 
-/** Component wrapped around the complete active EditorView content. */
+/** Component wrapped around the complete active EditorPanel content. */
 export type EditorWrapper = ComponentType<{ readonly children?: ReactNode }>;
 
-/** One editor wrapper and the modes where it surrounds EditorView. */
+/** One editor wrapper and the modes where it surrounds EditorPanel. */
 export interface EditorWrapperRegistration {
   /** Editor-wide React context or interaction boundary. */
   readonly wrapper: EditorWrapper;
-  /** Modes in which EditorView applies the wrapper. */
+  /** Modes in which EditorPanel applies the wrapper. */
   readonly mode?: EditorMode | readonly EditorMode[];
 }
 

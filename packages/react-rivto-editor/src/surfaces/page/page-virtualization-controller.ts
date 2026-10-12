@@ -9,7 +9,6 @@
  * @module
  */
 
-
 /** Page-local operations needed by commands that focus a currently unmounted root. */
 export interface PageVirtualizationController {
   /**

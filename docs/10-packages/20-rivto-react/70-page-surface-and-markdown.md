@@ -22,8 +22,8 @@ Hierarchy остаётся core state. Surface только рекурсивно
 По умолчанию виртуализация выключена. `virtualizePageThreshold={true}` включает её для любого числа root blocks, `false` выключает, а число включает её при достижении заданного порога. `virtualizePageOverscan` задаёт одинаковый буфер сверху и снизу viewport; по умолчанию это 8 roots с каждой стороны.
 
 ```tsx
-<EditorView
-  runtime={editorRuntime}
+<EditorPanel
+  editor={reactEditor}
   virtualizePageThreshold={1_000}
   virtualizePageOverscan={8}
 />
@@ -85,4 +85,4 @@ List/collapse metadata хранится в canonical `block.listProps`. `listSho
 
 ## Custom page chrome
 
-Toolbar, breadcrumbs и document title лучше рендерить children `EditorView`, а не persisted blocks, если они не являются частью документа. Именно так demo держит journal date и mode toolbar вне CRDT state.
+Toolbar, breadcrumbs и document title лучше рендерить children `EditorPanel`, а не persisted blocks, если они не являются частью документа. Именно так demo держит journal date и mode toolbar вне CRDT state.

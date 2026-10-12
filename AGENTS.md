@@ -68,7 +68,7 @@ For example, `useBlock` in `packages/react-rivto-editor/src/hooks/blocks/use-blo
  * @param blockId - Stable persisted ID of the block to observe.
  * @returns Current recursive snapshot and ID-bound operations. The `block`
  * field is undefined when the ID is unknown or the block has been deleted.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel subtree.
  */
 export function useBlock(blockId: string): UseBlockResult;
 ```

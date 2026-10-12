@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { RivtoEditorApi, EditorBlock } from "@chulane/rivto";
-import type { EditorRuntime } from "@chulane/rivto-react";
+import type { DocumentEditorAPI, EditorBlock } from "@chulane/rivto";
+import type { ReactEditor } from "@chulane/rivto-react";
 
-type DemoWindow = Window & { __rivtoDemo: { editor: RivtoEditorApi; editorRuntime: EditorRuntime } };
+type DemoWindow = Window & { __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor } };
 
 async function paste(page: Page, data: Record<string, string>, plain = false) {
   const content = page.locator('[data-journal-document="today"] [data-block-content]').first();

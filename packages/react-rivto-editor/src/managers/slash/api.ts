@@ -6,7 +6,7 @@ export interface ViewSlashCommandsApi {
   readonly revision: number;
   /**
    * Lists commands whose availability predicate accepts this block and view.
-   * @param context - Document-local block ID; the manager supplies its own editorView.
+   * @param context - Document-local block ID; the manager supplies its own panel.
    * @returns Available definitions in registration order without executing them.
    * @throws If an availability predicate throws.
    */

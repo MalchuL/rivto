@@ -13,9 +13,10 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useState, type React
 import { flushSync } from "react-dom";
 import { BlockTree } from "../../blocks";
 import { BlockElementRefProvider } from "../../blocks/block-wrapper/block-wrapper";
-import { useEditorContext } from "../../editor-view/editor-context";
-import { ESTIMATED_ROOT_HEIGHT, usePageVirtualization } from "../../editor-view/page-virtualization-context";
-import { useEditorRoot, useEditorView, useRootBlockIds } from "../../hooks";
+import { useEditorContext } from "../../hooks/editor/use-editor-context";
+import { ESTIMATED_ROOT_HEIGHT } from "./page-virtualization-context";
+import { usePageVirtualization } from "../../hooks/editor/use-page-virtualization";
+import { useEditorRoot, usePanel, useRootBlockIds } from "../../hooks";
 import { registerPageVirtualizationController } from "./page-virtualization-controller";
 
 const PAGE_SURFACE_CLASS = "page-surface";
@@ -63,7 +64,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
   readonly surface: HTMLElement | null;
   readonly overscan: number;
 }) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const [pageTop, setPageTop] = useState(0);
   // Focused or explicitly requested roots stay mounted even when scrolling
   // moves them outside the ordinary viewport range.
@@ -111,7 +112,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
      */
     const rootId = (blockId: string): string => {
       let id = blockId;
-      for (let parent = editorView.runtime.blocks.getParentId(id); parent; parent = editorView.runtime.blocks.getParentId(id)) id = parent;
+      for (let parent = panel.blocks.getParentId(id); parent; parent = panel.blocks.getParentId(id)) id = parent;
       return id;
     };
     /**
@@ -190,13 +191,13 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
          * @param blocks - Current sibling forest in canonical order.
          * @returns Visible IDs and text lengths in depth-first page order.
          */
-        const visit = (blocks: ReturnType<typeof editorView.runtime.blocks.getBlocks>): Array<{ id: string; length: number }> => (
+        const visit = (blocks: ReturnType<typeof panel.blocks.getBlocks>): Array<{ id: string; length: number }> => (
           blocks.flatMap((block) => [
             { id: block.id, length: block.content.length },
-            ...(!editorView.runtime.blockListProps.childrenVisible(block) ? [] : visit(block.children)),
+            ...(!panel.editor.blockListProps.childrenVisible(block) ? [] : visit(block.children)),
           ])
         );
-        return visit(editorView.runtime.blocks.getBlocks());
+        return visit(panel.blocks.getBlocks());
       },
       suspendScrollAdjustments: () => {
         if (scrollAdjustmentSuspensions === 0) {
@@ -221,7 +222,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
       surface.removeEventListener("pointerdown", onPointerDown);
       unregisterController();
     };
-  }, [blockIds, editorView, surface, virtualizer]);
+  }, [blockIds, panel, surface, virtualizer]);
   const items = virtualizer.getVirtualItems();
   let previousEnd = pageTop;
   let previousIndex = -2;
@@ -232,11 +233,11 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
    * @returns Number of preceding list members, or undefined for other blocks.
    */
   const counterSeed = (index: number): number | undefined => {
-    const type = editorView.runtime.blocks.getBlockNode(blockIds[index]!)?.listProps.type;
+    const type = panel.blocks.getBlockNode(blockIds[index]!)?.listProps.type;
     if (type !== "numbered_list") return undefined;
     let count = 0;
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-      const previousType = editorView.runtime.blocks.getBlockNode(blockIds[cursor]!)?.listProps.type;
+      const previousType = panel.blocks.getBlockNode(blockIds[cursor]!)?.listProps.type;
       if (previousType !== "numbered_list" && previousType !== "start_numbered_list") break;
       count += 1;
       if (previousType === "start_numbered_list") break;
@@ -274,7 +275,7 @@ export function PageSurface() { return <SurfaceBoundary type="block"><PageSurfac
 
 function PageSurfaceContent() {
   const rootIds = useRootBlockIds();
-  const { rootBlockId, editorView } = useEditorContext();
+  const { rootBlockId, panel } = useEditorContext();
   const { ref } = useEditorRoot();
   const pageVirtualization = usePageVirtualization();
   const [surface, setSurface] = useState<HTMLElement | null>(null);
@@ -292,7 +293,7 @@ function PageSurfaceContent() {
   }
 
   /*
-   * `ref` registers this element as the EditorView DOM/event root.
+   * `ref` registers this element as the EditorPanel DOM/event root.
    * `className` is the public `.page-surface` styling hook in styles.css.
    * `data-rivto-page-editor-root` is PAGE_EDITOR_ROOT_ATTRIBUTE in constants.ts;
    * PAGE_EDITOR_ROOT_SELECTOR uses it for cross-journal caret navigation.
@@ -314,7 +315,7 @@ function PageSurfaceContent() {
       {/* PAGE_END_SLOT_ATTRIBUTE in constants.ts marks the TrailingBlock portal target. 
       * Uses to add "Add block" buttons at the end of the page.
       */}
-      {(rootBlockId === undefined || editorView.panel) && <div data-page-end-slot="true" />}
+      {(rootBlockId === undefined || (!panel.blocks.hasBlock(rootBlockId) && panel.document.blocks.hasBlock(rootBlockId))) && <div data-page-end-slot="true" />}
     </main>
   );
 }

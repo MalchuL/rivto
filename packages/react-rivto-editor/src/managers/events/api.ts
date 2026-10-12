@@ -3,7 +3,7 @@ import type { DOMEventDefinition, DOMEventName, DOMEventTarget } from "./dom-typ
 import type { EditorEvent } from "./editor-event";
 import type { EditorEventHandler } from "./types";
 
-/** Event registrations and DOM root access for one EditorView. */
+/** Event registrations and DOM root access for one EditorPanel. */
 export interface ViewEventsApi {
   /**
    * Registers a handler restricted to this view, with automatic view cleanup.
@@ -35,7 +35,7 @@ export interface ViewEventsApi {
   getRoot(): HTMLElement | null;
   /**
    * Reads the rendered surface of this view without changing shared document mode.
-   * Unlike `editorRuntime.mode.get()`, which is shared by a document's views, this
+   * Unlike `reactEditor.mode.get()`, which is shared by a document's views, this
    * describes the receiving DOM surface: a page embedding returns `block` even
    * when its document's core mode is `edgeless`. No additional mode is stored.
    * Event dispatch captures this value in `event.mode`; handlers should use that

@@ -15,10 +15,7 @@ import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform 
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { editorControlProps } from "../../constants";
-import {
-  useBlockEditing,
-  useEditorView,
-} from "../../hooks";
+import { useBlockEditing, usePanel } from "../../hooks";
 import type { MarkdownLinkClick } from "../../types";
 import {
   MarkdownCodeBlock,
@@ -92,16 +89,16 @@ export function MarkdownContent({
 }) {
   const editing = useBlockEditing(blockId);
   const { block, operations } = editing;
-  const editorView = useEditorView();
+  const panel = usePanel();
   const [isEditing, setIsEditing] = useState(false);
   const source = block?.content ?? "";
 
   const updateCode = useCallback((node: PositionedNode, value: string) => {
     // An external write can precede this old render's input handler in the
     // same turn. Preserve its current surrounding text rather than the snapshot.
-    const current = editorView.runtime.blocks.getBlockNode(blockId)?.content;
+    const current = panel.blocks.getBlockNode(blockId)?.content;
     if (current !== undefined) operations.setContent(replaceMarkdownCode(current, node, value));
-  }, [editorView, blockId, operations]);
+  }, [panel, blockId, operations]);
   const transformUrl = useCallback<UrlTransform>((url) => {
     const safe = defaultUrlTransform(url);
     if (safe || !onLinkClick) return safe;

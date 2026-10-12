@@ -49,7 +49,7 @@ useSyncExternalStore(
 Возвращаемое value не записано в variable. Это нормально: hook нужен, чтобы
 подписать component и вызвать render при изменении number.
 
-`EditorRuntime.changed()`:
+`DocumentEditor.changed()`:
 
 ```ts
 this.currentRevision += 1;
@@ -161,7 +161,7 @@ Demo создаёт instance один раз через lazy `useState`:
 ```ts
 const [instance] = useState(() => {
   const doc = new YjsDoc(...);
-  const editor = createRivtoEditor({ document: doc, plugins });
+  const editor = createDocumentEditor({ document: doc, plugins });
   return { doc, editor };
 });
 ```
@@ -174,7 +174,7 @@ plugins и subscriptions.
 
 ```tsx
 function App() {
-  const editor = createRivtoEditor();
+  const editor = createDocumentEditor();
   return <RivtoEditor editor={editor} ... />;
 }
 ```

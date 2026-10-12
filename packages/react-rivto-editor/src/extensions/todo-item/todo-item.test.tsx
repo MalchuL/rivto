@@ -8,8 +8,8 @@ import { createTestReactEditor as createReactEditor } from "../../test-utils";
  */
 import type { ReactElement } from "react";
 
-import { indentBlocks } from "../../block-behaviors/index";
-import { createTestCoreEditor as createRivtoEditor } from "../../test-utils";
+import { indentBlocks } from "../../block-behaviors";
+import { createTestCoreEditor as createDocumentEditor } from "../../test-utils";
 import {
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
@@ -19,8 +19,8 @@ import {
 
 describe("todoItemExtension", () => {
   test("registers fresh validated TODO metadata for every creation", async () => {
-    const editor = await createRivtoEditor();
-    const editorView = createReactEditor({ editor, extensions: [todoItemExtension()] });
+    const editor = await createDocumentEditor();
+    const panel = createReactEditor({ editor, extensions: [todoItemExtension()] });
 
     const first = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "First" }).id;
     const second = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "Second" }).id;
@@ -39,7 +39,7 @@ describe("todoItemExtension", () => {
     expect(() => editor.blocks.updateBlock(first, { props: { priority: 5 } })).toThrow();
     expect(() => editor.blocks.updateBlock(first, { props: { updatedAt: "2026-01-01" } })).toThrow();
 
-    editorView.runtime.destroy();
+    panel.editor.destroy();
     editor.destroy();
   });
 
@@ -51,18 +51,18 @@ describe("todoItemExtension", () => {
   });
 
   test("converts a leaf to storage in place and rejects populated containers", async () => {
-    const editor = await createRivtoEditor();
-    const editorView = createReactEditor({ editor, extensions: [todoItemExtension()] });
+    const editor = await createDocumentEditor();
+    const panel = createReactEditor({ editor, extensions: [todoItemExtension()] });
     const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
-    editorView.slashCommands.execute("type.todo-storage", { blockId: empty });
+    panel.slashCommands.execute("type.todo-storage", { blockId: empty });
     expect(editor.blocks.getBlockNode(empty)?.type).toBe(TODO_STORAGE_BLOCK_TYPE);
 
     const populated = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Keep me",
       children: [{ type: "paragraph", content: "Keep child" }],
-    }, empty).id;
-    expect(() => editorView.slashCommands.execute("type.todo-storage", { blockId: populated }))
+    }, editor.blocks.getInsertionDestinationAfter(empty)).id;
+    expect(() => panel.slashCommands.execute("type.todo-storage", { blockId: populated }))
       .toThrow(/unavailable/);
     expect(editor.blocks.getBlock(populated)).toMatchObject({
       type: "paragraph",
@@ -73,35 +73,35 @@ describe("todoItemExtension", () => {
       TODO_STORAGE_BLOCK_TYPE,
       "paragraph",
     ]);
-    expect(editorView.runtime.blockBehaviors.resolve(empty).dropAxis).toBe("vertical");
+    expect(panel.editor.blockBehaviors.resolve(empty).dropAxis).toBe("vertical");
     expect(editor.blockRegistry.get(TODO_STORAGE_BLOCK_TYPE)?.metadata).toEqual({
       containment: { childOutline: "free", outlineFloor: true },
     });
 
     const firstTodo = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "First" }).id;
-    const nestedTodo = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "Nested" }, firstTodo).id;
+    const nestedTodo = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "Nested" }, editor.blocks.getInsertionDestinationAfter(firstTodo)).id;
     editor.blocks.moveBlocks([firstTodo, nestedTodo], empty, "inside");
-    indentBlocks(editorView, [nestedTodo]);
+    indentBlocks(panel, [nestedTodo]);
     expect(editor.blocks.getParentId(nestedTodo)).toBe(firstTodo);
 
-    editorView.runtime.destroy();
+    panel.editor.destroy();
     editor.destroy();
   });
 
   test("wires a supplied properties modal into the registered renderer", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const CustomModal = (_props: TodoItemPropertiesModalProps) => null;
-    const editorView = createReactEditor({
+    const panel = createReactEditor({
       editor,
       extensions: [todoItemExtension({ propertiesModal: CustomModal })],
     });
-    const Renderer = editorView.runtime.renderers.get(TODO_ITEM_BLOCK_TYPE) as (
+    const Renderer = panel.editor.renderers.get(TODO_ITEM_BLOCK_TYPE) as (
       props: { readonly blockId: string },
     ) => ReactElement<{ readonly propertiesModal: unknown }>;
 
     expect(Renderer({ blockId: "todo" }).props.propertiesModal).toBe(CustomModal);
 
-    editorView.runtime.destroy();
+    panel.editor.destroy();
     editor.destroy();
   });
 });

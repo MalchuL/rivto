@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { useEditorView, type EditorViewApi } from "@chulane/rivto-react";
+import { usePanel, type PanelAPI } from "@chulane/rivto-react";
 import { useCallback, useSyncExternalStore } from "react";
 
 const REVISION_PANEL_CLASS = "revision-panel";
@@ -26,7 +26,7 @@ interface RevisionSnapshot {
   readonly rows: readonly ManagerRevision[];
 }
 
-const snapshots = new WeakMap<EditorViewApi, RevisionSnapshot>();
+const snapshots = new WeakMap<PanelAPI, RevisionSnapshot>();
 
 /**
  * Reads every public manager revision and caches the row list by value.
@@ -34,42 +34,42 @@ const snapshots = new WeakMap<EditorViewApi, RevisionSnapshot>();
  * Returning the previous array when counters are unchanged keeps
  * `useSyncExternalStore` from scheduling a render on every listener fire.
  *
- * @param editorView - Editor view whose managers are inspected.
+ * @param panel - Editor view whose managers are inspected.
  * @returns Stable snapshot of manager names and revision counters.
  */
-function readManagerRevisions(editorView: EditorViewApi): RevisionSnapshot {
+function readManagerRevisions(panel: PanelAPI): RevisionSnapshot {
   const rows: readonly ManagerRevision[] = [
-    { manager: "editor", revision: editorView.runtime.revision },
-    { manager: "blocks", revision: editorView.runtime.blocks.revision },
-    { manager: "renderers", revision: editorView.runtime.renderers.revision },
-    { manager: "keyboard", revision: editorView.keyboard.revision },
-    { manager: "surfaces", revision: editorView.runtime.surfaces.revision },
-    { manager: "extensions", revision: editorView.runtime.extensions.revision },
-    { manager: "slashCommands", revision: editorView.slashCommands.revision },
+    { manager: "editor", revision: panel.editor.document.revision },
+    { manager: "blocks", revision: panel.editor.document.blocks.revision },
+    { manager: "renderers", revision: panel.editor.renderers.revision },
+    { manager: "keyboard", revision: panel.keyboard.revision },
+    { manager: "surfaces", revision: panel.editor.surfaces.revision },
+    { manager: "extensions", revision: panel.editor.extensions.revision },
+    { manager: "slashCommands", revision: panel.slashCommands.revision },
   ];
   const key = rows.map((row) => `${row.manager}:${row.revision}`).join("|");
-  const cached = snapshots.get(editorView);
+  const cached = snapshots.get(panel);
   if (cached?.key === key) return cached;
   const next = { key, rows };
-  snapshots.set(editorView, next);
+  snapshots.set(panel, next);
   return next;
 }
 
 /**
  * Subscribes to every manager stream that owns an independent revision.
  *
- * @param editorView - Editor view whose revision stores are observed.
+ * @param panel - Editor view whose revision stores are observed.
  * @param listener - Callback invoked after any subscribed counter changes.
  * @returns Combined disposer for every subscription.
  */
-function subscribeManagerRevisions(editorView: EditorViewApi, listener: () => void): () => void {
+function subscribeManagerRevisions(panel: PanelAPI, listener: () => void): () => void {
   const stop = [
-    editorView.runtime.subscribe(listener),
-    editorView.runtime.renderers.subscribe(listener),
-    editorView.keyboard.subscribe(listener),
-    editorView.runtime.surfaces.subscribe(listener),
-    editorView.runtime.extensions.subscribe(listener),
-    editorView.slashCommands.subscribe(listener),
+    panel.editor.document.subscribe(listener),
+    panel.editor.renderers.subscribe(listener),
+    panel.keyboard.subscribe(listener),
+    panel.editor.surfaces.subscribe(listener),
+    panel.editor.extensions.subscribe(listener),
+    panel.slashCommands.subscribe(listener),
   ];
   return () => stop.forEach((unsubscribe) => unsubscribe());
 }
@@ -80,15 +80,15 @@ function subscribeManagerRevisions(editorView: EditorViewApi, listener: () => vo
  * @returns Details panel used next to the keyboard-shortcut inventory.
  */
 export function RevisionsPanel() {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const subscribe = useCallback(
-    (listener: () => void) => subscribeManagerRevisions(editorView, listener),
-    [editorView],
+    (listener: () => void) => subscribeManagerRevisions(panel, listener),
+    [panel],
   );
   const snapshot = useSyncExternalStore(
     subscribe,
-    () => readManagerRevisions(editorView),
-    () => readManagerRevisions(editorView),
+    () => readManagerRevisions(panel),
+    () => readManagerRevisions(panel),
   );
 
   return (

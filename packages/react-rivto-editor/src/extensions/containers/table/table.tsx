@@ -24,8 +24,8 @@ import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks
 import { MarkdownContent } from "../../../blocks/markdown/markdown";
 import { Button } from "../../../components/ui/button";
 import { editorControlProps } from "../../../constants";
-import type { EditorViewApi } from "../../../editor-view/types";
-import { useBlockNode, useBlockSelectionAnchor, useEditorRoot, useEditorView } from "../../../hooks";
+import type { PanelAPI } from "../../../panels/types";
+import { useBlockNode, useBlockSelectionAnchor, useEditorRoot, usePanel } from "../../../hooks";
 import { findRenderedBlock, type ReactEditorExtension } from "../../../managers";
 import { TABLE_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE, TABLE_ROW_BLOCK_TYPE, tableBehavior, tableCellBehavior, tableRowBehavior } from "./table-behavior";
 
@@ -136,48 +136,47 @@ function useBlockHost(): { readonly marker: RefObject<HTMLDivElement | null>; re
 
 /**
  * Inserts a same-width row after an existing row in one undo transaction.
- * @param editorView - Active editor view.
+ * @param panel - Active editor view.
  * @param rowId - Existing row that owns the hovered lower boundary.
  * @returns The complete new row, or undefined outside a table.
  */
-export function insertTableRow(editorView: EditorViewApi, rowId: string): EditorBlock | undefined {
-  const tableId = editorView.runtime.blocks.getParentId(rowId);
-  const table = tableId ? editorView.runtime.blocks.getBlock(tableId) : undefined;
+export function insertTableRow(panel: PanelAPI, rowId: string): EditorBlock | undefined {
+  const tableId = panel.blocks.getParentId(rowId);
+  const table = tableId ? panel.blocks.getBlock(tableId) : undefined;
   if (table?.type !== TABLE_BLOCK_TYPE) return undefined;
   const columns = Math.max(1, ...table.children.map((row) => row.children.length));
   const widths = Array.from({ length: columns }, (_, column) => columnWidth(
     table.children.find((row) => row.children[column])?.children[column]?.props.tableColumnWidth,
   ));
   let inserted: EditorBlock | undefined;
-  editorView.runtime.history.batchUpdates(() => {
-    editorView.runtime.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
-    inserted = editorView.runtime.blocks.insertBlock(createTableRowInput(widths), rowId);
+  panel.editor.document.history.batchUpdates(() => {
+    panel.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
+    inserted = panel.blocks.insertBlock(createTableRowInput(widths), panel.blocks.getInsertionDestinationAfter(rowId));
   });
   return inserted;
 }
 
 /**
  * Inserts one cell at the same boundary in every row, preserving a rectangle.
- * @param editorView - Active editor view.
+ * @param panel - Active editor view.
  * @param cellId - Cell that owns the hovered right boundary.
  * @returns Complete inserted cells, or an empty list outside a table.
  */
-export function insertTableColumn(editorView: EditorViewApi, cellId: string): readonly EditorBlock[] {
-  const rowId = editorView.runtime.blocks.getParentId(cellId);
-  const tableId = rowId ? editorView.runtime.blocks.getParentId(rowId) : undefined;
-  const row = rowId ? editorView.runtime.blocks.getBlock(rowId) : undefined;
-  const table = tableId ? editorView.runtime.blocks.getBlock(tableId) : undefined;
+export function insertTableColumn(panel: PanelAPI, cellId: string): readonly EditorBlock[] {
+  const rowId = panel.blocks.getParentId(cellId);
+  const tableId = rowId ? panel.blocks.getParentId(rowId) : undefined;
+  const row = rowId ? panel.blocks.getBlock(rowId) : undefined;
+  const table = tableId ? panel.blocks.getBlock(tableId) : undefined;
   const column = row?.children.findIndex((cell) => cell.id === cellId) ?? -1;
   if (row?.type !== TABLE_ROW_BLOCK_TYPE || table?.type !== TABLE_BLOCK_TYPE || column < 0) return [];
   const width = columnWidth(row.children[column]?.props.tableColumnWidth);
   const inserted: EditorBlock[] = [];
-  editorView.runtime.history.batchUpdates(() => {
-    editorView.runtime.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
+  panel.editor.document.history.batchUpdates(() => {
+    panel.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
     table.children.forEach((tableRow) => {
-      editorView.runtime.blocks.updateBlock(tableRow.id, { listProps: { collapsed: false } });
+      panel.blocks.updateBlock(tableRow.id, { listProps: { collapsed: false } });
       const anchor = tableRow.children[column] ?? tableRow.children.at(-1);
-      const cell = editorView.runtime.blocks.insertBlock(createTableCellInput(width), anchor?.id);
-      if (!anchor) editorView.runtime.blocks.moveBlocks([cell.id], tableRow.id, "inside");
+      const cell = panel.blocks.insertBlock(createTableCellInput(width), anchor ? panel.blocks.getInsertionDestinationAfter(anchor.id) : { parentId: tableRow.id });
       inserted.push(cell);
     });
   });
@@ -186,16 +185,16 @@ export function insertTableColumn(editorView: EditorViewApi, cellId: string): re
 
 /**
  * Resolves every existing cell at one column index.
- * @param editorView - Active editor view.
+ * @param panel - Active editor view.
  * @param tableId - Candidate table block ID.
  * @param column - Zero-based column index.
  * @returns Current cell IDs in row order, or an empty list for invalid input.
  */
-function tableColumnCells(editorView: EditorViewApi, tableId: string, column: number): string[] {
-  const table = editorView.runtime.blocks.getBlockNode(tableId);
+function tableColumnCells(panel: PanelAPI, tableId: string, column: number): string[] {
+  const table = panel.blocks.getBlockNode(tableId);
   return table?.type === TABLE_BLOCK_TYPE && Number.isInteger(column) && column >= 0
     ? table.childIds.flatMap((rowId) => {
-      const cellId = editorView.runtime.blocks.getBlockNode(rowId)?.childIds[column];
+      const cellId = panel.blocks.getBlockNode(rowId)?.childIds[column];
       return cellId ? [cellId] : [];
     })
     : [];
@@ -203,16 +202,16 @@ function tableColumnCells(editorView: EditorViewApi, tableId: string, column: nu
 
 /**
  * Applies a transient column width directly to mounted cells during pointer movement.
- * @param editorView - Active editor view.
+ * @param panel - Active editor view.
  * @param root - Displayed document occurrence containing the mounted cells.
  * @param tableId - Table containing the resized column.
  * @param column - Zero-based column index.
  * @param width - Preview width in CSS pixels.
  * @returns Nothing; persistence happens once when the pointer is released.
  */
-function previewTableColumnWidth(editorView: EditorViewApi, root: HTMLElement | null, tableId: string, column: number, width: number): void {
+function previewTableColumnWidth(panel: PanelAPI, root: HTMLElement | null, tableId: string, column: number, width: number): void {
   if (!root) return;
-  tableColumnCells(editorView, tableId, column).forEach((cellId) => {
+  tableColumnCells(panel, tableId, column).forEach((cellId) => {
     findRenderedBlock(root, cellId)
       ?.style.setProperty(COLUMN_WIDTH_PROPERTY, `${columnWidth(width)}px`);
   });
@@ -220,22 +219,22 @@ function previewTableColumnWidth(editorView: EditorViewApi, root: HTMLElement | 
 
 /**
  * Persists one pixel width across every cell at a table column index.
- * @param editorView - Active editor view.
+ * @param panel - Active editor view.
  * @param tableId - Table whose column should change.
  * @param column - Zero-based column index.
  * @param width - Requested width in CSS pixels.
  * @returns Whether a valid table column was updated.
  */
 export function setTableColumnWidth(
-  editorView: EditorViewApi,
+  panel: PanelAPI,
   tableId: string,
   column: number,
   width: number,
 ): boolean {
-  const cells = tableColumnCells(editorView, tableId, column);
+  const cells = tableColumnCells(panel, tableId, column);
   if (cells.length === 0 || !Number.isFinite(width)) return false;
   const tableColumnWidth = columnWidth(width);
-  editorView.runtime.blocks.updateBlocks(cells.map((id) => ({
+  panel.blocks.updateBlocks(cells.map((id) => ({
     id,
     patch: { props: { tableColumnWidth } },
   })));
@@ -278,19 +277,19 @@ function TableDialog({ block, children }: BlockWrapperProps) {
  * @returns Current row count and maximum cells in any row.
  */
 function useTableDimensions(tableId: string): { readonly rows: number; readonly columns: number } {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const subscribe = useCallback(
-    (listener: () => void) => editorView.runtime.blocks.subscribeStructure(listener),
-    [editorView],
+    (listener: () => void) => panel.blocks.subscribeStructure(listener),
+    [panel],
   );
   const getSnapshot = useCallback(() => {
-    const rowIds = editorView.runtime.blocks.getBlockNode(tableId)?.childIds ?? [];
+    const rowIds = panel.blocks.getBlockNode(tableId)?.childIds ?? [];
     let columns = 0;
     rowIds.forEach((rowId) => {
-      columns = Math.max(columns, (editorView.runtime.blocks.getBlockNode(rowId)?.childIds.length ?? 0));
+      columns = Math.max(columns, (panel.blocks.getBlockNode(rowId)?.childIds.length ?? 0));
     });
     return `${rowIds.length}:${columns}`;
-  }, [tableId, editorView]);
+  }, [tableId, panel]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const separator = snapshot.indexOf(":");
   return {
@@ -324,12 +323,12 @@ export function Table({ blockId }: { readonly blockId: string }) {
  * @returns Row marker and boundary control portal.
  */
 function TableRow({ blockId }: { readonly blockId: string }) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const { marker, host } = useBlockHost();
   return <>
     <div ref={marker} className={ROW_CLASS} />
     {host && createPortal(<Button {...editorControlProps} variant="outline" size="icon-xs" className={`${ADD_ROW_CLASS} ${BOUNDARY_BUTTON_CLASS}`} type="button"
-      aria-label="Add table row below" onClick={() => insertTableRow(editorView, blockId)}><PlusIcon /></Button>, host)}
+      aria-label="Add table row below" onClick={() => insertTableRow(panel, blockId)}><PlusIcon /></Button>, host)}
   </>;
 }
 
@@ -345,21 +344,21 @@ interface ColumnResizeGesture {
 
 /**
  * Locates a cell's table column and current persisted width.
- * @param editorView - Active editor view.
+ * @param panel - Active editor view.
  * @param cellId - Candidate table cell ID.
  * @returns Resize location, or undefined when the cell is no longer in a table.
  */
 function resolveCellColumn(
-  editorView: EditorViewApi,
+  panel: PanelAPI,
   cellId: string,
 ): { readonly tableId: string; readonly column: number; readonly width: number } | undefined {
-  const rowId = editorView.runtime.blocks.getParentId(cellId);
-  const tableId = rowId ? editorView.runtime.blocks.getParentId(rowId) : undefined;
-  const row = rowId ? editorView.runtime.blocks.getBlockNode(rowId) : undefined;
-  const table = tableId ? editorView.runtime.blocks.getBlockNode(tableId) : undefined;
+  const rowId = panel.blocks.getParentId(cellId);
+  const tableId = rowId ? panel.blocks.getParentId(rowId) : undefined;
+  const row = rowId ? panel.blocks.getBlockNode(rowId) : undefined;
+  const table = tableId ? panel.blocks.getBlockNode(tableId) : undefined;
   const column = row?.childIds.indexOf(cellId) ?? -1;
   return row?.type === TABLE_ROW_BLOCK_TYPE && table?.type === TABLE_BLOCK_TYPE && column >= 0
-    ? { tableId: table.id, column, width: columnWidth(editorView.runtime.blocks.getBlockNode(cellId)?.props.tableColumnWidth) }
+    ? { tableId: table.id, column, width: columnWidth(panel.blocks.getBlockNode(cellId)?.props.tableColumnWidth) }
     : undefined;
 }
 
@@ -371,11 +370,11 @@ function resolveCellColumn(
  * @returns Editable cell and boundary control portal.
  */
 function TableCell({ blockId }: { readonly blockId: string }) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const { element: root } = useEditorRoot();
   const { marker, host } = useBlockHost();
   const resize = useRef<ColumnResizeGesture | null>(null);
-  const currentWidth = columnWidth(editorView.runtime.blocks.getBlockNode(blockId)?.props.tableColumnWidth);
+  const currentWidth = columnWidth(panel.blocks.getBlockNode(blockId)?.props.tableColumnWidth);
   /**
    * Starts a column resize from the hovered vertical boundary.
    * @param event - Primary pointer press on the resize separator.
@@ -383,7 +382,7 @@ function TableCell({ blockId }: { readonly blockId: string }) {
    */
   const startColumnResize = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
-    const location = resolveCellColumn(editorView, blockId);
+    const location = resolveCellColumn(panel, blockId);
     if (!location) return;
     event.preventDefault();
     event.stopPropagation();
@@ -407,7 +406,7 @@ function TableCell({ blockId }: { readonly blockId: string }) {
     const gesture = resize.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     gesture.width = columnWidth(gesture.startWidth + event.clientX - gesture.startX);
-    previewTableColumnWidth(editorView, root, gesture.tableId, gesture.column, gesture.width);
+    previewTableColumnWidth(panel, root, gesture.tableId, gesture.column, gesture.width);
   };
   /**
    * Ends pointer capture and optionally persists the previewed width once.
@@ -421,8 +420,8 @@ function TableCell({ blockId }: { readonly blockId: string }) {
     resize.current = null;
     event.currentTarget.removeAttribute("data-resizing");
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    if (commit) setTableColumnWidth(editorView, gesture.tableId, gesture.column, gesture.width);
-    else previewTableColumnWidth(editorView, root, gesture.tableId, gesture.column, gesture.startWidth);
+    if (commit) setTableColumnWidth(panel, gesture.tableId, gesture.column, gesture.width);
+    else previewTableColumnWidth(panel, root, gesture.tableId, gesture.column, gesture.startWidth);
   };
   /**
    * Offers keyboard resizing on the same accessible vertical separator.
@@ -431,12 +430,12 @@ function TableCell({ blockId }: { readonly blockId: string }) {
    */
   const resizeColumnWithKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    const location = resolveCellColumn(editorView, blockId);
+    const location = resolveCellColumn(panel, blockId);
     if (!location) return;
     event.preventDefault();
     event.stopPropagation();
     const direction = event.key === "ArrowRight" ? 1 : -1;
-    setTableColumnWidth(editorView, location.tableId, location.column, location.width + direction * (event.shiftKey ? 50 : 10));
+    setTableColumnWidth(panel, location.tableId, location.column, location.width + direction * (event.shiftKey ? 50 : 10));
   };
   /**
    * Creates a nested writing block while leaving Shift+Enter for cell text.
@@ -448,7 +447,7 @@ function TableCell({ blockId }: { readonly blockId: string }) {
       <MarkdownContent blockId={blockId} />
     </div>
     {host && createPortal(<Button {...editorControlProps} variant="outline" size="icon-xs" className={`${ADD_COLUMN_CLASS} ${BOUNDARY_BUTTON_CLASS}`} type="button"
-      aria-label="Add table column to the right" onClick={() => insertTableColumn(editorView, blockId)}><PlusIcon /></Button>, host)}
+      aria-label="Add table column to the right" onClick={() => insertTableColumn(panel, blockId)}><PlusIcon /></Button>, host)}
     {host && createPortal(<div className={RESIZE_COLUMN_CLASS} role="separator" tabIndex={0}
       aria-label="Resize table column" aria-orientation="vertical"
       aria-valuemin={MIN_COLUMN_WIDTH} aria-valuemax={MAX_COLUMN_WIDTH} aria-valuenow={currentWidth}
@@ -466,8 +465,8 @@ function TableCell({ blockId }: { readonly blockId: string }) {
 export function tableExtension(): ReactEditorExtension {
   return {
     id: "block.table",
-    setup: (editorRuntime) => {
-      editorRuntime.blockTypes.register({
+    setup: (reactEditor) => {
+      reactEditor.blockTypes.register({
         definition: {
           type: TABLE_BLOCK_TYPE,
           title: "Table",
@@ -476,7 +475,7 @@ export function tableExtension(): ReactEditorExtension {
         render: Table,
         behavior: tableBehavior,
       });
-      editorRuntime.blockTypes.register({
+      reactEditor.blockTypes.register({
         definition: {
           type: TABLE_ROW_BLOCK_TYPE,
           title: "Table row",
@@ -485,7 +484,7 @@ export function tableExtension(): ReactEditorExtension {
         render: TableRow,
         behavior: tableRowBehavior,
       });
-      editorRuntime.blockTypes.register({
+      reactEditor.blockTypes.register({
         definition: {
           type: TABLE_CELL_BLOCK_TYPE,
           title: "Table cell",
@@ -494,22 +493,22 @@ export function tableExtension(): ReactEditorExtension {
         render: TableCell,
         behavior: tableCellBehavior,
       });
-      editorRuntime.surfaces.registerBlockWrapper("block", TableCellWidthWrapper);
-      editorRuntime.surfaces.registerBlockWrapper("edgeless", TableCellWidthWrapper);
-      editorRuntime.surfaces.registerBlockWrapper("block", TableDialog);
-      editorRuntime.surfaces.registerBlockWrapper("edgeless", TableDialog);
-      editorRuntime.surfaces.registerBlockSlot({
+      reactEditor.surfaces.registerBlockWrapper("block", TableCellWidthWrapper);
+      reactEditor.surfaces.registerBlockWrapper("edgeless", TableCellWidthWrapper);
+      reactEditor.surfaces.registerBlockWrapper("block", TableDialog);
+      reactEditor.surfaces.registerBlockWrapper("edgeless", TableDialog);
+      reactEditor.surfaces.registerBlockSlot({
         position: "right",
         component: BlockModalButton,
         when: ({ block }) => block.type === TABLE_BLOCK_TYPE,
       });
-      editorRuntime.slashCommands.register({
+      reactEditor.slashCommands.register({
         id: "block.table.insert",
         title: "Table",
         group: "Turn into",
         keywords: ["grid", "rows", "columns", "cells"],
-        isAvailable: ({ blockId }) => editorRuntime.blocks.hasBlock(blockId) && !editorRuntime.blocks.hasChildren(blockId),
-        execute: ({ blockId, editorView }) => { convertLeafToContainer(editorView, blockId, createTableBlockInput()); },
+        isAvailable: ({ blockId }) => reactEditor.document.blocks.hasBlock(blockId) && !reactEditor.document.blocks.hasChildren(blockId),
+        execute: ({ blockId, panel }) => { convertLeafToContainer(panel, blockId, createTableBlockInput()); },
       });
     },
   };

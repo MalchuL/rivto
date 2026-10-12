@@ -14,7 +14,7 @@ import type {
   EditorElementNode,
   EditorElementInput,
   EditorSnapshot,
-  RivtoEditorApi,
+  DocumentEditorAPI,
 } from "@chulane/rivto";
 import { z } from "zod";
 
@@ -227,7 +227,7 @@ function copyElementForReport(element: EditorElementNode): EditorElementNode {
  * @returns Detached snapshot plus report placement from the same live read.
  */
 export function captureBlockReview(
-  editor: RivtoEditorApi,
+  editor: DocumentEditorAPI,
   reviewId: string,
   blocksAbove: number,
   blocksBelow: number,
@@ -297,7 +297,7 @@ export function captureBlockReview(
  * @returns Detached loadable schema-v9 snapshot.
  */
 export function captureElementReviewSnapshot(
-  editor: RivtoEditorApi,
+  editor: DocumentEditorAPI,
   reviewId: string,
   elementsAbove: number,
   elementsBelow: number,
@@ -361,7 +361,7 @@ export function captureElementReviewSnapshot(
 
 
 /** Builds complete canvas roots for the captured subset, promoting children whose parents were omitted. */
-function createReviewSnapshot(_editor: RivtoEditorApi, blocks: EditorBlock[], elements: EditorElementNode[]): EditorSnapshot {
+function createReviewSnapshot(_editor: DocumentEditorAPI, blocks: EditorBlock[], elements: EditorElementNode[]): EditorSnapshot {
   const included = new Set(elements.map((element) => element.id));
   const records = elements.map(({ id, type, childIds, frame, zIndex, props }) => ({
     id, type, childIds: childIds.filter((child) => included.has(child)), frame, zIndex, props,

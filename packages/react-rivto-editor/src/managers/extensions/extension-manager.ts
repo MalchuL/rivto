@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { ReactEditorApi } from "../../editor/types";
 import { RevisionStore } from "../../internal-store";
 import type { ExtensionsApi } from "./api";
 import type {
@@ -30,9 +30,9 @@ export class ExtensionManager implements ExtensionsApi {
   /**
    * Creates the mode-independent extension lifecycle owner.
    *
-   * @param editorRuntime - Owning React runtime supplied during extension setup.
+   * @param reactEditor - Owning React runtime supplied during extension setup.
    */
-  constructor(private readonly editorRuntime: EditorRuntime) {}
+  constructor(private readonly reactEditor: ReactEditorApi) {}
 
   /**
    * Installs the creation-time extension list.
@@ -158,7 +158,7 @@ export class ExtensionManager implements ExtensionsApi {
     this.activeExtensionRegistrations = owned;
     let dispose: RegistrationDisposer = () => undefined;
     try {
-      const cleanup = extension.setup(this.editorRuntime);
+      const cleanup = extension.setup(this.reactEditor);
       dispose = () => {
         let cleanupError: unknown;
         try {

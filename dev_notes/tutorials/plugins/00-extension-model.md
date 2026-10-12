@@ -187,12 +187,12 @@ setup: (editor) => { ... }
 ```
 
 Везде передаётся публичный `RivtoEditorApi`, а не private fields
-`EditorRuntime`. Plugin должен использовать registries и commands, доступные
+`DocumentEditor`. Plugin должен использовать registries и commands, доступные
 через этот contract.
 
 ## 9. Почему `getEditor` в constructor manager — функция
 
-`PluginManager` создаётся внутри constructor `EditorRuntime`, пока runtime ещё
+`PluginManager` создаётся внутри constructor `DocumentEditor`, пока runtime ещё
 инициализируется:
 
 ```ts
@@ -214,7 +214,7 @@ Host вызывает:
 const dispose = editor.use(plugin);
 ```
 
-`EditorRuntime.use()` только делегирует:
+`DocumentEditor.use()` только делегирует:
 
 ```ts
 use(plugin: RivtoPlugin): () => void {

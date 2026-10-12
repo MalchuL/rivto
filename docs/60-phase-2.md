@@ -27,7 +27,7 @@ Level 6. App Shell
   Роутинг, layout приложения, side panels, document switcher, auth, settings.
 ```
 
-Главный ответ: **следующим после `DocumentModel` должен быть `EditorRuntime`**.
+Главный ответ: **следующим после `DocumentModel` должен быть `ReactEditor`**.
 
 ---
 
@@ -79,14 +79,14 @@ document.getLayout(...)
 
 ---
 
-# 2. Следующий уровень: `EditorRuntime`
+# 2. Следующий уровень: `ReactEditor`
 
-`EditorRuntime` — это объект сессии редактирования.
+`ReactEditor` — это объект сессии редактирования.
 
 Он живёт поверх `DocumentModel`.
 
 ```ts
-type EditorRuntime = {
+type ReactEditor = {
   document: DocumentModel
 
   blocks: BlockRegistry
@@ -106,12 +106,12 @@ type EditorRuntime = {
 
 ```txt
 DocumentModel хранит состояние документа.
-EditorRuntime хранит состояние редактора.
+ReactEditor хранит состояние редактора.
 ```
 
 ---
 
-# 3. Что должно быть внутри EditorRuntime
+# 3. Что должно быть внутри ReactEditor
 
 ## 3.1 `BlockRegistry`
 
@@ -307,7 +307,7 @@ keydown Enter
 DocumentModel:
   "Что хранится в документе?"
 
-EditorRuntime:
+ReactEditor:
   "Что сейчас происходит в редакторе?"
 
 Renderer:
@@ -371,7 +371,7 @@ AI returns DocumentPatch
 
 # 5. Где находится `defineBlock`
 
-`defineBlock` я бы поставил между `DocumentModel` и `EditorRuntime`.
+`defineBlock` я бы поставил между `DocumentModel` и `ReactEditor`.
 
 Формально это часть **Editor Runtime definition layer**.
 
@@ -382,7 +382,7 @@ DocumentModel
 BlockRegistry / defineBlock
   объясняет runtime, что такое "callout"
 
-EditorRuntime
+ReactEditor
   использует registry для commands/plugins/rendering
 ```
 
@@ -409,10 +409,10 @@ BlockRegistry:
 
 # 6. Минимальный следующий слой
 
-Я бы начал не со всех plugins, а с вот такого минимального `EditorRuntime`:
+Я бы начал не со всех plugins, а с вот такого минимального `ReactEditor`:
 
 ```ts
-type EditorRuntime = {
+type ReactEditor = {
   document: DocumentModel
 
   blocks: BlockRegistry
@@ -492,4 +492,4 @@ type EditorRuntime = {
 
 Если совсем коротко:
 
-**Следующий уровень после `DocumentModel` — `EditorRuntime`, но перед полноценным runtime тебе нужен `BlockRegistry/defineBlock` как semantic layer, который объясняет редактору, что означают типы блоков из DocumentModel.**
+**Следующий уровень после `DocumentModel` — `ReactEditor`, но перед полноценным runtime тебе нужен `BlockRegistry/defineBlock` как semantic layer, который объясняет редактору, что означают типы блоков из DocumentModel.**

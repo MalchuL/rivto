@@ -1,10 +1,21 @@
-import type { RivtoEditorApi } from "@chulane/rivto";
-import type { BlockRenderer, KeymapOverrides, ReactEditorExtension } from "../managers/index";
+import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { BlockRenderer, ClipboardFormatRegistry, ClipboardManager, EventManager, KeyboardManager, KeymapOverrides, ReactEditorExtension, SlashCommandRegistry } from "../managers";
+import type { DocumentModel } from "@chulane/document-model";
+import type { BlockReference, BlockResolution } from "../extensions/embedding/types";
+import type { BlockElementProjection } from "../elements/block-element-projection";
+import type { CreateDefaultBlock, IsEmptyBlock } from "../extensions/built-ins/page/default-writing-block/types";
+import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
+import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
+import type { BlockTypesApi } from "../managers/blocks/block-types-api";
+import type { RenderersApi } from "../managers/blocks/renderers-api";
+import type { PanelRegistry } from "../managers/events/panel-registry";
+import type { ExtensionsApi } from "../managers/extensions/api";
+import type { SurfacesApi } from "../managers/surfaces/api";
 
 /** Creation options for the React presentation runtime. */
-export interface CreateEditorRuntimeOptions {
+export interface CreateReactEditorOptions {
   /** Existing fixed document editor; the caller or EditorStorage owns its destruction. */
-  readonly editor: RivtoEditorApi;
+  readonly editor: DocumentEditorAPI;
   /** Functional extensions installed synchronously in declaration order. */
   readonly extensions?: readonly ReactEditorExtension[];
   /** Stable binding-ID overrides; empty arrays disable matching bindings. */
@@ -13,3 +24,142 @@ export interface CreateEditorRuntimeOptions {
   readonly unknownBlockRenderer?: BlockRenderer;
 }
 
+/** Loading and construction policies; returned models become storage-owned. */
+export interface EditorStorageOptions {
+  /** Loads a model for this identity; defaults to creating an empty Yjs document. */
+  readonly openDocument?: (documentId: string) => Promise<DocumentModel>;
+  /**
+   * Configures the supplied storage-owned core's definitions, defaults, and commands
+   * and returns a React runtime wrapping that same core. Defaults to createReactEditor.
+   * Storage creates and disposes the core; this callback must not replace it.
+   */
+  readonly createEditor?: (editor: DocumentEditorAPI) => ReactEditorApi;
+  /** Lists containing document IDs from application metadata without acquiring their content; ordinary edits never invoke it. */
+  readonly lookupDocumentIds?: (blockId: string, options: { readonly signal?: AbortSignal }) => Promise<readonly string[]>;
+  /** Replaces preferred-document-first resolution; receives the persisted address and never changes its props. */
+  readonly resolveBlock?: (reference: BlockReference, options: { readonly signal?: AbortSignal }) => Promise<BlockResolution>;
+  /** Optional registry metadata notifications used to retry unresolved embedding locations. */
+  readonly subscribeDocumentIds?: (listener: () => void) => () => void;
+  /** Reports asynchronous release failures from view cleanup. */
+  readonly onError?: (error: unknown) => void;
+}
+
+/**
+ * One retained reference to a shared runtime and its document model.
+ *
+ * Every successful acquireEditor call returns its own release function. Releasing
+ * one acquisition leaves the others intact. Repeated release calls reuse the same
+ * promise and do not decrement the consumer count again. The final release destroys
+ * the React editor, core, and model when the final acquisition is released.
+ */
+export interface EditorAcquisition {
+  readonly editor: ReactEditorApi;
+  readonly document: DocumentModel;
+  /** Releases this consumer once; closes runtime, core, and model only when no consumer remains. */
+  release(): Promise<void>;
+}
+
+export interface Entry {
+  consumers: number;
+  pending: Promise<ReactEditorApi>;
+  editor?: ReactEditorApi;
+  core?: DocumentEditorAPI;
+  closing?: Promise<void>;
+}
+
+/** Shared React registrations around one document; occurrence operations belong to PanelAPI. */
+export interface ReactEditorApi {
+  /** Framework-neutral core permanently bound to this document and its managers.
+   * Document managers provide the following shared capabilities:
+   * Creates and updates document elements, including canvas objects, through the core element manager.
+   * The underlying core editor is exposed through document; every view uses this same manager.
+   * Named core commands registered and invoked by extensions.
+   * The manager is shared by all views without exposing the underlying core editor.
+   * Core undo/redo history and synchronous transaction batching for this editor.
+   * All views of the document share this local history; other editors keep their own.
+   * Guarded mutations and delegated core block operations.
+   * Model selection shared by occurrences; DOM adapters belong to each PanelAPI.
+   */
+  readonly document: DocumentEditorAPI;
+  /** Creates input for an empty writing block using the installed writing extension.
+   *
+   * Enter, trailing insertion, separators, and clipboard operations share this factory.
+   * The host configures it through {@link installDefaultWriting}.
+   *
+   * Throws until {@link installDefaultWriting} runs.
+   */
+  readonly createDefaultBlock: CreateDefaultBlock;
+  /** Checks whether a block is an empty writing block according to the installed extension.
+   *
+   * Enter outdent, list reset, and related operations share this predicate.
+   * The host configures it through {@link installDefaultWriting}.
+   *
+   * Throws until {@link installDefaultWriting} runs.
+   */
+  readonly isEmptyBlock: IsEmptyBlock;
+  /** Content renderers indexed by persisted block type. */
+  readonly renderers: RenderersApi;
+  /** Per-type outline and drop behavior resolved by page dispatchers. */
+  readonly blockBehaviors: BlockBehaviorsApi;
+  /** Atomic React block-type and presentation registration. */
+  readonly blockTypes: BlockTypesApi;
+  /** Registers list-property validation and keyboard behavior with the core policy manager.
+   * Registrations are removed when their React extension is disposed. */
+  readonly blockListProps: BlockListPropsApi;
+  /** React-owned portable clipboard formatter and parser registry. */
+  readonly clipboardFormats: ClipboardFormatRegistry;
+  /** Structured document operations; view-dependent paste receives its destination explicitly. */
+  readonly clipboard: ClipboardManager;
+  /** Core paste strategies extended by React clipboard integrations. */
+  readonly pasteStrategies: DocumentEditorAPI["clipboard"]["pasteStrategies"];
+  /** Root surfaces and their ordered block/editor wrappers. */
+  readonly surfaces: SurfacesApi;
+  /** Extension setup, mounted UI, registration ownership, and cleanup. */
+  readonly extensions: ExtensionsApi;
+  /** Delegated surface/document/window DOM event runtime. */
+  readonly events: EventManager;
+  /** Mounted occurrences and explicit active/default view lookup. */
+  readonly panels: PanelRegistry;
+  /** Semantic keyboard bindings and runtime keymap overrides. */
+  readonly keyboard: KeyboardManager;
+  /** React-owned slash-command registry. */
+  readonly slashCommands: SlashCommandRegistry;
+  /** Maintains the document's block elements and their default canvas geometry.
+   * Mounted surfaces share this projection instead of rebuilding it independently. */
+  readonly blockElements: BlockElementProjection;
+  /**
+   * Keeps a block-card projection active while views display the same pair of roots.
+   * No container is created for null: those views share document element roots.
+   * Missing roots leave their stored data intact so undo can restore the view.
+   * Projection subscriptions are shared by all consumers of the pair and released
+   * when the last view disconnects; the null/null projection follows runtime lifetime.
+   * @param rootBlockId - Block whose direct children are displayed, or null for document roots.
+   * @param rootElementId - Element container whose descendants are displayed, or null for all elements.
+   * @returns Idempotent release function for this consumer.
+   */
+  acquirePanel(rootBlockId: string | null, rootElementId: string | null): () => void;
+  /**
+   * Installs writing factories used by keyboard, trailing, separator, and clipboard paths.
+   *
+   * Called by `defaultWritingBlockExtension` to configure empty writing blocks
+   * for all rendered occurrences of this document.
+   * @param options - Replacement factories for empty writing blocks.
+   * @returns Disposer that restores the previous factories.
+   */
+  installDefaultWriting(options: {
+    createDefaultBlock: CreateDefaultBlock;
+    isEmptyBlock: IsEmptyBlock;
+  }): () => void;
+  /**
+   * Releases React managers while the lifecycle owner retains the core and document.
+   *
+   * Selection restoration is cancelled while its extension dependencies remain
+   * available. ExtensionManager then runs extension cleanup and owned registrations.
+   * Event listeners are detached through the existing manager registrations. All
+   * runtime disposers run even if cleanup fails, with errors reported afterward.
+   * Document/model disposal belongs to EditorStorage or the caller. Close the core
+   * after this synchronous React cleanup, then await model destruction before
+   * destroying the application's document registry and provider metadata.
+   */
+  destroy(): void;
+}

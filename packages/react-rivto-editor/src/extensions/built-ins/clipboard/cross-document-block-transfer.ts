@@ -1,11 +1,13 @@
 import type {
+  DocumentEditorAPI,
   EditorBlock,
   EditorBlockInput,
 } from "@chulane/rivto";
-import type { EditorRuntime } from "../../../editor/editor-runtime";
+import type { PanelAPI } from "../../../panels/types";
+import type { ReactEditorApi } from "../../../editor/types";
 
 /** Document operations required by transfer; accepts core, runtime, and view editors. */
-type BlockTransferEditor = Pick<EditorRuntime, "blocks" | "history" | "getDocument">;
+type BlockTransferEditor = Pick<DocumentEditorAPI, "blocks" | "history" | "getDocument">;
 
 /** Destination used by a cross-document page drag. */
 export interface CrossDocumentBlockTransferPlacement {
@@ -81,11 +83,20 @@ function getTransferBlocks(
  * @throws If the models match, IDs collide, a block is missing, or destination preparation/insertion fails.
  */
 export function crossDocumentBlockTransfer(
-  source: BlockTransferEditor,
-  destination: BlockTransferEditor,
+  sourceInput: BlockTransferEditor | Pick<ReactEditorApi, "document"> | PanelAPI,
+  destinationInput: BlockTransferEditor | Pick<ReactEditorApi, "document"> | PanelAPI,
   rootIds: readonly string[],
   placement: CrossDocumentBlockTransferPlacement,
 ): void {
+  const source = "getDocument" in sourceInput ? sourceInput : sourceInput.document;
+  const destination = "getDocument" in destinationInput ? destinationInput : destinationInput.document;
+  const sourcePanel = "editor" in sourceInput ? sourceInput : undefined;
+  const destinationPanel = "editor" in destinationInput ? destinationInput : undefined;
+  if (sourcePanel && rootIds.some(id => !sourcePanel.blocks.canRemove(id))) throw new Error("Source block is outside panel or protected");
+  if (destinationPanel && placement.targetId !== null) {
+    const container = placement.position === "inside" && placement.targetId === destinationPanel.rootBlockId;
+    if (!container && (!destinationPanel.blocks.hasBlock(placement.targetId) || (placement.position !== "inside" && !destinationPanel.blocks.canRemove(placement.targetId)))) throw new Error("Destination is outside panel or protected");
+  }
   const destinationDocument = destination.getDocument();
   const blocks = getTransferBlocks(source, destination, rootIds, placement);
   const prepared = destination.blocks.prepareInput(blocks);
@@ -95,11 +106,14 @@ export function crossDocumentBlockTransfer(
   if (sourceIds.size !== preparedIds.size || [...sourceIds].some((id) => !preparedIds.has(id))) {
     throw new Error("Transfer preparation must preserve block IDs");
   }
+  let insertion = { parentId: destinationPanel?.rootBlockId ?? null } as import("@chulane/document-model").BlockDestination;
+  if (placement.targetId !== null) {
+    if (placement.position === "inside") insertion = { parentId: placement.targetId };
+    else if (placement.position === "before") insertion = { parentId: destination.blocks.getParentId(placement.targetId)!, beforeId: placement.targetId };
+    else insertion = destination.blocks.getInsertionDestinationAfter(placement.targetId);
+  }
   destination.history.batchUpdates(() => {
-    const insertedIds = prepared.map((block) => destinationDocument.blocks.insertBlock(block).id);
-    if (placement.targetId !== null) {
-      destination.blocks.moveBlocks(insertedIds, placement.targetId, placement.position);
-    }
+    prepared.forEach(block => destinationDocument.blocks.insertBlock(block, insertion));
   });
   source.history.batchUpdates(() => {
     rootIds.forEach((id) => source.blocks.removeBlock(id));

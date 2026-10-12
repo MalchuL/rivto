@@ -175,7 +175,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
 
   await page.evaluate(({ movingId, targetId }) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, targetId, "before");
   }, { movingId: nextId, targetId: startId });
@@ -186,7 +186,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
 
   await page.evaluate((blockId) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     editor.blocks.updateBlock(blockId, { listProps: { type: "numbered_list" } });
   }, gapId);
@@ -196,32 +196,32 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
 
   const nested = await page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     const leftParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered left parent" }).id;
     const leftStart = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested left one",
       listProps: { type: "start_numbered_list" },
-    }, leftParent).id;
+    }, editor.blocks.getInsertionDestinationAfter(leftParent)).id;
     editor.blocks.indentBlock(leftStart);
     const leftNext = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested left two",
       listProps: { type: "numbered_list" },
-    }, leftStart).id;
+    }, editor.blocks.getInsertionDestinationAfter(leftStart)).id;
     const rightParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered right parent" }).id;
     const rightStart = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested right one",
       listProps: { type: "start_numbered_list" },
-    }, rightParent).id;
+    }, editor.blocks.getInsertionDestinationAfter(rightParent)).id;
     editor.blocks.indentBlock(rightStart);
     const rightNext = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Nested right two",
       listProps: { type: "numbered_list" },
-    }, rightStart).id;
+    }, editor.blocks.getInsertionDestinationAfter(rightStart)).id;
     return { leftParent, leftStart, leftNext, rightParent, rightNext };
   });
   const nestedNext = page.locator(blockIdSelector(nested.leftNext));
@@ -229,7 +229,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
 
   await page.evaluate(({ movingId, targetId }) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, targetId, "before");
   }, { movingId: nested.leftNext, targetId: nested.leftStart });
@@ -240,7 +240,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
 
   await page.evaluate(({ movingId, parentId }) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, parentId, "inside");
   }, { movingId: nested.leftNext, parentId: nested.rightParent });

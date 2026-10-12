@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../../editor/editor-runtime";
+import type { ReactEditorApi } from "../../../../editor/types";
 /**
  * Runtime registration for the host-provided default writing block.
  *
@@ -15,12 +15,12 @@ import { resolveIsEmptyBlock } from "./utils";
 /**
  * Installs writing factories, rendering, and slash conversion.
  *
- * @param editorRuntime - Runtime receiving the writing-block registration.
+ * @param reactEditor - Runtime receiving the writing-block registration.
  * @param options - Host-provided writing-block configuration.
  * @returns Cleanup for every installed writing-block facility.
  */
 export function registerDefaultWritingBlock(
-  editorRuntime: EditorRuntime,
+  reactEditor: ReactEditorApi,
   options: DefaultWritingBlockOptions,
 ): () => void {
   const type = options.type ?? DEFAULT_WRITING_BLOCK_TYPE;
@@ -38,8 +38,8 @@ export function registerDefaultWritingBlock(
     ?? (options.onMarkdownLinkClick
       ? (props) => createElement(MarkdownContent, { ...props, onLinkClick: options.onMarkdownLinkClick })
       : MarkdownContent);
-  const restoreWriting = editorRuntime.installDefaultWriting({ createDefaultBlock, isEmptyBlock });
-  const unregisterBlock = editorRuntime.blockTypes.register({
+  const restoreWriting = reactEditor.installDefaultWriting({ createDefaultBlock, isEmptyBlock });
+  const unregisterBlock = reactEditor.blockTypes.register({
     definition: { type, title },
     render,
     slashCommand,

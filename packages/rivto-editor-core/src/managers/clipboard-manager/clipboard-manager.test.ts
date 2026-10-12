@@ -1,11 +1,11 @@
 /** Clipboard operations retain hierarchy and handle text ranges explicitly. */
-import { createTestEditor as createRivtoEditor, createStructuralSelection, testCaret, testRange } from "../../editor/test-utils";
+import { createTestEditor as createDocumentEditor, createStructuralSelection, testCaret, testRange } from "../../editor/test-utils";
 import { PasteStrategyRegistry } from "./strategies";
 import { CLIPBOARD_BUNDLE_VERSION } from "./clipboard-data";
 
 describe("core ClipboardManager", () => {
   it("replaces an explicit reverse text range atomically", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "BeforeAfter",
       children: [{ type: "paragraph", content: "Keep child" }] }).id;
     const textTarget = testRange(editor, { blockId: id, offset: 6 }, { blockId: id, offset: 0 });
@@ -29,9 +29,9 @@ describe("core ClipboardManager", () => {
   });
 
   it("copies overlapping offsets as empty text and still pastes at the clamped caret", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
-    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, first).id;
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     const crossBlock = testRange(editor, { blockId: first, offset: 2 }, { blockId: last, offset: 1 });
     expect(editor.clipboard.copyText(crossBlock)?.blocks.map((block) => block.content)).toEqual(["rst", "L"]);
     const textTarget = testRange(editor, { blockId: first, offset: 0 }, { blockId: first, offset: 99 });
@@ -43,7 +43,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("imports older partial-text bundles with multiple blocks into an explicit target", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "LeftRight" }).id;
     const bundle = { version: CLIPBOARD_BUNDLE_VERSION, fromTextSelection: true, blocks: ["First", "Middle", "Last"].map((content) => ({
       id: content, type: "paragraph", content, props: {}, listProps: {}, pluginData: {}, children: [],
@@ -58,7 +58,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("copies and atomically cuts the current structured selection", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Selected" }).id;
     editor.selection.set(createStructuralSelection([id], id, id));
     const updates = jest.fn();
@@ -77,7 +77,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("preserves copied hierarchy in the structured bundle", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const first = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Root <one>\nline",
@@ -88,7 +88,7 @@ describe("core ClipboardManager", () => {
       }],
     }).id;
     editor.blocks.updateBlock(first, { listProps: { collapsed: true } });
-    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first).id;
+    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     editor.selection.set(createStructuralSelection([first, second], first, second));
 
     const payload = editor.clipboard.copy()!;
@@ -102,7 +102,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("trims copied text in the structured bundle", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     editor.blockRegistry.defineBlock({ type: "test.raw" });
     const id = editor.blocks.insertBlock({ type: "test.raw", content: "Selected text" }).id;
     const textTarget = testRange(editor, { blockId: id, offset: 0 }, { blockId: id, offset: 8 });
@@ -115,12 +115,12 @@ describe("core ClipboardManager", () => {
   });
 
   it("does not interpret extension-owned list properties", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const start = editor.blocks.insertBlock({ type: "paragraph", content: "One", listProps: { type: "start_numbered_list" } }).id;
-    const next = editor.blocks.insertBlock({ type: "paragraph", content: "Two", listProps: { type: "numbered_list" } }, start).id;
-    const gap = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, next).id;
-    const task = editor.blocks.insertBlock({ type: "paragraph", content: "Done", listProps: { type: "checkbox", checked: true } }, gap).id;
-    const resume = editor.blocks.insertBlock({ type: "paragraph", content: "Three", listProps: { type: "continue_numbered_list" } }, task).id;
+    const next = editor.blocks.insertBlock({ type: "paragraph", content: "Two", listProps: { type: "numbered_list" } }, editor.blocks.getInsertionDestinationAfter(start)).id;
+    const gap = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, editor.blocks.getInsertionDestinationAfter(next)).id;
+    const task = editor.blocks.insertBlock({ type: "paragraph", content: "Done", listProps: { type: "checkbox", checked: true } }, editor.blocks.getInsertionDestinationAfter(gap)).id;
+    const resume = editor.blocks.insertBlock({ type: "paragraph", content: "Three", listProps: { type: "continue_numbered_list" } }, editor.blocks.getInsertionDestinationAfter(task)).id;
     editor.selection.set(createStructuralSelection([start, next, gap, task, resume], start, resume));
 
     const payload = editor.clipboard.copy()!;
@@ -131,7 +131,7 @@ describe("core ClipboardManager", () => {
       { listProps: { type: "checkbox", checked: true } },
       { listProps: { type: "continue_numbered_list" } },
     ]);
-    const target = await createRivtoEditor();
+    const target = await createDocumentEditor();
     target.clipboard.paste({ bundle: payload, placement: { mergeText: false } });
     expect(target.blocks.getBlocks()).toMatchObject([
       { listProps: { type: "start_numbered_list" } },
@@ -145,13 +145,13 @@ describe("core ClipboardManager", () => {
   });
 
   it("prefers structured data over plain text", async () => {
-    const source = await createRivtoEditor();
+    const source = await createDocumentEditor();
     const copiedId = source.blocks.insertBlock({ type: "paragraph", content: "Structured" }).id;
     source.selection.set(createStructuralSelection([copiedId]));
     const payload = source.clipboard.copy()!;
     expect(payload.version).toBe(4);
 
-    const target = await createRivtoEditor();
+    const target = await createDocumentEditor();
     const targetId = target.blocks.insertBlock({ type: "paragraph", content: "" }).id;
     const textTarget = testCaret(targetId, 0);
     target.clipboard.paste({
@@ -179,7 +179,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("recovers one invalid structured block during its only preparation pass", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     let processorRuns = 0;
     editor.blocks.registerProcessor({
       id: "test.count-preparation",
@@ -216,14 +216,14 @@ describe("core ClipboardManager", () => {
   });
 
   it("places paste after a selected parent when focus ends on its nested child", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const parent = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Parent",
       children: [{ type: "paragraph", content: "Child" }],
     }).id;
     const child = editor.blocks.getBlockNode(parent)!.childIds[0]!;
-    const tail = editor.blocks.insertBlock({ type: "paragraph", content: "Tail" }, parent).id;
+    const tail = editor.blocks.insertBlock({ type: "paragraph", content: "Tail" }, editor.blocks.getInsertionDestinationAfter(parent)).id;
     editor.selection.set(createStructuralSelection([parent, child], parent, child));
 
     editor.clipboard.paste({
@@ -250,14 +250,14 @@ describe("core ClipboardManager", () => {
   });
 
   it("restores original block IDs when pasting a cut bundle", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const first = editor.blocks.insertBlock({
       type: "paragraph",
       content: "First",
       children: [{ type: "paragraph", content: "Nested" }],
     }).id;
     const child = editor.blocks.getBlock(first)!.children[0]!.id;
-    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first).id;
+    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     editor.selection.set(createStructuralSelection([first, second], first, second));
 
     const payload = editor.clipboard.cut()!;
@@ -271,9 +271,9 @@ describe("core ClipboardManager", () => {
   });
 
   it("remints IDs when originals still exist in the destination", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
-    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first).id;
+    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     editor.selection.set(createStructuralSelection([first, second], first, second));
     let importedIds: ReadonlyMap<string, string> | undefined;
     editor.clipboard.pasteStrategies.register("test.observe-import", {
@@ -301,7 +301,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("passes element import identities to later paste strategies", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const selection = { type: "selection" as const, blocks: [], pluginData: { test: true } };
     const elementIdMap = new Map([["source-element", "pasted-element"]]);
     let observed: ReadonlyMap<string, string> | undefined;
@@ -324,7 +324,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("remints IDs when pasting the same cut bundle a second time", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Twice" }).id;
     editor.selection.set(createStructuralSelection([id], id, id));
 
@@ -340,7 +340,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("preserves multiline plain text inside one block when requested", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Before " }).id;
     const textTarget = testCaret(id, 7);
 
@@ -357,7 +357,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("does not claim the clipboard for a collapsed caret", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Hello" }).id;
     const textTarget = testCaret(id, 2);
 
@@ -368,7 +368,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("copies and deletes an explicitly selected empty block", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
     editor.selection.set(createStructuralSelection([id]));
 
@@ -379,7 +379,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("marks a prefix range as text and merges it into the destination", async () => {
-    const source = await createRivtoEditor();
+    const source = await createDocumentEditor();
     const sourceId = source.blocks.insertBlock({ type: "paragraph", content: "Hello" }).id;
     const bundle = source.clipboard.copyText(testRange(
       source,
@@ -388,7 +388,7 @@ describe("core ClipboardManager", () => {
     ))!;
     expect(bundle.fromTextSelection).toBe(true);
 
-    const target = await createRivtoEditor();
+    const target = await createDocumentEditor();
     const targetId = target.blocks.insertBlock({ type: "paragraph", content: "AB" }).id;
     target.clipboard.paste({ bundle, textTarget: testCaret(targetId, 1) });
     expect(target.blocks.getBlockNode(targetId)?.content).toBe("AHelB");
@@ -397,7 +397,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("rejects cyclic structured clipboard input and no-ops without a text fallback", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Kept" }).id;
     const cyclic = {
       id: "cycle",
@@ -419,7 +419,7 @@ describe("core ClipboardManager", () => {
   });
 
   it("inserts a mergeable bundle as blocks when mergeText is false", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Host" }).id;
     editor.clipboard.paste({
       textTarget: testCaret(id, 2),

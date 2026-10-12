@@ -46,7 +46,7 @@ React adapter не вызывает `editor.history.undo()` напрямую. Э
 
 ## 3. Регистрация handler
 
-Во время создания `EditorRuntime` вызывается
+Во время создания `DocumentEditor` вызывается
 `registerBuiltInCommands()`. Там есть:
 
 ```ts
@@ -170,9 +170,9 @@ Y.Doc изменился
     ↓
 DocumentModelImpl subscription
     ↓
-EditorRuntime.reconcileSelection()
+DocumentEditor.reconcileSelection()
     ↓
-EditorRuntime.changed()
+DocumentEditor.changed()
     ↓
 revision увеличился
     ↓
@@ -185,7 +185,7 @@ Undo manager не вызывает React и не знает о компонен�
 
 ## 9. Keyboard shortcut идёт тем же путём
 
-`EditorRuntime.handleKeydown()` проверяет:
+`DocumentEditor.handleKeydown()` проверяет:
 
 ```ts
 if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {

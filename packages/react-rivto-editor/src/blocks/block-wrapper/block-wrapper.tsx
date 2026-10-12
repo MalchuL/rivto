@@ -16,7 +16,7 @@ import {
   type ReactNode,
   type RefCallback,
 } from "react";
-import { useEditorView } from "../../hooks";
+import { usePanel } from "../../hooks";
 
 /**
  * Stable slots used by BlockTree to render one block shell.
@@ -147,9 +147,9 @@ export function BlockWrapper({
   isSelected,
   ...slots
 }: BlockWrapperSlotProps) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const mode = useContext(SurfaceContext);
-  const wrappers = editorView.runtime.surfaces.getBlockWrappers(mode);
+  const wrappers = panel.editor.surfaces.getBlockWrappers(mode);
   let result: ReactNode = (
     <Fallback block={block} isSelected={isSelected} {...slots} />
   );

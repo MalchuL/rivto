@@ -1,10 +1,6 @@
 import { useEffect, useRef } from "react";
-import { useEditorView } from "../../editor-view/use-editor-view";
-import type {
-  EditorEventHandler,
-  KeyboardEditorEvent,
-  KeyboardEventDefinition,
-} from "../../managers";
+import { usePanel } from "./use-panel";
+import type { EditorEventHandler, KeyboardEditorEvent, KeyboardEventDefinition } from "../../managers";
 
 /**
  * Registers one declarative shortcut while keeping React state closures fresh.
@@ -20,7 +16,7 @@ export function useKeyboardEvent(
   binding: KeyboardEventDefinition,
   listener: EditorEventHandler<KeyboardEditorEvent>,
 ): void {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const bindingRef = useRef(binding);
   const listenerRef = useRef(listener);
   bindingRef.current = binding;
@@ -29,11 +25,11 @@ export function useKeyboardEvent(
   const mode = binding.mode;
   const modeKey = Array.isArray(mode) ? mode.join("\u0000") : mode;
 
-  useEffect(() => editorView.keyboard.register({
+  useEffect(() => panel.keyboard.register({
     ...bindingRef.current,
     when: (event) => bindingRef.current.when?.(event) ?? true,
   }, (event) => listenerRef.current(event)), [
-    editorView,
+    panel,
     binding.id,
     keys,
     binding.phase,

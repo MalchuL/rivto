@@ -1,6 +1,6 @@
 # Selection reconciliation и revision
 
-Selection является local runtime state. Remote updates, undo, direct document calls  могут сделать её endpoints недействительными, поэтому `EditorRuntime` reconciles selection с актуальным block tree.
+Selection является local runtime state. Remote updates, undo, direct document calls  могут сделать её endpoints недействительными, поэтому `ReactEditor` reconciles selection с актуальным block tree.
 
 ## Приватный `reconcileDocumentSelection()`
 
@@ -53,7 +53,7 @@ Selection changes уведомляют только `selection.subscribe()`; `ed
 
 ### Presentation
 
-Single editor хранит локальный mode в `editor.mode`; EditorStorage не имеет общего mode.
+Mode принадлежит React-панели через `panel.mode`; DocumentEditorAPI и EditorStorage не имеют mode.
 Изменение mode увеличивает revision и разделяет history captures без document mutation.
 React host подписывается через `useEditorMode()` и выбирает surface через JSX.
 Selection принадлежит core документа; отображаемую subtree boundary и DOM
@@ -79,7 +79,7 @@ const unsubscribe = editor.subscribe(() => {
 
 ## Что не вызывает revision само по себе
 
-Successful arbitrary command execution обновляет state `CommandRegistry`, но `EditorRuntime` не подписан на registry command-executed events. Revision изменится только если command также изменил document или block registry.
+Successful arbitrary command execution обновляет state `CommandRegistry`, но `ReactEditor` не подписан на registry command-executed events. Revision изменится только если command также изменил document или block registry.
 
 ## Direction examples
 

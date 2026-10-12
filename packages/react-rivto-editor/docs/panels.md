@@ -1,6 +1,8 @@
 # Panels and element roots
 
-A Panel is an application-owned navigation record:
+A panel displays the full document or a selected subtree. Applications may keep
+a navigation record alongside it; this example type belongs to the host and is not
+exported by the editor:
 
 ```ts
 interface Panel {
@@ -19,19 +21,24 @@ creates a hidden group or another stored entity. The two roots are independent.
 ```tsx
 const panel: Panel = {
   id: crypto.randomUUID(),
-  documentId: runtime.getDocument().id,
+  documentId: runtime.document.getDocument().id,
   rootBlockId: sectionId,
   rootElementId: null,
 };
 
-<EditorPanel runtime={runtime} panel={panel} onOpenBlock={({ blockId }) => open(blockId)}>
+<EditorPanel
+  editor={runtime}
+  rootBlockId={panel.rootBlockId ?? undefined}
+  rootElementId={panel.rootElementId}
+  onOpenBlock={open}
+>
   <PageSurface />
 </EditorPanel>
 ```
 
 The host owns navigation, titles, Panel persistence, and runtime lifetime.
-EditorPanel validates document identity. Missing block roots show the deleted-block
-state; missing element roots read as empty rather than falling back to document
+The host supplies the editor belonging to its navigation record. A missing block
+root stays loading until first observed, then shows the deleted-block state if removed; missing element roots read as empty rather than falling back to document
 roots. Undo can restore both data and layout. Panel-local mode defaults to a separate
 ModeManager; the host can pass `mode` to retain or explicitly share its state.
 
@@ -44,11 +51,16 @@ its ID as rootElementId. Multiple Panels can also intentionally share that group
 Deleting a Panel navigation record does not delete document elements. Removing its
 element container explicitly removes that subtree through normal element commands.
 
-`runtime.elements` exposes document-wide commands. `runtime.elements.forRoot(id)`
-returns a stable handle restricted to the container's descendants; `forRoot(null)`
-selects the whole document. Reads exclude the container, insertion appends to its
-children, and writes reject existing targets outside the subtree. A null destination
-parent in a scoped move means that handle's root, not an escape to document roots.
+`editor.document.elements` exposes document-wide commands. `usePanel().elements`
+is the handle restricted to the selected container's descendants. Reads exclude the
+container, insertion appends to its children, and writes reject existing outside targets.
+Use `{ root: true }` for that panel's root list and `{ parentId }` for an included parent.
+The core element manager has no `forRoot` method or root arguments; actual document
+roots use `{ parentId: null }` in document-wide operations.
+
+`EditorPanel` displays the selected block’s children. `EditorEmbed` requires
+rootBlockId and displays that block together with its descendants, protecting the
+root itself from removal and movement. Both accept an independent rootElementId. No public scope is passed around.
 
 ## Reconciliation and navigation
 
@@ -101,7 +113,7 @@ without children still require geometry. Child coordinates stay relative
 to the canvas, including inside nested groups.
 
 ```ts
-const group = runtime.elements.forRoot(rootElementId).insertElement({
+const group = usePanel().elements.insertElement({
   type: "group",
   zIndex: 1,
   children: [

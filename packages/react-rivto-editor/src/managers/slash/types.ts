@@ -1,9 +1,9 @@
-import type { EditorViewApi } from "../../editor-view/types";
+import type { PanelAPI } from "../../panels/types";
 
 /** Block-local context supplied when listing or executing a slash command. */
 export interface SlashCommandContext {
   /** API of the occurrence invoking the command, retained across deferred work. */
-  readonly editorView: EditorViewApi;
+  readonly panel: PanelAPI;
   /** Stable ID of the block containing the command trigger. */
   readonly blockId: string;
 }

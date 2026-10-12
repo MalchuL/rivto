@@ -1,8 +1,8 @@
-import { createTestEditor as createRivtoEditor } from "../test-utils";
+import { createTestEditor as createDocumentEditor } from "../test-utils";
 
-describe("EditorRuntime history manager", () => {
+describe("DocumentEditor history manager", () => {
   it("undoes and redoes one document command at a time", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" }).id;
 
     editor.blocks.updateBlock(id, { content: "Updated" });
@@ -16,7 +16,7 @@ describe("EditorRuntime history manager", () => {
   });
 
   it("keeps fast consecutive commands as separate undo steps", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
 
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" }).id;
     editor.blocks.setBlockProp(id, "tone", "info");
@@ -30,7 +30,7 @@ describe("EditorRuntime history manager", () => {
   });
 
   it("batches nested editor updates into one revision and undo step", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     let revisions = 0;
     const unsubscribe = editor.subscribe(() => {
       revisions += 1;
@@ -39,7 +39,7 @@ describe("EditorRuntime history manager", () => {
     const secondId = editor.history.batchUpdates(() => {
       const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
       return editor.history.batchUpdates(() => (
-        editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId)
+        editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(firstId))
       )).id;
     });
 
@@ -59,7 +59,7 @@ describe("EditorRuntime history manager", () => {
   });
 
   it("keeps consecutive block updates in one capture group", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" }).id;
 
     editor.blocks.updateBlock(id, { content: "First" });
@@ -72,7 +72,7 @@ describe("EditorRuntime history manager", () => {
   });
 
   it("keeps undo history across explicit typing capture boundaries", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" }).id;
 
     editor.blocks.updateBlock(id, { content: "First" });
@@ -88,7 +88,7 @@ describe("EditorRuntime history manager", () => {
   });
 
   it("excludes derived maintenance from user undo history", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "User change" }).id;
 
     editor.history.batchUpdatesWithoutHistory(() => {
@@ -107,7 +107,7 @@ describe("EditorRuntime history manager", () => {
   });
 
   it("publishes document updates for undo and redo", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" }).id;
     const calls: string[] = [];
     const unsubscribe = editor.subscribe(() => calls.push(editor.blocks.getBlocks()[0]?.content ?? ""));
@@ -123,7 +123,7 @@ describe("EditorRuntime history manager", () => {
   });
 
   it("clears history after loading persisted state", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
 
     editor.blocks.insertBlock({ type: "paragraph", content: "Before load" });
     editor.load({

@@ -31,7 +31,7 @@ const BLOCK_SLOT_POSITION_SET = new Set<BlockSlotPosition>([
  * Owns mode-specific surface composition.
  *
  * Root surfaces, per-block decorators, and editor-wide wrappers share this
- * manager because EditorView resolves all three from the active mode. Plugins
+ * manager because EditorPanel resolves all three from the active mode. Plugins
  * remain independent: they call this public manager but ExtensionManager never
  * imports or queries it.
  */
@@ -57,7 +57,7 @@ export class SurfaceManager implements SurfacesApi {
   /**
    * Registers the single root renderer for one editor mode.
    *
-   * @param mode - Presentation mode resolved by EditorView.
+   * @param mode - Presentation mode resolved by EditorPanel.
    * @param surface - Component rendering the complete active surface.
    * @returns Idempotent disposer removing only this registration.
    */
@@ -274,7 +274,7 @@ export class SurfaceManager implements SurfacesApi {
   /**
    * Registers an editor-wide wrapper with optional surface-mode restriction.
    *
-   * The first active wrapper remains outermost when EditorView composes them.
+   * The first active wrapper remains outermost when EditorPanel composes them.
    *
    * @param wrapper - Context or interaction boundary around complete editor UI.
    * @param mode - Optional mode or mode list restricting composition.

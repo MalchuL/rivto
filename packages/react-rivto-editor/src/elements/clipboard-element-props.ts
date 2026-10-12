@@ -1,4 +1,5 @@
-import type { ElementTreeApi, ElementManagerApi, EditorElementNode } from "@chulane/rivto";
+import type { PanelElementsAPI } from "../panels/panel-elements-api";
+import type { ElementManagerApi, EditorElementNode } from "@chulane/rivto";
 
 /**
  * Restores copied child lists after every destination record has been inserted.
@@ -9,7 +10,7 @@ import type { ElementTreeApi, ElementManagerApi, EditorElementNode } from "@chul
  * @param ids - Complete source-to-destination identity map.
  */
 export function restoreElementChildren(
-  elements: ElementManagerApi | ElementTreeApi,
+  elements: ElementManagerApi | PanelElementsAPI,
   sources: readonly EditorElementNode[],
   ids: ReadonlyMap<string, string>,
 ): void {

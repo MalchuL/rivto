@@ -9,7 +9,7 @@
  */
 import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
 import type { BlockBehaviorContext, BlockBehaviorOutcome, DropAxis } from "../../../block-behaviors/types";
-import type { KeyboardSelectionTarget } from "../../../managers/index";
+import type { KeyboardSelectionTarget } from "../../../managers";
 
 export const TABLE_BLOCK_TYPE = "table";
 export const TABLE_ROW_BLOCK_TYPE = "table-row";

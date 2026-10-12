@@ -14,13 +14,13 @@ export {
   normalizeUprightLabelAngle,
   pathLength,
   pointAlongPolyline,
-  polylineCutsNodes
+  polylineCutsNodes,
 } from "./connector-path";
 export {
   anchorNormal,
   inflateFrame,
   pointInFrame,
-  segmentIntersectsFrame
+  segmentIntersectsFrame,
 } from "./geometry-core";
 export type { Point } from "./geometry-core";
 

@@ -1,17 +1,9 @@
-/**
- * React and DOM contracts shared across the page drag extension.
- *
- * These contracts describe Rivto's own gesture state. The only dnd-kit-shaped
- * value is the handle ref callback exposed through {@link PageDragHandle}, so
- * block slots can activate a draggable without importing the library.
- *
- * @module
- */
 import type { EditorBlock as Block } from "@chulane/rivto";
 import type { ReactNode } from "react";
-import type { EditorViewApi } from "../../editor-view/types";
+import type { PanelAPI } from "../../panels/types";
 import type { CrossDocumentBlockTransferPlacement } from "../built-ins/clipboard/cross-document-block-transfer";
 import type { CanonicalDropPlacement } from "./placement/types";
+import type { DragStartEvent } from "@dnd-kit/react";
 
 /** Viewport pointer coordinates for a drag gesture. */
 export interface PointerCoordinates {
@@ -28,7 +20,7 @@ export interface PointerTracker {
 /** Live destination surface operations used by a source drag provider. */
 export interface CrossDocumentPageRootController {
   /** Executes placement reads and commits within the destination occurrence; its fixed model is available through getDocument without an explicit transfer model. */
-  editorView: EditorViewApi;
+  panel: PanelAPI;
   root: HTMLElement;
   setPlacement: (placement: DropPlacement | null, empty?: boolean) => void;
   resolvePlacement: (x: number, y: number, sources: readonly Block[], sourceDocumentId: string) => CrossDocumentBlockTransferPlacement & {
@@ -97,3 +89,6 @@ export interface PageDragExtensionOptions {
   readonly outerEdgeDropZone?: number;
   readonly allowChildPlacement?: boolean;
 }
+
+/** Live or snapshotted dnd-kit operation state consumed by placement. */
+export type PageDragOperation = DragStartEvent["operation"];

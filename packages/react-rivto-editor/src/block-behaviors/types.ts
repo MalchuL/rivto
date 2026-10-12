@@ -1,18 +1,7 @@
-/**
- * Behavior contract for one block type's outline and drop semantics.
- *
- * The BlockView component in `blocks/block-view/block-view.tsx` renders the DOM.
- * Page Enter/Tab/Backspace and drag handlers consult block behaviors so container
- * extensions can override split, indent, and drop without type switches in
- * those modules. Behaviors call `block-behaviors/ops` primitives and never touch
- * internal document storage directly.
- *
- * @module
- */
 import type { EditorBlock, Selection } from "@chulane/rivto";
-import type { EditorViewApi } from "../editor-view/types";
-import type { EditorRuntime } from "../editor/editor-runtime";
-import type { KeyboardSelectionTarget } from "../managers/index";
+import type { PanelAPI } from "../panels/types";
+import type { ReactEditorApi } from "../editor/types";
+import type { KeyboardSelectionTarget } from "../managers";
 
 /** handled stops dispatch, default requests the generic behavior, and rejected refuses the action. */
 export type BlockBehaviorOutcome = "handled" | "default" | "rejected";
@@ -34,13 +23,13 @@ export interface BlockDropPlacementOptions {
  * Block, selection, and DOM context supplied to a keyboard behavior method.
  *
  * `block` is a detached snapshot of the block whose type selected the behavior.
- * Selection is captured by the caller, while editorView remains a live API.
+ * Selection is captured by the caller, while panel remains a live API.
  * Handlers inspect ancestors separately when they need a parent or a container
  * whose outlineFloor metadata prevents children from being outdented further.
  */
 export interface BlockBehaviorContext {
   /** Editor view supplying selection, block behaviors, and shared writing factories. */
-  readonly editorView: EditorViewApi;
+  readonly panel: PanelAPI;
   /** Detached snapshot of the resolved block. */
   readonly block: EditorBlock;
   /** Structural parent, or `null` at the document root. */
@@ -66,7 +55,7 @@ export type BlockDropDestination = {
 /** Arguments for a drop-acceptance check against the destination parent. */
 export interface BlockDropContext {
   /** Runtime used to read live block types and parents. */
-  readonly editor: EditorRuntime;
+  readonly editor: ReactEditorApi;
   /** Exact destination, shared by feedback and commit. */
   readonly destination: BlockDropDestination;
   /** Source snapshots, including when they belong to another document. */

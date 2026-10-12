@@ -70,5 +70,5 @@ same model.
 ## Editor
 
 `@chulane/app/client` exposes `DocumentEditor`, a Rivto host that follows the
-same create / `EditorView` / destroy pattern as `demo/`. Page bodies are
+same create / `EditorPanel` / destroy pattern as `demo/`. Page bodies are
 serialized Rivto snapshots (`editor.dump()` JSON) stored on `Page.content`.

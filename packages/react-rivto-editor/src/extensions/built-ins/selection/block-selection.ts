@@ -6,7 +6,7 @@ import {
   EDITOR_CONTROL_SELECTOR,
   PREVENT_TEXT_EDITING_SELECTOR,
 } from "../../../constants";
-import type { EditorRuntime } from "../../../editor/editor-runtime";
+import type { ReactEditorApi } from "../../../editor/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
 import { toggleBlockSelection } from "../page/navigation";
 import { findEdgelessRuntime } from "./edgeless-runtime";
@@ -22,7 +22,7 @@ import { findEdgelessRuntime } from "./edgeless-runtime";
  * events arrive. On canvas, only editable block content releases selection here;
  * canvas backgrounds and controls retain their own interaction handlers.
  */
-export function registerBlockSelection(editorRuntime: EditorRuntime): () => void {
+export function registerBlockSelection(reactEditor: ReactEditorApi): () => void {
   const markedRoots = new Set<HTMLElement>();
   const setModifierDown = (root: HTMLElement, value: boolean) => {
     if (!root) return;
@@ -30,7 +30,7 @@ export function registerBlockSelection(editorRuntime: EditorRuntime): () => void
     else { delete root.dataset.blockSelecting; markedRoots.delete(root); }
   };
 
-  editorRuntime.keyboard.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockSelectionModifierDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierDown]!,
     target: "window",
@@ -41,7 +41,7 @@ export function registerBlockSelection(editorRuntime: EditorRuntime): () => void
     setModifierDown(root, true);
     return false;
   });
-  editorRuntime.keyboard.register({
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockSelectionModifierUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSelectionModifierUp]!,
     phase: "keyup",
@@ -51,7 +51,7 @@ export function registerBlockSelection(editorRuntime: EditorRuntime): () => void
     setModifierDown(root, false);
     return false;
   });
-  editorRuntime.events.register({
+  reactEditor.events.register({
     id: "block-selection.modifier-blur",
     type: "blur",
     target: "window",
@@ -59,7 +59,7 @@ export function registerBlockSelection(editorRuntime: EditorRuntime): () => void
     setModifierDown(root, false);
     return false;
   });
-  editorRuntime.events.register({
+  reactEditor.events.register({
     id: "block-selection.modifier-focus-owner",
     type: "focusin",
     target: "document",
@@ -71,12 +71,12 @@ export function registerBlockSelection(editorRuntime: EditorRuntime): () => void
     return false;
   });
 
-  editorRuntime.events.register({
+  reactEditor.events.register({
     id: "block-selection.pointer-clear",
     type: "pointerdown",
     capture: true,
     scope: "surface",
-  }, ({ editorView, raw: event, root, mode }) => {
+  }, ({ panel, raw: event, root, mode }) => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return false;
     if (!(event.target instanceof Element)) return false;
     if (event.target.closest(`${EDITOR_CONTROL_SELECTOR}, ${PREVENT_TEXT_EDITING_SELECTOR}`)) return false;
@@ -85,21 +85,21 @@ export function registerBlockSelection(editorRuntime: EditorRuntime): () => void
     if (mode === "edgeless" && (
       !anchor?.isContentEditable || root.dataset.panningReady === "true" || root.dataset.edgelessTool === "pan"
     )) return false;
-    const current = editorView.selection.get();
-    const canvasActive = mode === "edgeless" && findEdgelessRuntime(editorView)?.get().active;
+    const current = panel.selection.get();
+    const canvasActive = mode === "edgeless" && findEdgelessRuntime(panel)?.get().active;
     if (!isStructuralSelection(current) && (current?.blocks.length ?? 0) < 2 && !canvasActive) return false;
     // Release old coverage before the browser's delayed selectionchange publishes the new caret.
-    editorView.selection.clear();
+    panel.selection.clear();
     root.ownerDocument.getSelection()?.removeAllRanges();
     return false;
   });
 
-  editorRuntime.events.register({
+  reactEditor.events.register({
     id: "block-selection.pointer-toggle",
     type: "pointerdown",
     capture: true,
     scope: "block",
-  }, ({ editorView, raw: event, root, mode }) => {
+  }, ({ panel, raw: event, root, mode }) => {
     if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) return false;
     if (
       !(event.target instanceof Element) ||
@@ -109,21 +109,21 @@ export function registerBlockSelection(editorRuntime: EditorRuntime): () => void
     const blockId = block?.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!block || !blockId || !root.contains(block)) return false;
 
-    const selection = editorView.selection.get();
+    const selection = panel.selection.get();
     // A caret starts a new block selection; carrying its partial range forward
     // creates a mixed selection that the next native selectionchange clears.
     const current = isStructuralSelection(selection) ? selection : undefined;
     const next = toggleBlockSelection(
-      editorView.runtime.blocks.getBlocks(),
+      panel.blocks.getBlocks(),
       current,
       blockId,
       mode === "edgeless",
-      (candidate) => !editorView.runtime.blockListProps.childrenVisible(candidate),
+      (candidate) => !panel.editor.blockListProps.childrenVisible(candidate),
     );
-    const canvas = mode === "edgeless" ? findEdgelessRuntime(editorView) : undefined;
+    const canvas = mode === "edgeless" ? findEdgelessRuntime(panel) : undefined;
     if (next && canvas) canvas.setBlocks(next);
-    else if (next) editorView.selection.set(next);
-    else editorView.selection.clear();
+    else if (next) panel.selection.set(next);
+    else panel.selection.clear();
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });
     return true;

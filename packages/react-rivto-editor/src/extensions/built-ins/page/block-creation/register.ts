@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../../editor/editor-runtime";
+import type { ReactEditorApi } from "../../../../editor/types";
 /**
  * Enter dispatch for outline block splitting and creation.
  *
@@ -9,7 +9,7 @@ import type { EditorRuntime } from "../../../../editor/editor-runtime";
  *
  * @module
  */
-import { createBlockBehaviorContext } from "../../../../block-behaviors/index";
+import { createBlockBehaviorContext } from "../../../../block-behaviors";
 import { BUILTIN_KEYMAP, firstKeyboardTarget, isEditableKeyboardEvent, KEYBOARD_BINDING_IDS, shouldDeleteSelection } from "../../../../managers";
 
 /**
@@ -19,37 +19,37 @@ import { BUILTIN_KEYMAP, firstKeyboardTarget, isEditableKeyboardEvent, KEYBOARD_
  * selection never creates several blocks. Expanded text is deleted first.
  * Shift+Enter remains native plaintext input.
  *
- * @param editorRuntime - Runtime whose keyboard registry and views are used.
+ * @param reactEditor - Runtime whose keyboard registry and views are used.
  * @returns Nothing; the binding is owned by the extension lifecycle.
  */
-export function registerBlockCreation(editorRuntime: EditorRuntime): void {
-  editorRuntime.keyboard.register({
+export function registerBlockCreation(reactEditor: ReactEditorApi): void {
+  reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockCreate,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,
-  }, ({ editorView, raw: event, root }) => {
+  }, ({ panel, raw: event, root }) => {
     if (!isEditableKeyboardEvent(event)) return false;
     // Read the key event's native caret synchronously. A newly focused editor
     // can receive Enter before the browser's deferred selectionchange event.
-    const nativeSelection = editorView.selection.readDOM();
-    if (nativeSelection) editorView.selection.set(nativeSelection);
-    const selection = nativeSelection ?? editorView.selection.get();
+    const nativeSelection = panel.selection.readDOM();
+    if (nativeSelection) panel.selection.set(nativeSelection);
+    const selection = nativeSelection ?? panel.selection.get();
     const initialTarget = firstKeyboardTarget(selection);
     if (!initialTarget) return false;
 
     let claimed = false;
     // Selection deletion, text splitting, insertion, and nesting share one CRDT
     // transaction, so Enter is one collaborative update and one undo step.
-    editorView.runtime.history.batchUpdates(() => {
+    panel.editor.document.history.batchUpdates(() => {
       let target = initialTarget;
       if (shouldDeleteSelection(selection)) {
-        editorView.selection.delete();
-        const collapsed = firstKeyboardTarget(editorView.selection.get());
+        panel.selection.delete();
+        const collapsed = firstKeyboardTarget(panel.selection.get());
         if (!collapsed?.collapsed) return;
         target = collapsed;
       }
-      const context = createBlockBehaviorContext(editorView, target.blockId, root, editorView.selection.get());
+      const context = createBlockBehaviorContext(panel, target.blockId, root, panel.selection.get());
       if (!context) return;
-      claimed = editorView.runtime.blockBehaviors.dispatch(
+      claimed = panel.editor.blockBehaviors.dispatch(
         "onSplit",
         context,
         target,

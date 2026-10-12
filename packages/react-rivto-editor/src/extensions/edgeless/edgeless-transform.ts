@@ -1,12 +1,13 @@
-import { ElementGeometry } from "./element-geometry";
-import { drawingResizeProps } from "./visuals/utils/drawing-frame";
 import { createElement, useContext } from "react";
-import { EdgelessTransformControls } from "./edgeless-transform-controls";
-import { SurfaceContext } from "../../surfaces/surface";
-import type { EditorViewApi } from "../../editor-view/types";
 import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../constants";
-import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { PanelAPI } from "../../panels/types";
+import type { ReactEditorApi } from "../../editor/types";
 import type { EditorEvent } from "../../managers/events/editor-event";
+import { SurfaceContext } from "../../surfaces/surface";
+import { EdgelessTransformControls } from "./edgeless-transform-controls";
+import { ElementGeometry } from "./element-geometry";
+import type { ConnectorOverlayNode, ElementTransformPreview, TransformStart } from "./types";
+import { drawingResizeProps } from "./visuals/utils/drawing-frame";
 /**
  * Delegated move, resize, and rotate for edgeless cards, visuals, and groups.
  *
@@ -54,58 +55,18 @@ const CONNECTOR_LABEL_CLASS = "edgeless-connector-label";
 const CONNECTOR_LABEL_PREVIEW_CLASS = "edgeless-connector-label-preview";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-/** Geometry computed by Moveable for one leaf, in canvas units and clockwise degrees. */
-export interface ElementTransformPreview {
-  readonly id: string;
-  readonly frame: EditorElementFrame;
-  readonly rotation: number;
-  /** CSS transform supplied by Moveable while persisted left/top remain fixed. */
-  readonly transform?: string;
-}
-
-interface TransformStart {
-  /** Mounted occurrence that owns this gesture and its preview. */
-  readonly root: HTMLElement;
-  /** Moveable tracks all three gestures; the editor stores their initial geometry. */
-  readonly kind: "move" | "resize" | "rotate";
-  previews?: ReadonlyMap<string, ElementTransformPreview>;
-  groupRotations?: Map<string, number>;
-  previewGeometry?: ElementGeometry;
-  stopMoveable?: () => void;
-  dx: number;
-  dy: number;
-  readonly ids: string[];
-  readonly frames: Map<string, EditorElementFrame>;
-  /** Leaf IDs in this gesture, including group children. */
-  readonly moving: ReadonlySet<string>;
-  /** Connectors that must live-preview; empty means pointermove skips overlay work. */
-  readonly attachedConnectors: readonly ConnectorPreviewTarget[];
-  /**
-   * AFFiNE progressive groups: after drilling into a child, a click-without-drag
-   * should re-select this parent group (exit drill-in) instead of leaving the child selected.
-   */
-  readonly returnToGroup?: string;
-  moved: boolean;
-}
-
-/** Reused SVG path and optional label for one path-rebuild connector. */
-interface ConnectorOverlayNode {
-  readonly path: SVGPathElement;
-  label: HTMLElement | null;
-}
-
 /** Adds one delegated move/resize path for cards, visuals, and nested groups. */
-export function registerEdgelessTransform(editorRuntime: EditorRuntime): () => void {
-  return new EdgelessTransformController(editorRuntime).setup();
+export function registerEdgelessTransform(reactEditor: ReactEditorApi): () => void {
+  return new EdgelessTransformController(reactEditor).setup();
 }
 
 /** Owns transform gesture state, preview geometry, and commit for one editor runtime. */
 export class EdgelessTransformController {
-  private editorView?: EditorViewApi;
-  private get elements() { return this.editorView?.elements ?? this.editorRuntime.elements; }
-  private get selection() { return getEdgelessRuntime(this.editorView ?? this.editorRuntime); }
+  private panel?: PanelAPI;
+  private get elements() { return this.panel?.elements ?? this.reactEditor.document.elements; }
+  private get selection() { return getEdgelessRuntime(this.panel ?? this.reactEditor); }
 
-  private controls = new Map<EditorViewApi, {
+  private controls = new Map<PanelAPI, {
     prepareDrag(targets: HTMLElement[]): void;
     dragStart(event: MouseEvent | TouchEvent): void;
     stop(): void;
@@ -113,35 +74,35 @@ export class EdgelessTransformController {
 
   /**
    * Registers the mounted view's Moveable instance for drags started by editor selection.
-   * @param editorView - View whose DOM targets and gestures the controls own.
+   * @param panel - View whose DOM targets and gestures the controls own.
    * @param controls - Prepares selected hosts, forwards native mouse/touch starts,
    * and stops library tracking on cancellation.
    * @returns Cleanup that cancels this view's gesture and releases the registration.
    */
-  registerControls(editorView: EditorViewApi, controls: {
+  registerControls(panel: PanelAPI, controls: {
     prepareDrag(targets: HTMLElement[]): void;
     dragStart(event: MouseEvent | TouchEvent): void;
     stop(): void;
   }): () => void {
-    this.controls.set(editorView, controls);
+    this.controls.set(panel, controls);
     return () => {
-      this.finishControls(editorView, false);
-      this.controls.delete(editorView);
+      this.finishControls(panel, false);
+      this.controls.delete(panel);
     };
   }
 
   /**
    * Resolves mounted leaves for Moveable's single or group target.
    * Groups expand recursively; their hit areas follow the preview and are not Moveable targets.
-   * @param editorView - View supplying the selected element tree.
+   * @param panel - View supplying the selected element tree.
    * @param root - DOM root restricting the search to this mounted view.
    * @param ids - Selected element or group IDs, in selection order.
    * @returns Unique mounted leaf hosts for the supplied selection; missing elements are skipped.
    */
-  getMoveTargets(editorView: EditorViewApi, root: HTMLElement, ids: readonly string[]): HTMLElement[] {
+  getMoveTargets(panel: PanelAPI, root: HTMLElement, ids: readonly string[]): HTMLElement[] {
     const leaves = new Set<string>();
     const visit = (id: string) => {
-      const element = editorView.elements.getElementNode(id);
+      const element = panel.elements.getElementNode(id);
       if (!element) return;
       if (element.type === "group" && element.childIds.length) element.childIds.forEach(visit);
       else leaves.add(id);
@@ -153,11 +114,11 @@ export class EdgelessTransformController {
 
   /**
    * Checks whether editor selection accepted a move before Moveable begins tracking it.
-   * @param editorView - View reporting the library's drag-start event.
+   * @param panel - View reporting the library's drag-start event.
    * @returns False for content editing, controls, or a gesture owned by another view.
    */
-  isMoving(editorView: EditorViewApi): boolean {
-    return this.editorView === editorView && this.start?.kind === "move";
+  isMoving(panel: PanelAPI): boolean {
+    return this.panel === panel && this.start?.kind === "move";
   }
 
   private start: TransformStart | null = null;
@@ -496,7 +457,7 @@ export class EdgelessTransformController {
     }
     if (active.kind !== "move") {
       if (active.moved && active.previews) {
-        this.editorRuntime.history.batchUpdates(() => this.elements.updateElements(
+        this.reactEditor.document.history.batchUpdates(() => this.elements.updateElements(
           [...active.previews!.values()].map(({ id, frame, rotation }) => ({
             id, patch: { frame: this.groupChildren(id).length ? undefined : frame, props: {
               ...(this.elements.getElementNode(id)?.type === "connector" ? {} : { rotation }),
@@ -521,10 +482,10 @@ export class EdgelessTransformController {
       }
       return false;
     }
-    if (this.editorRuntime.commands.has("edgeless.selection.move")) {
-      this.editorRuntime.commands.execute("edgeless.selection.move", { editorView: this.editorView, payload: { dx: active.dx, dy: active.dy } });
+    if (this.reactEditor.document.commands.has("edgeless.selection.move")) {
+      this.reactEditor.document.commands.execute("edgeless.selection.move", { panel: this.panel, payload: { dx: active.dx, dy: active.dy } });
     } else {
-      this.editorRuntime.history.batchUpdates(() => active.ids.forEach((id) => {
+      this.reactEditor.document.history.batchUpdates(() => active.ids.forEach((id) => {
         const frame = this.previewFrame(id, active, active.dx, active.dy);
         if (frame) this.elements.updateElement(id, { frame });
       }));
@@ -532,8 +493,8 @@ export class EdgelessTransformController {
     return true;
   };
 
-  /** @param editorRuntime - Runtime receiving transform events and document commands. */
-  constructor(private readonly editorRuntime: EditorRuntime) {
+  /** @param reactEditor - Runtime receiving transform events and document commands. */
+  constructor(private readonly reactEditor: ReactEditorApi) {
 
   }
 
@@ -563,7 +524,7 @@ export class EdgelessTransformController {
   /**
    * Captures editor state when a Moveable edge or handle starts a move, resize, or rotation.
    * No document writes occur until finishControls commits the final geometry.
-   * @param editorView - View owning the selected element and its Panel coordinates.
+   * @param panel - View owning the selected element and its Panel coordinates.
    * @param root - Mounted edgeless viewport containing the target and connector previews.
    * @param id - Selected element or group ID; missing elements and standalone connectors are rejected.
    * Group children are expanded recursively without changing their stored parentage.
@@ -571,9 +532,9 @@ export class EdgelessTransformController {
    * @param stop - Stops Moveable's pointer tracking if Escape cancels the gesture.
    * @returns Whether the editor accepted the gesture.
    */
-  beginControls(editorView: EditorViewApi, root: HTMLElement, id: string, kind: "move" | "resize" | "rotate", stop: () => void): boolean {
+  beginControls(panel: PanelAPI, root: HTMLElement, id: string, kind: "move" | "resize" | "rotate", stop: () => void): boolean {
     if (this.start) this.finish(false);
-    this.editorView = editorView;
+    this.panel = panel;
     const element = this.elements.getElementNode(id);
     if (!element || element.type === "connector") return false;
     const moving = new Set(this.leaves([id]));
@@ -650,16 +611,16 @@ export class EdgelessTransformController {
   /**
    * Finishes only a Moveable gesture belonging to the supplied view.
    * Cancellation restores DOM styles; commitment records one history operation.
-   * @param editorView - View that mounted the Moveable controls.
+   * @param panel - View that mounted the Moveable controls.
    * @param commit - False on unmount, pointer cancellation, or explicit cancellation.
    * @param eventDetail - Click count used to preserve double-click text editing.
    */
-  finishControls(editorView: EditorViewApi, commit: boolean, eventDetail = 1): void {
-    if (this.editorView === editorView && this.start) this.finish(commit, eventDetail);
+  finishControls(panel: PanelAPI, commit: boolean, eventDetail = 1): void {
+    if (this.panel === panel && this.start) this.finish(commit, eventDetail);
   }
 
   /** Resolves click/drill-in selection and starts a permitted object move. */
-  private onPointerDown = ({ raw: event, root, editorView }: EditorEvent<"surface", "pointerdown">): boolean => {
+  private onPointerDown = ({ raw: event, root, panel }: EditorEvent<"surface", "pointerdown">): boolean => {
     if (event.button !== 0 || !(event.target instanceof Element)) return false;
     if (root.dataset.panningReady === "true" || root.dataset.edgelessTool === "pan") return false;
     if (event.target.closest("[data-edgeless-ui]")) return false;
@@ -667,7 +628,7 @@ export class EdgelessTransformController {
     const object = event.target.closest<HTMLElement>(OBJECT_SELECTOR);
     let id = card?.dataset.edgelessRoot ?? object?.dataset.edgelessObjectId;
     if (!id) return false;
-    this.editorView = editorView;
+    this.panel = panel;
     const childId = id;
     const parent = this.parentId(id);
     const current = this.selection.get().items;
@@ -714,7 +675,7 @@ export class EdgelessTransformController {
     const movable = !event.target.closest(CONTROL_SELECTOR) && (
       !card ||
       !hitBlock ||
-      (element?.type === "block" && elementContainsBlock(this.editorRuntime.blocks, element, editorView.getRootBlockIds(), hitBlockId))
+      (element?.type === "block" && elementContainsBlock(this.reactEditor.document.blocks, element, panel.blocks.getRootIds(), hitBlockId))
     );
     if (!movable) return false;
     event.stopPropagation();
@@ -742,7 +703,7 @@ export class EdgelessTransformController {
       const frame = this.transformFrame(item);
       if (frame) frames.set(item, { ...frame });
     });
-    const controls = this.controls.get(editorView);
+    const controls = this.controls.get(panel);
     if (!controls) return false;
     const kind = "move" as const;
     const attachedConnectors = this.connectorTargets(moving, new Set(ids), kind);
@@ -762,7 +723,7 @@ export class EdgelessTransformController {
     root.dataset.transforming = this.start.kind;
     root.focus({ preventScroll: true });
     this.lockGeometry(root, ids);
-    controls.prepareDrag(this.getMoveTargets(editorView, root, ids));
+    controls.prepareDrag(this.getMoveTargets(panel, root, ids));
     return true;
   };
 
@@ -794,21 +755,21 @@ export class EdgelessTransformController {
 
   /** Mounts per-view Moveable controls and installs move handlers; destruction cancels previews. */
   setup(): () => void {
-    this.editorRuntime.extensions.mount(() => createElement(TransformControls, { controller: this }));
+    this.reactEditor.extensions.mount(() => createElement(TransformControls, { controller: this }));
     // Cancelling pointerdown suppresses the mouse events that Moveable tracks.
-    this.editorRuntime.events.register({ id: "edgeless.transform.pointer-start", type: "pointerdown", capture: true, preventDefault: false, mode: "edgeless" }, this.onPointerDown);
-    this.editorRuntime.events.register({ id: "edgeless.transform.mouse-start", type: "mousedown", capture: true, mode: "edgeless" }, ({ raw, editorView }) => {
-      if (!this.isMoving(editorView)) return false;
-      this.controls.get(editorView)?.dragStart(raw);
+    this.reactEditor.events.register({ id: "edgeless.transform.pointer-start", type: "pointerdown", capture: true, preventDefault: false, mode: "edgeless" }, this.onPointerDown);
+    this.reactEditor.events.register({ id: "edgeless.transform.mouse-start", type: "mousedown", capture: true, mode: "edgeless" }, ({ raw, panel }) => {
+      if (!this.isMoving(panel)) return false;
+      this.controls.get(panel)?.dragStart(raw);
       return true;
     });
-    this.editorRuntime.events.register({ id: "edgeless.transform.touch-start", type: "touchstart", capture: true, mode: "edgeless" }, ({ raw, editorView }) => {
-      if (!this.isMoving(editorView)) return false;
-      this.controls.get(editorView)?.dragStart(raw);
+    this.reactEditor.events.register({ id: "edgeless.transform.touch-start", type: "touchstart", capture: true, mode: "edgeless" }, ({ raw, panel }) => {
+      if (!this.isMoving(panel)) return false;
+      this.controls.get(panel)?.dragStart(raw);
       return true;
     });
-    this.editorRuntime.events.register({ id: "edgeless.transform.pointer-cancel", type: "pointercancel", target: "window", mode: "edgeless" }, () => this.finish(false));
-    this.editorRuntime.keyboard.register({ id: KEYBOARD_BINDING_IDS.edgelessTransformCancel, keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessTransformCancel], mode: "edgeless", when: () => Boolean(this.start) }, () => this.finish(false));
+    this.reactEditor.events.register({ id: "edgeless.transform.pointer-cancel", type: "pointercancel", target: "window", mode: "edgeless" }, () => this.finish(false));
+    this.reactEditor.keyboard.register({ id: KEYBOARD_BINDING_IDS.edgelessTransformCancel, keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessTransformCancel], mode: "edgeless", when: () => Boolean(this.start) }, () => this.finish(false));
     return () => { this.finish(false); this.clearPreview(); };
   }
 }

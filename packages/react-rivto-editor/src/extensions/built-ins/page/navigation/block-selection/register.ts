@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../../../../editor/editor-runtime";
+import type { ReactEditorApi } from "../../../../../editor/types";
 /**
  * Keyboard registration for movement and growth of whole-block selections.
  *
@@ -10,7 +10,7 @@ import {
   isStructuralSelection,
   type EditorBlock,
 } from "@chulane/rivto";
-import type { EditorViewApi } from "../../../../../editor-view/types";
+import type { PanelAPI } from "../../../../../panels/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../../managers";
 import {
   adjacentBlockSelection,
@@ -28,57 +28,57 @@ import {
 /**
  * Registers structural selection navigation shortcuts.
  *
- * @param editorRuntime - Runtime receiving the keyboard bindings.
+ * @param reactEditor - Runtime receiving the keyboard bindings.
  * @returns No value.
  */
-export function registerBlockSelectionNavigation(editorRuntime: EditorRuntime): void {
+export function registerBlockSelectionNavigation(reactEditor: ReactEditorApi): void {
   const isCollapsed = (block: EditorBlock) => (
-    !editorRuntime.blockListProps.childrenVisible(block)
+    !reactEditor.blockListProps.childrenVisible(block)
   );
-  const move = (editorView: EditorViewApi, root: HTMLElement, direction: VerticalDirection, extend: boolean): boolean => {
-    const selection = currentNavigationSelection(editorView.selection);
+  const move = (panel: PanelAPI, root: HTMLElement, direction: VerticalDirection, extend: boolean): boolean => {
+    const selection = currentNavigationSelection(panel.selection);
     if (!isStructuralSelection(selection)) return false;
     const item = selection;
     if (!item || !hasBlockRanges(item)) return false;
-    const outline = navigationOutlineBlocks(editorView, item.focusBlockId);
+    const outline = navigationOutlineBlocks(panel, item.focusBlockId);
     const next = extend
       ? extendBlockSelection(outline, item, direction, isCollapsed)
       : adjacentBlockSelection(outline, item, direction, isCollapsed);
     assertBlockRangeEndpoints(next);
-    editorView.selection.set(next);
+    panel.selection.set(next);
     focusBlockSelection(root, next.focusBlockId);
     return true;
   };
 
-  const grow = (editorView: EditorViewApi, root: HTMLElement, direction: VerticalDirection): boolean => {
-    const selection = currentNavigationSelection(editorView.selection);
+  const grow = (panel: PanelAPI, root: HTMLElement, direction: VerticalDirection): boolean => {
+    const selection = currentNavigationSelection(panel.selection);
     const item = selection;
     if (!item || !hasBlockRanges(item)) return false;
-    const outline = navigationOutlineBlocks(editorView, item.focusBlockId);
+    const outline = navigationOutlineBlocks(panel, item.focusBlockId);
     const next = isStructuralSelection(selection)
       ? extendBlockSelection(outline, item, direction, isCollapsed)
       : blockSelection(outline, item.focusBlockId, item.focusBlockId, isCollapsed);
     if (!next) return false;
     assertBlockRangeEndpoints(next);
-    editorView.selection.set(next);
+    panel.selection.set(next);
     focusBlockSelection(root, next.focusBlockId);
     return true;
   };
 
-  const enterText = (editorView: EditorViewApi, root: HTMLElement): boolean => {
-    const blocks = currentNavigationSelection(editorView.selection);
+  const enterText = (panel: PanelAPI, root: HTMLElement): boolean => {
+    const blocks = currentNavigationSelection(panel.selection);
     if (!blocks || !isStructuralSelection(blocks) || !hasBlockRanges(blocks)) return false;
-    setNavigationCaret(root, editorView, { blockId: blocks.focusBlockId, offset: 0 });
+    setNavigationCaret(root, panel, { blockId: blocks.focusBlockId, offset: 0 });
     return true;
   };
 
   const binding = (
     id: string,
-    action: (editorView: EditorViewApi, root: HTMLElement) => boolean,
-  ) => editorRuntime.keyboard.register({
+    action: (panel: PanelAPI, root: HTMLElement) => boolean,
+  ) => reactEditor.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
-  }, ({ editorView, root }) => action(editorView, root));
+  }, ({ panel, root }) => action(panel, root));
   binding(KEYBOARD_BINDING_IDS.blockSelectionUp, (editor, root) => move(editor, root, "up", false));
   binding(KEYBOARD_BINDING_IDS.blockSelectionDown, (editor, root) => move(editor, root, "down", false));
   binding(KEYBOARD_BINDING_IDS.blockSelectionExtendUp, (editor, root) => move(editor, root, "up", true));

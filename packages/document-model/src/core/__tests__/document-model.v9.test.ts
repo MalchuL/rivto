@@ -202,9 +202,9 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     const modelA = new DocumentModelImpl(docA);
     const modelB = new DocumentModelImpl(docB);
     modelA.blocks.insertBlock({ id: "left", type: "paragraph" });
-    modelA.blocks.insertBlock({ id: "child", type: "paragraph" }, "left");
+    modelA.blocks.insertBlock({ id: "child", type: "paragraph" }, modelA.blocks.getInsertionDestinationAfter("left"));
     modelA.blocks.moveBlock("child", "left", "inside");
-    modelA.blocks.insertBlock({ id: "right", type: "paragraph" }, "left");
+    modelA.blocks.insertBlock({ id: "right", type: "paragraph" }, modelA.blocks.getInsertionDestinationAfter("left"));
     Y.applyUpdate(docB.doc, Y.encodeStateAsUpdate(docA.doc));
 
     expect(modelA.blocks.getParentId("child")).toBe("left");
@@ -221,7 +221,7 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     const doc = new YjsDoc("lazy-path-history");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "parent", type: "paragraph" });
-    model.blocks.insertBlock({ id: "child", type: "paragraph" }, "parent");
+    model.blocks.insertBlock({ id: "child", type: "paragraph" }, model.blocks.getInsertionDestinationAfter("parent"));
     const history = model.history;
     history.clear();
 

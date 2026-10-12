@@ -154,7 +154,7 @@ document.blocks.setPluginData("task-1", "comments", {
 - **Возвращает:** `void`.
 - **Исключения:** собственных проверок нет.
 
-`EditorRuntime` устанавливает validator `BlockRegistryManager`, чтобы document storage не зависел от registry или React.
+`ReactEditor` устанавливает validator `BlockRegistryManager`, чтобы document storage не зависел от registry или React.
 
 После установки каждый create/update/type-change сначала передаёт validator-у полный предполагаемый набор props. Возвращённый объект считается нормализованным состоянием; исключение останавливает операцию. Метод не перепроверяет уже сохранённые блоки и не запускает транзакцию.
 
@@ -204,15 +204,15 @@ Parent не хранится отдельным полем: manager выводи
 
 ## Создание и обновление блоков
 
-### `insertBlock(block, afterId?)`
+### `insertBlock(block, destination?)`
 
-- **Аргументы:** `block: BlockInput`; optional `afterId: string | null`, где `null` означает начало roots, а отсутствие — конец roots.
-- **Возвращает:** stable inserted ID.
+- **Аргументы:** `block: BlockInput`; optional `{ parentId: string | null, beforeId?: string }`, где null parent выбирает document roots, а отсутствие destination — конец roots.
+- **Возвращает:** рекурсивный inserted block со stable ID.
 - **Исключения:** пустой type, duplicate ID, invalid `listProps`, validator rejection, malformed CRDT storage и ошибки insertion.
 
-Если `afterId` существует, новый block вставляется после него в том же sibling array. Метод рекурсивно создаёт children через `insertInto()` в одной транзакции.
+`parentId` выбирает реальный контейнер, а `beforeId` — существующего следующего соседа. Без beforeId новый block добавляется в конец выбранного массива. Метод рекурсивно создаёт children через `insertInto()` в одной транзакции.
 
-Важная семантика `afterId`: он выбирает не только позицию, но и sibling container. Например, если target является child, новый блок станет его соседом с тем же parent. При `null` вставка всегда идёт в начало `roots`; вставить первым child публично можно последующим `moveBlock(..., parentId, "inside")` и reorder.
+Контейнер и beforeId проверяются до записи: anchor обязан принадлежать выбранному parent. Для вставки первым child передайте parentId и первый ID из getChildIds(parentId) как beforeId. Вставка сразу создаёт запись внутри родителя, без промежуточного document root и последующего move. getInsertionDestinationAfter(id) переводит существующего соседа в явное назначение.
 
 **Примечание об assignment:** метод транзитивно вызывает recursive `insertInto()`, а тот использует `assignMap()` для `listProps`, `props`, `pluginData` и `assignText()` для `content`. Каждый child получает собственные CRDT maps/text/children array, однако nested objects внутри map values остаются cloned plain objects. Их property mutation не создаёт update; менять нужно соответствующий top-level key через manager.
 

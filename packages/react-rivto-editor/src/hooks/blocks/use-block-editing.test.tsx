@@ -4,7 +4,7 @@ import {
   BLOCK_CONTENT_ATTRIBUTE,
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
 } from "../../constants";
-import { EditorView } from "../../editor-view/editor-view";
+import { EditorPanel } from "../../components/editor-panel/editor-panel";
 import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
 import { useBlockNode, type UseBlockNodeResult } from "./use-block";
 import { useBlockSelectionAnchor } from "./use-block-selection-anchor";
@@ -53,10 +53,10 @@ describe("useBlockEditing", () => {
         createElement("div", text.attributes),
       );
     };
-    const editorView = createReactEditor({ editor });
-    editorView.runtime.surfaces.register("block", Surface);
+    const panel = createReactEditor({ editor });
+    panel.editor.surfaces.register("block", Surface);
 
-    renderToStaticMarkup(createElement(EditorView, { runtime: editorView.runtime }, createElement(Surface)));
+    renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)));
 
     expect(text?.attributes[BLOCK_SELECTION_ANCHOR_ATTRIBUTE]).toBe("");
     expect(text?.attributes[BLOCK_CONTENT_ATTRIBUTE]).toBe("");
@@ -92,7 +92,7 @@ describe("useBlockEditing", () => {
     expect(editor.blocks.getBlockNode(blockId)?.props.count).toBeUndefined();
     expect(() => structural?.operations.setProp("count", 4)).toThrow(/not found/);
 
-    editorView.runtime.destroy();
+    panel.editor.destroy();
     editor.destroy();
   });
 });

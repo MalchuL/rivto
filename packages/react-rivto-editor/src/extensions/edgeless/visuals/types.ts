@@ -1,6 +1,7 @@
-import type { EdgelessSelectionRef } from "../../built-ins/selection/edgeless-runtime";
 import type { EditorElementNode } from "@chulane/rivto";
-export type { EdgelessSelectionRef } from "../../built-ins/selection/edgeless-runtime";
+import type { EdgelessSelectionRef } from "../../built-ins/selection/types";
+
+export type { EdgelessSelectionRef } from "../../built-ins/selection/types";
 
 /** Axis-aligned canvas geometry shared by every visual leaf. */
 export interface VisualFrame { x: number; y: number; width: number; height: number }
@@ -190,3 +191,12 @@ export interface EdgelessVisualCommandMap {
   "edgeless.selection.reorder": { payload: EdgelessReorder | { direction: EdgelessReorder }; result: void };
   "edgeless.tool.set": { payload: EdgelessVisualTool | "select"; result: void };
 }
+
+export type VisualCommandPayload<Name extends keyof EdgelessVisualCommandMap> = EdgelessVisualCommandMap[Name]["payload"];
+
+export type PayloadForKind<Payload, Kind> = Payload extends { kind: infer Kinds }
+  ? Kind extends Kinds ? Omit<Payload, "kind"> : never
+  : never;
+
+export type VisualPayload<Kind extends CreateVisualPayload["kind"]> =
+  PayloadForKind<CreateVisualPayload, Kind>;

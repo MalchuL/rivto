@@ -1,16 +1,17 @@
 /**
  * Builds one product-page Rivto runtime the same way the workspace demo does.
  *
- * The host owns lifetime: create here, render through `EditorView`, then
- * destroy both the React runtime and the core editor on unmount. Persistence
+ * The host owns lifetime: create here, render through `EditorPanel`, then
+ * destroy the React editor, core editor, and document model on unmount. Persistence
  * uses `editor.load` / `editor.dump` rather than a live Yjs provider — the
  * mock page store is still a JSON string.
  */
 
 import {
-  createRivtoEditor,
+  createDocumentEditor,
+  ModeManager,
   type EditorMode,
-  type RivtoEditorApi,
+  type DocumentEditorAPI,
 } from "@chulane/rivto";
 import {
   createReactEditor,
@@ -19,14 +20,18 @@ import {
   pageDragExtension,
   standardPreset,
   type MarkdownLinkClick,
-  type ReactEditor,
+  type ReactEditorApi,
 } from "@chulane/rivto-react";
+import { DocumentModelImpl } from "@chulane/document-model";
+import { YjsDoc } from "@chulane/crdt-doc";
 import { extractPageText, parseEditorSnapshot } from "./snapshot";
 
 /** Core + React pair owned by the page that created it. */
 export type PageEditorRuntime = {
-  editor: RivtoEditorApi;
-  reactEditor: ReactEditor;
+  document: DocumentModelImpl;
+  mode: ModeManager;
+  editor: DocumentEditorAPI;
+  reactEditor: ReactEditorApi;
 };
 
 /**
@@ -56,7 +61,17 @@ export function createPageEditor(options: {
   snapshot: string;
   mode?: EditorMode;
 }): PageEditorRuntime {
-  const editor = createRivtoEditor({ mode: options.mode ?? "block" });
+  const document = new DocumentModelImpl(new YjsDoc(`page-${crypto.randomUUID()}`));
+  const editor = createDocumentEditor({ document });
+  const reactEditor = createReactEditor({
+    editor,
+    extensions: [
+      standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      pageDragExtension(),
+      ...edgelessPreset(),
+      edgelessVisualsExtension(),
+    ],
+  });
   const parsed = parseEditorSnapshot(options.snapshot);
   if (parsed && (parsed.blocks.length > 0 || parsed.elements.length > 0)) {
     editor.load(parsed);
@@ -68,14 +83,5 @@ export function createPageEditor(options: {
       editor.history.clear();
     }
   }
-  const reactEditor = createReactEditor({
-    editor,
-    extensions: [
-      standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
-      pageDragExtension(),
-      ...edgelessPreset(),
-      edgelessVisualsExtension(),
-    ],
-  });
-  return { editor, reactEditor };
+  return { document, mode: new ModeManager(options.mode ?? "block"), editor, reactEditor };
 }

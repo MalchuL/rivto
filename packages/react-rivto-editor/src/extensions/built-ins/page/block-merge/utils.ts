@@ -9,7 +9,7 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../../../constants";
-import type { EditorViewApi } from "../../../../editor-view/types";
+import type { PanelAPI } from "../../../../panels/types";
 import { findRenderedBlock } from "../../../../managers/events/block-dom";
 
 /** Returns true when a BlockView directly owns an editable content host. */
@@ -33,33 +33,34 @@ function previousSiblingBlock(
 /**
  * Removes a root empty writing block after a non-text-editable sibling.
  *
- * @param editorView - Editor view owning host emptiness policy and block rendering.
+ * @param panel - Editor view owning host emptiness policy and block rendering.
  * @param root - Active page surface or edgeless card DOM scope.
  * @param blockId - Collapsed editable block addressed by the key event.
  * @returns True when the empty block was removed and the key was claimed.
  */
 export function removeEmptyBlockAfterStructuralPredecessor(
-  editorView: EditorViewApi,
+  panel: PanelAPI,
   root: HTMLElement,
   blockId: string,
 ): boolean {
-  const { isEmptyBlock } = editorView.runtime;
-  const block = editorView.runtime.blocks.getBlockNode(blockId);
+  const { isEmptyBlock } = panel.editor;
+  const block = panel.blocks.getBlockNode(blockId);
   if (
     !block ||
     !isEmptyBlock(block) ||
+    !panel.blocks.canRemove(block.id) ||
     block.listProps.collapsed === true ||
-    !editorView.getRootBlockIds().includes(block.id)
+    !panel.blocks.getRootIds().includes(block.id)
   ) return false;
 
   const previous = previousSiblingBlock(root, block.id);
   if (!previous || hasOwnedEditableContent(previous.element)) return false;
 
-  editorView.runtime.history.batchUpdates(() => {
-    const firstChildId = editorView.runtime.blocks.getBlockNode(block.id)?.childIds[0];
-    if (firstChildId) editorView.runtime.blocks.outdentBlock(firstChildId);
-    editorView.runtime.blocks.removeBlock(block.id);
-    editorView.selection.set(createStructuralSelection([previous.id]));
+  panel.editor.document.history.batchUpdates(() => {
+    const firstChildId = panel.blocks.getBlockNode(block.id)?.childIds[0];
+    if (firstChildId) panel.blocks.outdentBlock(firstChildId);
+    panel.blocks.removeBlock(block.id);
+    panel.selection.set(createStructuralSelection([previous.id]));
   });
   root.ownerDocument.getSelection()?.removeAllRanges();
   root.focus({ preventScroll: true });

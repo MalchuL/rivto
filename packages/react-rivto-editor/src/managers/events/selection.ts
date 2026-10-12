@@ -70,7 +70,7 @@ export function shouldDeleteSelection(
  */
 export function readKeyboardSelection(
   selectionManager: ViewSelectionApi,
-  blocks: BlocksApi,
+  blocks: Pick<BlocksApi, "getBlockNode">,
   emptyBlockId?: string,
 ): Selection | undefined {
   const nativeSelection = selectionManager.readDOM();

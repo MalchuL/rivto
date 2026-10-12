@@ -1,3 +1,6 @@
+import { PanelElements } from "../panels/panel-elements";
+import type { PanelAPI } from "../panels/types";
+import type { BlockElementProps } from "./types";
 /**
  * Generic projection between ordered root blocks and persisted block elements.
  *
@@ -8,7 +11,7 @@
  * @module
  */
 import type { EditorBlock, EditorBlockNode, EditorElementNode } from "@chulane/rivto";
-import type { EditorRuntime } from "../editor/editor-runtime";
+import type { ReactEditorApi } from "../editor/types";
 import type { BlocksApi } from "../managers/blocks/blocks-api";
 
 export const EDGELESS_BLOCK_ELEMENT_TYPE = "block";
@@ -167,25 +170,6 @@ function matchConnectedSegments(scores: readonly ReadonlyMap<number, number>[]):
 }
 
 /**
- * Inclusive document-order boundaries rendered by one edgeless block element.
- *
- * The range is resolved from current root order instead of persisting every ID.
- * Therefore blocks inserted between the boundaries, including empty roots,
- * automatically become part of the same canvas card.
- */
-export interface BlockElementProps {
-  readonly [key: string]: unknown;
-  /** First root rendered by the card. */
-  readonly startBlockId: string;
-  /** Last root rendered by the card. */
-  readonly endBlockId: string;
-  /** Missing/true fits the card height to all rendered blocks; false keeps a fixed frame. */
-  readonly autoHeight?: boolean;
-  /** Clockwise canvas rotation in degrees; omitted values render without rotation. */
-  readonly rotation?: number;
-}
-
-/**
  * Resolves the inclusive root range stored by a block element.
  *
  * @param element - Generic document element containing range boundary props.
@@ -209,7 +193,7 @@ export function blockIdsOf(element: EditorElementNode, rootIds: readonly string[
  * @param blocks - Current document hierarchy used to locate the boundaries.
  * @returns Parent ID, null for document roots, or undefined when neither boundary exists.
  */
-export function blockElementRoot(element: EditorElementNode, blocks: BlocksApi): string | null | undefined {
+export function blockElementRoot(element: EditorElementNode, blocks: Pick<BlocksApi, "getParentId">): string | null | undefined {
   const start = typeof element.props.startBlockId === "string" ? blocks.getParentId(element.props.startBlockId) : undefined;
   if (start !== undefined) return start;
   return typeof element.props.endBlockId === "string" ? blocks.getParentId(element.props.endBlockId) : undefined;
@@ -227,7 +211,7 @@ export function blockElementRoot(element: EditorElementNode, blocks: BlocksApi):
  * @returns Whether the block is a card root or one of its descendants.
  */
 export function elementContainsBlock(
-  blocks: BlocksApi,
+  blocks: Pick<BlocksApi, "getParentId">,
   element: EditorElementNode,
   rootIds: readonly string[],
   blockId: string,
@@ -260,10 +244,12 @@ export function blockRangeProps(blockIds: readonly string[]): BlockElementProps 
  * @returns Complete inserted separator block.
  * @throws When the active preset provides no separator block plugin.
  */
-export function insertBlockElementSeparator(editor: EditorRuntime, afterId: string): EditorBlock {
-  const type = editor.blockTypes.getDefaultBlockElementSeparatorType();
+export function insertBlockElementSeparator(editor: ReactEditorApi | PanelAPI, afterId: string): EditorBlock {
+  const shared = "editor" in editor ? editor.editor : editor;
+  const type = shared.blockTypes.getDefaultBlockElementSeparatorType();
   if (!type) throw new Error("No block element separator type is registered");
-  return editor.blocks.insertBlock({ type, content: "" }, afterId);
+  if ("editor" in editor) return editor.blocks.insertBlock({ type, content: "" }, editor.blocks.canRemove(afterId) ? editor.blocks.getInsertionDestinationAfter(afterId) : { parentId: afterId });
+  return editor.document.blocks.insertBlock({ type, content: "" }, editor.document.blocks.getInsertionDestinationAfter(afterId));
 }
 
 /** Owns the document's block-card projection, settings, and deferred reconciliation. */
@@ -279,11 +265,11 @@ export class BlockElementProjection {
 
   /**
    * Creates a projection for one pair of block and element roots without writing storage.
-   * @param editorRuntime - Shared runtime whose block ranges and cards stay consistent.
+   * @param reactEditor - Shared runtime whose block ranges and cards stay consistent.
    * @param rootBlockId - Parent whose children form card ranges; null means document roots.
    * @param rootElementId - Container for projected cards; null means document element roots.
    */
-  constructor(private readonly editorRuntime: EditorRuntime, readonly rootBlockId: string | null = null, readonly rootElementId: string | null = null) {}
+  constructor(private readonly reactEditor: ReactEditorApi, readonly rootBlockId: string | null = null, readonly rootElementId: string | null = null) {}
 
   /**
    * Creates a separately reconciled pair of roots using this projection's layout defaults.
@@ -292,7 +278,7 @@ export class BlockElementProjection {
    * @returns Unsubscribed projection; its owner must reconcile, subscribe, and destroy it.
    */
   createPanelProjection(rootBlockId: string | null, rootElementId: string | null): BlockElementProjection {
-    const projection = new BlockElementProjection(this.editorRuntime, rootBlockId, rootElementId);
+    const projection = new BlockElementProjection(this.reactEditor, rootBlockId, rootElementId);
     projection.setDefaultWidth(this.defaultWidth);
     projection.setOverlapAvoidance(this.avoidOverlap);
     return projection;
@@ -305,7 +291,7 @@ export class BlockElementProjection {
    */
   private availableElementId(blockId: string): string {
     const base = `${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${this.rootElementId === null ? "" : `${this.rootElementId}:`}${blockId}`;
-    if (!this.editorRuntime.elements.hasElement(base)) return base;
+    if (!this.reactEditor.document.elements.hasElement(base)) return base;
     return crypto.randomUUID();
   }
 
@@ -357,20 +343,20 @@ export class BlockElementProjection {
    */
   reconcile(): void {
     if (this.destroyed) return;
-    const editorRuntime = this.editorRuntime;
+    const reactEditor = this.reactEditor;
 
     // Build the two sides of the projection: current document roots and the
     // persisted canvas elements that render ranges of those roots as cards.
     // A deleted root is not an instruction to use document roots. Keep the
     // projection inactive until undo or a remote update restores its container.
-    if (this.rootBlockId !== null && !editorRuntime.blocks.hasBlock(this.rootBlockId)) return;
-    if (this.rootElementId !== null && !editorRuntime.elements.hasElement(this.rootElementId)) return;
-    const elements = editorRuntime.elements.forRoot(this.rootElementId);
+    if (this.rootBlockId !== null && !reactEditor.document.blocks.hasBlock(this.rootBlockId)) return;
+    if (this.rootElementId !== null && !reactEditor.document.elements.hasElement(this.rootElementId)) return;
+    const elements = new PanelElements(reactEditor.document.elements, reactEditor.document.getDocument(), this.rootElementId);
     const rootIds = this.rootBlockId !== null
-      ? editorRuntime.blocks.getBlockNode(this.rootBlockId)!.childIds
-      : editorRuntime.blocks.getRootIds();
+      ? reactEditor.document.blocks.getBlockNode(this.rootBlockId)!.childIds
+      : reactEditor.document.blocks.getRootIds();
     const roots = rootIds.flatMap((id) => {
-      const node = editorRuntime.blocks.getBlockNode(id);
+      const node = reactEditor.document.blocks.getBlockNode(id);
       return node ? [node] : [];
     });
     const rootOrder = roots.map((block) => block.id);
@@ -379,7 +365,7 @@ export class BlockElementProjection {
     // block scope can update the element. Fully deleted ranges can be removed.
     const existing = elements.getElementNodes().filter((element) => {
       if (element.type !== EDGELESS_BLOCK_ELEMENT_TYPE) return false;
-      const parent = blockElementRoot(element, editorRuntime.blocks);
+      const parent = blockElementRoot(element, reactEditor.document.blocks);
       return parent === undefined || parent === this.rootBlockId;
     });
     const currentRanges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
@@ -398,7 +384,7 @@ export class BlockElementProjection {
     const segments: EditorBlockNode[][] = [];
     let segment: EditorBlockNode[] = [];
     roots.forEach((block) => {
-      if (editorRuntime.blockTypes.separatesBlockElements(block.type)) {
+      if (reactEditor.blockTypes.separatesBlockElements(block.type)) {
         if (segment.length) segments.push(segment);
         segment = [];
       } else segment.push(block);
@@ -493,7 +479,7 @@ export class BlockElementProjection {
     this.memberships = desiredMemberships;
     if (!remove.length && !insert.length && !update.length) return;
 
-    editorRuntime.history.batchUpdatesWithoutHistory(() => {
+    reactEditor.document.history.batchUpdatesWithoutHistory(() => {
       remove.forEach((id) => elements.removeElementAndPromoteChildren(id));
       insert.forEach((element) => elements.insertElement(element));
       if (update.length) elements.updateElements(update);

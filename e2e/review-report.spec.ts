@@ -18,15 +18,15 @@ test("saves a slash-created Review report and reproduces it with native load", a
     const blockId = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!blockId) throw new Error("Expected slash target block ID");
     const runtimeState = await page.evaluate((id) => {
-      const editorRuntime = (
+      const reactEditor = (
         window as unknown as {
-        __rivtoDemo: { editorRuntime: import("@chulane/rivto-react").EditorRuntime };
+        __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditor };
       }
-      ).__rivtoDemo.editorRuntime;
+      ).__rivtoDemo.reactEditor;
       return {
-        commands: (editorRuntime.editorViews.getActive() ?? editorRuntime.editorViews.getDefault())!.slashCommands.getAll({ blockId: id }).map(({ id: commandId }) => commandId),
-        definition: editorRuntime.blockTypes.getDefinition("demo.review")?.type,
-        element: editorRuntime.elements.getElementNode("demo-review-element")?.type,
+        commands: (reactEditor.panels.getActive() ?? reactEditor.panels.getDefault())!.slashCommands.getAll({ blockId: id }).map(({ id: commandId }) => commandId),
+        definition: reactEditor.blockTypes.getDefinition("demo.review")?.type,
+        element: reactEditor.document.elements.getElementNode("demo-review-element")?.type,
       };
     }, blockId);
     expect(runtimeState).toMatchObject({
@@ -73,7 +73,7 @@ test("saves a slash-created Review report and reproduces it with native load", a
 
     await page.evaluate((id) => {
       const core = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
       }).__rivtoDemo.editor;
       core.history.undo();
       const props = core.blocks.getBlock(id)?.props;
@@ -85,7 +85,7 @@ test("saves a slash-created Review report and reproduces it with native load", a
     await page.getByLabel("Restore Review report").setInputFiles(reportPath);
     await expect.poll(() => page.evaluate(() => {
       const core = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
+        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
       }).__rivtoDemo.editor;
       return core.dump();
     })).toEqual(report.snapshot);
@@ -106,14 +106,14 @@ for (const repeat of [0, 200]) {
     await today.getByRole("button", { name: "Edgeless", exact: true }).click();
     // Long auto-height cards overlap the demo report; expose the form for native pointer input.
     await page.evaluate(() => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
       editor.elements.updateElement("demo-review-element", { zIndex: 1000 });
     });
     const report = today.locator('[data-review-report="demo-review-element"]');
     const problem = report.getByRole("textbox", { name: "Review problem" });
     await problem.scrollIntoViewIfNeeded();
     const readReport = () => page.evaluate(() => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
       return { node: editor.elements.getElementNode("demo-review-element")!, count: editor.elements.getElementNodes().length };
     });
     const initial = await readReport();
