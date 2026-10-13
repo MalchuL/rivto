@@ -103,8 +103,8 @@ export class ExtensionManager implements ExtensionsApi {
     const dispose = () => {
       if (!active) return;
       active = false;
-      release();
       this.registrations.delete(dispose);
+      release();
     };
     this.registrations.add(dispose);
     this.activeExtensionRegistrations?.push(dispose);

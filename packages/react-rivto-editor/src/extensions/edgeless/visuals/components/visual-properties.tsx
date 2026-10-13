@@ -1,7 +1,7 @@
 /**
  * Property editor for one or more selected visual objects of the same kind.
  *
- * Edits are previewed live through the controller and committed as a single
+ * Edits are previewed live through the edgeless operations and committed as a single
  * undo entry when the pointer leaves the panel or the panel unmounts. Rows
  * whose values differ across the selection render as "Mixed" until the user
  * picks a value. Controls are shadcn primitives (`NativeSelect`, `Checkbox`)
@@ -66,17 +66,17 @@ const verticalAlignments: readonly { value: TextVerticalAlign; label: string; ic
  * Renders the same-type multi-selection property editor.
  *
  * @param props - Selected visuals (all of one kind), font options, and the
- * visual controller that previews and commits edits.
+ * edgeless operations that previews and commits edits.
  * @returns The right-side visual properties panel.
  */
 export function VisualProperties({
   visuals,
   fonts: fontOptions,
-  controller,
+  edgelessOperation,
 }: {
   visuals: readonly EdgelessVisual[];
   fonts: readonly EdgelessFontOption[];
-  controller: EdgelessOperations;
+  edgelessOperation: EdgelessOperations;
 }) {
   const visual = visuals[0]!;
   const ids = visuals.map((item) => item.id);
@@ -89,20 +89,20 @@ export function VisualProperties({
       const target = event.target;
       if (!isNodeLike(target)) return;
       if (panelRef.current?.contains(target)) return;
-      if (controller.hasPropertyPreview()) controller.commitPropertyPreview();
+      if (edgelessOperation.hasPropertyPreview()) edgelessOperation.commitPropertyPreview();
     };
     view.addEventListener("pointerdown", onPointerDown, true);
     return () => {
       view.removeEventListener("pointerdown", onPointerDown, true);
-      if (controller.hasPropertyPreview()) controller.commitPropertyPreview();
+      if (edgelessOperation.hasPropertyPreview()) edgelessOperation.commitPropertyPreview();
     };
-  }, [controller]);
+  }, [edgelessOperation]);
 
   const common = (key: string): unknown => {
     const first = (visual as unknown as Record<string, unknown>)[key];
     return visuals.every((item) => (item as unknown as Record<string, unknown>)[key] === first) ? first : undefined;
   };
-  const preview = (patch: Record<string, unknown>) => controller.previewProperties(ids, patch);
+  const preview = (patch: Record<string, unknown>) => edgelessOperation.previewProperties(ids, patch);
   const color = (label: string, key: "fill" | "stroke" | "color", disabled?: boolean) =>
     key in visual && (
       <ColorControl
@@ -280,7 +280,7 @@ export function VisualProperties({
       count={visuals.length}
       ariaLabel="Visual properties"
       panelRef={panelRef}
-      onClose={() => controller.clearSelection()}
+      onClose={() => edgelessOperation.clearSelection()}
     >
       {body}
     </EdgelessPropertiesPanel>

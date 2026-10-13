@@ -45,15 +45,15 @@ const GROUP_HIT_CLASS = "edgeless-group-hit";
  * renders the visible boundary and controls; this area has no outline or drag
  * handle of its own. Preview geometry survives React updates during a gesture.
  *
- * @param props - Group ID and the controller that supplies derived bounds.
+ * @param props - Group ID and the edgeless operations that supply derived bounds.
  * @returns Hit area, or null when the group has no visible bounds.
  */
-function GroupHitArea({ groupId, controller }: {
+function GroupHitArea({ groupId, edgelessOperation }: {
   readonly groupId: string;
-  readonly controller: EdgelessOperations;
+  readonly edgelessOperation: EdgelessOperations;
 }) {
-  const bounds = controller.getFrame(groupId);
-  const element = controller.elements.getElementNode(groupId);
+  const bounds = edgelessOperation.getFrame(groupId);
+  const element = edgelessOperation.elements.getElementNode(groupId);
   const preview = element && bounds ? { ...element, frame: bounds } : undefined;
   const hit = useEdgelessElementStyle<HTMLDivElement>(preview);
   if (!bounds) return null;
@@ -63,7 +63,7 @@ function GroupHitArea({ groupId, controller }: {
     data-edgeless-group-hit={groupId}
     data-edgeless-object-kind="group"
     data-edgeless-object-id={groupId}
-    style={{ ...hit.style, zIndex: controller.getGroupHitZIndex(groupId) }}
+    style={{ ...hit.style, zIndex: edgelessOperation.getGroupHitZIndex(groupId) }}
   />;
 }
 
@@ -73,10 +73,10 @@ function GroupHitArea({ groupId, controller }: {
  * @param props - Controller used to read the selected group nodes and bounds.
  * @returns Invisible hit areas between the currently selected groups' children.
  */
-function SelectedGroups({ controller }: { controller: EdgelessOperations }) {
+function SelectedGroups({ edgelessOperation }: { edgelessOperation: EdgelessOperations }) {
   const selection = useEdgelessSelection();
-  return selection.items.map((id) => controller.elements.getElementNode(id)?.type === "group"
-    ? <GroupHitArea key={id} groupId={id} controller={controller} />
+  return selection.items.map((id) => edgelessOperation.elements.getElementNode(id)?.type === "group"
+    ? <GroupHitArea key={id} groupId={id} edgelessOperation={edgelessOperation} />
     : null);
 }
 
@@ -89,11 +89,11 @@ function SelectedGroups({ controller }: { controller: EdgelessOperations }) {
  * @returns Toolbar and property editors for the current selection, or nothing.
  */
 function EdgelessSelectionChrome({
-  controller,
+  edgelessOperation,
   visuals,
   fonts,
 }: {
-  readonly controller: EdgelessOperations;
+  readonly edgelessOperation: EdgelessOperations;
   readonly visuals: readonly EdgelessVisual[];
   readonly fonts: readonly EdgelessFontOption[];
 }) {
@@ -112,22 +112,22 @@ function EdgelessSelectionChrome({
     ? selectedVisuals
     : [];
   const propertyBlocks = selection.items.flatMap((id) => {
-    const element = controller.elements.getElementNode(id);
+    const element = edgelessOperation.elements.getElementNode(id);
     return element?.type === "block" ? [element] : [];
   });
   return (
     <>
-      <SelectionToolbar controller={controller} items={selection.items} />
+      <SelectionToolbar edgelessOperation={edgelessOperation} items={selection.items} />
       {Properties && <Properties elements={selected} reactPanel={reactPanel} />}
       {!Properties && propertyVisuals.length > 0 && (
         <VisualProperties
           visuals={propertyVisuals}
           fonts={fonts}
-          controller={controller}
+          edgelessOperation={edgelessOperation}
         />
       )}
       {propertyBlocks.length === selection.items.length && propertyBlocks.length > 0 && (
-        <BlockProperties elements={propertyBlocks} controller={controller} />
+        <BlockProperties elements={propertyBlocks} edgelessOperation={edgelessOperation} />
       )}
     </>
   );
@@ -136,7 +136,7 @@ function EdgelessSelectionChrome({
 /**
  * Renders first-class visual elements, the bottom tool bar, and gesture previews.
  *
- * @param props - Installed visuals controller and host options.
+ * @param props - Installed edgeless operations and host options.
  * @returns Portaled visual plane and tool chrome, or null outside edgeless mode.
  */
 export function EdgelessVisualLayer({
@@ -150,29 +150,29 @@ export function EdgelessVisualLayer({
 
 /** Owns canvas tools, previews, and subscriptions only while the edgeless surface is displayed. */
 function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsOptions }) {
-  const controller = useEdgelessOperations();
+  const edgelessOperation = useEdgelessOperations();
   const reactPanel = useReactPanel();
   useEffect(() => reactPanel.keyboard.register({
     id: KEYBOARD_BINDING_IDS.edgelessToolSelect,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessToolSelect],
     mode: "edgeless",
     priority: 20,
-    when: ({ root }) => !root.dataset.transforming && controller.getTool().tool !== "select",
+    when: ({ root }) => !root.dataset.transforming && edgelessOperation.getTool().tool !== "select",
   }, () => {
-    controller.setTool("select");
+    edgelessOperation.setTool("select");
     return true;
-  }), [controller, reactPanel]);
+  }), [edgelessOperation, reactPanel]);
 
   const { element: root } = useEditorRoot();
-  const tool = useVisualTool(controller);
+  const tool = useVisualTool(edgelessOperation);
   useSyncExternalStore(
-    (listener) => controller.subscribe(listener),
-    () => controller.getRevision(),
-    () => controller.getRevision(),
+    (listener) => edgelessOperation.subscribe(listener),
+    () => edgelessOperation.getRevision(),
+    () => edgelessOperation.getRevision(),
   );
   const plane = root?.querySelector<HTMLElement>("[data-edgeless-plane]") ?? null;
   const zoom = Number(root?.dataset.edgelessZoom) || 1;
-  const visuals = controller.getVisuals();
+  const visuals = edgelessOperation.getVisuals();
   const fontOptions = useMemo(
     () => [...new Map([...DEFAULT_FONTS, ...(options.fonts ?? [])].map((font) => [font.fontFamily, font])).values()],
     [options.fonts],
@@ -181,8 +181,8 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
     () => [...new Map([...DEFAULT_STICKERS, ...(options.stickers ?? [])].map((sticker) => [sticker.id, sticker])).values()],
     [options.stickers],
   );
-  const presetDrag = usePresetDrag({ controller, root, plane, zoom });
-  const drawing = useDrawingGesture({ controller, root, zoom, tool });
+  const presetDrag = usePresetDrag({ edgelessOperation, root, plane, zoom });
+  const drawing = useDrawingGesture({ edgelessOperation, root, zoom, tool });
   const drawingRef = useRef(drawing);
   drawingRef.current = drawing;
   const [reconnectHover, setReconnectHover] = useState<ConnectorHover | null>(null);
@@ -213,19 +213,19 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
     if (!root) return;
     const creationTools = new Set(["place", "element", "drawing", "eraser", "connector"]);
     const onContextMenu = (event: MouseEvent) => {
-      if (!creationTools.has(controller.getTool().tool)) return;
+      if (!creationTools.has(edgelessOperation.getTool().tool)) return;
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.setTool("select");
+      edgelessOperation.setTool("select");
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 2) return;
-      if (!creationTools.has(controller.getTool().tool)) return;
+      if (!creationTools.has(edgelessOperation.getTool().tool)) return;
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.setTool("select");
+      edgelessOperation.setTool("select");
     };
     root.addEventListener("contextmenu", onContextMenu);
     root.addEventListener("pointerdown", onPointerDown, true);
@@ -233,11 +233,11 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
       root.removeEventListener("contextmenu", onContextMenu);
       root.removeEventListener("pointerdown", onPointerDown, true);
     };
-  }, [controller, root]);
+  }, [edgelessOperation, root]);
 
   if (!root || !plane) return null;
 
-  const defaults = controller.getDefaults();
+  const defaults = edgelessOperation.getDefaults();
   const connectorHover = drawing.connectorHover ?? reconnectHover;
 
   return <>
@@ -247,17 +247,17 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
           <VisualElement
             key={visual.id}
             visual={visual}
-            controller={controller}
+            edgelessOperation={edgelessOperation}
             zoom={zoom}
             resolveEndpoint={resolveEndpoint}
             onReconnectHover={onReconnectHover}
             onReconnect={(key, endpoint) => {
               if (visual.kind !== "connector") return;
-              controller.update({ id: visual.id, patch: { [key]: endpoint } as never });
+              edgelessOperation.update({ id: visual.id, patch: { [key]: endpoint } as never });
             }}
           />
         ))}
-        <SelectedGroups controller={controller} />
+        <SelectedGroups edgelessOperation={edgelessOperation} />
       </div>,
       plane,
     )}
@@ -306,7 +306,7 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
     {options.toolbar !== false && createPortal(
       <>
         <ToolBar
-          controller={controller}
+          edgelessOperation={edgelessOperation}
           tool={tool}
           fonts={fontOptions}
           stickers={stickerOptions}
@@ -315,7 +315,7 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
           endPresetDrag={presetDrag.endPresetDrag}
         />
         <EdgelessSelectionChrome
-          controller={controller}
+          edgelessOperation={edgelessOperation}
           visuals={visuals}
           fonts={fontOptions}
         />

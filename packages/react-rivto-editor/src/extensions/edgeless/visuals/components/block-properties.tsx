@@ -19,15 +19,15 @@ const AUTO_HEIGHT_LABEL_CLASS = "text-xs font-normal text-secondary-foreground";
 /**
  * Edits layout behavior shared by one or more selected block cards.
  *
- * @param props - Selected cards and their owning edgeless controller.
+ * @param props - Selected cards and their owning edgeless edgeless operations.
  * @returns The shared right-side properties panel.
  */
 export function BlockProperties({
   elements,
-  controller,
+  edgelessOperation,
 }: {
   readonly elements: readonly EditorElementNode[];
-  readonly controller: EdgelessOperations;
+  readonly edgelessOperation: EdgelessOperations;
 }) {
   const ids = elements.map((element) => element.id);
   const autoHeight = elements.every((element) => element.props.autoHeight !== false);
@@ -37,7 +37,7 @@ export function BlockProperties({
       title="Block card"
       count={elements.length}
       ariaLabel="Block properties"
-      onClose={() => controller.clearSelection()}
+      onClose={() => edgelessOperation.clearSelection()}
     >
       <PropertyGroup title="Layout">
         <PropertyRow label="Height">
@@ -47,7 +47,7 @@ export function BlockProperties({
               className={AUTO_HEIGHT_INPUT_CLASS}
               aria-label="Automatic card height"
               checked={autoHeight}
-              onCheckedChange={(checked) => controller.setBlockAutoHeight(ids, checked === true)}
+              onCheckedChange={(checked) => edgelessOperation.setBlockAutoHeight(ids, checked === true)}
             />
             <Label htmlFor={autoHeightId} className={AUTO_HEIGHT_LABEL_CLASS}>Automatic</Label>
           </div>

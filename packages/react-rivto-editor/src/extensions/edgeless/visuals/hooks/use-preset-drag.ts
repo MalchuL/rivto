@@ -18,12 +18,12 @@ interface PresetDrag {
 
 /** Pointer-capture place/drag for create-toolbar presets (no HTML5 DnD). */
 export function usePresetDrag({
-  controller,
+  edgelessOperation,
   root,
   plane,
   zoom,
 }: {
-  controller: EdgelessOperations;
+  edgelessOperation: EdgelessOperations;
   root: HTMLElement | null;
   plane: HTMLElement | null;
   zoom: number;
@@ -48,11 +48,11 @@ export function usePresetDrag({
 
   const snappedFrame = (event: ReactPointerEvent<HTMLButtonElement>) => {
     const point = canvasPoint(event.nativeEvent, root, zoom);
-    const candidates = controller.elements.getElementNodes()
+    const candidates = edgelessOperation.elements.getElementNodes()
       .filter((element) => element.type !== "connector" && element.type !== "group")
       .map((element) => element.frame);
     return snapPlacedFrame(
-      centeredPlaceFrame(point, controller.getPlaceSize()),
+      centeredPlaceFrame(point, edgelessOperation.getPlaceSize()),
       candidates,
       {
         snapToGrid: root?.dataset.edgelessSnap !== "false",
@@ -92,7 +92,7 @@ export function usePresetDrag({
       if (!active.moved && Math.hypot(event.clientX - active.startX, event.clientY - active.startY) < 4) return;
       if (!active.moved) {
         active.moved = true;
-        controller.setPlaceTool(active.payload);
+        edgelessOperation.setPlaceTool(active.payload);
         const ghost = event.currentTarget.ownerDocument.createElement("div");
         ghost.className = "edgeless-preset-ghost";
         ghost.dataset.edgelessUi = "true";
@@ -117,13 +117,13 @@ export function usePresetDrag({
         const hit = event.currentTarget.ownerDocument.elementFromPoint(event.clientX, event.clientY);
         if (root && hit instanceof Node && root.contains(hit) && !(hit instanceof Element && hit.closest("[data-edgeless-ui]"))) {
           const frame = snappedFrame(event).frame;
-          controller.create({ ...active.payload, frame });
+          edgelessOperation.create({ ...active.payload, frame });
         }
-        controller.setPlaceTool(active.payload);
+        edgelessOperation.setPlaceTool(active.payload);
         return;
       }
       // Click (no drag): enter place mode; do not create at viewport center.
-      controller.setPlaceTool(active.payload);
+      edgelessOperation.setPlaceTool(active.payload);
     },
   };
 }

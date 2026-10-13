@@ -1,5 +1,12 @@
 import { ReactPanelProvider } from "./react-panel-provider";
 import type { EditorPanelProps } from "./types";
+import { ChildrenPanel, type PanelOptions } from "@chulane/rivto";
+import type { ReactEditorApi } from "../../editor/types";
+
+/** Creates core boundaries that display children of the selected block root. */
+function createChildrenPanel(editor: ReactEditorApi, options: PanelOptions) {
+  return new ChildrenPanel(editor, options);
+}
 
 /**
  * Displays children of a selected block, or document roots when no root is supplied.
@@ -12,5 +19,5 @@ import type { EditorPanelProps } from "./types";
  * @throws If an optional navigation record refers to a different document.
  */
 export function EditorPanel(props: EditorPanelProps) {
-  return <ReactPanelProvider {...props} embedding={false} />;
+  return <ReactPanelProvider {...props} createPanel={createChildrenPanel} />;
 }

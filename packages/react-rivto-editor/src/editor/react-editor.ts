@@ -267,6 +267,29 @@ export class ReactEditor implements ReactEditorApi {
   }
 
   /**
+   * Adds cleanup without replacing the runtime's destroy method.
+   *
+   * Remaining callbacks run synchronously in reverse registration order during
+   * destruction. One failure does not prevent the other callbacks from running.
+   * @param release - Synchronous cleanup for a resource owned by this runtime.
+   * @returns Idempotent disposer that runs cleanup immediately and removes it from the list.
+   * @throws If destruction has started, or if the returned disposer's cleanup fails.
+   */
+  registerCleanup(release: () => void): () => void {
+    if (this.destroyed) throw new Error("React editor is destroyed");
+    let active = true;
+    const dispose = () => {
+      if (!active) return;
+      active = false;
+      const index = this.disposers.indexOf(dispose);
+      if (index >= 0) this.disposers.splice(index, 1);
+      release();
+    };
+    this.disposers.push(dispose);
+    return dispose;
+  }
+
+  /**
    * Releases React managers while the lifecycle owner retains the core and document.
    *
    * Selection restoration is cancelled while its extension dependencies remain

@@ -55,12 +55,12 @@ function placePayload(tool: Extract<EdgelessVisualTool, { tool: "place" }>, fram
 
 /** Drawing, eraser, connector, and place pointer capture against the plane SVG. */
 export function useDrawingGesture({
-  controller,
+  edgelessOperation,
   root,
   zoom,
   tool,
 }: {
-  controller: EdgelessOperations;
+  edgelessOperation: EdgelessOperations;
   root: HTMLElement | null;
   zoom: number;
   tool: EdgelessVisualTool;
@@ -75,7 +75,7 @@ export function useDrawingGesture({
   const [connectorHover, setConnectorHover] = useState<ConnectorHover | null>(null);
   const attachPad = ATTACH_PAD_PX / Math.max(zoom, 0.01);
 
-  const creationCandidates = (): VisualFrame[] => controller.elements.getElementNodes()
+  const creationCandidates = (): VisualFrame[] => edgelessOperation.elements.getElementNodes()
     .filter((element) => element.type !== "connector" && element.type !== "group")
     .map((element) => element.frame);
 
@@ -88,19 +88,19 @@ export function useDrawingGesture({
   });
 
   const placedFrame = (point: CanvasPoint, altKey = false) => snapPlacedFrame(
-    centeredPlaceFrame(point, controller.getPlaceSize()),
+    centeredPlaceFrame(point, edgelessOperation.getPlaceSize()),
     creationCandidates(),
     snapOptions(altKey),
   );
 
   const objectAt = (point: CanvasPoint): string | undefined => {
-    const candidates = controller.elements.getElementNodes()
+    const candidates = edgelessOperation.elements.getElementNodes()
       .filter((element) => element.type !== "connector" && element.type !== "group"
-        && pointInRotatedFrame(point, inflateFrame(element.frame, attachPad), controller.getRotation(element.id)))
+        && pointInRotatedFrame(point, inflateFrame(element.frame, attachPad), edgelessOperation.getRotation(element.id)))
       .sort((a, b) => b.zIndex - a.zIndex);
     let id = candidates[0]?.id;
     while (id) {
-      const parent = controller.getParentId(id);
+      const parent = edgelessOperation.getParentId(id);
       if (!parent) break;
       id = parent;
     }
@@ -108,8 +108,8 @@ export function useDrawingGesture({
   };
 
   const endpoint = (id: string, point: CanvasPoint): ConnectorEndpoint => {
-    const frame = controller.getFrame(id)!;
-    const rotation = controller.getRotation(id);
+    const frame = edgelessOperation.getFrame(id)!;
+    const rotation = edgelessOperation.getRotation(id);
     const anchor = nearestAnchor(frame, point, rotation);
     return { elementId: id, anchor, position: endpointPoint({ anchor, position: point }, frame, rotation) };
   };
@@ -117,14 +117,14 @@ export function useDrawingGesture({
   const hoverFor = (point: CanvasPoint, excludeId?: string): ConnectorHover | null => {
     const id = objectAt(point);
     if (!id || id === excludeId) return null;
-    const frame = controller.getFrame(id);
+    const frame = edgelessOperation.getFrame(id);
     if (!frame) return null;
-    const rotation = controller.getRotation(id);
+    const rotation = edgelessOperation.getRotation(id);
     const nearest = nearestAnchor(frame, point, rotation);
     return {
       elementId: id,
       frame,
-      outline: inflateFrame(controller.getBounds(id) ?? frame, attachPad),
+      outline: inflateFrame(edgelessOperation.getBounds(id) ?? frame, attachPad),
       anchors: edgeAnchors(frame, rotation).map((anchor) => ({
         x: anchor.x,
         y: anchor.y,
@@ -166,20 +166,20 @@ export function useDrawingGesture({
   }, [root, tool]);
 
   useEffect(() => {
-    const dispose = (controller.reactPanel ?? controller.runtime).keyboard.register({
+    const dispose = (edgelessOperation.reactPanel ?? edgelessOperation.runtime).keyboard.register({
       id: "edgeless.gesture-cancel",
       keys: ["Escape"],
       mode: "edgeless",
       priority: 40,
       when: () => Boolean(gesture.current),
     }, () => cancelGesture());
-    const deactivate = controller.reactPanel?.subscribeDeactivation(() => cancelGesture());
+    const deactivate = edgelessOperation.reactPanel?.subscribeDeactivation(() => cancelGesture());
     return () => {
       dispose();
       deactivate?.();
       cancelGesture();
     };
-  }, [controller, root]);
+  }, [edgelessOperation, root]);
 
   const pointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (tool.tool === "select" || tool.tool === "pan" || event.button !== 0) return;
@@ -220,8 +220,8 @@ export function useDrawingGesture({
         route: tool.route,
         sourceAnchor: active.source!.anchor,
         targetAnchor: active.target?.anchor,
-        sourceFrame: active.source?.elementId ? controller.getBounds(active.source.elementId) : undefined,
-        targetFrame: active.target?.elementId ? controller.getBounds(active.target.elementId) : undefined,
+        sourceFrame: active.source?.elementId ? edgelessOperation.getBounds(active.source.elementId) : undefined,
+        targetFrame: active.target?.elementId ? edgelessOperation.getBounds(active.target.elementId) : undefined,
       });
       setConnectorHover(hoverFor(point, active.source?.elementId));
       return;
@@ -251,11 +251,11 @@ export function useDrawingGesture({
     const previous = active.points.at(-1)!;
     active.points.push(point);
     if (tool.tool === "eraser") {
-      const elements = controller.elements.getElementNodes().filter((element) => element.type !== "group");
+      const elements = edgelessOperation.elements.getElementNodes().filter((element) => element.type !== "group");
       elements.forEach((element) => {
-        if (!segmentIntersectsRotatedFrame(previous, point, element.frame, controller.getRotation(element.id))) return;
+        if (!segmentIntersectsRotatedFrame(previous, point, element.frame, edgelessOperation.getRotation(element.id))) return;
         let id = element.id;
-        while (controller.getParentId(id)) id = controller.getParentId(id)!;
+        while (edgelessOperation.getParentId(id)) id = edgelessOperation.getParentId(id)!;
         active.erased.add(id);
       });
       root?.querySelectorAll<HTMLElement>("[data-edgeless-object-id]").forEach((element) => {
@@ -277,13 +277,13 @@ export function useDrawingGesture({
     setConnectorPreview(null);
     clearErased();
     if (root) showSnapGuides(root, []);
-    if (tool.tool === "eraser") controller.deleteItems([...active.erased]);
+    if (tool.tool === "eraser") edgelessOperation.deleteItems([...active.erased]);
     else if (tool.tool === "connector" && active.source && active.target) {
-      controller.create({ kind: "connector", source: active.source, target: active.target, route: tool.route });
+      edgelessOperation.create({ kind: "connector", source: active.source, target: active.target, route: tool.route });
     } else if (tool.tool === "drawing" && active.points.length > 1) {
-      const strokeWidth = controller.getDefaults().drawing.strokeWidth;
+      const strokeWidth = edgelessOperation.getDefaults().drawing.strokeWidth;
       const padded = padDrawingFrame(active.points, strokeWidth, zoom);
-      controller.create({
+      edgelessOperation.create({
         kind: "drawing",
         brush: tool.brush,
         frame: padded.frame,
@@ -297,14 +297,14 @@ export function useDrawingGesture({
         ? snapDraggedFrame(start, end, creationCandidates(), snapOptions(event.altKey), event.shiftKey).frame
         : placedFrame(start, event.altKey).frame;
       if (tool.tool === "element") {
-        const reactPanel = controller.reactPanel;
-        const creation = controller.runtime.elementTypes.get(tool.type)?.creation;
+        const reactPanel = edgelessOperation.reactPanel;
+        const creation = edgelessOperation.runtime.elementTypes.get(tool.type)?.creation;
         if (!reactPanel || !creation) return;
         const input = creation.create(reactPanel);
         if (input.type !== tool.type) throw new Error("Element creation factory returned a different type");
-        controller.createElement({ ...input, frame });
-      } else controller.create(placePayload(tool, frame));
-      if (moved) controller.rememberPlaceSize(frame);
+        edgelessOperation.createElement({ ...input, frame });
+      } else edgelessOperation.create(placePayload(tool, frame));
+      if (moved) edgelessOperation.rememberPlaceSize(frame);
       setPlacePreview(placedFrame(end, event.altKey).frame);
     }
     if (tool.tool === "connector") {

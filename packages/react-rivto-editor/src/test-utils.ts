@@ -53,14 +53,7 @@ export function createTestReactEditor(options: Omit<CreateReactEditorOptions, "e
   const runtime = createReactEditor(options);
   const editor = new ReactPanel(runtime, new ChildrenPanel(options.editor, {  }), { mode: new ModeManager(modes.get(options.editor)) });
   // Headless fixtures have no registered root; destroy their panel before shared cleanup.
-  const closePanel = editor.destroy;
-  const destroyRuntime = runtime.destroy.bind(runtime);
-  runtime.destroy = () => {
-    let result: Promise<void>;
-    try { closePanel(); }
-    finally { result = destroyRuntime(); }
-    return result;
-  };
+  runtime.registerCleanup(editor.destroy);
   return editor;
 }
 

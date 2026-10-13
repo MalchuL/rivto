@@ -347,28 +347,28 @@ describe("edgelessVisualsExtension", () => {
 
   test("remembers last place and drawing tools per category", async () => {
     const editor = await createDocumentEditor({ mode: "edgeless" });
-    // Selection only — exercise category memory on a dedicated controller instance.
+    // Selection only — exercise category memory on a dedicated edgeless operations instance.
     const reactPanel = createReactEditor({ editor, extensions: [edgelessSelectionExtension(), edgelessVisualsExtension()] });
     const reactPanelOperations = observeOperations(reactPanel);
-    const controller = reactPanelOperations;
-    controller.setPlaceTool({ kind: "ellipse" });
-    expect(controller.getTool()).toEqual({ tool: "place", kind: "ellipse" });
-    controller.rememberPlaceSize({ x: 0, y: 0, width: 90, height: 70 });
-    expect(controller.getPlaceSize()).toEqual({ width: 90, height: 70 });
-    controller.setPlaceTool({ kind: "ellipse" });
-    expect(controller.getPlaceSize()).toEqual({ width: 90, height: 70 });
-    controller.setPlaceTool({ kind: "rectangle" });
-    expect(controller.getPlaceSize()).toEqual({ width: 160, height: 120 });
-    expect(controller.getLastTool("shapes")).toEqual({ tool: "place", kind: "rectangle" });
-    controller.setDrawingBrush("marker");
-    expect(controller.getLastTool("drawing")).toEqual({ tool: "drawing", brush: "marker" });
+    const edgelessOperation = reactPanelOperations;
+    edgelessOperation.setPlaceTool({ kind: "ellipse" });
+    expect(edgelessOperation.getTool()).toEqual({ tool: "place", kind: "ellipse" });
+    edgelessOperation.rememberPlaceSize({ x: 0, y: 0, width: 90, height: 70 });
+    expect(edgelessOperation.getPlaceSize()).toEqual({ width: 90, height: 70 });
+    edgelessOperation.setPlaceTool({ kind: "ellipse" });
+    expect(edgelessOperation.getPlaceSize()).toEqual({ width: 90, height: 70 });
+    edgelessOperation.setPlaceTool({ kind: "rectangle" });
+    expect(edgelessOperation.getPlaceSize()).toEqual({ width: 160, height: 120 });
+    expect(edgelessOperation.getLastTool("shapes")).toEqual({ tool: "place", kind: "rectangle" });
+    edgelessOperation.setDrawingBrush("marker");
+    expect(edgelessOperation.getLastTool("drawing")).toEqual({ tool: "drawing", brush: "marker" });
     editor.commands.execute("edgeless.tool.set", { operations: reactPanelOperations, payload: "select" });
-    expect(controller.getTool()).toEqual({ tool: "select" });
-    controller.activateCategory("shapes");
-    expect(controller.getTool()).toEqual({ tool: "place", kind: "rectangle" });
-    controller.activateCategory("drawing");
-    expect(controller.getTool()).toEqual({ tool: "drawing", brush: "marker" });
-    controller.destroy();
+    expect(edgelessOperation.getTool()).toEqual({ tool: "select" });
+    edgelessOperation.activateCategory("shapes");
+    expect(edgelessOperation.getTool()).toEqual({ tool: "place", kind: "rectangle" });
+    edgelessOperation.activateCategory("drawing");
+    expect(edgelessOperation.getTool()).toEqual({ tool: "drawing", brush: "marker" });
+    edgelessOperation.destroy();
     reactPanel.editor.destroy();
     editor.destroy();
   });
@@ -392,7 +392,7 @@ describe("edgelessVisualsExtension", () => {
   });
 });
 
-test("one visuals controller binds model reads, writes, and selection to different document panels", async () => {
+test("one set of edgeless operations binds model reads, writes, and selection to different document panels", async () => {
   const { DocumentStorage } = await import("@chulane/document-model");
   const { YjsDocumentRegistry } = await import("@chulane/crdt-doc");
   const { createTestReactEditor: createRuntime } = await import("../../../test-utils");
@@ -401,8 +401,8 @@ test("one visuals controller binds model reads, writes, and selection to differe
   const b = await storage.create("B");
   const core = await createTestMultiEditor([a, b], storage, { extensions: [edgelessSelectionExtension(), edgelessVisualsExtension()] });
   const runtime = core.getEditor(a.id)!;
-  const controller = new EdgelessOperations(runtime);
-  const first = controller;
+  const edgelessOperation = new EdgelessOperations(runtime);
+  const first = edgelessOperation;
   const second = new EdgelessOperations(core.getEditor(b.id)!);
   const rectangle = first.create({ kind: "rectangle" });
   const ellipse = second.create({ kind: "ellipse" });
@@ -418,7 +418,7 @@ test("one visuals controller binds model reads, writes, and selection to differe
   expect(second.getTool()).toMatchObject({ tool: "select" });
   expect(second.getRevision()).toBe(revision);
   expect(runtime.getDocument()).toBe(a);
-  controller.destroy(); second.destroy(); await core.destroy();
+  edgelessOperation.destroy(); second.destroy(); await core.destroy();
    await storage.destroy();
 });
 
@@ -476,28 +476,28 @@ test("groups Panel roots in sibling order and keeps grouping in one undo step", 
   ] });
   const reactPanel = new ReactPanel(fullPanel.editor, new ChildrenPanel(fullPanel.document, { rootElementId: parent.id }), {  });
   const reactPanelOperations = observeOperations(reactPanel);
-  const controller = reactPanelOperations;
-  expect(controller.getParentId("a")).toBeUndefined();
-  expect(controller.getFrame(parent.id)).toBeUndefined();
+  const edgelessOperation = reactPanelOperations;
+  expect(edgelessOperation.getParentId("a")).toBeUndefined();
+  expect(edgelessOperation.getFrame(parent.id)).toBeUndefined();
   expect(fullPanelOperations.getFrame(parent.id)).toBeDefined();
-  controller.select(["b", "a"]);
+  edgelessOperation.select(["b", "a"]);
   editor.history.clear();
-  const group = controller.group();
+  const group = edgelessOperation.group();
   expect(group.childIds).toEqual(["a", "b"]);
-  expect(controller.getParentId("a")).toBe(group.id);
+  expect(edgelessOperation.getParentId("a")).toBe(group.id);
   expect(reactPanel.elements.getRootIds()).toEqual([group.id, "between"]);
   expect(editor.elements.getRootIds()).toEqual([parent.id]);
   editor.history.undo();
   expect(reactPanel.elements.getRootIds()).toEqual(["a", "between", "b"]);
   expect(editor.elements.hasElement(group.id)).toBe(false);
-  controller.destroy(); reactPanel.destroy(); fullPanel.editor.destroy(); await editor.destroy();
+  edgelessOperation.destroy(); reactPanel.destroy(); fullPanel.editor.destroy(); await editor.destroy();
 });
 
 test("connector anchors follow a rotated group's derived frame after a child moves", async () => {
   const editor = await createDocumentEditor({ mode: "edgeless" });
   const fullPanel = createReactEditor({ editor, extensions: [edgelessSelectionExtension(), edgelessVisualsExtension()] });
   const fullPanelOperations = observeOperations(fullPanel);
-  const controller = fullPanelOperations;
+  const edgelessOperation = fullPanelOperations;
   const group = editor.elements.insertElement({ type: "group", zIndex: 0, props: { rotation: 90 }, children: [
     { id: "a", type: "rectangle", frame: { x: 0, y: 20, width: 100, height: 40 }, zIndex: 0, props: { rotation: 90 } },
     { id: "b", type: "rectangle", frame: { x: 200, y: 20, width: 100, height: 40 }, zIndex: 0, props: { rotation: 90 } },
@@ -510,6 +510,6 @@ test("connector anchors follow a rotated group's derived frame after a child mov
   const source = editor.elements.getElementNode("link")!.props.source as { position: { x: number; y: number } };
   expect(source.position.x).toBeCloseTo(150);
   expect(source.position.y).toBeCloseTo(190);
-  expect(controller.getRotation(group.id)).toBe(90);
-  controller.destroy(); fullPanel.editor.destroy(); editor.destroy();
+  expect(edgelessOperation.getRotation(group.id)).toBe(90);
+  edgelessOperation.destroy(); fullPanel.editor.destroy(); editor.destroy();
 });

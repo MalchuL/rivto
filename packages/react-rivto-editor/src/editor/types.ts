@@ -80,6 +80,14 @@ export interface Entry {
  * Model selection shared by occurrences; DOM adapters belong to each ReactPanelApi.
  */
 export interface ReactEditorApi extends DocumentEditorAPI {
+  /**
+   * Adds synchronous runtime cleanup without replacing destroy.
+   * Remaining callbacks run in reverse registration order even if another fails.
+   * @param release - Cleanup for a resource owned by this React runtime.
+   * @returns Idempotent disposer that runs cleanup and removes it from the list.
+   * @throws If destruction has started, or if the returned disposer's cleanup fails.
+   */
+  registerCleanup(release: () => void): () => void;
   /** Shared definitions, renderers and editing contributions for canvas element types. */
   readonly elementTypes: ElementTypesApi;
 

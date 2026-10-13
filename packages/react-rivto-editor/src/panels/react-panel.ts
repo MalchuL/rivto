@@ -181,8 +181,10 @@ export class ReactPanel implements ReactPanelApi {
    * Retains cleanup for an event or keyboard registration made by this panel.
    * @param dispose - Removes one local registration without destroying the shared manager.
    * @returns An idempotent disposer; destroy() also calls it if it is still retained.
+   * @throws If panel destruction has started, or if the returned disposer's cleanup fails.
    */
   readonly registerCleanup = (dispose: () => void): () => void => {
+    if (this.destroyed) throw new Error("React panel is destroyed");
     let active = true;
     const release = () => {
       if (!active) return;

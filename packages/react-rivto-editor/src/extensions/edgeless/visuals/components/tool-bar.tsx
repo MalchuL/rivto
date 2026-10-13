@@ -63,7 +63,7 @@ function categoryActive(category: ToolCategory, tool: EdgelessVisualTool): boole
 
 /** Bottom-centered create toolbar with always-visible Select and category popovers. */
 export function ToolBar({
-  controller,
+  edgelessOperation,
   tool,
   fonts,
   stickers,
@@ -71,7 +71,7 @@ export function ToolBar({
   movePresetDrag,
   endPresetDrag,
 }: {
-  controller: EdgelessOperations;
+  edgelessOperation: EdgelessOperations;
   tool: EdgelessVisualTool;
   fonts: readonly EdgelessFontOption[];
   stickers: readonly EdgelessStickerOption[];
@@ -92,7 +92,7 @@ export function ToolBar({
       if (!isNodeLike(target) || barRef.current?.contains(target)) return;
       // Keep the category submenu open while placing/drawing on the canvas —
       // only dismiss on Select/Pan, category toggle, or Escape.
-      const current = controller.getTool().tool;
+      const current = edgelessOperation.getTool().tool;
       if (current === "place" || current === "drawing" || current === "eraser" || current === "connector") {
         return;
       }
@@ -109,15 +109,15 @@ export function ToolBar({
       view.removeEventListener("pointerdown", onPointerDown, true);
       view.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [controller, menu]);
+  }, [edgelessOperation, menu]);
 
   const selectTool = () => {
-    controller.setTool("select");
+    edgelessOperation.setTool("select");
     close();
   };
 
   const panTool = () => {
-    controller.setTool({ tool: "pan" });
+    edgelessOperation.setTool({ tool: "pan" });
     close();
   };
 
@@ -138,7 +138,7 @@ export function ToolBar({
       <ToolBarDivider />
       {categories.map((category) => {
         const open = menu === category.id;
-        const last = controller.getLastTool(category.id);
+        const last = edgelessOperation.getLastTool(category.id);
         const active = categoryActive(category.id, tool);
         return (
           <EdgelessToolButton
@@ -152,17 +152,17 @@ export function ToolBar({
                 setMenu(null);
                 return;
               }
-              controller.activateCategory(category.id);
+              edgelessOperation.activateCategory(category.id);
               setMenu(category.id);
             }}
           />
         );
       })}
-      <RegisteredElementTools controller={controller} />
+      <RegisteredElementTools edgelessOperation={edgelessOperation} />
       {menu && (
         <CreationPanel
           category={menu}
-          controller={controller}
+          edgelessOperation={edgelessOperation}
           tool={tool}
           fonts={fonts}
           stickers={stickers}

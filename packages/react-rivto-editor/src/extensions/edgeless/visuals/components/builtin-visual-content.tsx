@@ -8,7 +8,7 @@ import { shapeStrokePad } from '../utils/shape-stroke';
 /** Per-element label and connector interaction supplied by the common positioned host. */
 interface VisualContentState {
   visual: EdgelessVisual;
-  controller: EdgelessOperations;
+  edgelessOperation: EdgelessOperations;
   zoom: number;
   editing: boolean;
   setEditing(value: boolean): void;
@@ -22,7 +22,7 @@ export const VisualContentContext = createContext<VisualContentState | null>(nul
 export function BuiltinVisualContent() {
   const context = useContext(VisualContentContext);
   if (!context) throw new Error('Built-in visual content requires an element host');
-  const { visual, controller, zoom, editing, setEditing, focusPointRef, source, target } = context;
+  const { visual, edgelessOperation, zoom, editing, setEditing, focusPointRef, source, target } = context;
 
     const labelFor = (text: string) => (
       <EditableLabel
@@ -30,7 +30,7 @@ export function BuiltinVisualContent() {
         editing={editing}
         onEditingChange={setEditing}
         text={text}
-        onCommit={(next) => controller.update({ id: visual.id, patch: { text: next } as never })}
+        onCommit={(next) => edgelessOperation.update({ id: visual.id, patch: { text: next } as never })}
         focusPointRef={focusPointRef}
         stopPointerWhileEditing
       />
@@ -56,8 +56,8 @@ export function BuiltinVisualContent() {
       );
     }
     if (visual.kind === "connector" && source && target) {
-      const sourceBound = source.elementId ? controller.getBounds(source.elementId) : undefined;
-      const targetBound = target.elementId ? controller.getBounds(target.elementId) : undefined;
+      const sourceBound = source.elementId ? edgelessOperation.getBounds(source.elementId) : undefined;
+      const targetBound = target.elementId ? edgelessOperation.getBounds(target.elementId) : undefined;
       const points = connectorPoints(
         source.position,
         target.position,

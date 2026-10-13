@@ -11,13 +11,19 @@ import {
   useSyncExternalStore
 } from "react";
 import { BlockElementRefBoundary } from "../../blocks/block-wrapper/block-wrapper";
-import { ChildrenPanel } from "@chulane/rivto";
-import { EmbeddingPanel } from "@chulane/rivto";
+import type { PanelAPI, PanelOptions } from "@chulane/rivto";
+import type { ReactEditorApi } from "../../editor/types";
 import { DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN, PageVirtualizationContext } from "../../surfaces/page/page-virtualization-context";
 import { ReactPanelContext } from "./react-panel-context";
 import { EditorRootContext } from "./editor-root-context";
 import type { PanelSnapshot } from "../../panels/types";
 import type { EditorPanelProps } from "./types";
+
+/** Internal provider properties with the core panel factory supplied by its owning component. */
+interface ReactPanelProviderProps extends EditorPanelProps {
+  /** Creates core panel boundaries after commit; keep this factory stable across renders. */
+  readonly createPanel: (editor: ReactEditorApi, options: PanelOptions) => PanelAPI;
+}
 
 const LOADING_PANEL_SNAPSHOT: PanelSnapshot = { status: "loading" };
 
@@ -60,11 +66,11 @@ function normalizeVirtualizationCount(value: number, fallback: number): number {
  * changing one block does not recreate the complete surface tree.
  *
  * @param props - Shared editor, panel roots and React subtree to bind together.
- * The embedding flag includes and protects the block root instead of displaying its children.
+ * The panel factory defines block boundaries and whether the block root is included and protected.
  * @returns The panel's context providers and supplied surface, or a loading indicator before its panel instance is available.
  */
 export function ReactPanelProvider({
-  embedding,
+  createPanel,
   editor: hostEditor,
   mode,
   rootBlockId,
@@ -74,23 +80,17 @@ export function ReactPanelProvider({
   children,
   virtualizePageThreshold = false,
   virtualizePageOverscan = DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN,
-}: EditorPanelProps & { readonly embedding: boolean }) {
+}: ReactPanelProviderProps) {
   const documentId = hostEditor.getDocument().id;
   const parent = useContext(ReactPanelContext);
   const enabled = active && parent?.enabled !== false;
-  const configuration = useMemo(() => ({ hostEditor, rootBlockId, rootElementId, embedding, mode }),
-    [hostEditor, rootBlockId, rootElementId, embedding, mode]);
+  const configuration = useMemo(() => ({ hostEditor, rootBlockId, rootElementId, createPanel, mode }),
+    [hostEditor, rootBlockId, rootElementId, createPanel, mode]);
   const [current, setCurrent] = useState<{ configuration: typeof configuration; instance: ReactPanel }>();
   useEffect(() => {
-    const { hostEditor, rootBlockId, rootElementId, embedding, mode } = configuration;
-    const options = { rootBlockId, rootElementId, mode };
-    let instance: ReactPanel;
-    if (embedding) {
-      if (!rootBlockId) throw new Error("Embedding panel requires a block root");
-      instance = new ReactPanel(hostEditor, new EmbeddingPanel(hostEditor, { ...options, rootBlockId }), { mode });
-    } else {
-      instance = new ReactPanel(hostEditor, new ChildrenPanel(hostEditor, options), { mode });
-    }
+    const { hostEditor, rootBlockId, rootElementId, createPanel, mode } = configuration;
+    const corePanel = createPanel(hostEditor, { rootBlockId, rootElementId });
+    const instance = new ReactPanel(hostEditor, corePanel, { mode });
     setCurrent({ configuration, instance });
     return instance.destroy;
   }, [configuration]);

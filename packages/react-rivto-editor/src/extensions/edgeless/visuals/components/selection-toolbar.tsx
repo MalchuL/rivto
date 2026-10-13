@@ -25,33 +25,33 @@ const alignments = [
 /**
  * Renders actions for the current multi-object canvas selection.
  *
- * @param props - The visual controller and the selected element IDs.
+ * @param props - The edgeless operations and the selected element IDs.
  * @returns A toolbar region, or one with only reorder actions for a single item.
  */
 export function SelectionToolbar({
-  controller,
+  edgelessOperation,
   items,
 }: {
-  readonly controller: EdgelessOperations;
+  readonly edgelessOperation: EdgelessOperations;
   readonly items: readonly string[];
 }) {
   return (
     <div className={SELECTION_TOOLBAR_CLASS} data-edgeless-ui="true" role="toolbar" aria-label="Selected objects">
-      {items.length > 1 && <EdgelessToolButton label="Group" icon="group" onClick={() => controller.group()} />}
-      {items.some((id) => controller.elements.getElementNode(id)?.type === "group") && (
-        <EdgelessToolButton label="Ungroup" icon="ungroup" onClick={() => controller.ungroup()} />
+      {items.length > 1 && <EdgelessToolButton label="Group" icon="group" onClick={() => edgelessOperation.group()} />}
+      {items.some((id) => edgelessOperation.elements.getElementNode(id)?.type === "group") && (
+        <EdgelessToolButton label="Ungroup" icon="ungroup" onClick={() => edgelessOperation.ungroup()} />
       )}
       {items.length > 1 && alignments.map(([alignment, label, icon]) => (
-        <EdgelessToolButton key={alignment} label={label} icon={icon} onClick={() => controller.align(alignment)} />
+        <EdgelessToolButton key={alignment} label={label} icon={icon} onClick={() => edgelessOperation.align(alignment)} />
       ))}
       {items.length > 2 && (
         <>
-          <EdgelessToolButton label="Distribute horizontally" icon="distribute-h" onClick={() => controller.distribute("horizontal")} />
-          <EdgelessToolButton label="Distribute vertically" icon="distribute-v" onClick={() => controller.distribute("vertical")} />
+          <EdgelessToolButton label="Distribute horizontally" icon="distribute-h" onClick={() => edgelessOperation.distribute("horizontal")} />
+          <EdgelessToolButton label="Distribute vertically" icon="distribute-v" onClick={() => edgelessOperation.distribute("vertical")} />
         </>
       )}
       {(["front", "forward", "backward", "back"] as const).map((direction) => (
-        <EdgelessToolButton key={direction} label={`Move ${direction}`} icon={direction} onClick={() => controller.reorder(direction)} />
+        <EdgelessToolButton key={direction} label={`Move ${direction}`} icon={direction} onClick={() => edgelessOperation.reorder(direction)} />
       ))}
     </div>
   );

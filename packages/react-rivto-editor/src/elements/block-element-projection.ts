@@ -248,7 +248,12 @@ export function insertBlockElementSeparator(editor: ReactEditorApi | ReactPanelA
   const shared = "editor" in editor ? editor.editor : editor;
   const type = shared.blockTypes.getDefaultBlockElementSeparatorType();
   if (!type) throw new Error("No block element separator type is registered");
-  if ("editor" in editor) return editor.blocks.insertBlock({ type, content: "" }, editor.blocks.canRemove(afterId) ? editor.blocks.getInsertionDestinationAfter(afterId) : { parentId: afterId });
+  if ("editor" in editor) {
+    const destination = editor.blocks.canRemove(afterId)
+      ? editor.blocks.getInsertionDestinationAfter(afterId)
+      : { parentId: afterId };
+    return editor.blocks.insertBlock({ type, content: "" }, destination);
+  }
   return editor.blocks.insertBlock({ type, content: "" }, editor.blocks.getInsertionDestinationAfter(afterId));
 }
 

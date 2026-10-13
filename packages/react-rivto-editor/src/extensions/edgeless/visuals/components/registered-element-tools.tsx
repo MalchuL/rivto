@@ -5,12 +5,12 @@ import { useVisualTool } from '../hooks/use-visual-tool';
 import { editorControlProps } from '../../../../constants';
 
 /** Adds registered creation contributions to the standard toolbar; all types use the existing placement gesture. */
-export function RegisteredElementTools({ controller }: { readonly controller: EdgelessOperations }) {
+export function RegisteredElementTools({ edgelessOperation }: { readonly edgelessOperation: EdgelessOperations }) {
   const reactPanel = useReactPanelContext().reactPanel;
   const registry = reactPanel.editor.elementTypes;
   useSyncExternalStore(listener => registry.subscribe(listener), () => registry.revision, () => registry.revision);
-  const tool = useVisualTool(controller);
+  const tool = useVisualTool(edgelessOperation);
   return <>{registry.getAll().filter(entry => entry.creation).map(({ definition, creation }) =>
-    <button {...editorControlProps} type="button" key={definition.type} aria-pressed={tool.tool === 'element' && tool.type === definition.type} onClick={() => controller.setTool({ tool: 'element', type: definition.type })}>{creation!.icon}{creation!.title}</button>
+    <button {...editorControlProps} type="button" key={definition.type} aria-pressed={tool.tool === 'element' && tool.type === definition.type} onClick={() => edgelessOperation.setTool({ tool: 'element', type: definition.type })}>{creation!.icon}{creation!.title}</button>
   )}</>;
 }

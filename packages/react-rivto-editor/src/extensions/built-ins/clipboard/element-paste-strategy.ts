@@ -18,10 +18,10 @@ import { createEdgelessSelection, findEdgelessRuntime } from "../selection/edgel
 
 /** Canvas-specific clipboard paste strategy. */
 export class ElementPasteStrategy implements PasteStrategy {
-  /** Document managers used by both the installed controller and its view-bound operations. */
-  get runtime(): ReactEditorApi { return "editor" in this.editor ? this.editor.editor : this.editor; }
-  private rootIds() { return "editor" in this.editor ? this.editor.blocks.getRootIds() : this.runtime.blocks.getRootIds(); }
-  private get elements() { return "editor" in this.editor ? this.editor.elements : this.runtime.elements; }
+  /** Document managers used by both the installed strategy and its panel-bound operations. */
+  get reactEditor(): ReactEditorApi { return "editor" in this.editor ? this.editor.editor : this.editor; }
+  private rootIds() { return "editor" in this.editor ? this.editor.blocks.getRootIds() : this.reactEditor.blocks.getRootIds(); }
+  private get elements() { return "editor" in this.editor ? this.editor.elements : this.reactEditor.elements; }
 
   /**
    * Creates a strategy for one React runtime.
@@ -60,10 +60,10 @@ export class ElementPasteStrategy implements PasteStrategy {
   paste(context: PasteContext, _placement: PastePlacement): PasteResult | undefined {
     const bundle = context.bundle;
     if (!bundle) return undefined;
-    const converted = this.converted ?? this.runtime.clipboard.convertElements(bundle, this.editor, context.blockIdMap ?? new Map());
+    const converted = this.converted ?? this.reactEditor.clipboard.convertElements(bundle, this.editor, context.blockIdMap ?? new Map());
     const pastedRootIds = bundle.blocks.flatMap(block => context.blockIdMap?.get(block.id) ?? []);
     const created: string[] = [];
-    this.runtime.history.batchUpdates(() => {
+    this.reactEditor.history.batchUpdates(() => {
       if (!converted.nodes.length && !bundle.elements?.length && pastedRootIds.length) {
         const card = this.elements.insertElement({ type: "block", frame: { x: 60, y: 60, width: 320, height: 120 },
           zIndex: Math.max(0, ...this.elements.getElementNodes().map(node => node.zIndex)) + 1,
@@ -82,14 +82,14 @@ export class ElementPasteStrategy implements PasteStrategy {
           }
         }
         const parentId = "editor" in this.editor ? this.editor.rootElementId : null;
-        const inserted = this.runtime.elements.insertElement({ ...node, childIds: [] }, { parentId });
+        const inserted = this.reactEditor.elements.insertElement({ ...node, childIds: [] }, { parentId });
         created.push(inserted.id);
         this.created?.elementIds.add(inserted.id);
       }
       restoreElementChildren(this.elements, bundle.elements ?? [], converted.idMap);
     });
     return created.length ? {
-      proposedSelection: createEdgelessSelection(("editor" in this.editor ? this.editor.selection : this.runtime.selection).get(), true, bundle.selectedElementIds?.length
+      proposedSelection: createEdgelessSelection(("editor" in this.editor ? this.editor.selection : this.reactEditor.selection).get(), true, bundle.selectedElementIds?.length
         ? bundle.selectedElementIds.flatMap(id => converted.idMap.get(id) ?? []) : created),
       elementIdMap: converted.idMap,
     } : undefined;

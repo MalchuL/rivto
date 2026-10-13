@@ -22,9 +22,9 @@ const LABEL_KINDS = new Set(["text", "sticker", "rectangle", "ellipse", "connect
  * Selection chrome is subscribed per visual ID so a sibling entering the
  * marquee does not re-render this node.
  *
- * @param props - Visual snapshot, controller, and connector gesture callbacks.
+ * @param props - Visual snapshot, edgeless operations, and connector gesture callbacks.
  * @param props.visual - Persisted visual to render.
- * @param props.controller - Owning visuals controller.
+ * @param props.edgelessOperation - Owning edgeless operations.
  * @param props.zoom - Current canvas zoom factor.
  * @param props.resolveEndpoint - Maps a pointer to a connector endpoint.
  * @param props.onReconnectHover - Hover preview while dragging an endpoint.
@@ -33,21 +33,21 @@ const LABEL_KINDS = new Set(["text", "sticker", "rectangle", "ellipse", "connect
  */
 export function VisualElement({
   visual,
-  controller,
+  edgelessOperation,
   zoom,
   resolveEndpoint,
   onReconnectHover,
   onReconnect,
 }: {
   readonly visual: EdgelessVisual;
-  readonly controller: EdgelessOperations;
+  readonly edgelessOperation: EdgelessOperations;
   readonly zoom: number;
   readonly resolveEndpoint: (event: Pick<PointerEvent, "clientX" | "clientY">) => ConnectorEndpoint;
   readonly onReconnectHover: (event: Pick<PointerEvent, "clientX" | "clientY"> | null) => void;
   readonly onReconnect: (key: "source" | "target", endpoint: ConnectorEndpoint) => void;
 }) {
   const selected = useEdgelessSelected(visual.id);
-  const element = controller.elements.getElementNode(visual.id);
+  const element = edgelessOperation.elements.getElementNode(visual.id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<{ key: "source" | "target"; endpoint: ConnectorEndpoint } | null>(null);
   const focusPointRef = useRef<EditableLabelFocusPoint | null>(null);
@@ -59,10 +59,10 @@ export function VisualElement({
   // Echo transform preview inline styles while locked so React does not clear them.
   const { ref: hostRef, style } = useEdgelessElementStyle<HTMLDivElement>(element);
   const canEditLabel = LABEL_KINDS.has(visual.kind);
-  const Renderer = element && controller.runtime.elementTypes.get(element.type)?.render;
-  const reactPanel = controller.reactPanel;
+  const Renderer = element && edgelessOperation.runtime.elementTypes.get(element.type)?.render;
+  const reactPanel = edgelessOperation.reactPanel;
   const content = element && reactPanel && Renderer
-    ? <VisualContentContext.Provider value={{ visual, controller, zoom, editing, setEditing, focusPointRef, source, target }}>
+    ? <VisualContentContext.Provider value={{ visual, edgelessOperation, zoom, editing, setEditing, focusPointRef, source, target }}>
         <Renderer element={element} reactPanel={reactPanel} />
       </VisualContentContext.Provider>
     : <div role="status">Unknown element: {element?.type}</div>;

@@ -16,13 +16,21 @@ import type { PanelSlashCommandsApi } from "../managers/slash/api";
  * document managers for whole-document operations; reactPanel.editor owns registrations. Use this
  * panel's selection, clipboard, and slashCommands for browser interaction with its
  * own surface. Use reactPanel.blocks and reactPanel.elements for bounded editing; reactPanel.document.elements spans the document.
- * The interface exposes neither mutable registries nor lifecycle methods.
+ * The interface exposes cleanup registration without exposing mutable registries or panel destruction.
  *
  * Writing-block factories are installed by defaultWritingBlockExtension or a host
  * extension through editor.installDefaultWriting. ReactPanel implements
  * this contract; components obtain it from useReactPanel rather than constructing it.
  */
 export interface ReactPanelApi extends PanelAPI {
+  /**
+   * Adds synchronous cleanup to this panel's local registration list.
+   * Other panels and the shared runtime retain their resources when this panel closes.
+   * @param release - Cleanup for a resource owned by this panel occurrence.
+   * @returns Idempotent disposer; panel destruction calls it if still retained.
+   * @throws If panel destruction has started, or if the returned disposer's cleanup fails.
+   */
+  registerCleanup(release: () => void): () => void;
   /** Shared document infrastructure; this occurrence never destroys it. */
   readonly editor: ReactEditorApi;
   /** Panel-local mode by default; hosts can explicitly supply a shared ModeManager. */
