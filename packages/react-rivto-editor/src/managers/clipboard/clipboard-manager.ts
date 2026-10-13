@@ -8,7 +8,7 @@ import { ElementPasteStrategy } from "../../extensions/built-ins/clipboard/eleme
 import { clipboardContentBundle, selectedClipboardElements } from "./clipboard-content";
 import { ClipboardConverters } from "./clipboard-converters";
 import { panelClipboardDocument } from "./panel-clipboard-document";
-import type { BlockClipboardConverter, ClipboardCopyContext, ClipboardPasteContext, ConvertedClipboardElements, CreatedClipboardRecords, ElementClipboardConverter, PanelPasteStrategy } from "./types";
+import type { BlockClipboardConverter, ClipboardCopyContext, ClipboardPasteContext, ConvertedClipboardElements, CreatedClipboardRecords, ElementClipboardConverter, PanelPasteStrategy, BlockClipboardFields } from "./types";
 
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { BLOCK_PASTE_STRATEGY_ID, ClipboardManager as CoreClipboardManager, PRESERVE_NEWLINES_PASTE_STRATEGY_ID, TEXT_PASTE_STRATEGY_ID } from "@chulane/rivto";
@@ -221,7 +221,7 @@ export class ClipboardManager {
     return structuredClone({ ...node, childIds: children.map(child => child.id) });
   }
 
-  private blockFields(fields: Partial<import("./types").BlockClipboardFields> | undefined) {
+  private blockFields(fields: Partial<BlockClipboardFields> | undefined) {
     if (!fields) return {};
     const { content, props, listProps, pluginData } = fields;
     return { ...(content === undefined ? {} : { content }), ...(props === undefined ? {} : { props }),

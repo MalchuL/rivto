@@ -4,6 +4,8 @@
  * preserve the caret, and update depth without changing document-order labels.
  */
 import { expect, test } from "@playwright/test";
+import type { ReactEditor } from "@chulane/rivto-react";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const BLOCK_NUMBER_CLASS = "demo-block-number";
 
@@ -14,7 +16,7 @@ for (const repeat of [0, 200]) {
     await expect(page.locator('[data-journal-document="today"] [data-block-content]').first()).toBeVisible();
     const id = await page.evaluate(() => {
       const { editor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        __rivtoDemo: { editor: DocumentEditorAPI };
       }).__rivtoDemo;
       return editor.blocks.getRootIds()[1]!;
     });
@@ -24,7 +26,7 @@ for (const repeat of [0, 200]) {
     const originalNumber = await number.textContent();
     await page.evaluate(() => {
       const runtime = window as unknown as {
-        __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditor };
+        __rivtoDemo: { reactEditor: ReactEditor };
         __outlineReads: number;
         __contentQueries: number;
       };
@@ -48,7 +50,7 @@ for (const repeat of [0, 200]) {
         const runtime = window as unknown as {
           __outlineReads: number;
         __contentQueries: number;
-          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          __rivtoDemo: { editor: DocumentEditorAPI };
         };
         runtime.__outlineReads = 0;
         runtime.__contentQueries = 0;
@@ -62,7 +64,7 @@ for (const repeat of [0, 200]) {
         const runtime = window as unknown as {
           __outlineReads: number;
         __contentQueries: number;
-          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          __rivtoDemo: { editor: DocumentEditorAPI };
         };
         return { reads: runtime.__outlineReads, queries: runtime.__contentQueries, focus: runtime.__rivtoDemo.editor.selection.get()?.focusBlockId };
       });
@@ -74,7 +76,7 @@ for (const repeat of [0, 200]) {
     for (const [operation, depth] of [["undo", "1"], ["redo", "0"]] as const) {
       await page.evaluate((action) => {
         (window as unknown as {
-          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          __rivtoDemo: { editor: DocumentEditorAPI };
         }).__rivtoDemo.editor.history[action]();
       }, operation);
       await expect(number).toHaveText(originalNumber!);

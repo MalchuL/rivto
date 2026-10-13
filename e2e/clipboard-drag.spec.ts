@@ -1,8 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { HOST_BLOCK_ID_SELECTOR as BLOCK_ID_SELECTOR, blockTypeSelector } from "./dom-markers";
 
 async function textPoint(
-  content: import("@playwright/test").Locator,
+  content: Locator,
   offset: number,
 ): Promise<{ x: number; y: number }> {
   return content.evaluate((element, requestedOffset) => {
@@ -18,7 +18,7 @@ async function textPoint(
   }, offset);
 }
 
-async function caretOffset(content: import("@playwright/test").Locator): Promise<number> {
+async function caretOffset(content: Locator): Promise<number> {
   return content.evaluate((element) => {
     const selection = element.ownerDocument.getSelection();
     if (!selection?.focusNode || !element.contains(selection.focusNode)) return -1;
@@ -43,7 +43,7 @@ const structuredBundle = JSON.stringify({
   }],
 });
 
-async function paste(page: import("@playwright/test").Page, asPlainText: boolean): Promise<void> {
+async function paste(page: Page, asPlainText: boolean): Promise<void> {
   const content = page.locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])").first();
   await content.click();
   await page.keyboard.press("End");

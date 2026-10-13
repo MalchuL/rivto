@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 import { readFile, readdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { BLOCK_ID_ATTRIBUTE, blockIdSelector } from "./dom-markers";
+import type { EditorSnapshot, DocumentEditorAPI } from "@chulane/rivto";
+import type { ReactEditor } from "@chulane/rivto-react";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
 
@@ -20,7 +22,7 @@ test("saves a slash-created Review report and reproduces it with native load", a
     const runtimeState = await page.evaluate((id) => {
       const reactEditor = (
         window as unknown as {
-        __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditor };
+        __rivtoDemo: { reactEditor: ReactEditor };
       }
       ).__rivtoDemo.reactEditor;
       return {
@@ -62,7 +64,7 @@ test("saves a slash-created Review report and reproduces it with native load", a
         nextReportSiblingId: string | null;
         parentReportId: string | null;
       };
-      snapshot: import("@chulane/rivto").EditorSnapshot;
+      snapshot: EditorSnapshot;
     };
     expect(report.problem).toContain(problem);
     expect(report.reportBlock).toEqual({
@@ -73,7 +75,7 @@ test("saves a slash-created Review report and reproduces it with native load", a
 
     await page.evaluate((id) => {
       const core = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        __rivtoDemo: { editor: DocumentEditorAPI };
       }).__rivtoDemo.editor;
       core.history.undo();
       const props = core.blocks.getBlock(id)?.props;
@@ -85,7 +87,7 @@ test("saves a slash-created Review report and reproduces it with native load", a
     await page.getByLabel("Restore Review report").setInputFiles(reportPath);
     await expect.poll(() => page.evaluate(() => {
       const core = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        __rivtoDemo: { editor: DocumentEditorAPI };
       }).__rivtoDemo.editor;
       return core.dump();
     })).toEqual(report.snapshot);
@@ -106,14 +108,14 @@ for (const repeat of [0, 200]) {
     await today.getByRole("button", { name: "Edgeless", exact: true }).click();
     // Long auto-height cards overlap the demo report; expose the form for native pointer input.
     await page.evaluate(() => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       editor.elements.updateElement("demo-review-element", { zIndex: 1000 });
     });
     const report = today.locator('[data-review-report="demo-review-element"]');
     const problem = report.getByRole("textbox", { name: "Review problem" });
     await problem.scrollIntoViewIfNeeded();
     const readReport = () => page.evaluate(() => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       return { node: editor.elements.getElementNode("demo-review-element")!, count: editor.elements.getElementNodes().length };
     });
     const initial = await readReport();

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const containers = [
   { type: "kanban", content: "Board", children: [{ type: "kanban-column", content: "Lane" }] },
@@ -15,7 +16,7 @@ for (const mode of ["block", "edgeless"] as const) {
         await page.goto("/");
         const ids = await page.evaluate(({ input, nextMode }) => {
           const editor = (window as unknown as {
-            __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+            __rivtoDemo: { editor: DocumentEditorAPI };
           }).__rivtoDemo.editor;
           const source = editor.blocks.insertBlock({ type: "paragraph", content: "Source" }).id;
           const upper = editor.blocks.insertBlock({ type: "paragraph", content: "Upper" }).id;
@@ -49,12 +50,12 @@ for (const mode of ["block", "edgeless"] as const) {
         await page.mouse.up();
         await expect.poll(() => page.evaluate(() => {
           const editor = (window as unknown as {
-            __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+            __rivtoDemo: { editor: DocumentEditorAPI };
           }).__rivtoDemo.editor;
           return editor.blocks.getRootIds();
         })).toEqual(child ? [ids.upper, ids.lower] : [ids.upper, ids.source, ids.lower]);
         await expect.poll(() => page.evaluate((id) => (window as unknown as {
-          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          __rivtoDemo: { editor: DocumentEditorAPI };
         }).__rivtoDemo.editor.blocks.getParentId(id), ids.source)).toBe(child ? ids.upper : null);
       });
     }
@@ -66,7 +67,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto("/");
     const ids = await page.evaluate((nextMode) => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       const source = editor.blocks.insertBlock({ type: "paragraph", content: "Source" }).id;
       const parent = editor.blocks.insertBlock({ type: "paragraph", content: "Parent", children: [
         { type: "columns", children: [{ type: "columns-column", children: [{ type: "paragraph", content: "First" }] }] },
@@ -101,12 +102,12 @@ for (const mode of ["block", "edgeless"] as const) {
     }
     await page.mouse.up();
     await expect.poll(() => page.evaluate((parent) => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       return editor.blocks.getBlock(parent)!.children.map(({ id }) => id);
     }, ids.parent)).toEqual([ids.siblings[0], ids.source, ...ids.siblings.slice(1)]);
-    await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.history.undo());
+    await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor.history.undo());
     await expect.poll(() => page.evaluate((source) => (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.blocks.getParentId(source), ids.source)).toBeNull();
   });
 
@@ -114,7 +115,7 @@ for (const mode of ["block", "edgeless"] as const) {
     test(`${type} background rejects content without inventing a column in ${mode}`, async ({ page }) => {
       await page.goto("/");
       const ids = await page.evaluate(({ type, mode }) => {
-        const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
         const source = editor.blocks.insertBlock({ type: "paragraph", content: "Source" }).id;
         const board = editor.blocks.insertBlock({ type, children: [
           { type: type === "kanban" ? "kanban-column" : "columns-column", content: "Left" },
@@ -136,7 +137,7 @@ for (const mode of ["block", "edgeless"] as const) {
       await expect(page.locator(".page-drop-indicator")).toHaveCount(0);
       await page.mouse.up();
       expect(await page.evaluate(({ source, board }) => {
-        const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
         return { parent: editor.blocks.getParentId(source), children: editor.blocks.getBlock(board)!.children.map(({ id }) => id) };
       }, ids)).toEqual({ parent: null, children: ids.lanes });
     });

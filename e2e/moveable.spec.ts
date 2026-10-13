@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 async function openShape(page: Page) {
   await page.goto("/");
@@ -6,7 +7,7 @@ async function openShape(page: Page) {
   await today.locator("[data-block-content]").first().waitFor();
   await today.getByRole("button", { name: "Edgeless", exact: true }).click();
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
     editor.elements.insertElement({ id: "moveable-shape", type: "rectangle", frame: { x: 100, y: 100, width: 180, height: 120 }, zIndex: 1000, props: { text: "Resize this text", fontSize: 16, strokeWidth: 3 } });
     editor.commands.execute("edgeless.selection.set", ["moveable-shape"]);
   });
@@ -16,7 +17,7 @@ async function openShape(page: Page) {
 }
 
 async function readShape(page: Page) {
-  return page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.elements.getElementNode("moveable-shape")!);
+  return page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor.elements.getElementNode("moveable-shape")!);
 }
 
 test("Moveable resizes HTML content without scaling its text and records one undo step", async ({ page }) => {
@@ -34,7 +35,7 @@ test("Moveable resizes HTML content without scaling its text and records one und
   expect((await readShape(page)).props.fontSize).toBe(16);
   expect((await readShape(page)).props.strokeWidth).toBe(3);
   await expect(shape.locator(".edgeless-shape-label")).toHaveCSS("font-size", "16px");
-  await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.history.undo());
+  await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor.history.undo());
   await expect.poll(async () => (await readShape(page)).frame).toEqual(before.frame);
 });
 
@@ -89,7 +90,7 @@ test("Moveable restores both the object and its handles when rotation is cancell
 
 test("Moveable resizes a rotated element while keeping the opposite edge fixed", async ({ page }) => {
   const { controls, shape } = await openShape(page);
-  await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.elements.updateElement("moveable-shape", { props: { rotation: 90 } }));
+  await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor.elements.updateElement("moveable-shape", { props: { rotation: 90 } }));
   await expect.poll(() => shape.evaluate(el => { const m = new DOMMatrix(getComputedStyle(el).transform); return [m.a, m.b, m.c, m.d]; })).toEqual([0, 1, -1, 0]);
   const before = await shape.boundingBox();
   const handle = await controls.locator('[data-edgeless-resize-handle="e"]').boundingBox();
@@ -112,7 +113,7 @@ for (const kind of ["block", "report", "shape"] as const) {
   test(`Moveable preserves ${kind} rotation through rerender, resize, undo and remount`, async ({ page }) => {
     const { today } = await openShape(page);
     const id = await page.evaluate((kind) => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       const types = { block: "block", report: "demo.review", shape: "rectangle" };
       const element = editor.elements.getElementNodes().find((element) => element.type === types[kind])!;
       editor.elements.updateElement(element.id, { frame: { x: 120, y: 120, width: 360, height: 240 }, props: kind === "block" ? { autoHeight: false } : undefined });
@@ -133,7 +134,7 @@ for (const kind of ["block", "report", "shape"] as const) {
     expect(preview).toMatch(/rotate\(/);
     // A fresh element snapshot must not replace the in-progress DOM preview.
     await page.evaluate((id) => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       editor.elements.updateElement(id, { zIndex: 2000 });
     }, id);
     await today.locator(".edgeless-viewport").dispatchEvent("wheel", { ctrlKey: true, deltaY: -Math.log(1.1) / 0.002, clientX: object.x, clientY: object.y });
@@ -141,16 +142,16 @@ for (const kind of ["block", "report", "shape"] as const) {
     await expect.poll(() => host.evaluate((host) => host.style.transform)).toBe(preview);
     await page.mouse.up();
     const readAngle = () => page.evaluate((id) => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       return Number(editor.elements.getElementNode(id)!.props.rotation ?? 0);
     }, id);
     await expect.poll(readAngle).not.toBe(0);
     const angle = await readAngle();
     await expect.poll(() => host.evaluate((host) => Number(host.style.transform.match(/rotate\(([^)]+)deg\)/)?.[1]))).toBeCloseTo(angle, 3);
-    await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.history.undo());
+    await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor.history.undo());
     await expect.poll(readAngle).toBe(0);
     await expect.poll(() => host.evaluate((host) => host.style.transform)).toMatch(/rotate\(0deg\)$/);
-    await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.history.redo());
+    await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor.history.redo());
     await expect.poll(readAngle).toBe(angle);
     await controls.locator('[data-edgeless-resize-handle="e"]').focus();
     await page.keyboard.press("Alt+Shift+ArrowRight");
@@ -185,7 +186,7 @@ test("Moveable uses the same object alignment for dragging and resizing", async 
   const { today, shape, controls } = await openShape(page);
   await today.getByRole("button", { name: "Disable snap to grid", exact: true }).click();
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
     editor.elements.updateElement("demo-review-element", { frame: { x: 400, y: 400, width: 300, height: 200 } });
   });
   await shape.scrollIntoViewIfNeeded();
@@ -209,7 +210,7 @@ test("Moveable uses the same object alignment for dragging and resizing", async 
   await page.mouse.up();
   await expect.poll(async () => (await readShape(page)).frame.x).toBe(220);
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
     editor.elements.updateElement("moveable-shape", { frame: { x: 100 } });
   });
   const handle = await controls.locator('[data-edgeless-resize-handle="e"]').boundingBox();
@@ -227,7 +228,7 @@ for (const type of ["rectangle", "block", "demo.review"]) {
   test(`Moveable border moves ${type} without a canvas drag handle`, async ({ page }) => {
     const { today } = await openShape(page);
     const id = await page.evaluate(type => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       const element = editor.elements.getElementNodes().find(element => element.type === type)!;
       editor.elements.updateElement(element.id, { frame: { x: 120, y: 120, width: 360, height: 240 }, zIndex: 3000, props: type === "block" ? { autoHeight: false } : undefined });
       editor.commands.execute("edgeless.selection.set", [element.id]);
@@ -237,7 +238,7 @@ for (const type of ["rectangle", "block", "demo.review"]) {
     await expect(edge).toBeVisible();
     await expect(today.locator("[data-edgeless-drag-handle]")).toHaveCount(0);
     const box = (await edge.boundingBox())!;
-    const read = () => page.evaluate(id => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.elements.getElementNode(id)!.frame, id);
+    const read = () => page.evaluate(id => (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor.elements.getElementNode(id)!.frame, id);
     const before = await read();
     await page.keyboard.down("Alt");
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 4);
@@ -247,7 +248,7 @@ for (const type of ["rectangle", "block", "demo.review"]) {
     await page.mouse.up();
     await page.keyboard.up("Alt");
     await expect.poll(read).toEqual({ ...before, x: before.x + 40, y: before.y + 20 });
-    await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.history.undo());
+    await page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor.history.undo());
     await expect.poll(read).toEqual(before);
   });
 }

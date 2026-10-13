@@ -1,6 +1,7 @@
-import type { ClipboardBundle, EditorBlock, EditorBlockInput, EditorElementNode } from "@chulane/rivto";
+import type { ClipboardBundle, EditorBlock, EditorBlockInput, EditorElementNode, EditorElementInput } from "@chulane/rivto";
 import type { RegistrationOwner } from "../extensions/types";
 import type { ClipboardContent, ClipboardFormatter, ClipboardParseContext, ClipboardParser, PortableBlockFormats } from "./types";
+import type { ClipboardConverters } from "./clipboard-converters";
 
 /** Escapes text before including it in exported clipboard HTML. */
 export const escapeClipboardHTML = (value: string): string => value.replace(/[&<>"']/g, (character) => ({
@@ -17,7 +18,7 @@ export class ClipboardFormatRegistry {
    * @param registrations - Extension lifecycle owning registered contributions.
    * @param converters - Optional runtime type converters applied before general formatting.
    */
-  constructor(private readonly registrations: RegistrationOwner, private readonly converters?: import("./clipboard-converters").ClipboardConverters) {}
+  constructor(private readonly registrations: RegistrationOwner, private readonly converters?: ClipboardConverters) {}
 
   /**
    * Appends a formatter to the ordered, composable formatting pipeline.
@@ -176,7 +177,7 @@ export class ClipboardFormatRegistry {
     if (data.html && typeof DOMParser !== "undefined") {
       const document = new DOMParser().parseFromString(data.html, "text/html");
       const blocks: EditorBlockInput[] = [];
-      const elements: import("@chulane/rivto").EditorElementInput[] = [];
+      const elements: EditorElementInput[] = [];
       const visit = (node: Node, destination: EditorBlockInput[]): void => {
         if (node.nodeType === 3) {
           const content = node.textContent ?? "";

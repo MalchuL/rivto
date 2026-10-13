@@ -1,5 +1,7 @@
 /** Browser regression for contentless container headers and collapsed summaries. */
 import { expect, test } from "@playwright/test";
+import type { ReactEditor } from "@chulane/rivto-react";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const ROW_CLASS = "page-block-row";
 const CONTENT_FLOW_CLASS = "rivto-block-content-flow";
@@ -22,7 +24,7 @@ test("slash converts the current root to each structural container", async ({ pa
     if (!blockId) throw new Error("Expected an editable root block");
     const before = await page.evaluate(() => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        __rivtoDemo: { editor: DocumentEditorAPI };
       }).__rivtoDemo.editor;
       return editor.blocks.getBlocks().map((block) => block.id);
     });
@@ -34,13 +36,13 @@ test("slash converts the current root to each structural container", async ({ pa
     await expect(block).toHaveAttribute("data-block-type", type);
     await expect.poll(() => page.evaluate(() => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        __rivtoDemo: { editor: DocumentEditorAPI };
       }).__rivtoDemo.editor;
       return editor.blocks.getBlocks().map((candidate) => candidate.id);
     })).toEqual(before);
     await page.evaluate(() => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        __rivtoDemo: { editor: DocumentEditorAPI };
       }).__rivtoDemo.editor;
       editor.history.undo();
     });
@@ -94,7 +96,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
 
   await expect.poll(() => page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor;
     return ["bento", "table", "kanban", "columns"].map((type) => (
       editor.blocks.getBlocks().find((block) => block.type === type)?.content
@@ -103,7 +105,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
 
   await page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor;
     const bento = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
     const tile = editor.blocks.insertBlock({ type: "paragraph", content: "Fourth tile" }).id;
@@ -113,7 +115,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
 
   await page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor;
     for (const type of ["bento", "kanban", "table"]) {
       const block = editor.blocks.getBlocks().find((candidate) => candidate.type === type)!;
@@ -215,8 +217,8 @@ for (const mode of ["block", "edgeless"] as const) {
     const id = await page.evaluate(() => {
       const { editor, reactEditor } = (window as unknown as {
         __rivtoDemo: {
-          editor: import("@chulane/rivto").DocumentEditorAPI;
-          reactEditor: import("@chulane/rivto-react").ReactEditor;
+          editor: DocumentEditorAPI;
+          reactEditor: ReactEditor;
         };
       }).__rivtoDemo;
       // Reuse a layout view that rejects body drops, under a type unknown to CSS.
@@ -255,7 +257,7 @@ for (const mode of ["block", "edgeless"] as const) {
     // Changing to an ordinary block must remove the old container decoration.
     await page.evaluate((blockId) => {
       (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        __rivtoDemo: { editor: DocumentEditorAPI };
       }).__rivtoDemo.editor.blocks.setBlockType(blockId, "paragraph");
     }, id);
     await expect(block).not.toHaveAttribute(DRAG_CONTAINER_ATTRIBUTE);

@@ -8,6 +8,7 @@
  */
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const PAGE_SURFACE_CLASS = "page-surface";
 const PAGE_BLOCK_ROW_CLASS = "page-block-row";
@@ -24,7 +25,7 @@ async function seedLargeDocument(page: Page): Promise<void> {
   await expect(page.locator('[data-journal-document="today"] [data-block-content]').first()).toBeVisible();
   await page.evaluate(() => {
     const runtime = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor;
     runtime.history.batchUpdates(() => {
       let afterId = runtime.blocks.getRootIds().at(-1);
@@ -53,7 +54,7 @@ async function seedOutlineDocument(page: Page, branches: number): Promise<string
   await page.getByRole("spinbutton", { name: "Virtualize after roots count" }).fill("1000");
   const siblings = await page.evaluate((count) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor;
     const childrenPerBranch = count ? Math.floor((2_000 - count) / count) : 0;
     editor.history.batchUpdates(() => {
@@ -101,7 +102,7 @@ test("windows 2,000 flat page roots and can disable windowing", async ({ page })
   await page.getByRole("checkbox", { name: "Virtualize page" }).check();
   await expect.poll(() => roots.count()).toBeLessThan(500);
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
     editor.blocks.updateBlock("perf-root-1999", { content: "Updated offscreen root" });
   });
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -178,7 +179,7 @@ test("moves the caret through a page window boundary", async ({ page }) => {
   await page.locator('[data-block-id="perf-root-0"] [data-block-content]').click();
   for (let index = 0; index < 35; index += 1) await page.keyboard.press("ArrowDown");
   const focused = await page.evaluate(() => (window as unknown as {
-    __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+    __rivtoDemo: { editor: DocumentEditorAPI };
   }).__rivtoDemo.editor.selection.get()?.focusBlockId);
   expect(Number(focused?.replace("perf-root-", ""))).toBeGreaterThan(20);
   await expect(page.locator(`[data-block-id="${focused}"]`)).toHaveCount(1);
@@ -189,7 +190,7 @@ test("extends a text selection through a page window boundary", async ({ page })
   await page.locator('[data-block-id="perf-root-0"] [data-block-content]').click();
   for (let index = 0; index < 35; index += 1) await page.keyboard.press("Shift+ArrowDown");
   const selection = await page.evaluate(() => {
-    const current = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.selection.get();
+    const current = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor.selection.get();
     return { anchor: current?.anchorBlockId, focus: current?.focusBlockId, native: Boolean(window.getSelection()?.rangeCount) };
   });
   expect(selection.anchor).toBe("perf-root-0");
@@ -210,7 +211,7 @@ test("keeps a structural selection complete across virtual gaps for keyboard com
 
   const selectedIds = await page.evaluate(() => (
     (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.selection.get()?.blocks.map((block) => block.id)
   ));
   expect(selectedIds).toEqual(Array.from({ length: 100 }, (_, index) => `perf-root-${index + 1}`));
@@ -227,7 +228,7 @@ test("keeps a structural selection complete across virtual gaps for keyboard com
   expect(afterIndent.top).toBeCloseTo(beforeIndent.top - 12, 0);
   const indentedParents = await page.evaluate(() => {
     const blocks = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.blocks;
     return Array.from({ length: 100 }, (_, index) => blocks.getParentId(`perf-root-${index + 1}`));
   });
@@ -236,7 +237,7 @@ test("keeps a structural selection complete across virtual gaps for keyboard com
   await page.keyboard.press("Shift+Tab");
   const outdentedParents = await page.evaluate(() => {
     const blocks = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.blocks;
     return Array.from({ length: 100 }, (_, index) => blocks.getParentId(`perf-root-${index + 1}`));
   });
@@ -245,7 +246,7 @@ test("keeps a structural selection complete across virtual gaps for keyboard com
   await page.keyboard.press("Delete");
   const remaining = await page.evaluate(() => (
     (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.blocks.getRootIds()
   ));
   for (let index = 1; index <= 100; index += 1) {
@@ -313,7 +314,7 @@ test("keeps the visible middle of a large selection fixed during repeated indent
   }));
   expect(await page.evaluate(() => (
     window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }
   ).__rivtoDemo.editor.blocks.getParentId("perf-root-50"))).toBe("perf-root-0");
   expect(Math.abs(after.top - before.top)).toBeLessThanOrEqual(8);
@@ -349,21 +350,21 @@ test("auto-scrolls a virtualized page while extending a pointer selection", asyn
   await page.mouse.move(initialHead.x, initialHead.y, { steps: 5 });
   await expect.poll(() => page.evaluate(() => (
     (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.selection.get()?.blocks.length ?? 0
   ))).toBeGreaterThan(1);
   await page.mouse.move(point.x, page.viewportSize()!.height - 2, { steps: 5 });
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(startScroll + 100);
   await expect.poll(() => page.evaluate(() => (
     (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.selection.get()?.blocks.length ?? 0
   ))).toBeGreaterThan(5);
   await page.mouse.up();
 
   const selected = await page.evaluate(() => {
     const selection = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.selection.get();
     return {
       count: selection?.blocks.length ?? 0,
@@ -408,14 +409,14 @@ test("auto-scrolls a non-virtualized page while extending a pointer selection", 
   await page.mouse.move(initialHead.x, initialHead.y, { steps: 5 });
   await expect.poll(() => page.evaluate(() => (
     (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.selection.get()?.blocks.length ?? 0
   ))).toBeGreaterThan(1);
   await page.mouse.move(point.x, page.viewportSize()!.height - 2, { steps: 5 });
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(startScroll + 100);
   await expect.poll(() => page.evaluate(() => (
     (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.selection.get()?.blocks.length ?? 0
   ))).toBeGreaterThan(5);
   await page.mouse.up();
@@ -424,7 +425,7 @@ test("auto-scrolls a non-virtualized page while extending a pointer selection", 
 test("keeps numbered-list values after earlier roots unmount", async ({ page }) => {
   await seedOutlineDocument(page, 0);
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
     editor.history.batchUpdates(() => {
       for (let index = 0; index < 120; index += 1) {
         editor.blocks.updateBlock(`perf-root-${index}`, { listProps: { type: "numbered_list" } });
@@ -465,7 +466,7 @@ test("drops on a root first mounted after scrolling during drag", async ({ page 
   await page.mouse.up();
   const placement = await page.evaluate(() => {
     const blocks = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.blocks;
     return { parent: blocks.getParentId("perf-root-0"), order: blocks.getRootIds() };
   });
@@ -580,7 +581,7 @@ for (const mode of ["block", "edgeless"] as const) {
     if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
     const times = await page.evaluate(async () => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        __rivtoDemo: { editor: DocumentEditorAPI };
       }).__rivtoDemo.editor;
       const ids = Array.from({ length: 100 }, (_, index) => `perf-b0-c${index + 100}`);
       /**
@@ -792,7 +793,7 @@ for (const mode of ["block", "edgeless"] as const) {
       test.setTimeout(180_000);
       const siblings = await seedOutlineDocument(page, branchCount);
       const originalParent = await page.evaluate((id) => {
-        const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
         return editor.blocks.getParentId(id);
       }, siblings[0]!);
       if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
@@ -865,7 +866,7 @@ for (const mode of ["block", "edgeless"] as const) {
       const rectReads = await page.evaluate(() => (window as unknown as { __dragRectReads: number }).__dragRectReads);
       console.log(`${branchCount || "flat"} branches drag: activation=${activation.toFixed(1)}, feedback=${samples.join(",")}, commit=${commit.toFixed(1)} ms; full scans=${fullScans}; rectangle reads=${rectReads}`);
       await expect.poll(() => page.evaluate((id) => {
-        const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
         return editor.blocks.getParentId(id);
       }, siblings[0]!)).not.toBe(originalParent);
       // Keep every identity, but do not read the whole nested surface's geometry on every sample.
@@ -901,7 +902,7 @@ for (const mode of ["block", "edgeless"] as const) {
     }, start);
     await page.mouse.up();
     const parent = await page.evaluate(() => (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor.blocks.getParentId("perf-b0-c998"));
     expect(parent).toBe("perf-b1");
     expect(feedback).toBeLessThan(180);
@@ -917,7 +918,7 @@ for (const mode of ["block", "edgeless"] as const) {
       if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
       const times = await page.evaluate(async ({ branches, siblings }) => {
         const editor = (window as unknown as {
-          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          __rivtoDemo: { editor: DocumentEditorAPI };
         }).__rivtoDemo.editor;
         await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
         const measure = async (action: () => void) => {

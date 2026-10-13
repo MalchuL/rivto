@@ -6,6 +6,7 @@ import { DocumentStorage } from "@chulane/document-model";
 import {
   createDocumentEditor,
   type DocumentEditorAPI,
+  type EditorElementNode,
 } from "@chulane/rivto";
 import {
   BENTO_BLOCK_TYPE,
@@ -160,13 +161,13 @@ function seedEdgelessShowcase(editor: DocumentEditorAPI): void {
     fontSize: 22,
     fontFamily: "Georgia, Cambria, serif",
     color: "#212529",
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
   (editor.commands.execute("edgeless.visual.create", { kind: "text", ...({
     text: "Shapes · sticky · pencil · connector · nested group · align/distribute extras",
     frame: { x: 60, y: 32, width: 560, height: 28 },
     fontSize: 13,
     color: "#495057",
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
 
   const rect = (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
     frame: { x: 60, y: 530, width: 130, height: 90 },
@@ -174,14 +175,14 @@ function seedEdgelessShowcase(editor: DocumentEditorAPI): void {
     stroke: "#1c7ed6",
     strokeWidth: 2,
     text: "Rect",
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
   const ellipse = (editor.commands.execute("edgeless.visual.create", { kind: "ellipse", ...({
     frame: { x: 240, y: 545, width: 110, height: 80 },
     fill: "#fff3bf",
     stroke: "#e67700",
     strokeWidth: 2,
     text: "Ellipse",
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
   (editor.commands.execute("edgeless.visual.create", { kind: "connector", ...({
     route: "orthogonal",
     source: { elementId: rect.id, anchor: { x: 1, y: 0.5 }, position: { x: 190, y: 575 } },
@@ -191,17 +192,17 @@ function seedEdgelessShowcase(editor: DocumentEditorAPI): void {
     endStyle: "arrow",
     text: "link",
     textRotation: "along",
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
 
   editor.commands.execute("edgeless.selection.set", [rect.id, ellipse.id]);
-  const shapeGroup = (editor.commands.execute("edgeless.selection.group") as import("@chulane/rivto").EditorElementNode);
+  const shapeGroup = (editor.commands.execute("edgeless.selection.group") as EditorElementNode);
 
   const sticky = (editor.commands.execute("edgeless.visual.create", { kind: "sticker", ...({
     text: "Sticky note\n(double-click to edit)",
     fill: "#eeeaff",
     color: "#362b67",
     frame: { x: 420, y: 530, width: 170, height: 130 },
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
 
   // Second connector: animated dashes flow toward the sticky.
   (editor.commands.execute("edgeless.visual.create", { kind: "connector", ...({
@@ -212,11 +213,11 @@ function seedEdgelessShowcase(editor: DocumentEditorAPI): void {
     lineStyle: "dashed-animated",
     endStyle: "arrow",
     text: "",
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
 
   // Nested group: existing group + sticky (Primary-click / Group again in the UI).
   editor.commands.execute("edgeless.selection.set", [shapeGroup.id, sticky.id]);
-  (editor.commands.execute("edgeless.selection.group") as import("@chulane/rivto").EditorElementNode);
+  (editor.commands.execute("edgeless.selection.group") as EditorElementNode);
 
   (editor.commands.execute("edgeless.visual.create", { kind: "drawing", ...({
     brush: "pencil",
@@ -227,35 +228,35 @@ function seedEdgelessShowcase(editor: DocumentEditorAPI): void {
     ],
     stroke: "#212529",
     strokeWidth: 2,
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
   (editor.commands.execute("edgeless.visual.create", { kind: "text", ...({
     text: "Free text — resize corners, drag handle, layer arrows",
     frame: { x: 640, y: 650, width: 260, height: 48 },
     fontSize: 14,
     color: "#343a40",
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
 
   // Unrelated siblings for align / distribute / multi-select practice.
   (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
     frame: { x: 920, y: 530, width: 56, height: 56 },
     fill: "#d3f9d8",
     stroke: "#2b8a3e",
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
   (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
     frame: { x: 1020, y: 560, width: 56, height: 56 },
     fill: "#d3f9d8",
     stroke: "#2b8a3e",
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
   (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
     frame: { x: 1120, y: 510, width: 56, height: 56 },
     fill: "#d3f9d8",
     stroke: "#2b8a3e",
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
   (editor.commands.execute("edgeless.visual.create", { kind: "ellipse", ...({
     frame: { x: 920, y: 640, width: 70, height: 48 },
     fill: "#ffd8a8",
     stroke: "#d9480f",
-  }) }) as import("@chulane/rivto").EditorElementNode);
+  }) }) as EditorElementNode);
 
   editor.commands.execute("edgeless.selection.clear");
 }

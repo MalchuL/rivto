@@ -4,6 +4,7 @@ import type {
   EditorBlockInput,
 } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../panels/types";
+import type { BlockDestination } from "@chulane/document-model";
 
 /** Document operations required by transfer; accepts core, runtime, and view editors. */
 type BlockTransferEditor = Pick<DocumentEditorAPI, "blocks" | "history" | "getDocument">;
@@ -105,7 +106,7 @@ export function crossDocumentBlockTransfer(
   if (sourceIds.size !== preparedIds.size || [...sourceIds].some((id) => !preparedIds.has(id))) {
     throw new Error("Transfer preparation must preserve block IDs");
   }
-  let insertion = { parentId: destinationPanel?.rootBlockId ?? null } as import("@chulane/document-model").BlockDestination;
+  let insertion = { parentId: destinationPanel?.rootBlockId ?? null } as BlockDestination;
   if (placement.targetId !== null) {
     if (placement.position === "inside") insertion = { parentId: placement.targetId };
     else if (placement.position === "before") insertion = { parentId: destination.blocks.getParentId(placement.targetId)!, beforeId: placement.targetId };

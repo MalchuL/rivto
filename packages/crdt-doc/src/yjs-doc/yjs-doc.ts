@@ -3,6 +3,7 @@ import * as utils from "./structures/utils";
 import * as Y from 'yjs';
 import { Storage } from "../utils";
 import { YjsArray, YjsMap, YjsText } from "./structures";
+import type { YJSType } from "./structures/utils/types";
 
 export class YjsDoc implements CRDTDoc {
     public readonly doc: Y.Doc;
@@ -252,7 +253,7 @@ export class YjsDoc implements CRDTDoc {
             // We call toJSON to convert the type to a JSON object. 
             // This is necessary because utils.convertYJSTypeToBasic can't convert object that wasn't get via getMap or other getters.
             // In such case it returns Y.AbstractType
-            snapshot[key] = utils.convertYJSTypeToBasic(value as import("./structures/utils/types").YJSType)
+            snapshot[key] = utils.convertYJSTypeToBasic(value as YJSType)
         });
         return snapshot;
     }

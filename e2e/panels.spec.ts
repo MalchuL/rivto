@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { ReactEditor } from "@chulane/rivto-react";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
-type Inspection = { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI; reactEditor: import("@chulane/rivto-react").ReactEditor } };
+type Inspection = { __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor } };
 
 async function seed(page: Page, repeat = 0) {
   await page.goto(`/?repeat=${repeat}`);

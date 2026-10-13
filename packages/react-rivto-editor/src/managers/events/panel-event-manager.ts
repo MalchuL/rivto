@@ -2,6 +2,7 @@ import type { PanelEventsApi } from "./api";
 import type { PanelRegistry } from "./panel-registry";
 import type { EventManager } from "./event-manager";
 import type { PanelRegistration } from "./types";
+import type { ReactPanelApi } from "../../panels/types";
 
 /** Local operations over the document's shared registrations. */
 export class PanelEventManager implements PanelEventsApi {
@@ -13,7 +14,7 @@ export class PanelEventManager implements PanelEventsApi {
    * @param panels - Mounted roots and their rendered surface kinds.
    * @returns Event methods that retain this panel even when another panel gains focus.
    */
-  constructor(private readonly shared: EventManager, private readonly owner: PanelRegistration & Pick<import("../../panels/types").ReactPanelApi, "mode">, private readonly panels: PanelRegistry) {}
+  constructor(private readonly shared: EventManager, private readonly owner: PanelRegistration & Pick<ReactPanelApi, "mode">, private readonly panels: PanelRegistry) {}
   register: PanelEventsApi["register"] = (definition, listener) => this.owner.registerCleanup(this.shared.register(definition, listener, this.owner));
   delete(id: string): boolean { return this.shared.delete(`${this.owner.id}:${id}`); }
   getRoot(): HTMLElement | null { return this.owner.getRoot(); }

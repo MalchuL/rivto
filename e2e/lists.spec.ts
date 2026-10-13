@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { BLOCK_ID_SELECTOR, blockIdSelector } from "./dom-markers";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -176,7 +177,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
 
   await page.evaluate(({ movingId, targetId }) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, targetId, "before");
   }, { movingId: nextId, targetId: startId });
@@ -187,7 +188,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
 
   await page.evaluate((blockId) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor;
     editor.blocks.updateBlock(blockId, { listProps: { type: "numbered_list" } });
   }, gapId);
@@ -197,7 +198,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
 
   const nested = await page.evaluate(() => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor;
     const leftParent = editor.blocks.insertBlock({ type: "paragraph", content: "Numbered left parent" }).id;
     const leftStart = editor.blocks.insertBlock({
@@ -230,7 +231,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
 
   await page.evaluate(({ movingId, targetId }) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, targetId, "before");
   }, { movingId: nested.leftNext, targetId: nested.leftStart });
@@ -241,7 +242,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
 
   await page.evaluate(({ movingId, parentId }) => {
     const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      __rivtoDemo: { editor: DocumentEditorAPI };
     }).__rivtoDemo.editor;
     editor.blocks.moveBlock(movingId, parentId, "inside");
   }, { movingId: nested.leftNext, parentId: nested.rightParent });

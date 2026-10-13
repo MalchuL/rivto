@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from 'react';
 import type { PanelAPI, ElementDefinition, EditorElementInput, EditorElementNode } from '@chulane/rivto';
+import type { EdgelessAlignment, EdgelessReorder, EdgelessVisualTool } from '../../elements/visuals/types';
 import type { ReactPanelApi } from '../../panels/types';
 import type { ElementClipboardConverter } from '../clipboard/types';
 
@@ -52,9 +53,9 @@ export interface EdgelessAPI {
   /** Creates a registered element in this panel and selects it; omitted frame fields use (120, 120, 160, 120), and omitted zIndex places it above existing elements. Rejects unknown types and invalid properties. */
   createElement(input: CreateElementInput): EditorElementNode;
   /** Reads this canvas representation’s current tool; gestures and previews remain local and reset when it unmounts. */
-  getTool(): import('../../extensions/edgeless/visuals/types').EdgelessVisualTool;
+  getTool(): EdgelessVisualTool;
   /** Chooses this canvas representation’s local tool; custom element tools must have a registered creation contribution. */
-  setTool(tool: import('../../extensions/edgeless/visuals/types').EdgelessVisualTool | 'select'): void;
+  setTool(tool: EdgelessVisualTool | 'select'): void;
   /** Moves the selected elements by canvas-unit deltas in one history batch. */
   move(dx: number, dy: number): void;
   /** Resizes the selected outer bounds in canvas units, preserving type-specific geometry. */
@@ -64,11 +65,11 @@ export interface EdgelessAPI {
   /** Replaces selected groups with their children without changing canvas geometry. */
   ungroup(): void;
   /** Aligns the selected objects along an edge or center line. */
-  align(alignment: import('../../extensions/edgeless/visuals/types').EdgelessAlignment): void;
+  align(alignment: EdgelessAlignment): void;
   /** Distributes at least three selected objects across their existing span. */
   distribute(axis: 'horizontal' | 'vertical'): void;
   /** Changes the selected objects' stacking order. */
-  reorder(direction: import('../../extensions/edgeless/visuals/types').EdgelessReorder): void;
+  reorder(direction: EdgelessReorder): void;
   /** Duplicates the selected subtrees through registered clipboard converters. */
   duplicateSelection(): EditorElementNode[];
 }

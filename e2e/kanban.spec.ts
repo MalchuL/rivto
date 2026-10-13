@@ -1,5 +1,6 @@
 /** Browser regression for moving real editor blocks across Kanban boundaries. */
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const ROW_CLASS = "page-block-row";
 const HANDLE_CLASS = "page-drag-handle";
@@ -89,7 +90,7 @@ test("moves cards between columns, back to the outline, and into an empty column
 test("moves Kanban cards in edgeless mode", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "kanban")!;
     editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
     editor.elements.insertElement({       type: "block", zIndex: 0, frame: { x: 20, y: 20, width: 800, height: 400 },
@@ -123,7 +124,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto("/");
     await page.evaluate((mode) => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === "kanban")!;
       editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
       const column = board.children[0]!;

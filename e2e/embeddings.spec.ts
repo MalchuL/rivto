@@ -1,15 +1,19 @@
 import { chromium, expect, firefox, test, type Locator, type Page } from "@playwright/test";
+import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { YjsDocumentRegistry } from "@chulane/crdt-doc";
+import type { EditorStorage, ReactEditor, EditorAcquisition } from "@chulane/rivto-react";
+import type { DocumentStorage } from "@chulane/document-model";
 
 interface DemoInspection {
-  storage: import("@chulane/document-model").DocumentStorage;
-  editor: import("@chulane/rivto-react").EditorStorage;
-  registry: import("@chulane/crdt-doc").YjsDocumentRegistry;
-  panes: Set<{ id: string; reactEditor: import("@chulane/rivto-react").ReactEditor }>;
+  storage: DocumentStorage;
+  editor: EditorStorage;
+  registry: YjsDocumentRegistry;
+  panes: Set<{ id: string; reactEditor: ReactEditor }>;
 }
 
 interface JournalInspection {
-  editor: import("@chulane/rivto").DocumentEditorAPI;
-  reactEditor: import("@chulane/rivto-react").ReactEditor;
+  editor: DocumentEditorAPI;
+  reactEditor: ReactEditor;
 }
 
 for (const repeat of [0, 200]) {
@@ -641,7 +645,7 @@ test("references follow the same block into a new document identity without pers
     return editor.getDocument("new-source")?.blocks.getBlockNode(id)?.content;
   }, target)).toBe("Moved source edit");
   await page.evaluate(async () => {
-    await (window as unknown as { __movedSource: import("@chulane/rivto-react").EditorAcquisition }).__movedSource.release();
+    await (window as unknown as { __movedSource: EditorAcquisition }).__movedSource.release();
   });
   await expect(content).toHaveText("Moved source edit");
   const props = await page.evaluate(() => {

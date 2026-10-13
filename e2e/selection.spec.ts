@@ -6,6 +6,8 @@ import {
   hostBlockIdSelector as blockIdSelector,
   blockTypeSelector,
 } from "./dom-markers";
+import type { ReactEditor } from "@chulane/rivto-react";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
 // Keep text endpoints in today's document occurrence, excluding editable
@@ -206,7 +208,7 @@ test("Shift+Alt drag includes a contentless Counter without converting text to b
   await page.mouse.down();
   await page.mouse.move(counterBox.x + counterBox.width / 2, counterBox.y + counterBox.height / 2, { steps: 8 });
   const selected = await page.evaluate(() => (
-    window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }
+    window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
   ).__rivtoDemo.editor.selection.get()?.blocks);
   expect(selected).toContainEqual(expect.objectContaining({
     id: await counter.getAttribute(BLOCK_ID_ATTRIBUTE),
@@ -582,7 +584,7 @@ for (const change of ["indent", "select", "clear", "select-and-return"] as const
   test(`preserves a newer ${change} before deferred indent restoration`, async ({ page }) => {
     const restored = await page.evaluate(async (change) => {
       const editor = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        __rivtoDemo: { editor: DocumentEditorAPI };
       }).__rivtoDemo.editor;
       const root = document.querySelector<HTMLElement>("[data-journal-document='today'] > [data-rivto-page-editor-root]")!;
       const ids = editor.blocks.getRootIds().slice(1, 3);
@@ -610,7 +612,7 @@ for (const mode of ["block", "edgeless"] as const) {
     if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
     const result = await page.evaluate(async () => {
       const { editor, reactEditor } = (window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI; reactEditor: import("@chulane/rivto-react").ReactEditor };
+        __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor };
       }).__rivtoDemo;
       const id = editor.blocks.getRootIds()[1]!;
       editor.selection.set({ type: "selection", blocks: [{ id, start: 1, end: 1 }], anchorBlockId: id, focusBlockId: id });

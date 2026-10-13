@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { hostBlockIdSelector } from "./dom-markers";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 for (const mode of ["block", "edgeless"] as const) {
   for (const repeat of [0, 200]) {
@@ -12,11 +13,11 @@ for (const mode of ["block", "edgeless"] as const) {
       // Long demo cards overlap; expose this card without changing document size or virtualization.
       if (mode === "edgeless") {
         const cardId = await target.evaluate(element => element.closest<HTMLElement>("[data-edgeless-root]")!.dataset.edgelessRoot!);
-        await page.evaluate(id => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.elements.updateElement(id, { zIndex: 1000 }), cardId);
+        await page.evaluate(id => (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor.elements.updateElement(id, { zIndex: 1000 }), cardId);
       }
       await target.click();
       const targetId = await target.evaluate(element => element.closest("[data-block-id]")!.getAttribute("data-block-id")!);
-      const read = () => page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor.selection.get());
+      const read = () => page.evaluate(() => (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor.selection.get());
       await expect.poll(async () => (await read())?.focusBlockId).toBe(targetId);
       await target.evaluate((element, mode) => {
         const data = new DataTransfer();
@@ -65,7 +66,7 @@ for (const repeat of [0, 200]) {
     await expect(today.locator("[data-block-selected]")).toHaveCount(2);
     await page.evaluate(() => {
       document.addEventListener("pointerdown", () => {
-        const w = window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI }; selectionAtPointer?: unknown };
+        const w = window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI }; selectionAtPointer?: unknown };
         w.selectionAtPointer = w.__rivtoDemo.editor.selection.get() ?? null;
       }, { once: true });
     });

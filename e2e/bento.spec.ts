@@ -1,5 +1,6 @@
 /** Browser coverage for responsive Bento layout, widths, shared modal and editing. */
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const RESIZE_RIGHT = "Resize Bento tile from the right";
 const RESIZE_LEFT = "Resize Bento tile from the left";
@@ -32,7 +33,7 @@ for (const mode of ["block", "edgeless"]) {
   test(`Bento editing and layout in ${mode}`, async ({ page }) => {
     await page.goto("/");
     await page.evaluate((mode) => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
       editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
       if (mode === "edgeless") editor.elements.insertElement({ type: "block", zIndex: 0,
@@ -66,7 +67,7 @@ for (const mode of ["block", "edgeless"]) {
     await expect(page.locator("dialog:modal")).toHaveCount(0);
     // Width preferences survive snapshot reload, and tiles shrink to their surface.
     await page.evaluate(() => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       editor.load(editor.dump());
     });
     await expect(first).toHaveCSS("flex-basis", committed);
@@ -74,7 +75,7 @@ for (const mode of ["block", "edgeless"]) {
     const box = (await board.boundingBox())!;
     for (const tile of await tiles.all()) expect((await tile.boundingBox())!.width).toBeLessThanOrEqual(box.width);
     await page.evaluate(() => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
       editor.blocks.removeBlocks(board.children.map((child) => child.id));
     });
@@ -89,7 +90,7 @@ for (const mode of ["block", "edgeless"]) {
 test("Bento edge resize freezes siblings until pointer release", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
     editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
   });
@@ -136,7 +137,7 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
   test(`Bento drag placement ${edge}`, async ({ page }) => {
     await page.goto("/");
     await page.evaluate(() => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
       editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
     });
@@ -216,7 +217,7 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
 test("drags a page block into a bento as a tile and a tile back onto the page", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
     const boardId = editor.blocks.insertBlock({
       type: "bento",
       content: "Drop board",
@@ -268,7 +269,7 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
 test("drops a page block into an empty Bento grid", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
     const boardId = editor.blocks.insertBlock({ type: "bento", content: "" }).id;
     const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Drop me" }).id;
     editor.load({
