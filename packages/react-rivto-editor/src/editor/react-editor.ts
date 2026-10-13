@@ -1,6 +1,5 @@
 import { ElementTypeManager } from "../managers/elements/element-type-manager";
 import type { ExtensionsApi } from "../managers/extensions/api";
-import { PanelElements } from "@chulane/rivto";
 import { BlockListPropsManager } from "../managers/blocks/block-list-props-manager";
 import { PanelRegistry } from "../managers/events/panel-registry";
 import type { ReactEditorApi } from "./types";
@@ -98,7 +97,6 @@ export class ReactEditor implements ReactEditorApi {
   /** @inheritdoc DocumentEditorAPI.dump */
   dump(): ReturnType<DocumentEditorAPI["dump"]> { return this.core.dump(); }
 
-  private readonly panelProjections = new Map<string, { consumers: number; release: () => void }>();
   /** Creates input for an empty writing block using the installed writing extension.
    *
    * Enter, trailing insertion, separators, and clipboard operations share this factory.
@@ -197,7 +195,6 @@ export class ReactEditor implements ReactEditorApi {
     this.surfaces = new SurfaceManager(extensions);
     this.blockElements = new BlockElementProjection(this);
     this.disposers.push(() => this.blockElements.destroy());
-    this.disposers.push(() => { this.panelProjections.forEach((entry) => entry.release()); this.panelProjections.clear(); });
     try {
       extensions.initialize(options.extensions ?? []);
       this.disposers.push(
@@ -209,39 +206,6 @@ export class ReactEditor implements ReactEditorApi {
       this.destroy();
       throw error;
     }
-  }
-
-  /**
-   * Keeps a block-card projection active while views display the same pair of roots.
-   * No container is created for null: those views share document element roots.
-   * Missing roots leave their stored data intact so undo can restore the view.
-   * Projection subscriptions are shared by all consumers of the pair and released
-   * when the last view disconnects; the null/null projection follows runtime lifetime.
-   * @param rootBlockId - Block whose direct children are displayed, or null for document roots.
-   * @param rootElementId - Element container whose descendants are displayed, or null for all elements.
-   * @returns Idempotent release function for this consumer.
-   */
-  acquirePanel(rootBlockId: string | null, rootElementId: string | null): () => void {
-    if (rootBlockId === null && rootElementId === null) {
-      return () => undefined;
-    }
-    const key = JSON.stringify([rootBlockId, rootElementId]);
-    let entry = this.panelProjections.get(key);
-    if (!entry) {
-      const projection = this.blockElements.createPanelProjection(rootBlockId, rootElementId);
-      const unsubscribeBlocks = this.core.blocks.subscribeStructure(projection.schedule);
-      const unsubscribeElements = new PanelElements(this.core.elements, this.core.getDocument(), rootElementId).subscribe(projection.schedule);
-      entry = { consumers: 0, release: () => { unsubscribeBlocks(); unsubscribeElements(); projection.destroy(); } };
-      this.panelProjections.set(key, entry);
-      projection.reconcile();
-    }
-    entry.consumers++;
-    let active = true;
-    return () => {
-      if (!active) return;
-      active = false;
-      if (--entry.consumers === 0) { entry.release(); this.panelProjections.delete(key); }
-    };
   }
 
   /**

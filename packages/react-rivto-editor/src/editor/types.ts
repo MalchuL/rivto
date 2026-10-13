@@ -138,17 +138,6 @@ export interface ReactEditorApi extends DocumentEditorAPI {
    * Mounted surfaces share this projection instead of rebuilding it independently. */
   readonly blockElements: BlockElementProjection;
   /**
-   * Keeps a block-card projection active while views display the same pair of roots.
-   * No container is created for null: those views share document element roots.
-   * Missing roots leave their stored data intact so undo can restore the view.
-   * Projection subscriptions are shared by all consumers of the pair and released
-   * when the last view disconnects; the null/null projection follows runtime lifetime.
-   * @param rootBlockId - Block whose direct children are displayed, or null for document roots.
-   * @param rootElementId - Element container whose descendants are displayed, or null for all elements.
-   * @returns Idempotent release function for this consumer.
-   */
-  acquirePanel(rootBlockId: string | null, rootElementId: string | null): () => void;
-  /**
    * Installs writing factories used by keyboard, trailing, separator, and clipboard paths.
    *
    * Called by `defaultWritingBlockExtension` to configure empty writing blocks

@@ -1,4 +1,5 @@
 import { createTestReactEditor as createReactEditor, createTestCoreEditor as createDocumentEditor } from "../test-utils";
+const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
 
 import { SEPARATOR_BLOCK_TYPE, separatorBlockExtension } from "../extensions/built-ins/separator/separator-block";
 import {
@@ -11,6 +12,38 @@ import {
 } from "./block-element-projection";
 
 describe("edgeless block element reconciliation", () => {
+  test("shares block-card maintenance and releases it once on final disconnect or owner destruction", async () => {
+    const core = await createDocumentEditor();
+    const panel = createReactEditor({ editor: core });
+    const owner = panel.editor.blockElements;
+    const root = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph" }] });
+    const container = core.elements.insertElement({ type: "group", frame: { x: 0, y: 0, width: 10, height: 10 }, zIndex: 0 });
+    const create = jestApi.spyOn(owner, "createPanelProjection");
+    try {
+      const stopFirst = owner.maintainBlockCards(root.id, container.id);
+      const child = create.mock.results[0]!.value;
+      const destroy = jestApi.spyOn(child, "destroy");
+      const stopSecond = owner.maintainBlockCards(root.id, container.id);
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(core.elements.getElementNodes().some(element => element.props.startBlockId === root.children[0]!.id)).toBe(true);
+      stopFirst(); stopFirst();
+      expect(destroy).not.toHaveBeenCalled();
+      stopSecond();
+      expect(destroy).toHaveBeenCalledTimes(1);
+      const stopThird = owner.maintainBlockCards(root.id, container.id);
+      const replacement = create.mock.results[1]!.value;
+      const destroyReplacement = jestApi.spyOn(replacement, "destroy");
+      const persisted = core.elements.getElementNodes();
+      owner.destroy();
+      expect(core.elements.getElementNodes()).toBe(persisted);
+      expect(destroyReplacement).toHaveBeenCalledTimes(1);
+      stopThird(); owner.destroy();
+      expect(destroyReplacement).toHaveBeenCalledTimes(1);
+      expect(() => owner.maintainBlockCards(root.id, container.id)).toThrow(/destroyed/);
+    } finally {
+      await panel.editor.destroy(); await core.destroy();
+    }
+  });
   const createRuntime = (editor: Awaited<ReturnType<typeof createDocumentEditor>>) => createReactEditor({
     editor,
     extensions: [separatorBlockExtension()],

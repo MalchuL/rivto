@@ -29,10 +29,10 @@ it("shares core managers and exposes the same panel through both hooks", async (
       expect(panel.blocks.hasBlock(root.id)).toBe(false);
       return null;
     }
-    const acquire = jestApi.spyOn(editor, "acquirePanel");
+    const maintainBlockCards = jestApi.spyOn(editor.blockElements, "maintainBlockCards");
     const markup = renderToStaticMarkup(<EditorPanel editor={editor} rootBlockId={root.id}><Probe /></EditorPanel>);
     expect(markup).toContain("Loading document…");
-    expect(acquire).not.toHaveBeenCalled();
+    expect(maintainBlockCards).not.toHaveBeenCalled();
     const panel = new ReactPanel(editor, new ChildrenPanel(editor, { rootBlockId: root.id }));
     try { renderToStaticMarkup(<TestPanel panel={panel}><Probe /></TestPanel>); }
     finally { panel.destroy(); }

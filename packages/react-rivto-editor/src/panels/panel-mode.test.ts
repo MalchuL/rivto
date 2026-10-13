@@ -20,14 +20,18 @@ const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
   it("cleans up every retained registration even when one disposer throws", async () => {
     const core = await createTestCoreEditor();
     const runtime = createReactEditor({ editor: core });
+    const release = jestApi.fn();
+    jestApi.spyOn(runtime.blockElements, "maintainBlockCards").mockReturnValue(release);
     const panel = new ReactPanel(runtime, new ChildrenPanel(core));
     let released = 0;
     panel.registerCleanup(() => { throw new Error("Expected cleanup failure"); });
     panel.registerCleanup(() => { released++; });
     expect(panel.destroy).toThrow("Expected cleanup failure");
+    expect(release).toHaveBeenCalledTimes(1);
     expect(released).toBe(1);
     expect(panel.getSnapshot().api).toBeUndefined();
     expect(panel.destroy).not.toThrow();
+    expect(release).toHaveBeenCalledTimes(1);
     await runtime.destroy(); await core.destroy();
   });
   it("releases its projection when constructor subscription setup fails", async () => {
@@ -35,7 +39,7 @@ const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
     const runtime = createReactEditor({ editor: core });
     const mode = new ModeManager();
     const release = jestApi.fn();
-    jestApi.spyOn(runtime, "acquirePanel").mockReturnValue(release);
+    jestApi.spyOn(runtime.blockElements, "maintainBlockCards").mockReturnValue(release);
     jestApi.spyOn(mode, "subscribe").mockImplementation(() => { throw new Error("Expected subscription failure"); });
     expect(() => new ReactPanel(runtime, new ChildrenPanel(core), { mode })).toThrow("Expected subscription failure");
     expect(release).toHaveBeenCalledTimes(1);

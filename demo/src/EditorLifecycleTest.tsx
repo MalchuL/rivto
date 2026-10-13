@@ -20,9 +20,9 @@ export function EditorLifecycleTest() {
     id: "lifecycle-observer",
     setup(editor) {
       counts.setup++;
-      const acquirePanel = editor.acquirePanel.bind(editor);
-      editor.acquirePanel = (...args) => {
-        const release = acquirePanel(...args);
+      const maintainBlockCards = editor.blockElements.maintainBlockCards.bind(editor.blockElements);
+      editor.blockElements.maintainBlockCards = (...args) => {
+        const release = maintainBlockCards(...args);
         counts.panelsCreated++;
         let active = true;
         return () => {

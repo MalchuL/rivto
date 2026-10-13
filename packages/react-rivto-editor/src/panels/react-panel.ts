@@ -51,7 +51,6 @@ export class ReactPanel implements ReactPanelApi {
   readonly clipboard: PanelClipboardManager;
   readonly slashCommands: PanelSlashCommandManager;
   readonly id = crypto.randomUUID();
-  private releasePanel: (() => void) | undefined;
   private selectionManager: PanelSelectionManager;
   private root: HTMLElement | null = null;
   private enabled = true;
@@ -86,7 +85,8 @@ export class ReactPanel implements ReactPanelApi {
     this.clipboard = new PanelClipboardManager(editor.clipboard, this);
     this.slashCommands = new PanelSlashCommandManager(editor.slashCommands, this);
     try {
-      this.releasePanel = this.acquireProjection();
+      /** Connects the concrete panel's block-card projection and retains its release callback for cleanup. */
+      this.registrations.add(editor.blockElements.maintainBlockCards(corePanel instanceof EmbeddingPanel ? null : corePanel.rootBlockId ?? null, corePanel.rootElementId));
       this.updateSnapshot(this.corePanel.document.getDocument(), true);
       // A subtree root can disappear and return through undo while its document remains retained.
       if (this.corePanel.rootBlockId) this.unsubscribeBlock = this.corePanel.document.blocks.subscribeBlockNode(this.corePanel.rootBlockId, () => this.updateSnapshot(this.corePanel.document.getDocument(), true));
@@ -120,10 +120,6 @@ export class ReactPanel implements ReactPanelApi {
 
   /** Selection operations for this occurrence; lifecycle remains internal to this panel instance. */
   get selection(): PanelSelectionApi { return this.selectionManager; }
-  /** Connects the concrete panel's block-card projection and returns its release callback. */
-  private acquireProjection(): () => void {
-    return this.editor.acquirePanel(this.corePanel instanceof EmbeddingPanel ? null : this.corePanel.rootBlockId ?? null, this.corePanel.rootElementId);
-  }
 
   /**
    * Returns the current snapshot without allocating a new object on each read.
@@ -222,14 +218,12 @@ export class ReactPanel implements ReactPanelApi {
     const errors: unknown[] = [];
     const cleanups = [
       this.unsubscribeMode,
-      this.releasePanel,
       this.unsubscribeBlock,
       this.unregisterRoot,
       () => this.selectionManager.destroy(),
       ...this.registrations,
     ];
     this.unsubscribeMode = undefined;
-    this.releasePanel = undefined;
     this.unsubscribeBlock = undefined;
     this.unregisterRoot = undefined;
     this.root = null;

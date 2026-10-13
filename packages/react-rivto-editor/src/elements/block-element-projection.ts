@@ -259,6 +259,7 @@ export function insertBlockElementSeparator(editor: ReactEditorApi | ReactPanelA
 
 /** Owns the document's block-card projection, settings, and deferred reconciliation. */
 export class BlockElementProjection {
+  private readonly panelProjections = new Map<string, { consumers: number; release: () => void }>();
   // Range endpoints are canonical persisted data, but moving an endpoint makes
   // them temporarily ambiguous. The last reconciled membership is an in-memory
   // matching hint only; explicit separator block types determine every segment.
@@ -275,6 +276,48 @@ export class BlockElementProjection {
    * @param rootElementId - Container for projected cards; null means document element roots.
    */
   constructor(private readonly reactEditor: ReactEditorApi, readonly rootBlockId: string | null = null, readonly rootElementId: string | null = null) {}
+
+  /**
+   * Maintains canvas block cards while panels display the same pair of roots.
+   *
+   * The first consumer synchronously reconciles persisted cards and connects
+   * subscriptions; creating or updating cards changes document elements. Later
+   * consumers share that work until the last consumer disconnects.
+   * No container is created for null: those views share document element roots.
+   * Missing roots leave their stored data intact so undo can restore the view.
+   * Projection subscriptions are shared by all consumers of the pair and released
+   * when the last view disconnects; the null/null projection follows runtime lifetime.
+   * For null/null this call returns a no-op cleanup: the editor already maintains
+   * document-root cards, so this consumer adds no subscriptions or reconciliation.
+   * @param rootBlockId - Block whose direct children are displayed, or null for document roots.
+   * @param rootElementId - Element container whose descendants are displayed, or null for all elements.
+   * @returns Idempotent function that stops this consumer’s maintenance; it is harmless after owner destruction.
+   * @throws If the owner is destroyed or initial card reconciliation fails.
+   */
+  maintainBlockCards(rootBlockId: string | null, rootElementId: string | null): () => void {
+    if (this.destroyed) throw new Error("Block card maintenance is destroyed");
+    if (rootBlockId === null && rootElementId === null) {
+      return () => undefined;
+    }
+    const key = JSON.stringify([rootBlockId, rootElementId]);
+    let entry = this.panelProjections.get(key);
+    if (!entry) {
+      const projection = this.createPanelProjection(rootBlockId, rootElementId);
+      const unsubscribeBlocks = this.reactEditor.blocks.subscribeStructure(projection.schedule);
+      const unsubscribeElements = new PanelElements(this.reactEditor.elements, this.reactEditor.getDocument(), rootElementId).subscribe(projection.schedule);
+      entry = { consumers: 0, release: () => { unsubscribeBlocks(); unsubscribeElements(); projection.destroy(); } };
+      this.panelProjections.set(key, entry);
+      projection.reconcile();
+    }
+    entry.consumers++;
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      if (this.destroyed) return;
+      if (--entry.consumers === 0) { entry.release(); this.panelProjections.delete(key); }
+    };
+  }
 
   /**
    * Creates a separately reconciled pair of roots using this projection's layout defaults.
@@ -330,9 +373,16 @@ export class BlockElementProjection {
     });
   };
 
-  /** Cancels queued work and releases previous membership hints. */
+  /**
+   * Cancels queued work and releases previous membership hints.
+   * Also disconnects all retained panel subscriptions and destroys their scoped
+   * reconcilers without deleting persisted cards. Later consumer cleanup is harmless.
+   */
   destroy(): void {
+    if (this.destroyed) return;
     this.destroyed = true;
+    this.panelProjections.forEach(entry => entry.release());
+    this.panelProjections.clear();
     this.memberships = new Map();
   }
 

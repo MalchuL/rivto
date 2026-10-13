@@ -93,6 +93,14 @@ Panel reconciles its block cards before use; subscriptions keep active projectio
 current. The null/null projection follows runtime lifetime. Reopening an inactive
 Panel reconciles edits made while it was closed. Card changes are excluded from undo.
 
+The internal panel lifecycle retains this work through
+`reactEditor.blockElements.maintainBlockCards(rootBlockId, rootElementId)` and
+calls the returned idempotent cleanup on destruction. The block-elements owner
+holds shared root-pair subscriptions and consumer counts; destroying it releases
+all remaining scoped maintenance without deleting persisted cards. ReactEditor
+has no `acquirePanel` operation. The concrete `blockElements` class remains
+available on its API, so this relocation does not hide its methods completely.
+
 Cards retain their ID, frame, stacking order, and custom properties when their block
 range can be reused. Both range boundaries moving to a common block parent lets that
 parent's projection adopt the existing card. Stored rootBlockId preserves ownership

@@ -14,7 +14,7 @@ it("reconciles separate element groups of one subtree without resetting their ge
   const root = core.blocks.insertBlock({ type: "paragraph", content: "Title", children: [{ type: "paragraph", content: "Child" }] });
   const first = runtime.elements.insertElement(groupInput);
   const second = runtime.elements.insertElement(groupInput);
-  const releaseFirst = runtime.acquirePanel(root.id, first.id); const releaseSecond = runtime.acquirePanel(root.id, second.id);
+  const releaseFirst = runtime.blockElements.maintainBlockCards(root.id, first.id); const releaseSecond = runtime.blockElements.maintainBlockCards(root.id, second.id);
   const a = new PanelElements(runtime.elements, runtime.getDocument(), first.id); const b = new PanelElements(runtime.elements, runtime.getDocument(), second.id);
   const card = a.getElementNodes()[0]!;
   expect(card.props.startBlockId).toBe(root.children[0]!.id);
@@ -23,7 +23,7 @@ it("reconciles separate element groups of one subtree without resetting their ge
   a.updateElement(card.id, { frame: { x: 555 } });
   expect(b.getElementNodes()).toBe(before);
   expect(() => a.updateElement(before[0]!.id, { frame: { x: 100 } })).toThrow();
-  const releaseAgain = runtime.acquirePanel(root.id, first.id);
+  const releaseAgain = runtime.blockElements.maintainBlockCards(root.id, first.id);
   expect(a.getElementNodes()).toHaveLength(1);
   expect(a.getElementNode(card.id)!.frame.x).toBe(555);
   releaseFirst(); releaseAgain(); releaseSecond(); runtime.destroy(); await core.destroy();
@@ -81,8 +81,8 @@ it("shares document elements between null-root Panels without deleting another b
   const runtime = fullPanel.editor;
   const a = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph", content: "A" }] });
   const b = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph", content: "B" }] });
-  const releaseA = runtime.acquirePanel(a.id, null);
-  const releaseB = runtime.acquirePanel(b.id, null);
+  const releaseA = runtime.blockElements.maintainBlockCards(a.id, null);
+  const releaseB = runtime.blockElements.maintainBlockCards(b.id, null);
   await Promise.resolve();
   const cards = core.elements.getElementNodes();
   expect(cards.every((element) => element.type === "block")).toBe(true);
@@ -90,7 +90,7 @@ it("shares document elements between null-root Panels without deleting another b
   expect(cards.filter((element) => element.props.startBlockId === b.children[0]!.id)).toHaveLength(1);
   const cardA = cards.find((element) => element.props.startBlockId === a.children[0]!.id)!;
   core.elements.updateElement(cardA.id, { frame: { x: 456 } });
-  const releaseAgain = runtime.acquirePanel(a.id, null);
+  const releaseAgain = runtime.blockElements.maintainBlockCards(a.id, null);
   await Promise.resolve();
   expect(core.elements.getElementNodes()).toHaveLength(cards.length);
   expect(core.elements.getElementNode(cardA.id)!.frame.x).toBe(456);
@@ -102,11 +102,11 @@ it("reassigns a moved block card to its current parent while retaining ID and ge
   const runtime = fullPanel.editor;
   const a = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph", content: "Moving" }] });
   const b = core.blocks.insertBlock({ type: "paragraph" });
-  const releaseA = runtime.acquirePanel(a.id, null);
+  const releaseA = runtime.blockElements.maintainBlockCards(a.id, null);
   const card = core.elements.getElementNodes().find((element) => element.props.startBlockId === a.children[0]!.id)!;
   core.elements.updateElement(card.id, { frame: { x: 345 } });
   core.blocks.moveBlocks([a.children[0]!.id], b.id, "inside");
-  const releaseB = runtime.acquirePanel(b.id, null);
+  const releaseB = runtime.blockElements.maintainBlockCards(b.id, null);
   await Promise.resolve();
   expect(core.elements.getElementNode(card.id)).toMatchObject({ frame: { x: 345 }, props: { startBlockId: a.children[0]!.id, endBlockId: a.children[0]!.id } });
   expect(core.blocks.getBlockNode(a.id)!.childIds).toEqual([]);
@@ -118,7 +118,7 @@ it("keeps an explicit element root empty after deletion and restores it through 
   const core = await createTestCoreEditor(); const fullPanel = createTestReactEditor({ editor: core });
   const root = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph" }] });
   const container = core.elements.insertElement(groupInput);
-  const release = fullPanel.editor.acquirePanel(root.id, container.id);
+  const release = fullPanel.editor.blockElements.maintainBlockCards(root.id, container.id);
   const elements = new PanelElements(core.elements, core.getDocument(), container.id);
   const card = elements.getElementNodes()[0]!;
   await Promise.resolve();
@@ -139,7 +139,7 @@ it("adopts a compatible existing card when an explicit element group is opened",
     type: "block", id: "existing-card", frame: { x: 234, y: 80, width: 300, height: 120 }, zIndex: 7,
     props: { startBlockId: block.id, endBlockId: block.id },
   }] });
-  const release = fullPanel.editor.acquirePanel(null, container.id);
+  const release = fullPanel.editor.blockElements.maintainBlockCards(null, container.id);
   await Promise.resolve();
   const cards = new PanelElements(core.elements, core.getDocument(), container.id).getElementNodes();
   expect(cards).toHaveLength(1);
