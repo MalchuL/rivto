@@ -13,7 +13,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useState, type React
 import { flushSync } from "react-dom";
 import { BlockTree } from "../../blocks";
 import { BlockElementRefProvider } from "../../blocks/block-wrapper/block-wrapper";
-import { useEditorContext } from "../../hooks/editor/use-editor-context";
+import { useReactPanelContext } from "../../hooks/editor/use-react-panel-context";
 import { ESTIMATED_ROOT_HEIGHT } from "./page-virtualization-context";
 import { usePageVirtualization } from "../../hooks/editor/use-page-virtualization";
 import { useEditorRoot, useReactPanel, useRootBlockIds } from "../../hooks";
@@ -275,7 +275,7 @@ export function PageSurface() { return <SurfaceBoundary type="block"><PageSurfac
 
 function PageSurfaceContent() {
   const rootIds = useRootBlockIds();
-  const { rootBlockId, reactPanel } = useEditorContext();
+  const { rootBlockId, reactPanel } = useReactPanelContext();
   const { ref } = useEditorRoot();
   const pageVirtualization = usePageVirtualization();
   const [surface, setSurface] = useState<HTMLElement | null>(null);

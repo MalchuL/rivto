@@ -1,5 +1,5 @@
 import type { ReactPanelApi } from "../../panels/types";
-import { useEditorContext } from "./use-editor-context";
+import { useReactPanelContext } from "./use-react-panel-context";
 
 /**
  * Returns the API supplied by the nearest EditorPanel component in the React tree.
@@ -13,5 +13,5 @@ import { useEditorContext } from "./use-editor-context";
  * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useReactPanel(): ReactPanelApi {
-  return useEditorContext().reactPanel;
+  return useReactPanelContext().reactPanel;
 }

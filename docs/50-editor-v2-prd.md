@@ -83,7 +83,7 @@ UI Layer
 ┌──────────────────────────────▼──────────────────────────────┐
 │                      Editor Runtime                         │
 │                                                             │
-│  EditorContext                                               │
+│  ReactPanelContext                                           │
 │  BlockRegistry                                               │
 │  CommandRegistry                                             │
 │  PluginManager                                               │
@@ -1787,7 +1787,7 @@ edgeless connector
 src/editor/
   core/
     ReactEditor.ts
-    EditorContext.ts
+    ReactPanelContext.ts
     ModeManager.ts
     EventRouter.ts
 

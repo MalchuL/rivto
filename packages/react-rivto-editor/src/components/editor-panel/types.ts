@@ -33,7 +33,7 @@ export interface EditorPanelProps {
  * Source panels share that runtime through a document-bound API for reads and commands
  * to the resolved model until the target moves to another document.
  */
-export interface EditorContextValue {
+export interface ReactPanelContextValue {
   /** React panel for this occurrence, with the shared React editor available through its editor field. */
   readonly reactPanel: ReactPanel;
   /** Model acquired by this panel; absent while its document is loading. */

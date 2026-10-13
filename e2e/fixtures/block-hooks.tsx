@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { EditorContext } from "../../packages/react-rivto-editor/src/components/editor-panel/editor-context";
+import { ReactPanelContext } from "../../packages/react-rivto-editor/src/components/editor-panel/react-panel-context";
 import { useBlockNode, useBlockOperations, type BlockOperations } from "../../packages/react-rivto-editor/src/hooks/blocks/use-block";
 import { useBlockTextEditing } from "../../packages/react-rivto-editor/src/hooks/blocks/use-block-text-editing";
 import { createTestCoreEditor, createTestReactEditor } from "../../packages/react-rivto-editor/src/test-utils";
@@ -30,7 +30,7 @@ export async function run(): Promise<void> {
   }
   const render = (editorIndex: number, id: string, text: boolean, domKey = 0) => {
     const reactPanel = editors[editorIndex]!;
-    flushSync(() => root.render(createElement(EditorContext.Provider, {
+    flushSync(() => root.render(createElement(ReactPanelContext.Provider, {
       value: { reactPanel, documentId: reactPanel.editor.getDocument().id },
     }, text ? createElement(Text, { id, domKey }) : createElement(Commands, { id }))));
   };

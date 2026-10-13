@@ -70,7 +70,7 @@ references target the same document.
 ## Rendering choices
 
 For the first version, render a read-only preview component from the detached
-target block. Do not reuse the host `BlockTree`: it reads `EditorContext`, so
+target block. Do not reuse the host `BlockTree`: it reads `ReactPanelContext`, so
 its commands and selection would target the host editor.
 
 Two later options are valid when richer rendering is required:

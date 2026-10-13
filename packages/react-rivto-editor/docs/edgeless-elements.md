@@ -68,12 +68,12 @@ const reactEditor = createReactEditor({
 });
 ```
 
-Inside an EditorPanel subtree, a toolbar can use the typed panel API:
+Inside an EditorPanel subtree, a canvas component can own typed operations through the React hook:
 
 ```tsx
 function CreateRectangle() {
-  const reactPanel = useReactPanel();
-  return <button onClick={() => reactPanel.edgeless.createElement({
+  const operations = useEdgelessOperations();
+  return <button onClick={() => operations.createElement({
     type: "rectangle",
     frame: { x: 40, y: 40, width: 160, height: 100 },
     zIndex: 1,

@@ -1,4 +1,4 @@
-import { usePanelContent } from "../../hooks/editor/use-panel-content";
+import { ReactPanelProvider } from "./react-panel-provider";
 import type { EditorPanelProps } from "./types";
 
 /**
@@ -12,5 +12,5 @@ import type { EditorPanelProps } from "./types";
  * @throws If an optional navigation record refers to a different document.
  */
 export function EditorPanel(props: EditorPanelProps) {
-  return usePanelContent(props, false);
+  return <ReactPanelProvider {...props} embedding={false} />;
 }

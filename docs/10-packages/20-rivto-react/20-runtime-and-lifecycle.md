@@ -38,7 +38,7 @@ Preset и surface не выбираются автоматически.
 
 ReactEditor и ReactPanel нельзя создавать вручную в React-компонентах, включая
 render, useMemo и initializer useState. Редактор создаёт useReactEditor после
-commit; панель создаёт эффект внутреннего usePanelContent в EditorPanel/EditorEmbed.
+commit; панель создаёт эффект внутреннего компонента ReactPanelProvider в EditorPanel/EditorEmbed.
 useReactPanel читает существующую панель из контекста и не создаёт новую.
 
 Конструктор ReactPanel подключает проекцию и подписки. Cleanup эффекта вызывает

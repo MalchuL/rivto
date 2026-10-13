@@ -7,7 +7,7 @@ import { createReactEditor, type CreateReactEditorOptions } from "./editor/react
 import { EditorStorage } from "./editor/editor-storage";
 import { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-writing-block";
 import { createElement, type ReactNode } from "react";
-import { EditorContext } from "./components/editor-panel/editor-context";
+import { ReactPanelContext } from "./components/editor-panel/react-panel-context";
 import { EditorRootContext } from "./components/editor-panel/editor-root-context";
 import { BlockElementRefBoundary } from "./blocks/block-wrapper/block-wrapper";
 
@@ -18,7 +18,7 @@ import { BlockElementRefBoundary } from "./blocks/block-wrapper/block-wrapper";
  * @returns Internal contexts for rendering hooks without mounting a browser component.
  */
 export function TestPanel({ panel, children }: { panel: ReactPanel; children?: ReactNode }) {
-  return createElement(EditorContext.Provider, { value: {
+  return createElement(ReactPanelContext.Provider, { value: {
     reactPanel: panel, document: panel.document.getDocument(), documentId: panel.documentId,
     rootBlockId: panel.rootBlockId, domIdPrefix: panel.id, enabled: true,
   } }, createElement(EditorRootContext.Provider, { value: { element: null, ref: panel.setRoot } },

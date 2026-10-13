@@ -56,6 +56,6 @@ function Inspect() {
       panel.document.history.stopCapturing();
       panel.elements.updateElement(node.id, { frame: { width: node.frame.width * 2 } });
     }}>Double width</button>
-    <button onClick={() => reactPanel.edgeless.duplicateSelection()}>Duplicate</button>
+    <button onClick={() => reactPanel.editor.commands.execute("edgeless.visual.duplicate", { reactPanel, payload: undefined })}>Duplicate</button>
   </>;
 }

@@ -112,7 +112,7 @@ Pick сохранять для частичных данных и необход
 ### 8. Зависимости менеджеров
 
 RendererManager и SurfaceManager получают владельца регистраций вместо всего
-runtime, если им нужны только own/assertActive. Не вводить DI-контейнер.
+runtime, если им нужны только registerCleanup/assertActive. Не вводить DI-контейнер.
 BlockTypeManager сохранить координатором атомарной регистрации definition,
 renderer, behavior и slash-команды с rollback.
 
@@ -248,7 +248,7 @@ EditorViewApi будет скрыт за интерфейсом вместе с 
   Доступ идёт через `runtime.editorViews`; getActive и getDefault не смешаны.
   Там, где нужен прежний fallback, он указан явно через `getActive() ?? getDefault()`.
 - RendererManager, SurfaceManager, SlashCommandRegistry и ClipboardFormatRegistry
-  получают узкий RegistrationOwner с own/assertActive вместо полного runtime.
+  получают узкий RegistrationOwner с registerCleanup/assertActive вместо полного runtime.
   Новый DI-контейнер или общий базовый manager не вводился.
 - Прямые импорты DOM helpers устранили цикл через общий managers barrel,
   проявившийся при загрузке DefaultBlockBehavior в тесте todo storage.

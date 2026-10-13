@@ -49,12 +49,17 @@ they create no DOM bindings, subscriptions or storage acquisitions. Whole-docume
 display is a ChildrenPanel with omitted roots.
 
 `EditorPanel` and `EditorEmbed` create these core panels from their root props and
-attach an internal ReactPanel. `usePanel()` returns that object typed as `PanelAPI`.
+create and connect an internal ReactPanel in an effect after commit. Cleanup
+destroys that instance; StrictMode replay creates a fresh one. The first render,
+root/editor replacement, and SSR show loading until the effect supplies a panel.
+React components must not construct ReactPanel or ReactEditor manually: use
+EditorPanel/EditorEmbed and useReactEditor respectively. `usePanel()` returns that object typed as `PanelAPI`.
 `useReactPanel()` returns the same object typed as `ReactPanelApi`, extending `PanelAPI`
 with browser operations. Bounded `.blocks` and `.elements` are available directly;
 `.editor` is the shared ReactEditorApi, and `.selection`, `.events`, `.keyboard`, `.clipboard`, `.mode`,
-`.slashCommands`, and `.edgeless` belong to browser interaction. Canvas actions
-remain bound to the original panel even after another panel receives focus.
+and `.slashCommands` belong to browser interaction. Canvas actions are created by
+`useEdgelessOperations()` inside the edgeless representation and remain bound to
+the original panel even after another panel receives focus.
 
 `subscribe(listener)` forwards whole-document revisions, including edits outside the
 panel boundaries; it does not observe selection. Internal `subscribeAvailability`
@@ -174,7 +179,8 @@ into the same root and child ID lists; recursive output is assembled on demand.
 Only selected groups mount their outline/hit-plate components. This does not add
 viewport virtualization for canvas visuals; page virtualization remains separate.
 
-Canvas tools and creation defaults belong to each mounted EditorPanel component.
-Switching its page/edgeless surface preserves them; unmounting resets them.
+Canvas tools and creation defaults belong to each mounted edgeless representation.
+Switching to the page surface unmounts that representation and resets them; returning to edgeless creates fresh tools, defaults, and previews.
 Panels share type definitions, not tool choices or remembered creation settings.
-The edgeless.tool.set named command requires an explicit { reactPanel, payload }.
+The edgeless.tool.set named command requires explicit { operations, payload }
+from the owning canvas; it cannot select a tool through a panel alone.

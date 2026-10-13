@@ -1,4 +1,4 @@
-import { useEditorContext } from "../editor/use-editor-context";
+import { useReactPanelContext } from "../editor/use-react-panel-context";
 
 /**
  * Names a child region within one mounted editor, including repeated source embeds.
@@ -6,6 +6,6 @@ import { useEditorContext } from "../editor/use-editor-context";
  * @returns A DOM ID shared by the child region and its collapse control.
  */
 export function useBlockChildrenId(blockId: string): string {
-  const { domIdPrefix } = useEditorContext();
+  const { domIdPrefix } = useReactPanelContext();
   return `${domIdPrefix ?? "rivto"}-block-children-${blockId}`;
 }

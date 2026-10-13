@@ -1,6 +1,6 @@
 import type { EditorMode } from "@chulane/rivto";
 import { useCallback, useSyncExternalStore } from "react";
-import { useEditorContext } from "./use-editor-context";
+import { useReactPanelContext } from "./use-react-panel-context";
 
 /**
  * Value and mutation API returned by {@link useEditorMode}.
@@ -36,7 +36,7 @@ export interface UseEditorModeResult {
  * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useEditorMode(): UseEditorModeResult {
-  const { reactPanel } = useEditorContext();
+  const { reactPanel } = useReactPanelContext();
   const subscribe = useCallback(
     (listener: () => void) => reactPanel.mode.subscribe(listener),
     [reactPanel],

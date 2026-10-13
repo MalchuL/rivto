@@ -63,14 +63,23 @@ EditorPanel never acquires an additional reference from context. EditorStorageCo
 used by embeddings to acquire their source documents. `openCoreEditor` and
 `releaseCoreEditor` are removed; use the acquisition's `editor` for core operations.
 
+React components must obtain ReactEditor through `useReactEditor` and panels
+through `EditorPanel`/`EditorEmbed`; do not construct either instance manually,
+including in render, `useMemo`, or a `useState` initializer. `useReactPanel` reads
+an existing panel from context. Panel construction and subscription setup happen
+in the owning effect, whose cleanup calls `destroy()`. StrictMode replay creates
+a new instance, and the first render and SSR show loading. Low-level factories
+remain for managed storage infrastructure and internal tests.
+
 ## Normal setup
 
+The host loads and owns the document model; the React hook owns both editor layers.
+
 ```tsx
-import { createDocumentEditor } from "@chulane/rivto";
-import { DocumentStorage } from "@chulane/document-model";
+import { DocumentStorage, type DocumentModel } from "@chulane/document-model";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import {
-  createReactEditor,
+  useReactEditor,
   EditorPanel,
   PageSurface,
 } from "@chulane/rivto-react";
@@ -84,30 +93,33 @@ import {
 const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
 storage.registerDocument("document-id");
 const document = await storage.openDocument("document-id");
-const editor = createDocumentEditor({ document });
-const reactEditor = createReactEditor({
-  editor,
-  extensions: [
-    standardPreset({
-      writing: {
-        slashCommand: { group: "Formatting" },
-      },
-    }),
-    pageDragExtension(),
-    ...edgelessPreset(),
-    blockExtension({
-      definition: cardDefinition,
-      render: CardContent,
-      slashCommand: { title: "Card" },
-    }),
-  ],
-});
+function DocumentView({ document }: { document: DocumentModel }) {
+  const state = useReactEditor({
+    document,
+    extensions: [
+      standardPreset({
+        writing: {
+          slashCommand: { group: "Formatting" },
+        },
+      }),
+      pageDragExtension(),
+      ...edgelessPreset(),
+      blockExtension({
+        definition: cardDefinition,
+        render: CardContent,
+        slashCommand: { title: "Card" },
+      }),
+    ],
+  });
 
-root.render(<EditorPanel editor={reactEditor}><PageSurface /></EditorPanel>);
+  if (state.status !== "ready") return <p>{state.status}</p>;
+  return <EditorPanel editor={state.editor}><PageSurface /></EditorPanel>;
+}
+
+root.render(<DocumentView document={document} />);
 
 // Host teardown:
-reactEditor.destroy();
-editor.destroy();
+root.unmount();
 await document.destroy();
 await storage.destroy();
 ```
@@ -423,4 +435,4 @@ The agreed sequence and implementation status are recorded in
 [`react-api-architecture-ru.md`](../../../dev_notes/react-api-architecture-ru.md).
 Core panel classes now own bounded editing; ReactPanel owns browser lifecycle.
 Element registrations live on `ReactEditor.elementTypes`, while canvas actions live
-on `ReactPanelApi.edgeless`. Extensions install behavior and no longer return a visual controller facade.
+in the edgeless representation through `useEdgelessOperations()`. Extensions install behavior and no longer return a visual controller facade.

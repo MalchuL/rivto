@@ -1,4 +1,4 @@
-import { usePanelContent } from "../../hooks/editor/use-panel-content";
+import { ReactPanelProvider } from "../editor-panel/react-panel-provider";
 import type { EditorEmbedProps } from "./types";
 
 /**
@@ -8,5 +8,5 @@ import type { EditorEmbedProps } from "./types";
  * @returns The embedding context and surface, or its root availability indicator.
  */
 export function EditorEmbed(props: EditorEmbedProps) {
-  return usePanelContent(props, true);
+  return <ReactPanelProvider {...props} embedding />;
 }

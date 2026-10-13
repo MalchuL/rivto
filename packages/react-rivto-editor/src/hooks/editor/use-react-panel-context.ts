@@ -1,6 +1,6 @@
 import { useContext } from "react";
-import { EditorContext } from "../../components/editor-panel/editor-context";
-import type { EditorContextValue } from "../../components/editor-panel/types";
+import { ReactPanelContext } from "../../components/editor-panel/react-panel-context";
+import type { ReactPanelContextValue } from "../../components/editor-panel/types";
 
 /**
  * Reads the complete internal EditorPanel context.
@@ -12,8 +12,8 @@ import type { EditorContextValue } from "../../components/editor-panel/types";
  * @returns The nearest EditorPanel's stable editor references.
  * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
-export function useEditorContext(): EditorContextValue {
-  const context = useContext(EditorContext);
-  if (!context) throw new Error("Editor hooks must be used inside EditorPanel or EditorEmbed");
-  return context;
+export function useReactPanelContext(): ReactPanelContextValue {
+  const panelContextValue = useContext(ReactPanelContext);
+  if (!panelContextValue) throw new Error("Editor hooks must be used inside EditorPanel or EditorEmbed");
+  return panelContextValue;
 }

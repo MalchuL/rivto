@@ -14,10 +14,10 @@ import { BlockElementRefBoundary } from "../../blocks/block-wrapper/block-wrappe
 import { ChildrenPanel } from "@chulane/rivto";
 import { EmbeddingPanel } from "@chulane/rivto";
 import { DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN, PageVirtualizationContext } from "../../surfaces/page/page-virtualization-context";
-import { EditorContext } from "../../components/editor-panel/editor-context";
-import { EditorRootContext } from "../../components/editor-panel/editor-root-context";
+import { ReactPanelContext } from "./react-panel-context";
+import { EditorRootContext } from "./editor-root-context";
 import type { PanelSnapshot } from "../../panels/types";
-import type { EditorPanelProps } from "../../components/editor-panel/types";
+import type { EditorPanelProps } from "./types";
 
 const LOADING_PANEL_SNAPSHOT: PanelSnapshot = { status: "loading" };
 
@@ -43,7 +43,7 @@ function normalizeVirtualizationCount(value: number, fallback: number): number {
  * It does not create or destroy the editor runtime, traverse blocks itself,
  * or add a DOM wrapper around a loaded surface. The host owns runtime lifetime
  * and the child surface owns presentation and registers its own DOM root through `useEditorRoot`.
- * The hook creates and connects the panel in an effect after commit and destroys
+ * This component creates and connects the panel in an effect after commit and destroys
  * it on cleanup; React callers must not create ReactPanel instances manually.
  * Abandoned renders create no panel, and StrictMode effect replay creates a new
  * instance after destroying the old one. The first client render and SSR show
@@ -60,10 +60,11 @@ function normalizeVirtualizationCount(value: number, fallback: number): number {
  * changing one block does not recreate the complete surface tree.
  *
  * @param props - Shared editor, panel roots and React subtree to bind together.
- * @param embedding - Includes and protects the block root instead of displaying its children.
- * @returns The panel's context providers and supplied surface, or a loading indicator before its model is available.
+ * The embedding flag includes and protects the block root instead of displaying its children.
+ * @returns The panel's context providers and supplied surface, or a loading indicator before its panel instance is available.
  */
-export function usePanelContent({
+export function ReactPanelProvider({
+  embedding,
   editor: hostEditor,
   mode,
   rootBlockId,
@@ -73,9 +74,9 @@ export function usePanelContent({
   children,
   virtualizePageThreshold = false,
   virtualizePageOverscan = DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN,
-}: EditorPanelProps, embedding: boolean) {
+}: EditorPanelProps & { readonly embedding: boolean }) {
   const documentId = hostEditor.getDocument().id;
-  const parent = useContext(EditorContext);
+  const parent = useContext(ReactPanelContext);
   const enabled = active && parent?.enabled !== false;
   const configuration = useMemo(() => ({ hostEditor, rootBlockId, rootElementId, embedding, mode }),
     [hostEditor, rootBlockId, rootElementId, embedding, mode]);
@@ -127,7 +128,7 @@ export function usePanelContent({
     () => hostEditor.extensions.revision,
     () => hostEditor.extensions.revision,
   );
-  const context = useMemo(() => reactPanel ? ({ reactPanel, documentId, document: snapshot.document, rootBlockId, domIdPrefix, enabled }) : null,
+  const panelContextValue = useMemo(() => reactPanel ? ({ reactPanel, documentId, document: snapshot.document, rootBlockId, domIdPrefix, enabled }) : null,
     [reactPanel, documentId, snapshot.document, rootBlockId, domIdPrefix, instance, enabled]);
   const virtualization = useMemo(() => {
     let threshold = virtualizePageThreshold;
@@ -157,7 +158,7 @@ export function usePanelContent({
   }, [instance]);
   const rootContext = useMemo(() => ({ element: root, ref: rootRef }), [root, rootRef]);
 
-  if (!context) {
+  if (!panelContextValue) {
     return <div role="status">Loading document…</div>;
   }
 
@@ -168,12 +169,12 @@ export function usePanelContent({
     : children;
 
   return (
-    <EditorContext.Provider value={context}>
+    <ReactPanelContext.Provider value={panelContextValue}>
       <PageVirtualizationContext.Provider value={virtualization}>
         <EditorRootContext.Provider value={rootContext}>
           <BlockElementRefBoundary>{content}</BlockElementRefBoundary>
         </EditorRootContext.Provider>
       </PageVirtualizationContext.Provider>
-    </EditorContext.Provider>
+    </ReactPanelContext.Provider>
   );
 }

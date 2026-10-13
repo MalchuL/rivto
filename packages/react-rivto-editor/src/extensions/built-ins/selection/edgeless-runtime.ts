@@ -9,7 +9,7 @@ import type { EdgelessSelectionRef, EdgelessSelectionSnapshot } from "./types";
  */
 import { isStructuralSelection, type Selection } from "@chulane/rivto";
 import { useSyncExternalStore } from "react";
-import { useEditorContext } from "../../../hooks/editor/use-editor-context";
+import { useReactPanelContext } from "../../../hooks/editor/use-react-panel-context";
 import type { ReactPanelApi } from "../../../panels/types";
 
 const EDGELESS_SELECTION_PLUGIN_KEY = "edgelessSelection";
@@ -218,7 +218,7 @@ export function findEdgelessRuntime(editor: ReactPanelApi | ReactEditorApi): Edg
 
 /** @returns Reactive full canvas selection for ordered element consumers. */
 export function useEdgelessSelection(): EdgelessSelectionSnapshot {
-  const { reactPanel } = useEditorContext();
+  const { reactPanel } = useReactPanelContext();
   const runtime = getEdgelessRuntime(reactPanel);
   return useSyncExternalStore(
     (listener) => runtime.subscribe(listener),
@@ -233,7 +233,7 @@ export function useEdgelessSelection(): EdgelessSelectionSnapshot {
  * @returns Whether that element is actively selected.
  */
 export function useEdgelessSelected(id: string): boolean {
-  const { reactPanel } = useEditorContext();
+  const { reactPanel } = useReactPanelContext();
   const runtime = getEdgelessRuntime(reactPanel);
   return useSyncExternalStore(
     (listener) => runtime.subscribe(listener),
